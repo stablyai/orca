@@ -9,14 +9,8 @@ export type BundledRipgrepWslRouting = {
 
 const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/]/
 
-/**
- * Where Orca's ripgrep runs for a local workspace root, given the distro the project's git runs in.
- *
- * Why a Windows drive root stays on the host even under a WSL project runtime: rg only reads files,
- * so unlike git there is no index whose stat cache two writers would invalidate, and the host reads
- * NTFS directly instead of through drvfs (content search measured ~18x faster on a 21.6k-file repo).
- * Following symlinks stays in WSL: Windows cannot resolve symlinks WSL created on drvfs.
- */
+/** Read Windows roots natively (~18x faster measured on 21.6k files); rg has no git index/cache to invalidate.
+ * Symlink-following stays in WSL because Windows cannot resolve guest drvfs symlinks. */
 export function resolveBundledRipgrepWslRouting(
   rootPath: string,
   projectWslDistro: string | undefined,

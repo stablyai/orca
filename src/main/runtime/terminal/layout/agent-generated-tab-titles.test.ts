@@ -1,5 +1,4 @@
-// A layout-owner build's main gives agent tabs their generated titles from the hook status it owns,
-// on a real Store, with no window: one rename and one frame per status batch.
+// Main-owned agent titles use accepted hook status with a real Store and no window; batch one rename and frame per status group.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

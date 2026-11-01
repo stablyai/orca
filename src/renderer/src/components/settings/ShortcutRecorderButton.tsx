@@ -32,8 +32,7 @@ type ShortcutRecorderButtonProps = {
   onClearError: (actionId: KeybindingActionId) => void
 }
 
-// Why: digit-index rows store one representative chord (e.g. ⌘1) but fire for
-// 1-9, so the trailing number cap renders the whole range.
+// Digit-index actions store a representative chord but fire for 1–9; display the full range.
 function toDigitRangeKeys(keys: string[]): string[] {
   const last = keys.at(-1)
   if (last === undefined || !/^[1-9]$/.test(last)) {
@@ -70,8 +69,7 @@ export function ShortcutRecorderButton({
       // Stale taps mustn't survive into the next recording session.
       doubleTapDetectorRef.current?.reset()
     }
-    // The global recorder-focused flag is owned by ShortcutsPane (one source of
-    // truth across rows), so it isn't toggled here.
+    // ShortcutsPane owns the global recorder-focus flag across rows.
   }, [recording])
 
   const handleRecordKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
@@ -93,8 +91,7 @@ export function ShortcutRecorderButton({
       return
     }
 
-    // A modifier press never captures on its own — the detector decides whether
-    // it completes a double-tap, leaving normal chords to capture on their key.
+    // Modifiers capture only when the detector completes a double-tap; regular chords wait for their key.
     if (modifierFromKeyEvent(event.code, event.key) !== null) {
       const detected = doubleTapDetectorRef.current?.process(
         toModifierDoubleTapEvent({

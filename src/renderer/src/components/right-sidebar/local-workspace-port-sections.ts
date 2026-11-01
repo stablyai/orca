@@ -23,9 +23,7 @@ export function getLocalWorkspacePortSections(
         port.owner.repoId === activeRepoId &&
         port.owner.worktreeId !== activeWorktreeId
     ),
-    // Why: the old repo-scoped scan showed listeners from other repos as
-    // External, without workspace-only actions or cross-worktree activation.
-    // Keep that behavior now that the shared scan can attribute them globally.
+    // Preserve old repo scope: other projects stay External without workspace activation/actions despite global attribution.
     externalPorts: ports.flatMap((port) => {
       if (port.kind !== 'workspace') {
         return [port]
@@ -35,12 +33,7 @@ export function getLocalWorkspacePortSections(
   }
 }
 
-/**
- * Whether the panel still renders its port sections under a failure notice.
- * Why: a failed scan retains the host's last-good ports, so hiding every
- * section would drop the stop and open actions for ports the status bar still
- * counts and lists.
- */
+/** Failed scans retain last-good ports; keep their actions available while the status bar still lists them. */
 export function shouldShowLocalWorkspacePortSections(
   scan: { unavailableReason?: string } | null | undefined,
   sections: { activePorts: unknown[]; otherWorkspacePorts: unknown[]; externalPorts: unknown[] }

@@ -1,8 +1,19 @@
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import {
+  type RuntimeEnvironmentSetupFailure,
+  runtimeEnvironmentSetupFailure
+} from '../../../shared/runtime-environment-subscription-setup'
+import { assertCrewSourceCurrent } from './runtime-environment-subscription-setup'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment, markEnvironmentUsed } from '../../../shared/runtime-environment-store'
-import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
+import {
+  requireWslHostWithoutStart,
+  resolveManagedRuntimeEnvironment,
+  type ManagedRuntimeCallPreparation
+} from './runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import type {
   RuntimeOrchestrationEnvelope,
@@ -11,7 +22,7 @@ import type {
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
-} from '../../../shared/remote-runtime-client'
+} from '../../../shared/remote-runtime/remote-runtime-client'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeSessionTabsDeltaEvents } from './runtime-environment-session-tabs-delta-decoding'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
@@ -38,9 +49,20 @@ export async function callRuntimeEnvironment(
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  options?: { signal?: AbortSignal; expectedEnvironmentRuntimeId?: string }
+  options?: {
+    signal?: AbortSignal
+    expectedEnvironmentRuntimeId?: string
+    preparation?: ManagedRuntimeCallPreparation
+  }
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
+    let statusOptions = options
+    // Why: the status probe dials on its own, so a no-start caller's WSL host is checked first.
+    if (options?.preparation) {
+      const { preparation, ...rest } = options
+      await requireWslHostWithoutStart(userDataPath, selector, preparation)
+      statusOptions = rest
+    }
     const environment = resolveEnvironment(userDataPath, selector)
     const failure = runtimeEnvironmentRevisionFailure(
       environment,
@@ -53,17 +75,13 @@ export async function callRuntimeEnvironment(
         userDataPath,
         selector,
         timeoutMs,
-        options,
+        statusOptions,
         expectedEnvironmentPairingRevision === undefined
       )
     )
   }
   const environment = resolveEnvironment(userDataPath, selector)
-  // Why: connection failures reject (they don't resolve as ok:false), so the
-  // Tailscale hint is applied to the thrown error here — wrapping the resolved
-  // value would miss the in-use connect/timeout case the toast surfaces.
-  // Track the endpoint the queued closure actually used: it re-resolves the
-  // environment, so a re-pair between enqueue and dispatch can change it.
+  // Connect failures reject; retain the dispatched endpoint for hints because queued re-pairing can change it.
   let endpoint = getPreferredPairedRuntimeConnection(environment).endpoint
   try {
     return await enqueueRuntimeCall(
@@ -72,7 +90,8 @@ export async function callRuntimeEnvironment(
       async () => {
         const currentEnvironment = await resolveManagedRuntimeEnvironment(
           userDataPath,
-          environment.id
+          environment.id,
+          options?.preparation
         )
         const revisionFailure = runtimeEnvironmentRevisionFailure(
           currentEnvironment,
@@ -125,8 +144,7 @@ export async function callRuntimeEnvironment(
             signal: options?.signal
           })
         }
-        // Why: startup/control-plane RPCs use the proven one-shot path so repo
-        // hydration cannot be coupled to a stale terminal-control connection.
+        // One-shot startup/control RPCs keep repo hydration independent of stale terminal-control sockets.
         const response = await sendRemoteRuntimeRequestAbortable(
           pairedConnection,
           method,
@@ -166,13 +184,25 @@ export async function subscribeRuntimeEnvironment(
     onClose: () => void
   },
   isCurrent: () => boolean = () => true,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  preparation?: ManagedRuntimeCallPreparation,
+  crewAttempt?: {
+    assertCurrent: () => void
+    observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
+  }
 ): Promise<RemoteRuntimeSubscription> {
   const callbacks = {
     ...rawCallbacks,
     onEvent: decodeSessionTabsDeltaEvents(method, rawCallbacks.onEvent)
   }
-  const environment = await resolveManagedRuntimeEnvironment(userDataPath, selector)
+  crewAttempt?.assertCurrent()
+  const environment = crewAttempt
+    ? resolveEnvironment(userDataPath, selector)
+    : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation)
+  crewAttempt?.assertCurrent()
+  if (crewAttempt) {
+    assertCrewSourceCurrent(environment)
+  }
   const pairedConnection = getPreferredPairedRuntimeConnection(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
@@ -185,6 +215,16 @@ export async function subscribeRuntimeEnvironment(
   }
   const callbacksWithMarkUsed = {
     onResponse: (response: RuntimeRpcResponse<unknown>) => {
+      if (
+        crewAttempt &&
+        response._meta?.runtimeId != null &&
+        response._meta.runtimeId !== environment.runtimeId
+      ) {
+        throw new RemoteRuntimeClientError(
+          'runtime_environment_changed',
+          'Runtime environment identity changed; refresh and try again'
+        )
+      }
       if (response.ok === true) {
         markUsedOnce(response._meta.runtimeId)
       }
@@ -203,8 +243,7 @@ export async function subscribeRuntimeEnvironment(
       callbacks.onClose()
     }
   }
-  // Why: an initial-connect failure rejects (mid-stream drops go through
-  // onError above), so the hint is applied to the thrown error here too.
+  // Initial connection failures reject; midstream errors use onError above.
   try {
     if (shouldRouteSubscriptionBySupport(method)) {
       return await subscribeSupportRoutedRuntimeEnvironment({
@@ -218,7 +257,7 @@ export async function subscribeRuntimeEnvironment(
         signal
       })
     }
-    return await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeRequest(
       pairedConnection,
       method,
       params,
@@ -226,14 +265,26 @@ export async function subscribeRuntimeEnvironment(
       callbacksWithMarkUsed,
       { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, signal }
     )
+    if (crewAttempt) {
+      try {
+        throwIfSignalAborted(signal)
+        crewAttempt.assertCurrent()
+        assertCrewSourceCurrent(environment)
+      } catch (error) {
+        subscription.close()
+        throw error
+      }
+    }
+    return subscription
   } catch (error) {
-    if (error instanceof Error) {
+    if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRuntimeUnreachableHint(
         environment,
         error.message,
         pairedConnection.endpoint
       )
     }
+    crewAttempt?.observeFailure(runtimeEnvironmentSetupFailure(error, 'subscription'))
     throw error
   }
 }

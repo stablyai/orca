@@ -26,7 +26,7 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
       socket.on('close', () => activeSockets.delete(socket))
       socket.on('error', () => socket.destroy())
 
-      // Why: a client whose SSH transport dropped throws synchronously; uncaught, that kills main.
+      // Dropped SSH transports can throw synchronously; contain failure before it kills main.
       try {
         client.forwardOut(
           options.localHost,
@@ -55,7 +55,7 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
     })
 
     await listenForPortForward(server, options.localHost, options.localPort)
-    // Why: port 0 asks the OS for a free port, and callers must dial the one it bound.
+    // Port 0 asks the OS to choose; callers must dial the actual bound port.
     const address = server.address()
     const localPort = typeof address === 'object' && address ? address.port : options.localPort
 
@@ -87,7 +87,7 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
       dispose: () => {
         void close()
       },
-      // Why: this forward dials through `client`; a reconnect gives the connection a new one.
+      // Reconnect replaces client identity; this forward belongs to its original client.
       isLive: (current) => !closed && current.getClient() === client
     }
   }

@@ -180,9 +180,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     )
   }
 
-  // Why: ConPTY re-encodes all output as screen paints placed by absolute cursor moves the stream
-  // tail cannot follow, so overwritten text survives in it — e.g. PSReadLine's ghost history
-  // prediction (another shell's command) reads as typed before this terminal's own input.
+  // ConPTY absolute cursor paints overwrite text that raw tails retain, including ghost PSReadLine predictions; read rendered cells.
   private async withConptyRenderedTail(
     ptyId: string,
     read: RuntimeTerminalRead,
@@ -206,8 +204,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalProjection> {
-    // Why over-fetch by a screen: the projection drops blank grid rows after taking its rows, so
-    // the empty rows below the prompt would otherwise eat into the requested line count.
+    // Over-fetch a screen so blank rows below the prompt cannot consume the requested nonblank line count.
     const rowLimit =
       terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
       (this.getTerminalSize(ptyId)?.rows ?? 0)
@@ -246,8 +243,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     if (!snapshot) {
       return { lines: [] }
     }
-    // Why: a cached acquisition can carry scrollback this caller did not ask for,
-    // so visible-only reads parse the grid itself rather than trusting the request.
+    // Cached acquisitions can include unrequested scrollback; visible-only reads must parse the grid.
     if (snapshotOptions.visibleScreenOnly) {
       const projection = await this.parseVisibleSnapshot(snapshot)
       // Live bytes ordered after the provider frame make that frame stale.

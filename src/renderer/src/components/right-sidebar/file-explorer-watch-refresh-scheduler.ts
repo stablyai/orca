@@ -17,17 +17,7 @@ export type CreateFileExplorerWatchRefreshSchedulerParams = {
   dirConcurrency: number
 }
 
-/**
- * Coalesces watcher-driven File Explorer refreshes into one run on the next tick, one run at a time.
- *
- * Why: an overflow storm otherwise issues K × (1 + N_expanded) readDirectory
- * round trips on the same SSH mux that carries PTY output. Transport-agnostic on
- * purpose — it sits above both the Electron fs:changed bus and the runtime-RPC
- * file-change subscription.
- * Why no debounce window: every producer already flushes on the shared watch batch window
- * (filesystem-watcher for local/SSH, createFileWatchEventBatcher for runtime files.watch), so a
- * second window here only adds latency. A new transport must batch at the producer before joining.
- */
+/** Coalesce pre-batched watch events next tick, serializing refresh waves to avoid repeated SSH round trips; producers own debounce. */
 export function createFileExplorerWatchRefreshScheduler({
   refreshTree,
   refreshDir,
@@ -46,8 +36,7 @@ export function createFileExplorerWatchRefreshScheduler({
     }
     timer = setTimeout(() => {
       timer = null
-      // Why: a run started here would race the in-flight one; the settle
-      // handler re-arms instead, so nothing pending is dropped.
+      // Let the in-flight settle handler rearm pending work rather than race another wave.
       if (inFlight === null) {
         run()
       }
@@ -61,26 +50,17 @@ export function createFileExplorerWatchRefreshScheduler({
     pendingDirs.clear()
 
     const started = (async () => {
-      // Why: isCoveredByFullRefresh reads a live `expanded` ref, so resolve it
-      // against the set refreshTree is about to read — a dir expanded during the
-      // tree refresh was never re-read and must keep its pending refresh.
+      // Snapshot coverage before refreshTree reads the live expanded set; later expansions still need pending reads.
       const covered = full ? new Set(dirs.filter(isCoveredByFullRefresh)) : null
       const outcome = full && !disposed ? await refreshTree() : null
-      // Why: refreshTree bails without touching the expanded dirs when its root load is
-      // superseded, so trusting `covered` there would drop those refreshes for good — nothing
-      // marks an expanded dir stale, so a later re-expansion won't re-read it either.
-      // Why: 'root-unreadable' is the opposite case. The transport just failed a read, so
-      // re-issuing buys one dead timeout per dir and holds `inFlight` open the whole time,
-      // blocking every later refresh. Drop them; a recovered watcher resyncs with an overflow.
+      // Retry covered dirs after supersession, but drop them after root transport failure to avoid dead timeouts blocking recovery.
       const outstanding =
         outcome === 'root-unreadable'
           ? []
           : covered && outcome === 'refreshed'
             ? dirs.filter((dirPath) => !covered.has(dirPath))
             : dirs
-      // Why: forEachWithConcurrency has no cancel hook, and the bound refreshDir
-      // is a live ref — a queued path would otherwise be read against the next
-      // worktree's binding after a switch.
+      // Stop queued reads on dispose before live refreshDir refs bind them to another worktree.
       await forEachWithConcurrency(outstanding, dirConcurrency, (dirPath) =>
         disposed ? Promise.resolve() : refreshDir(dirPath)
       )
@@ -105,10 +85,7 @@ export function createFileExplorerWatchRefreshScheduler({
       if (disposed) {
         return
       }
-      // Why: pendingDirs is deliberately NOT cleared. toggleDir drops a dir from
-      // expandedDirs without purging dirCache, so cache keys are a strict
-      // superset of what refreshTree re-reads; subsuming them would strand a
-      // stale listing for a collapsed-but-cached dir.
+      // Preserve pending reads for collapsed cached dirs, which full refresh does not cover.
       pendingFull = true
       arm()
     },

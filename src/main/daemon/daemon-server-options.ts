@@ -1,6 +1,7 @@
 import type { DaemonFileLog } from './daemon-file-log'
-import type { SubprocessHandle } from './session-subprocess-handle'
+import type { TerminalHostOptions } from './terminal-host-options'
 import type { TerminalSpawnAdmissionMode } from './terminal-spawn-gate'
+import type { HostTerminalPolicy } from './host-terminal-policy'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -31,18 +32,10 @@ export type DaemonServerOptions = {
   log?: DaemonFileLog
   /** Headless hosts enforce; desktop only observes until the client handles deferral. */
   spawnAdmission?: TerminalSpawnAdmissionMode
-  /** Where the daemon remembers whether automatic restores were running when it died. */
+  /** Crash-recovery state for automatic restores. */
   automaticWorkMarkerPath?: string
-  /** Where every daemon on this host shares its terminal count for the host cap. */
+  /** Shared terminal counts for the host-wide cap. */
   hostTerminalLedgerDir?: string
-  spawnSubprocess: (opts: {
-    sessionId: string
-    cols: number
-    rows: number
-    cwd?: string
-    env?: Record<string, string>
-    command?: string
-    shellOverride?: string
-    isCanceled?: () => boolean
-  }) => SubprocessHandle | Promise<SubprocessHandle>
+  terminalLimitPolicy?: HostTerminalPolicy
+  spawnSubprocess: TerminalHostOptions['spawnSubprocess']
 }

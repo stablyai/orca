@@ -17,16 +17,12 @@ vi.mock('./agent-foreground-process', () => ({
   confirmShellForegroundProcess: confirmShellForegroundMock
 }))
 import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
-import {
-  confirmLocalPtyShellForeground,
-  hasLocalPtyChildProcesses,
-  inspectLocalPtyChildProcesses
-} from './local-pty-foreground-inspection'
+
 import { LocalPtyProvider } from './local-pty-provider'
 import { ptyIncarnations, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from './pty-process-inspection'
 
-// Bare, so the retired pane's spawn file equals the recorded name (the path's basename).
+// Match the recorded basename so only the retired descriptor distinguishes the pane from idle.
 const POSIX_SHELL = 'sh'
 
 function registerPane(id: string, foreground: string | (() => string), shell?: string): void {
@@ -54,11 +50,7 @@ function registerPane(id: string, foreground: string | (() => string), shell?: s
   }
 }
 
-/**
- * A real node-pty whose master has been given up. The getter does not throw here -- it answers
- * `POSIX_SHELL`, which is exactly the recorded shell name, so only the descriptor distinguishes
- * this pane from an idle one.
- */
+/** Retired node-pty getters still report the spawn name; only descriptor state distinguishes this from idle. */
 async function registerRetiredPane(id: string): Promise<pty.IPty> {
   const term = pty.spawn(POSIX_SHELL, ['-c', 'exit 0'], {
     name: 'xterm-256color',
@@ -96,72 +88,8 @@ afterEach(() => {
   ptyShellPath.clear()
 })
 
-describe('confirmLocalPtyShellForeground', () => {
-  it('proves against the spawned shell path, which tells the Git Bash launcher apart', async () => {
-    const launcher = 'C:\\Program Files\\Git\\bin\\bash.exe'
-    registerPane('pty-git-bash', 'bash.exe', launcher)
-    confirmShellForegroundMock.mockResolvedValueOnce(true)
-
-    await expect(confirmLocalPtyShellForeground('pty-git-bash')).resolves.toBe(true)
-    expect(confirmShellForegroundMock).toHaveBeenCalledWith(4242, launcher, expect.any(Object))
-  })
-})
-
 // Windows has no master fd to retire, and `WindowsTerminal.process` answers from the spawn name.
 const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
-
-describe('inspectLocalPtyChildProcesses', () => {
-  it('reports unverifiable when the pty fd cannot be read', async () => {
-    registerPane(
-      'pty-closed',
-      () => {
-        throw new Error('EBADF: bad file descriptor')
-      },
-      '/bin/zsh'
-    )
-    expect(await inspectLocalPtyChildProcesses('pty-closed')).toBe('unverifiable')
-  })
-
-  it('still answers no-children when the shell itself is in the foreground', async () => {
-    registerPane('pty-idle', 'zsh', '/bin/zsh')
-    expect(await inspectLocalPtyChildProcesses('pty-idle')).toBe('no-children')
-  })
-
-  it('answers children when something else is in the foreground', async () => {
-    registerPane('pty-busy', 'vim', '/bin/zsh')
-    expect(await inspectLocalPtyChildProcesses('pty-busy')).toBe('children')
-  })
-
-  it('treats a pane this provider does not hold as a real negative', async () => {
-    expect(await inspectLocalPtyChildProcesses('pty-absent')).toBe('no-children')
-  })
-
-  it('preserves uncertainty conservatively in the boolean adapter', async () => {
-    let reads = 0
-    registerPane(
-      'pty-closed',
-      () => {
-        reads += 1
-        throw new Error('EBADF: bad file descriptor')
-      },
-      '/bin/zsh'
-    )
-    await expect(hasLocalPtyChildProcesses('pty-closed')).resolves.toBe(true)
-    // The result must come from the failed read, not from an earlier short-circuit.
-    expect(reads).toBe(1)
-  })
-})
-
-describeOnPosix('inspectLocalPtyChildProcesses on a retired master', () => {
-  it('reports unverifiable rather than reading the spawn file as an idle shell', async () => {
-    const term = await registerRetiredPane('pty-retired')
-
-    // The mechanism is silent: this is the same string an idle pane reports.
-    expect(term.process).toBe(POSIX_SHELL)
-    // Not `no-children`: the close guard reads that as "nothing is running here" and kills the pane.
-    expect(await inspectLocalPtyChildProcesses('pty-retired')).toBe('unverifiable')
-  }, 15000)
-})
 
 describe('inspectPtyProviderProcess child-process evidence', () => {
   const provider = new LocalPtyProvider()

@@ -51,8 +51,7 @@ export function requestContextualTourWhenReady(
     timeoutId = setTimeout(attempt, retryDelayMs)
   }
 
-  // Why: setup-guide actions often reveal lazy surfaces first; retrying keeps
-  // explicit user-triggered education from depending on renderer mount timing.
+  // Retry lazy surface mounting so explicit tour requests do not depend on renderer timing.
   timeoutId = setTimeout(attempt, 0)
 
   return () => {

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useMediaPicker } from '../platform/media-picker'
@@ -30,8 +31,7 @@ type UseMobileImageAttachmentArgs = {
 
 type MobileImageAttachment = {
   readonly attachImage: (source: MobileImageSource) => Promise<void>
-  // True only while the picked image is uploading to the host (not while the
-  // picker is open) — drives the send spinner so the 3-5s transfer isn't a no-op.
+  // Show upload progress after picker completion so the host transfer cannot look like a no-op.
   readonly isAttaching: boolean
 }
 
@@ -70,25 +70,33 @@ export function useMobileImageAttachment({
           onUploadStart: () => setIsAttaching(true),
           beforeTerminalSend
         })
-        // Cancelled picker: no error, no toast.
         if (sent) {
           onSuccess()
         }
       } catch (error) {
         onError()
         if (connState !== 'connected') {
-          showToast('Attach failed (disconnected)', 1500)
+          showToast(
+            translate('session.useImageAttachment.disconnected', 'Attach failed (disconnected)'),
+            1500
+          )
           return
         }
         if (error instanceof ImageLibraryPermissionError) {
-          showToast('Photo permission denied', 1500)
+          showToast(
+            translate('session.useImageAttachment.permissionDenied', 'Photo permission denied'),
+            1500
+          )
           return
         }
         if (getErrorMessage(error) === 'Clipboard image is too large') {
-          showToast('Image too large to attach', 1500)
+          showToast(
+            translate('session.useImageAttachment.imageTooLarge', 'Image too large to attach'),
+            1500
+          )
           return
         }
-        showToast('Attach failed', 1500)
+        showToast(translate('session.useImageAttachment.attachFailed', 'Attach failed'), 1500)
       } finally {
         setIsAttaching(false)
       }

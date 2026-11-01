@@ -29,17 +29,8 @@ export function buildCachedPaneReplayEnvelope({
     : envelope
 }
 
-/**
- * Chooses which cached pane statuses a reconnecting client may be re-told about, and drops the rest.
- *
- * Two panes are refused, for opposite reasons:
- * - a pane whose surface has been retired — the tab is gone, so replaying its status would hand the
- *   client a live agent pane nobody owns, which is what drives an auto-resume onto a transcript an
- *   orphaned agent is still writing;
- * - a pane whose envelope metadata is missing — the status cache and the metadata map are populated
- *   and cleared in lockstep, so a key present in one and not the other is drift. Skip rather than
- *   guess a source that mis-tags the replay downstream.
- */
+// Skip retired pane surfaces to prevent ghost status and auto-resume onto an orphan’s live transcript.
+// Missing envelope metadata means cache drift; never guess replay provenance.
 export function selectReplayableCachedPanes(input: {
   cachedByPaneKey: ReadonlyMap<string, AgentHookEventPayload>
   metaByPaneKey: ReadonlyMap<string, CachedPaneEnvelopeMeta>

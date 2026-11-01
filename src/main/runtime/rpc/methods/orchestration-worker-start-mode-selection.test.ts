@@ -1,12 +1,21 @@
-/**
- * End of the seam: `orchestration.workerStart` reads the user's own setting and starts the worker
- * that setting describes. No flag reaches this decision, and no combination refuses the start.
- */
+import { randomUUID } from 'node:crypto'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { createServer } from 'node:net'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { runProcess } from '@orca/process-host'
+import { z } from 'zod'
+import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+/** workerStart follows the user's launch preference without a mode flag; unsupported structured mode falls back rather than refusing routine dispatch. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../../../shared/agent-launch-model-preferences'
 
 const STRUCTURED_HANDLE = 'structworker_abc'
 // A real Orca session ID: a minted worker's preamble names it by this, not its handle.
@@ -19,7 +28,9 @@ const createStructuredWorkerSessionForWorktree = vi.fn(
     return { identity: { handle: STRUCTURED_HANDLE, sessionId: STRUCTURED_SESSION_ID }, host: {} }
   }
 )
-const createExistingWorktreeWorkerTerminal = vi.fn(async () => ({ handle: TERMINAL_HANDLE }))
+const createExistingWorktreeWorkerTerminal = vi.fn<
+  () => Promise<Partial<RuntimeTerminalCreate> & { handle: string }>
+>(async () => ({ handle: TERMINAL_HANDLE }))
 const sendStructuredWorkerPreamble = vi.fn(async (_args: { preamble: string }) => 'accepted')
 
 vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
@@ -39,7 +50,7 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
 }))
 
 const STRUCTURED_DEFAULT = {
-  experimentalNativeChat: true,
+  agentDefaultSurface: 'chat',
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
@@ -151,6 +162,56 @@ describe('worker-start honours the settings default', () => {
     )
   }
 
+  it.each(['fresh', 'reattach', 'adopted'] as const)(
+    'uses actual %s creation for a terminal worker readiness failure',
+    async (context) => {
+      createExistingWorktreeWorkerTerminal.mockResolvedValueOnce({
+        handle: TERMINAL_HANDLE,
+        ptyId: 'pty-created',
+        incarnationId: 'inc-created',
+        worktreeId: 'repo::wt',
+        title: null,
+        ...(context === 'reattach' ? { isReattach: true as const } : {}),
+        ...(context === 'adopted' ? { agentSessionDisposition: 'adopted' as const } : {})
+      })
+      vi.spyOn(runtime, 'getPtyLivenessVerdict').mockReturnValue({
+        status: 'exited',
+        incarnationId: 'inc-created',
+        cause: {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        }
+      })
+      vi.mocked(runtime.waitForTerminal).mockResolvedValue({
+        handle: TERMINAL_HANDLE,
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'exited',
+        exitCode: 256,
+        exitCause: {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        }
+      })
+      await expect(
+        startWorker({
+          ...STRUCTURED_DEFAULT,
+          nativeChatProviders: { claude: false, codex: false }
+        })
+      ).resolves.toMatchObject({
+        state: 'failed',
+        failedStage: 'agent_readiness',
+        lastError:
+          context === 'fresh'
+            ? expect.stringContaining('Close some Git Bash terminals')
+            : expect.not.stringContaining('Git Bash')
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    }
+  )
+
   it('starts a structured chat worker when structured native chat is the default', async () => {
     const result = await startWorker(STRUCTURED_DEFAULT)
 
@@ -163,14 +224,141 @@ describe('worker-start honours the settings default', () => {
     const preamble = sendStructuredWorkerPreamble.mock.calls[0]![0].preamble
     expect(preamble).toContain(`Your Orca session ID is: orca_session_id:${STRUCTURED_SESSION_ID}`)
     expect(preamble).toContain('The coordinator cannot see this chat')
-    expect(preamble).toContain('it will send this chat a fresh')
+    expect(preamble).toContain('More supervised work arrives in this chat')
     expect(preamble).not.toContain('this terminal')
     expect(preamble).not.toMatch(/exit the shell/i)
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
+  // Two sequential CLI subprocesses each allow 15s, plus RPC setup and cleanup.
+  it('runs the real worker-start CLI through RPC and production saved-choice mode selection', async () => {
+    const manifest = createRequire(resolve('package.json')).resolve('bun/package.json')
+    const { bin } = z
+      .object({ bin: z.object({ bun: z.string() }) })
+      .parse(JSON.parse(readFileSync(manifest, 'utf8')))
+    const root = mkdtempSync(join(tmpdir(), 'orca-worker-cli-'))
+    const endpoint =
+      process.platform === 'win32' ? `\\\\.\\pipe\\worker-${randomUUID()}` : join(root, 'rpc')
+    let settings: Record<string, unknown> = {}
+    vi.spyOn(runtime, 'requireStore').mockImplementation(() => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture reaches only getSettings.
+      return { getSettings: () => settings } as never
+    })
+    const method = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.workerStart'
+    )!
+    const requests: string[] = []
+    const server = createServer((socket) => {
+      let buffer = ''
+      socket.setEncoding('utf8')
+      socket.on('data', async (chunk: string) => {
+        buffer += chunk
+        if (!buffer.includes('\n')) {
+          return
+        }
+        const request = z
+          .object({
+            id: z.string(),
+            method: z.string(),
+            authToken: z.literal('fixture-token'),
+            params: z.record(z.string(), z.unknown()).default({})
+          })
+          .parse(JSON.parse(buffer.slice(0, buffer.indexOf('\n'))))
+        requests.push(request.method)
+        try {
+          const result =
+            request.method === 'status.get'
+              ? { capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY] }
+              : await method.handler(method.params!.parse(request.params), { runtime })
+          socket.end(
+            `${JSON.stringify({
+              id: request.id,
+              ok: true,
+              result,
+              _meta: { runtimeId: 'fixture-host' }
+            })}\n`
+          )
+        } catch (error) {
+          socket.end(
+            `${JSON.stringify({
+              id: request.id,
+              ok: false,
+              error: { code: 'fixture_failure', message: String(error) },
+              _meta: { runtimeId: 'fixture-host' }
+            })}\n`
+          )
+        }
+      })
+    })
+    try {
+      await new Promise<void>((ready) => server.listen(endpoint, ready))
+      writeFileSync(
+        join(root, 'orca-runtime.json'),
+        JSON.stringify({
+          runtimeId: 'fixture-host',
+          pid: process.pid,
+          startedAt: 1,
+          authToken: 'fixture-token',
+          transports: [{ kind: process.platform === 'win32' ? 'named-pipe' : 'unix', endpoint }]
+        })
+      )
+      const env = {
+        ...Object.fromEntries(
+          'HOME USERPROFILE APPDATA LOCALAPPDATA XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME ORCA_E2E_HOME_DIR ORCA_E2E_USER_DATA_DIR ORCA_USER_DATA_PATH TEMP TMP TMPDIR'
+            .split(' ')
+            .map((key) => [key, root])
+        ),
+        CODEX_HOME: join(root, 'codex'),
+        CLAUDE_CONFIG_DIR: join(root, 'claude'),
+        ORCA_BACKGROUND_LAUNCH: '1',
+        ORCA_DISABLE_MACOS_LOGIN_SHELL: '1',
+        PATH: process.env.PATH,
+        SystemRoot: process.env.SystemRoot,
+        ComSpec: process.env.ComSpec
+      }
+      for (const chat of [false, true]) {
+        settings = {
+          ...STRUCTURED_DEFAULT,
+          agentDefaultSurface: chat ? 'chat' : 'terminal',
+          nativeChatProviders: { codex: !chat }
+        }
+        const task = db.createTask({ spec: 'CLI saved-choice dispatch', runId })
+        const response = await runProcess({
+          program: join(dirname(manifest), bin.bun),
+          args: [
+            resolve('src/cli/index.ts'),
+            'orchestration',
+            'worker-start',
+            '--task',
+            task.id,
+            '--worktree',
+            'current',
+            '--agent',
+            'claude',
+            '--from',
+            'term_coord',
+            '--json'
+          ],
+          cwd: root,
+          env,
+          timeoutMs: 15_000
+        })
+        expect(response.code, response.stderr + response.stdout).toBe(0)
+        expect(JSON.parse(response.stdout)).toMatchObject({
+          result: { state: 'ready', mode: chat ? 'structured' : 'terminal' }
+        })
+      }
+      expect(requests.filter((name) => name === 'orchestration.workerStart')).toHaveLength(2)
+      expect(createExistingWorktreeWorkerTerminal).toHaveBeenCalledOnce()
+      expect(createStructuredWorkerSessionForWorktree).toHaveBeenCalledOnce()
+    } finally {
+      await new Promise<void>((done) => server.close(() => done()))
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 40_000)
+
   it('starts a terminal agent worker when it is not', async () => {
-    const result = await startWorker({ experimentalNativeChat: false })
+    const result = await startWorker({})
 
     expect(result).toMatchObject({
       state: 'ready',
@@ -180,7 +368,7 @@ describe('worker-start honours the settings default', () => {
     expect(createStructuredWorkerSessionForWorktree).not.toHaveBeenCalled()
     const preamble = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]![1]
     expect(preamble).toContain('The coordinator cannot see this terminal')
-    expect(preamble).toContain('Do not exit the shell. Your terminal stays available')
+    expect(preamble).toContain('Do not exit the shell. More supervised work arrives here')
     expect(preamble).not.toContain('this chat')
     expect(sendStructuredWorkerPreamble).not.toHaveBeenCalled()
   })
@@ -208,8 +396,7 @@ describe('worker-start honours the settings default', () => {
   })
 
   it('seeds --model and --effort into the structured session instead of downgrading', async () => {
-    // These two used to force a PTY worker, which is half of why orchestration never produced a
-    // structured chat: choosing a model is the ordinary way to dispatch one.
+    // Model/effort used to force PTY mode, preventing routine structured dispatch.
     const result = await startWorker(STRUCTURED_DEFAULT, { model: 'opus', effort: 'high' })
 
     expect(result).toMatchObject({
@@ -222,9 +409,30 @@ describe('worker-start honours the settings default', () => {
     )
   })
 
+  it.each([false, true])(
+    'keeps OpenCode version refusal before worker effects with native default %s',
+    async (opencode) => {
+      const dispatch = vi.spyOn(db, 'createStartingWorkerDispatch')
+      vi.spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport').mockRejectedValue(
+        new OrchestrationError('capability_unsupported', OPENCODE_MODEL_VERSION_REFUSAL)
+      )
+      await expect(
+        startWorker(
+          { ...STRUCTURED_DEFAULT, nativeChatProviders: { opencode } },
+          { agent: 'opencode', model: 'opencode/fledge-alpha-free' }
+        )
+      ).rejects.toMatchObject({
+        code: 'capability_unsupported',
+        message: OPENCODE_MODEL_VERSION_REFUSAL
+      })
+      expect(dispatch).not.toHaveBeenCalled()
+      expect(createExistingWorktreeWorkerTerminal).not.toHaveBeenCalled()
+      expect(createStructuredWorkerSessionForWorktree).not.toHaveBeenCalled()
+    }
+  )
+
   it('creates a new worktree WITHOUT an agent terminal and gives it a structured session', async () => {
-    // The other half: `createWorkerWorktree` creates agent-first, so a `--worktree new-child`
-    // dispatch could only ever end up a PTY terminal worker.
+    // Agent-first new worktrees previously made structured mode unreachable.
     const created = mockWorktreeCreation()
 
     const result = await startWorker(STRUCTURED_DEFAULT, {
@@ -249,7 +457,7 @@ describe('worker-start honours the settings default', () => {
     const created = mockWorktreeCreation()
 
     const result = await startWorker(
-      { ...STRUCTURED_DEFAULT, experimentalNativeChat: false },
+      { ...STRUCTURED_DEFAULT, nativeChatProviders: { claude: false, codex: false } },
       { worktree: 'new-child', name: 'worker-child' }
     )
 
@@ -259,8 +467,7 @@ describe('worker-start honours the settings default', () => {
   })
 
   it('falls back to a terminal agent in the worktree it just created when the host refuses', async () => {
-    // The host can only answer for a workspace that exists, so a created worktree settles its mode
-    // after creation — and a refusal must not fail a routine dispatch.
+    // Resolve mode after creation, when workspace support is knowable; unsupported preference must still dispatch.
     mockWorktreeCreation()
     vi.mocked(runtime.getStructuredAgentSessionCreateSupport).mockResolvedValue({
       supported: false,

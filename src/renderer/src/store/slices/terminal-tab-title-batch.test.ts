@@ -335,8 +335,7 @@ describe('terminal tab title batches', () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
     unsubscribe()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main derives the batch's titles from its own agent status (agent-generated-tab-titles.test.ts
-      // pins the same first-write and replacement rule there): the window sends and writes none.
+      // Main derives batch titles from agent status; first-write/replacement coverage is in agent-generated-tab-titles.test.ts, with no window writes.
       expect(main.commands).toEqual([])
       expect(publications).toBe(0)
       expect(store.getState().tabsByWorktree['wt-0']?.[0]?.generatedTitle).toBeUndefined()

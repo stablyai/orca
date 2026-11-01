@@ -1,14 +1,14 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem,
+  type AgentJournalRenderItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalMessageItem,
-  AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import {
   buildJournalItemRow,
@@ -16,14 +16,9 @@ import {
   journalLifecycleBatchRowBuilder
 } from './journal-row-builders'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalProducerInheritanceTests(): void {
-  // A row's producer is fixed by the write that created it. A revision naming no
-  // producer — a settlement, a prompt answer, a reopen sweep — keeps it; a
-  // revision naming one replaces the whole bundle, which is how a provisional
-  // stamp is corrected.
-
   const child: AgentJournalItemIdentity = {
     provider: 'codex',
     threadId: 'child',

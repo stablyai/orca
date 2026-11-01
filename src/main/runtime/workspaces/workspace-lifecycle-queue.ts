@@ -55,22 +55,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms).unref?.())
 }
 
-/**
- * One FIFO queue per host-qualified workspace for create, sleep, wake, close and delete. Commands
- * run one at a time in the order they arrived and are never merged. Delete cancels what has not
- * started and waits for what has. An unconfirmed outcome pauses the queue until the owner answers
- * again; main then re-observes and carries on, never replaying the paused command. Lives in
- * memory: after a restart nothing is pending and readers show observed state.
- */
+/** Serialize commands per host/workspace without merging. Delete cancels queued work and awaits running work; unconfirmed outcomes pause until owner observation, never replay. Pending state is lost on restart. */
 export class WorkspaceLifecycleQueue {
   readonly revision = new ProducerRevision()
   private readonly queues = new Map<string, WorkspaceQueue>()
   private membership: LifecycleMembership = (done) => done()
   private nextSeq = 0
-  /**
-   * Arrivals still looking up their workspace, by when they arrived. A later arrival waits for
-   * them only briefly: the lookup may name any workspace, and a dead host must not stall them all.
-   */
+  /** Bound waits for earlier unresolved lookups so one dead host cannot stall every workspace. */
   private readonly resolving = new Map<number, number>()
   private resolved: Signal = signal()
   private readonly creations = new WorkspaceLifecycleCreations<Entry>({
@@ -86,7 +77,6 @@ export class WorkspaceLifecycleQueue {
     private readonly now: () => number = Date.now
   ) {}
 
-  /** How long `seq` still waits for an earlier arrival's lookup; 0 once none holds it. */
   private lookupWaitMs(seq: number): number {
     const waits = [...this.resolving].flatMap(([earlier, arrivedAt]) =>
       earlier < seq ? [arrivedAt + LOOKUP_ORDER_WAIT_MS - this.now()] : []
@@ -103,10 +93,7 @@ export class WorkspaceLifecycleQueue {
     return this.enqueue(key, command, this.nextSeq++)
   }
 
-  /**
-   * For a command whose workspace is known only after a lookup: it takes its place on arrival.
-   * A lookup answering null finds no workspace to order against, so the command runs directly.
-   */
+  /** Reserve arrival order before lookup; null runs directly with no workspace to order. */
   async submitResolving<T>(
     resolveKey: () => Promise<string | null>,
     command: LifecycleCommand<T>
@@ -131,7 +118,6 @@ export class WorkspaceLifecycleQueue {
     return this.creations.open(start)
   }
 
-  /** The per-workspace hints the feed publishes. */
   hints(): Record<string, WorkspaceLifecycleHint> {
     const hints: Record<string, WorkspaceLifecycleHint> = {}
     for (const [key, queue] of this.queues) {
@@ -157,13 +143,12 @@ export class WorkspaceLifecycleQueue {
     return hints
   }
 
-  /** The creations projection the `creations` readers already read. */
   creationsSnapshot(): WorkspaceCreationsSnapshot {
     return this.creations.snapshot()
   }
 
-  isPaused(key: string): boolean {
-    return this.queues.get(key)?.paused != null
+  pausedKeys(): string[] {
+    return [...this.queues].flatMap(([key, queue]) => (queue.paused ? [key] : []))
   }
 
   private enqueue<T>(key: string, command: LifecycleCommand<T>, seq: number): Promise<T> {
@@ -201,7 +186,7 @@ export class WorkspaceLifecycleQueue {
       reply,
       settle
     }
-    // In arrival order among what has not started; a late lookup goes ahead of later arrivals.
+    // Late lookup results retain arrival order among queued entries.
     const after = queue.entries.findIndex((queued) => queued.state === 'queued' && queued.seq > seq)
     queue.entries.splice(after === -1 ? queue.entries.length : after, 0, entry)
     this.revision.bump()
@@ -236,7 +221,7 @@ export class WorkspaceLifecycleQueue {
       reply: null,
       settle: () => {}
     }
-    // Ahead of everything not started: the create is already running.
+    // This create already runs outside the queue, ahead of unstarted commands.
     const firstQueued = queue.entries.findIndex((queued) => queued.state === 'queued')
     queue.entries.splice(firstQueued === -1 ? queue.entries.length : firstQueued, 0, entry)
     return entry
@@ -315,10 +300,7 @@ export class WorkspaceLifecycleQueue {
     this.revision.bump()
   }
 
-  /**
-   * Waits for the paused command's owner to answer again, then re-observes the listing and lifts
-   * the pause. Returns early when a forced delete arrives; a silent owner is asked again later.
-   */
+  /** Wait for owner observation before lifting the pause; forced delete returns early, silent owners retry later. */
   private async awaitOwner(queue: WorkspaceQueue, paused: Pause): Promise<void> {
     if (!paused.observe) {
       queue.paused = null

@@ -1,8 +1,13 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { clearDisclosuresForTests } from '../worktree/agent-child-disclosure'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { WorktreeAgentList } from './WorktreeAgentList'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+
+// Disclosures persist in a module cache across list remounts; isolate each test.
+beforeEach(clearDisclosuresForTests)
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -16,6 +21,13 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('./AgentStateDot', () => ({ AgentStateDot: () => null }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+
+async function pressByLabel(renderer: ReactTestRenderer, label: string) {
+  const toggle = findAllByHostType(renderer.root, 'Pressable').find(
+    (node) => node.props.accessibilityLabel === label
+  )
+  await act(async () => toggle!.props.onPress({ stopPropagation: vi.fn() }))
+}
 
 function agent(paneKey: string, parentPaneKey: string | null = null): RuntimeWorktreeAgentRow {
   return {
@@ -82,7 +94,7 @@ describe('WorktreeAgentList', () => {
       )
     })
 
-    const summary = renderer!.root.findByType('Pressable')
+    const summary = findByHostType(renderer!.root, 'Pressable')
     expect(summary.props.accessibilityLabel).toBe('Expand 3 agents')
     expect(summary.props.accessibilityState).toEqual({ expanded: false })
     expect(renderer!.root.findAll((node) => node.props.agent !== undefined)).toHaveLength(0)
@@ -91,6 +103,8 @@ describe('WorktreeAgentList', () => {
 
     expect(stopPropagation).toHaveBeenCalledTimes(1)
     expect(summary.props.accessibilityLabel).toBe('Collapse 3 agents')
+    expect(renderer!.root.findAll((node) => node.props.agent !== undefined)).toHaveLength(3)
+    await pressByLabel(renderer!, 'Show 1 child agent')
     const rows = renderer!.root.findAll((node) => node.props.agent !== undefined)
     expect(rows).toHaveLength(4)
     expect(rows[1].props.depth).toBe(1)
@@ -100,10 +114,10 @@ describe('WorktreeAgentList', () => {
       name: 'Review tests',
       displayState: 'working'
     })
-    await act(async () => rows[1].findByType('Pressable').props.onPress({ stopPropagation }))
+    await act(async () => findByHostType(rows[1], 'Pressable').props.onPress({ stopPropagation }))
     expect(onAgentPress).toHaveBeenCalledWith('agent-1')
-    expect(rows[0].findAllByType('Text').at(-1)?.props.children).toBe('1m')
-    expect(rows[1].findAllByType('Text').at(-1)?.props.children).toBe(age)
+    expect(findAllByHostType(rows[0], 'Text').at(-1)?.props.children).toBe('1m')
+    expect(findAllByHostType(rows[1], 'Text').at(-1)?.props.children).toBe(age)
   })
 
   it("shows every agent row with no summary under the desktop's Full list layout", async () => {
@@ -128,10 +142,11 @@ describe('WorktreeAgentList', () => {
         })
       )
     })
+    await pressByLabel(renderer!, 'Show 1 child agent')
     const rows = renderer!.root.findAll((node) => node.props.agent !== undefined)
     expect(rows).toHaveLength(4)
     expect(rows[1].props.childRow.id).toBe('child')
-    const childPress = renderer!.root.findByType('Pressable')
+    const childPress = findByHostType(rows[1], 'Pressable')
     await act(async () => childPress.props.onPress({ stopPropagation: vi.fn() }))
     expect(onAgentPress).toHaveBeenCalledWith('agent-1')
   })
@@ -147,7 +162,7 @@ describe('WorktreeAgentList', () => {
       )
     })
 
-    expect(renderer!.root.findAllByType('Pressable')).toHaveLength(0)
+    expect(findAllByHostType(renderer!.root, 'Pressable')).toHaveLength(0)
     expect(renderer!.root.findAll((node) => node.props.agent !== undefined)).toHaveLength(1)
   })
 
@@ -162,6 +177,50 @@ describe('WorktreeAgentList', () => {
       )
     })
 
-    expect(renderer!.root.findByType('Pressable').props.accessibilityLabel).toBe('Expand 2 agents')
+    expect(findByHostType(renderer!.root, 'Pressable').props.accessibilityLabel).toBe(
+      'Expand 2 agents'
+    )
+  })
+
+  it('folds two or more idle children behind one row once the parent is expanded', async () => {
+    const now = 24 * 60 * 60_000
+    const fresh = (paneKey: string, parent?: string) => ({
+      ...agent(paneKey, parent),
+      updatedAt: now
+    })
+    // Silent rows without a live PTY decay to idle.
+    const idle = (paneKey: string) => agent(paneKey, 'parent')
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [fresh('parent'), fresh('busy', 'parent'), idle('idle-1'), idle('idle-2')],
+          now,
+          unvisited: false
+        })
+      )
+    })
+    const paneKeys = () =>
+      renderer!.root
+        .findAll((node) => node.props.agent !== undefined && node.props.depth !== undefined)
+        .map((node) => node.props.agent.paneKey)
+
+    expect(paneKeys()).toEqual(['parent'])
+    await pressByLabel(renderer!, 'Show 3 child agents')
+    expect(paneKeys()).toEqual(['parent', 'busy'])
+    await pressByLabel(renderer!, 'Show 2 idle child agents')
+    expect(paneKeys()).toEqual(['parent', 'busy', 'idle-1', 'idle-2'])
+
+    // Scrolling the workspace list remounts cards; the user's disclosures must survive.
+    act(() => renderer?.unmount())
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [fresh('parent'), fresh('busy', 'parent'), idle('idle-1'), idle('idle-2')],
+          now,
+          unvisited: false
+        })
+      )
+    })
+    expect(paneKeys()).toEqual(['parent', 'busy', 'idle-1', 'idle-2'])
   })
 })

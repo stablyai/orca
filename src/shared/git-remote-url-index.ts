@@ -1,15 +1,5 @@
-// Why: "which remote has this URL?" was answered with one `git remote get-url`
-// subprocess per remote, awaited serially -- 58 spawns on a repo with 58 remotes,
-// on every push-target resolution. `git remote -v` answers for every remote from
-// one child.
-//
-// `remote -v` is the faithful one-command form, not `config --get-regexp '^remote\.'`:
-// both `remote -v` and `remote get-url` print the URL *after* `url.<base>.insteadOf`
-// expansion and pick the first of several `remote.<name>.url` values, while raw config
-// reads return the unexpanded value and the last of the multiple values.
-//
-// `remote -v` also predates `remote get-url` (2.7), so this lowers rather than raises
-// the Git floor and needs no capability gate.
+// remote -v replaces serial get-url children with one while preserving insteadOf expansion and the first URL.
+// Raw config differs: it is unexpanded and returns the last multivar. remote -v predates get-url (2.7), requiring no capability gate.
 
 import { iterateProcessOutputLines } from './process-output-field-scanner'
 
@@ -33,11 +23,7 @@ export function parseGitRemoteVerboseLine(line: string): GitRemoteVerboseEntry |
   return match ? { name, url: match[1], direction: match[2] as 'fetch' | 'push' } : null
 }
 
-/**
- * Fetch URL per remote in `git remote` order -- the value `git remote get-url <name>`
- * prints. A remote configured with only a `pushurl` has no fetch row and is absent
- * here; `get-url` echoed the remote's own name for it, which no caller can match.
- */
+/** First fetch URL per remote, in git remote order, matching get-url. Pushurl-only remotes have no matchable fetch URL and are omitted. */
 export function parseGitRemoteFetchUrls(stdout: string): Map<string, string> {
   const fetchUrls = new Map<string, string>()
   for (const line of iterateProcessOutputLines(stdout)) {

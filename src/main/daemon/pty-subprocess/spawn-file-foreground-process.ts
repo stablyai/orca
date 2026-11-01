@@ -8,7 +8,8 @@ import {
   collectDescendantsFromIndex,
   getProcessTableIndex
 } from '../../../shared/process-table-index'
-import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
+import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
+import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
   getProcessTableSnapshot
@@ -52,7 +53,7 @@ export function resolveSpawnFileForegroundFromRows(
 ): AgentForegroundProcessResolution {
   const index = getProcessTableIndex(rows)
   const root = index.byPid.get(rootPid)
-  if (!root || !root.tpgid || root.tpgid < 0 || !root.tty || root.tty === '?') {
+  if (!root || !root.tpgid || root.tpgid < 0 || !hasControllingTty(root.tty)) {
     return { available: false, processName: null }
   }
   const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, rootPid)]
@@ -60,7 +61,8 @@ export function resolveSpawnFileForegroundFromRows(
     .filter((row) => row.pgid === root.tpgid && row.tty === root.tty && !/[TZ]/.test(row.stat))
     .sort((left, right) => right.depth - left.depth)
   const foreground = candidates[0]
-  if (!foreground) {
+  // A foreground process whose argv ps withheld could be the agent, so its absence is not proof.
+  if (!foreground || candidates.some((row) => unreadableArgvName(row.command) !== null)) {
     return { available: false, processName: null }
   }
   const name = getCommandTokenPathBasename(getFirstCommandToken(foreground.command)).replace(

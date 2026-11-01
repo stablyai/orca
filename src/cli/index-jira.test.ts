@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   callMock: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { okFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
-import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira-agent-capability'
+import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira/jira-agent-capability'
 import { RuntimeClientError } from './runtime/types'
 
 const site = {
@@ -98,12 +98,11 @@ function output() {
   return JSON.parse(String(calls.at(-1)?.[0]))
 }
 
-function errorOutput() {
-  const calls = vi.mocked(console.log).mock.calls
-  return JSON.parse(String(calls.at(-1)?.[0]))
-}
-
 describe('Jira CLI', () => {
+  const priorExitCode = process.exitCode
+  afterEach(() => {
+    process.exitCode = priorExitCode
+  })
   useWorktreeAwarenessEnvironment(mocks)
   beforeEach(() => {
     process.exitCode = undefined
@@ -130,14 +129,17 @@ describe('Jira CLI', () => {
     await main(['jira', 'connection'], '/tmp/workspace')
     expect(mocks.callMock).toHaveBeenCalledTimes(1)
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('does not verify access'))
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('site-1\thttps://example.atlassian.net')
+    )
   })
 
   it('rejects old hosts before any Jira read or write', async () => {
     await run(['comment', 'add', 'ENG-123', '--body', 'Ready'], {
       'status.get': { capabilities: [] }
     })
-    expect(errorOutput()).toMatchObject({ error: { code: 'incompatible_runtime' } })
-    expect(mocks.callMock).toHaveBeenCalledTimes(1)
+    expect(output()).toMatchObject({ error: { code: 'incompatible_runtime' } })
+    expect(mocks.callMock.mock.calls).toEqual([['status.get']])
   })
 
   it('refuses ambiguous keys even when activeSiteId happens to name the first site', async () => {
@@ -148,7 +150,7 @@ describe('Jira CLI', () => {
         activeSiteId: site.id
       }
     })
-    expect(errorOutput()).toMatchObject({ error: { code: 'invalid_argument' } })
+    expect(output()).toMatchObject({ error: { code: 'invalid_argument' } })
     expect(mocks.callMock).not.toHaveBeenCalledWith('jira.updateIssue', expect.anything())
   })
 
@@ -169,7 +171,7 @@ describe('Jira CLI', () => {
     'https://example.atlassian.net/jira/browse/ENG-123'
   ])('rejects a different origin or context path: %s', async (input) => {
     await run(['issue', input])
-    expect(errorOutput()).toMatchObject({ error: { code: 'invalid_argument' } })
+    expect(output()).toMatchObject({ error: { code: 'invalid_argument' } })
     expect(mocks.callMock).not.toHaveBeenCalledWith('jira.getIssue', expect.anything())
   })
 
@@ -177,7 +179,7 @@ describe('Jira CLI', () => {
     await run(['issue', `${site.siteUrl}/browse/ENG-123`, '--site', 'other'], {
       'jira.status': { sites: [site, { ...site, id: 'other', siteUrl: 'https://other.example' }] }
     })
-    expect(errorOutput()).toMatchObject({ error: { code: 'invalid_argument' } })
+    expect(output()).toMatchObject({ error: { code: 'invalid_argument' } })
   })
 
   it.each(['not-a-key', 'https://example.atlassian.net/projects/ENG'])(
@@ -185,7 +187,7 @@ describe('Jira CLI', () => {
     async (key) => {
       await run(['issue', key])
       expect(mocks.callMock).not.toHaveBeenCalled()
-      expect(errorOutput()).toMatchObject({ error: { code: 'invalid_argument' } })
+      expect(output()).toMatchObject({ error: { code: 'invalid_argument' } })
     }
   )
 
@@ -193,7 +195,7 @@ describe('Jira CLI', () => {
     'does not claim a missing or wrong issue was read',
     async (result) => {
       await run(['issue', 'ENG-123'], { 'jira.getIssue': result })
-      expect(errorOutput()).toMatchObject({ error: { code: 'jira_issue_unavailable' } })
+      expect(output()).toMatchObject({ error: { code: 'jira_issue_unavailable' } })
     }
   )
 
@@ -226,6 +228,7 @@ describe('Jira CLI', () => {
     ['search', ' ']
   ])('rejects invalid searches before access: %s', async (...args) => {
     await run(args)
+    expect(output()).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(mocks.callMock).not.toHaveBeenCalled()
   })
 
@@ -271,12 +274,24 @@ describe('Jira CLI', () => {
         '--fields-json',
         fields
       ])
+      expect(output()).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
       expect(mocks.callMock).not.toHaveBeenCalled()
     }
   )
 
   it('rejects unknown projects without creating an issue', async () => {
     await run(['create', '--project', 'UNKNOWN', '--type', '10001', '--title', 'Fix'])
+    expect(output()).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: expect.stringContaining('Project did not match exactly one project')
+      }
+    })
+    expect(mocks.callMock).toHaveBeenCalledWith('jira.listProjects', {
+      siteId: site.id,
+      strict: true
+    })
     expect(mocks.callMock).not.toHaveBeenCalledWith('jira.createIssue', expect.anything())
   })
 
@@ -295,6 +310,7 @@ describe('Jira CLI', () => {
     ['--body', 'a', '--body-file', 'b']
   ])('refuses unsafe comment input before access: %s', async (...flags) => {
     await run(['comment', 'add', 'ENG-123', ...flags])
+    expect(output()).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(mocks.callMock).not.toHaveBeenCalled()
   })
 
@@ -302,7 +318,7 @@ describe('Jira CLI', () => {
     'requires exactly one nonblank transition selector before access: %s',
     async (...flags) => {
       await run(['status', 'set', 'ENG-123', ...flags])
-      expect(errorOutput()).toMatchObject({
+      expect(output()).toMatchObject({
         error: {
           code: 'invalid_argument',
           message: 'Pass exactly one of --to <name> or --to-id <transitionId>.'
@@ -332,6 +348,18 @@ describe('Jira CLI', () => {
       await run(['status', 'set', 'ENG-123', '--to', 'In Progress'], {
         'jira.listTransitions': transitions
       })
+      expect(output()).toMatchObject({
+        ok: false,
+        error: {
+          code: 'invalid_argument',
+          message: expect.stringContaining('Expected one available transition')
+        }
+      })
+      expect(mocks.callMock).toHaveBeenCalledWith('jira.listTransitions', {
+        key: issue.key,
+        siteId: site.id,
+        strict: true
+      })
       expect(mocks.callMock).not.toHaveBeenCalledWith('jira.updateIssue', expect.anything())
     }
   )
@@ -352,13 +380,17 @@ describe('Jira CLI', () => {
       updates
     })
     expect(mocks.callMock).not.toHaveBeenCalledWith('jira.getIssue', expect.anything())
+    expect(output()).toMatchObject({
+      ok: true,
+      result: { ok: true, key: issue.key, siteId: site.id }
+    })
   })
 
   it('does not report rejected mutations as successful', async () => {
     await run(['label', 'add', 'ENG-123', '--label', 'bug'], {
       'jira.updateIssue': { ok: false, error: 'Permission denied' }
     })
-    expect(errorOutput()).toMatchObject({
+    expect(output()).toMatchObject({
       error: {
         code: 'jira_write_failed',
         message: expect.stringContaining('Permission denied')
@@ -370,7 +402,7 @@ describe('Jira CLI', () => {
     await run(['comment', 'add', 'ENG-123', '--body', 'Ready'], {
       'jira.addIssueComment': { ok: false, error: 'Connection closed while reading the response' }
     })
-    expect(errorOutput()).toMatchObject({
+    expect(output()).toMatchObject({
       error: {
         code: 'jira_write_failed',
         message: expect.stringContaining('Verify in Jira before retrying')
@@ -391,7 +423,7 @@ describe('Jira CLI', () => {
       return previous?.(method, ...args)
     })
     await main(['jira', 'comment', 'add', 'ENG-123', '--body', 'Ready', '--json'], '/tmp/workspace')
-    expect(errorOutput()).toMatchObject({
+    expect(output()).toMatchObject({
       error: {
         code: 'jira_write_unverified',
         message: expect.stringContaining('Verify in Jira before retrying')

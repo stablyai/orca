@@ -1,11 +1,7 @@
-/** When a managed server last took in migrated state; a rollback to an older snapshot loses it. */
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
 
-/**
- * The latest migration into this server: its durable mark, or a journal's start for a delta
- * moved before deltas wrote that mark. An unreadable journal fails closed as "now".
- */
+/** Use the durable migration mark or older delta journal time; unreadable journals conservatively return now to block destructive rollback. */
 export function latestOrcadMigrationInto(
   userDataPath: string,
   environment: KnownRuntimeEnvironment

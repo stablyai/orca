@@ -19,11 +19,9 @@ import type { HostScreenState } from './use-host-screen-state'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
-  /** The paired host whose list this is. */
   hostId: string | undefined
   /** Null in a build that lists without the feed. */
   feed: HostSidebarFeed | null
-  /** The rows worktree.ps and the desktop's server lists served, with display state applied. */
   displayWorktrees: Worktree[]
   /** The desktop's platform, which names its own host; never the phone's. */
   hostPlatform: NodeJS.Platform | null
@@ -32,13 +30,10 @@ export type HostListSectionsInputs = {
 
 export type HostListSections = {
   sections: Section[]
-  /** Each section before collapse; a feed-built section carries its own count instead. */
   rawSections: Section[]
   uniqueRepos: WorkspaceSectionRepo[]
-  /** Each row's repo by id, as the desktop's cards look theirs up for colour and icon. */
   repoById: ReadonlyMap<string, SectionRepo>
   collapsedGroups: Set<string>
-  /** The desktop's value once read; the served catalog's (or the default) before. */
   projectOrderBy: ProjectOrderBy
 }
 
@@ -56,7 +51,6 @@ function useFilterRepos(
   )
 }
 
-/** The phone's own list rules, for a page built without the feed. */
 function useLegacyHostListSections({
   displayWorktrees,
   state
@@ -97,7 +91,6 @@ function useLegacyHostListSections({
 
 const NO_SECTIONS: Section[] = []
 
-/** The desktop sidebar's own list, built by the shared builder from the host's feed. */
 function useFeedHostListSections({
   client,
   hostId,
@@ -131,8 +124,7 @@ function useFeedHostListSections({
     [domains, catalog, view]
   )
   const lastVisited = useLastVisitedWorktreeOnHost(hostId)
-  // Only under a feed this page cannot read (an older desktop): before the first read the list
-  // waits for the feed, or the host's last installed one, so it never draws a shape the desktop doesn't.
+  // Fall back only after an unreadable feed; before the first read, wait or retain the installed feed to avoid flashing a different list shape.
   const preFeed = feed?.kind === 'reopen'
   const sections = useMemo(
     () =>
@@ -188,7 +180,6 @@ function useFeedHostListSections({
   return { sections, rawSections: sections, uniqueRepos, repoById, collapsedGroups, projectOrderBy }
 }
 
-/** Switch point: the list comes from the host's sidebar feed, or the phone builds it itself. */
 export const useHostListSections = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? useFeedHostListSections
   : useLegacyHostListSections

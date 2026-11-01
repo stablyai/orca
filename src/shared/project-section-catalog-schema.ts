@@ -6,8 +6,7 @@ import type { RepoKind } from './repo-types'
 import type { ProjectOrderBy } from './ui-chrome-types'
 import { hostUnionArms, salvagedOptional, salvagingArray } from './zod-salvage'
 
-// The sidebar's project catalog as a reader parses it, from mobileRelay.projectSections or the
-// sidebar feed's projectCatalog domain (MobileProjectSectionCatalog is what a host sends).
+// Read sidebar-feed/mobileRelay.projectSections catalogs; MobileProjectSectionCatalog is the sender shape.
 
 const SETUP_METHOD_ARMS = hostUnionArms<ProjectHostSetupMethod>({
   'legacy-repo': true,

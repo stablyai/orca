@@ -9,7 +9,15 @@ import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
+import { findAiVaultSessionLiveState } from './ai-vault-original-pane'
 import { VaultSessionRow } from './AiVaultSessionRow'
+
+import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import {
+  buildAiVaultOriginalPaneIndex,
+  findAiVaultSessionLiveStateInIndex
+} from './ai-vault-original-pane-index'
 
 const session = {
   id: 'local:gemini:sess-1:/home/a/.gemini/s.json',
@@ -41,8 +49,7 @@ const worktreeInfo: AiVaultSessionWorktreeInfo = {
 }
 
 beforeEach(() => {
-  // The expanded details panel reads these while rendering (first-prompt card)
-  // and on mount (subagent list), so the row cannot expand without them.
+  // Expanded details read first-prompt/subagent APIs during render/mount.
   ;(window as unknown as { api: unknown }).api = {
     aiVault: {
       getFirstUserPrompt: vi.fn().mockResolvedValue({ prompt: null }),
@@ -52,8 +59,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  // No `globals: true`, so Testing Library's auto-cleanup never runs and rows
-  // from earlier tests would stay in the document and duplicate every query.
+  // Without Vitest globals, Testing Library cannot auto-clean up; retained rows would duplicate queries.
   cleanup()
   vi.clearAllMocks()
   delete (window as unknown as { api?: unknown }).api
@@ -61,6 +67,7 @@ afterEach(() => {
 
 function renderRow(
   overrides: {
+    liveState?: AgentDotState | null
     searchHit?: AiVaultSearchHit
     session?: AiVaultSession
     subagentResume?: AiVaultSubagentResumeActions
@@ -80,7 +87,7 @@ function renderRow(
         session={overrides.session ?? session}
         searchHit={overrides.searchHit}
         subagentResume={overrides.subagentResume}
-        liveState={null}
+        liveState={overrides.liveState ?? null}
         resumeStartup={{ command: 'gemini --resume sess-1' }}
         realHomeResumeStartup={{ command: 'gemini --resume sess-1' }}
         worktreeInfo={overrides.worktreeInfo ?? null}
@@ -108,9 +115,74 @@ function renderRow(
   )
 }
 
+it.each([true, false])(
+  'renders the selected pane status through the %s provider lookup',
+  (direct) => {
+    const selectedSession = { ...session, title: 'Monitor the background job until it finishes' }
+    const selected: AgentStatusEntry = {
+      paneKey: 'tab:leaf',
+      state: 'working',
+      workingMode: 'monitoring',
+      agentType: session.agent,
+      prompt: selectedSession.title,
+      updatedAt: 100,
+      stateStartedAt: 100,
+      stateHistory: [],
+      ...(direct ? { providerSession: { key: 'session_id', id: session.sessionId } } : {})
+    }
+    const lookup = (entries: AgentStatusEntry[]) => {
+      const state = {
+        agentStatusByPaneKey: Object.fromEntries(entries.map((entry, i) => [String(i), entry])),
+        retainedAgentsByPaneKey: {},
+        sleepingAgentSessionsByPaneKey: {},
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {}
+      }
+      const indexed = findAiVaultSessionLiveStateInIndex(
+        buildAiVaultOriginalPaneIndex(state),
+        selectedSession
+      )
+      expect(findAiVaultSessionLiveState(state, selectedSession)).toBe(indexed)
+      return indexed
+    }
+    renderRow({ liveState: lookup([selected]) })
+    expect(screen.getByLabelText('Monitoring background tasks')).toBeTruthy()
+    cleanup()
+    renderRow({ liveState: lookup([{ ...selected, workingMode: undefined }]) })
+    expect(screen.getByLabelText('Working')).toBeTruthy()
+    cleanup()
+    renderRow({
+      liveState: lookup([{ ...selected, state: 'done', workingMode: undefined, interrupted: true }])
+    })
+    expect(screen.getByLabelText('Interrupted')).toBeTruthy()
+    for (const [outcome, label] of [
+      ['failure', 'Failed'],
+      ['unconfirmed', 'Couldn’t confirm']
+    ] as const) {
+      cleanup()
+      renderRow({
+        liveState: lookup([
+          {
+            ...selected,
+            state: 'done',
+            workingMode: undefined,
+            mainAgent: { state: 'done', outcome, stateStartedAt: 100 }
+          }
+        ])
+      })
+      expect(screen.getByLabelText(label)).toBeTruthy()
+    }
+    cleanup()
+    renderRow({ liveState: lookup([{ ...selected, state: 'done', workingMode: undefined }]) })
+    expect(screen.queryByLabelText('Done')).toBeNull()
+    if (!direct) {
+      expect(lookup([selected, selected])).toBeNull()
+    }
+  }
+)
+
 function expectAgentIdentity(): void {
   const metadata = screen.getByTestId('ai-vault-session-metadata')
-  // AgentIcon is an <svg> for the hand-drawn agents and an <img> for the rest.
   expect(metadata.querySelector('svg, img')).toBeTruthy()
   expect(within(metadata).getByText('Gemini')).toBeTruthy()
   expect(within(metadata).getByText('2 msgs')).toBeTruthy()
@@ -118,9 +190,7 @@ function expectAgentIdentity(): void {
 
 describe('VaultSessionRow details toggle', () => {
   it('does not expand the row when a menu action is chosen', async () => {
-    // Radix portals the menu out of the row's DOM, but React bubbles its
-    // clicks back through the component tree. Expanding here would leave the
-    // row open behind the confirm dialog, and still open after cancelling.
+    // Portaled menu clicks still bubble through React; Delete must not expand the row behind its dialog.
     const onToggleDetails = vi.fn()
     const onRequestDelete = vi.fn()
     renderRow({ onToggleDetails, onRequestDelete })
@@ -138,9 +208,7 @@ describe('VaultSessionRow details toggle', () => {
     const { container } = renderRow({ onToggleDetails })
     const user = userEvent.setup()
 
-    // The session title: inside the row body, so its click reaches the row's
-    // own handler — the path a user takes to expand a row. Queried first-match
-    // because Radix's asChild trigger repeats the subtree.
+    // Pick the first title because Radix asChild repeats the subtree; its click must reach the row body.
     const title = container.querySelector('[title="Drag to resume in a new tab"]')
     expect(title).not.toBeNull()
     await user.click(title as Element)
@@ -237,14 +305,11 @@ describe('VaultSessionRow agent metadata line', () => {
     renderRow({ detailsExpanded: true })
 
     expectAgentIdentity()
-    // The details panel replaces the one-line preview with the full turns.
     expect(screen.getByText('Latest turns')).toBeTruthy()
     expect(screen.queryByText(': Ready when you are')).toBeNull()
   })
 
   it('renders the worktree badge once when expanded', () => {
-    // The metadata grid already carries the worktree badge, so the row body must
-    // not add a second copy of its own above the details panel.
     const { container } = renderRow({ detailsExpanded: true, worktreeInfo })
 
     expect(container.querySelectorAll(`[title="${worktreeInfo.label}"]`)).toHaveLength(1)

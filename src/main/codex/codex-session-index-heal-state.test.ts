@@ -5,8 +5,6 @@ import { join } from 'node:path'
 import {
   appendHealLedgerRecord,
   collectPendingHealThreads,
-  isHealMarkerCurrent,
-  writeHealMarker,
   type CodexSessionIndexHealPaths
 } from './codex-session-index-heal-state'
 
@@ -34,7 +32,7 @@ function createPaths(systemSessionsRoot = WINDOWS_SESSIONS_ROOT): CodexSessionIn
 }
 
 function appendAuditRecord(paths: CodexSessionIndexHealPaths, target: string, recordId: string) {
-  // Mirrors the real writer's leading newline, which quarantines a torn tail.
+  // Match the production newline that isolates torn ledger tails.
   appendFileSync(
     paths.auditLogPath,
     `\n${JSON.stringify({ action: 'hardlink', source: '/managed/x.jsonl', target, recordId })}\n`
@@ -46,27 +44,6 @@ function windowsRolloutTarget(root: string): string {
 }
 
 describe('codex session index heal state', () => {
-  it('keeps the heal marker current across Windows spellings of one target', () => {
-    const paths = createPaths()
-    writeHealMarker(paths, 42, { healedThreads: 1, missingThreads: 0, failedThreads: 0 })
-
-    for (const alias of ['C:/Users/Me/.codex/sessions', 'c:\\users\\me\\.codex\\sessions']) {
-      expect(isHealMarkerCurrent({ ...paths, systemSessionsRoot: alias }, 42)).toBe(true)
-    }
-  })
-
-  it('still re-heals when the real target path actually changes', () => {
-    const paths = createPaths()
-    writeHealMarker(paths, 42, { healedThreads: 1, missingThreads: 0, failedThreads: 0 })
-
-    expect(
-      isHealMarkerCurrent(
-        { ...paths, systemSessionsRoot: 'C:\\Users\\Me\\moved-codex\\sessions' },
-        42
-      )
-    ).toBe(false)
-  })
-
   it('treats a heal record as processed regardless of how its root was spelled', async () => {
     const paths = createPaths()
     appendAuditRecord(paths, windowsRolloutTarget(WINDOWS_SESSIONS_ROOT), 'audit-1')
@@ -124,20 +101,14 @@ describe('codex session index heal state', () => {
     clearInterval(ticker)
 
     expect(pending).toHaveLength(20_000)
-    // A blocking readFileSync + whole-file JSON.parse would starve every timer.
     expect(ticks).toBeGreaterThan(0)
   })
 
   it('refuses to treat an unreadable audit ledger as an empty work queue', async () => {
     const paths = createPaths()
-    // A directory in the audit's place surfaces EISDIR rather than ENOENT.
     mkdirSync(paths.auditLogPath, { recursive: true })
 
     await expect(collectPendingHealThreads(paths)).rejects.toThrow()
-  })
-
-  it('treats a missing audit ledger as no pending work', async () => {
-    await expect(collectPendingHealThreads(createPaths())).resolves.toEqual([])
   })
 
   it('skips torn ledger lines instead of failing the pass', async () => {

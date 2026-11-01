@@ -91,8 +91,7 @@ describe('launchWorkItemDirect owner row', () => {
     )
     expect(mocks.resolvePrBase).not.toHaveBeenCalled()
     expect(mocks.createWorktree.mock.calls[0]?.at(-1)).toEqual({ executionHostId: 'runtime:env-b' })
-    // Why (#29599): the server lists agents per workspace, so nothing is probed before it exists,
-    // and never this client in its place.
+    // Wait for the created workspace to ask its server for agents; never probe this client instead (#29599).
     expect(mocks.store.ensureRuntimeDetectedAgents).not.toHaveBeenCalled()
     expect(mocks.store.ensureDetectedAgents).not.toHaveBeenCalled()
   })

@@ -1,6 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
-import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
-import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -15,7 +13,6 @@ import {
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { createCommandCodeOutputStatusDetector } from '../../../../../shared/command-code-output-status'
 import { readInFlightCommandCodeTurn } from '../parked-terminal-command-status'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
@@ -26,7 +23,8 @@ import { isMainTerminalSideEffectAuthorityForPty } from '../terminal-side-effect
 import { isRendererHiddenPtyDeliveryGateEnabled } from '../terminal-hidden-delivery-gate'
 import {
   markRendererOwnedAgentStatusWrite,
-  registerRendererOwnedAgentStatusPane
+  registerRendererOwnedAgentStatusPane,
+  resolveRendererOwnedAgentStatusTiming
 } from '../renderer-owned-agent-status-registry'
 
 import { resolveLatestAgentDoneStartedAt } from './agent-done-started-at'
@@ -38,7 +36,6 @@ import {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/** Host and Windows capability flags plus the input-activity tracking status routing reads. */
 export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): void {
   session.shellOverride = session.tab?.shellOverride
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
@@ -46,16 +43,12 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
   // enables ConPTY synchronized-output protection, which strips an agent's
   // transient cursor-show (?25h) and leaves the cursor invisible. The execution
   // host is the authoritative signal: only a 'local' host is a local native PTY.
-  session.executionHostId = session.terminalOwnerUnresolved
-    ? UNRESOLVED_OWNER_HOST_ID
-    : getExecutionHostIdForWorktree(session.state, session.deps.worktreeId)
+  session.executionHostId = session.ownerContext.executionHostId
   session.isNativeWindowsConpty = isLocalNativeWindowsConpty({
     userAgent: navigator.userAgent,
     connectionId: null,
     cwd: session.deps.cwd,
-    // Why: main folds the global Windows shell into its spawn classification
-    // (pty.ts effectiveShellOverride); fold it here too so both sides treat
-    // a global-WSL default identically (terminal-query-authority.md ConPTY).
+    // Match main’s global-shell classification so default WSL never enables native ConPTY behavior.
     shellOverride: resolveWindowsShellOverride(
       session.shellOverride,
       session.state.settings?.terminalWindowsShell
@@ -76,8 +69,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
       (session.paneStartup.launchAgent === 'codex' ||
         session.paneStartup.telemetry.agent_kind === 'codex')
     ) {
-      // Why: history resumes open on a completed Codex composer without a done
-      // row, so arm the same Windows stale-focus guard until work starts again.
+      // Completed Codex resumes can lack a done row; keep the Windows stale-focus guard until work resumes.
       session.suppressNativeWindowsIdleCodexFocusReports = true
     }
     if (initialAgentStatus?.state === 'done') {
@@ -107,17 +99,22 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
     ? getCachedWindowsTerminalCapabilities()
     : null
   session.projectRuntime =
-    !session.tab?.forceHostRuntime && session.runtimeEnvironmentId === null
-      ? getLocalProjectExecutionRuntimeContext(session.state, session.deps.worktreeId, undefined, {
-          wslAvailable: session.localWindowsTerminalCapabilities?.wslAvailable,
-          availableWslDistros: session.localWindowsTerminalCapabilities?.wslDistros ?? null
-        })
+    !session.tab?.forceHostRuntime &&
+    session.runtimeEnvironmentId === null &&
+    (!session.ownerContext.selectedHost || session.ownerContext.projectRuntimeTarget)
+      ? getLocalProjectExecutionRuntimeContext(
+          session.state,
+          session.deps.worktreeId,
+          undefined,
+          {
+            wslAvailable: session.localWindowsTerminalCapabilities?.wslAvailable,
+            availableWslDistros: session.localWindowsTerminalCapabilities?.wslDistros ?? null
+          },
+          session.ownerContext.projectRuntimeTarget
+        )
       : undefined
   session.shouldOwnAgentStatusInRenderer = session.runtimeEnvironmentId !== null
-  // Why: the host also mirrors agent status for this pane through tabs.
-  // Claiming here (decided once at transport creation, like the side-effect
-  // authority below) lets the mirror keep this renderer's byte-derived status
-  // instead of overwriting/deleting it on every republication.
+  // Claim renderer-derived status once per transport so host mirroring cannot overwrite or delete its live row.
   session.releaseRendererOwnedAgentStatusPane =
     session.runtimeEnvironmentId !== null
       ? registerRendererOwnedAgentStatusPane(session.cacheKey, session.runtimeEnvironmentId)
@@ -147,15 +144,17 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
           agentType ?? authoritativePaneAgent
         )
       : resolvedStatusTitle
-    // Why: proves the claim — only a pane that really produced byte-derived
-    // status may fence the host mirror out of its store key.
+    // Only actual byte-derived status proves authority to fence out host mirroring.
     markRendererOwnedAgentStatusWrite(session.cacheKey)
+    const timing = resolveRendererOwnedAgentStatusTiming(
+      currentState.agentStatusByPaneKey[session.cacheKey]
+    )
     if (session.launchToken) {
       currentState.setAgentStatus(
         session.cacheKey,
         observedStatusPayload,
         statusTitle,
-        undefined,
+        timing,
         routing,
         {
           launchToken: session.launchToken
@@ -166,7 +165,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
         session.cacheKey,
         observedStatusPayload,
         statusTitle,
-        undefined,
+        timing,
         routing
       )
     }
@@ -184,38 +183,24 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
       session.scheduleTerminalBellNotification()
     }
   }
-  // Why: when main holds side-effect authority for this PTY's bytes, the
-  // transport must NOT register title/bell/agent byte parsers — the
-  // pty:sideEffect fact consumer below is the single policy consumer.
-  // Decided once at transport creation so a fact never has two consumers.
+  // Choose one side-effect consumer at transport creation; main facts replace title/bell/agent byte parsers.
   session.mainSideEffectAuthority = isMainTerminalSideEffectAuthorityForPty({
     settings: session.state.settings,
     runtimeEnvironmentId: session.runtimeEnvironmentId
   })
-  // Why: Phase-4 hidden-delivery gate — only meaningful under main authority
-  // (renderer byte parsers need bytes otherwise). Decided once at pane
-  // creation: it picks which path records a mode-2031 subscription (main's
-  // fact vs the byte scan), which must have exactly one owner.
+  // Choose hidden gating once under main authority so 2031 subscription facts and byte scans never both own the record.
   session.hiddenDeliveryGateActive =
     session.mainSideEffectAuthority &&
     isRendererHiddenPtyDeliveryGateEnabled(session.state.settings)
-  // Why: structural per-PTY gate predicate (authority on + gate on + bytes
-  // transit local main, which implies snapshot-backed). Shared by the hidden
-  // mark sync and mode-2031 subscription recording so the recorder can never
-  // disagree with what main may drop — and never depends on the racy hidden
-  // mark (a fact can outrun the pty:data task that sets it).
+  // Share the structural gate predicate with subscription recording; a fact can outrun the hidden mark set by data delivery.
   session.isHiddenDeliveryGateManagedPty = (ptyId: string | null): ptyId is string =>
     session.hiddenDeliveryGateActive && Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
-  // Why (byte-parser mode only): with main authority the Command Code scrape
-  // runs in main's per-PTY tracker and arrives as command-code facts; running
-  // the byte detector too would double-drive the seed/settle policy above.
+  // Only byte mode runs Command Code scraping; main facts already drive seed/settle under main authority.
   session.commandCodeOutputStatusDetector = session.mainSideEffectAuthority
     ? null
     : createCommandCodeOutputStatusDetector({
         startupCommand: session.paneStartup?.command,
-        // Why the seed: a reveal remount recreates this detector long past the banner
-        // (and with no startup command); a turn parked mid-flight must still arm the
-        // scrape so its return to the idle composer completes the row.
+        // Seed in-flight Command Code turns on reveal; recreated detectors missed the banner and must still recognize idle return.
         inFlightTurn: readInFlightCommandCodeTurn(session.cacheKey),
         onWorking: session.seedCommandCodeOutputWorkingStatus,
         onDone: session.scheduleCommandCodeOutputDoneStatus
@@ -247,20 +232,17 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
   session.recordTerminalInputForHibernation = (): void => {
     useAppStore.getState().recordTerminalInput(session.cacheKey)
   }
-  // Why: onData mixes real user input with xterm's parser auto-replies (focus
-  // reports, DA/DSR/CPR responses). Recording those replies as activity makes
-  // the hibernation planner treat a pane hidden after its agent finished as
-  // "input after done" forever. The core user-input signal fires only for real
-  // input, so hibernation activity records from it; onData recording remains
-  // solely as the fallback when the internal API is unavailable.
+  // Record real input from xterm’s core signal; onData also carries query replies that falsely prevent hibernation. Fall back only if that signal is absent.
   session.recordRealUserTerminalInput = (): void => {
     session.recordTerminalInputForHibernation()
-    // Takeover must never fire from the onData fallback below: it mixes in auto-replies.
-    reportWorkerTerminalUserInput(session.cacheKey, session.runtimeEnvironmentId)
   }
-  session.userInputActivityDisposable = subscribeToTerminalUserInput(
-    session.pane.terminal,
-    session.recordRealUserTerminalInput
+  // Why: xterm fires onUserInput before onData, so publishing here made the key wait on every store subscriber before reaching the PTY.
+  session.userInputActivityDisposable = subscribeToTerminalUserInput(session.pane.terminal, () =>
+    queueMicrotask(() => {
+      if (!session.disposed) {
+        session.recordRealUserTerminalInput()
+      }
+    })
   )
   session.recordTerminalInputForHibernationFallback = (): void => {
     if (session.userInputActivityDisposable === null) {

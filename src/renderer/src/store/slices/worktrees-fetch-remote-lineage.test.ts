@@ -19,10 +19,10 @@ function createRemoteRepoStore() {
 }
 import {
   createTestStore,
-  mockApi,
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
-  runtimeEnvironmentCall
+  runtimeEnvironmentCall,
+  worktreeListMock
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -96,7 +96,7 @@ describe('fetchWorktrees', () => {
       branch: 'refs/heads/feature'
     })
     const refreshed = { ...initial, linkedGitLabIssue: 321 }
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({
       worktreesByRepo: { repo1: [initial] },
       sortEpoch: 7

@@ -3,7 +3,6 @@ import { useCallback, useState, type RefObject } from 'react'
 import { useAppStore } from '../../store'
 import { dispatchDictationControl } from '../dictation/dictation-control-events'
 
-/** Whether the composer can dictate and is dictating now, and the controls that start and stop it. */
 export function useNativeChatDictation(
   textareaRef: RefObject<NativeChatComposerInput | null>,
   disabled: boolean
@@ -23,8 +22,7 @@ export function useNativeChatDictation(
     dictationState === 'starting' ||
     dictationState === 'listening' ||
     dictationState === 'stopping'
-  const dictationDisabled =
-    !isDictating && (disabled || voiceSettings?.enabled !== true || !voiceSettings.sttModel)
+  const dictationDisabled = !isDictating && (disabled || voiceSettings?.enabled !== true)
   const focusForDictation = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   const toggleDictation = useCallback(() => {
     if (isDictating) {

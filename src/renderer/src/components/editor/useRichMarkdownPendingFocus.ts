@@ -13,12 +13,7 @@ type PendingFocusOptions = {
   cancelAutoFocusRef: RefObject<(() => void) | null>
 }
 
-/**
- * Focuses the editor when the Explorer opens this document for find (issue #8083). The request is
- * scoped to one pane (`viewStateId`) so split siblings can't claim it, and stays armed until focus
- * actually lands — Tiptap can replace the instance first — or until its TTL retires it, so a later
- * unrelated remount of the same file never steals focus.
- */
+/** Keep pane-scoped focus handoffs armed across Tiptap replacement until focus lands or TTL expires, preventing later remount focus theft. */
 export function useRichMarkdownPendingFocus({
   editor,
   fileId,

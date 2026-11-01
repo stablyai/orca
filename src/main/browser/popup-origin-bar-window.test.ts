@@ -37,8 +37,7 @@ const { fakeElectron } = vi.hoisted(() => {
       loadURL: vi.fn(() => Promise.resolve()),
       close: vi.fn(),
       setWindowOpenHandler: vi.fn(),
-      // Mirrors real Electron: isDestroyed() is already true inside a
-      // 'destroyed' handler, which is what the double-close guard relies on.
+      // Electron marks contents destroyed before emitting destroyed; the close guard depends on this.
       isDestroyed: vi.fn(() => destroyed),
       emit: (event: string, ...args: unknown[]) => {
         if (event === 'did-navigate' || (event === 'did-navigate-in-page' && args[2])) {
@@ -47,7 +46,6 @@ const { fakeElectron } = vi.hoisted(() => {
         if (event === 'destroyed') {
           destroyed = true
         }
-        // off() replaces the stored array, so iterating the fetched one is safe.
         for (const handler of handlers.get(event) ?? []) {
           handler(...args)
         }
@@ -61,8 +59,7 @@ const { fakeElectron } = vi.hoisted(() => {
     webContents: FakeWebContents
     setBounds = vi.fn()
     constructor(options: { webContents?: FakeWebContents; webPreferences?: unknown }) {
-      // Why: Electron rejects explicit undefined instead of treating it as
-      // omitted, which the popup fallback path depends on.
+      // Electron rejects explicitly undefined webContents.
       if (Object.hasOwn(options, 'webContents') && options.webContents === undefined) {
         throw new TypeError('options.webContents must be a WebContents')
       }
@@ -362,7 +359,6 @@ describe('openPopupWithOriginBar', () => {
     expect(committedTitleEvent.preventDefault).toHaveBeenCalledOnce()
     expect(lastWindow().setTitle).toHaveBeenLastCalledWith('Sign in to Example')
 
-    // A stale title must not survive a cross-origin navigation.
     adopted.emit('did-navigate', {}, 'https://evil.example.net/')
     expect(lastWindow().setTitle).toHaveBeenLastCalledWith('https://evil.example.net')
   })
@@ -497,8 +493,6 @@ describe('openPopupWithOriginBar', () => {
     adopted.emit('destroyed')
 
     expect(lastWindow().close).toHaveBeenCalled()
-    // The window's closed handler must not call close() on already-destroyed
-    // contents — that throws in real Electron.
     expect(adopted.close).not.toHaveBeenCalled()
     expect(bar.webContents.close).toHaveBeenCalledTimes(1)
   })
@@ -526,8 +520,6 @@ describe('openPopupWithOriginBar', () => {
     const { bar } = lastViews()
     const dataUrl = bar.webContents.loadURL.mock.calls[0][0] as string
     const html = decodeURIComponent(dataUrl.replace('data:text/html;charset=utf-8,', ''))
-    // rtl clip container ellipsizes the left; the isolated ltr bdi keeps the
-    // origin's own characters (host, port) in normal order.
     expect(html).toContain('<bdi id="origin">')
     expect(html).toMatch(/#origin-clip\s*{[^}]*direction:\s*rtl/)
     expect(html).toMatch(/#origin\s*{[^}]*direction:\s*ltr/)

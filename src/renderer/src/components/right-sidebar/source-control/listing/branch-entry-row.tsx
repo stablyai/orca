@@ -2,14 +2,19 @@ import React from 'react'
 import { MessageSquare } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
+import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
-import { translate } from '@/i18n/i18n'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import { DiffLineCounts } from './diff-line-counts'
+import { reviewNoteCountTitle } from './review-note-count-title'
 import { SourceControlEntryContextMenu } from './entry-context-menu'
 import { toPermanentSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from './split-open'
-import { SOURCE_CONTROL_TREE_FILE_PADDING_PX, SOURCE_CONTROL_TREE_INDENT_PX } from './row-layout'
+import {
+  getSourceControlRowHighlightClass,
+  SOURCE_CONTROL_TREE_FILE_PADDING_PX,
+  SOURCE_CONTROL_TREE_INDENT_PX
+} from './row-layout'
 import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
 
 export function BranchEntryRow({
@@ -17,6 +22,7 @@ export function BranchEntryRow({
   currentWorktreeId,
   worktreePath,
   depth = 0,
+  isOpenFile = false,
   onRevealInExplorer,
   connectionId,
   onOpen,
@@ -27,6 +33,7 @@ export function BranchEntryRow({
   currentWorktreeId: string
   worktreePath: string
   depth?: number
+  isOpenFile?: boolean
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   connectionId?: string | null
   onOpen: (event?: SourceControlRowOpenEvent) => void
@@ -50,7 +57,11 @@ export function BranchEntryRow({
       <div
         data-source-control-path={entry.path}
         data-source-control-area="branch"
-        className="group flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors hover:bg-accent/40"
+        data-current={isOpenFile ? 'true' : undefined}
+        className={cn(
+          'group flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
+          getSourceControlRowHighlightClass(isOpenFile)
+        )}
         style={{
           paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
         }}
@@ -78,11 +89,7 @@ export function BranchEntryRow({
         {commentCount > 0 && (
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
-            title={translate(
-              'auto.components.right.sidebar.SourceControl.657e0c90ad',
-              '{{value0}} note{{value1}}',
-              { value0: commentCount, value1: commentCount === 1 ? '' : 's' }
-            )}
+            title={reviewNoteCountTitle(commentCount)}
           >
             <MessageSquare className="size-3" />
             <span className="tabular-nums">{commentCount}</span>

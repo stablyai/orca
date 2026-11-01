@@ -17,19 +17,11 @@ import {
   type Verdict
 } from './serialize-grid-roundtrip'
 
-// Serialize→replay round-trip fuzz for the addon-serialize patch. Invariants:
-//   I1 no line in the serialized range is wider than the grid, and no blank background-colored
-//      row follows its last text row (the old build trimmed those) ⇒ new bytes === old bytes
-//   I2 replaying the new bytes reproduces the source grid, cursor, buffer and modes
-//   I3 every checkpoint the old build replayed faithfully, the new one does too
-// I1/I3 need a baseline build: ORCA_OLD_SERIALIZE_ADDON=$(node
-// config/scripts/build-serialize-addon-at-ref.mjs --ref origin/main --out-dir <dir>).
-// ORCA_NEW_SERIALIZE_ADDON likewise replaces the installed build under test.
-//
-//   SERIALIZE_FUZZ_ITERATIONS=7000  cases per category (default 40)
-//   SERIALIZE_FUZZ_SEED=1234        re-run exactly one seed (all categories)
-//   SERIALIZE_FUZZ_CATEGORY=alt       run one of normal | alt | conpty
-//   SERIALIZE_FUZZ_REPORT=1         print tallies and minimized failures
+// I1: unchanged bytes outside overlong lines and trailing background rows; I2: faithful replay; I3: no regression.
+// Set ORCA_OLD_SERIALIZE_ADDON to a build from config/scripts/build-serialize-addon-at-ref.mjs.
+// ORCA_NEW_SERIALIZE_ADDON overrides the installed build.
+// SERIALIZE_FUZZ_ITERATIONS sets cases/category (default 40); SERIALIZE_FUZZ_SEED selects one seed.
+// SERIALIZE_FUZZ_CATEGORY selects normal, alt, or conpty; SERIALIZE_FUZZ_REPORT prints minimized failures.
 
 const ALL_CATEGORIES: readonly SerializeFuzzCategory[] = ['normal', 'alt', 'conpty']
 const CATEGORIES = ALL_CATEGORIES.filter(
@@ -54,7 +46,7 @@ async function caseVerdicts(
   return new Set(checks.flatMap((check) => verdicts(check, serializers.length > 1)))
 }
 
-/** Greedy step-drop minimizer that keeps the given verdict reproducing. */
+/** Drop steps greedily while preserving the failure verdict. */
 async function minimize(
   testCase: SerializeFuzzCase,
   verdict: Verdict,
@@ -208,10 +200,7 @@ async function describeFailures(
   return lines.join('\n')
 }
 
-// Seeds 1-25 whose NEW replay already diverges and whose OLD replay diverges
-// the same way (verified with ORCA_OLD_SERIALIZE_ADDON): upstream limitations
-// such as orphan combining marks in column 0 and wide glyphs reflowed into the
-// last column. Shrink this list when one is fixed.
+// Baseline-confirmed divergences include orphan combining marks and wide-glyph reflow; shrink as fixed.
 const CI_SEEDS = 25
 const KNOWN_PREEXISTING_I2_FAILURES: Record<SerializeFuzzCategory, number[]> = {
   normal: [4, 5, 8, 9, 14, 19, 25],
@@ -219,9 +208,7 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<SerializeFuzzCategory, number[]> = {
   conpty: [4, 8, 9, 11, 19]
 }
 
-// I3 regressions found at 7000 seeds per mode against origin/main (#22586), kept as guards
-// now that both are fixed: 1149 = clipped-wide blank had width 0; the rest = trailing
-// background-only rows were trimmed.
+// Fixed #22586 regressions: seed 1149 produced a width-zero blank; the others trimmed background rows.
 const FOUND_I3_REGRESSIONS: Record<SerializeFuzzCategory, number[]> = {
   normal: [4681],
   alt: [1674],

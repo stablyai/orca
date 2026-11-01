@@ -9,49 +9,49 @@ import type {
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex-state'
 
-// Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
+/** Ingest-only fields, stripped before the row is stored. */
+export type IncomingAgentHookEvent = AgentHookEventPayload & {
+  authorityRestartId?: string
+  codexRosterAuthority?: CodexRemoteRosterAuthority
+}
+
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   /** Live acknowledgement of the matching renderer retirement; never cached. */
   authorityRestartId?: string
   receivedAt: number
-  /** When this evidence was first observed, as distinct from `receivedAt`. A relay reconnect
-   *  replays cached rows and `receivedAt` must restamp to clear the connection watermark, so
-   *  only this clock can answer how old the evidence itself is. Persisted so it survives a
-   *  main restart; absent means "never separately observed" and consumers use `receivedAt`. */
+  /** Persisted evidence age survives replay; absent values fall back to receivedAt, which tracks delivery order. */
   evidenceObservedAt?: number
   stateStartedAt: number
-  /** When the main agent's current turn began, on this server's clock. Stamped only here, from the
-   *  main agent's own turn-opening event; absent when no such event was seen. */
+  /** Server-stamped main-agent turn start; absent until a live boundary establishes it. */
   turnStartedAt?: number
-  /** Provenance/ordering stamped by this server as the pane authority (STA-4293). Read by nothing yet. */
+  /** Runtime provenance and ordering, including hook/OSC precedence. */
   observation?: AgentStatusObservation
-  /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
+  /** Hydrated work remains unconfirmed until reconciled; this marker is never persisted. */
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
   retainedForLiveness?: true
-  /** The pane's OSC 7501 facet, stitched on at publish only (ProgramStatusFacetStore); never stored. */
+  /** OSC 7501 facet stitched at publication, never persisted. */
   programStatus?: ProgramStatusFacet
-  /** Marks a publish where only `programStatus` changed: state subscribers must not read a new state. */
+  /** Facet-only publication; state readers must not infer a transition. */
   programStatusOnly?: true
 }
 
-// `claudeRunningNonAgentTask` is persisted on purpose: it is the one child-work fact the row's
-// `mainAgent` cannot express (a shell, a cron or an owed task notification beside the agents), and hydration reads it to decide whether a
-// settled main agent may be seeded. It replaced the derived `claudeLeadBoundaryChildOnly` flag.
+// Persist non-agent work too: mainAgent cannot describe shell/cron/notification work that affects hydration.
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
   | 'authorityRestartId'
+  | 'statusAdmissionSession'
   | 'launchToken'
   | 'hostTurnRevision'
   | 'promptInteractionKey'
   | 'programStatus'
   | 'programStatusOnly'
   | 'restoredUnconfirmed'
-  // Why: revision counters are in-memory and the authority id is regenerated per process, so
-  // a stored observation could only rehydrate as a stale ordering claim from a dead authority.
+  // Authority IDs and revision counters belong to the runtime that issued them.
   | 'observation'
-  // Same: a terminal handle is issued by one runtime and means nothing to the next.
+  // Terminal handles belong to one runtime.
   | 'terminalHandle'
 > & {
   launchTokenHash?: string

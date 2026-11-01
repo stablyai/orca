@@ -40,39 +40,38 @@ afterEach(() => {
 })
 
 describe('first visible session appearance', () => {
-  it('waits for every saved setting and keeps the mounted terminal on later focus refreshes', () => {
-    state.terminalPreferencesReady = false
-    state.accessoryPreferencesReady = false
-    state.nativeChatController.sessionViewReady = false
-    mounts.count = 0
-    const render = () =>
-      act(() => {
-        if (renderer) {
-          renderer.update(createElement(MobileSessionRouteScreen))
-        } else {
-          renderer = create(createElement(MobileSessionRouteScreen))
-        }
-      })
-    const expectPreparing = () => {
-      expect(renderer?.root.findAll((node) => hostType(node) === 'ReadySession')).toHaveLength(0)
-      expect(renderer?.root.findAll((node) => hostType(node) === 'ActivityIndicator')).toHaveLength(
-        1
-      )
-      expect(mounts.count).toBe(0)
+  it.each(['terminal', 'accessory', 'chat'] as const)(
+    'waits for the saved %s setting before mounting the session',
+    (waiting) => {
+      state.terminalPreferencesReady = waiting !== 'terminal'
+      state.accessoryPreferencesReady = waiting !== 'accessory'
+      state.nativeChatController.sessionViewReady = waiting !== 'chat'
+      mounts.count = 0
+      const render = () =>
+        act(() => {
+          if (renderer) {
+            renderer.update(createElement(MobileSessionRouteScreen))
+          } else {
+            renderer = create(createElement(MobileSessionRouteScreen))
+          }
+        })
+      const expectPreparing = () => {
+        expect(renderer?.root.findAll((node) => hostType(node) === 'ReadySession')).toHaveLength(0)
+        expect(
+          renderer?.root.findAll((node) => hostType(node) === 'ActivityIndicator')
+        ).toHaveLength(1)
+        expect(mounts.count).toBe(0)
+      }
+      render()
+      expectPreparing()
+      state.terminalPreferencesReady = true
+      state.accessoryPreferencesReady = true
+      state.nativeChatController.sessionViewReady = true
+      render()
+      expect(renderer?.root.findAll((node) => hostType(node) === 'ReadySession')).toHaveLength(1)
+      expect(mounts.count).toBe(1)
+      render()
+      expect(mounts.count).toBe(1)
     }
-    render()
-    expectPreparing()
-    state.terminalPreferencesReady = true
-    render()
-    expectPreparing()
-    state.accessoryPreferencesReady = true
-    render()
-    expectPreparing()
-    state.nativeChatController.sessionViewReady = true
-    render()
-    expect(renderer?.root.findAll((node) => hostType(node) === 'ReadySession')).toHaveLength(1)
-    expect(mounts.count).toBe(1)
-    render()
-    expect(mounts.count).toBe(1)
-  })
+  )
 })

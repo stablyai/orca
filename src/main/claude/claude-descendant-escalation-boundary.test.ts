@@ -10,7 +10,6 @@ import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 const ROOT_PID = 500
 const ORCA_PGID = 400
 const ROOT_STARTED_AT = 'Thu Sep 3 18:04:50 2026'
-/** The second both close-time walks land in. */
 const WALK_SECOND = 'Thu Sep 3 18:05:04 2026'
 const WALK_MS = Date.parse(WALK_SECOND)
 const EARLIER_SECOND = 'Thu Sep 3 18:05:03 2026'
@@ -40,7 +39,6 @@ function rowsFor(cohorts: Cohort[]): ProcessTableRow[] {
   ]
 }
 
-/** A real ppid walk from the root, exactly as production captures one. */
 function walk(capturedAtMs: number, cohorts: Cohort[] = LIVE_TREE): DescendantSnapshot {
   return collectDescendantRows(ROOT_PID, rowsFor(cohorts), capturedAtMs)
 }
@@ -53,11 +51,7 @@ function signalledPids(calls: [number, NodeJS.Signals][]): number[] {
   return calls.flatMap(([pid, signal]) => (signal === 'SIGTERM' ? [pid] : [])).sort((a, b) => a - b)
 }
 
-/**
- * Drives the real reaper and the real verifier against a process table where
- * every descendant traps SIGTERM, so only a forced sweep can end them. The root
- * is alive for both walks and gone by the sweep, which is the measured teardown.
- */
+/** Descendants survive SIGTERM in the mock table, forcing the real verifier to escalate. */
 async function sweep(
   captures: DescendantSnapshot[],
   liveTree: Cohort[] = LIVE_TREE
@@ -83,7 +77,6 @@ async function sweep(
         })
     }
   )
-  // The close ladder's shape: arm, then re-walk the live root at the boundary.
   await tree.capture()
   await tree.refresh?.()
   await tree.reap()
@@ -92,9 +85,6 @@ async function sweep(
 
 describe('Claude descendant forced-sweep fence', () => {
   it('escalates a descendant forked in the same second as both close walks', async () => {
-    // Both walks land inside second :04, one ps duration apart, and the root is
-    // gone before a third could run. A descendant born at :04.042 is no less
-    // ours than its sibling born 96ms earlier at :03.946.
     const calls = await sweep([walk(WALK_MS + 42), walk(WALK_MS + 140)])
 
     expect(signalledPids(calls)).toEqual([...EARLIER_BORN, ...WALK_SECOND_BORN])
@@ -109,9 +99,6 @@ describe('Claude descendant forced-sweep fence', () => {
   })
 
   it('withholds the sweep from a row no walk re-derived, on its start second alone', async () => {
-    // 900 was seen once, in its own birth second, and the refresh did not find
-    // it. The merge retains the row, but nothing re-proved it belongs to us, so
-    // the second-resolution fence is all there is and it still says no.
     const retained = { pids: [900], startedAt: WALK_SECOND }
     const firstWalk = walk(WALK_MS + 42, [...LIVE_TREE, retained])
     const refresh = walk(WALK_MS + 140)

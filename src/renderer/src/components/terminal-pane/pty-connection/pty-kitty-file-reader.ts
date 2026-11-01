@@ -1,12 +1,13 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { bindTerminalKittyFileReader } from '@/lib/pane-manager/terminal-kitty-file-reader'
+import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import { waitForPromiseWithSignal } from '../../../../../shared/abort-signal-reason'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toHostSessionTabId
 } from '../../../../../shared/terminal-surface-id'
-import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalResolvePane } from '../../../../../shared/runtime-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -81,7 +82,7 @@ export function installPtyKittyFileReader(session: ConnectPanePtySession): void 
     if (typeof result.base64 !== 'string' || result.base64.length > 2_796_204) {
       throw new Error('Terminal image exceeds transport limit')
     }
-    const bytes = Uint8Array.from(atob(result.base64), (char) => char.charCodeAt(0))
+    const bytes = decodeBase64Bytes(result.base64)
     if (bytes.length > 2 * 1024 * 1024) {
       throw new Error('Terminal image exceeds transport limit')
     }

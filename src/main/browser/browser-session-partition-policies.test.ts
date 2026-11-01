@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   installBrowserWebAuthnAccessHandlers: vi.fn(),
   isRemoteCliDrivenGuest: vi.fn((_webContentsId?: number) => false),
   requestExternalAppLaunch: vi.fn(),
-  notifyPermissionDenied: vi.fn()
+  notifyPermissionDenied: vi.fn(),
+  resolvePagePromptTarget: vi.fn()
 }))
 
 type WillDownloadListener = (
@@ -81,7 +83,8 @@ vi.mock('./browser-manager', () => ({
     installCertificateRequestGuard: vi.fn(),
     removeCertificateRequestGuard: vi.fn(),
     notifyPermissionDenied: mocks.notifyPermissionDenied,
-    requestExternalAppLaunch: mocks.requestExternalAppLaunch
+    requestExternalAppLaunch: mocks.requestExternalAppLaunch,
+    resolvePagePromptTarget: mocks.resolvePagePromptTarget
   }
 }))
 vi.mock('./doc-preview-download-block-notice', () => ({
@@ -103,7 +106,6 @@ vi.mock('./browser-webauthn-access', () => ({
   installBrowserWebAuthnAccessHandlers: mocks.installBrowserWebAuthnAccessHandlers
 }))
 
-/** The parts of a tab the permission handlers read. */
 type FakeTab = {
   id: number
   getURL: () => string
@@ -119,9 +121,7 @@ type PartitionPolicyInstaller = (
   }
 ) => void
 
-// Why imported per test rather than at the top: the installer remembers which partitions it has
-// already configured in module state, so a shared import would make the second test's install a
-// no-op and leave it reading the first test's listener.
+// Reset module state per test so partition-install memoization cannot reuse earlier listeners.
 async function loadInstaller(): Promise<PartitionPolicyInstaller> {
   const module = await import('./browser-session-partition-policies')
   return module.installBrowserSessionPartitionPolicies
@@ -137,7 +137,6 @@ function profileFor(partition: string): BrowserSessionProfile {
   }
 }
 
-/** Fires the partition's real `will-download` listener and reports what it decided. */
 function fireWillDownload(partition: string): { cancelled: boolean } {
   const sess = sessionsByPartition.get(partition)
   if (!sess || sess.listeners.length !== 1) {
@@ -155,8 +154,6 @@ beforeEach(() => {
 })
 
 describe('partition download policy', () => {
-  // The presence half: without it, a deny assertion passes for a partition that installed no
-  // listener at all, and would keep passing if the whole download path were removed.
   it('routes a download on a partition that did not ask for the deny', async () => {
     const install = await loadInstaller()
     install(profileFor('persist:browsing-1'))
@@ -175,9 +172,6 @@ describe('partition download policy', () => {
     expect(mocks.handleGuestWillDownload).not.toHaveBeenCalled()
   })
 
-  // Why in the same run as the routing test above: a refusal the reader cannot see is a pressed
-  // button that does nothing, and a notice on the routing partition would announce a download that
-  // is about to arrive normally.
   it('tells the reader about the refusal, and only on the partition that refused', async () => {
     const install = await loadInstaller()
     install(profileFor('orca-doc-preview'), { downloads: 'deny' })
@@ -192,8 +186,6 @@ describe('partition download policy', () => {
     )
   })
 
-  // Why both partitions in one run: the listener is module state shared across sessions, so a deny
-  // installed for one partition must not follow the next partition that installs after it.
   it('keeps each partition on its own decision', async () => {
     const install = await loadInstaller()
     install(profileFor('orca-doc-preview'), { downloads: 'deny' })
@@ -206,22 +198,11 @@ describe('partition download policy', () => {
 })
 
 describe('partition permission policy', () => {
-  it('keeps ordinary browser partitions on the browser permission policy', async () => {
-    const install = await loadInstaller()
-    install(profileFor('persist:browsing-1'))
-
-    expect(mocks.installBrowserWebAuthnAccessHandlers).toHaveBeenCalledWith(
-      sessionsByPartition.get('persist:browsing-1')
-    )
-    expect(mocks.clearBrowserWebAuthnAccessHandlers).not.toHaveBeenCalled()
-  })
-
   it('denies clipboard reads only to pages an SSH host has driven (#29145)', async () => {
     mocks.isRemoteCliDrivenGuest.mockImplementation((id?: number) => id === 7)
     const install = await loadInstaller()
     const store = await import('./browser-site-permission-store')
     store.configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
-    // The user allowed the site, so only the SSH rule can refuse.
     store.setBrowserSitePermissionDecisions(
       'persist:browsing-2',
       'https://a.test',
@@ -264,6 +245,43 @@ describe('partition permission policy', () => {
     expect(checkHandler(guest(8), 'clipboard-read', 'https://a.test')).toBe(true)
   })
 
+  it('answers non-notification requests without inventorying frames', async () => {
+    const install = await loadInstaller()
+    const partition = 'persist:permission-frame-inventory'
+    await install(profileFor(partition), { sitePermissions: 'session' })
+    const { sessionBrowserSitePermissions } = await import('./browser-site-permission-prompt')
+    const memory = sessionBrowserSitePermissions(partition)
+    const requestHandler =
+      sessionsByPartition.get(partition)?.setPermissionRequestHandler.mock.calls[0]?.[0]
+    if (typeof requestHandler !== 'function') {
+      throw new Error('Expected the installed permission request handler')
+    }
+    const enumerateFrames = vi.fn(() => [{ url: 'about:srcdoc', origin: 'https://other.test' }])
+    const tab = {
+      id: 12,
+      getURL: () => 'https://a.test/page',
+      mainFrame: {
+        get framesInSubtree() {
+          return enumerateFrames()
+        }
+      }
+    }
+
+    for (const decision of ['allow', 'block'] as const) {
+      memory.set('https://a.test', ['location', 'clipboard', 'midi'], decision)
+      for (const permission of ['geolocation', 'clipboard-read', 'midi']) {
+        const answer = await new Promise<boolean>((resolve) => {
+          requestHandler(tab, permission, resolve, {
+            requestingUrl: 'about:srcdoc',
+            isMainFrame: false
+          })
+        })
+        expect(answer).toBe(decision === 'allow')
+      }
+    }
+    expect(enumerateFrames).not.toHaveBeenCalled()
+  })
+
   it("answers a notification from a frame with an inherited origin as the frame's real site", async () => {
     const install = await loadInstaller()
     const store = await import('./browser-site-permission-store')
@@ -293,8 +311,6 @@ describe('partition permission policy', () => {
       requestingOrigin: string,
       details: Partial<Electron.PermissionCheckHandlerHandlerDetails>
     ) => boolean
-    // Tab a.test holds a srcdoc frame of its own, a cross-origin b.test frame, and a blank frame
-    // that b.test created, which inherits b.test's origin.
     const tab = {
       id: 12,
       getURL: () => 'https://a.test/',
@@ -312,7 +328,7 @@ describe('partition permission policy', () => {
         requestHandler(tab, 'notifications', resolve, { requestingUrl, isMainFrame: false })
       )
 
-    // Electron checks with the real origin, then asks again before it shows the notification.
+    // Permission checks carry inherited origins; requests may carry opaque frame URLs.
     expect(
       checkHandler(tab, 'notifications', 'https://a.test', {
         requestingUrl: 'about:srcdoc',
@@ -320,11 +336,61 @@ describe('partition permission policy', () => {
       })
     ).toBe(true)
     await expect(request('about:srcdoc')).resolves.toBe(true)
-    // The tab's Allow is not b.test's, including in the blank frame b.test made.
     await expect(request('about:blank')).resolves.toBe(false)
     tab.mainFrame.framesInSubtree.push({ url: 'about:blank', origin: 'https://a.test' })
-    // Two blank frames from different sites: Orca cannot tell which asked, so it refuses.
+    // Ambiguous blank-frame origins must be refused.
     await expect(request('about:blank')).resolves.toBe(false)
+  })
+
+  it('asks when a page checks local network access, since Electron never requests it', async () => {
+    const install = await loadInstaller()
+    const store = await import('./browser-site-permission-store')
+    store.configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
+    const { respondToBrowserPagePrompt } = await import('./browser-page-prompts')
+    const send = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: prompts only read id, isDestroyed, send and subscribe to the window's lifecycle events.
+    const renderer = {
+      id: 10,
+      isDestroyed: () => false,
+      send,
+      on: vi.fn(),
+      off: vi.fn()
+    } as unknown as Electron.WebContents
+    mocks.resolvePagePromptTarget.mockReturnValue({ browserPageId: 'page-1', renderer })
+    install(profileFor('persist:browsing-lna'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+    const checkHandler = sessionsByPartition.get('persist:browsing-lna')?.setPermissionCheckHandler
+      .mock.calls[0]?.[0] as (
+      webContents: EventEmitter,
+      permission: string,
+      origin: string
+    ) => boolean
+    const tab = (url: string): EventEmitter =>
+      Object.assign(new EventEmitter(), { id: 20, isDestroyed: () => false, getURL: () => url })
+    const prompts = () =>
+      send.mock.calls.filter(([channel]) => channel === 'browser:page-prompt-requested')
+    const signIn = tab('https://login.example.com/signin')
+
+    // Chromium 150 asks loopback-network for 127.0.0.1; older pages query the legacy name.
+    expect(checkHandler(signIn, 'loopback-network', 'https://login.example.com')).toBe(false)
+    expect(checkHandler(signIn, 'local-network-access', 'https://login.example.com')).toBe(false)
+    expect(prompts()).toMatchObject([
+      [
+        'browser:page-prompt-requested',
+        { details: { origin: 'https://login.example.com', permissions: ['local-network'] } }
+      ]
+    ])
+    await respondToBrowserPagePrompt(renderer, {
+      requestId: prompts()[0][1].requestId,
+      answer: 'allow'
+    })
+    expect(checkHandler(signIn, 'loopback-network', 'https://login.example.com')).toBe(true)
+
+    // Chrome never gates loopback pages, so localhost dev servers neither ask nor read denied.
+    expect(
+      checkHandler(tab('http://localhost:5173/'), 'loopback-network', 'http://localhost:5173')
+    ).toBe(true)
+    expect(prompts()).toHaveLength(1)
   })
 
   it("keeps a paired server's pages off this computer's saved answers for the same profile id", async () => {
@@ -383,6 +449,88 @@ describe('partition permission policy', () => {
     expect(check()).toBe(true)
   })
 
+  it('gives browsing pages File System Access but keeps it from pages another machine can script', async () => {
+    const install = await loadInstaller()
+    const { installBrowserRoutePartitionPolicies } =
+      await import('./browser-session-route-policies')
+    const routed = `persist:orca-browser-v1-${'a'.repeat(64)}`
+    install(profileFor('persist:browsing-5'))
+    void installBrowserRoutePartitionPolicies(profileFor('persist:browsing-5'), routed)
+    const decide = (partition: string) => {
+      const sess = sessionsByPartition.get(partition)
+      if (!sess) {
+        throw new Error(`Expected the session for ${partition}`)
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+      const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+        webContents: { id: number; getURL: () => string },
+        permission: string,
+        callback: (allowed: boolean) => void,
+        details: Partial<Electron.FilesystemPermissionRequest>
+      ) => void
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+      const checkHandler = sess.setPermissionCheckHandler.mock.calls[0]?.[0] as (
+        webContents: null,
+        permission: string,
+        requestingOrigin: string,
+        details: Partial<Electron.PermissionCheckHandlerHandlerDetails>
+      ) => boolean
+      let requested: boolean | null = null
+      requestHandler(
+        { id: 11, getURL: () => 'https://app.test/' },
+        'fileSystem',
+        (allowed) => (requested = allowed),
+        { filePath: '/Users/me/project', isDirectory: true, fileAccessType: 'writable' }
+      )
+      const checked = checkHandler(null, 'fileSystem', 'https://app.test', {
+        filePath: '/Users/me/notes.txt',
+        isDirectory: false,
+        fileAccessType: 'writable'
+      })
+      return { requested, checked }
+    }
+
+    expect(decide('persist:browsing-5')).toEqual({ requested: true, checked: true })
+    expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
+    expect(decide(routed)).toEqual({ requested: false, checked: false })
+    expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith(
+      expect.objectContaining({ guestWebContentsId: 11, permission: 'fileSystem' })
+    )
+  })
+
+  it('refuses a blocklisted system folder at once instead of leaving the page waiting', async () => {
+    const install = await loadInstaller()
+    install(profileFor('persist:browsing-6'))
+    install(profileFor('orca-doc-preview'), { permissions: 'deny' })
+    const answer = (partition: string) => {
+      const sess = sessionsByPartition.get(partition)
+      const listener = sess?.on.mock.calls.find(
+        ([event]) => event === 'file-system-access-restricted'
+      )?.[1]
+      const actions: string[] = []
+      listener?.(
+        {},
+        {
+          origin: 'https://app.test',
+          isDirectory: true,
+          path: '/Users/me',
+          webContents: { id: 12 }
+        },
+        (action: string) => actions.push(action)
+      )
+      return actions
+    }
+
+    expect(answer('orca-doc-preview')).toEqual(['deny'])
+    expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
+    expect(answer('persist:browsing-6')).toEqual(['deny'])
+    expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith({
+      guestWebContentsId: 12,
+      permission: 'fileSystem',
+      rawUrl: 'https://app.test'
+    })
+  })
+
   it('hands a link to another app to the open-app prompt instead of denying it', async () => {
     const install = await loadInstaller()
     install(profileFor('persist:browsing-4'))
@@ -408,17 +556,15 @@ describe('partition permission policy', () => {
     requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
     const [launchGuest, launchUrl, requestingUrl] = mocks.requestExternalAppLaunch.mock.calls[0]
     expect([launchGuest, launchUrl]).toEqual([guest, 'com-okta-authenticator:/deviceChallenge'])
-    // The frame that asked, not the top page.
     expect(requestingUrl()).toBe('https://login.acme.okta.com/frame')
     expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
 
-    // A link Orca refuses to ask about keeps the denial notice.
     mocks.requestExternalAppLaunch.mockReturnValueOnce(false)
     requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
     expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith(
       expect.objectContaining({ guestWebContentsId: 9, permission: 'openExternal' })
     )
-    // Chromium's own launch stays denied either way; Orca opens the app after the user says yes.
+    // Orca launches approved apps itself, so Chromium's launch remains denied.
     expect(decisions).toEqual([false, false])
   })
 

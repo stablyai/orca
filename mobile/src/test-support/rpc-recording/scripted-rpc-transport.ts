@@ -14,22 +14,12 @@ import {
 import { createWriteOrdinal, type WriteOrdinal } from './write-ordinal'
 import type { Rejection } from './recording-scenario'
 
-/** What a product stream listener threw on one delivered frame. */
 type FrameListenerCrash = { readonly error: unknown }
 
-/** Named once so the two layers of the seam spell the operation's own call the same way. */
 type SendRequestArgs = Parameters<RpcClient['sendRequest']>
 
-/**
- * Puts another transport between the operation being recorded and this one. The recorder's own
- * instrumentation stays underneath, so the wrapped client is a transport under test rather than a
- * substitute for this one: `requests`, `payloads` and the scripted replies are all still observed
- * here, and a golden recorded through a wrapper is comparable to the one recorded without it.
- *
- * Declared as a function rather than as an import of the thing that uses it: the page bridge in
- * `mobile/src/mobile-web-shell/` is product code the native recording never runs, so the engine
- * does not load it; `rpc-recording-through-bridge.test.ts` builds the pair and hands it in instead.
- */
+// Keep recorder instrumentation below injected transports so wrapped and native recordings remain comparable.
+// Accept a wrapper function to avoid loading bridge product code into native recording.
 export type ScriptedClientWrapper = (client: RpcClient) => RpcClient
 
 /** The one device identity every recorded frame carries; nothing here reads a keychain. */
@@ -53,20 +43,10 @@ export class ScriptedRpcTransport {
     { id: string; params: unknown; deliver: (response: RpcResponse) => boolean }
   >()
   private readonly registries: RpcClientStreamRegistry[] = []
-  /**
-   * Wire id to the name of the last payload the registry published under it. Every frame it sends
-   * lands here, unsubscribes included, because `registeredStreams()` only ever looks up an id the
-   * registry still holds and an unsubscribed id is not one of those.
-   */
+  // Track every published id/name, including unsubscribes, for registry teardown observations.
   private readonly streamPayloads = new Map<string, string>()
   private activeName = ''
-  /**
-   * Logical request names waiting for the physical send that will carry them. A queue rather than
-   * one slot because a wrapped transport may forward a send asynchronously, and two sends issued in
-   * one turn would overwrite a slot before either reached the wire. Exactly one name is pushed per
-   * logical `sendRequest` and exactly one is taken by the physical call it wraps, in the order the
-   * operation made them.
-   */
+  // Queue logical names: asynchronous forwarding can leave multiple calls waiting for physical sends.
   private names: string[] = []
   private opening = false
   private listenerCrash: FrameListenerCrash | null = null
@@ -95,11 +75,6 @@ export class ScriptedRpcTransport {
   })
   private wireNames: string[] = []
 
-  /**
-   * `now` is the recording scheduler's virtual clock; every settlement is stamped from it.
-   * `nextWriteOrdinal` is the recording's one write counter, shared with its effects.
-   * `wrapClient` puts a transport under test between the operation and this one; see its type.
-   */
   constructor(
     private readonly now: () => number = () => 0,
     private readonly nextWriteOrdinal: WriteOrdinal = createWriteOrdinal(),
@@ -107,16 +82,10 @@ export class ScriptedRpcTransport {
   ) {
     const session = this.session()
     this.logical = createStableLogicalRpcClient(session, 'lan')
-    // The sandwich the seam is: the recorder observes the operation's own call on the outside, the
-    // wrapper carries it, and the inside hands it to the logical client with its name attached.
     const inner = wrapClient({
       ...this.logical,
       sendRequest: (...args: SendRequestArgs) => {
-        // Taken here rather than above the wrapper so `session()` still reads exactly one name per
-        // physical send: a wrapper that forwards on a microtask arrives after the next logical call
-        // has been made, and one slot would hand both sends the second name. Both ways of getting
-        // that wrong throw rather than guess: a wrapper that invents a send finds the queue empty,
-        // and one that swallows a send leaves a name whose method is not the one now on the wire.
+        // Dequeue at physical forwarding so same-turn asynchronous sends retain their own names; missing/extra sends fail.
         const name = this.names.shift() ?? '(no logical request)'
         if (name.slice(0, name.lastIndexOf('#')) !== args[0]) {
           throw new Error(`A physical send of ${args[0]} cannot take the name ${name}`)
@@ -127,10 +96,7 @@ export class ScriptedRpcTransport {
     })
     this.client = {
       ...inner,
-      // Outermost on purpose. `ordinal` orders this call against the recording's device writes and
-      // physical payloads, and the operation makes it at the same moment either way; stamping it
-      // under the wrapper would time the wrapper's forwarded send, an event the unwrapped recording
-      // has no counterpart for, and every send would read one write late.
+      // Stamp outside the wrapper to time the operation’s logical call rather than delayed forwarding.
       sendRequest: (...args: SendRequestArgs) => {
         const name = this.occurrence(args[0])
         this.names.push(name)
@@ -152,19 +118,14 @@ export class ScriptedRpcTransport {
   }
 
   private session(): RpcClient {
-    // One registry per physical session, the way `DirectRpcClient` builds one: the tracker is shared
-    // because a logical request outlives a cutover, a stream does not. Byte-neutral either way — the
-    // re-send after a cutover comes from the logical client's own replay — but it keeps a frame
-    // routed through the session that published its subscribe.
+    // Keep one stream registry per physical session; logical requests survive cutover while streams belong to their opening session.
     const streams: RpcClientStreamRegistry = new RpcClientStreamRegistry({
       nextId: () => this.nextFrameId(),
       getState: () => this.state,
       sendFrame: (frame) => {
         const payload = buildDirectRpcWireRequest(frame, DEVICE_TOKEN)
         const name = this.occurrence(payload.method)
-        // Only a subscribe opens a stream. The registry sends its unsubscribes through this same
-        // hook, and filing one under `openStreams` made a frame aimed at an unsubscribe name route
-        // at that id, find nothing, record nothing and not throw.
+        // Only subscribe opens streams; treating unsubscribe as one would let a frame silently reach no listener.
         if (this.opening) {
           this.openStreams.set(name, {
             id: payload.id,
@@ -172,9 +133,7 @@ export class ScriptedRpcTransport {
             deliver: (response) => streams.handleResponse(response)
           })
         }
-        // Outside the `opening` guard on purpose: a replay after a cutover re-sends an
-        // already-registered id under a fresh occurrence, so the latest payload is the one a
-        // teardown observation should name.
+        // Update replayed ids too so teardown names the latest physical occurrence.
         this.streamPayloads.set(payload.id, name)
         this.publish(name, payload)
         return true
@@ -225,13 +184,7 @@ export class ScriptedRpcTransport {
     return `frame-${++this.frameCount}`
   }
 
-  /**
-   * Every stream each session's registry still holds, in registration order, named by the subscribe
-   * payload it was opened on. Read off the registry's own map rather than mirrored as the recorder
-   * watches subscribes and frames go by: the leak this exists to observe is precisely a divergence
-   * between what the product believes it closed and what the registry still holds, and a mirror
-   * would reproduce the product's bookkeeping instead of observing it.
-   */
+  // Read the real registry after product cleanup; mirrored bookkeeping could hide leaks it is meant to detect.
   registeredStreams(): { method: string; payload: string | null; cancelled: boolean }[] {
     return this.registries.flatMap((registry) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is checked on the next line, and the registry is the one this transport constructed.
@@ -244,9 +197,7 @@ export class ScriptedRpcTransport {
           if (typeof stream.method !== 'string') {
             throw new Error(`Registered stream ${id} has no method`)
           }
-          // A cancelled record is the product having closed the stream and the registry holding it
-          // until the subscription id it needs to unsubscribe with arrives; only an uncancelled one
-          // is a cleanup that never ran.
+          // Cancelled records await an unsubscribe id; only uncancelled records imply missed cleanup.
           return {
             method: stream.method,
             payload: this.streamPayloads.get(id) ?? null,
@@ -257,11 +208,7 @@ export class ScriptedRpcTransport {
     })
   }
 
-  /**
-   * The product's stream listener, wrapped so `frame` can tell a dead listener from a dead registry.
-   * The throw is stashed and rethrown unchanged: the registry has to see it the way a device's
-   * message handler does, so what it skips after a listener dies is recorded rather than invented.
-   */
+  // Stash and rethrow listener failures unchanged so frame can record them without swallowing registry/scenario failures.
   private deliverToListener(onData: (result: unknown) => void, result: unknown): void {
     try {
       onData(result)
@@ -278,7 +225,6 @@ export class ScriptedRpcTransport {
     return crash
   }
 
-  /** One occurrence counter per method, so a subscribe payload is named the way a request is. */
   private occurrence(method: string): string {
     const next = (this.counts.get(method) ?? 0) + 1
     this.counts.set(method, next)
@@ -289,19 +235,8 @@ export class ScriptedRpcTransport {
     this.payloads.push({ name, ordinal: this.nextWriteOrdinal(), json: JSON.stringify(value) })
   }
 
-  /**
-   * A whole host response delivered at a subscribe payload's wire id, through the real registry, so
-   * `ready`, a data event, `end` and a refusal are one step kind rather than four.
-   *
-   * What the product listener threw is returned rather than thrown on, because the two failures a
-   * frame can produce have to stay apart. A missing payload, a params mismatch and a closed stream
-   * are the scenario no longer matching and stay loud. A listener that dies on a frame is the
-   * recording — the same rule the crash boundary holds for a screen, and without it the reply
-   * shapes that break a subscription are the only ones this oracle cannot see: only three
-   * listeners check the payload is an object before reading its `type` — the two
-   * `runtime.clientEvents` ones and the structured agent session's, which guards with
-   * `isSubscribeEvent` — so the absent-result and null-result partitions take every other one down.
-   */
+  // Deliver whole responses through the real stream registry.
+  // Record product listener crashes, while missing payloads, mismatched params and registry failures remain scenario errors.
   frame(name: string, params: unknown, reply: unknown): FrameListenerCrash | null {
     const stream = this.openStreams.get(name)
     if (!stream) {
@@ -316,8 +251,7 @@ export class ScriptedRpcTransport {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the response as JSON; the wire id is the transport’s.
       routed = stream.deliver({ ...(reply as object), id: stream.id } as RpcResponse)
     } catch (error) {
-      // Only the product listener's own throw is a recording; anything the registry raised on its
-      // way to the listener is the scenario no longer matching, and stays loud.
+      // Record only the listener’s own throw; registry errors mean the scenario stopped matching.
       const crashed = this.takeListenerCrash()
       if (!crashed || crashed.error !== error) {
         throw error
@@ -329,18 +263,15 @@ export class ScriptedRpcTransport {
       return crash
     }
     if (!routed) {
-      // Only a non-streaming reply lands here: the registry routes every streaming response to the
-      // id that opened the stream, retired or not. A scenario that has stopped matching, not a
-      // stream that closed early.
+      // Streaming frames always route to the opening id; reaching here with a non-streaming reply means the scenario mismatched.
       throw new Error(`No open stream for frame: ${name}`)
     }
     return null
   }
 
-  /** Whether a scripted name names a request that was sent and is still waiting for its reply. */
-  outstanding(name: string): boolean {
+  outstanding(name: string): { params: unknown } | undefined {
     const binding = this.bindings.get(this.aliases.get(name) ?? name)
-    return binding !== undefined && !binding.completed
+    return binding && !binding.completed ? binding : undefined
   }
 
   bind(alias: string, name: string, params: unknown): void {

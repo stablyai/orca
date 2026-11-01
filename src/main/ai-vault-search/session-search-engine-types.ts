@@ -1,37 +1,19 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
 
-// ENGINE types, deliberately not in src/shared: nothing here is a wire type.
-// PR 5 owns the public contract and lifts what a caller may actually receive;
-// until then a field can be added, renamed or dropped without a compat story.
-
 export {
   SESSION_SEARCH_LIMIT_DEFAULT,
   SESSION_SEARCH_LIMIT_MAX,
   resolveSessionSearchLimit
 } from '../../shared/ai-vault-search-limit'
-// Longer than this is not a query, and FTS5 pays for every term it plans.
+// Bound planning cost for long queries, including single-token pastes.
 export const SESSION_SEARCH_QUERY_MAX_LENGTH = 512
 
-// Snippet match markers. Why doubled: single brackets are everywhere in code
-// transcripts (`arr[0]`, regex classes, markdown links) and would read as
-// matches; doubled ones are rare.
+// Double brackets reduce collisions with code syntax in transcript snippets.
 export const SESSION_SEARCH_SNIPPET_MARK_OPEN = '[['
 export const SESSION_SEARCH_SNIPPET_MARK_CLOSE = ']]'
 
-/**
- * Which corpus answers the query.
- *
- * - `conversation`: user and assistant turns only, as a column filter over
- *   `messages_fts` (see `scopedExpression`).
- * - `all`: those turns plus tool calls and tool output, and the identifier
- *   shadow column, from `messages_fts`.
- *
- * The engine searches exactly the scope it is given. Switching corpus as the
- * user types is a UI policy and lives in the panel (PR 7); an engine that
- * second-guessed the scope would make a result impossible to reproduce from
- * its own request.
- */
+/** Conversation searches user/assistant columns; all also searches tools and identifier tokens. */
 export type SessionSearchScope = 'conversation' | 'all'
 
 export type SessionSearchSort = 'relevance' | 'newest'
@@ -57,31 +39,14 @@ export type SessionSearchRequest = {
 
 export type SessionSearchRoute = 'phrase' | 'and' | 'or' | 'typo+phrase' | 'typo+and' | 'typo+or'
 
-/**
- * How the query was executed. Diagnostics, not an answer: PR 5 decides which of
- * these a caller ever sees (the reviewer's F5/F7 want them behind `debug`).
- */
 export type SessionSearchPlannerReport = {
   route: SessionSearchRoute
-  /**
-   * The whole body the repaired plan searched, in query order, when any term
-   * was changed. Not just the corrected terms: a caller rendering "searched
-   * for" needs the query it actually ran, and a repair never drops a term the
-   * original kept. A corrected term carries the index's own spelling, which the
-   * tokenizer has case-folded; untouched terms keep the case they were typed in.
-   */
+  /** Full searched term sequence; repaired terms use index spelling, untouched terms retain input case. */
   repairedTerms?: string[]
-  /** The corpus the route ran against; today always the requested scope. */
   tier: SessionSearchScope
 }
 
-/**
- * Where a source stands according to the index's own `files` table. The query
- * path never stats a transcript, so it can report that the index has a live
- * file record for a session or that it has none, and never that a source is
- * gone: only a proven deletion may claim `missing`, and proving one is the
- * indexer's job (docs/reference/ssh-execution-boundary.md).
- */
+/** Index evidence only: search never stats transcripts, so a missing file row means unverifiable. */
 export type SessionSearchSourcePresence = 'present' | 'unverifiable'
 
 export type SessionSearchEvidence = {
@@ -89,7 +54,6 @@ export type SessionSearchEvidence = {
   timestamp: string | null
   /** FTS5 snippet with the matched terms wrapped in `[[` `]]`. */
   snippet: string
-  /** The snippet hit the engine's per-hit ceiling and was cut. */
   snippetTruncated?: boolean
 }
 
@@ -113,25 +77,16 @@ export type SessionSearchHit = {
 }
 
 export type SessionSearchPage = {
-  /** Null when this page is the last one. */
   cursor: string | null
   hasMore: boolean
 }
 
 export type SessionSearchTruncation = {
-  /**
-   * Ranking saw only the first `sessionCandidateLimit` sessions, so a session
-   * past that cut cannot appear on any page of this query.
-   */
+  /** Retrieval hit a candidate or scan limit; some matching sessions may be absent from every page. */
   candidates: boolean
   /** Hits on this page whose snippet was cut. */
   snippets: number
-  /**
-   * The query itself was cut before it was searched: past the length ceiling,
-   * or past the number of terms the planner will plan. The terms that survived
-   * were searched in full, so a hit is still a hit; a miss is not proof of
-   * absence.
-   */
+  /** Query length or term limits dropped input; a miss may omit matches for the dropped text. */
   query: boolean
 }
 

@@ -1,11 +1,11 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-adapter'
 import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionStopVerdict } from './structured-agent-session-host-types'
 import { endProviderChild } from './structured-agent-session-provider-child'
@@ -16,7 +16,7 @@ export async function settlePostAcquisitionAttachFailure(
   cause: unknown
 ): Promise<never> {
   let cleanupError: unknown = cause
-  let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
+  let exitProof: 'exit-proven' | 'root-exit-observed' | 'kill-delivered' | 'unproven' = 'unproven'
   try {
     await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
   } catch (error) {
@@ -25,10 +25,15 @@ export async function settlePostAcquisitionAttachFailure(
       error instanceof AgentSessionAcquisitionExitUnprovenError
         ? 'unproven'
         : error instanceof AgentSessionAcquisitionRootExitObservedError
-          ? 'root-exit-observed'
+          ? error.deathEvidenceKind === 'kill-delivered'
+            ? 'kill-delivered'
+            : 'root-exit-observed'
           : 'exit-proven'
   }
-  input.onAcquisitionReleased?.(cause, { rootGone: exitProof !== 'unproven' })
+  input.onAcquisitionReleased?.(cause, {
+    rootGone: exitProof !== 'unproven',
+    ...(exitProof === 'kill-delivered' ? { deathEvidenceKind: exitProof } : {})
+  })
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,
@@ -73,7 +78,7 @@ export function endStructuredAgentSessionReleasedChild(
       fence: child.fence,
       cause: 'attach-failed',
       reason: cause instanceof Error ? cause.message : String(cause),
-      // Orca failed to attach; the provider said nothing.
+      // Host attach faults are not provider failures.
       failure: agentSessionFailureFact('hostFault'),
       duringStartup: child.phase === 'starting',
       ...verdict
@@ -84,11 +89,10 @@ export function endStructuredAgentSessionReleasedChild(
   context.runtimeState.currentEventSink(sessionId)?.close()
   context.runtimeState.discardEventSink(sessionId)
   context.publishStatus?.(sessionId)
-  // The released acquisition was the live generation: readers and the queued-card drain re-derive.
+  // Re-derive reader/queue state after releasing the live acquisition.
   context.generationEnded?.(sessionId)
 }
 
-/** A reservation that support drift invalidated, released as processless. */
 export async function settleUnsupportedReservation(
   input: AttachFlowInput,
   record: AgentSessionRecord

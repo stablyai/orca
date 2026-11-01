@@ -4,8 +4,7 @@ export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'neutral'
 
 export type CheckOutcomeInput = { status?: string | null; conclusion?: string | null }
 
-// Why: a skipped job is a deliberate "not applicable", not an unresolved signal — every surface
-// must count it as passing or the same PR reads green on desktop and grey on mobile.
+// Skipped means not applicable; count it passing everywhere so desktop/mobile agree on the same PR.
 const PASSED_CONCLUSIONS = new Set(['success', 'skipped'])
 
 // Why: these block the merge. GitLab `manual` is deliberately absent — it waits on a human.

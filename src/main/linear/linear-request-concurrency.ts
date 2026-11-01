@@ -1,4 +1,3 @@
-// ── Concurrency limiter — max 4 parallel Linear API calls ────────────
 const MAX_CONCURRENT = 4
 let running = 0
 type QueuedLinearRequest = {

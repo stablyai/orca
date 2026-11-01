@@ -34,8 +34,7 @@ import {
 const RELAY_REGION_CACHE_FILENAME = 'orca-relay-region-preference.json'
 const CACHE_MAX_BYTES = 8 * 1024
 const CACHE_TTL_MS = 24 * 60 * 60_000
-// A withheld hint is cheap to revisit but expensive to re-measure on every
-// reconnect, so it is remembered for far less time than a chosen region.
+// Cache withheld hints briefly to avoid probing every reconnect without retaining them as long as chosen regions.
 const NO_HINT_TTL_MS = 60 * 60_000
 const SWITCH_MINIMUM_MS = 25
 const SWITCH_RATIO = 0.8
@@ -45,7 +44,6 @@ const RelayRegionCacheSchema = z
   .object({
     v: z.literal(2),
     directorUrl: z.string().max(2_048),
-    // Null records a deliberate "no hint"; the field is absent only for a region.
     region: RelayRegionSchema.nullable(),
     latencyMs: z.number().finite().nonnegative().max(60_000).optional(),
     expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
@@ -54,7 +52,6 @@ const RelayRegionCacheSchema = z
 
 type RelayRegionCache = z.infer<typeof RelayRegionCacheSchema>
 
-// Sign-out removes what Relay use left behind; the next Relay session re-measures.
 export function clearRelayRegionPreferenceCache(userDataPath: string): void {
   rmSync(join(userDataPath, RELAY_REGION_CACHE_FILENAME), { force: true })
 }
@@ -121,15 +118,13 @@ export class RelayRegionPreferenceResolver {
     }
   }
 
-  // Why: a cache written from a bad measurement pins the desktop to a distant
-  // cell for a full day. Probing the cell we actually landed on catches that.
+  // Bad cached measurements can pin distant cells for a day; probe the assigned cell to self-heal.
   async invalidateIfAssignedCellIsFar(assignedCellOrigin: string): Promise<void> {
     if (this.overrideRegion() || this.selfHealedCells.has(assignedCellOrigin)) {
       return
     }
     const now = (this.options.now ?? Date.now)()
     const cache = readRelayRegionCache(this.cachePath(), this.options.directorUrl, now)
-    // An absent, expired, or no-hint cache is already re-measured by resolve().
     if (!cache?.region || cache.expiresAt <= now) {
       return
     }
@@ -147,15 +142,12 @@ export class RelayRegionPreferenceResolver {
     try {
       const fetch = this.options.fetch ?? globalThis.fetch
       const probe = this.createProbe(fetch)
-      // A director that cannot list its regions is the one self-heal outcome a
-      // support log would otherwise never see, so it is reported before the throw.
       const reports = await this.probeCatalog(fetch, () => this.logSelfHeal(outcome))
       const best = bestMeasurement(measuredRegions(reports))
       outcome.bestRegion = best?.region ?? null
       outcome.bestLatencyMs = best?.latencyMs ?? null
       outcome.reason = best ? 'best-matches-cache' : 'no-region-measured'
-      // A far cell under a cache that still names the best region is the
-      // director declining the hint; deleting it would only re-probe.
+      // The director may decline the best-region hint; deleting it would only trigger identical probes.
       if (!best || best.region === cache.region) {
         this.logSelfHeal(outcome)
         return
@@ -169,9 +161,7 @@ export class RelayRegionPreferenceResolver {
         rmSync(this.cachePath(), { force: true })
       }
       this.logSelfHeal(outcome)
-    } catch {
-      // Self-heal is best effort; a failed probe must never disturb the session.
-    }
+    } catch {}
   }
 
   private logSelfHeal(outcome: Omit<RelayRegionSelfHealLogEvent, 'directorHost'>): void {
@@ -183,17 +173,13 @@ export class RelayRegionPreferenceResolver {
     now: number
   ): Promise<RelayRegion | undefined> {
     const fetch = this.options.fetch ?? globalThis.fetch
-    // Only a refresh withholds a hint, so only a refresh reports the catalog
-    // failure as a probe event; self-heal reports it as its own outcome.
+    // Refresh reports catalog failure as no hint; self-heal reports its separate outcome.
     const reports = await this.probeCatalog(fetch, () =>
       this.log(relayRegionCatalogFailureEvent(this.options.directorUrl))
     )
     const measurements = measuredRegions(reports)
-    // Why: a region may only win against a measured competitor. A rejected or
-    // unmeasurable peer, or one the director left out of the catalog because it
-    // has no serving cell right now (a roll wave), means director default
-    // placement beats a lone survivor. Withholding costs one hour; a hint won
-    // against nothing pins the desktop to that region for a day.
+    // A region must beat measured competitors; absent/unmeasurable peers defer placement to the director.
+    // Withholding lasts one hour; an uncontested hint would pin a roll-wave survivor for a day.
     const selected =
       measurements.length < reports.length || reports.length < RELAY_REGIONS.length
         ? null
@@ -252,9 +238,7 @@ export class RelayRegionPreferenceResolver {
         ...(entry.latencyMs === undefined ? {} : { latencyMs: entry.latencyMs }),
         expiresAt: now + entry.ttlMs
       } satisfies RelayRegionCache)
-    } catch {
-      // A cache write must not block an otherwise valid Relay assignment.
-    }
+    } catch {}
   }
 
   private overrideRegion(): RelayRegion | undefined {

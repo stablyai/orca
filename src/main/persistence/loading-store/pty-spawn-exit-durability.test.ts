@@ -1,3 +1,5 @@
+import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import { requireAcceptedSpawn } from '../../ipc/pty/spawn-outcome'
 import { SessionNotFoundError } from '../../daemon/daemon-errors'
 import { completePaneAdoption } from '../../ipc/pty/pane/complete-pane-adoption'
 import { LocalPtyProvider } from '../../providers/local-pty-provider'
@@ -7,6 +9,7 @@ import { bindProviderListeners } from '../../ipc/pty/provider/bind-listeners'
 import { createPtyIpcSession } from '../../ipc/pty/session'
 import { DaemonPtyAdapter } from '../../daemon/daemon-pty-adapter'
 import { expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitRuntimePtySpawn } from '../../ipc/pty/runtime/spawn-commit'
@@ -19,13 +22,7 @@ import { registerPersistedPtySpawn } from '../../ipc/pty/pane/spawn-registration
 import { clearProviderPtyState } from '../../ipc/pty/provider/state-cleanup'
 import { ptyOwnership, ptyIncarnationById } from '../../ipc/pty/provider/ownership-state'
 import { ptySizes } from '../../ipc/pty/delivery/visibility-state'
-import {
-  paneSpawnReservationsByOwnerKey,
-  reservePaneSpawn,
-  reserveIdlePaneSpawn,
-  resolvePaneSpawnReservation,
-  type PaneSpawnReservation
-} from '../../ipc/pty/pane/spawn-reservation'
+import { reservePaneSpawn, resolvePaneSpawnReservation } from '../../ipc/pty/pane/spawn-reservation'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -39,7 +36,9 @@ vi.mock('../../ssh/config/ssh-config-parser', () => ({
 it.each(
   [
     { controller: 'runtime', exitCode: 0 },
-    { controller: 'ipc', exitCode: -1 }
+    { controller: 'ipc', exitCode: -1 },
+    { controller: 'runtime', exitCode: 256 },
+    { controller: 'ipc', exitCode: 256 }
   ].flatMap((test) => [
     { ...test, stableOwner: false },
     { ...test, stableOwner: true }
@@ -71,9 +70,7 @@ it.each(
       runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
       runtime.beginPtyRegistration(binding.ptyId, binding.incarnationId)
     }
-    let commit: () => Promise<unknown>
-    const reservationKey = JSON.stringify([connectionId, binding.worktreeId, binding.leafId])
-    let reservation: PaneSpawnReservation | undefined
+    let commit: () => Promise<Awaited<ReturnType<typeof commitRuntimePtySpawn>> | undefined>
     if (owner) {
       const provider = new LocalPtyProvider()
       vi.spyOn(provider, 'spawn').mockResolvedValue({
@@ -92,7 +89,7 @@ it.each(
             renderer: controller === 'ipc',
             spawnOptions: { cols: 80, rows: 24 }
           })
-        )?.result
+        )?.outcome
     } else if (controller === 'runtime') {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only commit runs; its runtime/store are real and preflight-only dependencies are unreachable.
       const deps = { runtime, store, options: {} } as PtyRuntimeControllerDeps
@@ -111,38 +108,46 @@ it.each(
       ctx.stablePaneOwner = owner
       ctx.metadataLeafId = binding.leafId
       ctx.validatedLeafId = binding.leafId
-      reservation = reservePaneSpawn(reservationKey)
-      ctx.paneSpawnReservationKey = reservationKey
-      ctx.paneSpawnReservation = reservation
       commit = () => commitPtyIpcSpawn(ctx)
     }
     const gate = authority.pause()
-    const pending =
-      controller === 'ipc'
-        ? expect(commit()).resolves.toMatchObject({
-            id: binding.ptyId,
-            incarnationId: binding.incarnationId
-          })
-        : expect(commit()).rejects.toThrow('agent_session_exited_during_start')
+    const operation = commit()
+    const pending = expect(operation).resolves.toMatchObject({
+      kind: 'registration-exited',
+      result: { id: binding.ptyId, incarnationId: binding.incarnationId }
+    })
     await gate.started.promise
-    const nextReservation = reservation ? reserveIdlePaneSpawn(reservationKey) : undefined
     clearProviderPtyState(binding.ptyId)
     ptyOwnership.delete(binding.ptyId)
     await runtime.onPtyExit(binding.ptyId, exitCode, binding.incarnationId, {
-      providerExitObserved: true
+      providerExitObserved: true,
+      ...(exitCode > 0
+        ? {
+            cause: {
+              kind: 'exited' as const,
+              exitCode,
+              initialOutputDiagnostic: 'git-bash-console-capacity' as const
+            }
+          }
+        : {})
     })
     gate.finish.resolve()
     await pending
+    const outcome = await operation
+    if (!outcome) {
+      throw new Error('missing registration outcome')
+    }
+    let failure: unknown
+    try {
+      requireAcceptedSpawn(outcome)
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toMatchObject({ message: 'agent_session_exited_during_start' })
+    expect(formatTerminalStartFailure(failure) !== undefined).toBe(!stableOwner && exitCode > 0)
     expect(ptyOwnership.has(binding.ptyId)).toBe(false)
     expect(ptyIncarnationById.has(binding.ptyId)).toBe(false)
     expect(ptySizes.has(binding.ptyId)).toBe(false)
-    if (reservation) {
-      await expect(reservation.promise).resolves.toMatchObject({ id: binding.ptyId })
-      const next = await nextReservation
-      expect(next).not.toBe(reservation)
-      resolvePaneSpawnReservation(reservationKey, next, { id: 'next-spawn' })
-      expect(paneSpawnReservationsByOwnerKey.has(reservationKey)).toBe(false)
-    }
     const session = readState().workspaceSession
     expect(
       session.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
@@ -178,6 +183,7 @@ it.each(['replacement-pty', binding.ptyId])(
         runtime,
         store,
         undefined,
+        undefined,
         binding.ptyId,
         binding.worktreeId,
         null,
@@ -205,6 +211,7 @@ it('retains the binding when loss of contact supplies no process-exit proof', as
       runtime,
       store,
       undefined,
+      undefined,
       binding.ptyId,
       binding.worktreeId,
       null,
@@ -229,6 +236,7 @@ it('does not settle rejected registration until its exit cleanup reaches SQLite'
   const cleanup = registerPersistedPtySpawn(
     runtime,
     store,
+    undefined,
     undefined,
     binding.ptyId,
     binding.worktreeId,
@@ -267,6 +275,7 @@ it('keeps successful registration synchronous through the remaining spawn public
     registerPersistedPtySpawn(
       runtime,
       store,
+      undefined,
       undefined,
       binding.ptyId,
       binding.worktreeId,
@@ -330,7 +339,7 @@ it.each(['success', 'new-exit', 'old-exit'] as const)(
     gate.finish.resolve()
     const result = await settled
     if (event === 'new-exit') {
-      expect.soft(result.error?.message).toBe('agent_session_exited_during_start')
+      expect.soft(result.value?.outcome?.kind).toBe('registration-exited')
       expect
         .soft(
           readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[
@@ -338,12 +347,13 @@ it.each(['success', 'new-exit', 'old-exit'] as const)(
           ]
         )
         .toBeUndefined()
-      expect
-        .soft(
-          runtime.resolveTerminalPane(`${binding.tabId}:${binding.leafId}`, binding.worktreeId)
-            .connected
-        )
-        .toBe(false)
+      const resolve = () =>
+        runtime.resolveTerminalPane(`${binding.tabId}:${binding.leafId}`, binding.worktreeId)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        expect.soft(resolve).toThrow('terminal_not_found')
+      } else {
+        expect.soft(resolve().connected).toBe(false)
+      }
     } else {
       expect(result.error).toBeNull()
       expect(result.value?.result).toMatchObject({
@@ -410,7 +420,7 @@ it.each(['joined', 'fresh'] as const)(
         ctx.result = result
         ctx.hostSessionBinding = { store, ...binding }
         ctx.metadataLeafId = binding.leafId
-        return commitRuntimePtySpawn(ctx)
+        return (await commitRuntimePtySpawn(ctx)).result
       }
     })
     if (reservation) {

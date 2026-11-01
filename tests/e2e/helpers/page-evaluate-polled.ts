@@ -8,8 +8,7 @@ type Outcome<Result> =
 
 let nextKey = 0
 
-/** page.evaluate whose outcome is polled: awaiting a preload promise across CDP can be garbage-collected.
- *  `args` cross as JSON; bulk work passes a `timeout` that grows with its size. */
+// Poll preload outcomes rather than holding a CDP promise that may be garbage-collected; args cross as JSON.
 export async function evaluatePolled<Args, Result>(
   page: Page,
   run: (args: Args) => Promise<Result>,

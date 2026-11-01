@@ -8,8 +8,7 @@ import type * as InstallerUtilsRemote from '../agent-hooks/installer-utils-remot
 
 const mocks = vi.hoisted(() => {
   const state: {
-    // Why: removal and enabled-flag edits cannot break real TOML, so these cases
-    // make the parser reject the edited bytes to prove the write is still checked.
+    // Force parser failures to verify that removal and enabled-flag writes are also checked.
     rejectParse: ((content: string) => boolean) | null
     remoteFiles: Map<string, string>
   } = { rejectParse: null, remoteFiles: new Map() }

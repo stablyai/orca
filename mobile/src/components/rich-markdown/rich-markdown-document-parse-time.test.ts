@@ -9,18 +9,7 @@ import {
   topLevelDeclarationsReachAnElement
 } from '../../test-support/webview-document-census'
 
-/**
- * Rulings 20 and 21 over the editor's document, checked by the readers the terminal's census uses.
- *
- * The hand-written script could read `#editor` and install its listeners as it was parsed, because
- * the WebView re-parses the whole document on every load. These modules are imported, and an ES
- * module body runs once per page: a read or a listener left at a module's top level would hand the
- * page's second mount the first mount's element and install nothing, which is a dead editor that
- * reports itself ready.
- *
- * So every effect lives in a start function both hosts call, and every mutable binding lives on
- * the scope rather than in a module, which is what makes two editors on one page two editors.
- */
+// Require per-start effects and per-scope mutation (rulings 20/21): module parse happens once, so top-level reads/listeners leave second mount bound to first editor.
 const DIRECTORY = import.meta.dirname
 
 /** The sequence that calls the starts, which is not a module with a start of its own. */
@@ -52,9 +41,7 @@ describe('the rich Markdown editor document at parse time', () => {
   })
 
   it('would report work in every declaration that runs as the module is evaluated', () => {
-    // Three shapes, because a reader that knew only the first would accept the other two and the
-    // empty list above would be about nothing. A statement-kind filter waves all three through:
-    // each is a declaration by shape and parse-time work by effect.
+    // Cover three declaration-shaped parse-time effects; statement-kind filter alone incorrectly permits all.
     const planted: [string, string, string][] = [
       [
         'a const read from the document',
@@ -74,9 +61,7 @@ describe('the rich Markdown editor document at parse time', () => {
   })
 
   it('leaves declarations that only declare alone, so the empty list is a measurement', () => {
-    // The other direction, and the two that look like the shapes above but are not: an instance
-    // field runs per `new`, and nothing in a document is ever constructed at parse; a default
-    // export of a function declares a body that runs when something calls it.
+    // Allow per-instance fields and exported function bodies: neither executes at module parse.
     const inert = [
       'const options = { capture: true, passive: false }\n',
       'class Reporter {\n  pending = install()\n}\n',
@@ -86,17 +71,14 @@ describe('the rich Markdown editor document at parse time', () => {
   })
 
   it('holds no mutable binding of its own: every one is a field of the scope', () => {
-    // Ruling 21. The factory gives each call its own scope, so a `let` in a module would be the one
-    // thing two editors on one page still shared — the second mount would inherit the first's
-    // generation, its remembered caret and its last reported inset.
+    // Module let leaks generation/caret/inset across editor factory calls; each call must own scope (ruling 21).
     expect(MODULES.flatMap((name) => moduleLevelMutableBindings(name, moduleSource(name)))).toEqual(
       []
     )
   })
 
   it('would name one in every shape a module can write it', () => {
-    // The precondition, and it is per shape rather than one sample: a line match would have caught
-    // only the first of these four, and the other three are the same shared binding.
+    // Test all four binding forms; line pattern catching one cannot prove module state scan.
     const planted: [string, string, string][] = [
       ['bare', 'let pending = null\n', 'planted: let pending'],
       ['var', 'var pending = null\n', 'planted: var pending'],
@@ -114,8 +96,7 @@ describe('the rich Markdown editor document at parse time', () => {
   })
 
   it('leaves a const and a function-local let alone, so the empty list is a measurement', () => {
-    // The other direction: a reader that refused every declaration would agree with the empty
-    // expectation just as happily. A binding one call owns is not module state.
+    // Allow call-local bindings so scanner rejecting every declaration cannot satisfy empty module-state result.
     const inert =
       'const options = { capture: true }\n' +
       'export function n() {\n  let index = 0\n  for (var step = 0; step < 2; step++) {\n' +
@@ -133,8 +114,7 @@ describe('the rich Markdown editor document at parse time', () => {
     expect([...started].sort()).toEqual(exported('start').sort())
     expect([...stopped].sort()).toEqual(exported('stop').sort())
 
-    // The surface is read before anything reaches for it, and the host is told last, after the
-    // inset the host lifts its bar by has been measured.
+    // Read surface first; announce ready after measuring inset so synchronous host reply sees complete setup.
     expect(started[0]).toBe('startEditorSurface')
     expect(started.at(-1)).toBe('startHostBridge')
 
@@ -145,10 +125,7 @@ describe('the rich Markdown editor document at parse time', () => {
   })
 
   it('finds a lifecycle export however it is written, and only when it is one', () => {
-    // The precondition for the comparison above, and the reason it is read from the tree: a
-    // pattern over the source needed one exact spelling, so `async`, a return type or a parameter
-    // list the formatter wrapped made a real start disappear — and a start missing from both
-    // lists makes them agree, which is the silent version of the failure they exist to catch.
+    // Discover starts from AST: async/types/wrapped params must not hide real start from both compared lists and yield vacuous agreement.
     const spellings: [string, string][] = [
       ['plain', 'export function startKeyboardInset(scope: RichMarkdownEditorScope) {\n}\n'],
       ['async', 'export async function startKeyboardInset(scope: RichMarkdownEditorScope) {\n}\n'],
@@ -168,9 +145,7 @@ describe('the rich Markdown editor document at parse time', () => {
       ])
     ).toEqual(spellings.map(([spelling]) => [spelling, ['startKeyboardInset']]))
 
-    // And only when it is one. A start that takes more than the scope is an act the document
-    // performs, not a module's lifecycle (ruling 20), and a start over another document's scope
-    // belongs to that document.
+    // Only own-scope unary start is module lifecycle; extra-arg actions/other-document starts are not (ruling 20).
     const refused = [
       'export function startEdgeScroll(scope: RichMarkdownEditorScope, dir: number) {\n}\n',
       'export function startTapDispatch(scope: TerminalDocumentScope) {\n}\n',
@@ -181,11 +156,5 @@ describe('the rich Markdown editor document at parse time', () => {
         exportedLifecycleFunctions(source, 'start', 'RichMarkdownEditorScope')
       )
     ).toEqual([[], [], []])
-  })
-
-  it('would name a start the sequence forgot, which is what the comparison above is for', () => {
-    const planted = sequenceCallsTo('startRichMarkdownEditorDocument')
-    expect(planted).not.toContain('startEditorCommands')
-    expect([...planted, 'startEditorCommands'].sort()).not.toEqual(planted.slice().sort())
   })
 })

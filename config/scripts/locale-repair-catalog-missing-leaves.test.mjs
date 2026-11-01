@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { repairCatalog } from './locale-translation-policy.mjs'
 
-// Regression: en.json routinely carries keys a locale catalog has not been bootstrapped with yet
-// (~190 per locale at the time of writing), which crashed the whole repair run before it did any work.
+// English keys can precede locale bootstrapping; missing leaves must not crash the entire repair.
 describe('repairCatalog with un-bootstrapped keys', () => {
   const enCatalog = {
     auto: {

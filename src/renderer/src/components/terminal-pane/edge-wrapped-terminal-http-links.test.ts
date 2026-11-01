@@ -2,7 +2,7 @@ import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
-import { buildEdgeWrappedHttpLogicalLineCandidates } from './edge-wrapped-terminal-http-links'
+import { buildEdgeWrappedHttpLogicalLineCandidates } from '../../../../shared/edge-wrapped-terminal-http-links'
 
 const COLS = 40
 const WIDE_GLYPH = '界'
@@ -97,6 +97,15 @@ describe('edge-wrapped terminal HTTP links', () => {
       }
     }
   )
+
+  it('stops scanning back at a prose row that cannot continue a URL', () => {
+    const prose = makeBufferLine('see https://example.com and more words')
+    const hovered = makeBufferLine('tail')
+    const getLine = vi.fn((y: number) => (y === 199 ? hovered : prose))
+
+    buildEdgeWrappedHttpLogicalLineCandidates({ getLine }, 200)
+    expect(new Set(getLine.mock.calls.map(([y]) => y)).size).toBeLessThan(5)
+  })
 
   it('opens a URL when a wide glyph starts the continuation row', () => {
     const prefix = 'https://example.com/wide/'

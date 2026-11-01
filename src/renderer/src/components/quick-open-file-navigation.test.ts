@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => {
     authorize: vi.fn(),
     open: vi.fn(() => 'owner-file-id'),
     source: vi.fn(),
-    preview: vi.fn(),
     reveal: vi.fn(),
     assertCurrent: vi.fn(),
     rpc: vi.fn(),
@@ -26,10 +25,6 @@ vi.mock('@/store', () => ({
       setMarkdownViewMode: mocks.source
     })
   }
-}))
-vi.mock('@/lib/file-preview', () => ({
-  openFileInBrowserTab: mocks.preview,
-  getWorkspaceFilePreviewPlan: () => ({ status: 'browser-tab' })
 }))
 vi.mock('@/runtime/runtime-file-metadata-client', () => ({
   statRuntimePath: mocks.stat,
@@ -46,45 +41,24 @@ vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
     assertCurrent: mocks.assertCurrent
   })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.rpc,
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
+}))
 vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({
   scheduleEditorLineReveal: mocks.reveal
 }))
 import { openQuickOpenFile } from './quick-open-file-navigation'
+
+// Opening a path is a user act, so its stat may start a stopped WSL distro.
+const USER_ACT = { wakeWslDistro: true }
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.route.current = { target: { kind: 'local' }, connectionId: undefined }
   mocks.stat.mockResolvedValue({ isDirectory: false })
   mocks.assertCurrent.mockReset()
-  mocks.preview.mockReturnValue({ status: 'unsupported' })
   vi.stubGlobal('window', { api: { fs: { authorizeExternalPath: mocks.authorize } } })
-})
-
-it('previews an HTML file selected without a line destination', async () => {
-  mocks.preview.mockReturnValue({ status: 'browser-tab' })
-  await openQuickOpenFile('report.html', 'wt', '/repo', { pathQuery: 'report.html' })
-  expect(mocks.preview).toHaveBeenCalledWith({ filePath: '/repo/report.html', worktreeId: 'wt' })
-  expect(mocks.open).not.toHaveBeenCalled()
-  expect(mocks.reveal).not.toHaveBeenCalled()
-})
-
-it('opens HTML at the requested source line even when a preview is available', async () => {
-  mocks.preview.mockReturnValue({ status: 'browser-tab' })
-  await openQuickOpenFile('report.html', 'wt', '/repo', {
-    pathQuery: 'report.html',
-    line: 12,
-    column: 3
-  })
-  expect(mocks.preview).not.toHaveBeenCalled()
-  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ language: 'html' }), undefined)
-  expect(mocks.reveal).toHaveBeenCalledWith(
-    expect.any(Function),
-    '/repo/report.html',
-    12,
-    3,
-    'owner-file-id'
-  )
 })
 
 it('validates pasted local paths with user-named access and uses the owner-qualified reveal', async () => {
@@ -93,16 +67,18 @@ it('validates pasted local paths with user-named access and uses the owner-quali
     line: 12,
     column: 3
   })
-  expect(mocks.stat).toHaveBeenCalledWith(expect.anything(), '/external/guide.md', {
-    kind: 'user-file'
-  })
+  expect(mocks.stat).toHaveBeenCalledWith(
+    expect.anything(),
+    '/external/guide.md',
+    { kind: 'user-file' },
+    USER_ACT
+  )
   expect(mocks.open).toHaveBeenCalledWith(
     expect.objectContaining({
       filePath: '/external/guide.md',
       relativePath: '/external/guide.md',
       runtimeEnvironmentId: null
-    }),
-    undefined
+    })
   )
   expect(mocks.source).toHaveBeenCalledWith('owner-file-id', 'source')
   expect(mocks.reveal).toHaveBeenCalledWith(
@@ -122,10 +98,7 @@ it('keeps a literal colon filename when it exists instead of applying its appare
     { pathQuery: '/repo/report', line: 12 },
     '/repo/report:12'
   )
-  expect(mocks.open).toHaveBeenCalledWith(
-    expect.objectContaining({ filePath: '/repo/report:12' }),
-    undefined
-  )
+  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/repo/report:12' }))
   expect(mocks.reveal).not.toHaveBeenCalled()
 })
 
@@ -138,10 +111,7 @@ it('falls back from a missing literal colon filename to line navigation', async 
     { pathQuery: '/repo/file.ts', line: 12 },
     '/repo/file.ts:12'
   )
-  expect(mocks.open).toHaveBeenCalledWith(
-    expect.objectContaining({ filePath: '/repo/file.ts' }),
-    undefined
-  )
+  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/repo/file.ts' }))
   expect(mocks.reveal).toHaveBeenCalledWith(
     expect.any(Function),
     '/repo/file.ts',
@@ -158,12 +128,10 @@ it('probes SSH paths only on their owning host', async () => {
   expect(mocks.stat).toHaveBeenCalledWith(
     expect.objectContaining({ connectionId: 'ssh-a' }),
     '/external/file.ts',
-    { kind: 'user-file' }
+    { kind: 'user-file' },
+    USER_ACT
   )
-  expect(mocks.open).toHaveBeenCalledWith(
-    expect.objectContaining({ externalSshTargetId: 'ssh-a' }),
-    undefined
-  )
+  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ externalSshTargetId: 'ssh-a' }))
 })
 
 it('resolves paired paths on the host and never falls back to client filesystem access', async () => {
@@ -178,18 +146,44 @@ it('resolves paired paths on the host and never falls back to client filesystem 
   expect(mocks.stat).not.toHaveBeenCalled()
   expect(mocks.authorize).not.toHaveBeenCalled()
   expect(mocks.open).toHaveBeenCalledWith(
-    expect.objectContaining({ runtimeEnvironmentId: 'env-a', relativePath: 'file.ts' }),
-    undefined
+    expect.objectContaining({ runtimeEnvironmentId: 'env-a', relativePath: 'file.ts' })
   )
+})
+
+it('opens a paired path outside every workspace through the grant its host issued', async () => {
+  mocks.route.current.target = { kind: 'environment', environmentId: 'env-a' }
   mocks.rpc.mockResolvedValue({
     exists: true,
     isDirectory: false,
-    absolutePath: '/outside/file.ts',
+    absolutePath: '/private/tmp/handoff.md',
+    relativePath: null,
+    openTarget: {
+      kind: 'absolute-file',
+      provider: 'local',
+      absolutePath: '/private/tmp/handoff.md',
+      grantId: 'grant-1'
+    }
+  })
+  await openQuickOpenFile('/tmp/handoff.md', 'wt', '/repo', { pathQuery: '/tmp/handoff.md' })
+  expect(mocks.stat).not.toHaveBeenCalled()
+  expect(mocks.open).toHaveBeenCalledWith(
+    expect.objectContaining({
+      filePath: '/private/tmp/handoff.md',
+      relativePath: '/private/tmp/handoff.md',
+      runtimeEnvironmentId: 'env-a',
+      terminalArtifactGrantId: 'grant-1'
+    })
+  )
+  expect(mocks.open).not.toHaveBeenLastCalledWith(expect.objectContaining({ readOnly: true }))
+  mocks.rpc.mockResolvedValue({
+    exists: false,
+    isDirectory: false,
+    absolutePath: '/tmp/gone.md',
     relativePath: null
   })
   await expect(
-    openQuickOpenFile('/outside/file.ts', 'wt', '/repo', { pathQuery: '/outside/file.ts' })
-  ).rejects.toThrow('outside the workspace')
+    openQuickOpenFile('/tmp/gone.md', 'wt', '/repo', { pathQuery: '/tmp/gone.md' })
+  ).rejects.toThrow('File not found on its host: /tmp/gone.md')
 })
 
 it('keeps directories, denied files, missing files and replaced owners out of the editor', async () => {
@@ -220,7 +214,8 @@ it.each(['C:\\repo\\file.ts', '\\\\server\\share\\file.ts'])(
     expect(mocks.stat).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-windows' }),
       path,
-      { kind: 'user-file' }
+      { kind: 'user-file' },
+      USER_ACT
     )
     expect(mocks.authorize).not.toHaveBeenCalled()
     expect(mocks.reveal).toHaveBeenCalledWith(expect.any(Function), path, 3, 4, 'owner-file-id')
@@ -243,10 +238,7 @@ it('resolves literal colon names on a paired host before treating the suffix as 
     '/repo/report:12'
   )
   expect(mocks.rpc).toHaveBeenCalledOnce()
-  expect(mocks.open).toHaveBeenCalledWith(
-    expect.objectContaining({ filePath: '/repo/report:12' }),
-    undefined
-  )
+  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/repo/report:12' }))
   expect(mocks.reveal).not.toHaveBeenCalled()
   expect(mocks.stat).not.toHaveBeenCalled()
 })
@@ -264,12 +256,11 @@ it('keeps a pasted POSIX file on the local workspace WSL distro before any files
   })
   expect(mocks.stat).toHaveBeenCalledWith(
     expect.anything(),
-    '\\\\wsl.localhost\\Ubuntu\\home\\repo\\file.ts'
+    '\\\\wsl.localhost\\Ubuntu\\home\\repo\\file.ts',
+    undefined,
+    USER_ACT
   )
-  expect(mocks.open).toHaveBeenCalledWith(
-    expect.objectContaining({ relativePath: 'file.ts' }),
-    undefined
-  )
+  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ relativePath: 'file.ts' }))
   mocks.route.current.connectionId = 'ssh-a'
   await openQuickOpenFile('/home/repo/file.ts', 'wt', '\\\\wsl.localhost\\Ubuntu\\home\\repo', {
     pathQuery: '/home/repo/file.ts'
@@ -277,7 +268,8 @@ it('keeps a pasted POSIX file on the local workspace WSL distro before any files
   expect(mocks.stat).toHaveBeenLastCalledWith(
     expect.objectContaining({ connectionId: 'ssh-a' }),
     '/home/repo/file.ts',
-    { kind: 'user-file' }
+    { kind: 'user-file' },
+    USER_ACT
   )
 })
 
@@ -293,8 +285,7 @@ it.each(['literal:12', 'nested/literal:12', 'literal:12:3'])(
       query
     )
     expect(mocks.open).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: `/repo/${selected}` }),
-      undefined
+      expect.objectContaining({ filePath: `/repo/${selected}` })
     )
     expect(mocks.reveal).not.toHaveBeenCalled()
   }

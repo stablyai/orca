@@ -1,4 +1,4 @@
-import { nativeChatApprovalAcceptKey } from './native-chat-agent-support'
+import { nativeChatApprovalAcceptKey } from './native-chat/native-chat-agent-support'
 
 /** The facts in a status row's `{ approval: { tool, summary } }` envelope; callers own labels. */
 export type NativeChatApprovalEnvelope = {
@@ -11,7 +11,7 @@ export type NativeChatApprovalEnvelope = {
 
 const ESCAPE = String.fromCharCode(27)
 
-/** Parse the approval envelope the host writes to `agentStatus.interactivePrompt` on a PermissionRequest. */
+/** Read the approval envelope published in agentStatus.interactivePrompt on PermissionRequest. */
 export function parseNativeChatApprovalEnvelope(
   interactivePrompt: string | undefined | null,
   agent?: string

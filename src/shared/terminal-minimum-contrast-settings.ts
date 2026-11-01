@@ -1,13 +1,8 @@
-// xterm's minimumContrastRatio range: 1 disables contrast correction entirely, 21 is the maximum
-// WCAG ratio (black on white). Shared so main's persistence boundary and the renderer clamp alike.
+// Share xterm’s 1–21 range across persistence and renderer; 1 disables correction.
 export const MIN_TERMINAL_CONTRAST_RATIO = 1
 export const MAX_TERMINAL_CONTRAST_RATIO = 21
 
-/**
- * Clamps a user-supplied contrast floor (#10754). `undefined` means "unset", so callers fall back to
- * Orca's automatic background-luminance floor; anything unusable is treated the same way rather than
- * handed to xterm, which throws on a non-finite option.
- */
+/** Unset/invalid values preserve the automatic luminance floor; never pass non-finite values to xterm. */
 export function normalizeTerminalMinimumContrastRatio(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined

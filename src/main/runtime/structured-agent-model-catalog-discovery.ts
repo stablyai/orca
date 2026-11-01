@@ -1,6 +1,4 @@
-// Each registered agent's catalog probe, built from the SAME resolvers its session launches use,
-// rereading the environment on a missing program as a launch does: a probe under another binary
-// or env could list models the user's sessions cannot see.
+// Use session launch resolvers, including missing-program env refresh, for probes so catalogs match the binary/account sessions actually use.
 
 import { createAcpModelCatalogProbe } from '../acp/acp-model-catalog-probe'
 import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../acp/acp-launch-specs'
@@ -11,7 +9,7 @@ import {
 import { createCodexModelCatalogProbe } from '../codex/codex-model-catalog-probe'
 import type { AgentModelCatalogDiscovery } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { StructuredAgentModelCatalogContext } from './structured-agent-runtime-registrations'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 /** Claude's overlay, laid over its base env minus an inherited config dir; absent when none. */
 export function claudeLaunchEnvOverlay(

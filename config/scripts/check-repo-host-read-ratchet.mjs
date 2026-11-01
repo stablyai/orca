@@ -3,16 +3,12 @@ import { pathToFileURL } from 'node:url'
 import { stripSlashComments } from './check-path-literal-ratchet.mjs'
 import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on host decisions read off a repo row's legacy `connectionId` (Codex review 6 #4). A row
-// may name its SSH host only as `executionHostId: 'ssh:<target>'`, so a raw `repo.connectionId`
-// check answers "local" for it and runs remote work on this machine. Counts may only shrink.
-// A lower bound, not a proof: destructuring, indexed access and rows not named `*repo*`/`*Repo*`
-// are not seen, and the renderer is out of scope.
+// Legacy repo.connectionId can misclassify executionHostId:'ssh:<target>' as local; ratchet reads downward.
+// Lower bound: misses destructuring, indexed access, non-repo-named rows and renderer code.
 
 const BASELINE_PATH = 'config/repo-host-read-baseline.txt'
 const SCAN_ROOTS = ['src/main/', 'src/shared/', 'src/cli/']
-// A property read on a repo-named receiver; an assignment target is a write, not a decision.
-// `repo`, `sourceRepo`, `repoRow`; not `report` or `repos`.
+// Count reads on repo/sourceRepo/repoRow, excluding assignments and report/repos receivers.
 const RAW_READ = /\b(?:repo|\w*Repo)(?:[A-Z]\w*)?!?\??\.connectionId\b(?!\s*=(?!=))/g
 
 /** Files that define what the two spellings mean, with the reason. Keep each reason true. */
@@ -38,7 +34,6 @@ export function isScannedFile(rel) {
 const VERBATIM_COPY =
   /\.\.\.\(\s*(\w+)\.connectionId !== undefined \? \{ connectionId: \1\.connectionId \} : \{\}\s*\)/g
 
-/** Raw `<repo>.connectionId` reads in one file's code; comments are prose and do not count. */
 export function countRawRepoHostReads(text) {
   const code = stripSlashComments(text).replace(VERBATIM_COPY, '')
   return [...code.matchAll(RAW_READ)].length

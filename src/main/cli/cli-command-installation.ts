@@ -14,6 +14,7 @@ import {
   hasSameIdentity,
   hasSameSnapshot,
   inspectStableCommand,
+  isSameDirectoryEntry,
   isUnreadableSymlink,
   quarantineCommandPath,
   readEntrySnapshot,
@@ -31,6 +32,9 @@ export class CliCommandInstallation extends CliCommandInspection {
     const launcherPath = status.launcherPath
     if (!commandPath || !launcherPath || status.state === 'installed') {
       return
+    }
+    if (await isSameDirectoryEntry(commandPath, launcherPath)) {
+      throw new Error(`Refusing to register ${commandPath} as a link to itself.`)
     }
 
     const inspected = await this.inspectStableSymlink(commandPath, launcherPath)
@@ -175,7 +179,7 @@ export class CliCommandInstallation extends CliCommandInspection {
     return extractedRoot
   }
 
-  /** Why: a 0700 root-owned link is unreadable to the user, so root opens it up before the normal ownership check. */
+  // Repair unreadable root-owned links before checking ownership.
   private async inspectStableSymlink(
     commandPath: string,
     launcherPath: string

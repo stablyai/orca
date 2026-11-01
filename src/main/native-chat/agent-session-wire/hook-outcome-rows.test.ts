@@ -1,32 +1,37 @@
-// Captured prompt-hook blocks through each agent's translator, the journal, a reopen and the fold:
-// one warning row stays on screen, nothing else explains the turn, and the send on record stays.
+// Exercise captured hook failures through translators, persistence and folding without duplicating warnings.
 
 import { readFile } from 'node:fs/promises'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import {
   nativeChatRowTurnKeys,
   nativeChatTurnBarRows
-} from '../../../shared/native-chat-turn-grouping'
-import { nativeChatTurnFold, nativeChatTurnFoldRow } from '../../../shared/native-chat-turn-fold'
-import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
-import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
+import {
+  nativeChatTurnFold,
+  nativeChatTurnFoldRow
+} from '../../../shared/native-chat/transcript/native-chat-turn-fold'
+import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
+import { projectStructuredItemsToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import { selectStructuredAgentTurnBars } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { GROK_ACP_DIALECT } from '../../acp/acp-dialects/grok-dialect'
 import { readAcpFixture } from '../../acp/acp-timeline-fixture.test-support'
 import { AcpTimelineTranslator } from '../../acp/acp-timeline-translator'
 import { PromptResponseSchema } from '../../acp/generated/acp-protocol.generated'
-import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
+import { createCodexDispatchEchoes } from '../../codex/codex-structured-dispatch-echo'
+import { readCodexTurnId } from '../../codex/codex-structured-thread-facts'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,
@@ -56,8 +61,7 @@ async function captured<T>(agent: 'codex' | 'claude', scenario: string): Promise
   return lines.map((line) => JSON.parse(line)).filter((line) => line.case === scenario)
 }
 
-/** The system rows a settled chat draws, every turn folded. */
-function settledRows(items: readonly AgentJournalRenderItem[]) {
+function visibleRows(items: readonly AgentJournalRenderItem[]) {
   expect(withNativeChatCutTurnNotices(items, { agentName: 'Agent' })).toBe(items)
   const messages = projectStructuredItemsToNativeChat(items)
   const turnKeys = nativeChatRowTurnKeys(messages)
@@ -66,12 +70,13 @@ function settledRows(items: readonly AgentJournalRenderItem[]) {
     settledTurnKeys: new Set(turnKeys.flatMap((key) => (key ? [key] : []))),
     expandedTurnKeys: new Set()
   })
-  return messages.flatMap((message, index) =>
-    message.role === 'system' && !foldedRows.has(index) ? message.blocks : []
-  )
+  return messages.filter((_, index) => !foldedRows.has(index))
 }
 
-/** A chat whose send is on record, written by `write`, then read back by a fresh journal. */
+function settledRows(items: readonly AgentJournalRenderItem[]) {
+  return visibleRows(items).flatMap((message) => (message.role === 'system' ? message.blocks : []))
+}
+
 async function blockedChat(
   identity: Parameters<typeof openProviderTimelineRig>[1],
   write: (rig: ProviderTimelineRig) => void
@@ -89,23 +94,39 @@ async function blockedChat(
 }
 
 describe('a prompt hook that blocked the message', () => {
-  // A blocked tool call reaches the model as the tool's result, and writes no row of its own.
   it.each([
-    ['blocked-prompt', [DEPLOYS_FROZEN], 'blocked'],
-    ['blocked-prompt', [row('Hook stopped: Deploys are frozen')], 'stopped'],
-    ['blocked-steer', [DEPLOYS_FROZEN], 'blocked'],
-    ['blocked-tool', [], 'blocked']
-  ])('Codex %s (%s, %s)', async (scenario, rows, status) => {
+    ['blocked-prompt', [DEPLOYS_FROZEN], 'blocked', 'before turn/started'],
+    ['blocked-prompt', [DEPLOYS_FROZEN], 'blocked', 'after turn/started'],
+    ['blocked-prompt', [row('Hook stopped: Deploys are frozen')], 'stopped', 'before turn/started'],
+    ['blocked-steer', [DEPLOYS_FROZEN], 'blocked', 'none'],
+    ['blocked-tool', [], 'blocked', 'none']
+  ])('Codex %s (%s, %s, turn/start reply %s)', async (scenario, rows, status, reply) => {
     const frames = await captured<Captured>('codex', scenario)
     const { items, submissions } = await blockedChat(CODEX_CHAT, (rig) => {
-      const deps = { sessionId: 's', primaryThreadId: () => 't', sink: rig.eventSink }
-      const lane = createCodexJournalTranslator({ ...deps, schedule: (run) => (run(), () => {}) })
+      // Codex never echoes a refused prompt; only the turn/start reply names its turn.
+      const echoes = createCodexDispatchEchoes()
+      echoes.arm(SEND.clientMessageId, 1_000)
+      const answer = () =>
+        echoes.repliedTurn(SEND.clientMessageId, 't', readCodexTurnId(frames[0]!.params)!)
+      if (reply === 'before turn/started') {
+        answer()
+      }
+      const lane = createCodexJournalTranslator({
+        sessionId: 's',
+        primaryThreadId: () => 't',
+        sink: rig.eventSink,
+        dispatchTurnOpener: echoes.turnOpener,
+        schedule: (run) => (run(), () => {})
+      })
       for (const { method, params } of frames) {
         const frame = { method, params: { ...params, threadId: 't' } }
         if (scenario === 'blocked-prompt' && method === 'hook/completed') {
           frame.params.run = { ...params.run, status }
         }
         lane.handle({ type: 'notification', sessionId: 's', threadId: 't', ...frame })
+        if (reply === 'after turn/started' && method === 'turn/started') {
+          answer()
+        }
       }
     })
     expect(settledRows(items)).toEqual(rows)
@@ -123,9 +144,10 @@ describe('a prompt hook that blocked the message', () => {
           submissions: submissions.map((sent) => ({ ...sent, dispatchState }))
         }
         const { turnKeys } = nativeChatTurnMembership(messages, journal)
-        expect([...nativeChatTurnBarRows(messages, turnKeys).keys()]).toEqual([
-          agentJournalSubmissionKey(SEND.clientMessageId)
-        ])
+        const opener = agentJournalSubmissionKey(SEND.clientMessageId)
+        expect([...nativeChatTurnBarRows(messages, turnKeys).keys()]).toEqual([opener])
+        const { settledTurns } = selectStructuredAgentTurnBars(items, journal.submissions, null)
+        expect([...settledTurns.keys()]).toEqual([opener])
       }
     }
   })
@@ -189,5 +211,29 @@ describe('a prompt hook that blocked the message', () => {
     const turns = items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
     expect(turns).toEqual([expect.objectContaining({ state: 'completed', outcome: 'success' })])
     expect(settledRows(items)).toEqual([row(`Blocked by hook: ${QA_POLICY}`)])
+  })
+})
+
+describe('a Stop hook that sent Claude back', () => {
+  it('keeps the reply before the hook row once the turn settles', async () => {
+    const frames = await captured<Captured>('claude', 'stop-hook-sent-back')
+    const { items } = await blockedChat(CLAUDE_CHAT, (rig) => {
+      const lane = createClaudeJournalTranslator({ sink: rig.eventSink, fallbackIdPrefix: '1' })
+      for (const { frame } of frames) {
+        lane.handle({ type: 'message', sessionId: 's', message: frame })
+      }
+    })
+    expect(visibleRows(items).map((message) => [message.role, message.blocks[0]])).toEqual([
+      ['user', GO[0]],
+      ['assistant', { type: 'text', text: 'Grass is green.' }],
+      [
+        'system',
+        expect.objectContaining({
+          tone: 'warning',
+          text: 'Stop hook feedback: Verify your statement with evidence before finishing.'
+        })
+      ],
+      ['assistant', { type: 'text', text: 'I checked: grass is green.' }]
+    ])
   })
 })

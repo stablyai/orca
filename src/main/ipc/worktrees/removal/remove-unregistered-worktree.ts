@@ -1,3 +1,5 @@
+import { removeWorktree } from '../../../git/worktree-removal'
+import { usesNativeWindowsRemoval } from '../../../git/windows-worktree-removal'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -60,22 +62,29 @@ export async function removeUnregisteredWorktree(
         toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
         toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
         removalHome,
-        access.statPath,
-        access.readPath
+        access
       ))
   }
-  if (canCleanOrphanedDirectory) {
+  const native = usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
+  if (canCleanOrphanedDirectory || (native && removedMeta)) {
     assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
-    if (!args.force) {
+    if (canCleanOrphanedDirectory && !args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }
+
     const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
     let removalCompleted = false
     try {
       await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
         allowUnverifiedStop: args.allowUnverifiedPtyStop
       })
-      await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+      await (usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
+        ? removeWorktree(repo.path, worktreePath, args.force ?? false, {
+            ...localWorktreeGitOptions,
+            deleteBranch: false,
+            knownRemovedWorktree: null
+          })
+        : removeLocalWorktreePath(worktreePath, localWorktreeGitOptions))
       removalCompleted = true
     } finally {
       await removalGate.finish(removalCompleted)
@@ -106,10 +115,10 @@ export async function removeUnregisteredWorktree(
   }
   if (await isAlreadyRemovedWorktreePath(worktreePath, localWorktreeGitOptions)) {
     if (!args.force && !removedMeta) {
-      // Why: without persisted metadata, require the renderer recovery path before deleting Orca-only state for an unregistered path.
+      // Without persisted ownership, require renderer recovery approval before deleting unregistered state.
       throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
     }
-    // Why: a manually deleted worktree is already gone; persisted metadata proves it was an Orca-known row, so no force is needed.
+    // Persisted metadata proves an already-missing path was Orca-owned; cleanup needs no force.
     await cleanupUnusedWorktreePushTargetRemote(
       repo.path,
       args.worktreeId,

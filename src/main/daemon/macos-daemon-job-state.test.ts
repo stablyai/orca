@@ -6,7 +6,7 @@ const { run, clock } = vi.hoisted(() => ({
   clock: { now: 0 }
 }))
 vi.mock('@orca/process-host', () => ({ runProcess: run }))
-// Each poll wait advances a virtual clock, so the removal deadline runs without real time.
+// Advance the virtual deadline with each poll instead of waiting in real time.
 vi.mock('node:timers/promises', () => ({
   setTimeout: async (ms: number) => {
     clock.now += ms

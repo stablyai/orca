@@ -1,9 +1,4 @@
-/**
- * The liveness watch: one bridge into orcad's port, held open and never written to. orcad's HTTP
- * server keeps a connection that never sent a request, so the bridge ends only when orcad closes
- * it (exit 0, measured ~69 ms after killing orcad) or its distro stops (exit 1, ~40 ms after
- * `wsl --terminate`). Opening it doubles as the port probe: READY or REFUSED.
- */
+/** Hold an unwritten bridge as liveness watch/port probe: orcad closes it on socket loss or distro stop. Measured exits arrive ~69ms/~40ms respectively; exit codes still require independent liveness evidence. */
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import { openOrcadStdioBridgeChannel, resolveOrcadStdioBridge } from '../ssh/orcad-stdio-bridge'
 import {
@@ -18,12 +13,16 @@ export type WslOrcadWatch = {
   /** Called once, with the bridge's exit code, when a `ready` watch ends on its own. */
   onExit(listener: (code: number | null) => void): void
   close(): void
+  /** Whether it currently proves orcad answers on its port (false while it holds no open path). */
+  proving(): boolean
+  /** Called each time it stops proving without an exit, so the next check can come sooner. */
+  onIdle?(listener: () => void): void
 }
 
 const WATCH_OPEN_TIMEOUT_MS = 10_000
 
 function inertWatch(signal: 'refused' | 'unverifiable'): WslOrcadWatch {
-  return { signal, onExit: () => {}, close: () => {} }
+  return { signal, onExit: () => {}, close: () => {}, proving: () => false }
 }
 
 export async function openWslOrcadWatch(
@@ -91,7 +90,8 @@ export function watchChannel(
             listener(exitCode)
           }
         },
-        close
+        close,
+        proving: () => !ended && !closedByUs
       })
     }
     decoder.on('signal', (signal: OrcadStdioBridgeSignal) => settle(signal))

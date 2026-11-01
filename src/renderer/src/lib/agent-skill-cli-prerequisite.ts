@@ -34,8 +34,7 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
     }
 
     if (status.state !== 'installed' || status.pathConfigured === false) {
-      // Why: macOS may immediately show a native authorization prompt, so the
-      // user needs app-level context before that OS dialog appears.
+      // Show app context before macOS can immediately present its native authorization prompt.
       await showOrcaCliRegistrationPromptToast(registrationPromptDelayMs)
       const next = await window.api.cli.install()
       onStatusChange?.(next)
@@ -57,7 +56,7 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
   }
 }
 
-export async function showOrcaCliRegistrationPromptToast(delayMs = 700): Promise<void> {
+async function showOrcaCliRegistrationPromptToast(delayMs = 700): Promise<void> {
   toast.message(CLI_PREREQUISITE_REGISTRATION_TOAST, {
     description: CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION
   })
@@ -127,8 +126,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
   }
 
   if (status.pathConfigured === false) {
-    // Why: the skill installer opens a real shell; agents only get the expected
-    // Orca affordances when that shell can resolve the Orca CLI command.
+    // Installer shells must resolve the Orca CLI for agent skill affordances to work.
     toast.warning(
       translate(
         'auto.lib.agent.skill.cli.prerequisite.79371593b0',

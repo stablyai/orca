@@ -1,3 +1,8 @@
+import {
+  getClaudeSubagentNavigationTitle,
+  getClaudeSubagentNavigationDescription,
+  getClaudeSubagentNavigationSearchKeywords
+} from './claude-subagent-navigation-copy'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   getAgentAwakeDescription,
@@ -25,6 +30,11 @@ import {
   getCodexTerminalServerIsolationSearchKeywords,
   getCodexTerminalServerIsolationTitle
 } from './codex-terminal-server-isolation-copy'
+import {
+  getCodexHistorySharingDescription,
+  getCodexHistorySharingSearchKeywords,
+  getCodexHistorySharingTitle
+} from './codex-history-sharing-copy'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -45,7 +55,8 @@ function buildAgentSettingsKeywords(): string[] {
     { key: 'auto.components.settings.agents.search.permissions', fallback: 'permissions' },
     { key: 'auto.components.settings.agents.search.yolo', fallback: 'yolo', englishOnly: true },
     { key: 'auto.components.settings.agents.search.manual', fallback: 'manual' },
-    { key: 'settings.agents.autoPermissions', fallback: 'Auto' },
+    { key: 'settings.agents.permissionEachOwn', fallback: "Each agent's own settings" },
+    { key: 'components.native-chat.composer.permissionFullAccess', fallback: 'Full access' },
     { key: 'settings.agents.approveForMe', fallback: 'approve for me' },
     {
       key: 'auto.components.settings.agents.search.e2b7c0dcd7',
@@ -73,12 +84,19 @@ function expandAgentSearchText(value: string): string[] {
 
 type AgentsPaneSearchOptions = {
   includeAgentAwake?: boolean
+  /** Chat UI's per-agent Chat | CLI choice, shown in the Installed list. */
+  includeAgentChatChoice?: boolean
   includeAgentRuntime?: boolean
   includeAgentWorkspaceTrust?: boolean
   includeCodexTerminalServerIsolation?: boolean
 }
 
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
+const AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID = 'agent-chat-choice'
+/** The Installed list, where each chat agent's row holds its Chat | CLI choice. */
+export const AGENTS_INSTALLED_SECTION_ID = 'agents-installed'
+/** The top Chat or Terminal tiles that set this computer's default. */
+export const AGENT_DEFAULT_SURFACE_SECTION_ID = 'agents-default-surface'
 const AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID = 'agent-workspace-trust'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 const CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID = 'codex-terminal-server-isolation'
@@ -120,15 +138,57 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: AGENT_DEFAULT_SURFACE_SECTION_ID,
+    title: translate('settings.agents.defaultSurfaceTitle', 'Open agents as'),
+    description: translate(
+      'settings.agents.defaultSurfaceDescription',
+      'The default for agents on this computer.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+      ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
+      ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI')
+    ]
+  },
+  {
+    id: AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID,
+    targetSectionId: AGENTS_INSTALLED_SECTION_ID,
+    title: translate('settings.agents.chatChoiceTitle', 'Open as chat or CLI'),
+    description: translate(
+      'settings.agents.chatChoiceDescription',
+      'Choose whether each agent opens as a chat or in its CLI.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+      ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI'),
+      ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
+      ...translateSearchKeyword('settings.chat.providers.title', 'Providers', {
+        aliases: ['provider']
+      }),
+      ...translateSearchKeyword('settings.chat.providers.searchAgents', 'agents')
+    ]
+  },
+  {
     title: getAgentStatusHooksTitle(),
     description: getAgentStatusHooksDescription(),
     keywords: getAgentStatusHooksSearchKeywords()
+  },
+  {
+    id: 'claude-subagent-navigation',
+    title: getClaudeSubagentNavigationTitle(),
+    description: getClaudeSubagentNavigationDescription(),
+    keywords: getClaudeSubagentNavigationSearchKeywords()
   },
   {
     title: getAgentWorkspaceTrustTitle(),
     id: AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID,
     description: getAgentWorkspaceTrustDescription(),
     keywords: getAgentWorkspaceTrustSearchKeywords()
+  },
+  {
+    title: getCodexHistorySharingTitle(),
+    description: getCodexHistorySharingDescription(),
+    keywords: getCodexHistorySharingSearchKeywords()
   },
   {
     title: getCodexTerminalServerIsolationTitle(),
@@ -154,7 +214,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'settings.agents.permissionsSearchDescription',
-      'Launch agents with Manual, Auto, or Yolo permissions.'
+      'Choose Approve for me, Full access, or each agent’s own permission settings.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.agents.search.permission', 'permission'),
@@ -164,7 +224,12 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.agents.search.yolo', 'yolo'),
       ...translateSearchKeyword('auto.components.settings.agents.search.manual', 'manual'),
-      ...translateSearchKeyword('settings.agents.autoPermissions', 'Auto'),
+      ...translateSearchKeyword('settings.agents.permissionEachOwn', "Each agent's own settings"),
+      ...translateSearchKeyword('settings.agents.approveForMe', 'approve for me'),
+      ...translateSearchKeyword(
+        'components.native-chat.composer.permissionFullAccess',
+        'Full access'
+      ),
       ...translateSearchKeyword('auto.components.settings.agents.search.skip', 'skip'),
       ...translateSearchKeyword('auto.components.settings.agents.search.checks', 'checks')
     ]
@@ -174,6 +239,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
 
 export function getAgentsPaneSearchEntries({
   includeAgentAwake = true,
+  includeAgentChatChoice = false,
   includeAgentRuntime = true,
   includeAgentWorkspaceTrust = true,
   includeCodexTerminalServerIsolation = true
@@ -181,6 +247,9 @@ export function getAgentsPaneSearchEntries({
   const hiddenIds = new Set<string>()
   if (!includeAgentAwake) {
     hiddenIds.add(AGENT_AWAKE_SEARCH_ENTRY_ID)
+  }
+  if (!includeAgentChatChoice) {
+    hiddenIds.add(AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID)
   }
   if (!includeAgentRuntime) {
     hiddenIds.add(AGENT_RUNTIME_SEARCH_ENTRY_ID)
@@ -192,6 +261,6 @@ export function getAgentsPaneSearchEntries({
     hiddenIds.add(CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID)
   }
   return getAllAgentsPaneSearchEntries().filter(
-    (entry) => !('id' in entry) || !hiddenIds.has(entry.id)
+    (entry) => !('id' in entry) || typeof entry.id !== 'string' || !hiddenIds.has(entry.id)
   )
 }

@@ -1,7 +1,4 @@
-// Real-binary coverage: `git add` in one linked worktree must attribute its
-// status signal to that checkout only, through the real watcher, the admin dir
-// names Git picks (which need not match the folder name), and the head-identity
-// memo that maps them back to checkout paths.
+// Verify real Git staging events map admin-directory names back to the owning checkout.
 import { execFile } from 'node:child_process'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -99,7 +96,6 @@ async function waitForQuietWatcher(): Promise<void> {
   }
 }
 
-/** Stages a file in `checkout` and returns the checkout paths its status signal names. */
 async function stageAndAttribute(checkout: string): Promise<string[] | null> {
   await waitForQuietWatcher()
   received = []

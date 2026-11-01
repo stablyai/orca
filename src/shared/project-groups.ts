@@ -138,8 +138,7 @@ export function collectProjectGroupSubtreeIds(
       continue
     }
     subtreeIds.add(groupId)
-    // Why: imported project-group trees can be very wide; `push(...children)`
-    // can exceed V8's argument limit while collecting descendants.
+    // Wide imported trees can exceed V8’s spread argument limit; append children individually.
     for (const childGroupId of childGroupsByParentId.get(groupId) ?? []) {
       pending.push(childGroupId)
     }
@@ -147,9 +146,7 @@ export function collectProjectGroupSubtreeIds(
   return subtreeIds
 }
 
-/** Manual rank for a project inside a group bucket. Explicit
- *  `projectGroupOrder` wins; otherwise fall back to global repo order so drag
- *  midpoint math and sidebar sorting stay aligned. */
+/** Use explicit group rank, else global repo rank, so drag midpoint math and sidebar order agree. */
 export function getEffectiveProjectGroupManualRank(
   repo: Pick<Repo, 'id' | 'projectGroupOrder'> | undefined,
   repoOrderRankById?: ReadonlyMap<string, number>,
@@ -186,11 +183,7 @@ export function getNextProjectGroupOrder(repos: readonly Repo[], groupId: string
   return max + 1
 }
 
-/**
- * One row per group id, in first-seen order. Hosts can publish one group under the same id (a
- * project moved to a managed server keeps the desktop's copy, #30045); the last copy wins, as in
- * every id-keyed group lookup, so the sidebar and search agree on its name.
- */
+/** Deduplicate group IDs in first-seen order with last-copy values, matching id-keyed lookup behavior across host copies (#30045). */
 export function getDistinctProjectGroups<T extends Pick<ProjectGroup, 'id'>>(
   projectGroups: readonly T[]
 ): T[] {

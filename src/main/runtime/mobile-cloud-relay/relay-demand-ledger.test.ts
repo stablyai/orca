@@ -91,5 +91,11 @@ describe('RelayDemandLedger', () => {
       ownerIdentityKey: 'other-user\0profile\0org'
     })
     expect(ledger.hasDemand(ownerIdentityKey)).toBe(false)
+    const otherHost = deviceRegistry.addDevice('Other relay host')
+    deviceRegistry.setRelayBinding(otherHost.deviceId, {
+      ...binding(otherHost.deviceId, 2_000),
+      relayHostId: 'other-relay-host'
+    })
+    expect(ledger.hasDemand(ownerIdentityKey)).toBe(false)
   })
 })

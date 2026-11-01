@@ -1,5 +1,4 @@
-// A diff tab's in-memory view through session changes no layout apply makes: a partition move
-// carries the view to the tab's new partition, a removal drops it, and a failed write restores it.
+// Preserve in-memory editor views across partition moves; drop on removal and restore after failed writes.
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -74,7 +73,6 @@ function openDiff(workspace: string, tabId: string) {
   } as const
 }
 
-/** The editor tab main's layout stream publishes for `tabId` in `workspace` now. */
 function publishedTab(runtime: OrcaRuntimeService, workspace: string, tabId: string) {
   const reader = runtime.subscribeWorkspaceLayouts(() => {})
   reader.unsubscribe()
@@ -85,7 +83,6 @@ function publishedTab(runtime: OrcaRuntimeService, workspace: string, tabId: str
 describe("main's Store keeps an editor view where its tab's session is", () => {
   it('a partition move carries the view to the new partition, which publishes it', async () => {
     const { store, runtime, subscription } = await harness()
-    // The SSH repo routes its workspace to the SSH partition's layout.
     store.addRepo({
       id: 'repo-ssh',
       path: '/home/dev/api',

@@ -1,11 +1,8 @@
-/**
- * Integration tests for the server-authoritative mobile subscribe lifecycle.
- */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { listWorktrees } from '../git/worktree'
 import { OrcaRuntimeService } from './orca-runtime'
 
-// Why: default the mock store to the clamp floor (5_000ms) so legacy "restore fires after delay" assertions hold; the real default is indefinite/null.
+// Legacy restore cases need finite 5s (the clamp floor); production defaults to indefinite hold.
 const LEGACY_RESTORE_MS = 5_000
 const settingsState = {
   mobileAutoRestoreFitMs: LEGACY_RESTORE_MS as number | null
@@ -45,7 +42,6 @@ const store = {
   }
 }
 
-/** Reclaim clears protected retention maps that no public reader exposes. */
 class ObservableRuntime extends OrcaRuntimeService {
   get restoreTimers(): typeof this.pendingRestoreTimers {
     return this.pendingRestoreTimers
@@ -100,7 +96,6 @@ function createRuntime() {
     renameTerminal: vi.fn(),
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) => {
       notifications.push({ ptyId, mode, cols, rows })
     },
@@ -214,7 +209,7 @@ describe('mobile subscribe integration', () => {
       rows: 30,
       seq: 17,
       source: 'headless',
-      // Non-alt-screen reports alternateScreen=false so the renderer keeps its destructive scrollback clear on restore.
+      // Preserve destructive scrollback clear on non-alt-screen restore.
       alternateScreen: false
     })
     await expect(runtime.serializeTerminalBuffer('pty-empty')).resolves.toBeNull()
@@ -265,7 +260,6 @@ describe('mobile subscribe integration', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-    // Not yet restored
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
     await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
@@ -275,42 +269,34 @@ describe('mobile subscribe integration', () => {
   it('preserves previousDims across re-subscribes to same terminal', async () => {
     const { runtime, ptySizes } = createRuntime()
 
-    // First subscribe at desktop 150x40
     await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
-    // Re-subscribe (e.g. after reconnect): PTY is already 45x20 but previousDims must stay 150x40.
+    // Re-subscribe sees phone-fitted PTY dims but must retain the original desktop baseline.
     await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-    // Unsubscribe and let restore fire
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
     await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
 
-    // Should restore to original desktop dims, not 45x20
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
   it('preserves held-override baseline across resubscribe-after-indefinite-hold', async () => {
-    // Why: a fresh resubscribe under indefinite hold must inherit the override's retained desktop baseline, or a later desktop Restore becomes a no-op.
-    settingsState.mobileAutoRestoreFitMs = null // indefinite hold
+    // Indefinite-hold re-subscribe must inherit the retained desktop baseline for later Restore.
+    settingsState.mobileAutoRestoreFitMs = null
     const { runtime, ptySizes } = createRuntime()
 
-    // Initial subscribe at desktop 150x40 → fit to 45x20.
     await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
-    // Phone leaves; indefinite hold keeps PTY phone-fit while the override baseline still carries 150x40.
     runtime.handleMobileUnsubscribe('pty-1', 'client-a')
     await vi.advanceTimersByTimeAsync(60_000)
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
-    // Phone reopens — fresh resubscribe (inner map is empty).
     await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-    // Desktop user clicks Restore.
     await runtime.reclaimTerminalForDesktop('pty-1')
 
-    // Must restore to the original 150x40, not the phone-fit 45x20.
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
@@ -318,7 +304,6 @@ describe('mobile subscribe integration', () => {
     const { runtime, ptySizes } = createRuntime()
 
     await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 10, rows: 3 })
-    // Should clamp to minimum 20x8
     expect(ptySizes.get('pty-1')).toEqual({ cols: 20, rows: 8 })
   })
 
@@ -333,7 +318,6 @@ describe('mobile subscribe integration', () => {
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       expect(runtime.getMobileDisplayMode('pty-1')).toBe('desktop')
 
-      // Setting to 'auto' deletes the entry (same as default)
       runtime.setMobileDisplayMode('pty-1', 'auto')
       expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
     })
@@ -365,7 +349,6 @@ describe('mobile subscribe integration', () => {
       const { runtime, ptySizes } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-      // Switch to desktop (restores to 150x40)
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
@@ -373,7 +356,6 @@ describe('mobile subscribe integration', () => {
       const resizeEvents: unknown[] = []
       runtime.subscribeToTerminalResize('pty-1', (event) => resizeEvents.push(event))
 
-      // Switch back to auto (should re-fit to phone dims)
       runtime.setMobileDisplayMode('pty-1', 'auto')
       await runtime.applyMobileDisplayMode('pty-1')
 
@@ -394,10 +376,9 @@ describe('mobile subscribe integration', () => {
       await runtime.handleMobileSubscribe('pty-2', 'client-a', { cols: 45, rows: 20 })
 
       runtime.onClientDisconnected('client-a')
-      // onClientDisconnected enqueues fire-and-forget; flush microtasks + 0ms timers.
+      // Disconnect queues work; flush microtasks and zero-delay timers.
       await vi.advanceTimersByTimeAsync(0)
 
-      // Both PTYs restored immediately
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
       expect(ptySizes.get('pty-2')).toEqual({ cols: 120, rows: 35 })
       expect(runtime.isMobileSubscriberActive('pty-1')).toBe(false)
@@ -408,10 +389,8 @@ describe('mobile subscribe integration', () => {
       const { runtime, ptySizes } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-      // Timer is pending
 
       runtime.onClientDisconnected('client-a')
-      // Timer should be cancelled, PTY already restored by disconnect handler
 
       await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
@@ -421,13 +400,11 @@ describe('mobile subscribe integration', () => {
       const { runtime } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-      // Timer pending for pty-1
 
       runtime.onPtyExit('pty-1', 0)
       expect(runtime.isMobileSubscriberActive('pty-1')).toBe(false)
       expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
 
-      // Timer should have been cancelled — no crash from resizing a dead PTY
       await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
     })
 
@@ -436,7 +413,6 @@ describe('mobile subscribe integration', () => {
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
 
-      // pty-2 exits — should not affect pty-1's pending restore
       runtime.onPtyExit('pty-2', 0)
 
       await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
@@ -459,7 +435,6 @@ describe('mobile subscribe integration', () => {
       const countBefore = events.length
       unsubscribe()
 
-      // After unsubscribe, no more events
       runtime.setMobileDisplayMode('pty-1', 'auto')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(events.length).toBe(countBefore)
@@ -471,23 +446,19 @@ describe('mobile subscribe integration', () => {
       const { runtime, ptySizes } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-      // Toggle to desktop — restores to previousCols (150x40)
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
 
-      // Wait out the 500ms cascade-suppress armed by phone→desktop before the renderer's fit can update lastRendererSizes. See docs/mobile-terminal-layout-state-machine.md.
+      // Wait out the 500ms phone-to-desktop resize cascade suppression before reporting renderer geometry.
       await vi.advanceTimersByTimeAsync(500)
 
-      // Simulate desktop renderer's safeFit correcting to split-pane width
       runtime.onExternalPtyResize('pty-1', 105, 40)
 
-      // Toggle back to auto — should capture previousCols=105 (not 150)
       runtime.setMobileDisplayMode('pty-1', 'auto')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
-      // Toggle to desktop again — should restore to 105 (the corrected value)
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 105, rows: 40 })
@@ -496,51 +467,42 @@ describe('mobile subscribe integration', () => {
     it('uses lastRendererSize for previousCols on first subscribe', async () => {
       const { runtime, ptySizes } = createRuntime()
 
-      // Simulate: PTY spawned at 214 (ptySizes), but renderer already fit to 105
       ptySizes.set('pty-1', { cols: 214, rows: 72 })
       runtime.onExternalPtyResize('pty-1', 105, 40)
 
-      // First mobile subscribe — should use rendererSize (105) not ptySizes (214)
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
-      // Toggle to desktop — should restore to 105, not 214
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 105, rows: 40 })
     })
 
     it('ignores reports while a mobile-fit override is in place', async () => {
-      // Why: while an override holds phone dims the renderer echoes them back; treating that echo as external geometry would poison the restore baseline. See docs/mobile-fit-hold.md.
+      // Phone-fit echoes must not poison the desktop restore baseline; see docs/mobile-fit-hold.md.
       const { runtime, ptySizes } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-      // Renderer reports phone dims back (echo of override). Must be ignored.
       runtime.onExternalPtyResize('pty-1', 45, 20)
 
-      // Toggle to desktop — restore lands on the original baseline, not the phone-dim echo.
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     })
 
     it('still updates baseline once the override is cleared (real desktop resize)', async () => {
-      // Counterpart: once the override is cleared, pty:resize reports are legitimate and must update the baseline.
+      // Once the override clears, legitimate renderer reports must update the baseline.
       const { runtime, ptySizes } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-      // Take back — clears override and arms the 500ms cascade-suppress.
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
 
-      // Wait past the renderer-cascade suppress window.
       await vi.advanceTimersByTimeAsync(500)
 
-      // User resizes the desktop window. Renderer fires pty:resize.
       runtime.onExternalPtyResize('pty-1', 130, 35)
 
-      // Toggle to phone then take back — should restore the updated geometry, not the original 150x40.
       runtime.setMobileDisplayMode('pty-1', 'auto')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
@@ -551,17 +513,14 @@ describe('mobile subscribe integration', () => {
     })
 
     it('updates baseline mid-fit when desktop reports dims that differ from the override', async () => {
-      // Why: a desktop tab becoming visible mid-fit fires pty:resize with real dims (not the override's); that legit report must refresh the restore baseline.
+      // A newly visible desktop tab can report real geometry during phone fit; retain it for restore.
       const { runtime, ptySizes } = createRuntime()
-      // Seed a stale baseline (spawn default 80×24) before subscribing.
       ptySizes.set('pty-1', { cols: 80, rows: 24 })
       runtime.onExternalPtyResize('pty-1', 80, 24)
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-      // Desktop tab activated mid-fit reports real dims differing from the override (45×20), so they pass through.
       runtime.onExternalPtyResize('pty-1', 200, 60)
 
-      // Take back — should land on 200×60, not 80×24.
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 200, rows: 60 })
@@ -570,16 +529,14 @@ describe('mobile subscribe integration', () => {
 
   describe('recordRendererGeometry (pty:reportGeometry IPC)', () => {
     it('refreshes subscriber baseline while a mobile-fit override is active', async () => {
-      // Why: for a never-desktop-active terminal the baseline is the spawn default; the measurement-only report must update it so Take Back restores real dims.
+      // Never-active terminals need measurement-only geometry to replace spawn-default restore sizes.
       const { runtime, ptySizes } = createRuntime()
       ptySizes.set('pty-1', { cols: 80, rows: 24 })
       runtime.onExternalPtyResize('pty-1', 80, 24)
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-      // Override in place; desktop pane becomes visible and reports real geometry via the measurement-only channel.
       runtime.recordRendererGeometry('pty-1', 214, 72)
 
-      // Take back — should restore to the reported dims, not 80×24.
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 214, rows: 72 })
@@ -636,12 +593,10 @@ describe('mobile subscribe integration', () => {
     it('old resizeForClient still works alongside new system', async () => {
       const { runtime, ptySizes } = createRuntime()
 
-      // Old flow: explicit resizeForClient
       const fitResult = await runtime.resizeForClient('pty-1', 'mobile-fit', 'client-old', 45, 20)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
       expect(fitResult.mode).toBe('mobile-fit')
 
-      // Old flow: restore
       const restoreResult = await runtime.resizeForClient('pty-1', 'restore', 'client-old')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
       expect(restoreResult.mode).toBe('desktop-fit')
@@ -656,7 +611,6 @@ describe('mobile subscribe integration', () => {
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
 
-      // Wait long past the legacy 300ms debounce — PTY must remain held.
       await vi.advanceTimersByTimeAsync(60_000)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
     })
@@ -668,7 +622,6 @@ describe('mobile subscribe integration', () => {
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
 
       await vi.advanceTimersByTimeAsync(30_000)
-      // Not yet — still mid-window.
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
       await vi.advanceTimersByTimeAsync(30_000)
@@ -684,46 +637,40 @@ describe('mobile subscribe integration', () => {
       await vi.advanceTimersByTimeAsync(30_000)
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
-      // The new subscribe should have cancelled the pending restore timer.
       await vi.advanceTimersByTimeAsync(120_000)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
     })
 
     it('reclaimTerminalForDesktop with active subscriber keeps desktop mode until the phone acts', async () => {
-      // Why (#28487): the phone re-subscribes on its own after a reconnect or resume, so a re-subscribe must stay passive; typing re-fits.
+      // #28487: reconnect/resume re-subscribe stays passive; only typing takes the floor.
       const { runtime, ptySizes } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
-      // Desktop reclaim while phone is still subscribed.
       const ok = await runtime.reclaimTerminalForDesktop('pty-1')
       expect(ok).toBe(true)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
       expect(runtime.getMobileDisplayMode('pty-1')).toBe('desktop')
 
-      // Mobile re-subscribes (reconnect, resume). Stays at desktop dims.
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
       expect(runtime.getDriver('pty-1').kind).not.toBe('mobile')
 
-      // The user types on the phone. Re-fits to phone dims.
       await runtime.mobileTookFloor('pty-1', 'client-a')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
       expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
     })
 
     it('reclaim with WS disconnect between cycles — held branch restores correctly each time', async () => {
-      // Why: regression — under indefinite hold the held-branch reclaim must restore real desktop dims every cycle, not the current (phone) PTY size.
+      // Repeated held-override reclaim must restore desktop geometry, never the current phone fit.
       settingsState.mobileAutoRestoreFitMs = null
       const { runtime, ptySizes } = createRuntime()
 
       for (let i = 0; i < 3; i++) {
-        // Phone subscribes and types (after a take-back the subscribe alone is passive), fits to phone dims.
         await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
         await runtime.mobileTookFloor('pty-1', 'client-a')
         expect(ptySizes.get('pty-1'), `iter ${i}: phone-fit`).toEqual({ cols: 45, rows: 20 })
 
-        // WS disconnect under indefinite hold: PTY stays phone-fit, override persists, subscriber removed.
         runtime.onClientDisconnected('client-a')
         await vi.advanceTimersByTimeAsync(0)
         await vi.advanceTimersByTimeAsync(60_000)
@@ -734,7 +681,6 @@ describe('mobile subscribe integration', () => {
         expect(runtime.isMobileSubscriberActive('pty-1'), `iter ${i}: no subscribers`).toBe(false)
         expect(runtime.getTerminalFitOverride('pty-1'), `iter ${i}: override held`).not.toBeNull()
 
-        // Desktop clicks Restore — held-override branch.
         const ok = await runtime.reclaimTerminalForDesktop('pty-1')
         expect(ok, `iter ${i}: reclaim ok`).toBe(true)
         expect(ptySizes.get('pty-1'), `iter ${i}: PTY restored to desktop`).toEqual({
@@ -746,16 +692,13 @@ describe('mobile subscribe integration', () => {
     })
 
     it('reclaim → re-subscribe → reclaim cycle works repeatedly', async () => {
-      // Why: regression — the reclaim/re-subscribe ping-pong must work N times, not just once.
       const { runtime, ptySizes } = createRuntime()
 
       for (let i = 0; i < 3; i++) {
-        // Phone subscribes and types (after a take-back the subscribe alone is passive).
         await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
         await runtime.mobileTookFloor('pty-1', 'client-a')
         expect(ptySizes.get('pty-1'), `iter ${i}: phone-fit`).toEqual({ cols: 45, rows: 20 })
 
-        // Desktop reclaims.
         const ok = await runtime.reclaimTerminalForDesktop('pty-1')
         expect(ok, `iter ${i}: reclaim ok`).toBe(true)
         expect(ptySizes.get('pty-1'), `iter ${i}: reclaimed to desktop`).toEqual({
@@ -767,14 +710,13 @@ describe('mobile subscribe integration', () => {
     })
 
     it('null (indefinite) keeps PTY at phone dims when WS connection closes (onClientDisconnected)', async () => {
-      // Why: WS close routes through onClientDisconnected (not handleMobileUnsubscribe), which must honor indefinite-hold rather than unconditionally restore.
+      // WS close bypasses handleMobileUnsubscribe but must still honor indefinite hold.
       settingsState.mobileAutoRestoreFitMs = null
       const { runtime, ptySizes } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
 
       runtime.onClientDisconnected('client-a')
       await vi.advanceTimersByTimeAsync(0)
-      // Flush soft-leave grace too — that path also has its own desktop-restore branch.
       await vi.advanceTimersByTimeAsync(60_000)
 
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
@@ -862,7 +804,6 @@ describe('mobile subscribe integration', () => {
     })
 
     it('reclaimTerminalForDesktop prefers fresh desktop geometry for a held PTY', async () => {
-      // Why: manual restore must honor fresh desktop geometry measured while the PTY was phone-held, not the stale baseline.
       settingsState.mobileAutoRestoreFitMs = null
       const { runtime, ptySizes } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
@@ -884,9 +825,7 @@ describe('mobile subscribe integration', () => {
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
 
-      // Pending timer exists. Switch preference → indefinite.
       runtime.setMobileAutoRestoreFitMs(null)
-      // Now wait far longer than the original 60s window. No restore fires.
       await vi.advanceTimersByTimeAsync(120_000)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
     })
@@ -897,7 +836,7 @@ describe('mobile subscribe integration', () => {
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
 
-      // A finite value applies to the next unsubscribe only; the already-held PTY is not retroactively restored.
+      // Finite preferences apply on the next unsubscribe, never retroactively to an existing hold.
       runtime.setMobileAutoRestoreFitMs(60_000)
       await vi.advanceTimersByTimeAsync(120_000)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
@@ -920,7 +859,6 @@ describe('mobile subscribe integration', () => {
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
       await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
-      // Now restored to desktop — no subscriber, no override.
       expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(false)
     })
   })

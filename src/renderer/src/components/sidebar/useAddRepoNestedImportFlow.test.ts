@@ -248,4 +248,51 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
     })
     expect(onGitRepoReady).not.toHaveBeenCalled()
   })
+  it.each(['group', 'separate'] as const)(
+    'carries grouped import outcome without losing SSH owner (%s)',
+    async (mode) => {
+      const importedRepo: Repo = {
+        ...folderRepo,
+        id: 'app',
+        kind: 'git',
+        path: scan.repos[0].path,
+        connectionId: 'ssh-builder'
+      }
+      mocks.state.repos = [importedRepo]
+      const onGitRepoReady = vi.fn()
+      const result: ProjectGroupImportResult = {
+        group: {
+          id: 'group',
+          name: 'platform',
+          parentPath: scan.selectedPath,
+          connectionId: 'ssh-builder',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        projects: [{ path: importedRepo.path, projectId: importedRepo.id, status: 'imported' }],
+        importedCount: 1,
+        alreadyKnownCount: 0,
+        failedCount: 0
+      }
+      const flow = useTestAddRepoNestedImportFlow({
+        nestedConnectionId: 'ssh-builder',
+        nestedRuntimeKind: 'ssh',
+        nestedSelectedPaths: new Set([importedRepo.path]),
+        importNestedRepos: vi.fn().mockResolvedValue(result),
+        onGitRepoReady
+      })
+      await flow.handleImportNestedRepos(mode)
+      expect(onGitRepoReady).toHaveBeenCalledWith(
+        importedRepo.id,
+        'ssh_remote_path',
+        'ssh:ssh-builder',
+        mode === 'group' ? { importedProjectGroupId: 'group' } : undefined
+      )
+    }
+  )
 })

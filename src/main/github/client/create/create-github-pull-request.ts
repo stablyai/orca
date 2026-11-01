@@ -25,6 +25,7 @@ import {
 import { getOriginGitHubApiRepository, githubHostExecOptions } from '../../github-api-repository'
 import { classifyCreatePRError, parseCreatePRPayload } from './create-pr-error-classification'
 import { findOpenPRByHeadBase, readPullRequestTemplate } from './pull-request-template'
+import { withGitHubRepoExecution } from '../../github-repository-identity'
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
@@ -35,134 +36,145 @@ export async function createGitHubPullRequest(
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating reviews for this provider is not supported yet.'
+      error: 'Creating reviews for this provider is not supported yet.',
+      reason: 'provider_not_supported'
     }
   }
 
   // `gh` runs on this client whatever the host; only the git reads under it are routed.
   const connectionId = hostedReviewSshConnectionId(executionHostId)
 
-  // Why: creation targets the origin owning the unqualified head branch; the shared resolver preserves its host (#7331, #8312).
-  const ownerRepo = await getOriginGitHubApiRepository(
+  return withGitHubRepoExecution(
     repoPath,
     connectionId,
-    getHostedReviewLocalGitOptions(options)
-  )
-  if (!ownerRepo) {
-    return {
-      ok: false,
-      code: 'unsupported_provider',
-      error: 'Creating pull requests requires a GitHub remote.'
-    }
-  }
-  // The runner host-qualifies --repo from options.host for GHES (#8312).
-  const repoArg = `${ownerRepo.owner}/${ownerRepo.repo}`
-
-  const base = normalizeHostedReviewBaseRef(input.base)
-  const head = input.head ? normalizeHostedReviewHeadRef(input.head) || undefined : undefined
-  const title = input.title.trim()
-  if (!base || !title) {
-    return {
-      ok: false,
-      code: 'validation',
-      error: 'Create PR failed: base branch and title are required.'
-    }
-  }
-  if (head && head.toLowerCase() === base.toLowerCase()) {
-    return {
-      ok: false,
-      code: 'validation',
-      error: 'Create PR failed: choose a different base branch before creating a pull request.'
-    }
-  }
-
-  const tempDir = await mkdtemp(join(tmpdir(), 'orca-pr-body-'))
-  await acquire()
-  const bodyPath = join(tempDir, 'body.md')
-  try {
-    const body =
-      input.useTemplate && !input.body?.trim()
-        ? await readPullRequestTemplate(repoPath, connectionId)
-        : (input.body ?? '')
-    await writeFile(bodyPath, body, 'utf8')
-    const createArgs = [
-      'pr',
-      'create',
-      '--repo',
-      repoArg,
-      '--base',
-      base,
-      '--title',
-      title,
-      '--body-file',
-      bodyPath
-    ]
-    if (head) {
-      createArgs.push('--head', head)
-    }
-    if (input.draft) {
-      createArgs.push('--draft')
-    }
-    try {
-      const localGitOptions = getHostedReviewLocalGitOptions(options)
-      const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-      const { stdout } = await ghExecFileAsync(createArgs, {
-        ...ghRepoExecOptions(context),
-        ...(connectionId ? {} : localGitOptions),
-        ...githubHostExecOptions(ownerRepo),
-        timeout: 60_000,
-        idempotent: false
-      })
-      const created = parseCreatePRPayload(stdout)
-      if (created) {
-        return { ok: true, ...created }
-      }
-      const found = head
-        ? await findOpenPRByHeadBase({
-            repoPath,
-            repo: ownerRepo,
-            head,
-            base,
-            connectionId,
-            options
-          }).catch(() => null)
-        : null
-      if (found) {
-        return { ok: true, ...found }
-      }
-      return {
-        ok: false,
-        code: 'unknown_completion',
-        error: 'PR creation may have completed. Refreshing branch review state...'
-      }
-    } catch (error) {
-      const classified = classifyCreatePRError(error)
-      if (
-        !classified.ok &&
-        (classified.code === 'already_exists' || classified.code === 'unknown_completion') &&
-        head
-      ) {
-        const existing = await findOpenPRByHeadBase({
-          repoPath,
-          repo: ownerRepo,
-          head,
-          base,
-          connectionId,
-          options
-        }).catch(() => null)
-        if (existing) {
-          return {
-            ok: false,
-            code: 'already_exists',
-            error: 'A pull request already exists for this branch.',
-            existingReview: existing
-          }
+    getHostedReviewLocalGitOptions(options),
+    async () => {
+      // The unqualified head branch belongs to origin; retain its resolved host.
+      const ownerRepo = await getOriginGitHubApiRepository(
+        repoPath,
+        connectionId,
+        getHostedReviewLocalGitOptions(options)
+      )
+      if (!ownerRepo) {
+        return {
+          ok: false,
+          code: 'unsupported_provider',
+          error: 'Creating pull requests requires a GitHub remote.',
+          reason: 'unsupported_provider'
         }
       }
-      return classified
+      // The runner qualifies --repo using options.host.
+      const repoArg = `${ownerRepo.owner}/${ownerRepo.repo}`
+
+      const base = normalizeHostedReviewBaseRef(input.base)
+      const head = input.head ? normalizeHostedReviewHeadRef(input.head) || undefined : undefined
+      const title = input.title.trim()
+      if (!base || !title) {
+        return {
+          ok: false,
+          code: 'validation',
+          error: 'Create PR failed: base branch and title are required.'
+        }
+      }
+      if (head && head.toLowerCase() === base.toLowerCase()) {
+        return {
+          ok: false,
+          code: 'validation',
+          error: 'Create PR failed: choose a different base branch before creating a pull request.',
+          reason: 'same_base_branch'
+        }
+      }
+
+      const tempDir = await mkdtemp(join(tmpdir(), 'orca-pr-body-'))
+      await acquire()
+      const bodyPath = join(tempDir, 'body.md')
+      try {
+        const body =
+          input.useTemplate && !input.body?.trim()
+            ? await readPullRequestTemplate(repoPath, connectionId)
+            : (input.body ?? '')
+        await writeFile(bodyPath, body, 'utf8')
+        const createArgs = [
+          'pr',
+          'create',
+          '--repo',
+          repoArg,
+          '--base',
+          base,
+          '--title',
+          title,
+          '--body-file',
+          bodyPath
+        ]
+        if (head) {
+          createArgs.push('--head', head)
+        }
+        if (input.draft) {
+          createArgs.push('--draft')
+        }
+        try {
+          const localGitOptions = getHostedReviewLocalGitOptions(options)
+          const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+          const { stdout } = await ghExecFileAsync(createArgs, {
+            ...ghRepoExecOptions(context),
+            ...githubHostExecOptions(ownerRepo),
+            timeout: 60_000,
+            idempotent: false
+          })
+          const created = parseCreatePRPayload(stdout)
+          if (created) {
+            return { ok: true, ...created }
+          }
+          const found = head
+            ? await findOpenPRByHeadBase({
+                repoPath,
+                repo: ownerRepo,
+                head,
+                base,
+                connectionId,
+                options
+              }).catch(() => null)
+            : null
+          if (found) {
+            return { ok: true, ...found }
+          }
+          return {
+            ok: false,
+            code: 'unknown_completion',
+            error: 'PR creation may have completed. Refreshing branch review state...',
+            reason: 'creation_unconfirmed'
+          }
+        } catch (error) {
+          const classified = classifyCreatePRError(error)
+          if (
+            !classified.ok &&
+            (classified.code === 'already_exists' || classified.code === 'unknown_completion') &&
+            head
+          ) {
+            const existing = await findOpenPRByHeadBase({
+              repoPath,
+              repo: ownerRepo,
+              head,
+              base,
+              connectionId,
+              options
+            }).catch(() => null)
+            if (existing) {
+              return {
+                ok: false,
+                code: 'already_exists',
+                error: 'A pull request already exists for this branch.',
+                reason: 'existing_review',
+                existingReview: existing
+              }
+            }
+          }
+          return classified
+        }
+      } finally {
+        await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
+        release()
+      }
     }
-  } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
-    release()
-  }
+  )
 }

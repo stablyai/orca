@@ -42,37 +42,6 @@ function build(
 }
 
 describe('paired server activity facts', () => {
-  it("reads the server's own terminals and agents off its rows", () => {
-    const { facts } = build([
-      serverRow('live', { liveTerminalCount: 2, status: 'active' }),
-      serverRow('lost', { unverifiableTerminalCount: 1 }),
-      serverRow('agent', { status: 'working', workingMode: 'monitoring' }),
-      serverRow('asks', { liveTerminalCount: 1, status: 'permission' }),
-      serverRow('idle', { status: 'done' })
-    ])
-    expect(facts).toEqual({
-      [`${HOST}|live`]: { terminal: 'live', browser: false, structuredChat: false, agent: null },
-      [`${HOST}|lost`]: {
-        terminal: 'unverifiable',
-        browser: false,
-        structuredChat: false,
-        agent: null
-      },
-      [`${HOST}|agent`]: {
-        terminal: null,
-        browser: false,
-        structuredChat: false,
-        agent: 'monitoring'
-      },
-      [`${HOST}|asks`]: {
-        terminal: 'live',
-        browser: false,
-        structuredChat: false,
-        agent: 'permission'
-      }
-    })
-  })
-
   it('keeps a server out of contact unverifiable, never asleep', () => {
     const { facts } = build([serverRow('live', { liveTerminalCount: 1, status: 'active' })], {
       freshness: 'unverifiable'

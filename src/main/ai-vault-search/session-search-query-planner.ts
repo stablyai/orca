@@ -1,7 +1,7 @@
 import type { SessionSearchScope } from './session-search-engine-types'
 import { identifierShadowTerms } from './session-search-identifier-split'
 
-// Tokens exactly as the unicode61 tokenizer with `_ . - / +` tokenchars emits them.
+// Match unicode61 token characters; session-search-fts5-contract.test.ts checks against SQLite.
 const INDEX_TOKEN = /[\p{L}\p{N}\p{M}\p{Co}_./+-]+/gu
 const STOP_WORDS = new Set(
   (
@@ -14,31 +14,19 @@ const STOP_WORDS = new Set(
 const MAX_BODY_TERMS = 48
 const MAX_TERMS = 64
 
-// A query that quotes something from a transcript: camelCase, SCREAMING_SNAKE,
-// a dotted or snake_case name, a path, a filename, a PR number, a ticket, code
-// punctuation, or an error word.
 const LITERAL_PATTERN =
   /[A-Za-z0-9_]*[a-z][A-Z][A-Za-z0-9_]*|\b[A-Z][A-Z0-9]{2,}(_[A-Z0-9]+)+\b|\b\w{2,}[._]\w{2,}\b|\b[\w.-]+\/[\w/.-]+\b|\b\w+\.(ts|tsx|js|jsx|py|rs|go|json|md|sh|yml|yaml|toml|c|cc|h|java|sql)\b|#\d{3,}|\b[A-Z]{2,6}-\d{2,}\b|[(){};=]|::|->|--\w|\b(Error|Exception|Traceback|error:|warning:)\b/
 const QUOTED = /"[^"]{3,}"|'[^']{3,}'/
 
 export type SessionSearchQueryPlan = {
   literal: boolean
-  /**
-   * The query had more terms than the planner will search. What is dropped is
-   * the tail, so a match that only the last term would have found is missed;
-   * the caller is told rather than handed a confident empty answer.
-   */
+  /** The query exceeded the body-term limit, so trailing tokens were dropped. */
   truncated: boolean
-  /** Deduplicated index-faithful terms for the OR fallback, incl. identifier pieces. */
+  /** Deduplicated OR terms, including identifier pieces. */
   terms: string[]
-  /** Query-order tokens minus stop words for prose, all of them for a literal. */
+  /** Tokens for OR expansion; prose drops stop words unless fewer than two terms remain. */
   body: string[]
-  /**
-   * Query-order tokens exactly as typed, stop words kept: the phrase / AND
-   * candidate. A sentence pasted out of a transcript is only adjacent in the
-   * index with its stop words in place, and `unicode61` indexes them, so the
-   * phrase rung has to search the words the user actually typed.
-   */
+  /** Preserve stop words for phrase/AND matching because unicode61 indexes them. */
   phrase: string[]
 }
 
@@ -46,17 +34,11 @@ export function isLiteralQuery(query: string): boolean {
   return QUOTED.test(query) || LITERAL_PATTERN.test(query)
 }
 
-/**
- * The tokenizer contract, unfolded: the same boundaries FTS5 draws for
- * `unicode61 tokenchars '_.-/+'`. Pinned against real `fts5vocab` output in
- * session-search-fts5-contract.test.ts, which is what makes it safe to plan a
- * query without asking SQLite.
- */
 export function indexTokens(query: string, limit = Number.POSITIVE_INFINITY): string[] {
   const out: string[] = []
   for (const match of query.matchAll(INDEX_TOKEN)) {
     const token = match[0]
-    // Separators alone (`--`, `...`) are a token to FTS5 but never a search term.
+    // Ignore punctuation-only tokens even though FTS5 indexes them.
     if (/[\p{L}\p{N}\p{Co}]/u.test(token)) {
       out.push(token)
       if (out.length >= limit) {
@@ -67,21 +49,12 @@ export function indexTokens(query: string, limit = Number.POSITIVE_INFINITY): st
   return out
 }
 
-/**
- * `literal` overrides the shape test. Typo repair re-plans the query it
- * corrected, and a corrected spelling can look like ordinary prose even though
- * what was typed was a literal: `parseJsonn(the, data)` has the punctuation that
- * makes it literal, `parsejson the data` does not. Without the override the
- * re-plan would drop `the` as a stop word, so the repaired query would search
- * for less than the original asked for and `repairedTerms` would report a body
- * the user never typed.
- */
+/** Typo repair preserves the original literal mode so replanning cannot silently drop stop words. */
 export function planSessionSearchQuery(
   query: string,
   literal = isLiteralQuery(query)
 ): SessionSearchQueryPlan {
-  // One past the cap, so the plan can tell a query that just fits from one that
-  // was cut. `indexTokens` stops at its limit, so it cannot be asked afterwards.
+  // Read one extra token to distinguish an exact fit from truncation.
   const overCap = indexTokens(query, MAX_BODY_TERMS + 1)
   const truncated = overCap.length > MAX_BODY_TERMS
   const raw = overCap.slice(0, MAX_BODY_TERMS)
@@ -107,7 +80,7 @@ export function planSessionSearchQuery(
   }
 }
 
-// Why: `cli.mjs`, `foo-bar`, and `C++` are all FTS5 syntax errors unquoted.
+// Quote terms so punctuation is searched literally rather than parsed as FTS syntax.
 export function quoteFtsTerm(term: string): string {
   return `"${term.replaceAll('"', '""')}"`
 }
@@ -124,25 +97,9 @@ export function orExpression(terms: readonly string[]): string {
   return terms.map(quoteFtsTerm).join(' OR ')
 }
 
-/**
- * What a scope is, now that there is one FTS table.
- *
- * `conversation` used to be a second table holding a copy of the two prose
- * columns. It is a column filter instead: PR 2 measured the filter at
- * 1.16-1.36x the p95 of the dedicated table on a 105 MB corpus, against a 2x
- * bar, and the table cost a tenth of the index to maintain.
- *
- * It lives beside the other expression builders, and not with the retrieval
- * that uses it, because the typo repair has to ask the same question of the
- * same scope and importing it from there is a cycle.
- *
- * The filter binds to the whole expression, so it is applied here and nowhere
- * else — `{cols}: (a AND b)` filters both terms, while a prefix pasted in front
- * of a bare `a AND b` would filter only `a` and quietly search tool output for
- * the rest.
- */
 const CONVERSATION_COLUMNS = '{user_text assistant_text}'
 
+// Parenthesize the expression so the column filter applies to every term.
 export function scopedExpression(scope: SessionSearchScope, expression: string): string {
   return scope === 'all' ? expression : `${CONVERSATION_COLUMNS}: (${expression})`
 }

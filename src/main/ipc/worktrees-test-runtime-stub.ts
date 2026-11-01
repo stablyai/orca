@@ -15,6 +15,7 @@ export type WorktreeRuntimeStub = {
   clearOptimisticReconcileToken: ReturnType<typeof vi.fn>
   releaseRemovedWorktreeHostSessions: ReturnType<typeof vi.fn>
   resolveManagedMrBase: ReturnType<typeof vi.fn>
+  getSetupTerminalTitle: ReturnType<typeof vi.fn>
   createTerminal: ReturnType<typeof vi.fn>
   invalidateWorktreeCatalog: ReturnType<typeof vi.fn>
   splitTerminal: ReturnType<typeof vi.fn>
@@ -26,14 +27,13 @@ export type WorktreeRuntimeStub = {
   workspaceLifecycle: WorkspaceLifecycleQueue | null
 }
 
-/** Why: create-flow tests need a minimal runtime; full fetchRemoteWithCache behavior lives in fetch-remote-cache.test.ts. */
+/** Minimal create-flow runtime; fetch-remote-cache.test.ts covers actual fetch caching. */
 export function createWorktreeRuntimeStub(mainWindow?: {
   webContents: { send: (channel: string, ...args: unknown[]) => unknown }
 }): WorktreeRuntimeStub {
-  // Why here: every harness setup builds a stub, so no removal from an earlier test leaks in.
+  // Reset removals whenever the harness builds a runtime to prevent cross-test leaks.
   _resetPendingWorktreeRemovalsForTests()
   const runtimeStub: WorktreeRuntimeStub = {
-    // Mirrors the runtime field: listed only when the sidebar-inputs switch is on.
     workspaceLifecycle: ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceLifecycleQueue() : null,
     resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
     hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
@@ -46,6 +46,7 @@ export function createWorktreeRuntimeStub(mainWindow?: {
     clearOptimisticReconcileToken: vi.fn(),
     releaseRemovedWorktreeHostSessions: vi.fn(),
     resolveManagedMrBase: vi.fn().mockResolvedValue({ baseBranch: 'origin/mr-branch' }),
+    getSetupTerminalTitle: vi.fn().mockReturnValue('Setup'),
     createTerminal: vi.fn().mockResolvedValue({
       handle: 'term-startup',
       worktreeId: 'repo-1::/workspace/improve-dashboard',
@@ -62,7 +63,6 @@ export function createWorktreeRuntimeStub(mainWindow?: {
     closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
     acquireFileWatcherRemoval: vi.fn(),
     hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined),
-    // Mirrors the real runtime notifier, which sends worktrees:changed to the window.
     publishWorktreeRemovalChange: vi.fn((repoId: string) => {
       mainWindow?.webContents.send('worktrees:changed', { repoId })
     })

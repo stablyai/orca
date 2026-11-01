@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   ORCAD_RECOVERY_CHANGED_STATE_CODE,
+  ORCAD_UPDATE_TERMINALS_RUNNING_CODE,
+  type OrcadManagedDeferral,
+  type OrcadManagedPastLiveTerminals,
   type OrcadManagedRuntimeStatus
 } from '../../../../shared/orcad-managed-runtime'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
@@ -11,6 +14,7 @@ import { managedServerOutcomeLabel } from './managed-server-copy'
 
 export type ManagedServerAction =
   | 'update'
+  | 'forceUpdate'
   | 'rollback'
   | 'recover'
   | 'restoreSnapshot'
@@ -26,6 +30,9 @@ export type ManagedServerLifecycle = {
   confirmingStop: boolean
   confirmingForget: boolean
   confirmingRestore: boolean
+  /** An Update deferred only by running terminals, which Update anyway restarts past. */
+  confirmingForceUpdate: OrcadManagedPastLiveTerminals | null
+  setConfirmingForceUpdate: (value: OrcadManagedPastLiveTerminals | null) => void
   setConfirmingStop: (value: boolean) => void
   setConfirmingForget: (value: boolean) => void
   setConfirmingRestore: (value: boolean) => void
@@ -33,7 +40,15 @@ export type ManagedServerLifecycle = {
   run: (action: ManagedServerAction) => Promise<void>
 }
 
-/** Turns a refusal or deferral into the one line the user acts on. */
+function isLiveTerminalsDeferral(result: { outcome: string } | OrcadManagedDeferral): boolean {
+  return (
+    result.outcome === 'deferred' &&
+    'code' in result &&
+    result.forceable === true &&
+    result.code === ORCAD_UPDATE_TERMINALS_RUNNING_CODE
+  )
+}
+
 function outcomeMessage(result: Parameters<typeof managedServerOutcomeLabel>[0]): string | null {
   return result.outcome === 'deferred' ||
     result.outcome === 'refused' ||
@@ -42,7 +57,6 @@ function outcomeMessage(result: Parameters<typeof managedServerOutcomeLabel>[0])
     : null
 }
 
-/** Status and lifecycle actions for a server Orca deployed and owns over SSH. */
 export function useManagedServerLifecycle({
   api,
   environment,
@@ -56,9 +70,35 @@ export function useManagedServerLifecycle({
   const [status, setStatus] = useState<OrcadManagedRuntimeStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ManagedServerAction | 'status' | null>(null)
-  const [confirmingStop, setConfirmingStop] = useState(false)
-  const [confirmingForget, setConfirmingForget] = useState(false)
-  const [confirmingRestore, setConfirmingRestore] = useState(false)
+  const [confirmingStop, setStopConfirmation] = useState(false)
+  const [confirmingForget, setForgetConfirmation] = useState(false)
+  const [confirmingRestore, setRestoreConfirmation] = useState(false)
+  const [forceUpdateRequest, setForceUpdateRequest] =
+    useState<OrcadManagedPastLiveTerminals | null>(null)
+  // Why one choke point: the row shows one confirmation, so opening any closes the rest.
+  const openConfirmation = (
+    open: 'stop' | 'forget' | 'restore' | 'forceUpdate' | null,
+    forceUpdate: OrcadManagedPastLiveTerminals | null = null
+  ): void => {
+    setStopConfirmation(open === 'stop')
+    setForgetConfirmation(open === 'forget')
+    setRestoreConfirmation(open === 'restore')
+    setForceUpdateRequest(open === 'forceUpdate' ? forceUpdate : null)
+  }
+  const setConfirmingStop = (value: boolean): void => openConfirmation(value ? 'stop' : null)
+  const setConfirmingForget = (value: boolean): void => openConfirmation(value ? 'forget' : null)
+  const setConfirmingRestore = (value: boolean): void => openConfirmation(value ? 'restore' : null)
+  const setConfirmingForceUpdate = (value: OrcadManagedPastLiveTerminals | null): void =>
+    openConfirmation(value ? 'forceUpdate' : null, value)
+  // Why derived: another desktop's activation, a stop or a migration voids the confirmation.
+  const confirmingForceUpdate =
+    forceUpdateRequest &&
+    status &&
+    status.activeVersion === forceUpdateRequest.incumbentVersion &&
+    !status.recovery &&
+    !status.migration
+      ? forceUpdateRequest
+      : null
 
   const loadStatus = useCallback(async () => {
     setBusy('status')
@@ -84,12 +124,18 @@ export function useManagedServerLifecycle({
   }, [loadStatus])
 
   const run = async (action: ManagedServerAction): Promise<void> => {
+    const pastLiveTerminals = action === 'forceUpdate' ? confirmingForceUpdate : null
+    if (action === 'forceUpdate' && !pastLiveTerminals) {
+      return
+    }
+    // The build the operator saw running; Update anyway is refused if the host moved past it.
+    const incumbentVersion = status?.activeVersion ?? null
     setBusy(action)
     try {
       const selector = { selector: environment.id }
       const result =
-        action === 'update'
-          ? await api.update(selector)
+        action === 'update' || action === 'forceUpdate'
+          ? await api.update(pastLiveTerminals ? { ...selector, pastLiveTerminals } : selector)
           : action === 'rollback'
             ? await api.rollback(selector)
             : action === 'recover' || action === 'restoreSnapshot'
@@ -102,7 +148,15 @@ export function useManagedServerLifecycle({
                 : action === 'forget'
                   ? await api.forget(selector)
                   : await api.cancelStop(selector)
-      const message = outcomeMessage(result)
+      const forceable = action === 'update' && isLiveTerminalsDeferral(result)
+      const message = forceable ? null : outcomeMessage(result)
+      if (mountedRef.current) {
+        if (forceable) {
+          setConfirmingForceUpdate({ incumbentVersion })
+        } else if (action === 'update' || action === 'forceUpdate') {
+          setConfirmingForceUpdate(null)
+        }
+      }
       if (message) {
         toast.message(message)
       }
@@ -134,6 +188,8 @@ export function useManagedServerLifecycle({
     confirmingStop,
     confirmingForget,
     confirmingRestore,
+    confirmingForceUpdate,
+    setConfirmingForceUpdate,
     setConfirmingStop,
     setConfirmingForget,
     setConfirmingRestore,

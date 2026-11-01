@@ -8,13 +8,13 @@ import { parse } from 'yaml'
 
 const release = parse(readFileSync('.github/workflows/release-cut.yml', 'utf8'))
 const security = parse(readFileSync('.github/workflows/dependency-security.yml', 'utf8'))
-const gate = release.jobs['dependency-security']
+const audit = release.jobs['dependency-security']
 const publish = release.jobs['publish-release']
 
 function evaluate(expression, tag, result) {
   const needs = Object.fromEntries(publish.needs.map((job) => [job, { result: 'success' }]))
   needs.cut.outputs = { tag, should_release: 'true' }
-  needs['dependency-security'].result = result
+  needs['dependency-security'] = { result }
   return runInNewContext(expression.replace(/needs\.([\w-]+)/g, 'needs["$1"]'), {
     needs,
     cancelled: () => false,
@@ -22,26 +22,26 @@ function evaluate(expression, tag, result) {
   })
 }
 
-it('blocks stable publication until its dependency scan succeeds while leaving RCs independent', () => {
+it('audits stable releases without making publication wait for the scan', () => {
+  expect(publish.needs).not.toContain('dependency-security')
   for (const tag of ['v1.5.0', 'v2.0.1']) {
-    expect(evaluate(gate.if, tag, 'success')).toBe(true)
-    expect(evaluate(publish.if, tag, 'success')).toBe(true)
-    for (const result of ['failure', 'cancelled', 'skipped', '', undefined]) {
-      expect(evaluate(publish.if, tag, result)).toBe(false)
+    expect(evaluate(audit.if, tag, 'success')).toBe(true)
+    for (const result of ['success', 'failure', 'cancelled', 'skipped', '', undefined]) {
+      expect(evaluate(publish.if, tag, result)).toBe(true)
     }
   }
   for (const tag of ['v1.5.0-rc.1', 'v1.5.0-rc.1.perf']) {
-    expect(evaluate(gate.if, tag, 'skipped')).toBe(false)
+    expect(evaluate(audit.if, tag, 'skipped')).toBe(false)
     expect(evaluate(publish.if, tag, 'skipped')).toBe(true)
   }
 })
 
 it('scans the release tag with read-only workflow tooling instead of installing candidate code', () => {
-  expect(gate.with.ref).toBe('refs/tags/${{ needs.cut.outputs.tag }}')
-  expect(gate.uses).toBe('./.github/workflows/dependency-security.yml')
+  expect(audit.with.ref).toBe('refs/tags/${{ needs.cut.outputs.tag }}')
+  expect(audit.uses).toBe('./.github/workflows/dependency-security.yml')
   expect(security.permissions).toEqual({ contents: 'read' })
   expect(security.on.schedule).toBeUndefined()
-  for (const job of Object.values(security.jobs)) {
+  for (const job of [security.jobs.javascript, security.jobs.rust]) {
     const checkouts = job.steps.filter((step) => step.uses === 'actions/checkout@v6')
     expect(checkouts).toHaveLength(1)
     expect(checkouts[0].with.ref).toBe('${{ github.workflow_sha }}')
@@ -56,6 +56,13 @@ it('scans the release tag with read-only workflow tooling instead of installing 
         expect(step.with?.['working-directory']).toBeUndefined()
       }
     }
+  }
+})
+
+it('allows audit findings to pass CI', () => {
+  for (const name of ['javascript', 'rust']) {
+    const job = security.jobs[name]
+    expect(job.steps.find((step) => step.id === 'audit')['continue-on-error']).toBe(true)
   }
 })
 

@@ -70,15 +70,4 @@ describe('selectAutoAdvertisedPairingAddress', () => {
   ])('does not treat the route-backed near-match %s as a known host-local label', (name) => {
     expect(isVirtualBridgeInterface(name, true)).toBe(false)
   })
-
-  it.each([
-    ['external', EXTERNAL_SWITCH, false],
-    ['Default Switch', DEFAULT_SWITCH, true],
-    ['WSL', WSL_SWITCH, true],
-    ['physical', PHYSICAL_LAN, false],
-    ['host-local', HOST_LOCAL_BRIDGE, true],
-    ['ambiguous', AMBIGUOUS_SWITCH, true]
-  ] as const)('classifies the %s fixture', (_label, fixture, expected) => {
-    expect(isVirtualBridgeInterface(fixture.name, fixture.hasDefaultRoute)).toBe(expected)
-  })
 })

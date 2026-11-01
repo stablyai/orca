@@ -3,7 +3,7 @@ import { startBrowserScreencast } from '../browser/browser-screencast-stream'
 import { RendererPublicationThrottle } from './renderer-publication-throttle'
 
 async function run(): Promise<void> {
-  // Why: serve keeps running with no page open; Electron would otherwise quit at the first close.
+  // Serve must survive with no page open; keep Electron alive after last-window close.
   app.on('window-all-closed', () => {})
   await app.whenReady()
   const throttle = new RendererPublicationThrottle()
@@ -13,8 +13,7 @@ async function run(): Promise<void> {
   let captureCalls = 0
 
   for (let iteration = 0; iteration < 3; iteration += 1) {
-    // Why: headless serve backs each page with a hidden top-level window; a <webview> guest's
-    // child-frame view never reached the crashing Aura path.
+    // Use hidden top-level pages like serve; webview child frames never hit the failing Aura path.
     const page = new BrowserWindow({
       show: false,
       width: 640,

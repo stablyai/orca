@@ -2,7 +2,6 @@ import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 
 export type OwnerCandidate<T> = { provider: T; process: PtyProcessInfo }
 
-/** The one provider an inventory proves owns a session id, or undefined when none is proven. */
 export function chooseSessionOwner<T>(args: {
   candidates: readonly OwnerCandidate<T>[]
   inventoryComplete: boolean
@@ -13,8 +12,7 @@ export function chooseSessionOwner<T>(args: {
   const exact = expectedIncarnationId
     ? candidates.filter(({ process }) => process.incarnationId === expectedIncarnationId)
     : []
-  // Why exact wins over an incomplete inventory: incarnation ids are unique per spawn, so an
-  // unreachable daemon cannot own this generation, and refusing strands every restored pane (#30486).
+  // Unique spawn incarnations prove an exact owner even when unrelated inventories fail (#30486).
   if (new Set(exact.map(({ provider }) => provider)).size === 1) {
     return exact[0]
   }

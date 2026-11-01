@@ -102,8 +102,7 @@ export function useFeatureWallSessionDepth(
     const openedNow = !wasOpenRef.current
     wasOpenRef.current = true
     if (openedNow) {
-      // Why: depth telemetry is per explicit tour session; persisted completion
-      // can color the UI but must not leak into current-session depth fields.
+      // Reset per-session depth without importing persisted completion into telemetry.
       sessionDepthRef.current = {
         visitedWorkflows: new Set(),
         visitedAgentSteps: new Set(),

@@ -10,8 +10,7 @@ import type {
   installActiveSessionTabsSubscription
 } from './active-session-subscription'
 
-// Why: match the worktrees whose terminals stay mounted (the selected one plus the hot-retained
-// hidden set); a smaller pool resubscribed on every switch around a working set that never parks.
+// Match selected plus hot-retained mounted worktrees; a smaller pool resubscribes on every switch among panes that never park.
 export const WARM_WORKTREE_SESSION_SUBSCRIPTION_LIMIT = 1 + TERMINAL_WORKTREE_HOT_RETAIN_LIMIT
 
 type WarmEntry = {
@@ -48,10 +47,7 @@ export type WarmWorktreeSessionSubscriptions = {
   dispose: () => void
 }
 
-/**
- * Per-worktree `session.tabs.subscribe` streams, kept warm across worktree switches. Reinstalling
- * on every switch cost a subscribe round trip and a snapshot re-apply per switch on SSH hosts.
- */
+/** Keep session.tabs streams warm across switches; reinstalling costs SSH round-trips and snapshot reapplication each time. */
 export function createWarmWorktreeSessionSubscriptions(
   install: typeof installActiveSessionTabsSubscription
 ): WarmWorktreeSessionSubscriptions {
@@ -71,16 +67,14 @@ export function createWarmWorktreeSessionSubscriptions(
       }
     }
   }
-  // Why: a hidden window parks every stream and a reveal resumes each one without stagger, so
-  // warm streams would multiply the reveal's round trips.
+  // Hidden windows park/resume all streams together; warm streams would multiply reveal round-trips.
   const unsubscribeVisibility = subscribeWindowParkVisibility(() => {
     if (!getWindowParkVisible()) {
       dropUnselected()
     }
   })
 
-  // Why: a re-pair, removal or new runtime session of a host that is not selected never re-runs
-  // the selection effect, so its warm streams would keep retrying a dead identity.
+  // Unselected hosts do not rerun selection effects; invalidate warm streams on re-pair/removal/restart or they retry dead identities.
   const unsubscribeStore = useAppStore.subscribe((state, previous) => {
     if (
       state.runtimeEnvironments === previous.runtimeEnvironments &&

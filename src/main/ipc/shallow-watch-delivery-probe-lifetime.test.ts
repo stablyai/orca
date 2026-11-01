@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
@@ -21,10 +22,15 @@ vi.mock('node:fs/promises', () => ({
 import {
   detectShallowWatchDelivery,
   measureShallowWatchDelivery,
+  noteShallowWatchDelivered,
   resetShallowWatchDeliveryProbeForTests
 } from './shallow-watch-delivery-probe'
 
+const originalPlatform = process.platform
+
 beforeEach(() => {
+  // Write counts below are for the directory probe; darwin is covered separately.
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   vi.useFakeTimers()
   vi.resetAllMocks()
   resetShallowWatchDeliveryProbeForTests()
@@ -43,6 +49,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   vi.clearAllTimers()
   vi.useRealTimers()
   resetShallowWatchDeliveryProbeForTests()
@@ -132,14 +139,44 @@ describe('shallow probe resource ownership', () => {
     expectReleased()
   })
 
-  it('caches a failed probe once per process after releasing its resources', async () => {
+  it('re-measures a failed probe after the recheck delay instead of caching it', async () => {
     h.write.mockRejectedValueOnce(new Error('write failed'))
 
     await expect(detectShallowWatchDelivery()).resolves.toBe(false)
     await expect(detectShallowWatchDelivery()).resolves.toBe(false)
-
     expect(h.watch).toHaveBeenCalledOnce()
-    expect(h.write).toHaveBeenCalledOnce()
+    expectReleased()
+
+    h.write.mockImplementation(async () => h.deliver())
+    vi.advanceTimersByTime(30_000)
+    await expect(detectShallowWatchDelivery()).resolves.toBe(true)
+    expect(h.watch).toHaveBeenCalledTimes(2)
+  })
+
+  it('trusts delivery observed elsewhere in the process without measuring', async () => {
+    h.write.mockRejectedValueOnce(new Error('write failed'))
+    await expect(detectShallowWatchDelivery()).resolves.toBe(false)
+
+    noteShallowWatchDelivered()
+
+    await expect(detectShallowWatchDelivery()).resolves.toBe(true)
+    expect(h.watch).toHaveBeenCalledOnce()
+  })
+
+  it('probes a file watch on macOS, where shallow subscriptions watch files', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    h.write.mockImplementation(async () => {
+      if (h.watch.mock.calls.length > 0) {
+        h.deliver()
+      }
+    })
+
+    await expect(measureShallowWatchDelivery()).resolves.toBe(true)
+
+    const probePath = join('/fake-shallow-probe', 'probe')
+    expect(h.write.mock.calls[0]).toEqual([probePath, '0'])
+    expect(h.write.mock.invocationCallOrder[0]).toBeLessThan(h.watch.mock.invocationCallOrder[0])
+    expect(h.watch.mock.calls[0][0]).toBe(probePath)
     expectReleased()
   })
 })

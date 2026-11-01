@@ -15,17 +15,16 @@ function stringField(source: Record<string, unknown> | null, key: string): strin
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-/** A reasoning summary streams as a bold headline plus body; only the headline is activity copy. */
+/** Use reasoning headlines for activity, excluding the summary body. */
 function reasoningHeadline(text: string | null | undefined): ActivityText {
   const line = text?.split(/\r?\n/).find((candidate) => candidate.trim())
   if (!line) {
     return null
   }
-  // Hold the previous copy until the closing marker streams in; a half headline would flicker.
+  // Partial bold headlines flicker; retain previous activity until their closing marker.
   return /^\s*\*\*/.test(line) && !/\*\*.+\*\*/.test(line) ? undefined : line
 }
 
-/** Keep only a short sentence-shaped preview from provider-declared display fields. */
 export function providerActivityText(value: unknown): string | null {
   const normalized = normalizeOptionalField(value, MAX_PROVIDER_ACTIVITY_LENGTH + 1)
   if (!normalized) {
@@ -100,17 +99,7 @@ export function codexProviderFrameActivity(
   return itemType ? (CODEX_ITEM_ACTIVITY[itemType] ?? null) : null
 }
 
-/**
- * Claude does not narrate its own turn, so the activity line stays the generic fallback.
- *
- * Codex names each item it starts, which is what makes its line worth reading. Claude's only
- * turn-wide frame is `system/status`, whose payload is a bare token — every sentence Orca ever
- * put on this line for it was Orca's own wording for `requesting`, which is true for nearly the
- * whole turn and says no more than the fallback does. Its `task_*` frames do carry prose, but
- * they are keyed by task id and subagent type: they describe a spawned task, not this turn, and
- * the background-tasks strip already owns that. Compaction is the one exception kept — a real,
- * rare state that explains an otherwise unexplained wait, and the Codex map reports it too.
- */
+/** Claude status tokens add no useful narration; task prose belongs to spawned work. Only compaction explains a wait. */
 export function claudeProviderFrameActivity(kind: string, payload: unknown): ActivityText {
   const source = record(payload)
   if (kind === 'message:system:status') {
@@ -128,7 +117,7 @@ export function claudeProviderFrameActivity(kind: string, payload: unknown): Act
   return undefined
 }
 
-/** Retain only the current summary headline, never materialize the growing transcript. */
+/** Retain the current headline without materializing the full transcript. */
 export function createCodexProviderActivityReader(): (
   method: string,
   payload: unknown

@@ -2,10 +2,7 @@ import { useMemo } from 'react'
 import { useRouteHandoff, type RouteHandoff } from './route-handoff'
 import { useWorkspaceExecutionHost, workspaceHref } from './workspace-execution-host'
 
-/**
- * The route handoff for a screen whose pushes all open this workspace's own screens, so each one
- * stays on the workspace's server. A screen that also leaves the workspace keeps the plain handoff.
- */
+// Keep workspace-only pushes on this workspace’s server; screens that leave it must use plain route handoff.
 export function useWorkspaceRouteHandoff(): RouteHandoff {
   const router = useRouteHandoff()
   const executionHost = useWorkspaceExecutionHost()

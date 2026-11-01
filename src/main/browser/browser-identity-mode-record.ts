@@ -2,25 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserUserAgentMode } from '../../shared/browser-user-agent-mode'
 
-/**
- * The browser's identity is one process-wide decision, not a per-profile one.
- *
- * Electron resolves worker identity from a single process-global default, so two coherent
- * identities cannot coexist in one process: a per-profile native mode leaves documents on one
- * identity and every worker request on the other, which is a sharper bot signal than either
- * alone. The choice therefore lives here, is read before `ready`, and applies to the whole app.
- *
- * Both identities are load-bearing, which is why this is a choice and not a constant. Measured
- * across four origins, five repetitions each: the cleaned identity clears an embedded Turnstile
- * widget and WhatsApp's browser check while the native identity is refused by both; the native
- * identity clears a full-page Cloudflare interstitial that the cleaned identity never clears.
- *
- * Read with `readFileSync` rather than through the settings store because the store loads long
- * after `ready`, and by then every session and worker has already taken its default.
- *
- * This module only reads. Every write goes through browser-identity-mode-store.ts, which is the
- * single writer — the two-authority bug this replaced came from a second place writing here.
- */
+/** Read synchronously before Electron ready: worker identity uses a process-global default. */
 export const BROWSER_IDENTITY_MODE_FILE = 'browser-identity-mode.json'
 export const BROWSER_IDENTITY_MODE_VERSION = 1
 
@@ -54,7 +36,7 @@ type BrowserIdentityModeFileInput = {
   readonly migrationNoticePending?: unknown
 }
 
-/** In-memory health of one read. Never persisted: the file holds a choice, not a state machine. */
+/** Read health is transient; only the identity choice and migration flags are persisted. */
 export type BrowserIdentityModeReadResult =
   | HealthyBrowserIdentityModeReadResult
   | UnhealthyBrowserIdentityModeReadResult
@@ -86,7 +68,7 @@ function parseRecord(raw: string): BrowserIdentityModeReadResult {
     return unhealthyResult('corrupt')
   }
   const { version, mode, explicitSelection, migrationNoticePending } = parsed
-  // Why before the shape check: newer data means "update Orca", never "your data is broken".
+  // Classify future versions before validating current-version fields.
   if (typeof version === 'number' && version > BROWSER_IDENTITY_MODE_VERSION) {
     return unhealthyResult('future')
   }
@@ -107,7 +89,6 @@ function parseRecord(raw: string): BrowserIdentityModeReadResult {
   }
 }
 
-/** Reads the process identity synchronously before Electron readiness. */
 export function readBrowserIdentityModeRecord(userDataPath: string): BrowserIdentityModeReadResult {
   try {
     return parseRecord(readFileSync(browserIdentityModeRecordPath(userDataPath), 'utf-8'))

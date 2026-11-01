@@ -130,7 +130,6 @@ describe.skipIf(process.platform === 'win32')('remote pinned-Node runtime store'
       })
       expect(sh(promote).split('\n').at(-1)).toBe(REMOTE_NODE_RUNTIME_READY)
       expect(sh(probe)).toBe(REMOTE_NODE_RUNTIME_READY)
-      // A second installer of the same pin republishes identical bytes without a torn window.
       expect(sh(promote).split('\n').at(-1)).toBe(REMOTE_NODE_RUNTIME_READY)
       expect(sh(probe)).toBe(REMOTE_NODE_RUNTIME_READY)
     },

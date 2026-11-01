@@ -1,55 +1,73 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
+import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import {
+  makeFolderWorkspace,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
 import {
   findRuntimeWorkspaceFileRoute,
   findWorkspaceFileRoute
 } from './runtime-workspace-file-route'
 
 function state(): AppState {
-  return {
-    settings: { activeRuntimeEnvironmentId: 'runtime-a' },
+  const store = createTestStore()
+  store.setState({
+    settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'runtime-a' }),
     repos: [],
     detectedWorktreesByRepo: {},
     worktreesByRepo: {
-      repoA: [
-        {
+      'repo-a': [
+        makeWorktree({
           id: 'repo-a::/srv/repo-a',
           repoId: 'repo-a',
           path: '/srv/repo-a',
           runtimeOwnerEnvironmentId: 'runtime-a'
-        }
+        })
       ],
-      repoB: [
-        {
+      'repo-b': [
+        makeWorktree({
           id: 'repo-b::/srv/repo-b',
           repoId: 'repo-b',
           path: '/srv/repo-b',
           runtimeOwnerEnvironmentId: 'runtime-a'
-        },
-        {
+        }),
+        makeWorktree({
           id: 'repo-b::/srv/repo-b/docs',
           repoId: 'repo-b',
           path: '/srv/repo-b/docs',
           runtimeOwnerEnvironmentId: 'runtime-b'
-        }
+        })
       ]
     },
     folderWorkspaces: [
-      {
+      makeFolderWorkspace({
         id: 'notes',
         projectGroupId: 'group-a',
         folderPath: '/srv/notes',
         connectionId: null
-      }
+      })
     ],
     projectGroups: [
       {
         id: 'group-a',
+        name: 'Group A',
+        parentPath: '/srv',
+        parentGroupId: null,
+        createdFrom: 'manual',
+        tabOrder: 0,
+        isCollapsed: false,
+        color: null,
+        createdAt: 0,
+        updatedAt: 0,
         connectionId: null,
         executionHostId: 'runtime:runtime-a'
       }
     ]
-  } as unknown as AppState
+  })
+  return store.getState()
 }
 
 describe('findRuntimeWorkspaceFileRoute', () => {
@@ -93,15 +111,17 @@ describe('findRuntimeWorkspaceFileRoute', () => {
   it('routes direct SSH siblings only on the exact SSH host', () => {
     const sshState = state()
     sshState.repos = [
-      { id: 'repo-a', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' },
-      { id: 'repo-b', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' },
-      { id: 'repo-c', connectionId: 'ssh-2', executionHostId: 'ssh:ssh-2' }
-    ] as never
+      { ...TEST_REPO, id: 'repo-a', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' },
+      { ...TEST_REPO, id: 'repo-b', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' },
+      { ...TEST_REPO, id: 'repo-c', connectionId: 'ssh-2', executionHostId: 'ssh:ssh-2' }
+    ]
     sshState.worktreesByRepo = {
-      repoA: [{ id: 'a', repoId: 'repo-a', path: '/srv/a', hostId: 'ssh:ssh-1' }],
-      repoB: [{ id: 'b', repoId: 'repo-b', path: '/srv/b', hostId: 'ssh:ssh-1' }],
-      repoC: [{ id: 'c', repoId: 'repo-c', path: '/srv/b/nested', hostId: 'ssh:ssh-2' }]
-    } as never
+      'repo-a': [makeWorktree({ id: 'a', repoId: 'repo-a', path: '/srv/a', hostId: 'ssh:ssh-1' })],
+      'repo-b': [makeWorktree({ id: 'b', repoId: 'repo-b', path: '/srv/b', hostId: 'ssh:ssh-1' })],
+      'repo-c': [
+        makeWorktree({ id: 'c', repoId: 'repo-c', path: '/srv/b/nested', hostId: 'ssh:ssh-2' })
+      ]
+    }
     sshState.folderWorkspaces = []
 
     expect(findWorkspaceFileRoute(sshState, 'ssh:ssh-1', '/srv/b/nested/file.ts')).toEqual({

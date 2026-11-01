@@ -13,9 +13,7 @@ const A = '\x1b]133;A\x07'
 const B = '\x1b]133;B\x07'
 const C = '\x1b]133;C\x07'
 const D0 = '\x1b]133;D;0\x07'
-// The shell's prompt and the typed command that launched OMP.
 const SHELL_LAUNCH = `${A}$ ${B}omp\r\n${C}`
-// OMP arms modifyOtherKeys, an input mode a command must disarm before its `D`.
 const ARM_MODIFY_OTHER_KEYS = '\x1b[>4;2m'
 
 function triggers(chunks: string[]): number[] {

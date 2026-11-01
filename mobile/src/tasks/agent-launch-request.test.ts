@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentLaunchCreateParams,
+  agentLaunchExistingParams,
   isAgentLaunchUnsupportedRefusal,
   readAgentLaunchCreateOutcome
 } from './agent-launch-request'
 
 describe('agentLaunchCreateParams', () => {
   it('carries the create payload verbatim minus the reserved agent fields', () => {
-    // Why: the launch owns placement. A `startupAgent` left in the payload would create the
-    // worktree agent-first again, which is exactly the path this method exists to replace.
+    // Strip startupAgent: it forces agent-first PTY creation and bypasses the host’s surface choice.
     expect(
       agentLaunchCreateParams('codex', {
         repo: 'id:repo-1',
@@ -37,6 +37,23 @@ describe('agentLaunchCreateParams', () => {
   })
 })
 
+describe('agentLaunchExistingParams', () => {
+  const launch = { agent: 'codex', worktreeId: 'wt-1', operationId: 'op-1' } as const
+
+  it("sends an action's model and effort as session options", () => {
+    expect(
+      agentLaunchExistingParams({
+        ...launch,
+        sessionOptions: { model: 'gpt-5.6-terra', effort: 'high' }
+      }).sessionOptions
+    ).toEqual({ model: 'gpt-5.6-terra', effort: 'high' })
+  })
+
+  it('omits session options when the action saved no model', () => {
+    expect(agentLaunchExistingParams(launch)).not.toHaveProperty('sessionOptions')
+  })
+})
+
 describe('readAgentLaunchCreateOutcome', () => {
   it.each([
     {
@@ -62,9 +79,7 @@ describe('readAgentLaunchCreateOutcome', () => {
   )
 
   it('carries the launch warning, so a workspace that is incomplete says why', () => {
-    // A launch can seat the workspace and still fail to finish it — an unspawned pty, untracked
-    // files left behind. Dropping the reason is what leaves the phone on a workspace that is
-    // quietly wrong. The host reports it at the top level, the same place worktree.create does.
+    // A seated workspace may still be incomplete; retain the host’s top-level failure reason.
     expect(
       readAgentLaunchCreateOutcome({
         worktreeId: 'wt-1',

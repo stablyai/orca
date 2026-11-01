@@ -1,7 +1,8 @@
 import React from 'react'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { DiscardAllArea } from '../commit/discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import {
   getSubmoduleExpansionKey,
   isExpandableSubmoduleEntry,
@@ -37,8 +38,9 @@ export function SourceControlSectionFileList({
   handleContextMenu,
   revealInExplorer,
   activeConnectionId,
-  openUncommittedFile,
+  handleOpenDiff,
   handleStage,
+  handleResolveConflict,
   handleUnstage,
   requestDiscardEntry,
   diffCommentCountByPath
@@ -64,8 +66,9 @@ export function SourceControlSectionFileList({
   handleContextMenu: (key: string) => void
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
-  openUncommittedFile: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
+  handleResolveConflict: (entry: GitStatusEntry, resolution: ConflictResolution) => Promise<void>
   handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
@@ -122,8 +125,9 @@ export function SourceControlSectionFileList({
             onContextMenu={handleContextMenu}
             onRevealInExplorer={revealInExplorer}
             connectionId={activeConnectionId}
-            onOpen={openUncommittedFile}
+            onOpen={handleOpenDiff}
             onStage={handleStage}
+            onResolveConflict={handleResolveConflict}
             onUnstage={handleUnstage}
             onDiscard={requestDiscardEntry}
             commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
@@ -173,8 +177,9 @@ export function SourceControlSectionFileList({
             onContextMenu={handleContextMenu}
             onRevealInExplorer={revealInExplorer}
             connectionId={activeConnectionId}
-            onOpen={openUncommittedFile}
+            onOpen={handleOpenDiff}
             onStage={handleStage}
+            onResolveConflict={handleResolveConflict}
             onUnstage={handleUnstage}
             onDiscard={requestDiscardEntry}
             commentCount={diffCommentCountByPath.get(entry.path) ?? 0}

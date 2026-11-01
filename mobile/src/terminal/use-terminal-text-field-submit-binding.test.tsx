@@ -1,14 +1,11 @@
-import { createElement, type RefObject } from 'react'
+import { createElement, forwardRef, useImperativeHandle, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { TextInput } from 'react-native'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { describe, expect, it, vi } from 'vitest'
 import { useTerminalTextFieldSubmitBinding } from './use-terminal-text-field-submit-binding'
 
-/**
- * The seam is mocked so the handler it was handed can be called on demand: the real one is a DOM
- * listener, and what is under test is which closure that listener reaches, on every platform.
- */
+// Mock only the platform listener seam so tests can invoke the closure it actually captured.
 const mocks = vi.hoisted(() => {
   const boundHandlers: Array<() => void> = []
   return {
@@ -42,7 +39,14 @@ const field: RefObject<TextInput | null> = { current: null }
  * fields do: their submits read `handleSend`, a per-render function whose guard reads `client` and
  * `activeHandle`. This says the listener follows them.
  */
-function Harness({ value }: { readonly value: string }): null {
+let rebindField: ((node: TextInput | null) => void) | undefined
+
+const Field = forwardRef<TextInput>(function Field(_props, ref) {
+  useImperativeHandle(ref, () => node, [])
+  return null
+})
+
+function Harness({ value }: { readonly value: string }) {
   const bindField = useTerminalTextFieldSubmitBinding(
     field,
     () => {
@@ -53,8 +57,8 @@ function Harness({ value }: { readonly value: string }): null {
       return value === 'second'
     }
   )
-  bindField(node)
-  return null
+  rebindField = bindField
+  return createElement(Field, { ref: bindField })
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the binding never reads the node; the mocked seam only records the handler it was given.
@@ -62,6 +66,7 @@ const node = {} as TextInput
 
 function reset(): void {
   submitted = []
+  rebindField = undefined
   mocks.chordHandlers.length = 0
   mocks.boundHandlers.length = 0
   mocks.unbindCount = 0
@@ -69,8 +74,6 @@ function reset(): void {
 }
 
 describe('the terminal text field submit binding', () => {
-  // The listener is attached once, so this says the ref behind it follows the caller's newest
-  // closure rather than pinning the one the first render was given.
   it('calls the handler the newest commit supplied, not the first', () => {
     reset()
     let renderer: ReactTestRenderer | null = null
@@ -116,8 +119,9 @@ describe('the terminal text field submit binding', () => {
       renderer?.update(createElement(Harness, { value: 'second' }))
     })
 
-    // One release per rebind, so a field re-bound on every render leaks no listeners: only the
-    // binding still in place is unreleased.
+    act(() => rebindField?.(node))
+
+    // One binding remains live after an explicit rebind.
     expect(mocks.unbindCount - mocks.releasedCount).toBe(1)
     act(() => renderer?.unmount())
   })
@@ -136,5 +140,7 @@ describe('the terminal text field submit binding', () => {
     expect(submitted).toEqual(['first'])
     expect(field.current).toBe(node)
     act(() => renderer?.unmount())
+    expect(field.current).toBeNull()
+    expect(mocks.releasedCount).toBe(mocks.unbindCount)
   })
 })

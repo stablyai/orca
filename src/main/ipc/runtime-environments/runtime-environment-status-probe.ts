@@ -40,7 +40,7 @@ export async function getRuntimeEnvironmentStatus(
   })
   // A retired request must not publish old status or borrow its replacement's diagnostics.
   if (getRuntimeEnvironmentCapabilityIncarnation(environment.id) !== incarnation) {
-    // Why follow once: a re-pair this probe set off retired its owner; the successor answers it.
+    // Follow one repair started by this probe; the successor owner verifies the new pairing.
     return followRepair && repairedSameServer(userDataPath, environment)
       ? getRuntimeEnvironmentStatus(userDataPath, environment.id, timeoutMs, options, false)
       : runtimeEnvironmentChangedFailure(environment, 'status.get')
@@ -55,10 +55,7 @@ export async function getRuntimeEnvironmentStatus(
   )
 }
 
-/**
- * A new pairing for the same server managed over SSH, under the host key it pinned: what a re-pair
- * stores. Any other replacement (another host, key or kind) stays a changed environment.
- */
+/** Follow only SSH-managed repairs under the same pinned host key; other replacements remain changed. */
 function repairedSameServer(userDataPath: string, before: KnownRuntimeEnvironment): boolean {
   try {
     const after = resolveEnvironment(userDataPath, before.id)

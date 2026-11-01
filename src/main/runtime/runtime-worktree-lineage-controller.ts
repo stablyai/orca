@@ -19,6 +19,8 @@ import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   RuntimeLineageError,
+  LINEAGE_PARENT_AMBIGUOUS,
+  formatAmbiguousCwdParentMessage,
   enforceCreateLineageHostBoundary,
   resolveRuntimeWorktreeCreateLineage,
   type ResolvedWorkspaceParent,
@@ -35,10 +37,7 @@ type RuntimeWorktreeLineageDependencies = {
   showTerminal(handle: string): Promise<{ worktreeId: string }>
 }
 
-/**
- * Read-only and ownership-scoped like the resolved list: the migrating per-host accessor would adopt
- * another host's legacy row into this host just to answer a validation.
- */
+/** Read ownership-scoped metadata without migration; validation must not adopt another host's legacy row. */
 function savedInstanceIdReader(
   store: RuntimeStore,
   hostId: ExecutionHostId | undefined
@@ -87,7 +86,15 @@ export class RuntimeWorktreeLineageController {
         }
       }
     })
-    return enforceCreateLineageHostBoundary(resolution, childHostId)
+    const retained = enforceCreateLineageHostBoundary(resolution, childHostId)
+    if (
+      retained.kind === 'lineage' &&
+      retained.capture.source === 'cwd-context' &&
+      input?.cwdParentAmbiguous === true
+    ) {
+      throw new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, formatAmbiguousCwdParentMessage())
+    }
+    return retained
   }
 
   async resolveParent(selector: string): Promise<ResolvedWorkspaceParent> {
@@ -135,8 +142,7 @@ export class RuntimeWorktreeLineageController {
     }
     const store = this.deps.getStore()
     let readSavedInstanceId: ((id: string) => string | undefined) | undefined
-    // Why: saved metadata, not the resolved-worktree cache, which the reparent itself invalidates;
-    // an unknown node would end the walk and let a longer loop through.
+    // Reparent invalidates the resolved cache; saved metadata must cover intermediate nodes or longer loops escape detection.
     const instanceIdOf = (id: string): string | undefined => {
       if (id === child.id || id === parent.id) {
         return id === child.id ? child.instanceId : parent.instanceId
@@ -155,7 +161,7 @@ export class RuntimeWorktreeLineageController {
           'Parent selector would create a lineage cycle.'
         )
       }
-      // Why: a loop saved before this walk read saved data must not block unrelated parents.
+      // An unrelated saved loop must not block this parent.
       if (visited.has(cursor)) {
         break
       }

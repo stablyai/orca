@@ -9,7 +9,6 @@ import {
 import type { BrowserRouteSessionRegistryDependencies } from './browser-route-session-registry-contract'
 import type { BrowserRoutePreparePageInput } from './browser-route-session-state'
 
-/** Partition this page belongs in, refusing a name another identity already owns. */
 export function resolveBrowserRouteSessionPartition(
   dependencies: BrowserRouteSessionRegistryDependencies,
   input: BrowserRoutePreparePageInput,
@@ -30,12 +29,7 @@ export function resolveBrowserRouteSessionPartition(
   return derived
 }
 
-/**
- * Records the binding before the partition is prepared, so metadata never lags storage.
- *
- * Evicted partitions come back from the store with their metadata already dropped, so
- * their storage is destroyed here rather than left as disk nothing can collect.
- */
+// Write binding metadata before preparing storage; evictions need separate storage cleanup.
 export function persistBrowserRouteSessionBinding(
   dependencies: BrowserRouteSessionRegistryDependencies,
   derived: ResolvedBrowserRoutePartition,

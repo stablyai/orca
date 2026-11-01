@@ -1,14 +1,5 @@
-/**
- * disposeHeadlessTerminal's unwritten contract: no model write is ever dropped.
- *
- * Two halves, both load-bearing and both silently reversible:
- *   1. `headlessTerminals.delete(ptyId)` runs BEFORE disposal, so a write
- *      issued after the call lazily creates a fresh emulator instead of
- *      landing on the disposing one.
- *   2. `dispose()` is registered on the CURRENT writeChain, so links already
- *      queued behind it parse before the emulator goes away.
- * Swapping either ordering loses output with no error anywhere.
- */
+/** Delete the emulator map entry before disposal so new writes create a fresh emulator.
+ * Chain disposal after all queued parses; reversing either order silently loses output. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -79,7 +70,6 @@ describe('disposeHeadlessTerminal write ordering', () => {
     })
 
     const runtime = createRuntime()
-    // Queued but not yet parsed: the chain link is still pending here.
     runtime.onPtyData(PTY_ID, 'QUEUED-BEFORE-DISPOSE\r\n', 1)
     runtime.preparePtyExecutionContext(PTY_ID, null, { resetIncarnation: true })
     runtime.onPtyData(PTY_ID, 'ISSUED-AFTER-DISPOSE\r\n', 2)

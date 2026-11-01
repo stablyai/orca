@@ -142,8 +142,7 @@ export function createProcessHostDevRebuildPlugin(root = process.cwd()): Plugin 
       if (!packageDirty) {
         return
       }
-      // The external package must finish emitting before electron-vite restarts the app. The
-      // package's own build keeps its compiler and per-file atomic dist sync identical to build:packages.
+      // Finish external-package atomic dist emission before electron-vite restarts the app.
       const result = runProcessSync({
         program: process.execPath,
         args: [

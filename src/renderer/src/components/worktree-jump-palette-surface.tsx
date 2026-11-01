@@ -40,8 +40,8 @@ export function WorktreeJumpPaletteSurface({
         'auto.components.WorktreeJumpPalette.2770f02910',
         'Search chats, terminals, workspaces, tasks, settings, and actions'
       )}
-      overlayClassName="bg-black/55 backdrop-blur-[2px]"
-      contentClassName="top-[min(10%,4rem)] w-[900px] max-w-[96vw] max-h-[min(90vh,calc(100vh-1.5rem))] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+      surface="palette"
+      contentClassName="top-[min(10%,4rem)] w-[900px] max-w-[96vw] max-h-[min(90vh,calc(100vh-1.5rem))] overflow-hidden"
       commandProps={{
         loop: true,
         value: controller.commandSelectedItemId,
@@ -177,27 +177,29 @@ export function WorktreeJumpPaletteSurface({
       </div>
       <div aria-live="polite" className="sr-only">
         {controller.filterActive
-          ? `${translate('worktreeJumpPalette.filter.ariaActive', 'Filter: {{value0}} active.', {
-              value0: getPaletteFilterSelectionCount(controller.filter)
-            })} `
+          ? `${translate(
+              'worktreeJumpPalette.filter.ariaActiveCount',
+              'Filter: {{count}} active.',
+              {
+                count: getPaletteFilterSelectionCount(controller.filter),
+                defaultValue_one: 'Filter: {{count}} active.'
+              }
+            )} `
           : ''}
         {controller.deferredQuery.trim()
           ? translate(
-              'auto.components.WorktreeJumpPalette.bb72c08e63',
-              '{{value0}} results found{{value1}}',
-              {
-                value0: resultCount,
-                value1: controller.showCreateAction ? ', create worktree action available' : ''
-              }
+              'auto.components.WorktreeJumpPalette.resultsFound',
+              '{{count}} results found.',
+              { count: resultCount, defaultValue_one: '{{count}} result found.' }
             )
           : translate(
-              'auto.components.WorktreeJumpPalette.20af998bff',
-              '{{value0}} items available{{value1}}',
-              {
-                value0: resultCount,
-                value1: controller.showCreateAction ? ', create worktree action available' : ''
-              }
+              'auto.components.WorktreeJumpPalette.itemsAvailable',
+              '{{count}} items available.',
+              { count: resultCount, defaultValue_one: '{{count}} item available.' }
             )}
+        {controller.showCreateAction
+          ? ` ${translate('auto.components.WorktreeJumpPalette.createActionAvailable', 'Create worktree action available.')}`
+          : ''}
       </div>
     </CommandDialog>
   )

@@ -1,8 +1,3 @@
-// Guards the daemon foreground identity against Windows scan degradation: a
-// timed-out CIM scan (available:false) or an incomplete snapshot (available:true
-// with the agent row missing) must not retire a still-working agent and make
-// the coordinator read the shell as a false "agent done". Console presence is
-// the arbiter of a real exit.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -49,17 +44,22 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
+import { createConptyPreludeSender } from './pty-subprocess-test-harness'
 
 const BASE_TIME_MS = 1_000_000
 
 function mockPtyProcess(processName: string, pid = 12345) {
+  const sendConptyPrelude = createConptyPreludeSender()
   return {
     pid,
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),
     process: processName,
-    onData: vi.fn(() => ({ dispose: vi.fn() })),
+    onData: vi.fn((cb: (data: string) => void) => {
+      sendConptyPrelude(cb)
+      return { dispose: vi.fn() }
+    }),
     onExit: vi.fn(() => ({ dispose: vi.fn() }))
   }
 }
@@ -123,15 +123,36 @@ describe('daemon pty foreground degraded-scan handling', () => {
     return { proc, handle }
   }
 
+  it('keeps raw confirmation separate from a known detached writer decision', async () => {
+    resolveAgentForegroundProcessMock
+      .mockResolvedValueOnce({ available: true, processName: 'claude', processId: 999 })
+      .mockResolvedValue({ available: true, processName: 'powershell.exe' })
+    readConptyMock.mockReturnValue(new Set([12345, 999]))
+    const { handle } = await spawnWindowsShell()
+    await readForegroundAt(handle, 0)
+    if (!handle.confirmForegroundProcess) {
+      throw new Error('fixture confirmer missing')
+    }
+    vi.setSystemTime(BASE_TIME_MS + 40_000)
+    resolveAgentForegroundProcessMock.mockClear()
+    expect(await handle.confirmForegroundProcess({ decision: true })).toBe('claude')
+    expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(1)
+    expect(await handle.confirmForegroundProcess()).toBe('powershell.exe')
+    expect(resolveAgentForegroundProcessMock).toHaveBeenLastCalledWith(
+      12345,
+      'powershell.exe',
+      expect.not.objectContaining({ anchorProcessId: 999 })
+    )
+  })
+
   it('keeps a cached agent across a degraded (timed-out) scan', async () => {
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: false, processName: null })
     const { handle } = await spawnWindowsShell()
 
-    await readForegroundAt(handle, 0) // establishes 'claude'
-    expect(await readForegroundAt(handle, 1_000)).toBe('claude') // refresh returns degraded → keep
-    // Past the 1s TTL with a shell fallback: pre-fix this returned the shell.
+    await readForegroundAt(handle, 0)
+    expect(await readForegroundAt(handle, 1_000)).toBe('claude')
     expect(await readForegroundAt(handle, 2_500)).toBe('claude')
     expect(readConptyMock).not.toHaveBeenCalled()
   })
@@ -140,7 +161,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: true, processName: null })
-    readConptyMock.mockReturnValue(new Set([12345, 999])) // child still attached
+    readConptyMock.mockReturnValue(new Set([12345, 999]))
     const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
@@ -149,10 +170,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
   })
 
   it('stops holding a dead agent once the job answer is only a superset', async () => {
-    // The WSL shape: job [shell, detached plumbing] forever, so `size > 1` used
-    // to veto retirement outright and pin an exited agent's name for the life of
-    // the pane. Job membership is a SUPERSET of the console -- it cannot tell a
-    // working agent from a leftover -- so age decides instead.
+    // Detached job members can outlive the agent; unanchored membership needs an age bound.
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: true, processName: null })
@@ -161,14 +179,12 @@ describe('daemon pty foreground degraded-scan handling', () => {
 
     await readForegroundAt(handle, 0)
     expect(await readForegroundAt(handle, 2_500)).toBe('claude')
-    await readForegroundAt(handle, 40_000) // this refresh clears the cache
+    await readForegroundAt(handle, 40_000)
     expect(await readForegroundAt(handle, 40_100)).toBe('powershell.exe')
   })
 
   it('restores the idle refresh backoff once the dead identity is gone', async () => {
-    // A non-null cache makes idleNoEvidenceShell false, which pins retryMs at
-    // the 1s TTL. Never clearing the cache therefore also meant scanning the
-    // process table every second, forever, on an idle pane.
+    // Retiring stale identities also restores the slower idle refresh tier.
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: true, processName: null })
@@ -176,7 +192,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
     const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
-    await readForegroundAt(handle, 40_000) // identity expires here
+    await readForegroundAt(handle, 40_000)
     const scansAfterExpiry = resolveAgentForegroundProcessMock.mock.calls.length
 
     await readForegroundAt(handle, 41_000)
@@ -197,7 +213,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
   })
 
   it('never expires an identity while scans stay degraded', async () => {
-    // Age must only advance on positive "I looked and found no agent" evidence.
+    // Expiration requires an available scan that found no agent.
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: false, processName: null })
@@ -209,7 +225,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
   })
 
   it('never expires an identity while the job answer is unverifiable', async () => {
-    // ssh-execution-boundary.md: loss of contact is not evidence of death.
+    // Loss of contact is not proof of death.
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({ available: true, processName: 'claude' })
       .mockResolvedValue({ available: true, processName: null })
@@ -221,9 +237,6 @@ describe('daemon pty foreground degraded-scan handling', () => {
   })
 
   it('retires an anchored agent immediately when its pid leaves the job, despite a leftover', async () => {
-    // With an anchor pid the detached-leftover shape no longer pins a dead
-    // agent for the age bound: the anchor missing from a complete job read is
-    // proof of exit, leftovers notwithstanding.
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({
         available: true,
@@ -235,15 +248,14 @@ describe('daemon pty foreground degraded-scan handling', () => {
     const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
-    // Agent 999 exits; detached plumbing 777 keeps the job larger than the shell.
+    // Agent 999 exits while detached member 777 keeps the job larger than the shell.
     readConptyMock.mockReturnValue(new Set([12345, 777]))
-    await readForegroundAt(handle, 1_000) // refresh sees the anchor gone and clears
+    await readForegroundAt(handle, 1_000)
     expect(await readForegroundAt(handle, 1_100)).toBe('powershell.exe')
   })
 
   it('never retires an anchored agent the job still holds, even when scans miss it', async () => {
-    // The anchor pid alive in the job is proof of life: agentless-but-available
-    // scans past the age bound restamp instead of retiring a working agent.
+    // An anchored job member keeps its identity despite incomplete process-table rows.
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({
         available: true,
@@ -255,14 +267,13 @@ describe('daemon pty foreground degraded-scan handling', () => {
     const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
-    await readForegroundAt(handle, 40_000) // pre-fix: this refresh cleared the cache
+    await readForegroundAt(handle, 40_000)
     expect(await readForegroundAt(handle, 40_100)).toBe('claude')
     expect(await readForegroundAt(handle, 120_000)).toBe('claude')
   })
 
   it('retires an anchored agent when the scan proves its pid was recycled', async () => {
-    // Squatter reuse: the pid survives in the job, but the scan shows it now
-    // runs a non-agent. Proof of life must yield to proof of a different process.
+    // A foreign process identity overrides continued membership of a recycled PID.
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({ available: true, processName: 'claude', processId: 999 })
       .mockResolvedValue({ available: true, processName: null, anchorPidForeign: true })
@@ -270,14 +281,12 @@ describe('daemon pty foreground degraded-scan handling', () => {
     const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
-    await readForegroundAt(handle, 1_000) // refresh sees the foreign anchor and clears
+    await readForegroundAt(handle, 1_000)
     expect(await readForegroundAt(handle, 1_100)).toBe('powershell.exe')
   })
 
   it('retires on a shipped build whose node-pty cannot answer job queries', async () => {
-    // The real Windows fleet today: no job exports (#16059), so the read is null
-    // for every user. Treating that as unverifiable held a dead agent forever.
-    // With nothing to ask, the available scan that already found no agent decides.
+    // Without job-query support, an available process scan must decide retirement.
     jobReadableMock.mockReturnValue(false)
     readConptyMock.mockReturnValue(null)
     resolveAgentForegroundProcessMock
@@ -286,7 +295,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
     const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
-    await readForegroundAt(handle, 1_000) // this refresh retires it
+    await readForegroundAt(handle, 1_000)
     expect(await readForegroundAt(handle, 1_100)).toBe('powershell.exe')
   })
 
@@ -298,7 +307,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
     const { handle } = await spawnWindowsShell()
 
     await readForegroundAt(handle, 0)
-    await readForegroundAt(handle, 1_000) // refresh clears the cache
+    await readForegroundAt(handle, 1_000)
     expect(await readForegroundAt(handle, 1_100)).toBe('powershell.exe')
     expect(readConptyMock).toHaveBeenCalledTimes(1)
   })

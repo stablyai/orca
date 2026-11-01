@@ -66,7 +66,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     tuiAgent
   } = input
 
-  // Why: re-detect agents when the selected repo changes so the list matches the correct host (local runs once, deduped by the store).
+  // Detect agents on the selected repo’s host when it changes; local inventory is store-deduplicated.
   useEffect(() => {
     if (isRemote && selectedRepoSshStatus !== 'connected') {
       return
@@ -106,7 +106,6 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     setTuiAgent
   ])
 
-  // Per-repo: load yaml hooks.
   useEffect(() => {
     if (!repoId || !selectedRepoIsGit || !selectedRepoHookContextKey) {
       return
@@ -114,9 +113,10 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
 
     let cancelled = false
 
-    void loadHookCheckForRepo(repoId)
+    // Opening the composer is not a user act on the repo's WSL distro; Create checks again.
+    void loadHookCheckForRepo(repoId, { background: true })
       .then((result) => {
-        if (!cancelled) {
+        if (!cancelled && !result.unavailable) {
           commitHookCheckIfCurrent(selectedRepoHookContextKey, result.hooks)
         }
       })

@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
+import { getRemoteFileTarget } from './repo-remote-file-target'
 import {
   DEFAULT_BASE_REF_PROBE_TIMEOUT_MS,
   getDefaultBaseRefAsync,
@@ -38,13 +39,11 @@ export { getBranchConflictKind } from './repo-branch-conflict'
 export type { BranchConflictKind } from './repo-branch-conflict'
 export { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
 
-/** Get a human-readable name for the repo from its path. */
 export function getRepoName(path: string): string {
   const name = basename(path)
   return name.endsWith('.git') ? name.slice(0, -4) : name
 }
 
-/** Get the remote origin URL, or null if not set. */
 export async function getRemoteUrl(path: string): Promise<string | null> {
   try {
     const { stdout } = await gitExecFileAsync(['remote', 'get-url', 'origin'], { cwd: path })
@@ -79,7 +78,6 @@ export async function getRemoteDrift(
   }
 }
 
-/** Return recent subjects on the remote side of the local/remote delta. */
 export async function getRecentDriftSubjects(
   repoPath: string,
   localRef: string,
@@ -109,15 +107,17 @@ export async function getRecentDriftSubjects(
   }
 }
 
-/** Parse `git remote` stdout into a remote count. */
 function parseRemoteCount(stdout: string): number {
   return stdout.split('\n').filter((line) => line.trim().length > 0).length
 }
 
 /** Count configured remotes; zero means either none or unavailable. */
-export async function getRemoteCount(path: string): Promise<number> {
+export async function getRemoteCount(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<number> {
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
     return parseRemoteCount(stdout)
   } catch (err) {
     console.warn('[getRemoteCount] git remote failed', { path, err })
@@ -125,7 +125,6 @@ export async function getRemoteCount(path: string): Promise<number> {
   }
 }
 
-/** Resolve the configured push remote without assuming a provider. */
 export async function getDefaultRemote(
   path: string,
   options: LocalGitExecOptions = {},
@@ -148,9 +147,7 @@ export async function getDefaultRemote(
       if (value) {
         return value
       }
-    } catch {
-      // Fall through: branch has no explicit remote configured.
-    }
+    } catch {}
   }
 
   try {
@@ -182,29 +179,19 @@ export async function getDefaultRemote(
   }
 }
 
-/** Build a hosted file URL when the origin belongs to a supported provider. */
 export async function getRemoteFileUrl(
   repoPath: string,
   relativePath: string,
-  line: number
+  line: number,
+  endLine?: number,
+  options: LocalGitExecOptions = {}
 ): Promise<string | null> {
-  const remoteUrl = await getRemoteUrl(repoPath)
-  if (!remoteUrl) {
-    return null
-  }
-  const defaultBaseRef = await getDefaultBaseRefAsync(repoPath)
-  if (!defaultBaseRef) {
-    return null
-  }
-  return buildHostedRemoteFileUrl(
-    remoteUrl,
-    relativePath,
-    defaultBaseRef.replace(/^origin\//, ''),
-    line
-  )
+  const target = await getRemoteFileTarget(repoPath, options)
+  return target
+    ? buildHostedRemoteFileUrl(target.remoteUrl, relativePath, target.ref, line, endLine)
+    : null
 }
 
-/** Build a hosted commit URL when the origin belongs to a supported provider. */
 export async function getRemoteCommitUrl(repoPath: string, sha: string): Promise<string | null> {
   const remoteUrl = await getRemoteUrl(repoPath)
   return remoteUrl ? buildHostedRemoteCommitUrl(remoteUrl, sha) : null

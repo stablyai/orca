@@ -33,8 +33,7 @@ function posixSnapshot(input: {
 
 describe('Claude root kill fallback', () => {
   it('kills the root when the first capture landed in the fork second', async () => {
-    // The production POSIX verifier declines a root born in its capture second,
-    // and that verdict must not cost the tree the kill on Node's own handle.
+    // An ambiguous capture second must not block termination through Node's root handle.
     const child = mockChild()
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
@@ -73,7 +72,6 @@ describe('Claude root kill fallback', () => {
 
     await tree.capture()
     await tree.refresh?.()
-    // The descendant evidence is rightly discarded; the root's never was in doubt.
     await expect(tree.reap()).resolves.toBe('unverifiable')
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })

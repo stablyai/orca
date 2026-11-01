@@ -1,4 +1,4 @@
-/** Opening, saving and retrying the Node.js mirror recovery for an SSH host's failed setup. */
+// Recover SSH setup blocked on Node download through the mirror setting.
 import {
   normalizeNodeDistMirrorUrl,
   type NodeDistMirrorRefusal
@@ -20,10 +20,7 @@ import {
 
 export const NODE_DIST_MIRROR_SUGGESTION = 'https://npmmirror.com/mirrors/node/'
 
-/**
- * The recovery this window can carry out. Only this desktop's own SSH targets qualify: the mirror
- * setting lives in its main process, not on another server or in a paired browser.
- */
+/** Only desktop-owned SSH targets can change this main process’s mirror; remote servers/paired browsers cannot. */
 export function thisComputerNodeMirrorRecovery(
   status: SshManagedServerStatus | undefined,
   ownerEnvironmentId: string | null,
@@ -59,8 +56,7 @@ export function readNodeDistMirrorDialogTarget(data: Record<string, unknown>): s
   return typeof data.targetId === 'string' && data.targetId ? data.targetId : null
 }
 
-// Why a search, not a scroll target: it also opens the collapsed fields when only the environment
-// variable set the mirror.
+// Search opens collapsed fields too when only the environment variable supplied a mirror.
 function openNodeDistMirrorSettings(): void {
   const { openSettingsPage, openSettingsTarget, setSettingsSearchQuery } = useAppStore.getState()
   openSettingsPage()
@@ -81,10 +77,7 @@ const defaultDeps = {
   connect: (targetId: string) => window.api.ssh.connect({ targetId })
 }
 
-/**
- * Saves through the same setting and IPC as Settings > Advanced > Network, then connects again.
- * Why save first: main reads the setting when the connect downloads Node.
- */
+/** Save via Settings’ IPC before reconnect: main reads the mirror during Node download. */
 export async function saveNodeDistMirrorAndRetry(
   targetId: string,
   text: string,
@@ -118,8 +111,7 @@ export async function saveNodeDistMirrorAndRetry(
   if (!isSshConnectInFlight(targetId)) {
     return { outcome: 'retrying', retry: trackSshConnect(targetId, deps.connect(targetId)) }
   }
-  // Why wait: a second connect would race the one dialing, which may be past the download already.
-  // The status is current once the lock clears: main publishes a failed setup before it rejects.
+  // Wait for current dialing to finish or reconnect races it; main publishes failed setup before rejecting.
   const retry = sshConnectSettled(targetId).then(() =>
     blockedNodeDownload(useAppStore.getState().sshConnectionStates.get(targetId)?.managedServer)
       ? trackSshConnect(targetId, deps.connect(targetId))

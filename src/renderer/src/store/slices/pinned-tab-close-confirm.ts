@@ -43,9 +43,7 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
 
     requestPinnedTabCloseConfirm: (request) => {
       if (get().pinnedTabCloseConfirm) {
-        // Why: autonomous PTY exits can request multiple confirmations in one
-        // tick. Queue them so replacing the visible request cannot strand the
-        // first tab's close cleanup and buffered exit state.
+        // Queue simultaneous autonomous exits or replaced prompts strand earlier close cleanup/buffered exit state.
         queuedRequests.push(request)
         return
       }
@@ -71,8 +69,7 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
       if (!request) {
         return
       }
-      // Why: advance before running onConfirm so a re-entrant close queues
-      // behind the next real request instead of seeing the stale one.
+      // Advance before onConfirm so reentrant closes queue behind next real request, not stale prompt.
       advanceAfterAction()
       request.onConfirm()
     },

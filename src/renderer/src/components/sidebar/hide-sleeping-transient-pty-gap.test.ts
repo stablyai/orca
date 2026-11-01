@@ -9,15 +9,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
-/**
- * Repro for #15996 — a remote workspace's sidebar row blinks out for one frame
- * when another workspace is activated.
- *
- * A remote pane rebinding its PTY empties `ptyIdsByTabId[tabId]` for a commit.
- * The workspace's agent finished its turn long ago, so `worktreeIdsWithLiveAgent`
- * does not hold the row either, and "Hide sleeping" sweeps it out and back in
- * consecutive renders — the list jumps a full row height and snaps back.
- */
+// PTY rebind gaps must not hide an idle remote workspace and make the sidebar jump.
 
 function makeRepo(id: string): Repo {
   return { id, path: `/${id}`, displayName: id, badgeColor: '#000', addedAt: 0 }
@@ -53,7 +45,6 @@ const repoMap = new Map<string, Repo>([['repo1', makeRepo('repo1')]])
 
 type VisibleOptions = Parameters<typeof computeVisibleWorktreeIds>[2]
 
-/** Both workspaces hold one open terminal tab; neither has a fresh agent. */
 const tabsByWorktree = {
   [REMOTE]: [{ id: 'tab-remote' }],
   [OTHER]: [{ id: 'tab-other' }]
@@ -81,7 +72,6 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
   }
 }
 
-/** Mirrors what useVisibleSidebarWorktrees does per pass. */
 function sweepPass(
   state: ReturnType<typeof createSleepingSweepRetentionState>,
   ptyIdsByTabId: Record<string, string[]>,
@@ -112,7 +102,7 @@ describe('#15996 transient PTY gap under "Hide sleeping"', () => {
   it('keeps the row through a one-commit gap in ptyIdsByTabId', () => {
     const state = createSleepingSweepRetentionState()
     const bound = { 'tab-remote': ['remote:pty-1'], 'tab-other': ['remote:pty-2'] }
-    // The rebind commit — clearPtyBinding sets the tab's live PTY list to [].
+    // Model the transient empty PTY binding during rebind.
     const rebinding = { 'tab-remote': [], 'tab-other': ['remote:pty-2'] }
 
     expect(sweepPass(state, bound, 1_000)).toEqual([REMOTE, OTHER])

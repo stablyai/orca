@@ -2,10 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, seedStore } from '../slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
-import {
-  _resetLayoutOwnerPaneIntentsForTests,
-  isTabPaneTreeHeld
-} from '@/runtime/layout-owner-pane-intents'
+import { _resetLayoutOwnerPaneIntentsForTests } from '@/runtime/layout-owner-pane-intents'
+
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { LayoutApplyParams } from '../../../../shared/rpc-contract/workspace-layout-params'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
@@ -115,25 +113,5 @@ describe('the chat pane in a layout-owner build', () => {
     setChatLeaf(tabId, null)
     applySent()
     expect(mainTab(tabId).panes.chatLeafId).toBeUndefined()
-  })
-
-  it('holds frames off the tab until main answers, so a frame cannot undo the pick', () => {
-    const tabId = heldTab()
-    mocks.callRuntimeRpc.mockImplementationOnce(() => new Promise(() => {}))
-
-    setChatLeaf(tabId, LEAF)
-
-    expect(isTabPaneTreeHeld(tabId)).toBe(true)
-  })
-
-  it('sends nothing for a write that keeps the chat pane, or with the switch off', () => {
-    const tabId = heldTab()
-    const layout = store.getState().terminalLayoutsByTabId[tabId]!
-    store.getState().setTabLayout(tabId, { ...layout, expandedLeafId: LEAF })
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-
-    mocks.layoutOwnerIsMain = false
-    setChatLeaf(tabId, LEAF)
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 })

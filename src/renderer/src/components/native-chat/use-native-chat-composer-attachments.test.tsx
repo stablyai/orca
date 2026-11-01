@@ -1,22 +1,48 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, createElement, useEffect, useRef, useState } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import { act } from 'react'
+import { renderProbe } from './native-chat-composer-attachments-test-probe'
 import {
   appendNativeChatAttachmentCache,
   clearNativeChatAttachmentCacheForTests,
-  readNativeChatAttachmentCache,
-  useNativeChatComposerAttachments
+  readNativeChatAttachmentCache
 } from './use-native-chat-composer-attachments'
 import * as draftCache from './native-chat-draft-cache'
-import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attachment-cache'
 import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
-import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 import { useAppStore } from '@/store'
+import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
+import type { Tab } from '../../../../shared/tab-types'
+
+const initialStoreState = useAppStore.getInitialState()
+function publishOwner(
+  scopeKey: string,
+  owner: draftStorage.NativeChatComposerDraftOwner | undefined
+): void {
+  const sessionId = draftStore.structuredAgentSessionIdOfDraftScope(scopeKey)
+  const tab: Tab = {
+    id: scopeKey,
+    entityId: sessionId ?? scopeKey,
+    worktreeId: owner?.workspaceId ?? 'unknown',
+    groupId: 'group',
+    contentType: 'agent-session',
+    label: 'Chat',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  useAppStore.setState({
+    unifiedTabsByWorktree: owner ? { [owner.workspaceId]: [tab] } : {},
+    activeWorktreeId: owner?.workspaceId ?? null,
+    activeWorkspaceExecutionHostId: owner?.executionHostId ?? null
+  })
+}
+
 import * as draftStore from './native-chat-composer-draft-store'
 import * as draftStorage from './native-chat-composer-draft-storage'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
@@ -26,123 +52,38 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 const runtimeTarget = vi.hoisted(() => ({ remote: false }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => runtimeTarget.remote
 }))
 
-type AttachmentApi = ReturnType<typeof useNativeChatComposerAttachments>
-type ProbeApi = AttachmentApi & { adoptDraft: (draft: string) => void }
-
-const target: NativeChatResolvedTarget = {
-  ptyId: 'pty-1'
-}
-
-function Probe({
-  scopeKey,
-  structured = false,
-  disabled = false,
-  isComposing,
-  onReady
-}: {
-  scopeKey: string
-  structured?: boolean
-  disabled?: boolean
-  isComposing: () => boolean
-  onReady: (api: ProbeApi) => void
-}): React.JSX.Element {
-  const [caret, setCaret] = useState(0)
-  const [draftValue, setDraftValue] = useState('')
-  const [notice, setNotice] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const api = useNativeChatComposerAttachments({
-    attachmentScopeKey: scopeKey,
-    allowWithoutTarget: structured,
-    imageReferences: structured,
-    caret,
-    disabled,
-    isComposing,
-    resolveTarget: () => (structured ? null : target),
-    textareaRef,
-    setCaret,
-    setDraft: (updater) => setDraftValue((previous) => updater(previous)),
-    setNotice
-  })
-  useEffect(() => {
-    onReady({ ...api, adoptDraft: setDraftValue })
-  }, [api, onReady])
-  return (
-    <div>
-      <textarea ref={textareaRef} />
-      <output data-draft>{draftValue}</output>
-      <output data-notice>{notice}</output>
-    </div>
-  )
-}
-
-async function renderProbe(
-  scopeKey: string,
-  structured = false,
-  options: { disabled?: boolean; isComposing?: () => boolean } = {}
-): Promise<{
-  draft: () => string
-  latest: () => ProbeApi
-  notice: () => string
-  rerender: (scopeKey: string, disabled?: boolean) => Promise<void>
-  root: Root
-  textarea: () => HTMLTextAreaElement
-}> {
-  const container = document.createElement('div')
-  document.body.append(container)
-  // onReady fires on every render, so keep the freshest snapshot — reading a
-  // single captured `api` would go stale after attach/remove triggers a render.
-  let api: ProbeApi | null = null
-  const root = createRoot(container)
-  const onReady = (next: ProbeApi): void => {
-    api = next
-  }
-  const isComposing = options.isComposing ?? (() => false)
-  const render = async (nextScopeKey: string, disabled: boolean): Promise<void> => {
-    await act(async () => {
-      root.render(
-        createElement(Probe, {
-          scopeKey: nextScopeKey,
-          structured,
-          disabled,
-          isComposing,
-          onReady
-        })
-      )
-    })
-  }
-  await render(scopeKey, options.disabled ?? false)
-  if (!api) {
-    throw new Error('Probe did not render')
-  }
-  return {
-    draft: () => container.querySelector('[data-draft]')?.textContent ?? '',
-    root,
-    latest: () => {
-      if (!api) {
-        throw new Error('Probe is not mounted')
+function publishUnrelatedStatuses(): void {
+  for (let tick = 1; tick <= 24; tick += 1) {
+    useAppStore.setState((state) => ({
+      runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set('other-host', {
+        status: null,
+        checkedAt: tick
+      })
+    }))
+    useAppStore.setState((state) => ({
+      agentStatusByPaneKey: {
+        ...state.agentStatusByPaneKey,
+        'other-tab:other-pane': {
+          paneKey: 'other-tab:other-pane',
+          state: 'working',
+          prompt: 'background work',
+          updatedAt: tick,
+          stateStartedAt: 1,
+          stateHistory: []
+        }
       }
-      return api
-    },
-    notice: () => container.querySelector('[data-notice]')?.textContent ?? '',
-    rerender: (nextScopeKey: string, disabled = options.disabled ?? false) =>
-      render(nextScopeKey, disabled),
-    textarea: () => {
-      const textarea = container.querySelector('textarea')
-      if (!textarea) {
-        throw new Error('Probe textarea is not mounted')
-      }
-      return textarea
-    }
+    }))
   }
 }
 
 describe('useNativeChatComposerAttachments', () => {
   afterEach(() => {
+    useAppStore.setState(initialStoreState, true)
     runtimeTarget.remote = false
     clearNativeChatAttachmentCacheForTests()
     document.body.replaceChildren()
@@ -156,6 +97,149 @@ describe('useNativeChatComposerAttachments', () => {
     )
   })
 
+  it.each<{
+    name: string
+    scope: string
+    images: draftStorage.NativeChatComposerDraftImage[]
+    check: 'none' | 'path' | 'paste'
+  }>([
+    { name: 'empty checks', scope: 'agent-session:empty', images: [], check: 'none' },
+    {
+      name: 'ordinary paths',
+      scope: 'agent-session:path',
+      images: [{ id: 'path', path: '/repo/shot.png' }],
+      check: 'path'
+    },
+    {
+      name: 'kept local pastes',
+      scope: 'agent-session:paste',
+      images: [{ id: 'paste', path: '/state/native-chat-pastes/orca-paste-1-a.png' }],
+      check: 'paste'
+    },
+    {
+      name: 'SSH attachment-store paths',
+      scope: 'agent-session:ssh',
+      images: [
+        {
+          id: 'ssh',
+          path: '/state/agent-session-attachments/upload/shot.png',
+          connectionId: 'ssh-host'
+        }
+      ],
+      check: 'none'
+    },
+    {
+      name: 'ineligible terminal scopes',
+      scope: 'tab:leaf',
+      images: [{ id: 'terminal', path: '/state/agent-session-attachments/upload/shot.png' }],
+      check: 'none'
+    }
+  ])(
+    'does no ownership resolution for $name across status publications',
+    async ({ scope, images, check }) => {
+      const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
+      const owner: draftStorage.NativeChatComposerDraftOwner = {
+        workspaceId: 'folder-workspace',
+        executionHostId: 'local'
+      }
+      storage.drafts.set(scope, { text: '', images, owner, savedAt: 1 })
+      draftStorage.setNativeChatComposerDraftStorageForTests(storage)
+      const resolveOwner = vi.fn(() => owner)
+      draftStore.setNativeChatComposerDraftOwnerResolver(resolveOwner)
+      const validation = Promise.withResolvers<boolean>()
+      const pathExists = vi.fn(() => validation.promise)
+      const restoreNativeChatPastes = vi.fn(async () => {
+        const exists = await validation.promise
+        return images.map(({ path }) => ({ path, kept: true, exists }))
+      })
+      const originalApi = window.api
+      const originalState = useAppStore.getState()
+      let probe: Awaited<ReturnType<typeof renderProbe>> | undefined
+      Object.assign(window, { api: { fs: { pathExists }, ui: { restoreNativeChatPastes } } })
+      try {
+        await draftStore.hydrateNativeChatComposerDrafts()
+        probe = await renderProbe(scope, true)
+        expect(pathExists).toHaveBeenCalledTimes(check === 'path' ? 1 : 0)
+        expect(restoreNativeChatPastes).toHaveBeenCalledTimes(check === 'paste' ? 1 : 0)
+        const callsAtMount = resolveOwner.mock.calls.length
+        act(publishUnrelatedStatuses)
+        expect(resolveOwner.mock.calls.length - callsAtMount).toBe(0)
+        expect(resolveOwner).not.toHaveBeenCalled()
+        await act(async () => validation.resolve(false))
+        expect(probe.latest().imageAttachments).toMatchObject(
+          check === 'none'
+            ? images
+            : [{ id: images[0].id, path: '', unavailableName: expect.any(String) }]
+        )
+        act(publishUnrelatedStatuses)
+        expect(resolveOwner).not.toHaveBeenCalled()
+        expect(pathExists).toHaveBeenCalledTimes(check === 'path' ? 1 : 0)
+        expect(restoreNativeChatPastes).toHaveBeenCalledTimes(check === 'paste' ? 1 : 0)
+      } finally {
+        act(() => probe?.root.unmount())
+        useAppStore.setState({
+          runtimeStatusByEnvironmentId: originalState.runtimeStatusByEnvironmentId,
+          agentStatusByPaneKey: originalState.agentStatusByPaneKey
+        })
+        Object.assign(window, { api: originalApi })
+      }
+    }
+  )
+
+  it('ignores a late missing-file result from a previous host and retries when local again', async () => {
+    const scope = 'agent-session:host-changed'
+    const image = { id: 'old', path: '/state/agent-session-attachments/upload/shot.png' }
+    const storedOwner: draftStorage.NativeChatComposerDraftOwner = {
+      workspaceId: 'folder-workspace',
+      executionHostId: 'local'
+    }
+    const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
+    storage.drafts.set(scope, { text: '', images: [image], owner: storedOwner, savedAt: 1 })
+    draftStorage.setNativeChatComposerDraftStorageForTests(storage)
+    publishOwner(scope, storedOwner)
+    const resolveOwner = vi.fn((key: string) =>
+      resolveNativeChatDraftOwner(useAppStore.getState(), key)
+    )
+    draftStore.setNativeChatComposerDraftOwnerResolver(resolveOwner)
+    const old = Promise.withResolvers<boolean>()
+    const next = Promise.withResolvers<boolean>()
+    const pathExists = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise)
+    const originalApi = window.api
+    Object.assign(window, { api: { fs: { pathExists } } })
+    let probe: Awaited<ReturnType<typeof renderProbe>> | undefined
+    const originalState = useAppStore.getState()
+    try {
+      await draftStore.hydrateNativeChatComposerDrafts()
+      probe = await renderProbe(scope, true)
+      expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
+      expect(pathExists).toHaveBeenCalledTimes(1)
+      publishOwner(scope, { ...storedOwner, executionHostId: 'runtime:remote' })
+      await act(async () => old.resolve(false))
+      expect(draftStore.readNativeChatComposerDraft(scope).images).toEqual([image])
+      await act(async () => useAppStore.setState({}))
+      expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
+      publishOwner(scope, storedOwner)
+      await act(async () => useAppStore.setState({}))
+      expect(pathExists).toHaveBeenCalledTimes(2)
+      expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
+      await act(async () => next.resolve(false))
+      expect(probe.latest().imageAttachments).toMatchObject([
+        { id: image.id, path: '', unavailableName: 'shot.png' }
+      ])
+      expect(draftStore.readNativeChatComposerDraft(scope).owner).toEqual(storedOwner)
+      resolveOwner.mockClear()
+      act(publishUnrelatedStatuses)
+      expect(resolveOwner).not.toHaveBeenCalled()
+    } finally {
+      act(() => probe?.root.unmount())
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: originalState.runtimeStatusByEnvironmentId,
+        agentStatusByPaneKey: originalState.agentStatusByPaneKey
+      })
+      Object.assign(window, { api: originalApi })
+    }
+  })
+
   it('checks a restored store image when its owner becomes local, holding Send and preserving a newer edit', async () => {
     const scope = 'agent-session:restored'
     const image = { id: 'old', path: '/state/agent-session-attachments/upload/shot.png' }
@@ -164,8 +248,10 @@ describe('useNativeChatComposerAttachments', () => {
     const paste = { id: 'paste', path: '/state/native-chat-pastes/orca-paste-1-a.png' }
     storage.drafts.set('pty-1', { text: '', images: [image, paste], savedAt: 1 })
     draftStorage.setNativeChatComposerDraftStorageForTests(storage)
-    let owner: draftStorage.NativeChatComposerDraftOwner | undefined
-    draftStore.setNativeChatComposerDraftOwnerResolver(() => owner)
+    publishOwner(scope, undefined)
+    draftStore.setNativeChatComposerDraftOwnerResolver((key) =>
+      resolveNativeChatDraftOwner(useAppStore.getState(), key)
+    )
     const exists = Promise.withResolvers<boolean>()
     const pathExists = vi.fn(() => exists.promise)
     const originalApi = window.api
@@ -184,16 +270,16 @@ describe('useNativeChatComposerAttachments', () => {
       expect(nativeChatImagesHoldSend(terminal.latest().imageAttachments)).toBe(false)
       act(() => terminal.root.unmount())
       const probe = await renderProbe(scope, true)
-      owner = { workspaceId: 'wt', executionHostId: 'runtime:remote' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
       act(() => useAppStore.setState({}))
       expect(pathExists).not.toHaveBeenCalled()
-      owner = { workspaceId: 'wt', executionHostId: 'local' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
       act(() => useAppStore.setState({}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
-      owner = { workspaceId: 'wt', executionHostId: 'runtime:remote' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
       await act(async () => useAppStore.setState({}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
-      owner = { workspaceId: 'wt', executionHostId: 'local' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
       act(() => useAppStore.setState({}))
       const newer = { id: 'edit', path: '/repo/new.png' }
       await act(async () => {
@@ -210,42 +296,54 @@ describe('useNativeChatComposerAttachments', () => {
     }
   })
 
-  it('marks a restored image Not kept when a later sweep removes its upload, composer shown or not', async () => {
-    const scope = 'agent-session:swept-later'
-    const image = { id: 'old', path: '/state/agent-session-attachments/upload/shot.png' }
-    const other = { id: 'other', path: '/state/agent-session-attachments/upload-2/b.png' }
-    const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
-    storage.drafts.set(scope, { text: 'hi', images: [image, other], savedAt: 1 })
-    draftStorage.setNativeChatComposerDraftStorageForTests(storage)
-    draftStore.setNativeChatComposerDraftOwnerResolver(() => ({
-      workspaceId: 'wt',
-      executionHostId: 'local'
-    }))
-    let present = true
-    const pathExists = vi.fn(async () => present)
-    const originalApi = window.api
-    Object.assign(window, { api: { fs: { pathExists }, ui: {} } })
-    try {
-      await draftStore.hydrateNativeChatComposerDrafts()
-      const probe = await renderProbe(scope, true)
-      await act(async () => {})
-      expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
-      act(() => probe.root.unmount())
-      present = false
-      await act(async () =>
-        recheckNativeChatComposerDraftImagesIn('/state/agent-session-attachments/upload')
+  it.each([true, false])(
+    'rechecks a removed upload after restore settles (composer mounted: %s)',
+    async (mounted) => {
+      const scope = 'agent-session:swept-later'
+      const image = { id: 'old', path: '/state/agent-session-attachments/upload/shot.png' }
+      const other = { id: 'other', path: '/state/agent-session-attachments/upload-2/b.png' }
+      const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
+      storage.drafts.set(scope, { text: 'hi', images: [image, other], savedAt: 1 })
+      draftStorage.setNativeChatComposerDraftStorageForTests(storage)
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
+      draftStore.setNativeChatComposerDraftOwnerResolver((key) =>
+        resolveNativeChatDraftOwner(useAppStore.getState(), key)
       )
-      expect(draftStore.readNativeChatComposerDraft(scope).images).toMatchObject([
-        { id: 'old', path: '', unavailableName: 'shot.png' },
-        other
-      ])
-      const reopened = await renderProbe(scope, true)
-      expect(nativeChatImagesHoldSend(reopened.latest().imageAttachments)).toBe(true)
-      act(() => reopened.root.unmount())
-    } finally {
-      Object.assign(window, { api: originalApi })
+      let present = true
+      const pathExists = vi.fn(async () => present)
+      const originalApi = window.api
+      Object.assign(window, { api: { fs: { pathExists }, ui: {} } })
+      try {
+        await draftStore.hydrateNativeChatComposerDrafts()
+        const probe = await renderProbe(scope, true)
+        await act(async () => {})
+        expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
+        if (!mounted) {
+          act(() => probe.root.unmount())
+        }
+        present = false
+        await act(async () =>
+          recheckNativeChatComposerDraftImagesIn('/state/agent-session-attachments/upload')
+        )
+        expect(draftStore.readNativeChatComposerDraft(scope).images).toMatchObject([
+          { id: 'old', path: '', unavailableName: 'shot.png' },
+          other
+        ])
+        if (mounted) {
+          expect(probe.latest().imageAttachments).toMatchObject([
+            { id: 'old', path: '', unavailableName: 'shot.png' },
+            other
+          ])
+          act(() => probe.root.unmount())
+        }
+        const reopened = await renderProbe(scope, true)
+        expect(nativeChatImagesHoldSend(reopened.latest().imageAttachments)).toBe(true)
+        act(() => reopened.root.unmount())
+      } finally {
+        Object.assign(window, { api: originalApi })
+      }
     }
-  })
+  )
 
   it('holds attached images as chips (deferred to submit) and restores them on remount', async () => {
     const first = await renderProbe('pty-1')
@@ -254,8 +352,7 @@ describe('useNativeChatComposerAttachments', () => {
       first.latest().attachResolvedPaths(['/tmp/orca-native-chat-attach-test.png'])
     })
 
-    // Images are NOT sent to the TUI on attach — they ride along on submit, so
-    // the chip and the TUI input never diverge and removing a chip is clean.
+    // Attach only on submit so chip removal cannot leave stale image paths in TUI input.
     expect(first.latest().imageAttachments).toMatchObject([
       { path: '/tmp/orca-native-chat-attach-test.png' }
     ])
@@ -351,10 +448,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // Today's only caller settles ownership synchronously before it calls, so this
-  // verdict cannot arrive false — but the hook exports this entry point. Pinned
-  // because the fallback is not a refusal: a false verdict is not "owned", so a
-  // remote target would blame client-local attachments for an ownership failure.
+  // False ownership must name the ownership failure, even though the current immediate caller checks synchronously.
   it('names the ownership failure when an immediate attach arrives already false', async () => {
     runtimeTarget.remote = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => false })
@@ -370,8 +464,6 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // Ownership is per path: the target-owned drop still lands, the client-local
-  // paste is refused, and the refusal is reported rather than hidden.
   it('keeps the owned half of a mixed queued batch after the target becomes remote', async () => {
     let composing = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
@@ -391,9 +483,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // References are inserted in the order the user made them. Splitting the queue
-  // into an owned half and a client-local half would hoist every workspace drop
-  // ahead of a paste that came first.
+  // Preserve mixed attachment order; grouping by ownership would move workspace drops ahead of earlier pastes.
   it('keeps a mixed queued batch in the order it was attached', async () => {
     let composing = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
@@ -425,9 +515,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // An already-blocked target refuses at the drop instead of queueing. Queued
-  // paths that can never attach would still spend the pending budget, and the
-  // next legitimate drop would be turned away for being one too many.
+  // Refuse permanently blocked targets before queueing so invalid paths cannot exhaust the pending budget.
   it('refuses an already-blocked target at the drop without spending the queue budget', async () => {
     runtimeTarget.remote = true
     let composing = true
@@ -440,6 +528,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.latest().attachResolvedPaths(refused))
     expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
 
+    useAppStore.setState(initialStoreState, true)
     runtimeTarget.remote = false
     act(() => probe.latest().attachResolvedPaths(['/local/allowed.txt']))
     composing = false
@@ -488,8 +577,7 @@ describe('useNativeChatComposerAttachments', () => {
     })
 
     expect(probe.draft()).toBe('각 @/remote/b.txt @/remote/b.txt @/remote/a.txt ')
-    // The focus this flush must not steal would be scheduled a frame out, so without advancing
-    // one the assertions below hold even when the flush does steal focus.
+    // Advance a frame so scheduled focus theft cannot make these assertions pass vacuously.
     await act(async () => {
       await new Promise((resolve) => requestAnimationFrame(resolve))
     })
@@ -731,8 +819,7 @@ describe('useNativeChatComposerAttachments', () => {
       probe.latest().attachResolvedPaths(['/tmp/later.png'])
     })
 
-    // A composer that comes back must still wait for the pending one, which no draft saves; the
-    // later image is saved at once, and shows behind it.
+    // Pending chips survive remounts in memory while later completed images persist without overtaking them.
     expect(nativeChatPendingAttachmentSnapshot('pty-1')).toMatchObject([
       { id: pendingId, path: '', pending: true },
       { path: '/tmp/later.png' }
@@ -746,7 +833,6 @@ describe('useNativeChatComposerAttachments', () => {
       probe.latest().imageAttachments.find((attachment) => attachment.id === pendingId)?.previewUrl
     ).toBe('blob:preview-1')
 
-    // Thumbnails keep the order they were attached in, so their numbers don't jump.
     act(() => probe.latest().resolvePendingImageAttachment(pendingId ?? '', '/tmp/first.png'))
     expect(readNativeChatAttachmentCache('pty-1')).toMatchObject([
       { path: '/tmp/first.png' },

@@ -9,6 +9,7 @@ import type {
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { isLiveFrameCompatibleWithViewport } from './browser-screencast-viewport-fit'
+import type { BrowserJavaScriptDialog } from '../../shared/browser-javascript-dialog'
 
 type BrowserScreencastMessageHandlerDeps = {
   dbg: WebContents['debugger']
@@ -20,9 +21,10 @@ type BrowserScreencastMessageHandlerDeps = {
   scheduleNavigationFrameCapture: () => void
   clearNavigationCaptureTimer: () => void
   bumpSnapshotGeneration: () => void
-  /** True when the frame showed the guest at a size the stream must re-emulate for, so it is stale. */
+  /** True while guest frames must be dropped pending re-emulation. */
   observeGuestViewSize: (metadata: BrowserScreencastFrameMetadata) => boolean
-  setDialogOpen: (open: boolean) => void
+  /** The page's dialog Orca still holds; a CDP close can be a second frame's turned-away one. */
+  openDialog: () => BrowserJavaScriptDialog | null
 }
 
 export function createBrowserScreencastMessageHandler(
@@ -31,7 +33,7 @@ export function createBrowserScreencastMessageHandler(
   const { dbg, options, isClosed, isStopping, queueFrame, ackScreencastFrame } = deps
   const { scheduleNavigationFrameCapture, clearNavigationCaptureTimer, bumpSnapshotGeneration } =
     deps
-  const { setDialogOpen, observeGuestViewSize } = deps
+  const { observeGuestViewSize, openDialog } = deps
 
   return (_event: unknown, method: string, params: unknown): void => {
     if (isClosed()) {
@@ -43,7 +45,6 @@ export function createBrowserScreencastMessageHandler(
     if (method === 'Page.javascriptDialogOpening') {
       const payload =
         params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
-      setDialogOpen(true)
       options.onEvent?.({
         type: 'dialog',
         dialogType: typeof payload.type === 'string' ? payload.type : 'alert',
@@ -52,8 +53,12 @@ export function createBrowserScreencastMessageHandler(
       return
     }
     if (method === 'Page.javascriptDialogClosed') {
-      setDialogOpen(false)
-      options.onEvent?.({ type: 'dialogClosed' })
+      const open = openDialog()
+      options.onEvent?.(
+        open
+          ? { type: 'dialog', dialogType: open.type, message: open.message }
+          : { type: 'dialogClosed' }
+      )
       return
     }
     if (method === 'Page.frameNavigated') {
@@ -99,13 +104,9 @@ export function createBrowserScreencastMessageHandler(
       const decoded = Buffer.from(data, 'base64')
       const image =
         decoded.buffer.byteLength === decoded.byteLength ? decoded : new Uint8Array(decoded)
-      // Why: image dimension parsing happens for every live frame; share the
-      // result between stale-frame rejection and metadata enrichment.
       const imageSize = readBrowserScreencastImageSize(image, options.format)
       if (!isLiveFrameCompatibleWithViewport(imageSize, options)) {
-        // Why: after tab switches/navigation Chromium can briefly stream the
-        // host surface instead of the requested client viewport. Dropping that
-        // frame keeps the client from rendering server-sized blank gutters.
+        // Tab switches and navigation can briefly stream the host surface instead of the client viewport.
         ackScreencastFrame(sessionId)
         scheduleNavigationFrameCapture()
         return

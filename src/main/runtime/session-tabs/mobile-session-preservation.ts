@@ -11,7 +11,13 @@ import {
   mergeMobileSessionTabGroups
 } from '../mobile-session-tab-merge'
 import { terminalLayoutContainsLeaf } from '../../../shared/workspace-session-pane-ownership'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { terminalIsOfTab } from '../session-lifecycle/close/closed-tab-terminal'
 import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
+import {
+  appendBrowserTabOrder,
+  collectBrowserGroupAssignment
+} from '../mobile-session-browser-group-projection'
 
 export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends OrcaRuntimeWithSyncMobileSessionTabs {
   protected abstract collectPreservedHeadlessMobileSessionTabs(
@@ -54,11 +60,19 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
-    const tabGroups = mergeMobileSessionTabGroups(
-      snapshot.worktree,
-      snapshot.tabGroups ?? existing.tabGroups ?? [],
-      tabs,
-      activeTab?.type === 'terminal' ? activeTab : null
+    const browserTabIds = normalizedPreservedTabs
+      .filter((tab) => tab.type === 'browser')
+      .map((tab) => tab.id)
+    const tabGroups = appendBrowserTabOrder(
+      mergeMobileSessionTabGroups(
+        snapshot.worktree,
+        snapshot.tabGroups ?? existing.tabGroups ?? [],
+        tabs,
+        activeTab?.type === 'terminal' ? activeTab : null
+      ),
+      browserTabIds,
+      undefined,
+      collectBrowserGroupAssignment(existing.tabGroups, browserTabIds)
     )
     return {
       ...snapshot,
@@ -130,13 +144,15 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     incoming: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot | undefined
   ): void {
-    // Why no headless-built exemption: the first renderer publication after a restart lands on a
-    // disk-hydrated base, and skipping it left a retired paired tab owned until the next sync (STA-4897).
+    // First renderer frames after restart must prune disk-hydrated retired tabs too (STA-4897).
     if (!existing) {
       return
     }
     for (const { tab, scope } of this.listRendererRetiredTerminalTabs(incoming, existing)) {
-      if (!this.hasLiveRuntimeSessionOwnedPtyBinding(existing.worktree, tab)) {
+      if (
+        !this.hasLiveRuntimeSessionOwnedPtyBinding(existing.worktree, tab) &&
+        !this.ownsTerminalMainClosed(existing.worktree, tab)
+      ) {
         continue
       }
       if (scope === 'tab') {
@@ -145,12 +161,34 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       }
       for (const ptyId of getMobileTerminalLeafPtyIds(tab)) {
         const pty = this.ptysById.get(ptyId)
-        if (pty?.worktreeId === existing.worktree && pty.tabId === tab.parentTabId) {
+        if (
+          pty?.worktreeId === existing.worktree &&
+          terminalIsOfTab(this.paneOfPty(pty).tabId, tab.parentTabId)
+        ) {
           pty.runtimeSessionOwned = false
           this.setPairedRendererSessionOwnership(ptyId, false)
         }
       }
     }
+  }
+
+  /** Switch-on: the row's live, owned terminal that main's close left in no pane. */
+  private ownsTerminalMainClosed(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    return (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      getMobileTerminalLeafPtyIds(tab).some((ptyId) => {
+        const pty = this.ptysById.get(ptyId)
+        return (
+          pty?.worktreeId === worktreeId &&
+          pty.connected &&
+          pty.runtimeSessionOwned &&
+          this.paneOfPty(pty).tabId === null
+        )
+      })
+    )
   }
 
   protected buildPreservedHeadlessMobileSessionSnapshot(
@@ -165,10 +203,17 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
+    // Retained offscreen pages need headless ownership; terminal-only rebases would loosen terminal liveness checks.
+    const rebaseToHeadless =
+      !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch) &&
+      tabs.some((tab) => tab.type === 'browser' && tab.placement?.kind !== 'client')
+    const publicationBase = rebaseToHeadless
+      ? { ...existing, publicationEpoch: `headless-hydrated:${Date.now().toString(36)}` }
+      : existing
     return {
       ...existing,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
-      // Why: mint a fresh version or clients' same-epoch gate drops the prune frame.
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(publicationBase, tabs),
+      // Bump version or clients discard same-epoch prune frames.
       snapshotVersion: existing.snapshotVersion + 1,
       activeGroupId: existing.activeGroupId ?? getHeadlessMobileSessionGroupId(existing.worktree),
       activeTabId: activeTab?.id ?? null,

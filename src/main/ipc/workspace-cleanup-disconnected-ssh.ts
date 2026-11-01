@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../shared/execution-host'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
@@ -32,8 +32,7 @@ export function synthesizeDisconnectedSshCleanupCandidates(
   const executionHostId = getRepoExecutionHostId(repo)
   if (targetWorktreeIds) {
     const candidates: WorkspaceCleanupCandidate[] = []
-    // Why: targeted refreshes name their workspaces already; walking all
-    // persisted metadata is unnecessary for disconnected SSH repos.
+    // Targeted refresh already names candidates; avoid traversing all persisted SSH metadata.
     for (const worktreeId of targetWorktreeIds) {
       if (!worktreeId.startsWith(repoWorktreePrefix)) {
         continue

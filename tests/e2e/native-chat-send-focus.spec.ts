@@ -1,4 +1,4 @@
-// Clicking Send or Stop leaves focus in the composer, as Enter does, after the button disables.
+// Completed tab and composer actions return keyboard input to the chat draft.
 
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { expect } from './helpers/orca-app'
@@ -15,7 +15,7 @@ async function openChat(page: Page, claudeCommand: string) {
   const worktreeId = await waitForActiveWorktree(page)
   await page.evaluate(async (command) => {
     await window.__store?.getState().updateSettings({
-      experimentalNativeChat: true,
+      nativeChatProviders: { claude: true, codex: true },
       defaultTuiAgent: 'claude',
       agentCmdOverrides: { claude: command }
     })
@@ -30,11 +30,13 @@ async function openChat(page: Page, claudeCommand: string) {
       { worktreeId, sessionId }
     )
   await expect.poll(readTabId, { timeout: 30_000 }).toBeTruthy()
-  await page.locator(`[data-testid="sortable-tab"][data-tab-id="${await readTabId()}"]`).click()
+  const tab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${await readTabId()}"]`)
+  await tab.click()
   const chat = page.locator('[data-native-chat-root="true"]')
   const composer = chat.getByRole('textbox')
   await composer.click()
   return {
+    tab,
     composer,
     send: chat.getByRole('button', { name: 'Send', exact: true }),
     stop: chat.getByRole('button', { name: 'Stop the agent' }),
@@ -42,8 +44,26 @@ async function openChat(page: Page, claudeCommand: string) {
   }
 }
 
-test.describe('a click on the native chat composer button keeps focus in the composer', () => {
+test.describe('native chat composer focus', () => {
   test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
+
+  test('keyboard tab rename returns input to the native chat composer', async ({
+    orcaPage: page,
+    claudeStub
+  }) => {
+    const { tab, composer } = await openChat(page, claudeStub.command)
+    await tab.dblclick()
+    const rename = tab.locator('[data-tab-rename-input="true"]')
+    await expect(rename).toBeFocused()
+    await rename.fill('')
+    await rename.pressSequentially('Renamed chat', { delay: 60 })
+    await page.keyboard.press('Enter')
+    await expect(rename).toHaveCount(0)
+    await expect(tab).toHaveAttribute('data-tab-title', 'Renamed chat')
+    await expect.poll(() => focusIsIn(composer)).toBe(true)
+    await page.keyboard.type('Draft after rename')
+    await expect(composer).toContainText('Draft after rename')
+  })
 
   test('when Send disables at the end of the turn', async ({ orcaPage: page, claudeStub }) => {
     const { composer, send, stop, reply } = await openChat(page, claudeStub.command)

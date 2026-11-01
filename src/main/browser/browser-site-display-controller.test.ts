@@ -52,7 +52,6 @@ function fakeGuest(url: string): FakeGuest {
   return guest
 }
 
-/** What the page shows after the navigation commits and its document loads. */
 function commit(controller: BrowserSiteDisplayController, guest: FakeGuest, url: string): void {
   guest.url = url
   controller.onMainFrameNavigationCommitted(guest.id)
@@ -117,7 +116,7 @@ describe('BrowserSiteDisplayController zoom', () => {
     const guest = fakeGuest('https://github.com/')
     controller.onGuestRegistered(guest, null)
     controller.zoomPage(guest.id, 'in')
-    // Electron copies the embedder's zoom (here 120%) onto every webview, on change and after commits.
+    // Model Electron copying the embedder's zoom on UI changes and navigation.
     const copyUIZoom = (): void => {
       guest.level = 1
     }
@@ -145,7 +144,6 @@ describe('BrowserSiteDisplayController color scheme', () => {
     controller.onGuestRegistered(guest, null)
     controller.setColorScheme(guest.id, 'dark')
 
-    // Why it matters: each send replaces every emulated feature, including an agent's own.
     controller.zoomPage(guest.id, 'in')
     commit(controller, guest, 'https://docs.example.com/')
     commit(controller, guest, 'https://news.example.com/')

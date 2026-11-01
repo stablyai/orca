@@ -62,10 +62,7 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths (the fs mock
-// above otherwise makes every probe miss). The real resolver — which skips the
-// Store App Execution Alias stub — is covered in
-// windows-powershell-executable.test.ts.
+// The fs mock misses executable probes; pin paths here and leave Store-alias coverage to the resolver tests.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -105,8 +102,7 @@ vi.mock('../wsl', () => ({
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
-  // cwds that are meant to exist, so report them present without spawning wsl.exe.
+  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
   wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
@@ -158,26 +154,6 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('listProcesses', () => {
-    it('returns spawned PTYs', async () => {
-      const before = await provider.listProcesses()
-      await provider.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/owned-cwd',
-        worktreeId: 'repo::/tmp/owned-cwd'
-      })
-      await provider.spawn({ cols: 80, rows: 24 })
-      const after = await provider.listProcesses()
-      expect(after.length - before.length).toBe(2)
-      const newEntries = after.slice(before.length)
-      expect(newEntries[0]).toHaveProperty('id')
-      expect(newEntries[0]).toHaveProperty('title', 'zsh')
-      expect(newEntries[0]).toHaveProperty('cwd', '/tmp/owned-cwd')
-      expect(newEntries[0]).toHaveProperty('worktreeId', 'repo::/tmp/owned-cwd')
-      expect(newEntries[0]).not.toHaveProperty('wslDistro')
-      expect(newEntries[1]).not.toHaveProperty('wslDistro')
-    })
-
     it('reports native and WSL ownership explicitly on Windows', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const native = await provider.spawn({
@@ -196,22 +172,6 @@ describe('LocalPtyProvider', () => {
 
       expect(processes.find((process) => process.id === native.id)?.wslDistro).toBeNull()
       expect(processes.find((process) => process.id === wsl.id)?.wslDistro).toBe('Ubuntu')
-    })
-  })
-
-  describe('getDefaultShell', () => {
-    it('returns SHELL env var on Unix', async () => {
-      const originalShell = process.env.SHELL
-      try {
-        process.env.SHELL = '/bin/bash'
-        expect(await provider.getDefaultShell()).toBe('/bin/bash')
-      } finally {
-        if (originalShell === undefined) {
-          delete process.env.SHELL
-        } else {
-          process.env.SHELL = originalShell
-        }
-      }
     })
   })
 

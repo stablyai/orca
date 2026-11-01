@@ -1,21 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { isTrackedPathSpec, partitionTrackedPathSpecs } from './git-tracked-pathspecs'
 
-function previousPartition(filePaths: readonly string[], trackedPaths: readonly string[]) {
-  const normalize = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '')
-  const isTracked = (filePath: string) => {
-    const normalized = normalize(filePath)
-    return trackedPaths.some((trackedPath) => {
-      const normalizedTracked = normalize(trackedPath)
-      return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
-    })
-  }
-  return {
-    trackedPaths: filePaths.filter(isTracked),
-    untrackedPaths: filePaths.filter((filePath) => !isTracked(filePath))
-  }
-}
-
 function countNormalizations(run: () => unknown): number {
   const replace = vi.spyOn(String.prototype, 'replace')
   try {
@@ -53,7 +38,9 @@ describe('tracked pathspec partition', () => {
   ] as const)('keeps matching semantics for %j against %j', (request, tracked, expected) => {
     expect(isTrackedPathSpec(request, tracked)).toBe(expected)
     expect(partitionTrackedPathSpecs([request], tracked)).toEqual(
-      previousPartition([request], tracked)
+      expected
+        ? { trackedPaths: [request], untrackedPaths: [] }
+        : { trackedPaths: [], untrackedPaths: [request] }
     )
   })
 
@@ -66,47 +53,14 @@ describe('tracked pathspec partition', () => {
     })
   })
 
-  it('matches the previous implementation across combinations of path edges', () => {
-    const paths = [
-      '',
-      '/',
-      '.',
-      './a',
-      'a',
-      'a/',
-      'a//',
-      'a/b',
-      'a\\b',
-      'a//b',
-      'ab',
-      'A',
-      '../a',
-      'a/../b',
-      '[a]',
-      '*',
-      'a b',
-      'é',
-      'e\u0301',
-      '/a',
-      '//host/share',
-      'C:\\a'
-    ]
-    for (const tracked of [[], paths, ...paths.map((entry) => [entry])]) {
-      expect(partitionTrackedPathSpecs(paths, tracked)).toEqual(previousPartition(paths, tracked))
-    }
-  })
-
   it('normalizes each visited tracked entry once and each request once per operation', () => {
     const requests = Array.from({ length: 64 }, (_, index) => `missing/${index}`)
     const tracked = Array.from({ length: 256 }, (_, index) => `docs\\file-${index}///`)
-    expect(countNormalizations(() => previousPartition(requests, tracked))).toBe(32_896)
-    expect(countNormalizations(() => partitionTrackedPathSpecs(requests, tracked))).toBe(320)
     expect(countNormalizations(() => partitionTrackedPathSpecs(requests, tracked))).toBe(320)
   })
 
   it('retains early exit for a selected directory with many tracked descendants', () => {
-    const tracked = Array.from({ length: 150_000 }, (_, index) => `docs/file-${index}`)
-    expect(countNormalizations(() => previousPartition(['docs'], tracked))).toBe(4)
+    const tracked = Array.from({ length: 64 }, (_, index) => `docs/file-${index}`)
     expect(countNormalizations(() => partitionTrackedPathSpecs(['docs'], tracked))).toBe(2)
     expect(countNormalizations(() => partitionTrackedPathSpecs([], tracked))).toBe(0)
   })

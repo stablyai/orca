@@ -11,7 +11,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  // Mounted hooks share one copy of the options until the last one unmounts.
   cleanup()
   vi.restoreAllMocks()
   window.localStorage.removeItem(AI_VAULT_VIEW_OPTIONS_STORAGE_KEY)

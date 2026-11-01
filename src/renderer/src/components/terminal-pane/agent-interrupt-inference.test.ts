@@ -323,8 +323,7 @@ describe('agent interrupt inference', () => {
   it.each([['claude'], ['codex'], ['omp'], ['pi'], ['prime-agent']] as const)(
     'never asks main to interrupt %s on repeated navigation Escape while working',
     (agentType) => {
-      // Why: Escape is ambiguous at the source for these TUIs, so the renderer does not spend a
-      // round-trip on it. main re-checks the same rule for requests that never came from here.
+      // Skip ambiguous navigation Escape round trips; main independently validates requests from other callers.
       vi.useFakeTimers()
       let entry: AgentStatusEntry | undefined = makeEntry({ agentType, toolName: 'Bash' })
       const inferInterrupt = vi.fn()
@@ -375,8 +374,7 @@ describe('agent interrupt inference', () => {
   it.each([['claude'], ['omp'], ['pi'], ['prime-agent']] as const)(
     'keeps a pending Ctrl+C for %s when a navigation Escape lands before it settles',
     (agentType) => {
-      // Why: Escape is not a retraction. The user asked to interrupt; dismissing an overlay
-      // while that request is still settling must not silently cancel it.
+      // Escape may dismiss UI but must not revoke a Ctrl+C already waiting to settle.
       vi.useFakeTimers()
       let entry: AgentStatusEntry | undefined = makeEntry({ agentType, toolName: 'Bash' })
       const inferInterrupt = vi.fn().mockReturnValue(true)

@@ -9,9 +9,9 @@ on:
         type: string
 
       runner:
-        description: Hosted runner for the unit shards; relay integration keeps its x86 host.
+        description: Hosted runner for the unit shards.
         required: false
-        default: ubuntu-latest
+        default: blacksmith-4vcpu-ubuntu-2404
         type: string
 
       browser_contract:
@@ -32,7 +32,7 @@ on:
         type: string
 
       module_cache:
-        description: Transform cache policy (off, cold producer, or warm exact restore).
+        description: Transform cache policy (off, cold producer, or warm restore).
         default: 'off'
         type: string
 
@@ -91,39 +91,15 @@ jobs:
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
 
-      # The image resets HOME during login; shell fixtures intentionally use temporary homes.
-      - name: Preserve explicit login-shell homes on Blacksmith
-        if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
-        run: |
-          sudo python3 - <<'PYTHON'
-          from pathlib import Path
-          profile = Path('/etc/profile.d/blacksmith.sh')
-          if profile.exists():
-              original = profile.read_text()
-              updated = original.replace('export HOME="$RUNNER_HOME"', 'export HOME="${HOME:-$RUNNER_HOME}"')
-              if updated != original:
-                  profile.write_text(updated)
-          PYTHON
-
       - name: Verify Blacksmith unit runner environment
         if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
         run: |
           ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --version
-          fixture_home="$(mktemp -d)"
-          trap 'rm -rf "$fixture_home"' EXIT
-          printf 'export ORCA_CI_PROFILE_LOADED=1\n' > "$fixture_home/.bash_profile"
-          HOME="$fixture_home" ORCA_CI_FIXTURE_HOME="$fixture_home" /bin/bash -lc '
-            test "$HOME" = "$ORCA_CI_FIXTURE_HOME" && test "$ORCA_CI_PROFILE_LOADED" = 1
-          ' || {
-            echo '::error::Runner login profile overrides fixture HOME'
-            grep -nH 'HOME' /etc/profile /etc/profile.d/*.sh || true
-            HOME="$fixture_home" /bin/bash -lc 'printf "Observed HOME=%s\n" "$HOME"'
-            exit 1
-          }
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       - name: Resolve unit module cache
         id: module-cache
@@ -134,19 +110,22 @@ jobs:
           ORCA_UNIT_CACHE_NAMESPACE: ${{ inputs.module_cache_namespace }}
         run: node config/scripts/ci-unit-module-cache.mjs identity
 
-      - name: Restore exact unit module cache
+      # The key pins config, plugins, lockfile and runtimes; the newest producer for it wins.
+      # Source edits are keyed per module by Vitest plus vitest-module-cache-resolution-key.ts.
+      - name: Restore unit module cache
         id: module-cache-restore
         if: inputs.module_cache == 'warm' && steps.module-cache.outputs.key != ''
         continue-on-error: true
         uses: actions/cache/restore@v5
         with:
           path: ${{ steps.module-cache.outputs.path }}
-          key: ${{ steps.module-cache.outputs.key }}
+          key: ${{ steps.module-cache.outputs.key }}-${{ github.sha }}
+          restore-keys: ${{ steps.module-cache.outputs.key }}-
 
       - name: Validate restored unit module cache or use cold transforms
         if: steps.module-cache.outputs.key != ''
         env:
-          ORCA_UNIT_CACHE_RESTORE_HIT: ${{ steps.module-cache-restore.outputs.cache-hit }}
+          ORCA_UNIT_CACHE_RESTORE_HIT: ${{ steps.module-cache-restore.outputs.cache-matched-key != '' }}
         run: node config/scripts/ci-unit-module-cache.mjs prepare
 
       - uses: actions/download-artifact@v8
@@ -175,15 +154,15 @@ jobs:
           export ORCA_SHARD_SOURCE_SHA
           node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
-            ${{ (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404') && '--maxWorkers=4' || '' }}
+            ${{ inputs.runner == 'blacksmith-8vcpu-ubuntu-2404' && '--maxWorkers=8' || (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404' || inputs.runner == 'ubuntu-24.04') && '--maxWorkers=4' || '' }}
 
       - name: Seal unit module cache
         id: module-cache-seal
+        # Only cold main/seeded producers publish; PRs consume and never seed each other.
         if: >-
           success() && steps.module-cache.outputs.key != '' &&
-          steps.module-cache-restore.outputs.cache-hit != 'true' &&
-          (github.event_name == 'pull_request' ||
-          github.ref == 'refs/heads/main' && github.event_name != 'pull_request' ||
+          inputs.module_cache == 'cold' &&
+          (github.ref == 'refs/heads/main' && github.event_name != 'pull_request' ||
           inputs.module_cache_seed && github.event_name == 'workflow_dispatch')
         run: node config/scripts/ci-unit-module-cache.mjs seal
 
@@ -193,7 +172,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{ steps.module-cache.outputs.path }}
-          key: ${{ steps.module-cache.outputs.key }}
+          key: ${{ steps.module-cache.outputs.key }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Upload unit shard assignment
         if: always()
@@ -213,7 +192,8 @@ jobs:
       fail-fast: false
       matrix:
         node: ${{ fromJSON(inputs.node_versions) }}
-    runs-on: ubuntu-latest
+    # Free hosted runner: ~1.2 min of work finishes well inside the ~7 min unit shards it runs beside.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
 
     steps:

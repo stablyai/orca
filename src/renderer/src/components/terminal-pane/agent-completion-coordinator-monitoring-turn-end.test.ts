@@ -5,9 +5,7 @@ import { normalizeHookPayload } from '../../../../shared/agent-hook-listener'
 import { createHookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
-// Why: STA-4119's second complaint is the missing completion notification. This drives the REAL
-// hook listener and feeds its real output into the REAL coordinator, rather than hand-writing a
-// payload — the whole question is whether the two layers actually agree about a monitoring turn.
+// Feed real hook-listener output to the real coordinator to verify monitoring turn boundaries agree across layers.
 const PANE = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 const RUNNING_SHELL = {
   id: 'shell-1',
@@ -48,7 +46,6 @@ function createCoordinator() {
   return { coordinator, dispatchCompletion, dispatchHookLifecycle }
 }
 
-/** Meta the coordinator hands the notification dispatcher. */
 function completionMeta(dispatchCompletion: ReturnType<typeof vi.fn>) {
   return dispatchCompletion.mock.calls[0]?.[1] as
     | { source?: string; agentStatus?: { state?: string; workingMode?: string } }
@@ -70,7 +67,6 @@ describe('completion notification when a lead turn ends into monitoring', () => 
       background_tasks: [RUNNING_SHELL]
     })
 
-    // Precondition: the pane really is in the monitoring state, not done.
     expect(monitoring).toMatchObject({ state: 'working', workingMode: 'monitoring' })
     expect(typeof monitoring.turnCompletedAt).toBe('number')
 
@@ -79,8 +75,7 @@ describe('completion notification when a lead turn ends into monitoring', () => 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     const meta = completionMeta(dispatchCompletion)
     expect(meta?.source).toBe('hook')
-    // Why: the announcement is a synthesized `done` while the reported row stays `working` —
-    // the notification follows the TURN boundary, not the rendered state.
+    // Announce the turn boundary as done while the stored row remains working.
     expect(meta?.agentStatus?.state).toBe('done')
     // Why: announce only. Running pane lifecycle here would settle a pane that is still working.
     expect(dispatchHookLifecycle).not.toHaveBeenCalledWith(

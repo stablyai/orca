@@ -1,12 +1,10 @@
-// The Antigravity ACP server Orca installs for chats when the person asks: Google ships it only as a
-// registry download (no installer, no published checksums), so each archive and both of its
-// executables are pinned by the hashes and sizes Orca verified.
+// Pin the official registry archives and each executable verified inside them.
 
 import { join } from 'node:path'
 import type { ManagedRuntime, ManagedRuntimePin } from '../node-runtime/managed-runtime-release'
 import { probeAntigravityAcpServer } from './antigravity-acp-runtime-probe'
 
-const VERSION = '1.3.0'
+const VERSION = '1.4.3'
 const RELEASES = 'https://dl.google.com/agy-extensions/releases'
 const COMMAND = 'agy_acp_server.par'
 // The server finds its harness beside itself.
@@ -23,44 +21,43 @@ type Pinned = {
 }
 const PINNED: Record<string, Pinned> = {
   'darwin-arm64': {
-    path: 'macos/agy-acp-server-1.3.0-darwin-arm64.zip',
-    archive: '7cd97045f7b4fe81175a107cdf16f9c51484e3c78a5162cae415338bb6aa5b88',
-    archiveBytes: 111456962,
-    server: 'cb1f0725183ed922079ed6cd1d2422b4d8be44c5fb60be3e9a43d8d04f99a18e',
-    serverBytes: 278535456,
-    harness: 'b04b00662c1821b953a409d43626b86d1229130eeb2078b4e1304c06199aa481',
-    harnessBytes: 118611392
+    path: 'macos/agy-acp-server-1.4.3-darwin-arm64.zip',
+    archive: 'c57db0a9b8b712daa9c3c17cdb990a61842ea569f279e8bd79d7aa85a303b20b',
+    archiveBytes: 114147623,
+    server: '1251927db3e21f3d693fd042d6890d82f65eb00587e97f1f3d8f0d798e7f0954',
+    serverBytes: 282446160,
+    harness: '9e8fdc6e20a3262ca0a771850ca4a8414ca839a642cc964ec5c547cc2c33c200',
+    harnessBytes: 122957936
   },
   'darwin-x64': {
-    path: 'macos/agy-acp-server-1.3.0-darwin-x86_64.zip',
-    archive: 'bb23956b89984bf5d354af2c3725e6c57f0cc1b7228e77a0e91c9c2bc1d47646',
-    archiveBytes: 117245544,
-    server: 'f31bd5797eeb225a5efa12e24573f1f4eb157ec00698dd6a2cda6f0d924705cf',
-    serverBytes: 282840688,
-    harness: 'd724f49b2c9e440c5d37925b1da203fc204c17dd9c662df45094c641f9806bc6',
-    harnessBytes: 124175392
+    path: 'macos/agy-acp-server-1.4.3-darwin-x86_64.zip',
+    archive: '9392dbbdad7f0663dbfb5a0bf641297b0cf80d2ee9cd2d49a616bbbc7378731d',
+    archiveBytes: 119801100,
+    server: 'd51eea5bdb2c5fa2ca37c21bafcbba1eb89fb6b287489b0c2795c64f3b96ee33',
+    serverBytes: 286653712,
+    harness: '0c000ad3f4c1ded5fc72b23a8c5816205a09e6d8f0957c9ea548221273e0efd9',
+    harnessBytes: 127612208
   },
   'linux-x64': {
-    path: 'linux/agy-acp-server-1.3.0-linux-x86_64.zip',
-    archive: '9fb60956af0a9d76220a4db91ca9ac88e2a2372ad68f985ab5fceace6b825b96',
-    archiveBytes: 333727150,
-    server: 'cf6feaebdacfc2255dcfc8883db99b15de8554698554e2a1e78e5ccec1c68a20',
-    serverBytes: 926533965,
-    harness: '63042ca43fc7a69600683920f7706689b82cf8aecefe21dc18cf35e99c9dde4d',
-    harnessBytes: 130388040
+    path: 'linux/agy-acp-server-1.4.3-linux-x86_64.zip',
+    archive: '0634ce5306ba92c932945455e7a83fda78e2d99c33fa8aa6ee0566206a382714',
+    archiveBytes: 336846435,
+    server: '7e06ec4aab6dcff53911a16c124692bc95c8848b2a1fd3220be6f67dbe7efafb',
+    serverBytes: 927707135,
+    harness: '55b2d1d8206d3f38353cdba3c5c5d087cd718241b90500bce4f8009f64495285',
+    harnessBytes: 133926136
   },
   'linux-arm64': {
-    path: 'linux/agy-acp-server-1.3.0-linux-arm64.zip',
-    archive: '500b0bc0fb858e88f4df404d4cedf80bf9298c178291e39e383d6c50b111cbdf',
-    archiveBytes: 321690363,
-    server: '03ea51ff7a60cb1b44e65da40fdb35f1f457db7950d1651d9e86945c8aa584c6',
-    serverBytes: 930848992,
-    harness: '7fe676f1234889900800bad3ca50fb9b55f1e16ee4cb82b789f84ae5145fd582',
-    harnessBytes: 123224968
+    path: 'linux/agy-acp-server-1.4.3-linux-arm64.zip',
+    archive: '05c153443b0b1175151c760eeddea538950bc9843e317d54786a1f03670182bc',
+    archiveBytes: 322887047,
+    server: '6db15569878613d9abe47f9841a3e039322b0c599c752510ff27381c9532ff21',
+    serverBytes: 932662106,
+    harness: 'd898fa05e31d502b0b2df5a8565463c2cec0a06a7a65285d49b1ea79c3fc42b3',
+    harnessBytes: 127512832
   }
 }
 
-/** This host's pinned server; none where Google publishes no build Orca verified (Windows). */
 function pin(): ManagedRuntimePin | null {
   const pinned = PINNED[`${process.platform}-${process.arch}`]
   return pinned

@@ -90,4 +90,5 @@ test('50 MiB append and replacement p95', async ({ bench }) => {
     warmupIterations: 0,
     warmupTime: 0
   })
-})
+  // Why: 70 forced-GC'd 50 MiB models outlast the default timeout; the budget is the p95, not the total.
+}, 180_000)

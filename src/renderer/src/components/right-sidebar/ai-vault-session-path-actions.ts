@@ -4,38 +4,27 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { aiVaultSessionLogFilePath } from '../../../../shared/ai-vault-session-log-resource'
 import { isAiVaultSyntheticSessionPath } from '../../../../shared/ai-vault-session-deletion'
 import { revealInFileManager } from '@/lib/reveal-in-file-manager'
 
-// One definition, shared with main's delete validator; re-exported here under
-// the name this module's callers already use.
 export { isAiVaultSyntheticSessionPath as isSyntheticAiVaultSessionPath }
 
 export function canUseLocalAiVaultSessionPathActions(
   executionHostId: ExecutionHostId | null | undefined
 ): boolean {
-  // Why: Electron shell open/reveal APIs only validate paths on this computer;
-  // SSH session history exposes paths that exist on the remote host instead.
+  // Electron shell APIs use this computer's paths; SSH history paths belong to the remote host.
   return normalizeExecutionHostId(executionHostId) === LOCAL_EXECUTION_HOST_ID
 }
 
-/**
- * Whether AI Vault `View Log` / `Open Log` can open this session's log inside
- * Orca as a read-only tab: a non-blank, local, single-file (non-synthetic)
- * path. Remote/runtime and synthetic identities are withheld until AI Vault has
- * a provider-owned log-resource contract.
- */
+/** File viewing needs a conversation resource on this computer, not a session storage locator. */
 export function canOpenAiVaultSessionLogInOrca(
-  session: Pick<AiVaultSession, 'filePath' | 'executionHostId'>
+  session: Pick<AiVaultSession, 'agent' | 'filePath' | 'executionHostId'>
 ): boolean {
-  const filePath = session.filePath?.trim()
-  if (!filePath) {
-    return false
-  }
-  if (!canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
-    return false
-  }
-  return !isAiVaultSyntheticSessionPath(filePath)
+  return (
+    canUseLocalAiVaultSessionPathActions(session.executionHostId) &&
+    aiVaultSessionLogFilePath(session) !== null
+  )
 }
 
 /** Reveals a session's log or cwd in the OS file manager, judged by the session's own host. */

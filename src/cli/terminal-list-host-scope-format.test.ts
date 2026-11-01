@@ -49,6 +49,16 @@ describe('formatTerminalList pane titles', () => {
   })
 })
 
+describe('formatTerminalList orphaned marker', () => {
+  it('marks only the terminal with no pane binding', () => {
+    const list = formatTerminalList(
+      listResult({ terminals: [terminal(), terminal({ handle: 'term_2', orphaned: true })] })
+    )
+    expect(list).toContain('term_1  worker  connected  host=')
+    expect(list).toContain('term_2  worker  connected  orphaned  host=')
+  })
+})
+
 describe('formatTerminalList scope declaration', () => {
   it('states the covered and omitted hosts', () => {
     const output = formatTerminalList(

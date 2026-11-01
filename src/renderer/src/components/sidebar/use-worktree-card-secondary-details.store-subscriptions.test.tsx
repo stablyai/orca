@@ -7,7 +7,7 @@ import { getWorktreeCardDetails } from '../../../../shared/worktree/card-propert
 import { useAppStore } from '@/store'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Worktree } from '../../../../shared/worktree/types'
+import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import { useWorktreeCardSecondaryDetails } from './use-worktree-card-secondary-details'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
@@ -132,94 +132,48 @@ describe('useWorktreeCardSecondaryDetails store subscriptions', () => {
     }
     mount(<Probe />)
 
-    // Why: promptCacheTtlMs comes from the settings the card already subscribes to,
-    // so this hook must not open a third subscription for the same field.
+    // Reuse settings passed by the card rather than adding a per-card subscription for the same field.
     expect(listenerCount() - baseline).toBe(composedListeners)
 
     unmount()
     expect(listenerCount()).toBe(baseline)
   })
-
-  it('reads the cache TTL from the passed settings', () => {
-    let cacheTtlMs = -1
-    function Probe({ ttl }: { ttl: number }): null {
-      cacheTtlMs = useWorktreeCardSecondaryDetails(
-        secondaryDetailsArgs(makeSettings(ttl))
-      ).cacheTtlMs
-      return null
+  it('unlinks the chosen sibling while retaining the selected review and other sources', async () => {
+    const primary: WorkspaceAttachment = {
+      provider: 'github',
+      type: 'pr',
+      number: 42,
+      url: 'https://github.com/acme/orca/pull/42'
     }
-
-    mount(<Probe ttl={300_000} />)
-    expect(cacheTtlMs).toBe(300_000)
-
-    act(() => root?.render(<Probe ttl={120_000} />))
-    expect(cacheTtlMs).toBe(120_000)
-  })
-
-  it('reports no TTL while the aggregate cache timer is suppressed', () => {
-    let cacheTtlMs = -1
-    function Probe(): null {
-      // compactCards suppresses the aggregate timer row.
-      cacheTtlMs = useWorktreeCardSecondaryDetails({
-        ...secondaryDetailsArgs(makeSettings(300_000)),
-        compactCards: true
-      }).cacheTtlMs
-      return null
+    const sibling: WorkspaceAttachment = {
+      provider: 'github',
+      type: 'pr',
+      number: 42,
+      url: 'https://github.com/other/orca/pull/42'
     }
-
-    mount(<Probe />)
-    expect(cacheTtlMs).toBe(0)
-  })
-
-  it('writes a suppression tombstone when the user unlinks a displayed GitHub PR', async () => {
     const updateWorktreeMeta = vi.fn().mockResolvedValue({ ok: true })
-    let unlink: (() => Promise<void>) | null = null
+    let unlink: ((item?: WorkspaceAttachment) => Promise<void>) | null = null
     function Probe(): null {
       const details = useWorktreeCardSecondaryDetails({
         ...secondaryDetailsArgs(makeSettings(300_000)),
-        worktree: { ...makeWorktree(), hostId: 'ssh:builder' },
-        prDisplay: {
-          provider: 'github',
-          number: 42,
-          title: 'Branch PR'
+        worktree: {
+          ...makeWorktree(),
+          hostId: 'ssh:builder',
+          linkedPR: 42,
+          linkedItems: [primary, sibling]
         },
-        updateWorktreeMeta: updateWorktreeMeta as never
+        prDisplay: { provider: 'github', number: 42, title: 'Primary', url: primary.url },
+        updateWorktreeMeta
       })
       unlink = details.handleUnlinkReview
       return null
     }
-
     mount(<Probe />)
-    await act(() => unlink?.())
-
+    await act(() => unlink?.(sibling))
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       WORKTREE_ID,
-      { linkedPR: null, suppressedGitHubPR: 42 },
+      { linkedItemsBase: [primary, sibling], linkedItems: [primary] },
       { executionHostId: 'ssh:builder' }
-    )
-  })
-
-  it('surfaces a failed GitHub unlink after the optimistic card update is reverted', async () => {
-    const updateWorktreeMeta = vi.fn().mockResolvedValue({
-      ok: false,
-      error: 'Update the remote runtime to unlink GitHub pull requests'
-    })
-    let unlink: (() => Promise<void>) | null = null
-    function Probe(): null {
-      const details = useWorktreeCardSecondaryDetails({
-        ...secondaryDetailsArgs(makeSettings(300_000)),
-        prDisplay: { provider: 'github', number: 42, title: 'Branch PR' },
-        updateWorktreeMeta: updateWorktreeMeta as never
-      })
-      unlink = details.handleUnlinkReview
-      return null
-    }
-
-    mount(<Probe />)
-    await act(() => unlink?.())
-
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      'Update the remote runtime to unlink GitHub pull requests'
     )
   })
 })

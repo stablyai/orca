@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { MACHINE_NAME_MAX_LENGTH } from '../../../shared/machine-name'
 import { updateSettings, type SettingsMutationOperations } from './settings-update'
+import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 
 function settingsOperations(settings: Partial<GlobalSettings>): SettingsMutationOperations {
   return {
@@ -14,6 +15,25 @@ function settingsOperations(settings: Partial<GlobalSettings>): SettingsMutation
     notifySettingsChanged: vi.fn()
   }
 }
+
+it('retires only changed launch owners before notifying, including headless writes without listeners', () => {
+  const expire = vi.spyOn(agentModelCatalogStore, 'expireAgent')
+  const shell = vi.spyOn(agentModelCatalogStore, 'expireLaunchScopes')
+  try {
+    const operations = settingsOperations({ agentCmdOverrides: { pi: 'pi' } })
+    updateSettings(operations, { machineName: 'host' })
+    expect(expire).not.toHaveBeenCalled()
+    expect(shell).not.toHaveBeenCalled()
+    updateSettings(operations, { agentCmdOverrides: { pi: 'pi-new' } })
+    expect(expire).toHaveBeenCalledExactlyOnceWith('pi')
+    expect(operations.notifySettingsChanged).not.toHaveBeenCalled()
+    updateSettings(operations, { nativeChatInheritShellEnvironment: true })
+    expect(shell).toHaveBeenCalledOnce()
+  } finally {
+    expire.mockRestore()
+    shell.mockRestore()
+  }
+})
 
 describe('updateSettings machineName', () => {
   it('stores the trimmed, bounded form of a written name', () => {
@@ -120,27 +140,5 @@ describe('updateSettings terminalMinimumContrastRatio', () => {
     expect(updateSettings(operations, { terminalFontSize: 15 }).terminalMinimumContrastRatio).toBe(
       1
     )
-  })
-})
-
-describe('updateSettings scoped chat defaults', () => {
-  it('clears agent overrides for a shared chat permission choice from any writer', () => {
-    const operations = settingsOperations({
-      nativeChatPermissionMode: 'full-access',
-      agentNativeChatPermissionModes: { codex: 'auto' }
-    })
-    expect(
-      updateSettings(operations, { nativeChatPermissionMode: 'ask' }).agentNativeChatPermissionModes
-    ).toEqual({})
-  })
-
-  it('retains explicit overrides from a bulk mutation or durable rollback', () => {
-    const operations = settingsOperations({ nativeChatPermissionMode: 'ask' })
-    expect(
-      updateSettings(operations, {
-        nativeChatPermissionMode: 'full-access',
-        agentNativeChatPermissionModes: { codex: 'auto' }
-      }).agentNativeChatPermissionModes
-    ).toEqual({ codex: 'auto' })
   })
 })

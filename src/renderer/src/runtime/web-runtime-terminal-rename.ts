@@ -1,14 +1,11 @@
 import type { TerminalTab, TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
-import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 import { setWebRuntimeTabProps } from './web-runtime-terminal-actions'
 
-/**
- * Why: a remote server's tab name lives on that server, where `orca terminal rename`, phones and
- * other desktops read it. A rename kept only here diverged from all of them (#29975).
- */
+// Push remote names to their owner so CLI, phones and other desktops agree (#29975).
 export function renameWebRuntimeTerminal(
   ptyId: string | null | undefined,
   title: string | null
@@ -51,11 +48,7 @@ function boundRemotePtyId(state: RenameStoreState, tab: TerminalTab): string | n
   return candidates.find((ptyId) => ptyId && parseRemoteRuntimePtyId(ptyId)) ?? null
 }
 
-/**
- * Sends a desktop rename to the host that owns the tab. Always by tab id, which reaches a pane
- * that is asleep, starting, or bound to a handle the host has since forgotten; plus by handle when
- * one is bound, which is all a host older than tab-id renames understands.
- */
+/** Always rename by tab ID, even asleep/starting or with stale handles; also send by bound handle for older hosts lacking tab-ID rename. */
 export function renameHostTerminalTab(
   state: RenameStoreState,
   tabId: string,

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS,
   useNativeChatPendingDelivery
@@ -65,7 +65,6 @@ describe('terminal Chat pending delivery', () => {
     act(() => result.current.record('first'))
     expect(result.current.pending[0]?.afterEmptyTranscriptSessionId).toBeUndefined()
   })
-  // A resumed transcript can hold an older identical turn; the claim was about another one.
   it('keeps a send, and its failure notice, when a different session with old history loads', () => {
     const old: NativeChatMessage[] = [
       { ...userRow('run tests'), id: 'old-user', timestamp: 10 },

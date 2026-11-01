@@ -3,7 +3,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
-import { isSubagentBlock } from '../../shared/native-chat-types'
+import { isSubagentBlock } from '../../shared/native-chat/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
@@ -47,7 +47,7 @@ async function stoppingChild(reportsOutcome: boolean) {
     stdio: [agent.stdin, agent.stdout, stderr, null, null] satisfies PipedChildProcess['stdio']
   })
   const spawn = vi.fn<PipedProcessSpawner>(() => child)
-  // Teardown is simulated: no signal or process-table operation can reach the machine.
+  // Stub teardown so fixture PIDs cannot reach real process operations.
   teardown.mockImplementation(async () => {
     child.emit('exit', 0, null)
     return 'exited'
@@ -155,7 +155,6 @@ describe('Grok child outcome during a full host Stop', () => {
     const [unavailable] = await fixture.rosters()
     expect(fixture.childWork.views()).toMatchObject([{ membership: 'settled', outcome: 'unknown' }])
     expect(unavailable.row.itemId).toBe(fixture.original.row.itemId)
-    // Contact was lost when the session ended, a moment the host observed.
     expect(unavailable.block).toEqual({
       ...fixture.original.block,
       state: 'unverifiable',

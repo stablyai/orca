@@ -11,7 +11,7 @@ function currentAppPath(): string | undefined {
   }
 }
 
-/** `wsl` is the WSL-only guest bundle dir (`out/relay/wsl`), never uploaded to SSH hosts. */
+/** WSL guest bundles are never uploaded to SSH hosts. */
 export function relayBundleCandidates(
   platform: RelayPlatform | 'wsl',
   appPath = currentAppPath()

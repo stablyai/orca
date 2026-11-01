@@ -100,7 +100,10 @@ describe('packaged ripgrep storage', () => {
     })
     const manifest = JSON.parse(await readFile(f.manifestPath, 'utf8'))
     expect(manifest.schemaVersion).toBe(4)
-    expect(Object.values(manifest.targets).filter((entry) => entry.packagedRipgrep)).toHaveLength(7)
+    expect(manifest.targets['linux-x64-glibc'].packagedRipgrep).toBe(true)
+    expect(existsSync(join(f.templateDir, 'targets/linux-x64-glibc/ripgrep/linux-x64/rg'))).toBe(
+      false
+    )
   })
 
   it('keeps binaries that differ and never removes Darwin signing inputs', async () => {

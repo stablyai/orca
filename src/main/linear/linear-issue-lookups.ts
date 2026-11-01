@@ -1,3 +1,7 @@
+import {
+  LINEAR_AUTHENTICATION_ERROR,
+  isIntegrationCredentialDecryptionError
+} from '../../shared/integration-credential-errors'
 import type { LinearIssue } from '../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-types'
 import { acquire, release } from './linear-request-concurrency'
@@ -81,7 +85,7 @@ async function readIssueWithSignal(
       if (isAuthError(error)) {
         clearToken(entry.workspace.id)
         if (shouldThrowAuthError(workspaceId)) {
-          throw error
+          throw new Error(LINEAR_AUTHENTICATION_ERROR)
         }
       } else {
         console.warn('[linear] getIssue failed:', error)
@@ -95,21 +99,26 @@ async function readIssueWithSignal(
 
 export async function getIssueByUuidForAgent(
   id: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearIssueWriteRecord | null> {
-  const entry = getClients(workspaceId)[0]
+  const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
     return null
   }
 
-  return runLinearLookup(entry, async () => {
-    const result = await entry.client.client.rawRequest<
-      LinearIssueByUuidResponse,
-      LinearRawVariables
-    >(ISSUE_BY_UUID_QUERY, { id })
-    const issue = result.data?.issue ?? null
-    return issue ? mapRawIssueWriteRecord(issue) : null
-  })
+  return runLinearLookup(
+    entry,
+    async () => {
+      const result = await entry.client.client.rawRequest<
+        LinearIssueByUuidResponse,
+        LinearRawVariables
+      >(ISSUE_BY_UUID_QUERY, { id })
+      const issue = result.data?.issue ?? null
+      return issue ? mapRawIssueWriteRecord(issue) : null
+    },
+    signal
+  )
 }
 
 export async function getCommentByUuidForAgent(
@@ -139,29 +148,35 @@ export async function getCommentByUuidForAgent(
 
 export async function getAttachmentByUuidForAgent(
   id: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearAttachmentWriteRecord | null> {
-  const entry = getClients(workspaceId)[0]
+  const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
     return null
   }
 
-  return runLinearLookup(entry, async () => {
-    const result = await entry.client.client.rawRequest<
-      LinearAttachmentByUuidResponse,
-      LinearRawVariables
-    >(ATTACHMENT_BY_UUID_QUERY, { id })
-    const attachment = result.data?.attachment
-    return attachment ? mapRawAttachmentWriteRecord(attachment) : null
-  })
+  return runLinearLookup(
+    entry,
+    async () => {
+      const result = await entry.client.client.rawRequest<
+        LinearAttachmentByUuidResponse,
+        LinearRawVariables
+      >(ATTACHMENT_BY_UUID_QUERY, { id })
+      const attachment = result.data?.attachment
+      return attachment ? mapRawAttachmentWriteRecord(attachment) : null
+    },
+    signal
+  )
 }
 
 export async function getIssueCommentThreadRoot(
   issueId: string,
   commentId: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<{ id: string; parentId: string | null } | null> {
-  const comment = await getCommentByUuidForAgent(commentId, workspaceId)
+  const comment = await getCommentByUuidForAgent(commentId, workspaceId, signal)
   if (!comment || comment.issue.id !== issueId) {
     return null
   }
@@ -178,7 +193,7 @@ export async function searchIssues(
     return []
   }
 
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     entries.map(async (entry) => {
       await acquire()
       try {
@@ -191,23 +206,31 @@ export async function searchIssues(
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
-          if (shouldThrowAuthError(workspaceId)) {
-            throw error
-          }
         } else {
           console.warn('[linear] searchIssues failed:', error)
         }
-        return []
+        throw error
       } finally {
         release()
       }
     })
   )
-  // Why: searchIssues returns Linear's relevance ranking. Re-sorting by
-  // updatedAt would discard relevance order for single-workspace results,
-  // diverging from Linear's web UI and pre-PR behavior.
-  if (entries.length === 1) {
-    return results.flat().slice(0, limit)
+  const successful = results.flatMap((result) =>
+    result.status === 'fulfilled' ? result.value : []
+  )
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected' && results.every((result) => result.status === 'rejected')) {
+    if (isIntegrationCredentialDecryptionError(failure.reason)) {
+      throw failure.reason
+    }
+    if (results.some((result) => result.status === 'rejected' && isAuthError(result.reason))) {
+      throw new Error(LINEAR_AUTHENTICATION_ERROR)
+    }
+    throw new Error('Unable to load Linear issues. Try again.')
   }
-  return sortAndLimitIssues(results.flat(), limit)
+  // Single-workspace results must retain Linear relevance ranking instead of updatedAt order.
+  if (entries.length === 1) {
+    return successful.slice(0, limit)
+  }
+  return sortAndLimitIssues(successful, limit)
 }

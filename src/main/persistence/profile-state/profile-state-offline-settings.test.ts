@@ -102,6 +102,66 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
     }
   )
 
+  it.each([false, true])(
+    'keeps migration-sensitive absence through edit/import then flush/reopen (initialized=%s)',
+    async (initialized) => {
+      const location = createLocation()
+      const original = {
+        settings: {
+          agentPermissionDefault: 'own',
+          agentPermissionOverrides: {},
+          agentDefaultArgs: { claude: '--model opus --effort high --verbose' },
+          ...(initialized ? { agentLaunchChoices: {} } : {})
+        }
+      }
+      const authority = new ProfileStateSqliteAuthority(location.databaseFile, location.profileId)
+      if (backend === 'json') {
+        writeFileSync(location.dataFile, JSON.stringify(original))
+      } else {
+        authority.writeSerializedState(Buffer.from(JSON.stringify(original)))
+        authority.close()
+      }
+      updateAgentHookSettingsFromProfileState(location, false)
+      const before = JSON.parse(authority.readSerializedState() ?? 'null')
+      expect(Object.hasOwn(before.settings, 'agentLaunchChoices')).toBe(initialized)
+      authority.close()
+      vi.useFakeTimers()
+      const loaded = new Store({
+        dataFile: location.dataFile,
+        profileStateAuthority: new ProfileStateSqliteAuthority(
+          location.databaseFile,
+          location.profileId
+        )
+      })
+      try {
+        expect(loaded.getSettings().agentLaunchChoices).toEqual(
+          initialized ? {} : { claude: { model: 'opus', options: { effort: 'high' } } }
+        )
+        vi.advanceTimersByTime(5000)
+        await loaded.waitForPendingWrite()
+      } finally {
+        await loaded.freezeWritesAsync()
+        vi.useRealTimers()
+      }
+      const reopened = new Store({
+        dataFile: location.dataFile,
+        profileStateAuthority: new ProfileStateSqliteAuthority(
+          location.databaseFile,
+          location.profileId
+        )
+      })
+      try {
+        expect(reopened.getSettings().agentLaunchChoices).toEqual(
+          initialized ? {} : { claude: { model: 'opus', options: { effort: 'high' } } }
+        )
+        expect(reopened.getSettings().agentStatusHooksEnabled).toBe(false)
+        expect(reopened.getSettings().agentDefaultArgs?.claude).toContain('--verbose')
+      } finally {
+        await reopened.freezeWritesAsync()
+      }
+    }
+  )
+
   it.each([undefined, null, 42])(
     'does not stamp missing/non-object existing settings %j',
     (settings) => {
@@ -173,10 +233,10 @@ it('keeps offline no-storage initialization stamped', () => {
   updateAgentHookSettingsFromProfileState(location, true)
   const authority = new ProfileStateSqliteAuthority(location.databaseFile, location.profileId)
   try {
-    expect(
-      JSON.parse(authority.readSerializedState() ?? 'null').settings
-        .uiLanguagePortugueseMigrationApplied
-    ).toBe(true)
+    expect(JSON.parse(authority.readSerializedState() ?? 'null').settings).toMatchObject({
+      agentStatusHooksEnabled: true,
+      uiLanguagePortugueseMigrationApplied: true
+    })
   } finally {
     authority.close()
   }

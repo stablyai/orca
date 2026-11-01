@@ -48,13 +48,7 @@ function makeGraph(terminals: readonly RestartTerminal[]) {
   }
 }
 
-/**
- * Restart shape: the renderer graph (tab ids, leaf ids, pty ids) is persisted and comes back
- * identical, but every terminal handle is minted per process. The daemon keeps the WORKER's
- * ORCA_TERMINAL_HANDLE alive so its dispatch still resolves; the coordinator's handle in
- * `runs.coordinator_handle` is only ever rebound by a later orchestration command.
- */
-/** Attention is projected from liveness facts, not lineage; exact equality is on the rest. */
+/** Restart retains graph/daemon worker handles, but remints coordinator handles until orchestration rebinds them. */
 function lineageOf<T extends { attention?: unknown }>(
   context: T | undefined
 ): Omit<T, 'attention'> | undefined {
@@ -134,9 +128,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
         }
       })
 
-      // Restart: a fresh runtime, same persisted graph, and the daemon-retained worker handles
-      // (ORCA_TERMINAL_HANDLE) re-adopted for the still-live worker PTYs. The coordinator did not
-      // run an orchestration command yet, so its handle is fresh and the Run still names the old one.
+      // Restart re-adopts live daemon worker handles; runs still name the old, not-yet-rebound coordinator handle.
       const after = new OrcaRuntimeService(store)
       after.registerPreAllocatedHandleForPty('pty-worker', beforeHandles.worker)
       after.registerPreAllocatedHandleForPty('pty-nested-worker', beforeHandles['nested-worker'])
@@ -158,9 +150,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
         coordinatorHandle: freshCoordinatorHandle,
         orchestrationRunId: run.id
       })
-      // The nested worker's creator (the worker) kept its daemon handle, but its authority is
-      // gated on the process incarnation the task was created under; it must still nest under
-      // the worker pane by durable pane key, never fall through to the coordinator.
+      // Worker incarnation gates authority; durable pane keys must still nest its child rather than falling to coordinator.
       expect(lineageOf(contexts?.[paneKey('nested-worker')])).toEqual({
         taskId: nestedTask.id,
         dispatchId: nestedDispatch.id,
@@ -201,8 +191,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
       const context = runtime.syncWindowGraph(1, makeGraph(terminals))
         .agentOrchestrationByPaneKey?.[workerPaneKey]
 
-      // Why: a handle no live row carries must not reach the renderer, and the durable pane key
-      // is still published so the row nests again the moment that pane is restored.
+      // Never publish handles lacking live rows; keep durable pane keys so restored panes recover nesting.
       expect(lineageOf(context)).toEqual({
         taskId: task.id,
         dispatchId: dispatch.id,

@@ -2,14 +2,14 @@ import { usableJournalHistoryOrigin } from '../native-chat/agent-session-journal
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalPosition } from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalPosition } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentJournalItemPosition,
   compareAgentJournalPositions
-} from '../../shared/agent-session-journal-position'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { isRootAgentJournalItem } from '../../shared/agent-session-journal-producer'
+} from '../../shared/agent-session/journal/agent-session-journal-position'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionHistoryJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 const TURN_LIFECYCLE_RECORD_PREFIX = 'turn-lifecycle:'
@@ -67,7 +67,7 @@ export function readCodexHistoryJournalView(
       note(turnId, agentJournalItemPosition(journal.item(itemId) ?? { sequence }))
     }
   })
-  // A send accepted before its turn row landed still names its turn through its provider item.
+  // Accepted submissions can identify turns whose rows have not landed yet.
   for (const submission of journal.submissions()) {
     const promptKey = agentJournalSubmissionKey(submission.clientMessageId)
     nativePromptKeys.add(promptKey)
@@ -120,7 +120,7 @@ function codexTurnIdOfRow(
   if (!turn) {
     return null
   }
-  // A command's turn row carries Orca's own turn id; the provider turn rides beside it.
+  // Command rows use Orca turn IDs; their provider turn ID is stored separately.
   if (body?.kind === 'turn' && body.providerTurnId) {
     return body.providerTurnId
   }

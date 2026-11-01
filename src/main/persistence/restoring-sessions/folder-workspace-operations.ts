@@ -73,7 +73,7 @@ export class FolderWorkspacePersistenceOperations {
     const group = (this.state.projectGroups ?? []).find(
       (entry) => entry.id === input.projectGroupId
     )
-    // Why trim: the guard below accepts a padded path, so persist the same value it validated.
+    // Use the group path only when the supplied path is absent or blank.
     const folderPath =
       typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
         ? input.folderPath
@@ -115,7 +115,7 @@ export class FolderWorkspacePersistenceOperations {
       ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
         ? { pendingFirstAgentMessageRename: true }
         : {}),
-      // Switch point: creation is the workspace's first Recent stamp.
+      // Workspace creation establishes its first Recent stamp.
       lastActivityAt: ORCA_SIDEBAR_INPUTS_IS_MAIN ? now : 0,
       createdAt: now,
       updatedAt: now
@@ -150,6 +150,7 @@ export class FolderWorkspacePersistenceOperations {
         | 'smartAt'
         | 'lastTerminalUseAt'
         | 'diffComments'
+        | 'externalConversations'
       >
     > &
       WorkspaceAttachmentMutation
@@ -250,7 +251,7 @@ export class FolderWorkspacePersistenceOperations {
     if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
       workspace.lastActivityAt = updates.lastActivityAt
     }
-    // Written as a pair; an absent tier is Rest, so its presence as a key is what clears it.
+    // Presence clears an absent tier to Rest; update its timestamp as a pair.
     if ('smartTier' in updates) {
       workspace.smartTier = updates.smartTier
       workspace.smartAt = updates.smartAt
@@ -260,6 +261,9 @@ export class FolderWorkspacePersistenceOperations {
     }
     if (updates.diffComments !== undefined) {
       workspace.diffComments = updates.diffComments
+    }
+    if (updates.externalConversations !== undefined) {
+      workspace.externalConversations = updates.externalConversations
     }
     workspace.updatedAt = Date.now()
     this.scheduleSave()

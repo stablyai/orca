@@ -50,6 +50,31 @@ function issue(number: number): GitHubWorkItem {
 }
 
 describe('mobile workspace name ownership', () => {
+  it('pins a reused remote branch through name edits and supports branching off explicitly', () => {
+    const result = renderMobileComposerSource()
+    act(() => result.current.setName('Review workspace'))
+    act(() =>
+      result.current.handleSmartBranchSelect('refs/remotes/origin/feature/test', 'feature/test')
+    )
+    expect(result.current.reuseEligibleBranch).toBe('feature/test')
+    expect(result.current.name).toBe('Review workspace')
+    expect(result.current.reuseSelectedBranch).toBe(true)
+    expect(result.current.createSelection).toMatchObject({
+      reuse: true,
+      localBranchName: 'feature/test'
+    })
+    act(() => result.current.setReuseSelectedBranch(false))
+    expect(result.current.createSelection).toMatchObject({
+      reuse: false,
+      branchNameOverride: undefined
+    })
+    act(() => result.current.setReuseSelectedBranch(true))
+    expect(result.current.name).toBe('Review workspace')
+    expect(result.current.createSelection).toMatchObject({
+      reuse: true,
+      localBranchName: 'feature/test'
+    })
+  })
   const linearIssue: LinearIssue = {
     id: 'linear-9',
     identifier: 'ENG-9',

@@ -1,4 +1,8 @@
+import { useState } from 'react'
+import { describeLoadError } from '../components/load-error-description'
+import { mobileTasksListShowsError } from './mobile-tasks-list-state'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   SafeAreaView,
   View,
@@ -9,7 +13,8 @@ import {
   ActionSheetModal,
   BottomDrawerModalHost,
   GitBranch,
-  ConfirmModal
+  ConfirmModal,
+  useMobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
@@ -23,7 +28,11 @@ import {
 import { renderMobileTasksChrome } from './mobile-tasks-screen-chrome'
 import { renderMobileTasksListSurface } from './mobile-tasks-list-surface'
 import {
-  renderMobileTasksProviderPicker,
+  mobileTasksSearchVisible,
+  renderMobileTasksSearchControl
+} from './mobile-tasks-search-control'
+import { renderMobileTasksFilterSheet } from './mobile-tasks-filter-sheet'
+import {
   renderMobileTasksRepoPicker,
   renderMobileTasksGitHubIssueSourcePicker,
   renderMobileTasksGitHubViewPicker,
@@ -32,8 +41,7 @@ import {
 } from './mobile-tasks-provider-pickers'
 import {
   renderMobileTasksGitHubProjectPicker,
-  renderMobileTasksGitHubProjectViewPicker,
-  renderMobileTasksGitHubProjectSortPicker
+  renderMobileTasksGitHubProjectViewPicker
 } from './mobile-tasks-github-project-pickers'
 import {
   renderMobileTasksGitHubProjectFieldsPicker,
@@ -46,13 +54,7 @@ import {
   renderMobileTasksLinearTeamPicker,
   renderMobileTasksLinearStatusPicker
 } from './mobile-tasks-filter-pickers'
-import {
-  renderMobileTasksLinearViewPicker,
-  renderMobileTasksLinearGroupPicker,
-  renderMobileTasksLinearOrderPicker,
-  renderMobileTasksLinearDisplayPicker,
-  renderMobileTasksSortPicker
-} from './mobile-tasks-list-display-pickers'
+import { renderMobileTasksLinearDisplayPicker } from './mobile-tasks-list-display-pickers'
 import {
   renderMobileTasksCreateDrawer,
   renderMobileTasksCreateTargetPicker,
@@ -73,13 +75,18 @@ import {
   renderMobileTasksSetupTrustDrawer,
   renderMobileTasksOrcaYamlTrustDrawer
 } from './mobile-tasks-workspace-trust-drawers'
+import { pressedStyle } from '../theme/mobile-theme'
 import {
   renderMobileTasksProjectMissingRepoDrawer,
   renderMobileTasksProjectDetailDrawer
 } from './mobile-tasks-project-detail-drawer'
-import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
+import { MobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
+  const colorScheme = useMobileColorScheme()
+  const t = useMobileTranslation()
+  const [searchBarHeight, setSearchBarHeight] = useState(0)
+  const bottomBarHeight = mobileTasksSearchVisible(model) ? searchBarHeight : 0
   const {
     error,
     githubMode,
@@ -111,9 +118,9 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
     <SafeAreaView style={styles.container} edges={['top']}>
       {renderMobileTasksChrome(model)}
 
-      {error ? (
+      {error && !mobileTasksListShowsError(model) ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{describeLoadError(error, t).message}</Text>
         </View>
       ) : null}
 
@@ -124,8 +131,11 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
               style={styles.sourceNoticeBanner}
             >
               <Text style={styles.sourceNoticeText}>
-                Preferred issue source upstream is unavailable for {fallback.repoLabel}. Using
-                origin.
+                {t(
+                  'tasks.legacySurface.sourceFallback',
+                  'Preferred issue source upstream is unavailable for {{repo}}. Using origin.',
+                  { repo: fallback.repoLabel }
+                )}
               </Text>
             </View>
           ))
@@ -134,6 +144,11 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
       {!error && provider === 'github' && githubMode === 'items'
         ? githubSourceErrors.map((sourceError) => {
             const isRetrying = retryingGithubSourceRepoPaths.has(sourceError.repoPath)
+            const sourceErrorParts = t(
+              'tasks.legacySurface.loadIssuesFailed',
+              "Couldn't load issues from {{source}}.",
+              { source: '\uFFFC' }
+            ).split('\uFFFC')
             return (
               <View
                 key={`github-source-error:${sourceError.repoId}:${sourceError.source.owner}/${sourceError.source.repo}`}
@@ -141,11 +156,11 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
               >
                 <View style={styles.sourceErrorCopy}>
                   <Text style={styles.sourceErrorText}>
-                    Couldn't load issues from{' '}
+                    {sourceErrorParts[0]}
                     <Text style={styles.sourceErrorSlug}>
                       {sourceError.source.owner}/{sourceError.source.repo}
                     </Text>
-                    .
+                    {sourceErrorParts.slice(1).join('')}
                   </Text>
                   <Text style={styles.sourceErrorMessage} numberOfLines={2}>
                     {sourceError.message}
@@ -153,13 +168,19 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Retry loading issues from ${sourceError.source.owner}/${sourceError.source.repo}`}
-                  style={styles.sourceErrorRetry}
+                  accessibilityLabel={t(
+                    'tasks.legacySurface.retryLoadingIssues',
+                    'Retry loading issues from {{source}}',
+                    { source: `${sourceError.source.owner}/${sourceError.source.repo}` }
+                  )}
+                  style={({ pressed }) => [styles.sourceErrorRetry, pressed && pressedStyle]}
                   disabled={loading || isRetrying}
                   onPress={() => void retryGitHubIssueSourceFetch(sourceError.repoPath)}
                 >
                   <Text style={styles.sourceErrorRetryText}>
-                    {isRetrying ? 'Retrying...' : 'Retry'}
+                    {isRetrying
+                      ? t('tasks.legacySurface.retrying', 'Retrying...')
+                      : t('common.retry', 'Retry')}
                   </Text>
                 </Pressable>
               </View>
@@ -174,18 +195,20 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         <View style={styles.projectDataNotice}>
           <AlertTriangle size={15} color={colors.statusAmber} />
           <Text style={styles.projectDataNoticeText}>
-            Sub-issue data is unavailable for your token.
+            {t(
+              'tasks.legacySurface.subIssueDataUnavailable',
+              'Sub-issue data is unavailable for your token.'
+            )}
           </Text>
         </View>
       ) : null}
 
-      {renderMobileTasksListSurface(model)}
+      {renderMobileTasksListSurface(model, colorScheme, bottomBarHeight)}
 
-      {/* Why: Tasks stacks sheets (an issue detail under Create Workspace or a confirm), and iOS
-          refuses a native modal over a presented sibling, so they share one Modal, ordered by zIndex. */}
+      {renderMobileTasksSearchControl(model, setSearchBarHeight)}
+
+      {/* iOS refuses stacked sibling native modals; layer Tasks sheets in one Modal by zIndex. */}
       <BottomDrawerModalHost>
-        {renderMobileTasksProviderPicker(model)}
-
         {renderMobileTasksRepoPicker(model)}
 
         {renderMobileTasksGitHubIssueSourcePicker(model)}
@@ -199,8 +222,6 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         {renderMobileTasksGitHubProjectPicker(model)}
 
         {renderMobileTasksGitHubProjectViewPicker(model)}
-
-        {renderMobileTasksGitHubProjectSortPicker(model)}
 
         {renderMobileTasksGitHubProjectFieldsPicker(model)}
 
@@ -218,15 +239,9 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
         {renderMobileTasksLinearStatusPicker(model)}
 
-        {renderMobileTasksLinearViewPicker(model)}
-
-        {renderMobileTasksLinearGroupPicker(model)}
-
-        {renderMobileTasksLinearOrderPicker(model)}
-
         {renderMobileTasksLinearDisplayPicker(model)}
 
-        {renderMobileTasksSortPicker(model)}
+        {renderMobileTasksFilterSheet(model)}
 
         {renderMobileTasksCreateDrawer(model)}
 
@@ -256,12 +271,15 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
         {renderMobileTasksProjectDetailDrawer(model)}
 
-        {renderMobileTasksItemDetailDrawer(model)}
+        <MobileTasksItemDetailDrawer model={model} />
 
         <ActionSheetModal
           visible={taskUiReady && mergeMethodProjectRow != null}
-          title="Merge method"
-          message="Choose how this pull request should be merged."
+          title={t('tasks.legacySurface.mergeMethodTitle', 'Merge method')}
+          message={t(
+            'tasks.legacySurface.pullRequestMergeMessage',
+            'Choose how this pull request should be merged.'
+          )}
           actions={
             mergeMethodProjectRow
               ? (['squash', 'merge', 'rebase'] as const).map((method) => ({
@@ -277,11 +295,17 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         />
         <ActionSheetModal
           visible={taskUiReady && mergeMethodTaskItem != null}
-          title="Merge method"
+          title={t('tasks.legacySurface.mergeMethodTitle', 'Merge method')}
           message={
             mergeMethodTaskItem?.provider === 'gitlab'
-              ? 'Choose how this merge request should be merged.'
-              : 'Choose how this pull request should be merged.'
+              ? t(
+                  'tasks.legacySurface.mergeRequestMergeMessage',
+                  'Choose how this merge request should be merged.'
+                )
+              : t(
+                  'tasks.legacySurface.pullRequestMergeMessage',
+                  'Choose how this pull request should be merged.'
+                )
           }
           actions={
             mergeMethodTaskItem
@@ -291,7 +315,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
                 ).map((method) => ({
                   label:
                     mergeMethodTaskItem.provider === 'gitlab' && method === 'merge'
-                      ? 'Merge'
+                      ? t('tasks.legacySurface.mergeAction', 'Merge')
                       : getHostedReviewMergeMethodLabel(method),
                   icon: GitBranch,
                   onPress: () => {
@@ -306,7 +330,9 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         <ConfirmModal
           visible={taskUiReady && pendingHostedMerge != null}
           title={
-            pendingHostedMerge?.item.provider === 'gitlab' ? 'Merge Request' : 'Merge Pull Request'
+            pendingHostedMerge?.item.provider === 'gitlab'
+              ? t('tasks.legacySurface.mergeRequestTitle', 'Merge Request')
+              : t('tasks.legacySurface.mergePullRequestTitle', 'Merge Pull Request')
           }
           message={
             pendingHostedMerge ? getHostedMergeConfirmMessage(pendingHostedMerge) : undefined
@@ -314,7 +340,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           confirmLabel={
             pendingHostedMerge
               ? getHostedReviewMergeMethodLabel(pendingHostedMerge.method)
-              : 'Merge'
+              : t('tasks.legacySurface.mergeAction', 'Merge')
           }
           onConfirm={() => {
             if (!taskUiReady || !pendingHostedMerge) {
@@ -326,7 +352,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         />
         <ConfirmModal
           visible={taskUiReady && pendingProjectGitHubMerge != null}
-          title="Merge Pull Request"
+          title={t('tasks.legacySurface.mergePullRequestTitle', 'Merge Pull Request')}
           message={
             pendingProjectGitHubMerge
               ? getProjectGitHubMergeConfirmMessage(pendingProjectGitHubMerge)
@@ -335,7 +361,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           confirmLabel={
             pendingProjectGitHubMerge
               ? getHostedReviewMergeMethodLabel(pendingProjectGitHubMerge.method)
-              : 'Merge'
+              : t('tasks.legacySurface.mergeAction', 'Merge')
           }
           onConfirm={() => {
             if (!taskUiReady || !pendingProjectGitHubMerge) {
@@ -353,7 +379,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           title={
             pendingHostedStateChange
               ? getHostedStateConfirmTitle(pendingHostedStateChange)
-              : 'Update Item'
+              : t('tasks.legacySurface.updateItemTitle', 'Update Item')
           }
           message={
             pendingHostedStateChange
@@ -363,7 +389,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           confirmLabel={
             pendingHostedStateChange
               ? getHostedStateConfirmLabel(pendingHostedStateChange)
-              : 'Confirm'
+              : t('common.confirm', 'Confirm')
           }
           destructive={pendingHostedStateChange?.nextState === 'closed'}
           onConfirm={() => {

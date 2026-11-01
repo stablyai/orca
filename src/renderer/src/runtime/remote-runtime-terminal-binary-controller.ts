@@ -96,8 +96,7 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
         : decodeTerminalStreamText(frame.payload)
     const deliverOutput = (): void => {
       if (!validSpan) {
-        // Why: rendering malformed span JSON would expose protocol framing
-        // as terminal text and lose its raw sequence accounting.
+        // Malformed span JSON is framing, not terminal text; rendering it also corrupts raw sequence accounting.
         this.requestResyncSnapshot(stream)
         return
       }
@@ -106,8 +105,7 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
           ? span.rawLength
           : data.length
       const seq = typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined
-      // Why: older servers replay snapshot-covered buffered chunks after a
-      // requested recovery; rendering them would duplicate the recovered tail.
+      // Older servers replay snapshot-covered chunks; ignore them or duplicate recovered output.
       if (
         typeof seq === 'number' &&
         typeof stream.recoverySnapshotSeq === 'number' &&
@@ -116,9 +114,7 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
         return
       }
       const resyncInFlight = stream.resyncInFlight
-      // Why: keep painting while recovery is in flight — gating froze the pane for
-      // the whole round trip (#18488); the snapshot replaces the screen when it lands.
-      // expectedSeq stays at the gap so a recovery that never lands can still be retried.
+      // Keep live paint during recovery to avoid round-trip freezes (#18488). Keep expectedSeq at the gap so missing recovery remains retryable.
       if (
         !resyncInFlight &&
         !stream.pausedOutputGapExpected &&

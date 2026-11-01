@@ -26,8 +26,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -78,67 +80,6 @@ describe('AgentBrowserBridge', () => {
     })
     bridge = new AgentBrowserBridge(mockBrowserManager())
     bridge.setActiveTab(100)
-  })
-
-  it('clears reload fallback timer after the load event settles', async () => {
-    vi.useFakeTimers()
-    try {
-      succeedWith(null)
-      const wc = {
-        ...mockWebContents(100, 'https://reloaded.example', 'Reloaded'),
-        reload: vi.fn(),
-        on: vi.fn(),
-        removeListener: vi.fn()
-      }
-      webContentsFromIdMock.mockReturnValue(wc)
-
-      const result = bridge.reload()
-
-      await vi.waitFor(() => {
-        expect(wc.on).toHaveBeenCalledWith('did-finish-load', expect.any(Function))
-      })
-
-      const finishListener = wc.on.mock.calls.find(
-        ([event]) => event === 'did-finish-load'
-      )?.[1] as (() => void) | undefined
-      const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
-        | (() => void)
-        | undefined
-      expect(finishListener).toBeDefined()
-      expect(failListener).toBeDefined()
-      expect(vi.getTimerCount()).toBe(1)
-
-      finishListener!()
-
-      await expect(result).resolves.toEqual({
-        url: 'https://reloaded.example',
-        title: 'Reloaded'
-      })
-      expect(wc.removeListener).toHaveBeenCalledWith('did-finish-load', finishListener)
-      expect(wc.removeListener).toHaveBeenCalledWith('did-fail-load', failListener)
-      expect(vi.getTimerCount()).toBe(0)
-
-      await vi.advanceTimersByTimeAsync(10_000)
-      expect(wc.removeListener).toHaveBeenCalledTimes(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  // ── goto command ──
-
-  it('navigates the registered webContents without spawning agent-browser', async () => {
-    const wc = mockWebContents(100, 'https://example.com/start', 'Example')
-    webContentsFromIdMock.mockReturnValue(wc)
-
-    await expect(bridge.goto('https://example.com/next')).resolves.toEqual({
-      url: 'https://example.com/next',
-      title: 'Example'
-    })
-
-    expect(wc.loadURL).toHaveBeenCalledWith('https://example.com/next')
-    expect(wc.isLoading).not.toHaveBeenCalled()
-    expect(execFileMock).not.toHaveBeenCalled()
   })
 
   it('preserves scheme-less navigation semantics at the direct WebContents boundary', async () => {
@@ -473,6 +414,30 @@ describe('AgentBrowserBridge', () => {
       message: 'ReferenceError: missingValue is not defined'
     })
     expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('frees the page queue when callers leave a never-settling evaluation', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand
+      .mockReturnValueOnce(new Promise(() => {}))
+      .mockResolvedValue({ result: { value: 'example.com' } })
+    webContentsFromIdMock.mockReturnValue(wc)
+    const hungCaller = new AbortController()
+    const queuedCaller = new AbortController()
+
+    const hung = bridge.evaluate('new Promise(() => {})', undefined, undefined, hungCaller.signal)
+    const queued = bridge.evaluate('sideEffect()', undefined, undefined, queuedCaller.signal)
+    const next = bridge.evaluate('location.host')
+    queuedCaller.abort()
+    hungCaller.abort()
+
+    await expect(hung).rejects.toThrow()
+    await expect(queued).rejects.toThrow()
+    await expect(next).resolves.toMatchObject({ result: 'example.com' })
+    expect(wc.debugger.sendCommand).not.toHaveBeenCalledWith(
+      'Runtime.evaluate',
+      expect.objectContaining({ expression: 'sideEffect()' })
+    )
   })
 
   it('fails closed when the registered webContents debugger is stale', async () => {

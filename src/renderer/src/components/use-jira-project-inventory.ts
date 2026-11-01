@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { JiraProject } from '../../../shared/jira-types'
+import type { JiraProject } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'

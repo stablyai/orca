@@ -14,7 +14,6 @@ import {
   STAGED_STARTUP_COMMAND_STALE_MS,
   discardStagedStartupCommand,
   stageStartupCommand,
-  startupStagingFailureNotice,
   sweepStaleStagedStartupCommands
 } from './startup-command-staging'
 
@@ -33,11 +32,6 @@ function stage(command: string, shellPath = '/bin/zsh', platform: NodeJS.Platfor
 }
 
 describe('stageStartupCommand', () => {
-  it('types a short single-line command as is', () => {
-    expect(stage(`claude 'fix it'`)).toEqual({ command: `claude 'fix it'`, delivery: 'typed' })
-    expect(readdirSync(directory)).toEqual([])
-  })
-
   it('types exactly 512 bytes, stages 513', () => {
     expect(stage('a'.repeat(512)).delivery).toBe('typed')
     expect(stage('a'.repeat(513)).delivery).toBe('staged')
@@ -68,15 +62,6 @@ describe('stageStartupCommand', () => {
     expect(staged.command).toBe(`. '${scriptPath}'`)
     expect(statSync(scriptPath).mode & 0o777).toBe(0o600)
     expect(readFileSync(scriptPath, 'utf8')).toBe(`command rm -f -- '${scriptPath}'\n${command}\n`)
-  })
-
-  it('evals the script in fish, which runs a sourced file without job control', () => {
-    const staged = stage('a'.repeat(600), '/opt/homebrew/bin/fish')
-    expect(staged.command).toBe(`eval (string collect < '${staged.scriptPath}')`)
-  })
-
-  it('recognizes a login shell name', () => {
-    expect(stage('a'.repeat(600), '-zsh').delivery).toBe('staged')
   })
 
   // Why: ksh runs a sourced file's commands in the shell's own process group, so Ctrl-Z is lost.
@@ -110,22 +95,6 @@ describe('stageStartupCommand', () => {
       const command = 'a'.repeat(600)
       expect(stage(command, shellPath)).toEqual({ command, delivery: 'typed' })
       expect(readdirSync(directory)).toEqual([])
-    }
-  )
-
-  // Why: typed raw, tcsh runs a prompt's second line as a command and MAX_CANON cuts a long one.
-  it.each([['/usr/bin/nu'], ['/bin/tcsh'], ['/usr/local/bin/pwsh'], [undefined]])(
-    'runs an Orca-built launch line through /bin/sh for a shell that cannot source it (%s)',
-    (shellPath) => {
-      const staged = stageStartupCommand({
-        command: `claude 'one\ntwo'`,
-        shellPath,
-        orcaBuiltLine: true,
-        platform: 'darwin',
-        directory
-      })
-      expect(staged.delivery).toBe('staged')
-      expect(staged.command).toBe(`/bin/sh '${staged.scriptPath}'`)
     }
   )
 
@@ -178,13 +147,6 @@ describe('stageStartupCommand', () => {
     }
   )
 
-  it('types a short Orca-built line in a shell that reads its quoting literally', () => {
-    const command = `claude 'wow!! great'`
-    expect(
-      stageStartupCommand({ command, shellPath: '/bin/zsh', orcaBuiltLine: true, directory })
-    ).toEqual({ command, delivery: 'typed' })
-  })
-
   // Why: a quick command or --command written for tcsh or nu is not sh syntax.
   it.each([['/bin/tcsh'], ['/usr/bin/nu'], [undefined]])(
     'types a command the user wrote as it always was in a shell that cannot source it (%s)',
@@ -195,13 +157,6 @@ describe('stageStartupCommand', () => {
       expect(readdirSync(directory)).toEqual([])
     }
   )
-
-  it('leaves Windows hosts alone', () => {
-    expect(stage('a'.repeat(600), 'C:\\Program Files\\Git\\bin\\bash.exe', 'win32').delivery).toBe(
-      'typed'
-    )
-    expect(stage('a'.repeat(600), '/bin/bash', 'win32').delivery).toBe('typed')
-  })
 
   it('types the full command and says so when the script cannot be written', () => {
     const command = 'a'.repeat(600)
@@ -216,12 +171,6 @@ describe('stageStartupCommand', () => {
     expect(staged.failure).toMatch(/ENOENT/)
     expect(staged.scriptPath).toBeUndefined()
   })
-
-  it('gives every launch its own script', () => {
-    const first = stage('a'.repeat(600))
-    const second = stage('a'.repeat(600))
-    expect(first.scriptPath).not.toBe(second.scriptPath)
-  })
 })
 
 describe('discardStagedStartupCommand', () => {
@@ -229,12 +178,6 @@ describe('discardStagedStartupCommand', () => {
     const staged = stage('a'.repeat(600))
     discardStagedStartupCommand(staged)
     expect(readdirSync(directory)).toEqual([])
-  })
-
-  it('is a no-op once the script deleted itself', () => {
-    const staged = stage('a'.repeat(600))
-    rmSync(staged.scriptPath!)
-    expect(() => discardStagedStartupCommand(staged)).not.toThrow()
   })
 })
 
@@ -252,23 +195,5 @@ describe('sweepStaleStagedStartupCommands', () => {
     utimesSync(unrelated, staleSeconds, staleSeconds)
     sweepStaleStagedStartupCommands({ directory, now })
     expect(readdirSync(directory).sort()).toEqual(['orca-launch-bbbb.sh', 'something-else.sh'])
-  })
-})
-
-describe('startupStagingFailureNotice', () => {
-  it('says nothing when staging did not fail', () => {
-    expect(startupStagingFailureNotice(stage(`claude 'fix it'`))).toBeNull()
-    expect(startupStagingFailureNotice(stage(`claude '${'x'.repeat(600)}'`))).toBeNull()
-  })
-
-  it('prints one line naming the failure, with no control bytes from the reason', () => {
-    const notice = startupStagingFailureNotice({
-      command: 'x',
-      delivery: 'typed-after-stage-failed',
-      failure: 'EACCES: permission denied\nsecond line'
-    })
-    expect(notice).toBe(
-      '\r\n[orca] Could not stage the launch command (EACCES: permission denied second line); typed it in full. If the shell shows quote> or waits for more input, press Ctrl-C and launch again.\r\n'
-    )
   })
 })

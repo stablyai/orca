@@ -19,7 +19,7 @@ const ACTIVE_SAMPLE_INTERVAL_MS = 5_000
 const IDLE_SAMPLE_INTERVAL_MS = 30_000
 const MAX_REPORTED_TRIPS = 5
 
-/** pid/ppid rows from a child process (POSIX `ps`) or the native Windows table; null when unreadable. */
+/** Return null when process inventory cannot be read. */
 export async function readDaemonProcessRows(): Promise<ProcessRow[] | null> {
   try {
     if (process.platform === 'win32') {
@@ -33,9 +33,8 @@ export async function readDaemonProcessRows(): Promise<ProcessRow[] | null> {
 
 type DaemonProcessGrowthMonitorOptions = {
   listSessions: () => readonly { sessionId: string; pid: number | null }[]
-  /** Samples fast while automatic work started recently, slowly otherwise. */
   recentAutomaticWork: () => boolean
-  /** Why: an observe-only host has nothing to protect, so it pays for `ps` only around restores. */
+  /** Avoid idle process-table reads on observe-only hosts. */
   sampleWhenIdle: boolean
   onLevelChanged: (level: HostPressureLevel) => void
   onTrip: (trips: readonly ProcessGrowthTrip[]) => void
@@ -45,10 +44,7 @@ type DaemonProcessGrowthMonitorOptions = {
   now?: () => number
 }
 
-/**
- * Watches the daemon's descendant tree, per terminal and in total. It never kills:
- * a trip only closes admission of automatic work and reports which terminals grew.
- */
+/** Report descendant growth to admission control without killing processes. */
 export class DaemonProcessGrowthMonitor {
   private readonly state = createProcessGrowthState()
   private readonly limits: ProcessGrowthLimits
@@ -131,8 +127,7 @@ export class DaemonProcessGrowthMonitor {
     if (this.stopped) {
       return
     }
-    // Why rising samples fast: a growing tree is confirmed over several short samples, never
-    // tripped on one long idle interval; a merely large tree keeps the slow cadence.
+    // Confirm growth with short samples; a large tree alone keeps the slow cadence.
     const confirming = this.rising || this.currentLevel === 'critical'
     const delayMs =
       this.options.recentAutomaticWork() || confirming

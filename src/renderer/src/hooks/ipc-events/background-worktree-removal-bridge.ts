@@ -14,8 +14,7 @@ import {
 type HostMarkedRow = Pick<Worktree, 'id' | 'hostId'>
 type AppStoreApi = Pick<typeof useAppStore, 'getState' | 'setState'>
 
-// Delete states this bridge set from a host marker, keyed like deleteStateByWorktreeId. A state the
-// local delete flow set is left to that flow.
+// Track only host-marker delete state; locally initiated flows retain their own state.
 const hostMarkedDeleteStates = new Map<string, HostMarkedRow>()
 // Errors this bridge set from a row's `removalError`, cleared once the host stops listing it failed.
 const hostFailedDeleteStates = new Map<string, HostMarkedRow & { error: string }>()
@@ -48,11 +47,7 @@ function showHostFailure(store: AppStoreApi, row: Worktree & { removalError: str
   showDeleteError(store, row, row.removalError)
 }
 
-/**
- * Shows the existing Deleting card while the host lists a row as removing, for views that did not
- * ask for the delete. The row leaving means it finished; the row returning unmarked means it did
- * not, and a row the host lists with `removalError` shows that error until Delete retries it.
- */
+/** Mirror host removal markers into Deleting/error cards: disappearing rows finished, while unmarked returns did not; retain reported errors until retry. */
 export function reconcileHostWorktreeRemovals(store: AppStoreApi = useAppStore): void {
   settleHostWorktreeRemovals()
   const listed = new Map<string, Worktree>()

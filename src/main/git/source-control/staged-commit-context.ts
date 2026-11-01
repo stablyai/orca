@@ -37,7 +37,7 @@ export async function getStagedCommitContext(
     if (!isMaxBufferOverflowError(error)) {
       throw error
     }
-    // Why: staged patch is optional context (truncated later anyway); degrade to file-name summary rather than fail.
+    // Oversized patches are optional context; retain the file summary instead of failing.
     console.warn(
       '[git] Staged patch too large to read; using file summary only:',
       describeMaxBufferOverflowError(error)

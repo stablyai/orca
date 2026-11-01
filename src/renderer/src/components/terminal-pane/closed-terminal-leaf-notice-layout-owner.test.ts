@@ -17,8 +17,7 @@ afterEach(() => {
 })
 
 describe('a pane main closed before its tab mounted, in a layout-owner build', () => {
-  // Main writes and starts every split itself, so no split waits in the window to mount the pane:
-  // the tab mounts from main's layout, which no longer holds it.
+  // Main-owned splits mount from frames; once main removes the leaf, no window-side deferred mount may remain.
   it('leaves nothing waiting to mount it, and drops it from a mounted tab as before', () => {
     const target = new EventTarget()
     vi.stubGlobal('window', target)

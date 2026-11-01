@@ -4,7 +4,10 @@ import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { normalizeRuntimePathSeparators } from '../../../../../../shared/cross-platform-path'
+import {
+  isCaseInsensitiveRuntimeRoot,
+  normalizeRuntimePathSeparators
+} from '../../../../../../shared/cross-platform-path'
 
 /** The physical file an edit tab shows. Renderer-local; the workspace is never part of it. */
 export type EditorBufferIdentity = {
@@ -13,11 +16,7 @@ export type EditorBufferIdentity = {
   environmentId: string | null
 }
 
-/**
- * Case is kept, because case sensitivity can differ per directory and a folded key would merge
- * distinct files. Why not `normalizeRuntimePathForComparison`: it lowercases whole Windows paths.
- * `windows` (the local Windows client only) also reads a `//` path as UNC.
- */
+/** Preserve path case: sensitivity can differ per directory and normalizeRuntimePathForComparison folds all Windows paths. Only local Windows clients interpret // as UNC. */
 export function editorBufferPathKey(filePath: string, windows: boolean): string {
   // Absolute POSIX paths start with `/`, so a drive or `\\` prefix proves Windows. `//` does not.
   const drive = /^[A-Za-z]:[\\/]/.test(filePath)
@@ -36,6 +35,13 @@ export function editorBufferPathKey(filePath: string, windows: boolean): string 
     : `${slashed.slice(0, serverEnd).toLowerCase()}${slashed.slice(serverEnd)}`
 }
 
+/** Path key for matching external changes under a root: drive/`\\` roots fold like buffer identity, `//` and WSL stay byte-exact. */
+export function externalChangePathKeyFor(rootPath: string): (filePath: string) => string {
+  return isCaseInsensitiveRuntimeRoot(rootPath)
+    ? (filePath) => editorBufferPathKey(filePath, false)
+    : (filePath) => filePath
+}
+
 type EditorPathOwner = { environmentId: string | null; hostId: string | null }
 
 /** The owner is this machine and this client is the local Windows desktop app. */
@@ -52,14 +58,7 @@ export function editorBufferOwnerPathKey(filePath: string, owner: EditorPathOwne
   return editorBufferPathKey(filePath, isLocalWindowsEditorOwner(owner))
 }
 
-/**
- * Null for non-edit views and unresolved owners. SSH files are keyed by connection target; a
- * retarget is caught by the guarded save.
- *
- * The key is not fixed for a live tab: an unpinned runtime tab resolves its pairing live (null
- * before the revision registry loads, the newest proven revision after). A caller must treat a key
- * change as a re-key or join of the existing record, never as a fresh record.
- */
+/** Null for nonedit/unresolved owners; SSH uses target identity plus guarded-save retarget checks. Unpinned runtime keys follow live proven pairing revisions; changed keys must rekey/join existing records, never discard them as fresh. */
 export function editorBufferIdentityOf(
   file: OpenFile,
   state: WorktreeOperationRouteState
@@ -91,21 +90,20 @@ export function editorBufferIdentityOf(
   }
 }
 
-/**
- * True when the identity's environment now names another machine. Pass the ids from one
- * `onRuntimeEnvironmentsRetired` event, not a long-lived list: a retired id can be re-paired.
- */
+export function editorSaveResourceKey(
+  file: OpenFile,
+  state: WorktreeOperationRouteState
+): string | null {
+  const identity = editorBufferIdentityOf({ ...file, mode: 'edit' }, state)
+  return identity
+    ? JSON.stringify([file.mode, file.mirroredFromRuntimeSession === true, identity.key])
+    : null
+}
+
+/** Check one retirement event’s IDs for machine replacement; long-lived lists become stale when IDs are re-paired. */
 export function isEditorBufferIdentityRetired(
   identity: EditorBufferIdentity,
   retiredEnvironmentIds: readonly string[]
 ): boolean {
   return identity.environmentId !== null && retiredEnvironmentIds.includes(identity.environmentId)
-}
-
-/**
- * A record id no identity key can equal. Records on a retired environment move here and are never
- * merged into the replacement machine's records, even with an identical path and baseline.
- */
-export function detachedEditorBufferId(viewId: string): string {
-  return `detached:${viewId}`
 }

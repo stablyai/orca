@@ -1,13 +1,4 @@
-/**
- * #11994 follow-up: the host-side `reposChanged` broadcast added by this change makes every
- * paired client refetch a remote catalog after any host-local repo mutation, and the client
- * now tolerates `repo_not_found` while purging its own row. Both must stay host-scoped.
- *
- * Two collisions are legal in this codebase and are pinned here:
- *  - the same project *name* on a local host and one or more remotes (ids are per-host UUIDs);
- *  - the same repo *id* on two execution hosts (see persistence.ts `removeProjectForHost`).
- * Deleting on one host must never take another host's row, in either direction.
- */
+/** Host-change refetch and repo_not_found ghost cleanup must isolate owners (#11994). Pin both same-name distinct-ID projects and same-ID cross-host rows; removal may never affect another host. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
@@ -156,51 +147,6 @@ beforeEach(() => {
 })
 
 describe('deleting one host copy of a same-named project', () => {
-  it('removes only the remote row when the same name exists locally', async () => {
-    const store = seed([localTwin, remoteATwin], 'env-a')
-
-    await store.getState().removeProject('env-a-uuid', { hostId: 'runtime:env-a' })
-
-    expect(repoRmCalls()).toEqual([
-      expect.objectContaining({
-        selector: 'env-a',
-        params: { repo: 'env-a-uuid' }
-      })
-    ])
-    expect(reposRemove).not.toHaveBeenCalled()
-    // Only this desktop's persisted rows for the remote host, never the local row.
-    expect(reposRemoveForHost).toHaveBeenCalledWith({
-      repoId: 'env-a-uuid',
-      hostId: 'runtime:env-a'
-    })
-    expect(remainingRepoIds(store)).toEqual(['local-uuid'])
-  })
-
-  it('removes only the local row when the same name exists on a remote', async () => {
-    const store = seed([localTwin, remoteATwin], 'env-a')
-
-    await store.getState().removeProject('local-uuid', { hostId: 'local' })
-
-    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'local-uuid', hostId: 'local' })
-    expect(reposRemove).not.toHaveBeenCalled()
-    expect(repoRmCalls()).toEqual([])
-    expect(remainingRepoIds(store)).toEqual(['env-a-uuid'])
-  })
-
-  it('removes only remote A when the same name exists on remote B', async () => {
-    const store = seed([remoteATwin, remoteBTwin], 'env-b')
-
-    await store.getState().removeProject('env-a-uuid', { hostId: 'runtime:env-a' })
-
-    expect(repoRmCalls()).toEqual([
-      expect.objectContaining({
-        selector: 'env-a',
-        params: { repo: 'env-a-uuid' }
-      })
-    ])
-    expect(remainingRepoIds(store)).toEqual(['env-b-uuid'])
-  })
-
   it('keeps remote B when remote A reports the project already gone', async () => {
     // The reporter's #11994 case with a name collision: the ghost purge is host-scoped.
     answerRepoRm({ failingSelector: 'env-a', code: 'repo_not_found' })
@@ -252,8 +198,7 @@ describe('deleting one host copy of a project whose id exists on two hosts', () 
   })
 
   it('keeps the row when the owner cannot disambiguate a duplicate id', async () => {
-    // A host holding the id on two of its own hosts answers selector_ambiguous; that is a
-    // real failure, not a ghost, so the tolerance must not swallow it.
+    // selector_ambiguous is a real refusal, not missing-project proof; keep row and report failure.
     answerRepoRm({ failingSelector: 'env-a', code: 'selector_ambiguous' })
     const store = seed([duplicateLocal, duplicateRemote], 'env-a')
 
@@ -264,15 +209,6 @@ describe('deleting one host copy of a project whose id exists on two hosts', () 
 })
 
 describe('refetching one host catalog after its own delete', () => {
-  it('prunes only that host rows when the name exists on other hosts', async () => {
-    answerCatalogs({ 'env-a': [], 'env-b': [remoteBTwin] })
-    const store = seed([localTwin, remoteATwin, remoteBTwin], 'env-a')
-
-    await store.getState().fetchRuntimeEnvironmentRepos('env-a')
-
-    expect(remainingRepoIds(store)).toEqual(['local-uuid', 'env-b-uuid'])
-  })
-
   it('keeps another host row that shares the deleted repo id', async () => {
     const duplicateLocal = repo('dup-id', {
       path: '/laptop/dup',

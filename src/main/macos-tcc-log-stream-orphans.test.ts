@@ -30,7 +30,7 @@ describe('findOrphanedTccLogStreams', () => {
         row(11, 4321),
         row(12, 1, '/usr/bin/log stream --predicate subsystem == "com.apple.TCC" --style compact'),
         row(13, 1, '/usr/bin/log show --last 1m'),
-        // A pid recycled between the args and comm sweeps, or an unreadable comm.
+        // Simulate PID reuse between argv and executable snapshots, plus unreadable executable identity.
         row(14, 1, LEGACY_ARGS, '/usr/bin/yes'),
         row(15, 1, LEGACY_ARGS, '')
       ]).map((match) => match.pid)

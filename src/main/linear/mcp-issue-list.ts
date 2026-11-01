@@ -15,10 +15,7 @@ import { resolveWorkspaceSelector } from './issue-context/workspaces'
 import { encodeIssueListCursor, resolveIssueListCursor } from './mcp-issue-list-cursor'
 import { buildIssueFilter } from './mcp-issue-list-filter'
 
-// Why: `--limit` is opt-in, so the default read walks every page instead of quietly cutting
-// the answer off. Linear caps `first` at 250. The budget and page ceiling are backstops, not
-// caps: the CLI abandons an RPC at 60s, so a walk that would outlive it has to stop early and
-// say `truncated` with a continuation cursor rather than fail the whole command.
+// Without --limit, page until completion or safety bounds; return truncation before the CLI RPC deadline.
 const LIST_ISSUES_PAGE_SIZE = 250
 const LIST_ISSUES_MAX_PAGES = 200
 const LIST_ISSUES_READ_BUDGET_MS = 20_000
@@ -36,7 +33,7 @@ type WorkspaceIssuePage = {
   nextCursor?: string
 }
 
-// limit null means unbounded; the deadline still applies.
+// A null limit removes the caller cap; deadline and page bounds still apply.
 type IssueListReadBudget = { limit: number | null; deadline: number }
 
 const LIST_ISSUES_QUERY = `
@@ -80,7 +77,7 @@ export async function listMcpIssues(
     cursor: pagination.linearCursor,
     workspaceId: pagination.workspaceId
   }
-  // One deadline for the whole call, so fanning out over many workspaces cannot multiply it.
+  // Share one deadline across fan-out so workspace count cannot multiply the budget.
   const deadline = Date.now() + LIST_ISSUES_READ_BUDGET_MS
   const { pages, failures } = await readIssueListWorkspaces(
     entries,
@@ -218,7 +215,6 @@ async function readIssueListWorkspace(
   return { issues, hasMore, nextCursor }
 }
 
-// null means unbounded: read until Linear stops handing out pages.
 function resolveLimit(limit: number | undefined): number | null {
   return limit === undefined ? null : Math.max(1, Math.floor(limit))
 }

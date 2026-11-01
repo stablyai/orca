@@ -16,10 +16,11 @@ it('rebuilds only after a canonical nonzero completed exit, at most twice', asyn
     ['codex', 1, canonical, false]
   ] as const) {
     const result = { exitCode, stdout: '', stderr }
-    const run = vi.fn(async (_strictMcp: boolean) => result)
+    const retryResult = { ...result, stdout: 'retry output' }
+    const run = vi.fn(async (strictMcp: boolean) => (strictMcp ? result : retryResult))
     expect(
       await runClaudeBackgroundAttempts({ agentId, run, failedExit: (outcome) => outcome })
-    ).toBe(result)
+    ).toBe(eligible ? retryResult : result)
     expect(run.mock.calls).toEqual(eligible ? [[true], [false]] : [[true]])
   }
 })

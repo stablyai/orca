@@ -14,9 +14,7 @@ import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 
-// A live terminal main has not placed yet, with no sleeping record: the window's activation
-// finds no tab and asks main for the workspace's first one while main's placement is still
-// reading the host census. The workspace must end with the live terminal's tab only.
+// Activation must await main's in-flight placement census so the existing live terminal becomes the first tab without an extra shell.
 
 const WT = FIXTURE_GIT_WORKTREE_ID
 const LIVE_PTY = `${WT}@@live`

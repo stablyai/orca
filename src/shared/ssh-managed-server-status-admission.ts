@@ -19,7 +19,7 @@ import {
 import { clampUtf8TextPrefix } from './utf8-byte-limits'
 import { isNodeDistMirrorAttempt } from './node-dist-mirror'
 
-// Why field-by-field like plainSsh: an unknown kind from a newer host drops alone.
+// Drop an unknown kind alone so newer-host fields do not discard the whole retained state.
 export function admitSshManagedServerStatus(value: unknown): {
   managedServer?: SshManagedServerStatus
 } {
@@ -94,7 +94,7 @@ export function admitSshManagedServerStatus(value: unknown): {
   }
 }
 
-// Why alone: an unknown mirror state from a newer build drops to the plain try-again line.
+// Unknown mirror state degrades only its note to the plain retry line.
 function admitNodeDownloadBlocked(value: unknown): {
   nodeDownloadBlocked?: SshManagedServerNodeDownloadBlocked
 } {
@@ -135,7 +135,7 @@ function admitSshManagedServerLinkedProjects(value: unknown): {
   return linked.length > 0 ? { linked } : {}
 }
 
-// Why alone: an unknown note from a newer host drops without hiding that the host is managed.
+// Unknown update notes must not hide managed-host identity.
 function admitSshManagedServerUpdateNote(value: unknown): { update?: SshManagedServerUpdateNote } {
   if (!value || typeof value !== 'object' || !('state' in value)) {
     return {}

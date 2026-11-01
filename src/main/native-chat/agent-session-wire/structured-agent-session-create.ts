@@ -1,20 +1,23 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
-import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session-definitive-refusal'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   refuse,
-  type AgentSessionAttachResult,
-  type AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+  isAgentSessionRefusalError
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type {
+  AgentSessionAttachResult,
+  AgentSessionMutationResult
+} from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { journalOpenRefusalError } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { reserveRequestFor, type AgentSessionAttachParams } from './structured-agent-session-attach'
 import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'
 import {
-  prepareAdoptedTranscript,
+  prepareCreateTranscript,
   importAdoptedTranscript
 } from './structured-agent-session-adopted-import'
 import {
@@ -30,18 +33,16 @@ import { observedReceipt } from './structured-agent-session-operation-settlement
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import { openingMessageOptions } from './structured-agent-session-execution-options'
 
 export type StructuredAgentSessionCreateOptions = {
-  firstMessage?: { clientMessageId: string; body: AgentJournalMessageItem }
+  firstMessage?: StructuredAgentSessionFirstMessage
   hostLaunchDirectory?: string
-  /** The saved list the chat's options are admitted against, for the folder its picker read. */
   catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
-  /** Called after the durable create, before delivery can start the agent. */
+  /** Publish after durable creation, before agent delivery starts. */
   publishTab?: () => Promise<void>
 }
 
-/** Founds a chat and its opening message; only the delivery loop acquires the agent. */
 export function createStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
   callerKey: string,
@@ -157,7 +158,7 @@ async function foundConversation(
   }
   const prepared = replayed
     ? { ok: true as const, items: null }
-    : await prepareAdoptedTranscript(params)
+    : await prepareCreateTranscript(context, params)
   if (!prepared.ok) {
     const { refusal } = prepared
     return {
@@ -170,16 +171,17 @@ async function foundConversation(
   const existing = context.sessions.get(sessionId)
   const opened = existing
     ? { session: existing }
-    : await openStructuredAgentSessionConversationJournal(deps, candidate.record).catch(
-        (error: unknown) => {
-          deps.logger.warn('opening the journal of a new chat failed', {
-            scope: 'create-journal-open',
-            sessionId,
-            error
-          })
-          throw journalOpenRefusalError(error)
-        }
-      )
+    : await openStructuredAgentSessionConversationJournal(
+        deps,
+        agentSessionConversationView(candidate.record)
+      ).catch((error: unknown) => {
+        deps.logger.warn('opening the journal of a new chat failed', {
+          scope: 'create-journal-open',
+          sessionId,
+          error
+        })
+        throw journalOpenRefusalError(error)
+      })
   const { session } = opened
   const fence = candidate.record.lease.runtimeFence
   let committed = replayed
@@ -212,14 +214,12 @@ async function foundConversation(
           },
           {
             ...first,
-            payloadFingerprint: computeAgentSessionPayloadFingerprint({
-              method: 'agentSession.send',
-              sessionId,
-              fields: { body: first.body }
-            }),
+            payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, first.body),
             origin: 'client',
             source: { kind: 'user' },
-            ...openingMessageOptions(candidate.record.options)
+            ...(first.selection === undefined
+              ? openingMessageOptions(candidate.record.options)
+              : {})
           }
         )
         if (!sent.ok) {
@@ -281,7 +281,6 @@ async function foundConversation(
   }
 }
 
-/** Host entry points that open a chat: attach an existing one or create a new one. */
 export function structuredAgentSessionEntryDelegates(
   context: () => StructuredAgentSessionAttachContext
 ) {
@@ -297,13 +296,4 @@ export function structuredAgentSessionEntryDelegates(
       options?: StructuredAgentSessionCreateOptions
     ) => createStructuredAgentSession(context(), caller.callerKey, params, options)
   }
-}
-
-/** The model and effort the chat was created with, which its opening message runs on as a send's
- *  carried ones do. */
-function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
-  options?: AgentSessionExecutionOptions
-} {
-  const { model, effort } = options ?? {}
-  return model ? { options: { model, ...(effort ? { effort } : {}) } } : {}
 }

@@ -58,8 +58,6 @@ export async function createReservedBrowserClientPage(
     if (route.key !== event.command.executionHostKey) {
       throw new BrowserClientPageCommandError('browser_client_page_execution_host_stale')
     }
-    // The started route proves this generation is current, so any page still holding an older key
-    // for the same host owns a fenced tunnel and the partition's previous proxy endpoint.
     await dependencies.retireSupersededExecutionHostPages(route)
     assertBrowserClientPageCommandNotAborted(signal)
     assertAvailable()
@@ -115,7 +113,7 @@ export async function createReservedBrowserClientPage(
     if (!dependencies.routeWebContents.grantNavigation(registration)) {
       throw new BrowserClientPageCommandError('browser_client_page_navigation_grant_failed')
     }
-    // Before the first navigation: a download can start on it, and an unbound page cannot own one.
+    // Bind before navigation so downloads can resolve their owning page immediately.
     dependencies.guestBinding.bind({
       registration,
       browserProfileId: event.command.browserProfileId

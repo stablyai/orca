@@ -8,18 +8,7 @@ import type { StoreRuntimeState } from './store-runtime-state'
 
 type TerminalBindingRecoveryOperationsRuntime = Pick<StoreRuntimeState, 'state'>
 
-/**
- * `terminated` is the only lease state that withdraws a pane binding. It is the operator-close
- * state, and the one written after a host-acknowledged stop.
- *
- * `expired` is deliberately not death: every writer of it records that the CLIENT lost its route —
- * a superseded sibling, a recycled relay id, a persistPtyBinding refusal, a failed reattach, a
- * relay reset — and `docs/reference/ssh-execution-boundary.md` grades all of those `unverifiable`.
- * Refusing the binding there strands a remote shell that is still running behind a pane that can no
- * longer reach it. Keeping it authorizes a reattach ATTEMPT, never a respawn: when the shell really
- * is gone, `attachStablePaneOwner` retires the binding on the relay's own absence answer and falls
- * through to a fresh spawn.
- */
+/** Expired means lost route, not exit: retain binding for reattach. Only terminated withdraws it. */
 function sshRemotePtyLeaseWithdrawsBinding(lease: SshRemotePtyLease): boolean {
   return lease.state === 'terminated'
 }
@@ -81,7 +70,7 @@ export class TerminalBindingRecoveryOperations {
     if (lease.ptyId !== bindingPtyId) {
       return false
     }
-    // Why: remote PTY ids are scoped to a relay target; require stored lease context to match so missing fields don't tombstone unrelated panes.
+    // Relay-local PTY IDs require matching target context to avoid retiring unrelated panes.
     return (
       (binding.targetId === undefined ||
         binding.targetId === null ||

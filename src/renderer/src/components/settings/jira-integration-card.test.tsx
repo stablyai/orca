@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { setRendererUiLanguage } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { JiraIntegrationCard } from './jira-integration-card'
 
@@ -93,13 +93,13 @@ describe('JiraIntegrationCard account scope', () => {
     container?.remove()
     container = null
     mocks.store.current = null
-    await setRendererUiLanguage('en')
+    await i18n.changeLanguage(await loadRendererUiLanguage('en'))
   })
 
   it.each(['en', 'ko'] as const)(
     'renders complete %s connection counts without an English suffix',
     async (language) => {
-      await setRendererUiLanguage(language)
+      await i18n.changeLanguage(await loadRendererUiLanguage(language))
       for (const count of [0, 1, 2]) {
         const state = installStore({ activeRuntimeEnvironmentId: null })
         state.jiraStatus.sites = Array.from({ length: count }, (_, index) => ({

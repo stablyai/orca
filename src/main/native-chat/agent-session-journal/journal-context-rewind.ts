@@ -1,16 +1,16 @@
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type { JournalReducerState } from './journal-reducer'
 import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-builders'
 import type { JournalRowWriter, JournalOperationReceipt } from './journal-row-writer'
 import { buildJournalQueueClearRow } from './journal-stop-and-resume-rows'
 import { journalQueuePauseRestatement } from './queued-message-pause'
-import type { JournalQueuedMessages } from './journal-queued-messages'
+import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
 import type { JournalRow } from './journal-row-schema'
 
 export async function rewindJournalContext(input: {
@@ -23,6 +23,7 @@ export async function rewindJournalContext(input: {
   receipt: (cursor: AgentJournalCursor) => JournalOperationReceipt
 }): Promise<AgentJournalCursor> {
   let receipt: JournalOperationReceipt | undefined
+  let adoption: JournalQueuePlan | undefined
   const rows = await input.writer.enqueueRows(
     () => {
       const state = input.state()
@@ -53,8 +54,10 @@ export async function rewindJournalContext(input: {
           removed.set(agentJournalSubmissionKey(submission.clientMessageId), true)
         }
       }
+      // Capture adoption before tombstones retire legacy-card handoffs.
+      adoption = input.cards.adoptionOfAll()
       const revisions = new Map<string, number>()
-      const plan: ((seq: number, ts: number) => JournalRow)[] = []
+      const plan: ((seq: number, ts: number) => JournalRow)[] = [...adoption.rows]
       for (const [itemId, retireSubmission] of removed) {
         const row = buildJournalTombstoneRow({ state, itemId, seq: 0, ts: 0, fence: input.fence })
         revisions.set(itemId, row.revision)
@@ -98,8 +101,14 @@ export async function rewindJournalContext(input: {
       return plan
     },
     {
-      write: (db) => receipt!.write(db),
-      committed: () => receipt!.committed()
+      write: (db) => {
+        adoption?.receipt.write(db)
+        receipt!.write(db)
+      },
+      committed: () => {
+        adoption?.receipt.committed()
+        receipt!.committed()
+      }
     }
   )
   const last = rows.at(-1)!

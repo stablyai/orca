@@ -1,6 +1,4 @@
-// Shared shape for xterm addons Orca keeps off the boot chunk: memoize the
-// dynamic import, expose the resolved constructor synchronously to later panes,
-// and drain the panes that opened while the load was in flight.
+// Memoize lazy xterm addon imports, expose resolved constructors synchronously, and drain panes opened during loading.
 type LazyAddonLoadHandlers = {
   /** Attach the panes that opened while the load was still in flight. */
   onLoaded: () => void
@@ -16,9 +14,7 @@ export type LazyXtermAddonLoader<TConstructor> = {
   rearm: () => void
 }
 
-// Why a cap rather than unlimited retries: a chunk that is genuinely gone (bad
-// deploy, unreadable disk) must not re-fetch on every attach, but one transient
-// failure must not disable the addon for the whole session either.
+/** Bound retries for missing deploy/disk chunks without letting one transient failure disable the addon for the session. */
 const DEFAULT_ATTEMPT_LIMIT = 3
 
 export function createLazyXtermAddonLoader<TConstructor>(config: {
@@ -52,9 +48,7 @@ export function createLazyXtermAddonLoader<TConstructor>(config: {
           handlers?.onLoaded()
         },
         (error) => {
-          // Why clear the memo: `.then(onOk, onError)` settles *fulfilled*, so
-          // caching it would disable the addon for the rest of the session even
-          // though a later attach could retry within the attempt cap.
+          // then(onOk, onError) fulfills even on failure; clear its memo so later attaches can retry within the cap.
           load = null
           handlers?.onFailed?.()
           console.warn(config.failureMessage, error)

@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import {
@@ -75,7 +76,7 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
   cache: AppState['hostedReviewCache']
   repoPath: string
   branch: string
-  settings: AppState['settings']
+  settings: RuntimeFocusSettings
   repoId?: string
   connectionId?: string | null
   executionHostId?: string | null
@@ -145,8 +146,7 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
       hostedReviewEntry?.branchLookupGitHubPRNumber === args.pr.number)
       ? args.pr.number
       : undefined
-  // Why: the key embeds the branch, so this write path grows with every distinct
-  // (host, repo, branch) a session refreshes. Share the hosted-review slice's bound.
+  // Bound hosted-review keys across host/repo/branch churn like the shared slice.
   return {
     cache: withHostedReviewCacheEntry(args.cache, hostedReviewCacheKey, {
       data: args.pr ? hostedReviewInfoFromGitHubPRInfo(args.pr) : null,

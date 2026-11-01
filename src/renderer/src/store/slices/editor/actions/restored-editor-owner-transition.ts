@@ -241,7 +241,7 @@ export function buildRestoredEditorOwnerTransition(
                 }
               : file
         ),
-        editorBuffers: rekeyEditorBuffers(s.editorBuffers, s.openFiles, migrations, () => ({
+        ...rekeyEditorBuffers(s, s.openFiles, migrations, 'carry', () => ({
           pendingOwnerMigration: undefined
         })),
         editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),

@@ -120,8 +120,7 @@ describe('useTabAgent observed-signal dispatch', () => {
     for (let revision = 1; revision <= TITLE_PUBLICATIONS; revision += 1) {
       act(() => publishRuntimeTitle(revision))
     }
-    // One commit per publication. Re-dispatching the unchanged observed-signal
-    // flag doubled this, and put SortableTab's fiber in every #185 stack.
+    // Each title publication should commit once; redundant true dispatches doubled commits and implicated SortableTab in unrelated #185 cascades.
     expect(probeRenders).toBe(TITLE_PUBLICATIONS)
     expect(latestAgent).toBe('codex')
   })

@@ -1,13 +1,4 @@
-/**
- * A case-sensitive filesystem stays case-sensitive whichever desktop is reading it.
- * `git/worktree-path-comparison` decided case-folding from `process.platform`, so on Windows both
- * spellings of a WSL checkout — the Linux one and the `\\wsl.localhost\...` alias the listing
- * actually produces — folded, and two distinct checkouts read as one row.
- *
- * The removal suite mocks `translateWslOutputPaths` to identity. That mock is what hid this: in
- * production `listWorktreesStrict` always runs the listing through it, so the paths that reach the
- * comparison are UNC, never Linux. The end-to-end case below therefore drives the real translator.
- */
+// Exercise the real Linux-to-UNC translator: an identity mock would hide ext4-tail case folding.
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslPathTranslation from './command-runner/wsl-path-translation'
@@ -21,8 +12,6 @@ const { gitExecFileAsyncMock, gitExecFileSyncMock, statMock, readFileMock, resol
     resolveGitDirMock: vi.fn()
   }))
 
-// Why the real translator: an identity mock removes the Linux -> UNC rewrite that production
-// always applies, which is the only reason the Linux spelling would ever reach the comparison.
 vi.mock('./runner', async () => {
   const translation = await vi.importActual<typeof WslPathTranslation>(
     './command-runner/wsl-path-translation'
@@ -49,7 +38,7 @@ import {
   createGitCommandMocker,
   resetWorktreeRemovalState
 } from './remove-worktree-test-harness'
-import { areWorktreePathsEqual, canonicalWorktreePath } from './worktree-path-comparison'
+import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { removeWorktree } from './worktree'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
@@ -58,13 +47,6 @@ const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 const UNC = '\\\\wsl.localhost\\Ubuntu\\home\\alice\\ws'
 
 describe('worktree path comparison across path syntaxes', () => {
-  it('keeps two WSL UNC worktrees that differ only in case distinct', () => {
-    expect(areWorktreePathsEqual(`${UNC}\\Feature`, `${UNC}\\feature`, 'win32')).toBe(false)
-    expect(canonicalWorktreePath(`${UNC}\\Feature`, 'win32')).not.toBe(
-      canonicalWorktreePath(`${UNC}\\feature`, 'win32')
-    )
-  })
-
   it('keeps two POSIX worktrees that differ only in case distinct on a Windows desktop', () => {
     expect(areWorktreePathsEqual('/home/alice/ws/Feature', '/home/alice/ws/feature', 'win32')).toBe(
       false
@@ -142,8 +124,6 @@ describe('removeWorktree branch selection on a Windows desktop', () => {
   })
 
   it('deletes the branch of the requested WSL worktree, not its case twin', async () => {
-    // Git-in-the-distro answers in Linux paths; the real translator rewrites them to UNC on the way
-    // out, so this is the exact listing the comparison sees on a Windows desktop.
     const listing = `worktree /home/alice/repo
 HEAD aaa111
 branch refs/heads/main

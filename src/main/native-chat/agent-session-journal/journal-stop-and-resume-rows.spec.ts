@@ -1,14 +1,11 @@
-// A Stop's event and a Resume ride tombstones, but are no history: an app never receives them,
-// and they never count as the content that makes a rebuilt or provider-backed epoch usable.
+// Stop/Resume tombstones are neither published history nor evidence that an epoch contains content.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import { projectJournalBatch } from '../agent-session-wire/agent-session-journal-batch'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { startJournalRowFold } from './journal-open'
@@ -26,7 +23,7 @@ import {
 import {
   agentSessionJournalProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalStopAndResumeRowsTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -50,7 +47,6 @@ export function registerJournalStopAndResumeRowsTests(): void {
     await rm(root, { recursive: true, force: true })
   })
 
-  /** One epoch's rows, folded as an open folds them. */
   function fold(rows: readonly JournalRow[]) {
     const folding = startJournalRowFold({ sessionId: IDENTITY.sessionId, epoch: EPOCH })
     for (const row of rows) {
@@ -59,7 +55,6 @@ export function registerJournalStopAndResumeRowsTests(): void {
     return folding.finish()
   }
 
-  /** An epoch row, then `after` built at the next sequences. */
   function epochWith(
     reason: AgentJournalEpochReason,
     after: readonly ('stop' | 'resume' | 'item')[]
@@ -115,8 +110,6 @@ export function registerJournalStopAndResumeRowsTests(): void {
       expect(projected).toMatchObject({ ok: true, batch: { items: [], removedItemIds: [] } })
     })
 
-    // An older build founded `unreconcilable_prefix` epochs when it deleted history; this one opens
-    // such an epoch as it stands.
     it('fold as history in an epoch an older build founded after deleting rows', () => {
       expect(fold(epochWith('unreconcilable_prefix', ['stop', 'resume']))).toMatchObject({
         newer: null,

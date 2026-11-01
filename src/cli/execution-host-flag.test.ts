@@ -54,8 +54,6 @@ describe('parseHostFlag', () => {
     expect(() => parseHostFlag(flags({ host: true }))).toThrow('Missing value for --host')
   })
 
-  // A value that claims a kind but does not parse is malformed, not a name someone could have
-  // meant — only an unprefixed value can be a host alias.
   it.each(['runtime:', 'ssh:', 'ssh:a|b', '   '])('rejects the unparseable host id %s', (value) => {
     expect(() => parseHostFlag(flags({ host: value }))).toThrow(`Invalid --host value: ${value}`)
   })
@@ -70,8 +68,6 @@ describe('parseHostFlag', () => {
     })
   })
 
-  // Why: `orca host list` prints the alias, so the alias is what gets typed. Rejecting it sent
-  // people hunting for a machine-generated id the listing showed in a different column.
   it('carries an unprefixed host name through as an alias', () => {
     expect(parseHostFlag(flags({ host: 'trader-local' }))).toEqual({
       kind: 'alias',
@@ -111,8 +107,6 @@ describe('resolveHostFlagEnvironmentId', () => {
     ).rejects.toThrow('no paired Orca server is named or has id env-missing')
   })
 
-  // Why: the name is what a person or agent actually knows; requiring the raw uuid made the
-  // obvious spelling fail against a server that is sitting right there.
   it('accepts the environment name as well as its id', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
 
@@ -213,8 +207,6 @@ describe('resolveHostFlagEnvironmentId', () => {
   })
 })
 
-// Why: the reported failure. `orca host list` shows `trader-local`, so `--host trader-local` is
-// what gets typed, and only the machine-generated `ssh:ssh-1783599077486-fyasux` was accepted.
 describe('unprefixed --host aliases', () => {
   function clientWithTargets(targets: { id: string; label: string }[]): RuntimeClient {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SSH target resolution reads only client.call.
@@ -232,7 +224,6 @@ describe('unprefixed --host aliases', () => {
     )
   })
 
-  // The SSH axis lives on the connected runtime, so a miss here is not yet a failure.
   it('leaves an alias that names no paired server to the SSH axis', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
 
@@ -260,8 +251,6 @@ describe('unprefixed --host aliases', () => {
     ).rejects.toThrow('Unknown host in --host trader-local')
   })
 
-  // Why: a paired server and an SSH target are different machines. Picking either would run the
-  // command somewhere the caller never named.
   it('refuses an alias that names a machine on both axes', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
     listSshTargetsMock.mockResolvedValue([{ id: 'ssh-1-a', label: 'awin' }])
@@ -279,9 +268,6 @@ describe('unprefixed --host aliases', () => {
     })
   })
 
-  // Why: findSshTargetByName returns undefined for a duplicated label, which reads the same as
-  // "no SSH target by that name" — so this case used to look conflict-free and resolve to the
-  // paired server, the one direction that still guessed.
   it('refuses an alias naming a server and two SSH targets sharing a label', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
     listSshTargetsMock.mockResolvedValue([
@@ -329,7 +315,6 @@ describe('unprefixed --host aliases', () => {
     })
   })
 
-  // Why: `orca host list` prints `this machine` as the local row's name, with a space.
   it('resolves the local row name to --host local', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
     await expect(
@@ -375,7 +360,7 @@ describe('unprefixed --host aliases', () => {
     })
   })
 
-  // Why: cmd.exe does not strip single quotes, so `--host 'gpu'` arrives with them.
+  // cmd.exe passes wrapping single quotes through literally.
   it('ignores one pair of wrapping quotes around a host name', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
     listSshTargetsMock.mockResolvedValue([])
@@ -385,8 +370,6 @@ describe('unprefixed --host aliases', () => {
     expect(parseHostFlag(flags({ host: '"local"' }))).toEqual({ kind: 'local', id: 'local' })
   })
 
-  // Why: with --environment the command runs on that server, so a bare name is a machine it
-  // reaches; a locally paired server sharing the name, even the routed one, is not a host there.
   it('leaves an alias to the routed server SSH targets when --environment picks the server', async () => {
     listEnvironmentsMock.mockReturnValue([
       environment('env-1', 'openclaw'),
@@ -482,8 +465,7 @@ describe('resolveEnvironmentSelectorForStore', () => {
     expect(listSshTargetsMock).not.toHaveBeenCalled()
   })
 
-  // Why: the store matches names exactly, so a loosely matched name has to leave here as the id;
-  // an exact one stays as typed, which `orca status` shows as the target.
+  // The store matches names exactly; canonicalize loose matches to IDs.
   it('hands back the id for a name typed in another case or quoted', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'Build')])
 
@@ -495,8 +477,6 @@ describe('resolveEnvironmentSelectorForStore', () => {
     )
   })
 
-  // Why: the inverse of the --host case, and the one the report actually hit — a name that is
-  // an SSH target dead-ended with a bare "unknown environment".
   it('names the SSH target when the selector is one', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
     listSshTargetsMock.mockResolvedValue([{ id: 'ssh-1-a', label: 'openclaw' }])

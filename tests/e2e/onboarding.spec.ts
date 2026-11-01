@@ -1,11 +1,4 @@
-/**
- * E2E tests for the first-launch Onboarding flow.
- *
- * The onboarding overlay is gated by `OnboardingState.closedAt === null` (see
- * `shouldShowOnboarding` in `should-show-onboarding.ts`). Each test gets a fresh
- * Electron instance + isolated userData dir, so persistence starts clean and
- * the overlay renders on first paint without any setup.
- */
+// Fresh isolated profiles start with closedAt:null so first-launch onboarding paints without seeded completion.
 
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
@@ -79,8 +72,7 @@ async function chooseOnboardingNotificationSound(page: Page, name: RegExp): Prom
   await soundSelect.click()
   const option = page.getByRole('option', { name })
   await expect(option).toBeVisible()
-  // Why: the select menu extends over the onboarding footer on small CI
-  // viewports; keyboard selection avoids pointer fall-through to Skip.
+  // Use keyboard selection because the sound menu overlaps Skip on small viewports.
   await option.press('Enter')
   await expect(soundSelect).toContainText(name)
   await expectOnboardingNotificationSoundMenuClosed(page)
@@ -148,15 +140,10 @@ async function continueFromThemeToNotifications(page: Page): Promise<void> {
 }
 
 test.describe('Onboarding flow', () => {
-  // Why: the shared fixture pre-seeds onboarding as closed so non-onboarding
-  // tests don't get blocked by the fullscreen overlay. Opt out here so this
-  // spec actually exercises the first-launch flow.
+  // Opt out of the fixture’s completed-onboarding seed to exercise first launch.
   test.use({ dismissOnboarding: false })
 
   test.beforeEach(async ({ orcaPage }) => {
-    // Per-test userData is freshly minted by the orcaPage fixture, so persisted
-    // onboarding state defaults to `closedAt: null, lastCompletedStep: -1` and
-    // the overlay paints on its own once App's bootstrap effect resolves.
     await waitForSessionReady(orcaPage)
   })
 
@@ -170,13 +157,8 @@ test.describe('Onboarding flow', () => {
     await expectOnboardingProgress(orcaPage, /^1 of [345]$/)
     await expect(onboardingFooterButton(orcaPage, /^Continue\b/)).toBeVisible()
     await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toBeVisible()
-    // Why: Back is not rendered on the first step (was previously rendered-but-
-    // disabled with `disabled:invisible`, now conditionally mounted).
     await expect(orcaPage.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0)
-    // Footer hint shows the platform-correct continue shortcut (⌘ on Mac,
-    // Ctrl elsewhere). Match either form so the test runs cross-platform.
-    // Why: scope to the footer action so background UI shortcut hints cannot
-    // false-positive this assertion.
+    // Scope the platform-specific Cmd/Ctrl hint to Continue so background shortcut hints cannot satisfy it.
     await expect(
       onboardingFooterButton(orcaPage, /^Continue\b/)
         .locator('span')
@@ -184,17 +166,10 @@ test.describe('Onboarding flow', () => {
         .first()
     ).toBeVisible()
 
-    // --- Step 1: agent ---
-    // Force a deterministic, non-default selection so the assertion below
-    // proves the wizard actually wrote the user's choice (not just the
-    // pre-selected detected agent). Codex sits in the top-6 catalog when no
-    // agents are detected, otherwise behind the "Show N more agents" details
-    // expander — open it if codex isn't visible.
+    // Choose nondefault Codex to prove the wizard writes the choice; expand the catalog if needed.
     const targetAgent: TuiAgent = 'codex'
     const codexButton = orcaPage.getByRole('button', { name: 'Codex', exact: true })
-    // Why: isVisible() is a one-shot probe — on slow renderer paint it would
-    // race the wizard mount and falsely take the "show more agents" branch.
-    // waitFor with a small timeout actually retries until the button paints.
+    // Wait for mount before choosing the Show more branch; isVisible is only a one-shot probe.
     const codexVisible = await codexButton
       .first()
       .waitFor({ state: 'visible', timeout: 1_000 })
@@ -215,19 +190,11 @@ test.describe('Onboarding flow', () => {
         message: 'lastCompletedStep did not advance to 1 after first Continue'
       })
       .toBe(1)
-    // The agent choice must be persisted to settings (the user will see this
-    // pre-selected when they later open a new tab / agent picker).
     await expect
       .poll(async () => (await getSettings(orcaPage)).defaultTuiAgent, { timeout: 5_000 })
       .toBe(targetAgent)
 
-    // --- Step 2: theme ---
-    // Default settings.theme is 'system', so the document class can resolve to
-    // either 'dark' or 'light' depending on the host. Click the opposite tile
-    // so we always observe a live flip — the assertion that proves the wizard
-    // applies the choice immediately, not just on Continue.
-    // Why: 'system' resolves async on mount, so wait for the class to settle
-    // before snapshotting — otherwise startingTheme can be stale.
+    // Wait for async system-theme resolution, then choose the opposite tile to prove immediate application.
     await orcaPage.waitForFunction(
       () =>
         document.documentElement.classList.contains('dark') ||
@@ -242,11 +209,7 @@ test.describe('Onboarding flow', () => {
       .toBe(oppositeTheme)
 
     await continueOnboarding(orcaPage)
-    // Why: the theme Continue persists step 2, then persists *through* any
-    // skipped optional steps (integrations is skipped when gh is installed,
-    // windows_terminal off macOS), so lastCompletedStep can land at 2, 3, or 4.
-    // Key off the settled "theme step committed" lower bound rather than a fixed
-    // window that assumed integrations always renders.
+    // Require theme step 2 committed; skipped integration/platform steps can advance lastCompletedStep further.
     await expect
       .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
         timeout: 5_000,
@@ -265,15 +228,12 @@ test.describe('Onboarding flow', () => {
       })
       .toBe(true)
 
-    // --- Step 3: notifications ---
     await expectOnboardingNotificationSound(orcaPage, /System Default/i)
     await expect(orcaPage.getByRole('button', { name: /Send Test Notification/i })).toBeVisible()
     await expectOnboardingCustomSoundOption(orcaPage)
 
     await continueFromPostNotificationsToRepo(orcaPage)
 
-    // Verify the source defaults land without asking users to configure each
-    // source in the onboarding UI.
     await expect
       .poll(
         async () => {
@@ -320,14 +280,11 @@ test.describe('Onboarding flow', () => {
       timeout: 15_000
     })
 
-    // Why: the OS the renderer reports drives whether Cmd or Ctrl is the
-    // accelerator (OnboardingFlow.tsx checks navigator.userAgent).
+    // Use renderer UA like OnboardingFlow’s Cmd/Ctrl decision.
     const isMac = await orcaPage.evaluate(() => navigator.userAgent.includes('Mac'))
     const accelerator = isMac ? 'Meta+Enter' : 'Control+Enter'
 
-    // Why: in headless Linux CI the window-level capture-phase listener can
-    // miss synthetic keyboard events when no element holds focus. Click an
-    // inert area inside the overlay first to anchor focus, then press.
+    // Anchor focus inside the overlay so hidden-window synthetic keys reach its capture listener.
     await orcaPage.locator('footer').click({ position: { x: 1, y: 1 } })
     await orcaPage.keyboard.press(accelerator)
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
@@ -419,11 +376,7 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
-    // Why: since #10011 `settings:set` strips activeRuntimeEnvironmentId — the
-    // durable Active Server preference is only writable through its dedicated
-    // handler, which resolves the id against the main-process environment
-    // store. So the host has to be registered for real, not faked in the
-    // renderer. Pairing is offline (no live server needed).
+    // #10011: register a real environment before its dedicated Active Server handler can persist selection; offline pairing suffices.
     const pairingCode = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       scope: 'runtime',
@@ -440,14 +393,9 @@ test.describe('Onboarding flow', () => {
         name: 'E2E Server',
         pairingCode: code
       })
-      // Why: after #5071 the server-path add step gates on the registered
-      // runtime-environment list (store.runtimeEnvironments), not just the
-      // activeRuntimeEnvironmentId setting.
+      // #5071: populate registered runtimeEnvironments, which gates server-path add.
       store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
-      // Why: a runtime host is only auto-selectable (health 'available') when it
-      // has a live, protocol-compatible status; without one it reads
-      // 'disconnected' and the Add Project dialog falls back to Local Mac.
-      // runtimeProtocolVersion 3 clears MIN_COMPATIBLE_RUNTIME_SERVER_VERSION.
+      // Only live compatible status makes a host auto-selectable; protocol 3 clears the minimum version gate.
       const seededStatus = {
         runtimeId: `${environment.id}-runtime`,
         rendererGraphEpoch: 0,
@@ -458,11 +406,7 @@ test.describe('Onboarding flow', () => {
         runtimeProtocolVersion: 3,
         minCompatibleRuntimeClientVersion: 1
       }
-      // Why a snapshot and not a bare status: since #20003 the published snapshot owns host health,
-      // and main's status owner publishes `checking` for this unreachable host as soon as any
-      // runtime RPC touches it — which flips the Add Project host to Local mid-test. Pinning the
-      // seed at the top sequence makes applyRuntimeHostStatusSnapshot's monotonic guard drop those
-      // publications. A snapshot-less write would also no-op once any snapshot exists.
+      // #20003: pin a top-sequence host snapshot so unreachable-host checking publications cannot change the seeded available health.
       store.getState().setRuntimeEnvironmentStatus(environment.id, {
         snapshot: {
           environmentId: environment.id,
@@ -476,10 +420,7 @@ test.describe('Onboarding flow', () => {
         status: seededStatus,
         checkedAt: Date.now()
       })
-      // Why: the store's switchRuntimeEnvironment probes reachability, which a
-      // synthetic host can't satisfy — write the preference directly and push
-      // the returned settings in rather than refetching (fetchSettings would
-      // kick off a status hydrate that clobbers the seeded 'available' health).
+      // Set selection directly and use returned settings; reachability probes/refetch would overwrite the synthetic available host.
       const settings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
         environmentId: environment.id
       })
@@ -492,12 +433,7 @@ test.describe('Onboarding flow', () => {
       })
       .toBe(environmentId)
 
-    // Why: runtime-host health now derives from the status snapshot (transport
-    // + verification) whenever one exists, and a snapshot also blocks later
-    // status-only writes — so a status seed alone no longer reads 'available'
-    // and the host selector falls back to Local. Publish a verified, ready
-    // snapshot with a high sequence so later real snapshots cannot downgrade
-    // it, modelling a reachable host for the skip-to-project-setup path.
+    // Health derives from transport/verification snapshots; pin a verified ready snapshot above live publications.
     await orcaPage.evaluate((id) => {
       const store = window.__store
       if (!store) {
@@ -576,15 +512,12 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
-    // Advance to the Add Project dialog.
     await continueOnboarding(orcaPage)
     await continueOnboarding(orcaPage)
     await continueFromPostNotificationsToRepo(orcaPage)
     await orcaPage.getByRole('button', { name: /Clone from URL/i }).click()
 
-    // Why: focus the clone-url input and press Cmd/Ctrl+Enter. The capture-
-    // phase keydown handler should bail via isEditableTarget, so the dialog
-    // should remain visible and the empty clone form must not submit.
+    // Press Cmd/Ctrl+Enter in the editable clone field; the capture handler must leave the dialog and empty form alone.
     const isMac = await orcaPage.evaluate(() => navigator.userAgent.includes('Mac'))
     const accelerator = isMac ? 'Meta+Enter' : 'Control+Enter'
     const input = orcaPage.getByPlaceholder('https://github.com/user/repo.git')
@@ -616,9 +549,7 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible()
     await expectOnboardingProgress(orcaPage, /^1 of [345]$/)
 
-    // Why: "without losing progress" means persisted lastCompletedStep stays
-    // at 1 — Back rewinds the visible step but must not roll persistence back.
-    // Poll because persistence flushes async via IPC after the Back click.
+    // Back changes only the visible step; poll async IPC persistence to require lastCompletedStep stays 1.
     await expect
       .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
         timeout: 5_000
@@ -631,10 +562,7 @@ test.describe('Onboarding flow', () => {
       timeout: 15_000
     })
 
-    // Advance to the final notification step. Its primary button hands off to
-    // Add Project, so the footer offers no "Skip to project setup" shortcut —
-    // but click-off and Escape must still open the skip-confirmation dialog like
-    // every other step, so the modal never feels stuck.
+    // On the final step, primary hands off to Add Project; Escape/click-off must still offer skip confirmation.
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
     await continueFromThemeToNotifications(orcaPage)
@@ -642,8 +570,6 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
     await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
 
-    // Escape opens the confirmation; "No, keep going" returns to the step with
-    // onboarding still open.
     await orcaPage.keyboard.press('Escape')
     await expectOnboardingSkipConfirmationOpen(orcaPage)
     await orcaPage.getByRole('button', { name: /No, keep going/i }).click()
@@ -651,8 +577,6 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
     expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
 
-    // Click-off opens the confirmation; Skip dismisses onboarding outright (no
-    // Add Project handoff — that is the primary button's job).
     await orcaPage.locator('[data-onboarding-overlay]').click({ position: { x: 8, y: 40 } })
     await expectOnboardingSkipConfirmationOpen(orcaPage)
     await orcaPage.getByRole('button', { name: /^Skip$/ }).click()

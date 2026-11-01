@@ -1,7 +1,4 @@
-/**
- * Parked terminal side-effect watcher.
- * Why: parking unmounts TerminalPane, so this replays its bell/title/agent-completion/PR-link side effects while parked.
- */
+/** Keep mounted-pane bell/title/completion/PR-link policy active while parking unmounts TerminalPane. */
 import { isClaudeIdleEdge } from '@/lib/agent-idle-edge'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
@@ -32,7 +29,7 @@ import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
 import { hookLaneTitleTurnEndEvidence } from '@/hooks/agent-hook-turn-end-ownership'
 import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 // Why: keep the live path's BEL-vs-completion race window so notification behavior is identical whether a tab is parked or mounted.
 const PARKED_NOTIFICATION_GRACE_MS = AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS
@@ -52,13 +49,13 @@ export type ParkedTerminalByteWatcherOptions = {
   ptyId: string
   tabId: string
   worktreeId: string
-  /** Stable terminal-layout leaf UUID; combined with tabId into the paneKey for cache-timer, unread, and notification attribution. */
+  /** Stable leaf UUID combined with tabId for cache, unread and notification attribution. */
   leafId: string
-  /** PaneManager pane id the unmounted pane used; the watcher must write this same slot or a stale "working" title strands. */
+  /** Reuse the unmounted pane’s numeric title slot so stale working status cannot strand. */
   paneId: number
   /** Whether this PTY's pane was the tab's active split — only the focused split drives the tab title. */
   drivesTabTitle?: boolean
-  /** Last runtime title at park time; seeds the agent tracker so an agent working at unmount still fires completion when it goes idle. */
+  /** Seed working state so the recreated tracker recognizes completion after park. */
   initialTitle?: string
   /** Pull main's title-only snapshot when a watcher starts before its pane ever mounted (ordinary park cycles already have a title). */
   restoreTitleOnRegister?: boolean
@@ -83,7 +80,7 @@ export function startParkedTerminalByteWatcher(
 
   let disposed = false
   let pendingBellNotification = false
-  // Why: a watcher-written title has no pane to overwrite it after reveal (stale 'working' pins status); track writes so dispose clears the exact slot.
+  // Track exact title writes: no mounted pane can replace them, and stale working titles pin status.
   let wroteRuntimeTitleSlot = false
   let bellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteTimer: ReturnType<typeof setTimeout> | null = null
@@ -142,7 +139,7 @@ export function startParkedTerminalByteWatcher(
     }, PARKED_NOTIFICATION_GRACE_MS)
   }
 
-  // Why: one policy block shared by both modes (byte parsing and facts) — semantics must be identical or flipping the switch changes behavior.
+  // Byte mode and fact mode share policy so switching authority preserves behavior.
   const sideEffectCallbacks = {
     onTitleChange: (title: string): void => {
       const state = useAppStore.getState()
@@ -161,7 +158,7 @@ export function startParkedTerminalByteWatcher(
       }
     },
     onAgentBecameIdle: (title: string, meta?: AgentIdleEdgeMeta): void => {
-      // Why: stale-derived idles (main's 3s timer, not observed bytes) clear session state but must not schedule a completion a paused agent didn't earn.
+      // Stale-title expiry clears state without granting unobserved completion to a paused agent.
       if (meta?.staleWorkingTitleClear) {
         useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
         return
@@ -226,8 +223,7 @@ export function startParkedTerminalByteWatcher(
     }
   }
 
-  // Why: command-lifecycle signals drive store-level policy only (git nudge, SSH same-turn
-  // status drop, Command Code seed/settle); the pane-coupled parts stay with the mounted pane.
+  // Keep store-level command policy here; foreground confirmation and input-intent inference stay with mounted panes.
   const commandStatusPolicy = createParkedTerminalCommandStatusPolicy({
     ptyId,
     worktreeId,
@@ -236,7 +232,7 @@ export function startParkedTerminalByteWatcher(
     paneKey
   })
 
-  // Why: with the authority switch on, the fact consumer is the single policy consumer — registering byte parsers too would double-fire bells.
+  // Main-derived facts own policy under main authority; byte parsers would double-fire side effects.
   const mainSideEffectAuthority =
     !remoteRuntimePty &&
     isMainTerminalSideEffectAuthorityForPty({
@@ -248,26 +244,22 @@ export function startParkedTerminalByteWatcher(
     mainSideEffectAuthority &&
     isRendererHiddenPtyDeliveryGateEnabled(useAppStore.getState().settings)
 
-  // Why (byte-parser mode only): reuse the transport's output processor to keep exact live-path parsing semantics.
-  // initialAgentTitle: an agent already working at park time still produces a working→idle transition.
+  // Reuse live-path parsing and seed working identity for completion after park.
   const processor = factSideEffectAuthority
     ? null
     : createPtyOutputProcessor({
         ...(options.initialTitle !== undefined ? { initialAgentTitle: options.initialTitle } : {}),
         ...sideEffectCallbacks
       })
-  // Why (byte-parser mode only): under main authority, byte-scanning PR links too would observe every link twice (facts already carry them).
+  // In byte mode, scan PR links; main-authority mode already receives them as facts.
   const observeTerminalGitHubPRLink = factSideEffectAuthority
     ? null
     : createTerminalGitHubPRLinkDetector()
-  // Why (byte-parser mode only): mode parity — main's tracker emits these as facts; the byte
-  // path scans the same shared parsers the mounted kill-switch-off pane uses.
+  // Byte mode uses the same shared parsers as mounted panes; main mode receives equivalent facts.
   const commandFinishedScanner = factSideEffectAuthority
     ? null
     : createOsc133CommandFinishedScanner(commandStatusPolicy.onCommandFinished)
-  // Why the seed: this detector is recreated per park cycle with no startup command
-  // to fast-arm it, and a Command Code TUI parked mid-turn is long past its banner —
-  // unseeded it would never scrape the turn's return to the idle composer.
+  // Seed Command Code’s in-flight turn: the banner is gone and the recreated detector otherwise misses return to idle.
   const commandCodeOutputStatusDetector = factSideEffectAuthority
     ? null
     : createCommandCodeOutputStatusDetector({
@@ -292,7 +284,7 @@ export function startParkedTerminalByteWatcher(
               executionHostId: workspaceOwner?.executionHostId ?? undefined
             })
         },
-        // Why: activation-deferred tabs can start a watcher before any pane restored the title; ordinary parked tabs avoid this IPC.
+        // Only activation-deferred panes need an initial title snapshot; ordinary parks already have a pane title.
         restoreTitleOnRegister: options.restoreTitleOnRegister === true
       })
     : null
@@ -320,8 +312,7 @@ export function startParkedTerminalByteWatcher(
       }
     }
   }
-  // Why: paired hosts forward derived facts over the one environment event
-  // stream; parked PTYs never consume terminal multiplex slots or raw bytes.
+  // Paired hosts deliver facts on the environment stream; parked PTYs consume no multiplex slots or raw bytes.
   const unsubscribeByteParsers =
     processor === null ? null : subscribeToPtyData(ptyId, processLiveData)
 
@@ -330,21 +321,20 @@ export function startParkedTerminalByteWatcher(
       return
     }
     disposed = true
-    // Why first: each park/reveal cycle owns a distinct processor gauge, and the store/IPC
-    // teardown below must not be able to throw its way past the census drop.
+    // Drop the per-cycle processor gauge before store/IPC cleanup can throw and strand it.
     processor?.disposePendingSideEffectGauge()
-    // Why: unhide BEFORE the reveal remount registers pane handlers, so main resumes delivery and emits the restore marker the pane consumes.
+    // Unhide before reveal remount registers handlers so main resumes delivery and emits its restore marker.
     releaseHiddenDeliveryClaim?.()
     unsubscribeByteParsers?.()
     unregisterFactConsumer?.()
-    // Why: clears tracker/timer/detector state so the watcher can't fire after the revealed pane's live parsers take over.
+    // Dispose old policy state before the revealed pane’s parsers take over.
     processor?.clearAccumulatedState()
     commandFinishedScanner?.reset()
     commandStatusPolicy.dispose()
     clearBellNotificationTimer()
     clearAgentTaskCompleteTimer()
     pendingBellNotification = false
-    // Why: store merge never deletes title slots, so a watcher-written entry would strand after reveal and pin worktree status 'working'.
+    // Store merge cannot delete title slots; clear this watcher’s exact writes so stale working status cannot survive reveal.
     if (wroteRuntimeTitleSlot) {
       wroteRuntimeTitleSlot = false
       useAppStore.getState().clearRuntimePaneTitle(tabId, paneId)

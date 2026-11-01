@@ -9,9 +9,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 export function registerReposCrossHostRefreshIdentityTests(): void {
-  // One project cloned on the local Mac and on a remote Orca server under distinct repo ids —
-  // the shape the compat merge exists to serve, and the only shape whose sourceRepoIds are
-  // assembled from two hosts.
+  // Same-name local/remote clones with distinct repo IDs exercise compat sourceRepoIds assembled across hosts.
   const SHARED_PROJECT_ID = 'github:stablyai/orca'
 
   const localRepo: Repo = {
@@ -70,8 +68,7 @@ export function registerReposCrossHostRefreshIdentityTests(): void {
   const runtimeEnvironmentsList = vi.fn()
   const runtimeEnvironmentTransportCall = vi.fn()
 
-  // Why: catalogs arrive over IPC, so every fetch must hand back freshly allocated rows —
-  // otherwise identity would match by accident and prove nothing.
+  // Allocate fresh IPC rows so stable identity cannot pass accidentally.
   function clone<T>(value: T): T {
     return structuredClone(value)
   }
@@ -136,8 +133,7 @@ export function registerReposCrossHostRefreshIdentityTests(): void {
 
     it('keeps sourceRepoIds ordered the same whichever host refreshed', async () => {
       const store = createTestStore()
-      // Why: with no active env, `fetchRepos` targets local, so the two calls below really do
-      // alternate hosts.
+      // Null active environment really selects local, alternating with runtime below.
       store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
       await store.getState().fetchReposForAllHosts()
       const afterAllHosts = sharedProject(store)?.sourceRepoIds
@@ -157,8 +153,7 @@ export function registerReposCrossHostRefreshIdentityTests(): void {
       const store = createTestStore()
       store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
       await store.getState().fetchReposForAllHosts()
-      // Why: the first local pass lands before the runtime catalog exists, so settle onto the
-      // two-host fixed point before measuring identity.
+      // Settle compat merge’s two-host fixed point before measuring no-op identity.
       await store.getState().fetchRepos(catalogOwner(store))
       const settled = sharedProject(store)
 

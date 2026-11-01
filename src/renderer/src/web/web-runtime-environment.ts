@@ -100,8 +100,7 @@ export function saveStoredWebRuntimeEnvironment(environment: StoredWebRuntimeEnv
   )
 }
 
-// Why: a tab holding a stale copy of this pairing must not put its code back after another tab
-// replaced it with a device key. A re-pair (new revision) stores its fresh code as usual.
+// Stale tabs must retain another tab’s migrated placeholder; only re-pair’s new revision may store a fresh code.
 function keepMigratedPlaceholders(
   next: StoredWebRuntimeEnvironment,
   stored: StoredWebRuntimeEnvironment | null

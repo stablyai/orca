@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { getCodexSelectionLaneKey } from '../../../shared/codex-selection-lane'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
@@ -72,7 +72,6 @@ function laneState(args?: {
   } as unknown as LaneState
 }
 
-/** The Windows-only shell resolution is gated on the renderer platform. */
 function withWindowsRenderer(run: () => void): void {
   const originalNavigator = globalThis.navigator
   Object.defineProperty(globalThis, 'navigator', {
@@ -118,9 +117,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
     ).toBe('wsl:__default__')
   })
 
-  // Why this matters: pty.ts keys such a pane `wsl:<distro>` from the resolved
-  // runtime, so keying it `wsl:__default__` would make its own distro's switch
-  // miss it — the pane keeps the old account with no notice.
+  // Use the resolved distro lane; wsl:__default__ would miss that distro’s account switch.
   it('keys a wsl.exe pane on a Windows-path worktree to the configured distro', () => {
     withWindowsRenderer(() => {
       expect(
@@ -149,9 +146,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
     })
   })
 
-  // Why: main resolves the shell through resolveLocalWindowsTerminalRuntimeOptions,
-  // so an unset override still lands on WSL when that is the Windows default.
-  // Reading only the tab would key this pane `host` and mute it on a host switch.
+  // An unset tab override may inherit global WSL; using only tab fields would mislabel it host and mute it on a host switch.
   it('keys an override-less pane by the default Windows shell', () => {
     withWindowsRenderer(() => {
       expect(
@@ -168,8 +163,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
     })
   })
 
-  // Why: the startup cwd is deliberately unconstrained (#7685), and main keys
-  // the lane off it, so a pane split across filesystems must follow the cwd.
+  // Startup cwd can leave the worktree (#7685); lane derivation must follow its filesystem like main.
   it('follows the pane startup cwd out of the workspace filesystem', () => {
     expect(
       resolveCodexPaneSelectionLaneKey({
@@ -196,9 +190,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
     })
   })
 
-  // Why: a floating terminal's cwd never reaches the tab, so it is keyed by its
-  // shell. Pinning that it does not throw or resolve against some other
-  // workspace's root, which is what the lane would otherwise inherit.
+  // Floating cwd is absent from tab state; use its shell rather than another workspace’s root.
   it('keys a floating terminal by its shell, not another workspace root', () => {
     expect(
       resolveCodexPaneSelectionLaneKey({
@@ -209,10 +201,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
     ).toBe('host')
   })
 
-  // Why: resolveLocalWindowsTerminalRuntimeOptions THROWS on repair-required,
-  // and this runs outside scanCodexPanes' per-pane failure guard — so without
-  // the early return the Promise.all rejects and EVERY pane in the batch loses
-  // its notice, not just this one.
+  // Repair-required resolution throws outside the per-pane guard; return early or one pane loses the entire batch’s notices.
   it('answers a repair-required runtime instead of throwing the batch away', () => {
     withWindowsRenderer(() => {
       expect(
@@ -283,8 +272,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
       tab: HOST_TAB,
       ptyId: 'remote:term-1'
     })
-    // Why assert disjointness rather than the literal key: colliding with `host`
-    // is the whole failure mode — a local switch would mute a working remote pane.
+    // Assert separation from host: a local switch must never mute a remote pane.
     expect(laneKey).not.toBe(getCodexSelectionLaneKey({ runtime: 'host' }))
     expect(isLocalCodexSelectionLaneKey(laneKey)).toBe(false)
   })
@@ -296,8 +284,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
       ptyId: 'ssh:my-box@@pty-7'
     })
     expect(laneKey).toBe('ssh-connection')
-    // Why: managed Codex accounts are only ever 'host' or 'wsl:<distro>', so no
-    // switch can produce this key — the pane is unreachable by any selection.
+    // Only host/wsl lanes have managed selections; no switch can reach this foreign key.
     expect(laneKey).not.toBe(getCodexSelectionLaneKey({ runtime: 'host' }))
     expect(isLocalCodexSelectionLaneKey(laneKey)).toBe(false)
   })
@@ -305,8 +292,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
 
 describe('resolveCodexPaneSelectionLane', () => {
   it('prefers the lane main recorded at spawn over the current derivation', () => {
-    // Why this is the whole point: the derivation reads CURRENT state, so the
-    // user editing a runtime preference after the pane opened must not re-key it.
+    // Current preferences can drift after spawn; a recorded lane must remain authoritative.
     const lane = resolveCodexPaneSelectionLane({
       state: laneState(),
       tab: HOST_TAB,
@@ -354,7 +340,6 @@ describe('resolveCodexPaneSelectionLane', () => {
     }
   })
 
-  // THE regression that matters: over-filtering silently kills the feature.
   it('derives a local host pane that main never recorded', () => {
     for (const recordedLaneKey of [undefined, null, '', '   ']) {
       expect(
@@ -369,8 +354,7 @@ describe('resolveCodexPaneSelectionLane', () => {
   })
 
   it('falls back to the derivation when the record names no selectable lane', () => {
-    // Why: the registry accepts any string it finds on disk, and a lane key that
-    // matches no switch would silently drop the pane's notice instead of failing.
+    // Registry strings are untrusted on-disk values; invalid lanes would silently lose notices.
     expect(
       resolveCodexPaneSelectionLane({
         state: laneState(),
@@ -385,8 +369,7 @@ describe('resolveCodexPaneSelectionLane', () => {
     ['remote:env-1@@term-1', 'env:env-1'],
     ['ssh:my-box@@pty-7', 'ssh-connection']
   ])('keeps a record from re-keying the foreign pane %s', (ptyId, expectedLaneKey) => {
-    // Why: a foreign pane's lane is settled by its id, so a record here can only
-    // be a recycled id — and honouring it would mute a working remote terminal.
+    // Foreign IDs determine their own lane; a recorded hit can only be a recycled ID.
     expect(
       resolveCodexPaneSelectionLane({
         state: laneState({ activeRuntimeEnvironmentId: 'env-1' }),
@@ -407,8 +390,7 @@ describe('resolveCodexPaneSelectionLane', () => {
         return Reflect.get(target, property)
       }
     })
-    // Why: this call sits outside the scan's per-pane failure guard, so a throw
-    // would lose the notice for every pane in the batch, not just this one.
+    // Derivation runs outside the per-pane guard; a throw would lose the whole batch’s notices.
     expect(
       resolveCodexPaneSelectionLane({
         state: exploding,
@@ -438,8 +420,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
     expect(ubuntuSwitch('host')).toBe(false)
   })
 
-  // Why a family: clearing a distro-less WSL selection nulls EVERY wsl slot, so
-  // matching only `wsl:__default__` would leave those panes stranded, unnoticed.
+  // Clearing a distro-less selection clears every WSL slot; matching only __default__ would miss them.
   it('claims every WSL distro when the change cleared them all', () => {
     const wslDefaultSwitch = getCodexAccountSwitchLaneMatcher({
       owner: { kind: 'local' },
@@ -449,16 +430,13 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
     expect(wslDefaultSwitch('wsl:__default__')).toBe(true)
     expect(wslDefaultSwitch('wsl:Ubuntu')).toBe(true)
     expect(wslDefaultSwitch('wsl:Debian')).toBe(true)
-    // Still cannot reach another machine, which is the point of the guard.
     expect(wslDefaultSwitch('host')).toBe(false)
     expect(wslDefaultSwitch('env:env-1')).toBe(false)
     expect(wslDefaultSwitch('ssh-connection')).toBe(false)
     expect(wslDefaultSwitch('remote-runtime')).toBe(false)
   })
 
-  // Why the negative half matters: pointing a distro-less WSL row at a real
-  // account writes only the `__default__` slot, so claiming the family there
-  // would card — and mute — every sibling distro's healthy Codex pane.
+  // Selecting an account on distro-less WSL writes only __default__; do not mute sibling distro panes.
   it('keeps a distro-less WSL selection off sibling distro panes', () => {
     const wslDefaultSelect = getCodexAccountSwitchLaneMatcher({
       owner: { kind: 'local' },
@@ -469,9 +447,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
     expect(wslDefaultSelect('host')).toBe(false)
   })
 
-  // Why: StatusBar passes clearsEveryWslDistro for the "System default" row of
-  // EVERY WSL group, including a concrete-distro one, where the clear lands in
-  // that slot alone. Without the null-distro condition it would mute them all.
+  // Concrete-distro System default clears only its slot even with clearsEveryWslDistro; require a null distro for family matching.
   it('keeps a cleared concrete-distro row off the other distros', () => {
     const ubuntuClear = getCodexAccountSwitchLaneMatcher({
       owner: { kind: 'local' },

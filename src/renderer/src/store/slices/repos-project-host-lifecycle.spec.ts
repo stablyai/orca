@@ -200,6 +200,7 @@ export function registerReposProjectHostLifecycleTests(): void {
 
       await store.getState().updateProjectHostSetup({
         setupId: localSetup.id,
+        hostId: 'local',
         updates: { displayName: 'Local renamed' }
       })
 
@@ -226,7 +227,7 @@ export function registerReposProjectHostLifecycleTests(): void {
         settings: { activeRuntimeEnvironmentId: null } as never
       })
 
-      await store.getState().deleteProjectHostSetup({ setupId: localSetup.id })
+      await store.getState().deleteProjectHostSetup({ setupId: localSetup.id, hostId: 'local' })
 
       expect(projectsDeleteHostSetup).toHaveBeenCalledWith({
         setupId: localSetup.id,
@@ -234,6 +235,31 @@ export function registerReposProjectHostLifecycleTests(): void {
       })
       expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
       expect(store.getState().projectHostSetups).toEqual([runtimeSetup])
+    })
+
+    it('refuses an unqualified setup id two hosts share instead of acting on the first', async () => {
+      const localSetup: ProjectHostSetup = { ...runtimeSetup, hostId: 'local' }
+      const store = createTestStore()
+      store.setState({
+        projects: [project],
+        projectHostSetups: [localSetup, runtimeSetup],
+        settings: { activeRuntimeEnvironmentId: null } as never
+      })
+
+      await expect(
+        store.getState().deleteProjectHostSetup({ setupId: localSetup.id })
+      ).resolves.toBeNull()
+      await expect(
+        store.getState().updateProjectHostSetup({
+          setupId: localSetup.id,
+          updates: { displayName: 'Renamed' }
+        })
+      ).resolves.toBeNull()
+
+      expect(projectsDeleteHostSetup).not.toHaveBeenCalled()
+      expect(projectsUpdateHostSetup).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(store.getState().projectHostSetups).toEqual([localSetup, runtimeSetup])
     })
 
     it('refuses a named host the catalog has no setup for instead of deleting by id', async () => {

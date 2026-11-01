@@ -1,6 +1,4 @@
-// A mutation applied in place: its steps write into drafts over the committed maps, only what they
-// touched is re-validated, and the drafts land together or not at all. The committed store was
-// valid, so a record the mutation did not touch, and whose dependencies it did not touch, still is.
+// Mutate drafts and commit atomically; revalidate touched records/dependencies only because the committed store was already valid.
 
 import type { AgentStatusStoreMutation } from './agent-status-store-contract'
 import {

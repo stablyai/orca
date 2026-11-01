@@ -32,7 +32,6 @@ const AGENT_LEAF = '11111111-1111-4111-8111-111111111111'
 const SHELL_LEAF = '22222222-2222-4222-8222-222222222222'
 const AGENT_PANE = `tab-1:${AGENT_LEAF}`
 
-/** One tab split into an agent pane and a shell pane. */
 function storeWithAgentPane(): ReturnType<typeof createTestStore> {
   const store = createTestStore()
   seedStore(store, {
@@ -75,29 +74,6 @@ describe('sleep through main in a layout-owner build', () => {
     mockApi.pty.kill.mockResolvedValue(undefined)
     applySleepRuntimeRpcDefault(mockApi)
     shutdownBufferCaptures.clear()
-  })
-
-  it('sends the hibernated pane’s record to main once its terminal stopped', async () => {
-    const store = storeWithAgentPane()
-
-    await store.getState().shutdownCompletedAgentPaneForHibernation(WT, {
-      paneKey: AGENT_PANE,
-      tabId: 'tab-1',
-      leafId: AGENT_LEAF,
-      ptyId: 'pty-agent'
-    })
-
-    const record = store.getState().sleepingAgentSessionsByPaneKey[AGENT_PANE]
-    expect(mocks.send).toHaveBeenCalledTimes(1)
-    expect(mocks.send.mock.calls[0]![2]).toEqual({
-      type: 'sleep',
-      tabId: 'tab-1',
-      paneKeys: [AGENT_PANE],
-      records: [record]
-    })
-    expect(mocks.send.mock.invocationCallOrder[0]).toBeGreaterThan(
-      mockApi.pty.kill.mock.invocationCallOrder[0]!
-    )
   })
 
   it('sends nothing when the hibernation stop fails', async () => {

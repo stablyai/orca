@@ -1,6 +1,4 @@
-// Per-terminal scopes against the real user manager: an OOM kill or a fork limit in one
-// terminal leaves the daemon and the other terminals running, and the daemon scope's end
-// takes the terminal slice with it. The baseline only reports what one OOM kill does today.
+// Exercise terminal isolation against real systemd: OOM/fork limits spare daemon/neighbors, while daemon exit ends the terminal slice. Baseline reports shared-scope OOM behavior.
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const { join } = require('node:path')
@@ -101,7 +99,7 @@ async function oomCase(bundlePath, prefix, systemdVersion, mode) {
   const [term1, term2, term3] = daemon.terminals
   await until(() => pidFrom(`${r}.sleeper`) && pidFrom(`${r}.stubborn`), 'terminals not ready')
   const sleeper = pidFrom(`${r}.sleeper`)
-  // Today every terminal shares the daemon's scope, so its limit is the only one to hit.
+  // Baseline terminals share the daemon scope, so only its limit can be hit.
   const [limited, memoryMax] =
     mode === 'baseline' ? [daemon.unit, '192M'] : [daemon.scopes[1].split('/').at(-1), '64M']
   systemctl('set-property', '--runtime', limited, `MemoryMax=${memoryMax}`, 'MemorySwapMax=0')

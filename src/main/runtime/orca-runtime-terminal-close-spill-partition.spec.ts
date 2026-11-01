@@ -73,7 +73,6 @@ export function registerOrcaRuntimeTerminalCloseSpillPartitionTests(): void {
       getForegroundProcess: async () => null,
       listProcesses: async () => [{ id: 'target-pty', cwd: REPO.path, title: 'Terminal' }]
     })
-    // The published snapshot lists both partitions' tabs, as the Web UI sees them.
     const tabs = [...sessions.values()].flatMap((session) =>
       buildHeadlessMobileSessionTerminalTabs(
         WORKTREE_ID,
@@ -126,7 +125,6 @@ export function registerOrcaRuntimeTerminalCloseSpillPartitionTests(): void {
         true
       )
       expect(kill).toHaveBeenCalledWith('target-pty')
-      // The unrelated tab and its partition are untouched.
       expect(sessions.get(LOCAL_EXECUTION_HOST_ID)).toBe(local)
     })
 
@@ -171,7 +169,6 @@ export function registerOrcaRuntimeTerminalCloseSpillPartitionTests(): void {
           capturePersistedTerminalTabCopy(session, WORKTREE_ID, 'target')
         ])
       )
-      // In place, as the binding writer rebinds a session it holds.
       const second = sessions.get('runtime:env-0')!
       second.terminalLayoutsByTabId.target!.ptyIdsByLeafId = { [LEAF]: 'replacement-pty' }
       second.terminalPtyIncarnationsByPaneKey = { [`target:${LEAF}`]: 'replacement-incarnation' }

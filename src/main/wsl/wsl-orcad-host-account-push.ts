@@ -1,8 +1,4 @@
-/**
- * Keeps a WSL host's orcad holding the account env this desktop selected for its distro, so the
- * launches orcad starts on its own (CLI, orchestration, automations, chats, AI commit text) run
- * that account too. Pushed when the host comes up and whenever a selection changes.
- */
+/** Push selected distro account homes on connect/selection changes so host-initiated CLI, automation, chat and text-generation launches use the same account. */
 import type { HostAccountLaunchEnv } from '../../shared/host-account-launch-env'
 import { HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -54,7 +50,7 @@ async function pushOnce(
 ): Promise<void> {
   const verdict = await push.hostSupports(HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY)
   if (verdict === 'unknown') {
-    // Why throw: an unanswered probe is not an older host, so the push is retried.
+    // Unknown capabilities are not proof of an old host; fail so the push retries.
     throw new Error('The host did not report its capabilities.')
   }
   if (verdict === 'unsupported') {
@@ -99,7 +95,7 @@ function enqueue(
   return runKeyedSerializedOperation(pending, push.environmentId, () =>
     pushOnce(push, dependencies)
   ).catch((error: unknown) => {
-    // Why keep the host's last env: clearing it would start the next launch on another account.
+    // Retain the last host account on failure; clearing it would launch under another account.
     console.warn(`[wsl-hosts] Could not give ${push.distro} its selected accounts:`, error)
     const delay = retryDelaysMs[attempt]
     if (delay === undefined) {

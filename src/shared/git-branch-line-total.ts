@@ -10,15 +10,10 @@ import { isTestCodePath } from './test-code-path'
 
 export type { GitBranchLineTotal }
 
-// Why: a base→worktree diff on a very large branch over SSH is unbounded
-// work. A failed diff invalidates the total rather than publishing a partial
-// number or blocking the status response indefinitely.
+// Bound large base-to-worktree diffs over SSH; failures invalidate totals instead of publishing partial values.
 export const GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS = 15_000
 
-// Why: the hard timeout bounds the git process, not the wait. The status
-// response carries the file list and staging state, so it must never sit behind
-// a ranged diff — past this budget the pass publishes without the total and the
-// diff keeps running to backfill the cache for the next pass.
+// Do not hold file/staging status behind the hard process timeout; publish without totals after this budget and backfill later.
 export const GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS = 500
 
 const BRANCH_LINE_TOTAL_PENDING = Symbol('branch-line-total-pending')
@@ -54,16 +49,8 @@ export async function settleGitBranchLineTotalWithinSoftDeadline(input: {
   return undefined
 }
 
-/**
- * `git diff <base>` with no second rev and no `--cached` compares that
- * commit to the working tree, so committed + staged + unstaged collapse into one
- * correctly-deduplicated result. Summing the per-area status rows instead would
- * double-count any line touched in two areas.
- *
- * `-M` only (not `-M -C`): matches the working-tree numstat the CHANGES rows are
- * built from, and avoids `-C`'s cost on wide diffs. The trailing `--` keeps the
- * OID parsed as a rev even if a path of the same name exists.
- */
+/** git diff <base> collapses committed/staged/unstaged changes without double-counting lines touched in multiple areas.
+ * -M matches CHANGES numstat without -C’s wide-diff cost; trailing -- disambiguates OIDs from paths. */
 export function buildGitBranchLineTotalDiffArgs(mergeBase: string): string[] {
   return [
     '-c',
@@ -79,11 +66,7 @@ export function buildGitBranchLineTotalDiffArgs(mergeBase: string): string[] {
   ]
 }
 
-/**
- * The pinned base reaches the host as untrusted RPC input and is spliced into a
- * git argv. Only an object name shape is ever legitimate here, so anything else
- * (notably a leading `-`) is rejected before it can act as a flag.
- */
+/** Pinned bases are untrusted RPC input; accept only object-name shapes so argv cannot acquire flags. */
 export function isGitBranchLineTotalMergeBase(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{7,64}$/.test(value)
 }
@@ -106,15 +89,12 @@ export function sumGitBranchLineTotal(input: {
   let generatedRemoved = 0
   for (const source of [input.tracked, input.untracked]) {
     for (const [filePath, stats] of source) {
-      // Binary files parse to undefined in numstat and contribute nothing, matching
-      // the per-file rows.
+      // Binary numstat entries contribute no lines, matching per-file rows.
       const fileAdded = stats.added ?? 0
       const fileRemoved = stats.removed ?? 0
       added += fileAdded
       removed += fileRemoved
-      // Generated wins the overlap (a snapshot is both): the point of the bucket
-      // is to separate authored lines from churn, and a regenerated file is churn
-      // wherever it lives.
+      // Generated wins overlaps (e.g. test snapshots): regenerated lines are churn wherever stored.
       if (isGeneratedCodePath(filePath)) {
         generatedAdded += fileAdded
         generatedRemoved += fileRemoved
@@ -133,17 +113,13 @@ export function sumGitBranchLineTotal(input: {
   }
 }
 
-// Why: one shared exec per (host, worktree, mergeBase). The renderer's own
-// in-flight refs only dedupe a single renderer's calls; a second window or an
-// fs-watcher burst would otherwise run the ranged diff twice concurrently.
+// Lease one exec per host/worktree/base across windows and watcher bursts; renderer refs only dedupe one window.
 const rangedNumstatLeaseOwner = new GitStatusReadLeaseOwner<{
   stats: Map<string, GitLineStats>
   renameSources: Set<string>
 } | null>()
 
-// Why: the soft deadline hides this diff's cost from the poller's duration-aware
-// backoff, so an overrunning one would restart the moment it finished. Make it
-// wait out its own measured cost; the cache carry-forward keeps the chip up.
+// Soft deadlines hide diff cost from poller backoff; cool down by measured cost to prevent immediate restarts, retaining cached totals.
 const GIT_BRANCH_LINE_TOTAL_MAX_COOLDOWN_MS = 30_000
 const GIT_BRANCH_LINE_TOTAL_COOLDOWN_MAX_KEYS = 256
 const rangedNumstatCooldownUntilMs = new Map<string, number>()
@@ -181,20 +157,13 @@ function recordRangedNumstatDuration(leaseKey: string, durationMs: number, nowMs
   }
 }
 
-/**
- * Call from every path that clears the other git read caches: without it a pass
- * beginning after a discard/stash/checkout joins the pre-mutation lease.
- */
+/** Invalidate with other Git read caches so post-discard/stash/checkout passes cannot join pre-mutation leases. */
 export function invalidateGitBranchLineTotalInFlight(): void {
   rangedNumstatLeaseOwner.invalidate()
   rangedNumstatCooldownUntilMs.clear()
 }
 
-/**
- * Computes the branch total, null when it is known unavailable, or undefined
- * when work was skipped. Rejects only on abort — every other failure
- * invalidates the total instead of publishing a partial number.
- */
+/** Return exact totals, null when unavailable, or undefined when skipped; only abort rejects, while other failures invalidate prior totals. */
 export async function computeGitBranchLineTotal(input: {
   worktreePath: string
   /** Spelling for the direct untracked-file reads when the git host's differs; defaults to worktreePath. */
@@ -210,8 +179,7 @@ export async function computeGitBranchLineTotal(input: {
     return undefined
   }
   const leaseKey = `${input.hostKey}\0${input.worktreePath}\0${input.mergeBase}`
-  // Safe before the lease: a cooldown is only armed once a diff settled, so there
-  // is never an in-flight one to join while it is active.
+  // Cooldown starts only after settlement, so no in-flight lease exists to join while cooling.
   if (isRangedNumstatCoolingDown(leaseKey, monotonicNowMs())) {
     return undefined
   }
@@ -227,9 +195,7 @@ export async function computeGitBranchLineTotal(input: {
         const stats = parseNumstat(stdout, (path) => renameSources.add(path))
         return { stats, renameSources }
       } catch (error) {
-        // Why: an aborted pass must reject so a cancelled scan is never treated
-        // as completed. Everything else — a bad merge base, a timeout, a
-        // detached worktree — yields null to invalidate a previous exact total.
+        // Abort must reject, never mark a cancelled scan complete. Other failures return null to invalidate prior exact totals.
         if (sharedSignal.aborted) {
           throw error
         }
@@ -242,9 +208,7 @@ export async function computeGitBranchLineTotal(input: {
         }
       }
     }),
-    // Untracked files are invisible to a ranged diff but already render as
-    // CHANGES rows, so they are added on top. Stat-keyed caching inside makes
-    // this near-free when attachLineStats just read the same paths.
+    // Ranged diffs omit untracked files shown in CHANGES; stat caching makes their addition cheap after attachLineStats.
     collectUntrackedAdditions(
       input.filesystemWorktreePath ?? input.worktreePath,
       input.untrackedPaths,

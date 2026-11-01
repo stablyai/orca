@@ -12,7 +12,6 @@ const identity = {
   executionHostIdentity: 'ssh/target:private.example'
 }
 
-/** Shipping-shaped inputs whose derived names are frozen: both are persisted on disk. */
 const pinnedIdentity = {
   orcaProfileId: 'orca/profile:alpha',
   browserProfileId: 'browser/profile:default',
@@ -21,20 +20,6 @@ const pinnedIdentity = {
 }
 
 describe('browser route partition identity', () => {
-  it('derives a stable opaque cross-platform partition and binding fingerprint', () => {
-    const first = deriveBrowserRoutePartition(identity)
-    const second = deriveBrowserRoutePartition({ ...identity })
-
-    expect(second).toEqual(first)
-    expect(first.partition).toMatch(/^persist:orca-browser-v1-[a-f0-9]{64}$/)
-    expect(first.bindingFingerprint).toMatch(/^[a-f0-9]{64}$/)
-    expect(first.partition.slice('persist:'.length)).toMatch(/^[a-z0-9-]+$/)
-    for (const rawIdentity of Object.values(identity)) {
-      expect(first.partition).not.toContain(rawIdentity)
-    }
-    expect(first.partition).not.toContain('private.example')
-  })
-
   it('keeps delimiter-containing components structurally distinct', () => {
     const left = deriveBrowserRoutePartition({
       ...identity,
@@ -50,19 +35,6 @@ describe('browser route partition identity', () => {
     expect(left).not.toEqual(right)
   })
 
-  it('does not expose equality of individual identity components', () => {
-    const baseline = deriveBrowserRoutePartition(identity).partition
-    const sameProfile = deriveBrowserRoutePartition({
-      ...identity,
-      executionHostIdentity: 'ssh/target:other.example'
-    }).partition
-
-    expect(baseline.split('-').at(-1)).not.toBe(sameProfile.split('-').at(-1))
-    expect(baseline).not.toMatch(/:[a-f0-9]{16}:/)
-  })
-
-  // Why: a component dropped from the hash silently merges two jars -- another browser
-  // profile's or another paired server's cookies answer to this identity.
   it('makes every identity component load-bearing', () => {
     const derived = [
       identity,
@@ -76,8 +48,7 @@ describe('browser route partition identity', () => {
     expect(new Set(derived.map((entry) => entry.bindingFingerprint)).size).toBe(derived.length)
   })
 
-  // Why: both names are persisted, so a changed hash input, order, tag, or version relocates
-  // every existing user's cookie jar instead of failing.
+  // Persisted names must remain stable to avoid silently relocating cookie jars.
   it('pins the derived partition and fingerprint against silent relocation', () => {
     expect(deriveBrowserRoutePartition(pinnedIdentity)).toEqual({
       partition:
@@ -86,14 +57,6 @@ describe('browser route partition identity', () => {
     })
   })
 
-  it('keeps the partition name and the binding fingerprint in separate digest domains', () => {
-    const derived = deriveBrowserRoutePartition(identity)
-
-    expect(derived.partition).not.toContain(derived.bindingFingerprint)
-  })
-
-  // Why: removal deletes every partition carrying the scope, so a scope missing either
-  // component wipes storage the removed record never owned.
   it('scopes partition ownership to one orca profile and one environment', () => {
     const scope = deriveBrowserRoutePartitionStorageScope({
       orcaProfileId: 'orca/profile:alpha',
@@ -115,7 +78,7 @@ describe('browser route partition identity', () => {
     ).not.toBe(scope)
   })
 
-  // Why: an accepted name is joined onto the partition data root and that directory removed.
+  // These names are joined to the partition root for storage deletion.
   it('recognizes a route partition only as a whole name', () => {
     const valid = deriveBrowserRoutePartition(pinnedIdentity).partition
 

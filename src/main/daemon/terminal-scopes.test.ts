@@ -43,10 +43,7 @@ const SCOPE_ON = { on: expect.objectContaining({ slice: 'orca_ptys_orca_daemon_1
 
 type Call = { program: string; args: string[] }
 
-/**
- * A fake `systemd-run`: may reject OOMPolicy or memory properties on scopes, enforces `pidsMax`
- * on each one, and with memory delegated shows each requested memory limit page-rounded.
- */
+/** Model property rejection, delegated task limits, and page-rounded memory enforcement. */
 function fakeManager({
   oomPolicy = true,
   pidsMax = 'max',

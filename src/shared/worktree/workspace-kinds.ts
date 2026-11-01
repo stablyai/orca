@@ -4,12 +4,7 @@ import type { RuntimeWorktreePsSummary } from '../runtime-worktree-contracts'
 import { getWorktreeGitIdentityDisplay } from './git-identity-display'
 import type { Worktree } from './types'
 
-/**
- * Predicates for what KIND of workspace a row is, as the sidebar's Filters switches classify it.
- *
- * Why shared: main applies the persisted switches to the phone push it sends for local chat
- * sessions, and a second copy of these predicates is how that push drifts from the sidebar.
- */
+/** Share kind predicates between sidebar filters and host phone pushes to prevent visibility drift. */
 
 type WorkspaceKindFields = Pick<
   Worktree,
@@ -29,8 +24,7 @@ export function isDefaultBranchWorkspace(
   if (!worktree.isMainWorktree || worktree.ephemeralVmCheckoutMode === 'provisioned-root') {
     return false
   }
-  // Why: a folder project's root is its default workspace but has no branch; on a git repo an
-  // empty branch means detached HEAD or an offline SSH row, which stay visible.
+  // Folder roots have no branch; empty branches on Git mains may be detached/offline and must stay visible.
   return worktree.branch.trim() !== '' || (repo !== undefined && isFolderRepo(repo))
 }
 
@@ -46,21 +40,13 @@ export function isCliCreatedWorkspace(
   return worktree.cliProvenance?.kind === 'created-by-cli'
 }
 
-/**
- * Whether a worktree sits on a detached HEAD (a commit, not a branch).
- *
- * Why the head check: folder workspaces and SSH-synthesized rows carry both an
- * empty branch and an empty head, so branch-emptiness alone would sweep them
- * into this filter. Requiring a real head keeps the predicate to genuine
- * detached-HEAD checkouts, matching what DetachedHeadBadge renders on the card.
- */
+/** Require a real HEAD as DetachedHeadBadge does; empty-branch folder/offline SSH rows are not detached checkouts. */
 export function isDetachedHeadWorkspace(
   worktree: Pick<WorkspaceKindFields, 'branch' | 'head'>
 ): boolean {
   return getWorktreeGitIdentityDisplay(worktree)?.kind === 'detached'
 }
 
-/** The workspace kinds a Filters switch can hide. */
 export const WORKSPACE_KINDS = [
   'defaultBranch',
   'automationCreated',
@@ -69,7 +55,6 @@ export const WORKSPACE_KINDS = [
 ] as const
 export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number]
 
-/** Which Filters switch hides each kind: the one list every surface applies. */
 export const WORKSPACE_KIND_SWITCH = {
   defaultBranch: 'hideDefaultBranchWorkspace',
   automationCreated: 'hideAutomationGeneratedWorkspaces',
@@ -77,10 +62,9 @@ export const WORKSPACE_KIND_SWITCH = {
   detachedHead: 'hideDetachedHeadWorkspaces'
 } as const satisfies Record<WorkspaceKind, string>
 
-/** The Filters switches that hide a workspace by its kind alone, with no live renderer state. */
 export type WorkspaceKindSwitches = Record<(typeof WORKSPACE_KIND_SWITCH)[WorkspaceKind], boolean>
 
-/** Whether a switch that is on hides a kind this row is; `isKind` is asked only for those kinds. */
+/** Query only kinds whose hiding switch is on. */
 export function isHiddenByKindSwitch(
   switches: WorkspaceKindSwitches,
   isKind: (kind: WorkspaceKind) => boolean

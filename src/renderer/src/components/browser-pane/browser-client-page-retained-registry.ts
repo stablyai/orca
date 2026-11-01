@@ -163,7 +163,7 @@ export class BrowserClientPageRetainedRegistry {
     const webview = createBrowserClientPageWebview({
       createWebview: this.options.createWebview,
       document: this.options.document,
-      partition: identity.partition
+      identity
     })
 
     let resolveMount!: RetainedPage['resolveMount']
@@ -312,8 +312,7 @@ export class BrowserClientPageRetainedRegistry {
   }
 
   private disconnectPage(page: RetainedPage): void {
-    // Why: the pane's own detach may never run (registry dispose, guest loss), and the sync
-    // would otherwise keep re-reading a container for a host that is no longer in the document.
+    // Registry disposal or guest loss may precede pane detach; stop rect reads for the disconnected host now.
     page.visibleAttachment?.stopTrackingViewport()
     page.visibleAttachment = null
     page.webview.remove()

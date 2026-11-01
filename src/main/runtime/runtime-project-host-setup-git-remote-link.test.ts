@@ -88,7 +88,7 @@ describe('RuntimeProjectHostSetupController with a Git-remote project', () => {
         url: 'https://gitlab.com/group/other.git',
         destination: '/tmp'
       })
-    ).rejects.toThrow('Imported folder does not match the selected project identity.')
+    ).rejects.toThrow('Imported folder resolves to project "git:gitlab.com/group/other"')
     expect(repos).toHaveLength(0)
   })
 })

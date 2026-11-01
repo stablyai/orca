@@ -201,7 +201,6 @@ describe('createGitObjectQuarantine', () => {
       })
     ).resolves.toBe('ok')
 
-    // The index never lands without its pack.
     expect(readdirSync(join(objects, 'pack'))).toEqual([])
     expect(scratchDirs()).toEqual([])
     expect(warn).toHaveBeenCalledWith(

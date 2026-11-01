@@ -1,9 +1,4 @@
-/**
- * The serializer keeps trailing background-only rows (a TUI that paints its
- * whole screen, e.g. OpenCode), so screens read as text end in `\r\n\x1b[NX`
- * rows. Every text reader of `serialize({ scrollback: 0 })` must read the same
- * thing with and without them.
- */
+/** Text readers must ignore serialized trailing background-only rows retained by full-screen TUIs such as OpenCode. */
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'

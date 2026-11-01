@@ -2,13 +2,7 @@ import type { Page } from '@stablyai/playwright-test'
 import type { PairedElectronClient, RuntimeDesktopPairingOffer } from './paired-electron-client'
 import { revealPairedClientWindow } from './paired-client-window-reveal'
 
-/**
- * Points a freshly launched paired desktop client at the HUB runtime and makes it the active
- * environment, returning the environment id.
- *
- * On a reused profile the stored environment is adopted as-is: re-pairing there would mint a second
- * credential and a second device identity, which is exactly what a relaunch must NOT do.
- */
+// Reuse stored pairing on relaunch; re-pairing would mint a second credential/device identity.
 export async function selectPairedRuntimeEnvironment(
   page: Page,
   args: { name: string; pairingUrl: string; reusedProfile: boolean }

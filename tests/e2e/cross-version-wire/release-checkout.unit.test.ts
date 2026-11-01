@@ -46,8 +46,7 @@ function git(args: string[]): string {
 }
 
 function syntheticCheckout(): ReleaseCheckout {
-  // Why realpath: vite-node reports module urls through macOS's /var -> /private/var
-  // symlink, so provenance assertions need the resolved form.
+  // Resolve macOS /var symlinks like vite-node for provenance comparisons.
   const root = realpathSync(temporaryCacheRoot())
   return { ref: 'v0.0.0-synthetic', commit: 'f'.repeat(40), label: 'v0.0.0-synthetic', root }
 }
@@ -216,8 +215,7 @@ async function runContentionPhase(
       acquiredMarker,
       ...(ablateLock ? { ablateLock, stagingMarker, proceedPath, populateStaging: true } : {})
     })
-    // onLockAttempt runs only after the rival's first stamp miss and invocation
-    // of the actual lock function; no elapsed-time guess stands in for contention.
+    // Wait for real lock contention acknowledgement, not an elapsed-time guess.
     await waitForFile(ablateLock ? stagingMarker : attemptMarker, 30_000)
     if (!ablateLock) {
       expect(existsSync(acquiredMarker), rival.output()).toBe(false)
@@ -229,8 +227,7 @@ async function runContentionPhase(
       (error: unknown) => error
     )
     if (ablateLock) {
-      // The staging marker is after the second stamp miss. Publishing before this
-      // acknowledgement would let the ablation pass without exercising deletion.
+      // Wait for the second stamp miss or the ablation could pass without exercising deletion.
       writeFileSync(proceedPath, '')
     }
     await releaseOnce()
@@ -378,8 +375,7 @@ describe('release checkout materialization', () => {
     })
 
     await expect(runContentionPhase(published, scratch, 'locked', false)).resolves.toBe(true)
-    // In the same causally acknowledged interleaving, a no-lock materializer
-    // deletes the newly published tree. This makes the lock assertion non-vacuous.
+    // The same acknowledged interleaving without a lock must delete the published tree, proving the lock assertion matters.
     await expect(runContentionPhase(published, scratch, 'ablated', true)).resolves.toBe(false)
   }, 120_000)
 
@@ -564,9 +560,7 @@ describe('release checkout module importer', () => {
     const probe = await importReleaseCheckoutModule(checkout, '/src/provenance-probe.mjs')
     expect(String(probe.moduleUrl)).toContain(checkout.root.split('\\').join('/'))
 
-    // The working tree has this module and the synthetic checkout does not:
-    // resolving it would mean a root-relative specifier silently ran current
-    // code as the "old" side — the exact poison this harness exists to prevent.
+    // This module exists only in the working tree; resolving it would silently run current code as the old build.
     await expect(
       importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts')
     ).rejects.toThrow()

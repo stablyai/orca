@@ -30,7 +30,6 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     async (_event, args: { filePath?: string; connectionId?: string }): Promise<never> => {
       validateRequiredString(args?.filePath, 'filePath')
       const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
-      // Why: only SSH targets downloaded through here, and this process serves none.
       throw new SshHostNotServedError(connectionId)
     }
   )

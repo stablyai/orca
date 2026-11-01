@@ -60,7 +60,6 @@ describe('RelayDispatcher', () => {
     const frame = encodeJsonRpcFrame(req, 1, 0)
     dispatcher.feed(frame)
 
-    // Let the handler promise resolve
     await vi.advanceTimersByTimeAsync(0)
 
     expect(handler).toHaveBeenCalledWith(
@@ -68,7 +67,6 @@ describe('RelayDispatcher', () => {
       expect.objectContaining({ isStale: expect.any(Function) })
     )
 
-    // Should have sent a response (after keepalive timer writes)
     const responses = written.filter((buf) => {
       const f = decodeFirstFrame(buf)
       if (f.type !== MessageType.Regular) {
@@ -296,12 +294,10 @@ describe('RelayDispatcher', () => {
     const handler = vi.fn().mockResolvedValue('ok')
     dispatcher.onRequest('ping', handler)
 
-    // Send request with seq=50
     const req: JsonRpcRequest = { jsonrpc: '2.0', id: 1, method: 'ping' }
     dispatcher.feed(encodeJsonRpcFrame(req, 50, 0))
     await vi.advanceTimersByTimeAsync(0)
 
-    // The response frame should have ack=50
     const responseFrames = written.filter((buf) => {
       const f = decodeFirstFrame(buf)
       if (f.type !== MessageType.Regular) {
@@ -320,7 +316,6 @@ describe('RelayDispatcher', () => {
 
   it('silently handles keepalive frames', () => {
     const frame = encodeKeepAliveFrame(1, 0)
-    // Should not throw
     dispatcher.feed(frame)
   })
 
@@ -412,16 +407,12 @@ describe('RelayDispatcher', () => {
 
     dispatcher.invalidateClient()
 
-    // Why the cause is asserted: an unqualified invalidate is the relay's own decision, and only a
-    // caller that watched the peer's transport end may report 'peer-closed'.
+    // Unqualified invalidation is local; peer-closed requires an observed peer transport end.
     expect(listener).toHaveBeenCalledWith(1, 'local')
   })
 
   it('detaches the primary client when its write throws (frame lost, trigger reconnect)', () => {
-    // Regression: a primary-client write throw dropped the frame (possibly
-    // pty.data/pty.exit) with no resend AND without notifying detach, so the
-    // owning Orca's reconnect + PTY-reattach path never engaged until the ~20s
-    // keepalive timeout — output/pane-death were silently lost in the meantime.
+    // A failed primary write must detach promptly so reconnect/reattach repairs lost PTY events before keepalive timeout.
     let throwOnWrite = false
     const detachDispatcher = new RelayDispatcher((data) => {
       if (throwOnWrite) {
@@ -437,13 +428,9 @@ describe('RelayDispatcher', () => {
       throwOnWrite = true
       detachDispatcher.notify('pty.exit', { id: 'pty-1', code: 0 })
 
-      // Fix: the write failure detaches the primary so the reconnect/reattach
-      // machinery runs promptly instead of waiting for keepalive timeout.
-      // Why 'local': a throwing sink is this relay's write failing, not observed proof the peer left.
+      // The sink failed locally; that is no observed peer departure.
       expect(detachListener).toHaveBeenCalledWith(1, 'local')
 
-      // Recovery: a reconnecting socket swaps the write via setWrite; the client
-      // is usable again and later frames flow to the new sink.
       throwOnWrite = false
       const recovered: Buffer[] = []
       detachDispatcher.setWrite((data) => {

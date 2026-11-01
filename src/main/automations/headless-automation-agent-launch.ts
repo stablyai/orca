@@ -1,24 +1,15 @@
-/**
- * A server-run automation's agent, started through the shared launch executor.
- *
- * Automations observe their run from the PTY, so the launch is `terminalOnly` whatever the chat
- * default says. What stays the automation's own is in the factories: a new-per-run workspace is
- * created agent-first from the automation's create args, and an existing workspace gets a terminal
- * titled with the run. Both fold an argv agent's prompt into its command at any length, as the
- * automation always has. A post-start agent's prompt goes out through the follow-up writer the create
- * always used, for parity: the executor's composer readiness misses slow starts (a follow-up fixes it).
- * A `reuseSession` automation first sends its prompt into the agent a previous run left idle, as on
- * the desktop, and launches fresh only when no such agent takes it.
- */
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+// Automations observe PTYs, so launch terminal agents regardless of the chat default.
 
 import type {
   AgentLaunchPublishedSurface,
   AgentLaunchSurfaceExecution
 } from '../agent-launch/agent-launch-execution'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
@@ -42,18 +33,36 @@ export async function launchHeadlessAutomationAgent(
   runtime: OrcaRuntimeService,
   request: {
     automation: Automation
-    run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
+    run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'trigger'>
     target: Extract<AutomationRunTargetResult, { ok: true }>
-    /** This automation's runs, whose idle agent a `reuseSession` run continues. */
     runs: readonly AutomationRun[]
   }
 ): Promise<HeadlessAutomationAgentLaunch> {
   const { automation, run, target } = request
   const agent = automation.agentId
+  const selectedTarget =
+    automation.workspaceMode === 'existing'
+      ? await runtime.resolveManagedTerminalWorkspaceTarget(
+          `id:${requireWorkspaceId(automation)}`,
+          parseWorkspaceKey(automation.workspaceId ?? '')?.type === 'folder'
+            ? undefined
+            : getRepoExecutionHostId(target.repo),
+          false
+        )
+      : undefined
+  const selectedWorkspace = selectedTarget?.managedWorktree
+  if (automation.workspaceMode === 'existing' && !selectedWorkspace) {
+    throw new Error('The target workspace is no longer available.')
+  }
   // The startup plan trims the prompt for every agent; a blank one launches the agent bare.
   const text = automation.prompt?.trim()
   if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
-    const reused = await sendToReusableSession(runtime, { ...request, text })
+    const reused = await sendToReusableSession(
+      runtime,
+      { ...request, text },
+      selectedWorkspace?.displayName ?? null,
+      selectedWorkspace?.hostId ?? getRepoExecutionHostId(target.repo)
+    )
     if (reused) {
       return reused
     }
@@ -64,7 +73,7 @@ export async function launchHeadlessAutomationAgent(
     runtime,
     intent: {
       agent,
-      // The workspace factory builds the create from the automation, so the target carries none.
+      // The workspace factory supplies create arguments from the automation.
       target:
         automation.workspaceMode === 'new_per_run'
           ? { kind: 'create-worktree', create: {} }
@@ -74,7 +83,6 @@ export async function launchHeadlessAutomationAgent(
     terminalOnly: true,
     workspaces: {
       createWorktree: async ({ startupAgent, startupPrompt }) => {
-        // Agent-first is the only create here; a structured pre-flight must not reach it.
         if (startupAgent === undefined) {
           throw new Error(TERMINAL_ONLY_MESSAGE)
         }
@@ -83,7 +91,11 @@ export async function launchHeadlessAutomationAgent(
           run,
           repo: target.repo
         })
+        let startupTerminalCreation: RuntimeTerminalCreate | undefined
         const created = await runtime.createManagedWorktree({
+          onStartupTerminalCreated: (terminal) => {
+            startupTerminalCreation = terminal
+          },
           ...create,
           startupAgent,
           ...(startupPrompt ? { startupPrompt } : {})
@@ -102,8 +114,9 @@ export async function launchHeadlessAutomationAgent(
         return {
           worktreeId: created.worktree.id,
           startupTerminalHandle: startup.handle,
+          startupTerminalCreation,
           ...(startup.paneKey ? { startupTerminalPaneKey: startup.paneKey } : {}),
-          // The create folds an offered prompt at any length; staging carries long lines.
+          // Creation stages long prompts while keeping them on the launch command.
           ...(startupPrompt ? { promptRodeLaunchCommand: true } : {})
         }
       }
@@ -113,26 +126,38 @@ export async function launchHeadlessAutomationAgent(
         throw new Error(TERMINAL_ONLY_MESSAGE)
       },
       createTerminalAgent: async ({ worktreeId, startupPrompt }) => {
-        const launched = await runtime.launchAgentTerminal(`id:${worktreeId}`, {
-          agent,
-          prompt: startupPrompt ?? '',
-          title: run.title,
-          ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
-        })
+        const resolved = selectedWorkspace
+        if (!resolved) {
+          throw new Error('The target workspace is no longer available.')
+        }
+        const launched = await runtime.launchAgentTerminal(
+          `id:${worktreeId}`,
+          {
+            agent,
+            prompt: startupPrompt ?? '',
+            title: run.title,
+            suppressStartupUpdatePrompt: true,
+            ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+            // Run now is the user's act and may start a stopped WSL distro; a scheduled run never does.
+            ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const })
+          },
+          {
+            worktree: resolved,
+            repo: target.repo,
+            folderWorkspace: selectedTarget?.scope.folderWorkspace ?? undefined
+          }
+        )
         terminal = launched
-        const shown = await runtime.showManagedWorktree(`id:${launched.worktreeId}`)
-        workspace = { id: launched.worktreeId, displayName: shown.displayName ?? null }
+        workspace = { id: launched.worktreeId, displayName: resolved.displayName ?? null }
         return {
           handle: launched.handle,
+          terminalCreation: launched,
           ...(launched.paneKey ? { paneKey: launched.paneKey } : {}),
           ...(startupPrompt ? { promptRodeLaunchCommand: true } : {})
         }
       },
-      deliverTerminalPrompt: ({ handle, prompt }) =>
-        runtime.deliverStartupFollowup(handle, {
-          expectedProcess: TUI_AGENT_CONFIG[agent].expectedProcess,
-          prompt: prompt.text
-        })
+      deliverTerminalPrompt: ({ handle, prompt, terminalCreation }) =>
+        runtime.deliverStartupFollowup(handle, { agent, prompt: prompt.text }, { terminalCreation })
     }
   }
   await launchUntilPublished(execution)
@@ -149,7 +174,6 @@ export async function launchHeadlessAutomationAgent(
   }
 }
 
-/** Null when no previous run's agent is idle in its own PTY or it did not take the prompt. */
 async function sendToReusableSession(
   runtime: OrcaRuntimeService,
   request: {
@@ -157,7 +181,10 @@ async function sendToReusableSession(
     run: Pick<AutomationRun, 'id'>
     runs: readonly AutomationRun[]
     text: string
-  }
+    target: Extract<AutomationRunTargetResult, { ok: true }>
+  },
+  workspaceDisplayName: string | null,
+  physicalHostId: string
 ): Promise<HeadlessAutomationAgentLaunch | null> {
   const { automation, text } = request
   const worktreeId = requireWorkspaceId(automation)
@@ -165,6 +192,11 @@ async function sendToReusableSession(
     automationId: automation.id,
     agentId: automation.agentId,
     worktreeId,
+    target: {
+      hostId: getRepoExecutionHostId(request.target.repo),
+      repoId: request.target.repo.id,
+      path: request.target.repo.path
+    },
     currentRunId: request.run.id,
     runs: request.runs,
     agentStatusForPane: (paneKey) =>
@@ -174,7 +206,14 @@ async function sendToReusableSession(
         .toSorted((left, right) => right.receivedAt - left.receivedAt)[0],
     liveSession: (previous) => {
       const handle = runOwnHandle(runtime, previous)
-      return handle ? { handle, previous } : null
+      const liveWorktreeId = handle ? runtime.getTerminalWorktreeIdForHandle(handle) : null
+      const liveHostId = handle
+        ? runtime.getPtyExecutionHostMetadata(runtime.getTerminalPtyIdForHandle(handle))
+            .executionHostId
+        : undefined
+      return handle && liveWorktreeId === worktreeId && liveHostId === physicalHostId
+        ? { handle, previous }
+        : null
     }
   })
   if (
@@ -185,16 +224,15 @@ async function sendToReusableSession(
       agent: automation.agentId,
       freshLaunch: false,
       text,
-      // As a worker brief does: a Windows host cannot find the agent in front, only a shell.
+      // Windows cannot prove which agent is foreground; refuse only a proven shell.
       unprovableHost: 'write-unless-shell'
     }))
   ) {
     return null
   }
-  const shown = await runtime.showManagedWorktree(`id:${worktreeId}`)
   return {
     workspaceId: worktreeId,
-    workspaceDisplayName: shown.displayName ?? null,
+    workspaceDisplayName,
     terminalHandle: session.handle,
     terminalSessionId: session.previous.terminalSessionId,
     terminalPaneKey: session.previous.terminalPaneKey,
@@ -202,8 +240,11 @@ async function sendToReusableSession(
   }
 }
 
-/** The run's pane handle while that pane still holds the run's own PTY; null otherwise. */
-export function runOwnHandle(runtime: OrcaRuntimeService, run: AutomationRun): string | null {
+/** Reject reused pane handles whose PTY no longer belongs to this run. */
+export function runOwnHandle(
+  runtime: Pick<OrcaRuntimeService, 'getTerminalHandleForPaneKey' | 'getTerminalPtyIdForHandle'>,
+  run: AutomationRun
+): string | null {
   const handle = run.terminalPaneKey
     ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
     : null
@@ -214,10 +255,7 @@ export function runOwnHandle(runtime: OrcaRuntimeService, run: AutomationRun): s
     : null
 }
 
-/**
- * Settles once the agent's terminal exists, as the run was always recorded; a post-start prompt
- * is still being delivered, and the run's watcher observes the agent from here on.
- */
+/** Return on terminal publication; post-start prompt delivery may still be pending. */
 function launchUntilPublished(
   execution: AgentLaunchSurfaceExecution
 ): Promise<AgentLaunchPublishedSurface> {

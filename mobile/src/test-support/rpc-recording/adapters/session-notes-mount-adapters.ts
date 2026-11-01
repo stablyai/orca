@@ -11,14 +11,7 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const WORKSPACE = 'workspace-1'
 const TAB = 'tab-md'
 
-/**
- * The session screen's own persisted text: the worktree-stored review notes, the markdown tab save,
- * and the quick-command list the terminal sheet edits.
- *
- * All three are optimistic writes with a rollback, so the projection is the local list rather than
- * the reply: what a golden has to show is which value survives a refusal. Quick commands adds a
- * serialized queue, so its recording is also the order two overlapping saves settle in.
- */
+// Observe local values surviving refused optimistic saves and settlement order for overlapping serialized quick-command writes.
 export function sessionNotesMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -123,7 +116,8 @@ export function sessionNotesMountAdapters(
             readMarkdownTab: () => {
               effect('read-markdown-tab', {})
               return Promise.resolve()
-            }
+            },
+            dictationLeaveHold: { holdsLeave: false, hold: () => false }
           })
         )
       })

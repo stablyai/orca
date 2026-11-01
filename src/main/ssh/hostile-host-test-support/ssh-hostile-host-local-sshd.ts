@@ -1,12 +1,4 @@
-/**
- * Runs a local-sshd hostile-host cell: a user-level sshd on a loopback port that logs in as the
- * runner user, so a macOS runner can be the SSH host without system changes or a second account.
- *
- * What the SSH side cannot hide on macOS: /usr/bin/{cc,gcc,g++,c++,make,xattr,python3} are
- * SIP-protected xcrun stubs, so the shims only shadow them by PATH order, and an absolute
- * `/usr/bin/cc` call would bypass the log. A PTY's login shell re-runs path_helper from
- * /etc/paths, which puts Homebrew back for the terminal (not for the deploy's exec channels).
- */
+/** Use a user-level loopback sshd without account/system changes. On macOS, absolute SIP-protected tool paths bypass shims and PTY path_helper can restore Homebrew; deploy exec channels remain isolated. */
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { userInfo } from 'node:os'
@@ -47,7 +39,7 @@ export type LocalSshdConfigInput = {
 export function localSshdConfig(input: LocalSshdConfigInput): string {
   const path = [input.shimDir, ...LOCAL_SSHD_BASE_PATH].join(':')
   for (const value of [path, input.home, input.hostKey, input.pidFile, input.authorizedKeys]) {
-    // Why: sshd_config splits on whitespace and has no escaping we could rely on across versions.
+    // sshd_config whitespace escaping is not reliable across supported versions.
     if (/[\s"']/.test(value)) {
       throw new Error(`local sshd paths must not contain whitespace or quotes: ${value}`)
     }
@@ -95,7 +87,7 @@ function freeLoopbackPort(): Promise<number> {
 export async function startLocalSshdTarget(
   cell: LocalSshdHostileHostCell
 ): Promise<LocalSshdHostileHostTarget> {
-  // Why /tmp: the remote home holds orcad's daemon socket, and macOS caps sun_path at 104 bytes.
+  // Keep sockets under /tmp: macOS sun_path is limited to104 bytes.
   const tempDir = await mkdtemp(join(await realpath('/tmp'), 'orca-hh-'))
   try {
     const home = join(tempDir, 'home')
@@ -176,7 +168,7 @@ export async function stopLocalSshdTarget(target: LocalSshdHostileHostTarget): P
     target.sshd.kill('SIGTERM')
     await exited
   }
-  // Why: orcad daemonizes out of the sshd session; it runs from the temp home, so its argv names it.
+  // Daemonized orcad outlives sshd; its temp-home argv identifies cleanup targets.
   await runProcess({ program: 'pkill', args: ['-TERM', '-f', target.tempDir], timeoutMs: 10_000 })
   if (!(await waitForNoProcessMatching(target.tempDir, 10_000))) {
     await runProcess({ program: 'pkill', args: ['-KILL', '-f', target.tempDir], timeoutMs: 10_000 })

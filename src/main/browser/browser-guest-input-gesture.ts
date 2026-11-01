@@ -1,7 +1,6 @@
 import type { WebContents } from 'electron'
 
-// Why: Electron's window-open details carry no user-activation flag, so main keeps its own
-// browser-process input timeline instead of trusting anything the page can synthesize.
+// Window-open details lack user activation; track browser-process input instead of page events.
 const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
   'mouseDown',
   'mouseUp',
@@ -17,7 +16,12 @@ const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
 
 export const BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS = 1_000
 
-/** A click, tap or keypress the user made, as opposed to a pointer move or wheel. */
+/** Whether activation observed at `observedAt` still lets the page act on it. */
+export function isRecentBrowserGuestInput(observedAt: number, now: number): boolean {
+  const elapsed = now - observedAt
+  return elapsed >= 0 && elapsed <= BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS
+}
+
 export function isActivatingBrowserGuestInput(input: Electron.InputEvent | undefined): boolean {
   return typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)
 }
@@ -30,12 +34,13 @@ export type BrowserGuestInputGesture = {
 
 export function trackBrowserGuestInputGesture(
   guest: WebContents,
-  now: () => number = () => Date.now()
+  { now = Date.now, onActivatingInput }: { now?: () => number; onActivatingInput?: () => void } = {}
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
   const onInputEvent = (_event: Electron.Event, input: Electron.InputEvent): void => {
     if (isActivatingBrowserGuestInput(input)) {
       lastGestureAt = now()
+      onActivatingInput?.()
     }
   }
   let attached = false
@@ -49,13 +54,7 @@ export function trackBrowserGuestInputGesture(
     consume: () => {
       const observedAt = lastGestureAt
       lastGestureAt = null
-      const elapsed = observedAt === null ? -1 : now() - observedAt
-      return (
-        attached &&
-        observedAt !== null &&
-        elapsed >= 0 &&
-        elapsed <= BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS
-      )
+      return attached && observedAt !== null && isRecentBrowserGuestInput(observedAt, now())
     },
     dispose: () => {
       lastGestureAt = null

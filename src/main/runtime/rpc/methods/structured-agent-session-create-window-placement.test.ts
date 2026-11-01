@@ -1,10 +1,9 @@
-// A chat this machine's window creates is placed by the window's own open, where it reserved the
-// chat's place; main's publish of it places nothing. Any other caller's chat main places itself.
+// The local window places its reserved chat itself; main places chats for every other caller.
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
-import { structuredAgentSessionCreateParams } from '../../../../shared/structured-agent-session-create'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
+import { structuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import {
   createRestTestRig,
   type RestTestRig
@@ -14,7 +13,7 @@ import {
   HOST_TEST_NOW as NOW
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { DESKTOP_RPC_CALLER, type RpcCallerIdentity } from '../rpc-caller-identity'
+import type { RpcCallerIdentity } from '../rpc-caller-identity'
 import { call, runtimeCalls } from './structured-agent-session-rpc.test-fixture'
 
 const CLIENT = {
@@ -38,31 +37,33 @@ afterEach(async () => {
 })
 
 // The transport's caller stamp, which the fixture forwards with the rest of the client.
-const create = (client: typeof CLIENT & { caller?: RpcCallerIdentity }) =>
+const create = (
+  client: typeof CLIENT & { caller?: RpcCallerIdentity },
+  tabPlacement?: { groupId?: string; afterTabId?: string }
+) =>
   call(
     'agentSession.create',
     structuredAgentSessionCreateParams({
       sessionId: SESSION,
       worktree: 'id:workspace-1',
       agent: 'codex',
+      ...(tabPlacement ? { tabPlacement } : {}),
       randomUuid: () => '00000000-0000-0000-0000-0000000000fb',
       now: NOW
     }),
     client
   )
 
-it.each([
-  ["this machine's window", { ...CLIENT, caller: DESKTOP_RPC_CALLER }, true],
-  ['a paired device', { ...CLIENT, caller: { kind: 'paired-device', deviceId: 'phone-1' } }, false],
-  ['a caller the transport did not name', CLIENT, false]
-] as const)(
-  'a create from %s leaves its chat to the window only when the window made it',
-  async (_, client, byWindow) => {
-    expect(await create(client)).toMatchObject({ ok: true, result: { ok: true } })
+it("passes a paired client's chosen place to main's placement, outside the fingerprint (L270)", async () => {
+  const phone = { ...CLIENT, caller: { kind: 'paired-device', deviceId: 'desktop-2' } } as const
+  const placement = { groupId: 'server-group-1', afterTabId: 'server-tab-1' }
+  expect(await create(phone, placement)).toMatchObject({ ok: true, result: { ok: true } })
 
-    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledOnce()
-    const published = runtimeCalls.publishStructuredAgentSessionTab?.mock.calls[0]?.[0]
-    expect(published).toMatchObject({ sessionId: SESSION, activate: true })
-    expect(published?.placedByWindow).toBe(byWindow ? true : undefined)
-  }
-)
+  const published = runtimeCalls.publishStructuredAgentSessionTab?.mock.calls[0]?.[0]
+  expect(published?.placement).toEqual(placement)
+  // A retry naming another place replays the same create.
+  expect(await create(phone, { groupId: 'server-group-2' })).toMatchObject({
+    ok: true,
+    result: { ok: true }
+  })
+})

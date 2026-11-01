@@ -103,8 +103,7 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
         label: 'stablyai/orca'
       }
     })
-    // Offline/unauthed: the parent lookup returns null. The same-name origin
-    // owner must NOT be persisted over the parent identity.
+    // Failed upstream probes are ambiguous; never replace a known parent identity with same-name origin.
     apiMocks.repoUpstream.mockResolvedValueOnce(null)
     apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
 

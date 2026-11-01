@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// Why: the sibling hook test mocks @/lib/primary-selection, so it cannot prove
-// the armed window is really single-shot. This file wires the hook to the real
-// module and exercises the Linux terminal middle-click follow-up end to end.
+// Use real primary-selection state to prove terminal middle-click suppression is single-shot; sibling mocks cannot verify it.
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -36,7 +34,6 @@ async function renderProbe(): Promise<void> {
   })
 }
 
-// Stand-in for xterm's hidden helper textarea inside its `.xterm` container.
 function appendXtermHelperTextarea(): HTMLTextAreaElement {
   const terminal = document.createElement('div')
   terminal.className = 'xterm'
@@ -58,8 +55,7 @@ function dispatchPasteBeforeInput(target: HTMLElement): Event {
   return event
 }
 
-// Why: `paste` is the event that actually reaches the PTY — xterm forwards from
-// a `paste` listener and never listens to `beforeinput`.
+// xterm forwards paste, not beforeinput, so exercise the event that actually writes PTY bytes.
 function dispatchClipboardPaste(target: HTMLElement): Event {
   const event = new Event('paste', { bubbles: true, cancelable: true })
   target.dispatchEvent(event)

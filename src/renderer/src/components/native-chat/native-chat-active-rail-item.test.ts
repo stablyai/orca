@@ -4,7 +4,6 @@ import {
   type NativeChatRailSlot
 } from './native-chat-active-rail-item'
 
-/** Rows 100px tall, laid end to end, as the virtualizer would report them. */
 function rows(count: number, height = 100) {
   return Array.from({ length: count }, (_unused, index) => ({
     index,
@@ -27,7 +26,6 @@ const TURNS: NativeChatRailSlot[] = [
   { turnKey: 'u2' }
 ]
 
-/** The rail items `TURNS` loads: each turn's opening prompt. */
 const TICKS = [
   { id: 'u1', slotIndex: 0 },
   { id: 'u2', slotIndex: 4 }
@@ -42,8 +40,6 @@ const MID_SCROLL = {
 }
 
 describe('active rail item', () => {
-  // The whole point of resolving through `turnKey`: most of a transcript is reply,
-  // and a rule that needs a user row on screen goes dark for the length of one.
   it('keeps the owning prompt lit while an agent reply fills the viewport', () => {
     expect(
       findActiveNativeChatRailItem({
@@ -80,8 +76,6 @@ describe('active rail item', () => {
     ).toBe('u2')
   })
 
-  // A short last turn would otherwise light its predecessor while the reader is
-  // staring at the newest prompt.
   it('lights the newest turn when pinned to the bottom', () => {
     expect(
       findActiveNativeChatRailItem({
@@ -96,8 +90,6 @@ describe('active rail item', () => {
     ).toBe('u2')
   })
 
-  // A message jumped to near the end sits at the top edge a few pixels short of
-  // the bottom: it is what is being read, not the newest turn.
   it('lights the turn at the fold when parked just above the bottom', () => {
     expect(
       findActiveNativeChatRailItem({
@@ -133,8 +125,7 @@ describe('active rail item', () => {
     ).toBeNull()
   })
 
-  // The window reflects the last committed render, so it can lag a scroll by a
-  // commit. Holding the previous tick beats blanking one.
+  // Virtual items can lag by a commit; retain the previous tick rather than blanking it.
   it('holds the previous tick when the window is stale', () => {
     expect(
       findActiveNativeChatRailItem({
@@ -163,7 +154,6 @@ describe('active rail item', () => {
     ).toBe('u2')
   })
 
-  // A rejected send the journal recorded keeps its place but opens no turn.
   it('lights a prompt in no turn by its own tick', () => {
     const slots: NativeChatRailSlot[] = [...TURNS, { turnKey: undefined }]
     const ticks = [...TICKS, { id: 'rejected', slotIndex: 10 }]
@@ -224,7 +214,6 @@ describe('active rail item', () => {
       expect(findActiveNativeChatRailItem({ ...scroll, scrollTop: 250 })).toBe('steer')
     })
 
-    // A row outside every turn (thread-scoped) can land inside the running one.
     it('stays lit past a row of no turn below it', () => {
       expect(
         findActiveNativeChatRailItem({
@@ -237,7 +226,6 @@ describe('active rail item', () => {
       ).toBe('steer')
     })
 
-    // The opener is older than the loaded window, known only from the outline.
     it('lights the outline prompt above the first loaded tick, and the tick below it', () => {
       const window = { slots, ticks: [{ id: 'steer', slotIndex: 2 }], virtualItems: rows(5) }
       expect(findActiveNativeChatRailItem({ ...window, scrollTop: 150, ...MID_SCROLL })).toBe('u1')
@@ -247,7 +235,6 @@ describe('active rail item', () => {
     })
   })
 
-  // No prompt of the reader's opened it, so the nearest one above stands for it.
   it('lights the prompt above a turn the agent opened on its own', () => {
     expect(
       findActiveNativeChatRailItem({

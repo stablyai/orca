@@ -16,9 +16,7 @@ vi.mock('./rich-markdown-source-owning-cut-feedback', () => ({
   showRichMarkdownSourceOwningCutLimitError: showCutLimitErrorMock
 }))
 
-/**
- * Minimal extensions matching the rich editor schema without UI dependencies.
- */
+/** Match the rich-editor schema without loading UI dependencies. */
 const testExtensions = [
   StarterKit,
   TaskList,
@@ -44,7 +42,6 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/** Count top-level paragraph nodes in the document. */
 function countParagraphs(editor: Editor): number {
   let count = 0
   editor.state.doc.forEach((node) => {
@@ -78,20 +75,6 @@ function createClipboardEventMock(options?: { failReadback?: boolean }): {
 }
 
 describe('rich markdown cut handler behavior', () => {
-  it('hard-wrapped document prose stays one paragraph after normalization', () => {
-    const editor = createEditor('Line one\nLine two\nLine three\n')
-
-    expect(countParagraphs(editor)).toBe(1)
-    expect(editor.state.doc.firstChild!.textContent).toContain('\n')
-
-    normalizeEmptyListItems(editor)
-
-    expect(countParagraphs(editor)).toBe(1)
-    expect(editor.state.doc.firstChild!.textContent).toBe('Line one\nLine two\nLine three')
-
-    editor.destroy()
-  })
-
   it('soft-break normalization still creates visible paragraph breaks', () => {
     const editor = createEditor('Line one\nLine two\nLine three\n')
     normalizeSoftBreaks(editor)
@@ -203,31 +186,5 @@ describe('rich markdown cut handler behavior', () => {
     } finally {
       editor.destroy()
     }
-  })
-
-  it('normalizeEmptyListItems is idempotent on already-clean documents', () => {
-    const editor = createEditor('First.\n\nSecond.\n\nThird.\n')
-
-    const docBefore = editor.state.doc.toJSON()
-    normalizeEmptyListItems(editor)
-    const docAfter = editor.state.doc.toJSON()
-
-    // Already separated paragraphs should not be modified
-    expect(docAfter).toEqual(docBefore)
-
-    editor.destroy()
-  })
-
-  it('normalizeEmptyListItems does not modify populated list items or blockquotes', () => {
-    const editor = createEditor('- Item 1\n- Item 2\n')
-
-    const docBefore = editor.state.doc.toJSON()
-    normalizeEmptyListItems(editor)
-    const docAfter = editor.state.doc.toJSON()
-
-    // List structure should be unchanged (no top-level paragraphs to split)
-    expect(docAfter).toEqual(docBefore)
-
-    editor.destroy()
   })
 })

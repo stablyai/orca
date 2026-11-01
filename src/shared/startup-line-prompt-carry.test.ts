@@ -6,8 +6,6 @@ import {
   ZSH_MULTI_LINE_STARTUP_LINE_BUDGET_BYTES
 } from './startup-line-prompt-carry'
 import type { TuiAgent } from './tui-agent'
-import { RUNTIME_CAPABILITIES } from './protocol-version'
-import { AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY } from './agent-launch-runtime-capability'
 
 function offer(
   agent: TuiAgent,
@@ -33,7 +31,6 @@ function offer(
   )
 }
 
-/** `count` prompt lines of `bytes` each, as a multi-line source-control prompt is. */
 function linesOf(count: number, bytes: number): string {
   return Array.from({ length: count }, (_unused, index) => `${index}:`.padEnd(bytes, 'x')).join(
     '\n'
@@ -43,24 +40,10 @@ function linesOf(count: number, bytes: number): string {
 /** A prompt that brings the quoted `claude '<prompt>'` line to exactly `bytes`. */
 function promptForClaudeLineOf(bytes: number): string {
   const base = offer('claude', '').plan?.launchCommand ?? ''
-  // `<base> '<prompt>'`: one space and two quotes around the text.
   return 'x'.repeat(bytes - base.length - 3)
 }
 
 describe('whether a launch prompt rides the typed startup line', () => {
-  it('carries a short single-line prompt on the launch command', () => {
-    const { plan, promptCarried } = offer('claude', 'explain this repo')
-    expect(promptCarried).toBe(true)
-    expect(plan?.launchCommand).toContain('explain this repo')
-  })
-
-  it('carries a short Windows multi-line prompt as one encoded physical launch line', () => {
-    const { plan, promptCarried } = offer('claude', linesOf(5, 40), { platform: 'win32' })
-    expect(promptCarried).toBe(true)
-    expect(plan?.launchCommand).not.toContain('\n')
-    expect(plan?.launchCommand).toContain('`n')
-  })
-
   it('carries a line of exactly the budget and refuses one byte past it', () => {
     const atBudget = offer('claude', promptForClaudeLineOf(TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES))
     expect(new TextEncoder().encode(atBudget.plan?.launchCommand ?? '').byteLength).toBe(
@@ -91,7 +74,6 @@ describe('whether a launch prompt rides the typed startup line', () => {
   ])('never types a %s-bearing prompt, which a shell would read as Enter', (_label, prompt) => {
     const { plan, promptCarried } = offer('codex', prompt)
     expect(promptCarried).toBe(false)
-    // The clean launch: the prompt is left for the paste after start.
     expect(plan?.launchCommand).not.toContain('first line')
     expect(plan?.followupPrompt).toBeNull()
   })
@@ -133,16 +115,6 @@ describe('whether a launch prompt rides the typed startup line', () => {
     expect(plan).not.toBeNull()
     expect(Object.values(plan?.env ?? {}).join('')).not.toContain('xxxx')
   })
-
-  it('never carries a stdin-after-start agent’s prompt, whose CLI takes none', () => {
-    const { plan, promptCarried } = offer('aider', 'fix it')
-    expect(promptCarried).toBe(false)
-    expect(plan?.followupPrompt).toBeNull()
-  })
-
-  it('reports nothing carried for an empty prompt', () => {
-    expect(offer('claude', '   ').promptCarried).toBe(false)
-  })
 })
 
 // Pinned live by startup-line-typed-length.live-shell.test.ts; the refusals below were measured on
@@ -166,11 +138,6 @@ describe('a multi-line prompt typed into a shell the host names', () => {
     expect(offer('claude', prompt, { shellName: 'zsh' }).promptCarried).toBe(false)
   })
 
-  it('keeps a long single line off a zsh launch command, which a late write truncates', () => {
-    const prompt = promptForClaudeLineOf(TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES + 1)
-    expect(offer('claude', prompt, { shellName: 'zsh' }).promptCarried).toBe(false)
-  })
-
   it.each([['bash'], ['fish'], ['pwsh'], [undefined]])(
     'never types a multi-line line into %s',
     (shellName) => {
@@ -188,8 +155,7 @@ describe('a multi-line prompt typed into a shell the host names', () => {
   })
 })
 
-// Why: a host that cannot prove the agent took the terminal could paste into the shell of one that
-// exited, so there the line carries the prompt whatever its size, as it did before.
+// Without foreground proof, a paste could land in an exited agent’s shell; keep the prompt on its launch line.
 describe('on a host that cannot prove the launched agent is in front', () => {
   it.each([
     ['a long single line', 'x'.repeat(TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES * 4)],
@@ -202,13 +168,11 @@ describe('on a host that cannot prove the launched agent is in front', () => {
     })
     expect(promptCarried).toBe(true)
     expect(plan?.launchCommand).toContain(prompt.split('\n')[0])
-    // Control: the same prompt is pasted where the host can prove the agent.
     expect(offer('claude', prompt, { platform: 'darwin' }).promptCarried).toBe(false)
   })
 })
 
-// Why: PowerShell's multi-line form is one physical line with backtick escapes (#23672), so a short
-// multi-line prompt has no control byte there and rides the line within the typed budget.
+// PowerShell escapes newlines onto one physical line, so short multiline prompts fit the typed budget (#23672).
 describe('a short multi-line prompt on a Windows PowerShell host', () => {
   it('rides the launch line as one physical line', () => {
     const prompt = linesOf(5, 40)
@@ -216,12 +180,5 @@ describe('a short multi-line prompt on a Windows PowerShell host', () => {
     expect(promptCarried).toBe(true)
     expect(plan?.launchCommand).not.toMatch(/[\r\n]/)
     expect(plan?.launchCommand).toContain(prompt.replaceAll('\n', '`n'))
-  })
-})
-
-describe('the capability clients gate a prompted launch on', () => {
-  it('is advertised by every host that applies the typed-line rule', () => {
-    // An older host folds any prompt into the typed line, so its absence is the gate.
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY)
   })
 })

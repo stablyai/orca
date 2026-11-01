@@ -1,6 +1,4 @@
-// Layout-owner builds: an `agent.launch`'s early tab in a workspace main owns is main's own tab,
-// written before the launch runs, and a withdrawn launch pane is main's own close; no window takes
-// part. A paired server's workspace keeps today's window relay.
+// Main-owned early launch tabs are written before launch and withdrawn through main close; paired-runtime workspaces retain window relay.
 import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './structured-session-tab-close'
 import type {
   AgentLaunchTabPublished,
@@ -9,6 +7,8 @@ import type {
 import type { AgentLaunchPlacementReceipt } from '../../../shared/agent-launch-intent'
 import type { AgentLaunchPaneAddress } from '../../../shared/agent-launch-pane-verdict'
 import { parseExecutionHostId } from '../../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 
 /** Where the tab landed against where the launch asked for it, as the window reports it. */
 function placementFallback(
@@ -23,6 +23,17 @@ function placementFallback(
 }
 
 export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRuntimeWithCloseStructuredAgentSessionTab {
+  protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
+
+  /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
+  hasLiveTerminalForPaneKey(paneKey: string): boolean {
+    const pty = this.getPtyRecordForPaneKey(paneKey)
+    // Main's bound terminal may survive listing gaps; only certified exit frees its pane.
+    return ORCA_LAYOUT_OWNER_IS_MAIN
+      ? !!pty && this.getPtyLivenessVerdict(pty.ptyId)?.status !== 'exited'
+      : pty?.connected === true
+  }
+
   /** Whether main's layout holds the tab's workspace, so main writes the tab itself. */
   private ownsLaunchTab(worktreeId: string, tabId: string): boolean {
     const hostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
@@ -80,10 +91,7 @@ export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRunti
     })
   }
 
-  /**
-   * An attached window keeps what it kept for a tab it made: the launch's pane (whose outcome it
-   * shows), the prompt that pane offers to copy, and the viewer rule. Its tab is main's.
-   */
+  /** Keep window-owned launch outcome, copyable prompt and viewer rules while main owns the tab. */
   private showLaunchTabInWindow(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>,
     shownByMain: NonNullable<AgentLaunchTabPublishRequest['shownByMain']>
@@ -91,7 +99,7 @@ export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRunti
     if (!this.notifier?.publishAgentLaunchTab || !this.getAvailableAuthoritativeWindow()) {
       return
     }
-    // A view: the launch never waits on it or fails over it.
+    // Window display is advisory; launch never waits or fails on it.
     void this.notifier
       .publishAgentLaunchTab({ ...request, shownByMain })
       .catch((error: unknown) => {
@@ -99,10 +107,7 @@ export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRunti
       })
   }
 
-  /**
-   * Takes a withdrawn launch pane back in main's layout: the pane, or its tab when it is the last.
-   * False for a workspace main does not own, whose window takes it back as today.
-   */
+  /** Withdraw main-owned launch panes, closing the tab for its last pane; false leaves unowned workspaces to window cleanup. */
   withdrawAgentLaunchPaneInMainLayout(pane: AgentLaunchPaneAddress): boolean {
     if (!this.ownsLaunchTab(pane.worktreeId, pane.tabId)) {
       return false

@@ -14,12 +14,7 @@ afterEach(async () => {
 
 describe('scanAiVaultSessions — Claude cwd drift', () => {
   it('resumes a Claude session from its start directory even after the cwd drifts', async () => {
-    // Regression for #9361: Claude stores transcripts under
-    // ~/.claude/projects/<slug-of-start-dir>/, and `claude --resume <id>` only
-    // looks in the project dir derived from the *current* cwd. If the session
-    // changed directory mid-run, resuming with the last-seen cwd fails with
-    // "No conversation found". The session's representative cwd must stay the
-    // start directory.
+    // Claude resumes by the starting project directory; a later cwd yields "No conversation found" (#9361).
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-cwd-drift-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)

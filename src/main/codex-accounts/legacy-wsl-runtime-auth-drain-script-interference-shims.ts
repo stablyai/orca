@@ -1,4 +1,3 @@
-// Installs the hash and mutation shims each real guest-script case needs.
 import { chmodSync, existsSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DRAIN_APPLY_INTERRUPTION_JS } from './legacy-wsl-runtime-auth-drain-interruption-source'
@@ -16,7 +15,7 @@ export function installDrainInterferenceShims(
 ): void {
   const shimPath = join(binDir, 'sha256sum')
   const nativeHash = '/usr/bin/sha256sum'
-  // Hash-boundary interference needs the counter; other cases use the real guest utility.
+  // Count hashes only for interference that targets a hash boundary.
   if (
     process.platform === 'linux' &&
     !options.rewriteAfterHashCall &&
@@ -39,8 +38,7 @@ export function installDrainInterferenceShims(
   if (process.env.REWRITE_AFTER && calls === Number(process.env.REWRITE_AFTER)) {
   fs.writeFileSync(process.env.REWRITE_TARGET, process.env.REWRITE_BYTES)
   }
-  // Why: an atomic rename leaves the pinned hard link on the OLD inode, so its hash still
-  // matches while the path now resolves elsewhere. Only an inode identity check sees that.
+  // Renames preserve the pinned inode's hash, so detecting replacement requires an identity check.
   if (process.env.REPLACE_ON_HASH_OF && file.includes(process.env.REPLACE_ON_HASH_OF)) {
   const staged = process.env.REPLACE_PATH + '.intruder'
   fs.writeFileSync(staged, process.env.REPLACE_BYTES)

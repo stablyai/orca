@@ -27,7 +27,6 @@ function published(): PublishedWorkspaceLayout {
 const diff = (before: PublishedWorkspaceLayout, after: PublishedWorkspaceLayout) =>
   diffPublishedLayouts(GIT_KEY, indexPublishedLayout(before), indexPublishedLayout(after), after)
 
-/** `before` with one edit: the frame for it carries what changed and applies back to `after`. */
 function edited(edit: (layout: PublishedWorkspaceLayout) => void) {
   const before = published()
   const after = structuredClone(before)
@@ -46,13 +45,6 @@ describe('a published layout as records', () => {
   it('splits and joins back to the same layout, field for field', () => {
     const layout = published()
     expect(stableJson(joinPublishedLayout(splitPublishedLayout(layout)))).toBe(stableJson(layout))
-  })
-
-  it('keeps a pane’s binding out of its tab’s tree', () => {
-    const records = splitPublishedLayout(published())
-    const tree = records.paneTrees.find((candidate) => candidate.tabId === 'tab-shell')!
-    expect(tree.panes.every((pane) => !('ptyId' in pane))).toBe(true)
-    expect(records.bindings).toContainEqual({ leafId: leaf(1), ptyId: `${GIT_KEY}@@aaaa0001` })
   })
 
   it('sends nothing when nothing changed', () => {

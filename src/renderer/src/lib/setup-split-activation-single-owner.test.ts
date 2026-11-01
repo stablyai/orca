@@ -18,12 +18,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-/**
- * Conditional old-host reconstruction, not proof of STA-9417: a host-created worktree with a
- * split of the (unmounted) primary tab, then the first activation of that worktree. When main's
- * split reveal does not reach the window, the activation sweep mints a second tab for the setup
- * PTY, so two saved panes own one terminal and one of them freezes.
- */
+/** Model old-host lost split reveal: first activation of an unmounted host-created setup split can mint a second tab for the same PTY and freeze one pane. Conditional reconstruction, not proof of STA-9417. */
 
 const initialState = useAppStore.getState()
 const TAB_B = 'b3f1c1de-5e0f-4a51-9d0c-7a8e2a9f6b11'
@@ -150,6 +145,7 @@ function stubHost(
           listener = next
           return () => {}
         },
+        onLaunchRecipe: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: vi.fn()
       }

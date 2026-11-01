@@ -41,7 +41,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
       return withSpan(
         'runtime.session-tabs.close',
         async (span) => {
-          // Why: old runtime clicks and cleanup are wire-identical, so changing their behavior would regress mixed-version pairings.
+          // Preserve legacy runtime closes: user clicks and cleanup have identical wire shapes.
           if (!params.reason && requiresIntent) {
             const result = await context.runtime.refuseUnattributedMobileSessionTabClose(
               params.worktree,
@@ -55,7 +55,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.tabId,
             {
               reason: 'user',
-              // Why explicit reason only: a reasonless legacy close never carried a confirmation.
+              // Only explicit reasons prove confirmation; legacy reasonless closes do not.
               ...(params.force && params.reason !== undefined ? { force: true } : {}),
               ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }

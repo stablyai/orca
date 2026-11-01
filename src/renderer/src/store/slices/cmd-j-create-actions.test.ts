@@ -80,10 +80,7 @@ describe('Cmd+J lifted creation actions', () => {
   })
 
   it('rejects without a local browser fallback when paired-web creation fails', async () => {
-    // Why: a remote-owned workspace must stay remote-owned. If the remote host
-    // cannot create the page, we must NOT silently open a local desktop tab —
-    // that produces confusing split ownership (issue #5321). Mirrors the
-    // terminal no-fallback contract below.
+    // Failed remote creation must not fall back local and split ownership (#5321), like terminals.
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)
@@ -195,12 +192,15 @@ describe('Cmd+J lifted creation actions', () => {
 
     await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
 
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'runtime-1',
-      targetGroupId: 'group-1',
-      activate: true
-    })
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
+      {
+        worktreeId: 'wt-1',
+        environmentId: 'runtime-1',
+        targetGroupId: 'group-1',
+        activate: true
+      },
+      { userAct: true }
+    )
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
@@ -281,12 +281,15 @@ describe('Cmd+J lifted creation actions', () => {
 
     await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
 
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'owner-runtime',
-      targetGroupId: 'group-1',
-      activate: true
-    })
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
+      {
+        worktreeId: 'wt-1',
+        environmentId: 'owner-runtime',
+        targetGroupId: 'group-1',
+        activate: true
+      },
+      { userAct: true }
+    )
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 

@@ -1,3 +1,4 @@
+import { parseTerminalAttachmentLaunchResult } from '../../../shared/terminal-attachment-launch-result'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal-multiplex-flow-control'
 import { parseTerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
@@ -99,7 +100,11 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
         stream.callbacks.onOutputPauseCapability?.()
       }
       if (!stream.initialSnapshotReceived) {
-        stream.callbacks.onSubscribeAcknowledged?.()
+        stream.callbacks.onSubscribeAcknowledged?.(
+          event.terminal === stream.terminal
+            ? parseTerminalAttachmentLaunchResult(event.launchResult)
+            : undefined
+        )
       }
     } else if (event.type === 'end') {
       disposeRemoteTerminalStreamState(stream, 'Remote terminal stream ended.')
@@ -123,9 +128,7 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
       }
       clearSnapshot(stream)
       rejectPendingSnapshotRequest(stream, message)
-      // Why: the paired binary Error frame can be dropped under backpressure;
-      // this reliable event must also dispatch or release the resync gate, and
-      // must never disarm the watchdog while leaving the gate shut.
+      // Binary Error can drop under backpressure; reliable errors must dispatch/release resync, never disarm watchdog with gate still shut.
       if (stream.resyncPendingSend) {
         this.sendDeferredResyncSnapshot(stream)
       } else {
@@ -140,8 +143,7 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
           event.mode !== 'desktop-fit') ||
         typeof event.cols !== 'number' ||
         typeof event.rows !== 'number' ||
-        // Why: a restarted host that has not learned the grid yet publishes a 0x0 hold; parking
-        // xterm there shrinks the pane to one cell, so keys typed into it never reach the shell.
+        // Restarted hosts can publish 0x0 before learning grid; rejecting that hold prevents a one-cell pane whose keys never reach shell.
         (event.mode !== 'desktop-fit' && (event.cols <= 0 || event.rows <= 0))
       ) {
         return

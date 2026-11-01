@@ -8,8 +8,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
 
 describe('readTerminalMouseEncoding', () => {
   it('reads the encoding from the real vendored renderer xterm build', async () => {
-    // Pinned on purpose: if an upgrade moves the private service, this must fail
-    // loudly — a silent 'default' would bring back X10 reports (#23818).
+    // Fail on private-service drift: silently defaulting would restore legacy X10 reports (#23818).
     const terminal = new Terminal({ allowProposedApi: true })
     expect(readTerminalMouseEncoding(terminal)).toBe('default')
 

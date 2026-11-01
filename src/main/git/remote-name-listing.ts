@@ -68,12 +68,7 @@ function listingGitConfigContext(
   }
 }
 
-/**
- * `git remote` names for one repo/runtime. Failed listings are not cached: a
- * missed `upstream` would otherwise send issue/PR resolvers to origin on a
- * contributor clone (#7331). An `ssh:` repo is not served here, so it lists as
- * failed (`null`), never as this machine's remotes.
- */
+/** Cache repo/runtime names; failed or SSH-local reads return null so callers cannot infer a missing upstream. */
 export async function listCachedRemoteNames(
   repoPath: string,
   connectionId?: string | null,

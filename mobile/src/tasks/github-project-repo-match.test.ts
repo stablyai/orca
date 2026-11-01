@@ -257,8 +257,7 @@ describe('GitHub project repo matching', () => {
     ).toBeNull()
   })
 
-  // Regression: a transient github.repoSlug error used to be cached as a
-  // resolved "no repository", which filtered that repo's rows out forever.
+  // Transient slug failures must be retried instead of caching no repository forever.
   it('leaves a failed slug lookup matchable by the path fallback', () => {
     expect(
       findRepoForGitHubProjectRepository(
@@ -284,8 +283,7 @@ describe('dropFailedGitHubRepoSlugEntries', () => {
     })
   })
 
-  // Why: the cache is a slug-effect dependency, so a fresh object on every
-  // refresh would re-run the effect even when there is nothing to retry.
+  // Preserve cache identity on no-op refreshes so the slug effect does not refetch needlessly.
   it('returns the same object when nothing failed', () => {
     const cache = { 'repo-1': { path: '/a', repository: null } }
     expect(dropFailedGitHubRepoSlugEntries(cache)).toBe(cache)

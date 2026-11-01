@@ -1,5 +1,7 @@
-// Finishes a pane's own agent launch on every way its spawn ends.
-
+import {
+  readTerminalStartFailure,
+  type TerminalStartFailure
+} from '../../../../shared/terminal-start-failure'
 import {
   AGENT_LAUNCH_PANE_REFUSED_CODE,
   type AgentLaunchPaneAddress,
@@ -17,18 +19,16 @@ export type PaneAgentLaunch = {
   address: AgentLaunchPaneAddress
   paneKey: string
   running: RunningAgentLaunchPane
-  /** The plan's runtime fact: the PTY's shell comes only from it, as for a host launch. */
+  /** The plan chooses the PTY execution shell. */
   launchRuntime?: AgentLaunchRuntime
-  /** The provider was asked for the process: a failure after this proves nothing ran. */
+  /** After provider dispatch, a failure cannot prove that nothing ran. */
   dispatched: boolean
-  /** Right before the provider spawn: refuses a launch whose pane the user closed meanwhile. */
   refuseIfClosed: () => void
 }
 
 type PaneAgentLaunchEnd =
   | { started: true }
-  /** The agent's process started, then exited before it registered. */
-  | { exitedDuringStart: true }
+  | { exitedDuringStart: true; terminalStartFailure?: TerminalStartFailure }
   | { error: unknown }
 
 function finish(launch: PaneAgentLaunch, verdict: AgentLaunchPaneVerdict): void {
@@ -36,7 +36,6 @@ function finish(launch: PaneAgentLaunch, verdict: AgentLaunchPaneVerdict): void 
   launch.runtime.reportAgentLaunchPaneVerdict(launch.address, verdict)
 }
 
-/** Ends the pane's launch, once; returns the error its spawn throws, if it failed. */
 export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEnd): Error | null {
   const launch = ctx.paneAgentLaunch
   ctx.paneAgentLaunch = null
@@ -44,7 +43,11 @@ export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEn
     return null
   }
   if ('exitedDuringStart' in end) {
-    finish(launch, { kind: 'not-started', code: 'agent_session_exited_during_start' })
+    finish(launch, {
+      kind: 'not-started',
+      code: 'agent_session_exited_during_start',
+      ...diagnosticFields(end.terminalStartFailure)
+    })
     return null
   }
   const closed = launch.running.closedByUser()
@@ -64,13 +67,17 @@ export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEn
     launch,
     // The provider may have started it before its answer was lost.
     launch.dispatched
-      ? { kind: 'unconfirmed' }
-      : { kind: 'not-started', code: agentLaunchFailureCode(end.error) }
+      ? { kind: 'unconfirmed', ...diagnosticFields(readTerminalStartFailure(end.error)) }
+      : {
+          kind: 'not-started',
+          code: agentLaunchFailureCode(end.error),
+          ...diagnosticFields(readTerminalStartFailure(end.error))
+        }
   )
   return new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
 }
 
-/** The user closed it while it started: its agent, if one spawned, stops, as a closed tab's does. */
+/** A pane closed during launch must stop any agent that may already have spawned. */
 function stopClosed(launch: PaneAgentLaunch): void {
   const handle = launch.runtime.getTerminalHandleForPaneKey(launch.paneKey)
   if (handle) {
@@ -81,4 +88,12 @@ function stopClosed(launch: PaneAgentLaunch): void {
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
+}
+
+function diagnosticFields(failure: TerminalStartFailure | undefined): {
+  initialOutputDiagnostic?: 'git-bash-console-capacity'
+} {
+  return failure?.cause.kind === 'exited' && failure.cause.initialOutputDiagnostic
+    ? { initialOutputDiagnostic: failure.cause.initialOutputDiagnostic }
+    : {}
 }

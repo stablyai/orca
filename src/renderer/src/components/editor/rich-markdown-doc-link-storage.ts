@@ -16,8 +16,7 @@ declare module '@tiptap/core' {
 
 export function getDocIndex(storage: DocLinkStorage): MarkdownDocumentIndex | null {
   if (storage.documents.length === 0) {
-    // Why: clear the cache so stale MarkdownDocument references aren't retained
-    // after the document list empties (e.g., when switching worktrees).
+    // Release cached document references when switching to an empty document list.
     storage._cachedDocs = null
     storage._cachedIndex = null
     return null

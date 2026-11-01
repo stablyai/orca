@@ -1,10 +1,4 @@
-/**
- * A supervised serve started from an AppImage keeps running the copy it unpacked (or the mount it
- * started from), so replacing the AppImage file never reached it, not even across a full service
- * restart. Before each start the supervisor checks that file; once it holds a new build, it execs
- * the new AppImage with its own arguments (same pid, so the service manager keeps tracking it).
- * That serve unpacks the new build and points the stable launcher at it, as any AppImage serve does.
- */
+/** AppImage swaps leave running copies stale; re-exec at the same PID to preserve service tracking. */
 import { readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -22,13 +16,11 @@ const APPIMAGE_PROBE_TIMEOUT_MS = 60_000
 
 export type AppImageBuildWatch = {
   appImagePath: string
-  /** Identity of the AppImage file the running build came from. */
   runningKey: string
 }
 
 export type AppImageBuildState = 'current' | 'settling' | 'superseded'
 
-/** Null unless this supervisor runs a build unpacked from, or mounted from, a known AppImage. */
 export function resolveAppImageBuildWatch(
   executable: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -74,7 +66,7 @@ export function inspectAppImageBuild(
 }
 
 export type AppImageRestartDeps = {
-  /** Checked before the exec: a stop that arrived while probing must not start a new server. */
+  /** A stop received during the probe must prevent the exec. */
   isStopped: () => boolean
   argv: readonly string[]
   env: NodeJS.ProcessEnv
@@ -93,8 +85,7 @@ export async function restartFromNewAppImage(
 ): Promise<string> {
   deps.log(`[serve] ${watch.appImagePath} holds a new Orca build; restarting from it.`)
   const env = appImageEnv(deps.env)
-  // Why probe first: a host without FUSE cannot mount it, and an exec that fails there would
-  // turn into a service restart loop instead of a server still running the old build.
+  // Probe FUSE support first to keep mount failures from causing a service restart loop.
   const refusal = await (deps.probe ?? probeAppImage)(watch.appImagePath, env)
   if (refusal) {
     return refusal
@@ -148,7 +139,7 @@ function appImageEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   ]) {
     delete next[name]
   }
-  // Why: node mode moved the user's NODE_OPTIONS aside; the new launch moves it aside again.
+  // Restore NODE_OPTIONS before the new launcher moves it aside again.
   if (env.ORCA_NODE_OPTIONS) {
     next.NODE_OPTIONS = env.ORCA_NODE_OPTIONS
   }
@@ -158,11 +149,7 @@ function appImageEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return next
 }
 
-/**
- * The new AppImage this profile's supervisor last exec'd, kept until a supervisor starts on it.
- * Why durable: a build that dies before its own crash brake would otherwise be exec'd on every
- * service restart of the old one, until the service manager's start limit disables the service.
- */
+/** Persist attempted builds to prevent service restart loops when they fail before their own brake. */
 export function serveAppImageAttemptPath(userDataPath: string): string {
   return join(userDataPath, 'serve-supervisor-appimage-attempt.json')
 }
@@ -193,7 +180,7 @@ export function createSupervisedAppImageUpdate(
   deps: SupervisedAppImageUpdateDeps
 ): SupervisedAppImageUpdate {
   const { watch, attemptPath } = deps
-  // A supervisor running the attempted build proves it started; so does --force, by intent.
+  // Clear on successful startup of the attempted build or an explicit --force retry.
   if (deps.force || readAttemptedKey(attemptPath) === watch.runningKey) {
     rmSync(attemptPath, { force: true })
   }

@@ -4,11 +4,11 @@ import {
   buildWindowsHookPowerShellCommand,
   wrapWindowsPowerShellEncodedCommand
 } from '../agent-hooks/installer-utils'
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 import {
   buildPosixGrokReplayGuardLines,
@@ -30,7 +30,7 @@ export function getPosixManagedCommand(scriptPath: string, eventName: CursorEven
 
 export function getManagedCommand(scriptPath: string, eventName: CursorEvent): string {
   if (process.platform !== 'win32') {
-    // Cursor uses the login shell; keep the POSIX guard inside sh with portable argument quoting.
+    // Cursor uses the login shell; wrap the POSIX guard in sh with portable quoting.
     return `/bin/sh -c ${quoteStartupArg(getPosixManagedCommand(scriptPath, eventName), 'posix')}`
   }
   const response = getCursorHookResponse(eventName)
@@ -50,22 +50,21 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: Cursor permission hooks fail closed on empty/invalid stdout (#15462).
+      // Cursor permission hooks reject empty or invalid stdout (#15462).
       `if defined ${CURSOR_HOOK_RESPONSE_ENV} (echo %${CURSOR_HOOK_RESPONSE_ENV}%) else (echo {})`,
-      // Why: source current endpoint coordinates for PTYs surviving an Orca restart.
+      // Refresh endpoints for PTYs that survived an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       ...buildWindowsGrokReplayGuardLines(),
       buildWindowsAgentHookPostCommand('cursor'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
 
   return [
     '#!/bin/sh',
-    // Why: Cursor permission hooks fail closed on empty/invalid stdout (#15462).
+    // Cursor permission hooks reject empty or invalid stdout (#15462).
     `if [ -n "$${CURSOR_HOOK_RESPONSE_ENV}" ]; then`,
     `  printf '%s\\n' "$${CURSOR_HOOK_RESPONSE_ENV}"`,
     'else',
@@ -74,7 +73,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     ...buildPosixHookPayloadCapture(),
     ...buildPosixGrokReplayGuardLines(),
     ...buildPosixHookSpoolLines('cursor'),
-    // Why: refresh endpoint coordinates so surviving PTYs keep reporting.
+    // Refresh endpoints for PTYs that survived an Orca restart.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -82,9 +81,8 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: post form fields because path-bearing worktree IDs are unsafe in hand-built JSON.
-    // Why: pipe payload to curl stdin to keep large output off the command line.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/cursor" \\',
+    // Form encoding handles path-bearing IDs; stdin keeps large payloads off the command line.
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/cursor" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',

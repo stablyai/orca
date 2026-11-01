@@ -1,13 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_HANDLERS } from '../orchestration'
+import { okFixture } from '../../test-fixtures'
 
 type Call = { name: string; params: Record<string, unknown> }
 
-/** The runtime half of this seam (`runCurrent` from a coordinator handle, `workerList` filtered by
- *  `run`) is proven in `rpc/methods/orchestration/worker/worker-list-run-scope-rpc.test.ts`; this
- *  half proves the handler asks exactly those two questions and reports what it decided. */
 describe('orchestration worker-list Run scope (CLI handler)', () => {
-  const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
   let calls: Call[]
   let logged: string[]
   let boundRun: string | null
@@ -16,12 +13,14 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
     call: async (name: string, params: Record<string, unknown>) => {
       calls.push({ name, params })
       if (name === 'orchestration.runCurrent') {
-        return { result: { run: boundRun ? { id: boundRun } : null } }
+        return okFixture('req_current', { run: boundRun ? { id: boundRun } : null })
       }
       if (name === 'orchestration.workerList') {
-        return {
-          result: { workers: [], counts: {}, page: { hasMore: false, nextCursor: null, total: 0 } }
-        }
+        return okFixture('req_list', {
+          workers: [],
+          counts: {},
+          page: { hasMore: false, nextCursor: null, total: 0 }
+        })
       }
       throw new Error(`unexpected call ${name}`)
     }
@@ -31,6 +30,10 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
     calls = []
     logged = []
     boundRun = null
+    vi.stubEnv('ORCA_TERMINAL_HANDLE', undefined)
+    vi.stubEnv('ORCA_AGENT_SESSION_ID', undefined)
+    vi.stubEnv('ORCA_STRUCTURED_SESSION', undefined)
+    vi.stubEnv('ORCA_PANE_KEY', undefined)
     vi.spyOn(console, 'log').mockImplementation((line: string) => {
       logged.push(line)
     })
@@ -38,11 +41,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-    if (originalTerminalHandle === undefined) {
-      delete process.env.ORCA_TERMINAL_HANDLE
-    } else {
-      process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
-    }
+    vi.unstubAllEnvs()
   })
 
   async function list(flags = new Map<string, string | boolean>(), json = true) {
@@ -52,8 +51,15 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
       cwd: '/tmp/repo',
       json
     } as never)
+    expect(calls.map((call) => call.name)).toEqual(
+      flags.has('run')
+        ? ['orchestration.workerList']
+        : ['orchestration.runCurrent', 'orchestration.workerList']
+    )
+    expect(logged).toHaveLength(1)
     const listCall = calls.find((call) => call.name === 'orchestration.workerList')
-    return { listCall, receipt: json ? JSON.parse(logged.at(-1)!).result : null }
+    const receipt: unknown = json ? JSON.parse(logged[0]) : null
+    return { listCall, receipt }
   }
 
   it('defaults an unscoped list to the Run bound to the calling terminal', async () => {
@@ -64,7 +70,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
 
     expect(calls[0]).toEqual({ name: 'orchestration.runCurrent', params: { from: 'term_coord' } })
     expect(listCall?.params.run).toBe('run_bound')
-    expect(receipt.scope).toEqual({ run: 'run_bound', source: 'bound' })
+    expect(receipt).toHaveProperty('result.scope', { run: 'run_bound', source: 'bound' })
   })
 
   it('keeps --run as the override and never asks for the binding', async () => {
@@ -75,7 +81,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
 
     expect(calls.map((call) => call.name)).not.toContain('orchestration.runCurrent')
     expect(listCall?.params.run).toBe('run_other')
-    expect(receipt.scope).toEqual({ run: 'run_other', source: 'flag' })
+    expect(receipt).toHaveProperty('result.scope', { run: 'run_other', source: 'flag' })
   })
 
   it('still lists every Run when the caller has no bound Run', async () => {
@@ -85,7 +91,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
     const { listCall, receipt } = await list()
 
     expect(listCall?.params.run).toBeUndefined()
-    expect(receipt.scope).toEqual({ source: 'all' })
+    expect(receipt).toHaveProperty('result.scope', { source: 'all' })
   })
 
   it('names the scope in the human-readable receipt', async () => {
@@ -94,6 +100,6 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
 
     await list(new Map(), false)
 
-    expect(logged.at(-1)).toContain('Scope: Run run_bound (bound to this terminal)')
+    expect(logged.at(-1)).toContain('scope.run=run_bound scope.source=bound')
   })
 })

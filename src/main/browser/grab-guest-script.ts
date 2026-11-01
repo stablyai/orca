@@ -1,3 +1,4 @@
+import { COMPOSED_TREE_SCRIPT } from '../../shared/browser-composed-tree-script'
 import { GRAB_GUEST_CONTENT_SCRIPT } from './grab-guest-content-script'
 import { GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT } from './grab-guest-element-context-script'
 import { GRAB_GUEST_FOUNDATION_SCRIPT } from './grab-guest-foundation-script'
@@ -12,15 +13,7 @@ import {
 
 type GuestScriptAction = 'arm' | 'awaitClick' | 'finalize' | 'extractHover' | 'teardown'
 
-/**
- * Guest-page scripts for element grab mode. Executed via webContents.executeJavaScript.
- *
- * - `arm`: install the shadow-root overlay, hover listeners, and extraction logic
- * - `awaitClick`: return a Promise that resolves with the payload when the user clicks
- * - `finalize`: extract the payload for the currently hovered element and return it
- * - `extractHover`: extract the payload for the currently hovered element WITHOUT cleanup
- * - `teardown`: remove the overlay and all listeners
- */
+/** Runs in the guest through webContents.executeJavaScript. */
 export function buildGuestOverlayScript(action: GuestScriptAction): string {
   switch (action) {
     case 'arm':
@@ -38,6 +31,7 @@ export function buildGuestOverlayScript(action: GuestScriptAction): string {
 
 const ARM_SCRIPT = [
   GRAB_GUEST_FOUNDATION_SCRIPT,
+  COMPOSED_TREE_SCRIPT,
   GRAB_GUEST_CONTENT_SCRIPT,
   GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT,
   GRAB_GUEST_REACT_SCRIPT,

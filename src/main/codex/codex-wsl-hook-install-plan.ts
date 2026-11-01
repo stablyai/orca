@@ -1,7 +1,8 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { wslExeProcessSpec, wslExeStdout } from '../wsl-exe-process'
+import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
 
 export type CodexWslRuntimeHookTarget = {
   runtime?: 'host' | 'wsl'
@@ -14,10 +15,8 @@ export type CodexWslRuntimeHookInstallPlan = {
   scriptPath: string
   commandScriptPath: string
   trustConfigPath: string
-  /** Distro that executes Codex for this runtime home (RPC trust grants run
-   *  codex inside it). */
   wslDistro: string
-  /** Canonical Linux-side runtime home — CODEX_HOME for in-distro codex runs. */
+  /** Guest CODEX_HOME, canonical when resolution is available. */
   linuxRuntimeHome: string
 }
 
@@ -51,9 +50,7 @@ const WSL_CANONICALIZE_TIMEOUT_MS = 5000
 const WSL_PATH_MISSING_OUTPUT = '__ORCA_WSL_PATH_MISSING__'
 export const MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES = 512
 
-// Why: `readlink -f` over wsl.exe stalls up to the timeout on a cold or wedged
-// distro. Running it synchronously on the Electron main process froze the UI on
-// every Codex WSL launch, so resolve it off-thread and cache the latest result.
+// Canonicalize asynchronously and cache results so cold WSL startup cannot block the main thread.
 const canonicalWslPathCache = new Map<string, string>()
 const inFlightWslCanonicalizations = new Map<string, Set<WslCanonicalPathSettled>>()
 
@@ -93,8 +90,7 @@ function scheduleWslLinuxPathCanonicalization(
   }
   inFlightWslCanonicalizations.set(key, nextListeners)
   const drivePath = /^[A-Za-z]:[/\\]/.test(windowsPath)
-  // Why: wslpath reads each distro's automount root, so a custom root such as
-  // /windows is discovered without synchronously starting WSL on Electron main.
+  // wslpath honors the distro's custom automount root.
   const args = drivePath
     ? [
         '-d',
@@ -116,45 +112,46 @@ function scheduleWslLinuxPathCanonicalization(
         'sh',
         linuxPath
       ]
-  execFile(
-    'wsl.exe',
-    args,
-    {
-      encoding: 'utf-8',
-      timeout: WSL_CANONICALIZE_TIMEOUT_MS,
-      windowsHide: true,
-      cwd: resolveWslInteropSpawnCwd()
-    },
-    (error, stdout) => {
-      const canonicalPath = stdout.trim()
-      const resolvedPath = !error && canonicalPath.startsWith('/') ? canonicalPath : null
-      const pathMissing = !error && canonicalPath === WSL_PATH_MISSING_OUTPUT
-      const settlement: WslCanonicalPathSettlement = resolvedPath
-        ? { status: 'resolved', canonicalPath: resolvedPath }
-        : pathMissing
-          ? { status: 'missing' }
-          : { status: 'unavailable' }
-      if (settlement.status === 'resolved') {
-        rememberCanonicalWslPath(key, canonicalPath)
-      } else if (settlement.status === 'missing') {
-        // Why: a successful directory probe is stronger than a transport error;
-        // clear the identity so stale trust can be revoked and later rediscovered.
-        canonicalWslPathCache.delete(key)
-      }
-      // Why: keep the last known-good cache on timeout/transient WSL failures.
-      // Dropping it forces the next launch onto the logical `/mnt/...` guess,
-      // which is wrong under custom automount roots and rewrites trust keys.
-      const settledListeners = inFlightWslCanonicalizations.get(key) ?? new Set()
-      inFlightWslCanonicalizations.delete(key)
-      for (const listener of settledListeners) {
-        try {
-          listener(settlement)
-        } catch (listenerError) {
-          console.warn('[codex-wsl-hook-path] failed to reconcile canonical path', listenerError)
-        }
+  const settle = (error: Error | null, stdout: string): void => {
+    const canonicalPath = stdout.trim()
+    const resolvedPath = !error && canonicalPath.startsWith('/') ? canonicalPath : null
+    const pathMissing = !error && canonicalPath === WSL_PATH_MISSING_OUTPUT
+    const settlement: WslCanonicalPathSettlement = resolvedPath
+      ? { status: 'resolved', canonicalPath: resolvedPath }
+      : pathMissing
+        ? { status: 'missing' }
+        : { status: 'unavailable' }
+    if (settlement.status === 'resolved') {
+      rememberCanonicalWslPath(key, canonicalPath)
+    } else if (settlement.status === 'missing') {
+      // Confirmed absence invalidates cached trust identity.
+      canonicalWslPathCache.delete(key)
+    }
+    // Retain known-good identity on transport errors; /mnt guesses can rewrite valid custom-root trust.
+    const settledListeners = inFlightWslCanonicalizations.get(key) ?? new Set()
+    inFlightWslCanonicalizations.delete(key)
+    for (const listener of settledListeners) {
+      try {
+        listener(settlement)
+      } catch (listenerError) {
+        console.warn('[codex-wsl-hook-path] failed to reconcile canonical path', listenerError)
       }
     }
+  }
+  void runCanonicalizeExec(distro, args).then(
+    (stdout) => settle(null, stdout),
+    (error: unknown) => settle(error instanceof Error ? error : new Error(String(error)), '')
   )
+}
+
+// A background probe must not start a stopped distro (E9); a user act for it passes the gate.
+async function runCanonicalizeExec(distro: string, args: string[]): Promise<string> {
+  const blocked = await blockedWslDistroForExec(distro)
+  if (blocked) {
+    // Settles as unavailable, which keeps the last known-good identity.
+    throw new Error(`WSL distro ${distro} is ${blocked.state}; not probing its Codex home`)
+  }
+  return wslExeStdout(await runProcess(wslExeProcessSpec(args, WSL_CANONICALIZE_TIMEOUT_MS)))
 }
 
 function canonicalizeWslLinuxPath(
@@ -171,10 +168,21 @@ function canonicalizeWslLinuxPath(
   if (cached !== undefined) {
     rememberCanonicalWslPath(cacheKey, cached)
   }
-  // Why: every launch revalidates asynchronously. Returning the cache keeps
-  // launch prep synchronous while settlement repairs or revokes trust in-place.
+  // Return cached identity during asynchronous revalidation; settlement reconciles trust.
   scheduleWslLinuxPathCanonicalization(distro, linuxPath, windowsPath, onSettled)
   return cached ?? null
+}
+
+/** Whether this home is a WSL Codex home, whose hooks only the WSL writer may touch. */
+export function isCodexWslRuntimeHome(
+  runtimeHomePath: string | null | undefined,
+  target?: CodexWslRuntimeHookTarget
+): boolean {
+  return (
+    !!runtimeHomePath &&
+    (parseWslUncPath(runtimeHomePath) !== null ||
+      (target?.runtime === 'wsl' && !!target.wslDistro?.trim()))
+  )
 }
 
 export function createCodexWslRuntimeHookInstallPlan(
@@ -200,8 +208,7 @@ export function createCodexWslRuntimeHookInstallPlan(
   if (!logicalLinuxRuntimeHome.startsWith('/')) {
     return null
   }
-  // Why: Codex canonicalizes hook sources inside WSL; resolving there keeps
-  // trust keys valid when HOME or the runtime directory crosses a symlink.
+  // Match Codex's guest-side canonicalization so symlinks cannot change the trust key.
   const linuxRuntimeHome = trimTrailingSlash(
     canonicalize(distro, logicalLinuxRuntimeHome, runtimeHomePath, onCanonicalPathSettled) ??
       logicalLinuxRuntimeHome

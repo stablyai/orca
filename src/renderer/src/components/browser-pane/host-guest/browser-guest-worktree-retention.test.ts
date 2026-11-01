@@ -114,13 +114,13 @@ describe('selectBrowserGuestEvictionWorktreeIds', () => {
     ).toEqual(['wt-6'])
   })
 
-  it('lets a protected worktree within the budget occupy a retained slot', () => {
+  it('keeps a protected worktree without spending a retained slot on it', () => {
     expect(
       selectEvicted({
-        orderedWorktreeIds: ['wt-1', 'wt-2', 'wt-3', 'wt-4', 'wt-5'],
+        orderedWorktreeIds: ['wt-1', 'wt-2', 'wt-3', 'wt-4', 'wt-5', 'wt-6'],
         isEvictable: (worktreeId) => worktreeId !== 'wt-3'
       })
-    ).toEqual(['wt-5'])
+    ).toEqual(['wt-6'])
   })
 
   it('counts duplicated recency entries once', () => {

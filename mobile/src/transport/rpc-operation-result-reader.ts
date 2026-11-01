@@ -4,22 +4,20 @@ import type { RpcCompatibleReader, RpcDecodeIssue } from './rpc-operation-contra
 
 const MAX_REPORTED_DECODE_ISSUES = 20
 
-/** A reader that names the semantic variant it decodes, so a combinator can tag its issues. */
+// Name the decoded variant so combinators can attribute issues.
 export type NamedRpcResultReader<Variant extends string, Value> = RpcCompatibleReader<
   unknown,
   Variant,
   Value
 > & { readonly variant: Variant }
 
-/** Builds a compatible reader for one semantic variant of a reply payload. */
 export function rpcResultVariant<Variant extends string, Schema extends z.ZodType>(
   variant: Variant,
   schema: Schema
 ): NamedRpcResultReader<Variant, z.output<Schema>> {
   const read: RpcCompatibleReader<unknown, Variant, z.output<Schema>> = (raw) => {
     try {
-      // Why: zod-salvage holds module-level collector state and wraps a *synchronous*
-      // parse only; safeParse throws on an async schema, which reads as incompatible.
+      // Salvage uses module-level state and synchronous parsing; async-schema throws must become incompatible.
       const parsed = collectSalvageDrops(() => schema.safeParse(raw))
       if (!parsed.value.success) {
         return { compatible: false, issues: decodeIssues(parsed.value.error) }
@@ -68,8 +66,7 @@ function decodeIssues(error: z.ZodError): RpcDecodeIssue[] {
   )
 }
 
-// Why: a hostile or very foreign reply can issue per element; report a bounded sample and
-// say how many were dropped rather than letting the diagnostic grow with the payload.
+// Bound diagnostics independently of reply size, retaining the dropped count.
 function boundIssues(issues: readonly RpcDecodeIssue[]): RpcDecodeIssue[] {
   if (issues.length <= MAX_REPORTED_DECODE_ISSUES) {
     return [...issues]

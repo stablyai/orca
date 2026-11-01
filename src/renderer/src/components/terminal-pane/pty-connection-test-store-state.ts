@@ -6,6 +6,7 @@ import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-ag
 import type { AppState } from '@/store/types'
 
 export type StoreState = {
+  unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']
   activeWorktreeId: string | null
   tabsByWorktree: Record<
     string,
@@ -102,6 +103,7 @@ export type StoreState = {
   removeDeferredSshSessionId: ReturnType<typeof vi.fn>
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
+  consumeTabStartupCommand?: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   agentStatusByPaneKey: Record<string, unknown>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>

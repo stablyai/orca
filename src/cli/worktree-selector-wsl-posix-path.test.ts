@@ -1,8 +1,4 @@
-/**
- * The CLI half of #16628: inside WSL the user types `/home/neil/qa-repo`, the runtime stored the
- * UNC path Windows sees. Only this process sits in the distro, so only it may translate — and the
- * same selector reaches `worktree rm`, so an unprovable distro must leave the path alone.
- */
+// These selectors also reach worktree rm, so translate only with proof of the caller's distro.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreeRecord } from '../shared/runtime-types'
 import type { RuntimeClient } from './runtime-client'
@@ -65,7 +61,7 @@ describe('normalizeWorktreeSelectorForCaller in a WSL shell (#16628)', () => {
 
   it('leaves the path alone when only another distro spells it', async () => {
     const { client } = makeClient([uncPath(UBUNTU, LINUX_PATH)])
-    // Interop forwards WSL_DISTRO_NAME, so it must not outvote the cwd that proves the distro.
+    // Interop can forward WSL_DISTRO_NAME from a different distro than the cwd proves.
     vi.stubEnv('WSL_DISTRO_NAME', UBUNTU)
 
     await expect(
@@ -103,7 +99,7 @@ describe('normalizeWorktreeSelectorForCaller in a WSL shell (#16628)', () => {
   it.each([
     ['a branch selector', 'branch:qa'],
     ['a relative path', 'path:qa-repo'],
-    // A UNC path is already the runtime's spelling; a backslash inside a Linux path has no UNC form.
+    // A Linux filename containing a backslash cannot be represented as a UNC path.
     ['a UNC path selector', `path:${uncPath(UBUNTU, LINUX_PATH)}`],
     ['a Linux path containing a backslash', 'path:/home/neil/qa\\repo']
   ])('leaves %s untranslated', async (_label, selector) => {

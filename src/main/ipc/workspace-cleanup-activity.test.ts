@@ -135,7 +135,6 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       readTextFile
     )
 
-    // Why: only the tail of the reflog is read — the newest entry is enough.
     expect(readTextFile).toHaveBeenCalledWith(reflogPath, { tailBytes: 8192 })
     expect(worktree.lastActivityAt).toBe(1_700_000_900_000)
   })
@@ -148,8 +147,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       const worktreePath = path.join(dir, 'wt')
       await mkdir(worktreePath, { recursive: true })
       await writeFile(path.join(worktreePath, '.git'), `gitdir: ${gitDir}\n`)
-      // Why: a single record longer than the 8192-byte tail window keeps its
-      // timestamp before the window; the reader must fall back to a full read.
+      // A reflog entry longer than the tail window needs a full read to find its timestamp.
       await writeFile(
         path.join(gitDir, 'logs', 'HEAD'),
         '0000 1111 Dev <dev@example.com> 1700000000 -0700\tbranch: Created from HEAD\n' +
@@ -256,8 +254,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
         readTextFile
       )
 
-      // Separators are normalized because the probe join uses the host separator;
-      // what this pins is the drive spelling of every resolved probe target.
+      // Normalize probe separators while checking the Windows drive spelling of every resolved target.
       const normalize = (target: string): string => target.replaceAll('/', '\\')
       expect(statPath.mock.calls.map(([target]) => normalize(target)).sort()).toEqual(
         [

@@ -7,7 +7,7 @@ import {
   getPaletteWorktreeExecutionHostId,
   resolvePaletteRepoForWorktree
 } from '@/lib/palette-repo-resolution'
-import type { PaletteDocument } from '@/lib/palette-match/palette-document'
+import type { PaletteDocument } from '../../../shared/palette-match/palette-document'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'

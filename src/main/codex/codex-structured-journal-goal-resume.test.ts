@@ -1,11 +1,11 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget
@@ -377,8 +377,7 @@ describe('codex goal lifecycle resume', () => {
         prefix === 'Goal cleared' ? prefix : `${prefix}: Keep the current scratch directory tidy.`
       )
     )
-    // A resumed goal's fresh accounting revises the row it already has: no new
-    // row, and the text a reader sees is unchanged. A cleared goal has no accounting.
+    // Fresh resume accounting revises the existing row; cleared goals carry none.
     const cleared = scenario.resumed.method === 'thread/goal/cleared'
     expect(journal.writes).toHaveLength(writesBeforeResume + (cleared ? 0 : 1))
     expect(journal.publishes()).toBe(publishesBeforeResume + (cleared ? 0 : 1))

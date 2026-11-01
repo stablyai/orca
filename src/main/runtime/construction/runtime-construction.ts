@@ -1,3 +1,5 @@
+import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   RuntimeConstructionBindings,
   RuntimeConstructionDependencies
@@ -17,6 +19,8 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-
 import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
 
 import type { RuntimeStore } from '../runtime-store-contract'
+import { installGitHubProjectAccounts } from '../../github/github-project-account'
+import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
@@ -37,15 +41,15 @@ import { RuntimeAutomationController } from '../runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from '../runtime-orchestration-federation'
 import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-list'
 import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
-import { createEphemeralAgentSessionClaimSigner } from '../agent-session-claim-identity'
+import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from '../terminal-view-attribute-store'
 import { RuntimeMachineName } from '../runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal-scrollback-policy'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs every checked canonical surface.
 export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
-  // Earlier layers allocate these slots; this constructor assigns their readonly values.
   declare protected readonly getLocalProviderFn: HostServices['getLocalProviderFn']
   declare readonly onPtyStopped: HostServices['onPtyStopped']
   declare protected readonly onTerminalAgentStatus: HostServices['onTerminalAgentStatus']
@@ -63,6 +67,9 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     | RuntimeConstructionBindings['readHookCliWriterObservation']
     | null
   declare protected readonly checkHookAgentPresenceFn: HostServices['checkHookAgentPresenceFn']
+  declare readonly subscribeAgentProviderSessionChangesFn:
+    | RuntimeConstructionBindings['subscribeAgentProviderSessionChanges']
+    | null
   declare protected readonly reconcileAgentStatusForEndedProcessFn: HostServices['reconcileAgentStatusForEndedProcessFn']
   declare protected readonly forgetHookAgentExitFn: HostServices['forgetHookAgentExitFn']
   declare protected readonly dropAgentStatusForRemovedWorktreeFn: HostServices['dropAgentStatusForRemovedWorktreeFn']
@@ -70,6 +77,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly getPairedDeviceNameFn: HostServices['getPairedDeviceNameFn']
   declare protected readonly buildAgentHookPtyEnv: HostServices['buildAgentHookPtyEnv']
   declare protected readonly getDesktopWindowStatusFn: HostServices['getDesktopWindowStatusFn']
+  protected readonly headlessTerminalScrollbackRows: number
   declare protected readonly prepareAiVaultSessionResumeFn: HostServices['prepareAiVaultSessionResumeFn']
   declare protected readonly prepareCodexStructuredLaunchFn: HostServices['prepareCodexStructuredLaunchFn']
   declare protected readonly resolveCodexStructuredLaunchHomeFn: HostServices['resolveCodexStructuredLaunchHomeFn']
@@ -83,14 +91,18 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly skillCommands: ServiceState['skillCommands']
 
   abstract showManagedWorktree(
-    worktreeSelector: string
+    ...args: Parameters<ListManagedWorktrees['showManagedWorktree']>
   ): ReturnType<ListManagedWorktrees['showManagedWorktree']>
   abstract resolveProjectRuntimeForWorktree(
     worktreeId: string | null | undefined
   ): ProjectExecutionRuntimeResolution | undefined
   protected abstract ensureNativeWindowsConptyDa1Override(ptyId: string): void
 
+  readonly getSetupTerminalTitle: () => string
+
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
+
+  readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
 
   protected readonly getAgentStatusSnapshotForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
@@ -107,13 +119,20 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   ) {
     super()
     this.store = store
+    installGitHubProjectAccounts(store, () => this.resolvedWorktrees.peek()?.worktrees ?? [])
+    this.legacyStructuredSessionTabIds = Object.freeze(
+      collectSavedStructuredAgentSessionIds(
+        store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
+      )
+    )
     this.machineName.start()
+    this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
-    // oxlint-disable-next-line typescript/no-this-alias -- SAFETY: Preserve the constructor receiver captured by callbacks.
-    const runtime: this = this
-    installRuntimeFileCommandSurface(runtime, this.fileCommands)
-    installRuntimeGitCommandSurface(runtime, this.gitCommands)
-    installRuntimeRepositoryCommandSurface(runtime, {
+    installRuntimeFileCommandSurface(this, this.fileCommands)
+    // Host start: drop what a crashed run's staged saves left in the staging folder.
+    this.fileCommands.stagedFileSaves.sweepOrphans()
+    installRuntimeGitCommandSurface(this, this.gitCommands)
+    installRuntimeRepositoryCommandSurface(this, {
       projectHostSetups: this.projectHostSetups,
       projectGroups: this.projectGroups,
       nestedRepoImport: this.nestedRepoImport,
@@ -128,7 +147,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       repositoryHooks: this.repositoryHooks,
       repositoryIssueCommand: this.repositoryIssueCommand
     })
-    installRuntimeReviewCommandSurface(runtime, {
+    installRuntimeReviewCommandSurface(this, {
       gitLabQueries: this.gitLabQueryCommands,
       gitLabMutations: this.gitLabMutationCommands,
       gitHubReviewQueries: this.gitHubReviewQueries,
@@ -136,7 +155,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       gitHubIssueComments: this.gitHubIssueComments,
       gitHubProjects: this.gitHubProjectCommands
     })
-    installRuntimeServiceCommandSurface(runtime, {
+    installRuntimeServiceCommandSurface(this, {
       aiVault: this.aiVault,
       sessionSearchSettings: new RuntimeSessionSearchSettingsController(
         store,
@@ -176,16 +195,20 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
         }
       )
     })
-    installRuntimeSkillCommandSurface(runtime, this.skillCommands)
+    installRuntimeSkillCommandSurface(this, this.skillCommands)
     Object.assign(this, this.edgeCommands.surface)
-    this.clientSettings = new RuntimeClientSettingsController(store, () =>
-      this.notifyReposChanged()
+    this.clientSettings = new RuntimeClientSettingsController(
+      store,
+      () => this.notifyReposChanged(),
+      {
+        artifacts: () => this.artifacts.hasService(),
+        skills: () => this.skillCommands.hasSkillCloudService()
+      }
     )
     this.automation = new RuntimeAutomationController(store, {
-      showRepo: (selector) => runtime.showRepo(selector),
-      showManagedWorktree: (selector) => this.showManagedWorktree(selector)
+      showRepo: (selector) => this.showRepo(selector),
+      showManagedWorktree: (selector, hostId) => this.showManagedWorktree(selector, hostId)
     })
-    // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
       this.clientSessionTabSelections.hydrate(persistedClientTabSelections)
@@ -194,8 +217,9 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
+    this.workspaceSleepPlatform = deps?.workspaceSleepPlatform ?? null
     this.orchestrationFederation = new RuntimeOrchestrationFederation(
-      runtime,
+      this,
       this.orchestrationEnvironmentTransport
     )
     if (stats) {
@@ -215,14 +239,13 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       deps?.retireAgentHookCompatibilityAuthority ?? null
     this.readHookCliWriterObservationFn = deps?.readHookCliWriterObservation ?? null
     this.checkHookAgentPresenceFn = deps?.checkHookAgentPresence ?? null
+    this.subscribeAgentProviderSessionChangesFn = deps?.subscribeAgentProviderSessionChanges ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
     this.forgetHookAgentExitFn = deps?.forgetHookAgentExit ?? null
     this.dropAgentStatusForRemovedWorktreeFn = deps?.dropAgentStatusForRemovedWorktree ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
-    // Why: configure the shared AiVault scan cache from a serve-mode-reachable
-    // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
-    // even on headless `orca serve` hosts where registerCoreHandlers never runs.
+    // Headless serve skips registerCoreHandlers but still needs managed-Codex/WSL AiVault sources.
     if (deps?.getAdditionalAiVaultCodexHomePaths) {
       configureAiVaultSessionSources({
         getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
@@ -231,12 +254,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
         getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
       })
     }
-    // Why: the daemon adapter is installed via `setLocalPtyProvider()` during
-    // attachMainWindowServices, AFTER this service is constructed. Capturing
-    // `getLocalPtyProvider()` at construction time would freeze a reference to
-    // the pre-daemon `LocalPtyProvider` and miss the routed adapter. Resolve
-    // lazily via thunk so teardown always sees the currently-installed
-    // provider (design §4.3 wire-up).
+    // Resolve lazily: attachMainWindowServices replaces the initial provider with the daemon adapter later (§4.3).
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
@@ -244,6 +262,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.onClaudeTerminalEvidence = deps?.onClaudeTerminalEvidence ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
+    this.headlessTerminalScrollbackRows =
+      deps?.headlessTerminalScrollbackRows ?? DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null
     this.prepareCodexStructuredLaunchFn = deps?.prepareCodexStructuredLaunch ?? null
     this.resolveCodexStructuredLaunchHomeFn = deps?.resolveCodexStructuredLaunchHome ?? null
@@ -251,20 +271,15 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.agentSessionClaimSigner =
       deps?.agentSessionClaimSigner ?? createEphemeralAgentSessionClaimSigner(this.runtimeId)
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
-    // Why: the ConPTY spawn mark can land after daemon stream data already
-    // created this PTY's emulator; the mark retrofits the DA1 override here
-    // (terminal-query-authority.md §ConPTY DA1).
+    // ConPTY spawn marks can follow emulator creation; retrofit DA1 (terminal-query-authority.md).
     registerConptyDa1OverrideInstaller((ptyId) => this.ensureNativeWindowsConptyDa1Override(ptyId))
-    // Why: a renderer attribute push must reach already-live emulators too —
-    // cursor options for DECRQSS/DECRQM parity plus the per-PTY OSC color
-    // override reset a theme apply implies (terminal-query-authority.md
-    // §View-attribute bridge).
+    // Apply renderer changes to live emulators too: cursor query parity and per-PTY OSC color reset.
     registerTerminalViewAttributesApplier((attributes) => {
       for (const state of this.headlessTerminals.values()) {
         state.emulator.applyPushedViewAttributes(attributes)
       }
     })
-    // Why: PR conflict previews fetch the same base branches a create refreshes; one owner queues them.
+    // Conflict previews and create refreshes must queue through one fetch owner.
     setPRConflictSummaryRemoteFetches(this.remoteFetches)
   }
 }

@@ -7,22 +7,17 @@ export type BrowserScreencastGuestViewSize = {
   height: number
 }
 
-// The runtime's own floor for a requested viewport (normalizeScreencastViewport).
+// Match normalizeScreencastViewport's minimum dimensions.
 const MIN_VIEWPORT_WIDTH = 320
 const MIN_VIEWPORT_HEIGHT = 240
 
-/**
- * Whether this guest can only paint inside its embedder's element. A `<webview>` guest's
- * compositor surface is the element's size: an emulated viewport larger than that is laid out
- * at full size but its frames and `capturePage` hold only the element's top-left part, and
- * `Emulation.setVisibleSize` does not grow it (measured on Electron 43, 2026-10-18). An
- * offscreen `BrowserWindow` does grow, so it keeps the full requested size.
- */
+// Webview compositors stay bounded by their embedder even after Emulation.setVisibleSize.
+// Emulating a larger viewport crops the layout; offscreen BrowserWindows can grow instead.
 export function isEmbedderSizedScreencastGuest(webContents: Pick<WebContents, 'getType'>): boolean {
   return typeof webContents.getType === 'function' && webContents.getType() === 'webview'
 }
 
-/** For an embedder-sized guest every live frame reports the element's CSS size, whatever is emulated. */
+/** Webview frame dimensions reveal the embedder size regardless of viewport emulation. */
 export function readScreencastGuestViewSize(
   metadata: BrowserScreencastFrameMetadata
 ): BrowserScreencastGuestViewSize | null {
@@ -38,15 +33,11 @@ export function readScreencastGuestViewSize(
   ) {
     return null
   }
-  // Why floor: a fractional element must not be asked for the pixel row it cannot paint.
+  // Floor fractional bounds so the guest is never asked to paint an unavailable pixel row.
   return { width: Math.floor(width), height: Math.floor(height) }
 }
 
-/**
- * The viewport to emulate: the client's request, shrunk to what the guest can paint. Frames then
- * cover the whole emulated page and report its real size, so a client letterboxes and maps
- * input against what it was sent instead of a stretched crop.
- */
+// Clamp to guest bounds while preserving the runtime viewport floor.
 export function clampScreencastViewportToGuestView(
   requested: BrowserScreencastViewport,
   view: BrowserScreencastGuestViewSize | null

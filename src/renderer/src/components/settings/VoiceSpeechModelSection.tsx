@@ -15,11 +15,11 @@ import {
 } from '../ui/dropdown-menu'
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { speechModelDescription } from './speech-model-description'
 
 function describeSpeechModelDownloadError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
-  // Why: ipcRenderer.invoke wraps main-process rejections; strip the transport
-  // prefix so the toast shows only the underlying download failure.
+  // Strip Electron’s invoke wrapper so download errors show the underlying cause.
   return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
 }
 
@@ -56,7 +56,7 @@ export function VoiceSpeechModelSection({
         <Label>{translate('auto.components.settings.VoicePane.43fd4f454b', 'Speech Model')}</Label>
         <p className="text-xs text-muted-foreground">
           {selectedModel && selectedIsReady
-            ? `${selectedModel.label} — ${selectedModel.description}`
+            ? `${selectedModel.label} — ${speechModelDescription(selectedModel)}`
             : translate(
                 'auto.components.settings.VoicePane.e24f7d43d2',
                 'Select a speech model. Local models run offline; cloud models require an API key.'
@@ -98,7 +98,7 @@ export function VoiceSpeechModelSection({
                   } else if (isCloud) {
                     onOpenOpenAiDialog(manifest.id)
                   } else if (!isDownloading) {
-                    // Why: download progress appears in this menu, so starting one should not dismiss it.
+                    // Keep the menu open so download progress remains visible.
                     event.preventDefault()
                     void window.api.speech.downloadModel(manifest.id).catch((error: unknown) =>
                       toast.error(
@@ -106,8 +106,7 @@ export function VoiceSpeechModelSection({
                           'auto.components.settings.VoicePane.cfde55c7b0',
                           'Failed to download model.'
                         ),
-                        // Why: the raw cause (e.g. net::ERR_CONTENT_LENGTH_MISMATCH)
-                        // is the only diagnosable signal users can report back.
+                        // Include the raw cause because it is the diagnosable failure users can report.
                         { description: describeSpeechModelDownloadError(error) }
                       )
                     )
@@ -159,7 +158,7 @@ export function VoiceSpeechModelSection({
                     </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    {manifest.description}
+                    {speechModelDescription(manifest)}
                   </p>
                 </div>
                 {!isCloud && isReady ? (

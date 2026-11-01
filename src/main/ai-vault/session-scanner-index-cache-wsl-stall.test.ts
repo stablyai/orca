@@ -33,8 +33,7 @@ import {
   WslTranscriptFsError
 } from '../native-chat/wsl-transcript-fs-gate'
 
-// Identity must not change between the refused and the recovered read, or the
-// cache would miss for that reason instead of because the entry was evicted.
+// Keep identity unchanged so recovery proves eviction rather than a signature-based cache miss.
 const INDEX_STATS = { size: 128, mtimeMs: 7, ctimeMs: 7 }
 
 let releaseStall: (() => void) | undefined
@@ -57,8 +56,7 @@ function servingHandle(body: string) {
   }
 }
 
-// A result that lands past the deadline never lifts the route quarantine, so
-// recovery waits out the back-off window the same way production does.
+// Late results cannot clear quarantine; advance through backoff before retrying.
 async function releaseAndSettle(): Promise<void> {
   releaseStall?.()
   releaseStall = undefined
@@ -66,8 +64,6 @@ async function releaseAndSettle(): Promise<void> {
 }
 
 beforeEach(() => {
-  // blockedRoutes is persistent gate state: a prior stall must not quarantine
-  // this test's route.
   resetWslTranscriptFsGateForTests()
   resetCodexSessionIndexTitleCacheForTests()
   clearKimiSessionIndexCache()
@@ -180,7 +176,6 @@ describe('memoized WSL session indexes under a stalled mount', () => {
       servingHandle(`${JSON.stringify({ id: SESSION_ID, thread_name: 'Ship the gate' })}\n`)
     )
 
-    // Same size/mtime as the refused read: only the eviction can produce a hit.
     expect(await readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)).toBe(
       'Ship the gate'
     )
@@ -211,8 +206,7 @@ describe('memoized WSL session indexes under a stalled mount', () => {
     )
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
 
-    // A throw, not `null`: `parseSessionCandidate` turns it into a scan issue,
-    // where `null` would cache an un-enriched session that never re-reads.
+    // WSL rejection must reach the scan issue path instead of caching missing enrichment.
     expect(await pending).toBeInstanceOf(WslTranscriptFsError)
   })
 

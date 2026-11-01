@@ -1,5 +1,4 @@
-// Open to the side in a layout-owner build (ORCA_LAYOUT_OWNER=main): each new split reaches main
-// with its tab, and the window draws main's frames, so both show the same groups after every step.
+// With main layout ownership, each split and tab must reach main together; drawn frames must preserve group parity.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
@@ -13,7 +12,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -116,7 +114,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     await settledSent()
     expect(mainView()).toEqual(windowView())
 
-    // An editor open to the side: an empty split first, then the open fills it.
     const editorGroup = store.getState().createEmptySplitGroup(WT, ROOT, 'right')!
     openFile('/a.ts', { targetGroupId: editorGroup })
     expect(await settledSent()).toEqual([
@@ -129,12 +126,10 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     ])
     expect(mainView()).toEqual(windowView())
 
-    // A terminal and a browser tab made with their split, beside the editor's split.
     store.getState().createTab(WT, undefined, undefined, {
       split: { sourceGroupId: editorGroup, splitDirection: 'down' }
     })
     const terminalGroup = store.getState().groupsByWorktree[WT]!.at(-1)!.id
-    // The browser tab and its split are drawn from main's frame.
     const browser = store.getState().createBrowserTab(WT, 'about:blank', {
       split: { sourceGroupId: ROOT, splitDirection: 'left' }
     })

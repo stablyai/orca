@@ -195,7 +195,6 @@ describe('client session-tab selection', () => {
     expect(projected.activeTabId).toBe('browser-unified')
     expect(projected.activeGroupId).toBe('group-right')
     expect(projected.tabs.find((tab) => tab.isActive)?.id).toBe('browser-unified')
-    // A later open follows where the host moved, not the first projection.
     expect(store.project(snapshot('terminal-a::leaf-b'), 'new-device').activeTabId).toBe(
       'terminal-a::leaf-b'
     )
@@ -241,7 +240,6 @@ describe('client session-tab selection', () => {
     store.activate(snapshot(), 'device-a', 'browser-unified')
     store.forgetClient('device-a')
     expect(persisted.at(-1)).toEqual({})
-    // Why: forgetting state that is already gone must not rewrite the persisted file.
     const writes = persisted.length
     store.forgetClient('device-a')
     store.forgetWorktree('wt-1')
@@ -482,4 +480,23 @@ describe('client session-tab selection', () => {
       }
     })
   })
+})
+
+it('reopening caller visibility retains host-follow policy without changing a bystander close', () => {
+  const store = new ClientSessionTabSelectionStore()
+  const tabs = browserStrip(['a', 'b'])
+  store.project(tabs, 'caller')
+  store.project(tabs, 'bystander')
+  store.forgetTabs('wt-1', ['a'])
+  const before = store.project(tabs, 'caller')
+  expect(before.activeTabId).toBe('b')
+  expect(store.serialize()).toEqual({})
+  const reopened = store.reopen(tabs, 'caller', 'a')
+  expect(reopened.activeTabId).toBe('a')
+  expect(store.project(tabs, 'caller').activeTabId).toBe('a')
+  expect(store.project(tabs, 'bystander').activeTabId).toBe('b')
+  expect(
+    store.project(browserStrip(['a', 'b'], { hostActiveTabId: 'b' }), 'caller').activeTabId
+  ).toBe('b')
+  expect(store.serialize()).toEqual({})
 })

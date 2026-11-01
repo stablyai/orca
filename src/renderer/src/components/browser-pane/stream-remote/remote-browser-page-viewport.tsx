@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -9,17 +9,14 @@ import type {
   BrowserPage as BrowserPageState
 } from '../../../../../shared/browser-workspace-types'
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser'
-import {
-  resolveRemoteFailureExternalUrl,
-  toHttpsRecoveryUrl
-} from '../../../../../shared/browser-url'
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
-import { toDisplayUrl } from '../describe-page/browser-page-url-display'
+import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import {
   canReconnectRemoteBrowserStream,
@@ -45,14 +42,15 @@ export function RemoteBrowserPageViewport({
   worktreeId,
   runtimeWorktree,
   runtimeTarget,
-  onReload,
+  isActive,
   onGoto,
   onNavigateToUrl,
   onReconnect,
   handleRemotePointerDown,
   handleRemotePointerUp,
   handleRemoteContextMenu,
-  handleRemoteScreenshotKeyDown
+  handleRemoteScreenshotKeyDown,
+  handleRemoteScreenshotPaste
 }: {
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
   imageRef: React.RefObject<HTMLImageElement | null>
@@ -70,8 +68,8 @@ export function RemoteBrowserPageViewport({
   worktreeId: string
   runtimeWorktree: string
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
-  onReload: () => void
-  onGoto: (url: string) => void
+  isActive: boolean
+  onGoto: (url: string) => Promise<void>
   /** The address bar's submit path, which also parks a URL typed before the host page exists. */
   onNavigateToUrl: (url: string) => void
   onReconnect: () => void
@@ -79,12 +77,22 @@ export function RemoteBrowserPageViewport({
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
+  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
 }): React.JSX.Element {
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
-  const remoteFailureUrl = browserTab.loadError?.validatedUrl ?? browserTab.url
+  // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
+  const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
+  if (
+    browserTab.loadError !== standingFailure &&
+    (browserTab.loadError || (!browserTab.loading && !busy))
+  ) {
+    setStandingFailure(browserTab.loadError)
+  }
+  const loadError =
+    browserTab.loadError ?? resolveActiveBrowserLoadFailure(standingFailure, browserTab.url)
+  const remoteFailureUrl = loadError?.validatedUrl ?? browserTab.url
   const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
-  const showRemoteFailureOverlay =
-    Boolean(browserTab.loadError) && !isBlankBrowserUrl(remoteFailureUrl)
+  const showRemoteFailureOverlay = Boolean(loadError) && !isBlankBrowserUrl(remoteFailureUrl)
 
   return (
     <div
@@ -117,6 +125,7 @@ export function RemoteBrowserPageViewport({
           onPointerUp={handleRemotePointerUp}
           onContextMenu={handleRemoteContextMenu}
           onKeyDown={handleRemoteScreenshotKeyDown}
+          onPaste={handleRemoteScreenshotPaste}
           draggable={false}
         />
       ) : (
@@ -150,15 +159,16 @@ export function RemoteBrowserPageViewport({
       {isBlankBrowserUrl(browserTab.url) ? (
         <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
       ) : null}
-      {showRemoteFailureOverlay && browserTab.loadError ? (
+      {showRemoteFailureOverlay && loadError ? (
         <BrowserLoadFailureOverlay
-          loadError={browserTab.loadError}
+          loadError={loadError}
           externalUrl={remoteFailureExternalUrl}
-          currentUrl={toDisplayUrl(remoteFailureUrl)}
-          httpsRecoveryUrl={toHttpsRecoveryUrl(remoteFailureUrl)}
-          onRetry={onReload}
-          onTryHttps={onGoto}
-          onCopy={(url) => void window.api.ui.writeClipboardText(url)}
+          // Why: reloading the server's error page only refreshes it; re-attempt the URL that failed.
+          onRetry={() => onGoto(remoteFailureUrl)}
+          autoRetry={{
+            active: isActive,
+            loading: browserTab.loading
+          }}
           onOpenExternal={(url) => void window.api.shell.openUrl(url)}
           certificateFailure={remoteCertificateTrustSupported ? certificateFailure : null}
           expectedBrowserPageId={
@@ -188,23 +198,17 @@ export function RemoteBrowserPageViewport({
           }}
         />
       ) : null}
-      {/* Why the reconnect control also opens this toast: the control renders inside it, so
-          gating the toast on the message alone made an empty message ('' from a host that failed
-          with no text) swallow the user's only way back — the original stranding bug, reachable
-          through three sites that forward host-supplied text into `stopped`. */}
+      {/* Render the toast for Reconnect even when a host failure supplies no message; the control lives inside it. */}
       {remoteError || canReconnectRemoteBrowserStream(streamStatus) ? (
         <div
           data-testid="remote-browser-stream-error"
           role="status"
           aria-live="polite"
-          // Why z-30: the load-failure overlay is a z-20 full-pane sheet, so without this the
-          // Reconnect control renders beneath it and silently swallows every click — the user's
-          // only way back, present but unusable, whenever the page also failed to load.
+          // Keep Reconnect above the z-20 load-failure sheet so it remains clickable.
           className="absolute bottom-4 left-1/2 z-30 flex max-w-md -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
         >
           <span>{remoteError}</span>
-          {/* Why: the runtime refuses server screencast for a client-placed page, so reconnecting
-              can never render it here. A new server-placed page is the only way through. */}
+          {/* Client-placed pages refuse server screencasts; only a new server-placed page can render here. */}
           {remotePageHandle?.placement?.kind === 'client' ? (
             <ReopenBrowserPageOnServerButton
               environmentId={remotePageHandle.environmentId}

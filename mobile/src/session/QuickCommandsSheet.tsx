@@ -1,15 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Alert, View, Text, Pressable, StyleSheet } from 'react-native'
+import { Alert, View, Text, Pressable } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../components/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import {
-  getQuickCommandPreview,
-  MAX_QUICK_COMMANDS,
-  quickCommandMatchesRepo
-} from '../terminal/quick-commands'
+import { getQuickCommandPreview, quickCommandMatchesRepo } from '../terminal/quick-commands'
 import { useQuickCommands } from './use-quick-commands'
 import { QuickCommandEditorForm } from './QuickCommandEditorForm'
 import { QuickCommandAgentPicker, QuickCommandsList } from './QuickCommandsList'
@@ -19,6 +17,7 @@ import {
   quickCommandToDraft,
   type QuickCommandDraft
 } from './quick-command-draft'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   visible: boolean
@@ -26,7 +25,6 @@ type Props = {
   client: RpcClient | null
   repoId: string | null
   repoName: string | null
-  /** The host's agent-prompt cap. */
   agentPromptMaxLength: number | null
   onLaunch: (command: TerminalQuickCommand) => boolean
 }
@@ -42,6 +40,8 @@ export function QuickCommandsSheet({
   agentPromptMaxLength,
   onLaunch
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const { commands, loading, ready, error, persist } = useQuickCommands({
     client,
     enabled: visible
@@ -96,11 +96,6 @@ export function QuickCommandsSheet({
   const globalCommands = visibleCommands.filter((command) => command.scope?.type !== 'repo')
 
   const openEditor = (command?: TerminalQuickCommand) => {
-    // Why: the host rejects full-list updates above this cap; existing rows
-    // must remain editable/deletable when creation is no longer possible.
-    if (!command && commands.length >= MAX_QUICK_COMMANDS) {
-      return
-    }
     draftRevisionRef.current += 1
     editorGenerationRef.current += 1
     setDraft(
@@ -121,12 +116,17 @@ export function QuickCommandsSheet({
     // Why: quick commands sync with desktop, so an accidental one-tap delete
     // removes shared data rather than only dismissing a local row.
     Alert.alert(
-      `Delete "${command.label || 'Untitled'}"?`,
-      'This quick command will be removed from your saved list.',
+      t('session.quickCommandsSheet.deleteConfirmTitle', 'Delete "{{label}}"?', {
+        label: command.label || t('session.quickCommandsSheet.untitled', 'Untitled')
+      }),
+      t(
+        'session.quickCommandsSheet.deleteConfirmMessage',
+        'This quick command will be removed from your saved list.'
+      ),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete', 'Delete'),
           style: 'destructive',
           onPress: () => {
             void persist({ type: 'delete', id: command.id })
@@ -169,11 +169,11 @@ export function QuickCommandsSheet({
   const title =
     view === 'editor'
       ? draft?.id
-        ? 'Edit Quick Command'
-        : 'Add Quick Command'
+        ? t('session.quickCommandsSheet.editTitle', 'Edit Quick Command')
+        : t('session.quickCommandsSheet.addTitle', 'Add Quick Command')
       : view === 'agent'
-        ? 'Choose Agent'
-        : 'Quick Commands'
+        ? t('session.quickCommandsSheet.chooseAgentTitle', 'Choose Agent')
+        : t('session.quickCommandsSheet.title', 'Quick Commands')
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
@@ -188,7 +188,7 @@ export function QuickCommandsSheet({
               setView(view === 'agent' ? 'editor' : 'list')
             }}
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={t('common.back', 'Back')}
           >
             <ChevronLeft size={18} color={colors.textSecondary} />
           </Pressable>
@@ -200,7 +200,10 @@ export function QuickCommandsSheet({
       {view === 'editor' && draft ? (
         <View style={styles.editorDesc}>
           <Text style={styles.descText}>
-            Save terminal commands or agent prompts for quick access.
+            {t(
+              'session.quickCommandsSheet.editorDescription',
+              'Save terminal commands or agent prompts for quick access.'
+            )}
           </Text>
         </View>
       ) : null}
@@ -213,7 +216,6 @@ export function QuickCommandsSheet({
           query={query}
           loading={loading}
           disabled={!ready}
-          canAdd={commands.length < MAX_QUICK_COMMANDS}
           error={error}
           onQueryChange={setQuery}
           onLaunch={handleLaunch}
@@ -263,12 +265,12 @@ export function QuickCommandsSheet({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.sm },
   backButton: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -280,7 +282,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     textAlign: 'center'
   },
-  pressed: { backgroundColor: colors.bgRaised },
+  pressed: { backgroundColor: colors.borderSubtle },
   editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
   descText: { fontSize: 12, color: colors.textMuted }
-})
+}))

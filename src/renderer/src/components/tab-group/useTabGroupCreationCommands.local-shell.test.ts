@@ -66,12 +66,7 @@ const useAppStore = Object.assign(
 
 vi.mock('../../store', () => ({ useAppStore }))
 
-/**
- * The "+" menu's shell rows on a workspace that no runtime environment owns. The remote
- * runtime is connected and focused, which is the whole trap: an unowned workspace must
- * still open its shell locally instead of asking that runtime to resolve a selector it
- * has never heard of (#16444).
- */
+/** An unowned workspace must launch locally even while a remote runtime is focused; that runtime has no workspace selector. */
 describe('tab group "+" menu shell launch on a locally-owned workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks()

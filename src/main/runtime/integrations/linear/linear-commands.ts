@@ -9,12 +9,10 @@ export abstract class OrcaRuntimeWithLinearCommands extends OrcaRuntimeWithFileC
 
   protected abstract listResolvedWorktrees(): Promise<ResolvedWorktree[]>
 
-  // ── Linear integration ──
-
   readonly linearCommands = new RuntimeLinearCommands({
     runtimeAvailable: () => this.store !== null,
     showTerminal: (handle) => this.showTerminal(handle),
-    resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
+    resolveWorkspaceSelector: (selector) => this.resolveWorkspaceSelector(selector),
     listResolvedWorktrees: () => this.listResolvedWorktrees(),
     setWorktreeMeta: (worktree, meta) => {
       const target = worktreeRowTarget(this.store!, worktree)

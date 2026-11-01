@@ -3,8 +3,7 @@ import type { CodexInstallationProblem } from './codex-cli-installation'
 import type { TuiAgent } from './tui-agent'
 import { isTuiAgent } from './tui-agent-config'
 
-/** A chat start refused because the agent's binary is older than its chats need; names the agent
- *  so a replayed or phone refusal says whose without the chat. */
+/** Name the agent in installation refusals so replays/mobile can identify it without chat context. */
 export type AgentCliInstallationProblem = {
   agent: TuiAgent
   installedVersion: string
@@ -35,8 +34,7 @@ export function readAgentCliInstallationProblem(
   }
 }
 
-/** A refusal's facts for `problem`; Codex's are also sent the way clients before
- *  `agentInstallation` read them. */
+/** Include legacy Codex fields for clients predating agentInstallation. */
 export function agentCliInstallationFacts(problem: AgentCliInstallationProblem): {
   agentInstallation: AgentCliInstallationProblem
   codexInstallation?: CodexInstallationProblem

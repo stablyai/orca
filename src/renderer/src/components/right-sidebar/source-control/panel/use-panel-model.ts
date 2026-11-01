@@ -12,10 +12,6 @@ import { useSourceControlReviewFlows } from '../review/use-review-flows'
 import { useSourceControlUpstreamStatusFetch } from '../sync/use-upstream-status-fetch'
 import { useSourceControlPanelFoundation } from './use-panel-foundation'
 
-/**
- * The panel's single entry point: foundation, then the flows that act on it, then the action model
- * the chrome renders from. The rendered tree reads only this.
- */
 export function useSourceControlPanelModel() {
   const foundation = useSourceControlPanelFoundation()
   const commitFlows = useSourceControlCommitFlows(foundation)
@@ -40,6 +36,7 @@ export function useSourceControlPanelModel() {
     entries,
     fetchUpstreamStatus,
     grouped,
+    handleOpenDiff,
     handleStageAllPrimary,
     hostedReview,
     hostedReviewCreateCopy,
@@ -47,6 +44,7 @@ export function useSourceControlPanelModel() {
     hostedReviewCreationForHeader,
     hostedReviewStateForActions,
     inFlightRemoteOpKind,
+    isRemoteOperationInAnotherWorktree,
     isAbortingOperation,
     isBranchVisible,
     isCommitting,
@@ -58,6 +56,7 @@ export function useSourceControlPanelModel() {
     isHostedReviewStateLoading,
     isRemoteOperationActive,
     openModal,
+    openCommittedDiff,
     refreshActiveGitStatusAfterMutation,
     remoteStatus,
     remoteStatusForActions,
@@ -88,6 +87,7 @@ export function useSourceControlPanelModel() {
     hostedReviewStateForActions,
     isHostedReviewStateLoading,
     inFlightRemoteOpKind,
+    isRemoteOperationInAnotherWorktree,
     hostedReviewCreation,
     branchSummary,
     branchName,
@@ -153,6 +153,8 @@ export function useSourceControlPanelModel() {
     entries,
     branchEntries,
     branchSummary,
+    handleOpenDiff,
+    openCommittedDiff,
     sourceControlRef
   })
   const entryMutations = useSourceControlEntryMutations({

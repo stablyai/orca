@@ -35,8 +35,7 @@ function semanticRow(row: EnrichedAgentHookEventPayload): Record<string, unknown
   return semantic
 }
 
-// Why: runs on every status write; a structural walk exits on the first difference and skips
-// shared leaves (e.g. an unchanged 8 KB lastAssistantMessage) instead of serializing both rows.
+// Per-write comparison skips shared leaves and exits early without serializing large messages.
 function semanticRowsEqual(
   before: EnrichedAgentHookEventPayload | null | undefined,
   after: EnrichedAgentHookEventPayload | null | undefined
@@ -111,8 +110,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     return true
   }
 
-  /** Republish a row whose OSC 7501 facet alone changed, to the window and row-mutation readers only:
-   *  enriched listeners (plugins, recorder, titles) must not see progress ticks as transitions. */
+  /** Facet-only ticks reach row/window readers, without triggering enriched transition subscribers. */
   protected republishProgramStatusFacet(paneKey: string): void {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
     const row = this.state.lastStatusByPaneKey.get(paneKey) as

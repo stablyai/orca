@@ -1,20 +1,13 @@
-/**
- * Which view a launch moves: the requesting connection's, never the host's or another client's.
- *
- * A paired client (a phone, or a desktop client of a remote server) that launches into an existing
- * workspace, or into a folder workspace it creates, gets the new tab as its own selection, recorded
- * the way `session.tabs.createTerminal` selects the tab it creates for its caller. In-process
- * callers keep today's behaviour, and their launch that creates a worktree keeps
- * `worktree.create`'s navigation. A paired client's worktree create never activates the host
- * window: its setup and default tabs are provisioned in the background. A folder workspace has
- * neither, and its create activates nothing, so it is selected for its caller like an existing one.
- */
+/** Paired launches move only the requesting connection's view.
+ * Existing/folder targets select the tab; worktree creates provision setup/default tabs in the background.
+ * In-process callers retain host navigation; folder creation activates nothing. */
 
 import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
 import type { AgentLaunchPublishedSurface } from '../../../agent-launch/agent-launch-executor'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
+import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 
 /** The paired client whose view this launch should move, or null when it moves the host's. */
 export function agentLaunchCallerNavigationId(
@@ -56,4 +49,21 @@ export function selectAgentLaunchTabForCaller(
   } catch (error) {
     console.warn('[agent-launch] the launch ran; selecting its tab for the caller did not', error)
   }
+}
+
+/**
+ * `agent.launch.v2` was defined when Claude and Codex were the only chats, so it vouches for those
+ * two. Any other agent's chat needs the client to say it reads it, by the rule tabs and restart
+ * offers use; a client that does not gets that agent as a terminal.
+ */
+export function callerRendersLaunchedChat(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>,
+  agent: string
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    agent === 'claude' ||
+    agent === 'codex' ||
+    clientRendersStructuredAgent(context.clientCapabilities, agent)
+  )
 }

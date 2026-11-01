@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { hasEmptyReattachRetireEvidence } from './empty-reattach-retire-evidence'
 import { isHibernationDoneRecord } from '../../../../../shared/hibernation-done-record'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 function note(overrides: Partial<SleepingAgentSessionRecord> = {}): SleepingAgentSessionRecord {
@@ -25,6 +25,7 @@ function resumeStartup(
   return {
     command: 'codex resume conv-1',
     agent: 'codex',
+    resumeOrigin: 'saved',
     resumeProviderSession: { key: 'session_id', id: 'conv-1' },
     launchConfig: { agentArgs: '', agentEnv: {} },
     launchToken: 'token-1',

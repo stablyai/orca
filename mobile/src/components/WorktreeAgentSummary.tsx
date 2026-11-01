@@ -1,7 +1,9 @@
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { agentDotState } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
@@ -16,6 +18,7 @@ type Props = {
 }
 
 export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props) {
+  useMobileColorScheme()
   const visibleAgents = agents.slice(0, MAX_VISIBLE_AGENTS)
   const hiddenCount = agents.length - visibleAgents.length
   const subject = `${agents.length} agents`
@@ -57,14 +60,14 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   summary: {
     minHeight: 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.xs,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   summaryCollapsed: {
     borderWidth: 1,
@@ -94,11 +97,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     paddingHorizontal: 3,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel
   },
   hiddenCount: {
     fontSize: 10,
     color: colors.textMuted
   }
-})
+}))

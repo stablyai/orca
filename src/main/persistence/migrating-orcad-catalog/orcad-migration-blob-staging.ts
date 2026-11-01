@@ -1,10 +1,4 @@
-/**
- * Destination side of the migration blob channel. Blobs are not named by the signed manifest, so
- * a staged file's name carries its whole descriptor (`<key>.<sha256>.<byteLength>.part` under a
- * per-kind directory) and the staged set is read back from disk after a restart. At catalog commit
- * every staged blob must be complete and digest-exact, then moves to the migration's received
- * directory; installing received blobs into live state is each kind's installer (D1b-6b/6c).
- */
+// The manifest omits blobs; descriptor filenames make staged uploads resumable after restart.
 import { readdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
@@ -52,11 +46,11 @@ type ReceivedBlobPathResolver = (
 const receivedDirectoryPath: ReceivedBlobPathResolver = (root, manifest, descriptor) =>
   join(receivedBlobsDirectory(root, manifest), descriptor.blobKind, descriptor.key)
 
-/** Where each kind lands at commit; every kind waits in the received directory for its installer. */
 const RECEIVED_BLOB_DESTINATIONS: Record<OrcadMigrationBlobKind, ReceivedBlobPathResolver> = {
   'terminal-restore-hints': receivedDirectoryPath,
   'shell-history': receivedDirectoryPath,
-  'agent-session-records': receivedDirectoryPath
+  'agent-session-records': receivedDirectoryPath,
+  'terminal-history': receivedDirectoryPath
 }
 
 export function getOrcadMigrationReceivedBlobPath(
@@ -67,7 +61,6 @@ export function getOrcadMigrationReceivedBlobPath(
   return RECEIVED_BLOB_DESTINATIONS[descriptor.blobKind](root, manifest, descriptor)
 }
 
-/** Names in a committed migration's received directory for `blobKind`; the caller checks the key. */
 export function listOrcadMigrationReceivedBlobNames(
   root: string,
   manifest: OrcadMigrationRequestIdentity,
@@ -77,7 +70,6 @@ export function listOrcadMigrationReceivedBlobNames(
 }
 
 export type OrcadMigrationBlobChunkStaging = {
-  /** The manifest the importer holds staged for this migration, if any. */
   stagedManifest: OrcadMigrationManifest | null
   root: string
   request: OrcadMigrationBlobChunkRequest
@@ -98,7 +90,7 @@ export function stageOrcadMigrationBlobChunk(
     (entry) => orcadMigrationBlobIdentity(entry) === orcadMigrationBlobIdentity(descriptor)
   )
   if (existing && !sameOrcadMigrationBlob(existing, descriptor)) {
-    // Never replace bytes already staged under this key; the sender aborts and restages instead.
+    // Replacing staged bytes requires abort and restage.
     throw new Error(`orcad_migration_blob_descriptor_conflict:${descriptor.blobKind}`)
   }
   if (!existing) {
@@ -161,10 +153,7 @@ export function assertOrcadMigrationBlobsReady(
   }
 }
 
-/**
- * Each still-staged blob's verified file; one an earlier attempt already moved was checked then.
- * Only meaningful after `assertOrcadMigrationBlobsReady` in the same synchronous turn.
- */
+/** Verified staged files; call after assertOrcadMigrationBlobsReady in the same synchronous turn. */
 export function stagedOrcadMigrationBlobFiles(
   manifest: OrcadMigrationManifest,
   root: string
@@ -175,10 +164,7 @@ export function stagedOrcadMigrationBlobFiles(
   }))
 }
 
-/**
- * Refuses commit unless the staged and already-received blobs are exactly the set the sender
- * moved, so a blob lost on the way (or left from another capture) fails instead of vanishing.
- */
+/** Reject missing or extra blobs, including leftovers from another capture. */
 export function assertOrcadMigrationBlobSetMatches(
   manifest: OrcadMigrationManifest,
   root: string,
@@ -200,7 +186,7 @@ export function assertOrcadMigrationBlobSetMatches(
     }
   }
   for (const descriptor of expected) {
-    // An earlier commit attempt may already have moved it; the received bytes must still match.
+    // Previous commit attempts may have moved these bytes to received.
     if (
       !stagedIds.has(orcadMigrationBlobIdentity(descriptor)) &&
       inspectReceivedBlob(root, manifest, descriptor) !== 'matching'
@@ -210,10 +196,7 @@ export function assertOrcadMigrationBlobSetMatches(
   }
 }
 
-/**
- * The caller must run `assertOrcadMigrationBlobsReady` first, in the same synchronous turn: that
- * pass hashes every staged file, and no chunk can land between it and these links.
- */
+/** Call assertOrcadMigrationBlobsReady in the same synchronous turn so no chunk can change verified bytes. */
 export function commitOrcadMigrationBlobs(manifest: OrcadMigrationManifest, root: string): void {
   const directories = new Set<string>()
   for (const descriptor of stagedBlobDescriptors(root, manifest)) {
@@ -233,13 +216,12 @@ export function commitOrcadMigrationBlobs(manifest: OrcadMigrationManifest, root
   removeOrcadMigrationStagingDirectory(root, manifest)
 }
 
-/** Also drops blobs a failed commit already moved: the catalog they belonged to never landed. */
+/** Also remove blobs moved by a commit that never landed. */
 export function abortOrcadMigrationBlobs(manifest: OrcadMigrationManifest, root: string): void {
   removeOrcadMigrationStagingDirectory(root, manifest)
   rmSync(receivedBlobsDirectory(root, manifest), { recursive: true, force: true })
 }
 
-/** Received blobs stay only for staged or committed migrations; a failed commit's are dropped. */
 export function pruneOrcadMigrationBlobStaging(
   stagedManifests: readonly OrcadMigrationManifest[],
   committedMigrations: readonly OrcadMigrationRequestIdentity[],
@@ -287,7 +269,7 @@ function stagedBlobDescriptors(
           })
         )
       } catch {
-        // Not a name this channel writes; it cannot belong to the staged set.
+        // Foreign names cannot belong to the staged set.
       }
     }
   }

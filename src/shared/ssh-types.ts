@@ -2,16 +2,11 @@ import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
 import type { OrcadSshProvisioningIntent } from './orcad-ssh-provisioning'
 import type { NodeDistMirrorAttempt } from './node-dist-mirror'
 
-// ─── SSH Connection Types ───────────────────────────────────────────
-
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
 export const LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
 
-/**
- * Which runtime executes the SSH relay. `pinned-node` runs the D6 ladder on Orca's uploaded Node and
- * prebuilt addons (design D5); `legacy` is the opt-in host Node with native deps installed by npm.
- */
+/** pinned-node uses uploaded Node/prebuilt addons (D6 ladder/D5 design); opt-in legacy uses host Node/npm native deps. */
 export const SSH_REMOTE_RUNTIMES = ['legacy', 'pinned-node'] as const
 export type SshRemoteRuntime = (typeof SSH_REMOTE_RUNTIMES)[number]
 
@@ -19,10 +14,7 @@ export type SshRemoteRuntime = (typeof SSH_REMOTE_RUNTIMES)[number]
 export const SSH_REMOTE_RUNTIME_RUNGS = ['A', 'B', 'C', 'D', 'legacy'] as const
 export type SshRemoteRuntimeRung = (typeof SSH_REMOTE_RUNTIME_RUNGS)[number]
 
-/**
- * Main-owned record of the last ladder decision for a host. Valid only while its key
- * (glibc, pinned runtime hash, Orca major) still matches, so an upgrade re-evaluates.
- */
+/** Main-owned ladder cache; changes to glibc, pinned-runtime hash or Orca major invalidate it. */
 export type SshRemoteRuntimeResolution = {
   rung: SshRemoteRuntimeRung
   /** The classified refusal that stepped off Orca's pinned Node, when one did. */
@@ -40,8 +32,7 @@ export type SshTargetOwner = { type: 'on-demand-runtime'; runtimeId: string }
 export type SshTarget = {
   id: string
   label: string
-  /** Internal owner for targets that Orca creates as implementation details.
-   *  Owned targets are hidden from normal SSH-host management surfaces. */
+  /** Internal targets are hidden from normal host management. */
   owner?: SshTargetOwner
   /** Host alias to resolve through OpenSSH config (ssh -G). */
   configHost?: string
@@ -54,66 +45,52 @@ export type SshTarget = {
   identityAgent?: string
   /** Whether OpenSSH IdentitiesOnly should limit public-key auth attempts. */
   identitiesOnly?: boolean
-  /** Whether the host's SSH config explicitly requests GSSAPIAuthentication
-   *  (Kerberos). ssh2 has no gssapi-with-mic support, so these targets try the
-   *  system OpenSSH transport first. */
+  /** ssh2 lacks gssapi-with-mic; configured Kerberos targets try system OpenSSH first. */
   gssapiAuthentication?: boolean
   /** ProxyCommand from SSH config, if any. */
   proxyCommand?: string
   /** Jump host (ProxyJump), if any. */
   jumpHost?: string
-  /** Where this target came from. `ssh-config` targets are kept in sync with
-   *  `~/.ssh/config` on import — their config-derived fields (host, port,
-   *  username, jump host, identity, proxy) are refreshed on each import.
-   *  `manual` targets are never overwritten by import. Legacy persisted targets
-   *  predate this field (undefined) and are adopted into config-sync on next
-   *  import. */
+  /** ssh-config refreshes config-derived fields on import; manual is never overwritten.
+   * Legacy absent source is adopted only when the old import shape matches (ssh-target-source.ts). */
   source?: 'ssh-config' | 'manual'
   /** Grace period in seconds before relay shuts down after disconnect.
    *  0 disables expiry. Default: 0 (until reset). Max: 604800 (7 days). */
   relayGracePeriodSeconds?: number
-  /** Lets this host's `orca` CLI drive this desktop's Orca browser tabs in the host's own
-   *  workspaces (desktop browser bridge) and its relay-era terminals' orchestration commands.
-   *  On unless explicitly `false`; read it through `isRemoteCliControlAllowed`. */
+  /** Allow this host’s CLI to drive desktop browser tabs in its workspaces and relay-era terminal orchestration.
+   * Enabled unless false; use isRemoteCliControlAllowed. */
   allowRemoteCliControl?: boolean
   /** Retired: written by earlier builds and ignored now. Kept so a downgrade still finds its stamp. */
   allowRemoteCliControlConsent?: 'desktop-browser-bridge'
-  /** Set to true after a successful connection that triggered a credential
-   *  prompt (passphrase or password). Persisted so startup reconnect can
-   *  partition targets into eager (no passphrase) vs deferred (passphrase)
-   *  without attempting a connection first. */
+  /** Undefined means on; false leaves this host disconnected at launch until the user connects it. */
+  reconnectOnLaunch?: boolean
+  /** Persist prompted-auth history so startup defers credential-requiring hosts without attempting a connection. */
   lastRequiredPassphrase?: boolean
-  /** Port forwards to auto-restore on connect/reconnect. Persisted so
-   *  forwards survive app restarts. */
   portForwards?: SavedPortForward[]
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
+  /** Windows only: hold one loopback tunnel through a ProxyCommand/ProxyJump and run later
+   *  commands over it. Opt-in; undefined means off. */
+  systemSshProxyConnectionReuse?: boolean
   /** Relay runtime for this host; undefined means pinned-node. */
   remoteRuntime?: SshRemoteRuntime
   /** Main-owned ladder cache; renderer updates never set it. */
   remoteRuntimeResolution?: SshRemoteRuntimeResolution
-  /** Durable registration incarnation. Advances on create / re-create / explicit
-   *  re-adopt only, so automations fenced on an old registration cannot run on a
-   *  later target that happens to reuse the id. Never advanced by connect state. */
+  /** Main-owned registration incarnation fences automation reuse after create/re-create/re-adopt; connect state never advances it. */
   generation?: number
   /** Main-owned provisioning intent; never fall back to a relay while it exists. */
   orcadProvisioning?: OrcadSshProvisioningIntent
-  /**
-   * Main-owned: this host serves a managed Orca server. Deliberately not `owner`: shipped builds
-   * hide owned targets, and a downgraded build must still see and reach the host over its relay.
-   */
   /** Main-owned: managed orcad can't run on this host; retried once this app version changes. */
   managedServerUnavailable?: { reason: string; appVersion: string }
   /** Retired with the move offer (hosts convert on connect); kept so a downgraded build doesn't re-offer. */
   managedServerMoveOffered?: { appVersion: string }
-  /**
-   * Main-owned: the user confirmed "Move anyway", so saved state the move can't carry stays in this
-   * desktop's retained profile instead of refusing the move. Cleared once the host moves.
-   */
+  /** Confirmed “Move anyway” leaves uncarried state in the desktop profile; clear after the move. */
   managedServerLeaveBehind?: { confirmedAt: string }
   /** Main-owned: updating the managed server to this app version failed; retried once it changes. */
   managedServerUpdateFailure?: { reason: string; appVersion: string }
+  /** Main-owned: the user stopped and removed this host's server; only an explicit Connect deploys again. */
+  managedServerRemoved?: { removedAt: string }
   orcadFence?: {
     environmentId: string
     /** The retained source holds projects no move took: the host is unserved until moved again. */
@@ -132,6 +109,7 @@ export type SshTargetCreateInput = Omit<
   | 'managedServerMoveOffered'
   | 'managedServerLeaveBehind'
   | 'managedServerUpdateFailure'
+  | 'managedServerRemoved'
 >
 export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
 
@@ -145,12 +123,8 @@ export type SshTargetSummary = Pick<SshTarget, 'id' | 'label' | 'generation'> & 
   connectionStatus?: SshConnectionStatus
 }
 
-/** Identity of a removed SSH target, recorded so that re-adding the same host
- *  can re-point orphaned repos/worktrees from the old (deleted) target id to
- *  the new one. Repos store only the target id, so without this record the old
- *  workspaces are stranded on a dead id when the target is removed. */
+/** Re-adopt orphaned repos/worktrees onto a replacement target ID; those records retain only the deleted target ID. */
 export type RemovedSshTargetTombstone = {
-  /** The id the removed target had — what orphaned repos/worktrees still point at. */
   oldTargetId: string
   /** ssh-config alias, if any — the most stable re-adoption key. */
   configHost?: string
@@ -190,14 +164,10 @@ export type SshConfigHostSummary = {
   jumpHost?: string
   /** True when an Orca SSH target already uses this config alias. */
   alreadyInOrca: boolean
-  /**
-   * True when the user deleted this alias from Orca (tombstone). Still listed so they
-   * can re-pick it; passive import and "Add all" keep it out until re-adopt / save.
-   */
+  /** Deleted alias remains explicitly selectable; passive/Add all import excludes it until re-adoption or save. */
   previouslyRemoved?: boolean
 }
 
-/** Max hosts one picker query returns; shared so the renderer's copy cannot drift. */
 export const SSH_CONFIG_HOST_RESULT_LIMIT = 100
 
 export type SshConfigHostListResult = {
@@ -232,6 +202,13 @@ export type SavedPortForward = {
   remoteHost: string
   remotePort: number
   label?: string
+}
+
+/** A saved forward that isn't open on this connection; `error` is why its last start failed. */
+export type UnrestoredPortForward = SavedPortForward & {
+  error?: string
+  /** It ran, then its process died, rather than never starting. */
+  stopped?: true
 }
 
 export type SshConnectionStatus =
@@ -332,6 +309,8 @@ export type SshManagedServerStatus =
       serving?: SshManagedServerServingNote
       /** Set on the connect that moved this host's projects, when some were linked instead. */
       linked?: SshManagedServerLinkedProject[]
+      /** Set on the connect that moved this host's automations, when its server kept some off. */
+      automationsLeftDisabled?: number
       /**
        * macOS 15+: the SSH session that started this server proved exited, so its terminals may
        * have lost Local Network access (#25934). Absent when unknown, e.g. an older launch.
@@ -389,35 +368,21 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
-  /** A stop this client asked for and could not confirm, replayed on the next handshake to this
-   *  same target. See `shared/ssh-pending-pty-kill.ts`. Never on the wire — client-local. */
+  /** Client-local unconfirmed stop for replay to the same target; see ssh-pending-pty-kill.ts. Never sent on the wire. */
   pendingKill?: SshPendingPtyKill
-  /** Stored-form ptyId of the newer lease that won this pane, written only by supersession — which
-   *  already holds the winner in hand. Cleared whenever this id is re-upserted live, so a RECYCLED
-   *  relay id cannot inherit its predecessor's mark. */
+  /** Stored-form winning lease ID, written by supersession; live upserts clear it so recycled IDs cannot inherit the mark. */
   supersededBy?: string
-  /** The host listed this ptyId under a different PTY incarnation, so the id no longer routes to
-   *  this lease's shell. Written only by the pending-stop replay's `relay-id-recycled` retirement. */
+  /** Pending-stop replay proved a different incarnation owns this ID (relay-id-recycled); never reattach this lease. */
   relayIdRecycled?: true
 }
 
-/**
- * A lease that still claims a running terminal: a client holds it (`attached`) or let it run
- * (`detached`). `expired` lost its owner without an exit record and `terminated` ended; neither is
- * a claim, though only `terminated` is evidence the terminal exited.
- */
+/** Attached/detached still claim a running terminal; expired lost its route, while only terminated proves exit. */
 export function isLiveSshPtyLease(lease: Pick<SshRemotePtyLease, 'state'>): boolean {
   return lease.state === 'attached' || lease.state === 'detached'
 }
 
-/**
- * `expired` says only that the CLIENT lost its route, never that the remote shell died
- * (docs/reference/ssh-execution-boundary.md), so it covers two unrelated cases. Two writers can
- * prove the route is dead for good — a newer lease won the pane, or the relay handed the id to
- * another shell — and re-adopting either is the 2 -> 19 -> 20 lease fan-out or a pane handed to a
- * stranger's process. An `expired` lease carrying neither mark is an orphan, not a corpse, and a
- * reattach is the only thing that can tell those apart.
- */
+/** Expired means lost client route, never proven remote exit (ssh-execution-boundary.md).
+ * Superseded/recycled marks prove this route unusable; unmarked orphans may reattach to discover whether the shell survived. */
 export function sshRemotePtyLeaseAllowsReattach(
   lease: Pick<SshRemotePtyLease, 'state' | 'supersededBy' | 'relayIdRecycled'>
 ): boolean {
@@ -444,8 +409,6 @@ export type SshPtyConsumerRecovery = {
   }
 }
 
-// ─── Port Forwarding Types ─────────────────────────────────────────
-
 export type PortForwardEntry = {
   id: string
   connectionId: string
@@ -453,16 +416,12 @@ export type PortForwardEntry = {
   remoteHost: string
   remotePort: number
   label?: string
-  /** Origin captured from terminal output for this remote port (e.g. a Vite
-   *  banner printed inside an SSH-hosted PTY). The renderer rewrites the port
-   *  to the local forward and trusts the user has DNS for the custom host. */
+  /** Remote terminal-advertised origin; renderer rewrites the forwarded port and relies on the user’s custom-host DNS. */
   advertisedUrl?: string
-  /** Protocol parsed from the advertised URL — used to upgrade HTTP guesses
-   *  to HTTPS even when the advertised host can't be reused locally. */
+  /** Use advertised HTTPS even when its hostname cannot be reused locally. */
   advertisedProtocol?: 'http' | 'https'
 }
 
-/** A listening port detected on a remote host. */
 export type DetectedPort = {
   port: number
   host: string
@@ -470,8 +429,7 @@ export type DetectedPort = {
   processName?: string
 }
 
-/** A detected SSH port after the main process has mapped terminal-advertised
- *  URLs onto the raw relay scan row for IPC/UI consumption. */
+/** Main maps terminal-advertised URLs onto relay scan rows for IPC/UI. */
 export type EnrichedDetectedPort = DetectedPort & {
   advertisedUrl?: string
   advertisedProtocol?: 'http' | 'https'

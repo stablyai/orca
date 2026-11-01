@@ -21,7 +21,7 @@ const kept = turn('kept', 'root')
 const checkpoint = compact('summary', 'kept', 'kept')
 const later = turn('later', 'summary', 'later', 'assistant')
 
-// Verified against Pi 1.1.0 buildContextEntries + sessionEntryToContextMessages.
+// Verified against Pi 1.1.0 buildContextEntries/sessionEntryToContextMessages.
 export const PI_CONTEXT_FIXTURES = [
   {
     name: 'kept range before latest compaction',

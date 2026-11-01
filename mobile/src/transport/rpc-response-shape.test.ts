@@ -5,6 +5,8 @@ describe('isRpcResponse', () => {
   it('requires success responses to include a result field', () => {
     expect(isRpcResponse({ id: 'rpc-1', ok: true, result: null })).toBe(true)
     expect(isRpcResponse({ id: 'rpc-1', ok: true })).toBe(false)
+    expect(isRpcResponse({ id: 7, ok: true, result: null })).toBe(false)
+    expect(isRpcResponse({ ok: true, result: null })).toBe(false)
   })
 
   it('requires failure responses to include code and message', () => {

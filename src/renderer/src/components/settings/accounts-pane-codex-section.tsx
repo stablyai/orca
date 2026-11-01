@@ -73,11 +73,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
           'auto.components.settings.AccountsPane.d0d53b7eb0',
           'Manage which Codex account Orca uses for live rate limit fetching.'
         )}
-        // Why: this single SearchableSetting backs the whole Codex section,
-        // including the "Active Codex Account" sub-control (account picker
-        // below). Roll every Codex search entry's title/description/keywords
-        // into one haystack so a search for "Active Codex Account" doesn't
-        // render the section header with no body underneath it.
+        // Index every nested Codex control here so searches cannot render a matching header with an empty body.
         keywords={getAccountsCodexSearchEntries().flatMap((entry) => [
           entry.title,
           entry.description ?? '',
@@ -85,10 +81,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
         ])}
         className="space-y-3 py-2"
       >
-        {/* Why: Settings deep-links can target this subsection directly from
-        the status-bar account switcher. Keeping a stable DOM anchor here
-        avoids dumping the user at the top of Accounts and making them hunt
-        for the actual Codex account controls. */}
+        {/* Keep a stable anchor for status-bar account-switcher deep links. */}
         {activeCodexAuthWarning ? (
           <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
@@ -167,7 +160,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               onClick={() =>
                 void runCodexAccountAction('adding', () =>
                   trackAccountAddition('codex', accountOwner, () =>
-                    // Why the server's own login for a remote owner: one here would sign in this device.
+                    // Run remote login on the account owner rather than this device.
                     accountOwner.kind === 'environment'
                       ? addCodexAccountOnHost(accountOwner)
                       : window.api.codexAccounts.add({
@@ -189,7 +182,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               )}
               {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
             </Button>
-            {/* Why: follows the running addition; hidden only where its server's prompt has Cancel. */}
+            {/* Follow the running addition; hide Cancel only when its server prompt already offers it. */}
             {codexAction === 'adding' && !accountAdditionShownInPrompt('codex', accountOwner) ? (
               <Button
                 variant="ghost"
@@ -208,8 +201,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
           </div>
         </div>
         {remoteAccountScopeNotice}
-        {/* Why not in a remote scope: the link belongs to a login running on
-        this desktop, which has nothing to do with the server named above. */}
+        {/* Local login links cannot describe the selected server’s sign-in. */}
         {isRemoteAccountScope ? (
           <HostAccountSignInPrompt
             owner={accountOwner}

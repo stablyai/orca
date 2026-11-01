@@ -11,8 +11,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import { OrcaRuntimeService } from './orca-runtime'
 
-// Folder projects back several workspaces with ONE directory; only the
-// `::workspace:<uuid>` suffix separates them, so runtime PTY identity must keep it.
+// Folder workspaces share a directory; retain ::workspace:<uuid> to distinguish their PTYs.
 const REPO_ID = 'repo-1'
 const FOLDER_PATH = '/tmp/folder-project'
 const ROOT_ID = `${REPO_ID}::${FOLDER_PATH}`
@@ -63,7 +62,6 @@ function createRuntimeInternals(
   options: {
     session?: WorkspaceSessionState
     sessions?: unknown[]
-    // Consecutive controller inventories, so a sleep sees its PTY then sees it gone.
     processLists?: unknown[][]
   } = {}
 ): RuntimeInternals {
@@ -102,10 +100,7 @@ function createRuntimeInternals(
   return runtime as unknown as RuntimeInternals
 }
 
-/**
- * Resolves to 'blocked' only if `pending` has not settled once the microtask queue drains —
- * an uncontended mutation lease is pure-promise, so this never waits on wall-clock time.
- */
+/** Drain microtasks to test promise-only lease contention without wall-clock delays. */
 async function raceAgainstMicrotaskDrain(pending: Promise<unknown>): Promise<string> {
   return await Promise.race([
     pending.then(() => 'acquired'),
@@ -327,7 +322,6 @@ describe('folder workspaces sharing one directory', () => {
     )
     release()
 
-    // A shared identity key would wake A's stopped terminals on B's spawn and tell clients so.
     expect(
       events.filter(
         (event) => event.type === 'worktreeTerminalSleepState' && event.phase === 'woken'
@@ -347,10 +341,7 @@ describe('folder workspaces sharing one directory', () => {
     const spawnB = internals.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(WORKSPACE_B, null))
     expect(await raceAgainstMicrotaskDrain(spawnB)).toBe('acquired')
 
-    // Control: spawns intentionally share the per-worktree lock (only sleep
-    // excludes), so a second A spawn can no longer prove the lock blocks.
-    // A's own sleep still must, which keeps 'acquired' above from being a
-    // free pass on a lock that never blocks anything.
+    // Spawns intentionally share the lock; use sleep as the exclusive positive control.
     const sleepA = internals.sleepTerminalsForWorktree(`id:${WORKSPACE_A}`)
     expect(await raceAgainstMicrotaskDrain(sleepA)).toBe('blocked')
 
@@ -364,8 +355,7 @@ describe('folder workspaces sharing one directory', () => {
     const releaseFirst = await internals.acquireWorktreeTerminalSpawn(
       spawnWorktreeTarget(WORKSPACE_A, null)
     )
-    // Why: a multi-tab worktree activates every tab at once; queueing them
-    // behind each other was the activation latency staircase.
+    // Share concurrent tab spawns to avoid an activation latency staircase.
     const second = internals.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(WORKSPACE_A, null))
     expect(await raceAgainstMicrotaskDrain(second)).toBe('acquired')
 

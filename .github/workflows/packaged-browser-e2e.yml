@@ -23,7 +23,7 @@ permissions:
 cache-mode: read
 jobs:
   compatibility:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
@@ -67,7 +67,7 @@ jobs:
           path: test-results/
           retention-days: 3
   layout-compat:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6

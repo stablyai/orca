@@ -1,6 +1,3 @@
-// Why: covers two recent classifier fixes — Retry-After honoring on 429
-// (transient detection must propagate, not silently retry on 250ms cadence)
-// and stderr extraction from execFile rejections (err.message is unreliable).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   appendGitConfigEnv,
@@ -15,8 +12,6 @@ import {
 } from './runner'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 
-// Reads git config injected via the GIT_CONFIG_COUNT/KEY/VALUE env protocol
-// back into a plain key→value map so tests can assert on it directly.
 function readGitConfigEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   const count = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10)
   const config: Record<string, string> = {}
@@ -117,9 +112,6 @@ describe('isTransientGhError', () => {
   })
 
   it('does NOT retry 429 with Retry-After', () => {
-    // Why: when GitHub returns Retry-After, the server is telling us how long
-    // to wait. Retrying on our 250ms cadence just earns another 429 and burns
-    // the retry budget.
     expect(isTransientGhError('HTTP 429 Too Many Requests\nRetry-After: 60\n')).toBe(false)
   })
 
@@ -184,10 +176,8 @@ describe('appendGitConfigEnv', () => {
       [['credential.guiPrompt', 'false']]
     )
     expect(env.GIT_CONFIG_COUNT).toBe('2')
-    // Existing entry preserved.
     expect(env.GIT_CONFIG_KEY_0).toBe('core.quotePath')
     expect(env.GIT_CONFIG_VALUE_0).toBe('false')
-    // New entry appended at the next index.
     expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
     expect(env.GIT_CONFIG_VALUE_1).toBe('false')
   })
@@ -237,15 +227,12 @@ describe('mergeGitConfigEnvProtocol', () => {
 describe('promptGuardGitEnv credential-interactivity disable (STA-1292)', () => {
   it('disables the GCM GUI prompt without nuking the credential helper', () => {
     const env = promptGuardGitEnv({ PATH: '/usr/bin' })
-    // GCM: never show the GUI, but still serve cached credentials.
     expect(env.GCM_INTERACTIVE).toBe('never')
     const config = readGitConfigEnv(env)
     expect(config['credential.interactive']).toBe('false')
     expect(config['credential.guiPrompt']).toBe('false')
-    // Regression guard: we must NOT clear the helper — that would break
-    // cached-credential auth for private repos.
+    // Preserve credential helpers so private repos can still use cached authentication.
     expect(config['credential.helper']).toBeUndefined()
-    // Existing prompt guards remain intact.
     expect(env.GIT_TERMINAL_PROMPT).toBe('0')
   })
 })
@@ -258,7 +245,6 @@ describe('nonInteractiveGitEnv credential-interactivity disable (STA-1292)', () 
     expect(config['credential.interactive']).toBe('false')
     expect(config['credential.guiPrompt']).toBe('false')
     expect(config['credential.helper']).toBeUndefined()
-    // Its own BatchMode SSH guard is still applied and unaffected.
     expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
   })
 })
@@ -310,7 +296,6 @@ describe('promptGuardShellEnv keeps the shell locale (#7652 x #7808)', () => {
     expect(env.GIT_TERMINAL_PROMPT).toBe('0')
     expect(env.GCM_INTERACTIVE).toBe('never')
     expect((env.WSLENV ?? '').split(':')).toContain('GIT_TERMINAL_PROMPT')
-    // The user's locale survives; no pins appear where none existed.
     expect(env.LC_ALL).toBe('ja_JP.UTF-8')
     expect(env.LANG).toBeUndefined()
     expect(env.LANGUAGE).toBeUndefined()
@@ -319,8 +304,6 @@ describe('promptGuardShellEnv keeps the shell locale (#7652 x #7808)', () => {
 
 describe('git env forces untranslated diagnostics (issue #7808)', () => {
   it('overrides an inherited non-English locale so stderr parsers keep working', () => {
-    // A gettext-enabled git under de_DE translates even the `fatal:` prefix,
-    // breaking isNoUpstreamError and every other stderr phrase match.
     const env = promptGuardGitEnv({ PATH: '/usr/bin', LC_ALL: 'de_DE.UTF-8' })
     expect(env.LC_ALL).toBe('en_US.UTF-8')
     expect(env.LANG).toBe('en_US.UTF-8')
@@ -341,9 +324,6 @@ describe('git env forces untranslated diagnostics (issue #7808)', () => {
 
 describe('redirectPortedHostnameToEnv WSLENV forwarding', () => {
   it('names GITLAB_HOST in WSLENV so it can cross into a distro', async () => {
-    // A WSL-routed glab only sees Windows variables listed in WSLENV; without
-    // the entry the ported host is silently dropped and glab talks to
-    // gitlab.com (#12557).
     const { redirectPortedHostnameToEnv } = await import('./runner')
     const { options } = redirectPortedHostnameToEnv(
       ['api', '--hostname', 'gitlab.example.com:8443'],

@@ -1,5 +1,4 @@
-/** The first value `pick` reads from `error`, its `cause`s or the errors a cleanup aggregated,
- *  since acquisition errors wrap what a connection or adapter threw. Bounded to six links. */
+/** Acquisition can wrap cleanup failures; search causes and aggregate errors up to six links. */
 export function findInErrorChain<T>(
   error: unknown,
   pick: (error: Error) => T | undefined,

@@ -20,7 +20,7 @@ vi.mock('./files/file-target', () => ({
   resolveFileExplorerPath: mocks.resolvePath,
   requireRuntimeFileProvider: mocks.provider
 }))
-vi.mock('../ipc/filesystem-auth', () => ({ resolveAuthorizedPath: mocks.authorize }))
+vi.mock('../ipc/filesystem/filesystem-auth', () => ({ resolveAuthorizedPath: mocks.authorize }))
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal()),
   mkdir: mocks.mkdir,

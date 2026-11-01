@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
+import type * as ChildProcess from 'node:child_process'
 
 const {
   callMock,
@@ -35,15 +36,37 @@ vi.mock('./runtime/environments', () => ({
   resolveEnvironment: vi.fn()
 }))
 
-vi.mock('child_process', async () => {
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof ChildProcess>()
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
-  return createChildProcessModuleMock(spawnMock)
+  return { ...actual, ...createChildProcessModuleMock(spawnMock) }
 })
 
 import { main } from './index'
+import type {
+  RuntimeAgentLineageTestModule,
+  RuntimeAgentLineageCatalogTestModule
+} from '../shared/runtime-agent-lineage-consumer.test-fixture'
 import { COMMAND_SPECS } from './specs'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
+
+let lineage: RuntimeAgentLineageTestModule
+let catalog: RuntimeAgentLineageCatalogTestModule
+
+// The CLI's Node16 program needs a hook; each test still creates its own DB and runtime.
+beforeAll(async () => {
+  lineage = (
+    await vi.importActual<{ default: RuntimeAgentLineageTestModule }>(
+      '../main/runtime/runtime-agent-lineage.test-fixture'
+    )
+  ).default
+  catalog = (
+    await vi.importActual<{ default: RuntimeAgentLineageCatalogTestModule }>(
+      '../main/runtime/runtime-agent-lineage-catalog.test-fixture'
+    )
+  ).default
+})
 
 const TERMINAL_ROW = {
   handle: 'term_1',
@@ -71,10 +94,65 @@ describe('omittedHostIds selector annotation', () => {
     spawnMock
   })
 
+  it.each(['repo::/workspace', 'folder:lineage'])(
+    'prints canonical production-built lineage through actual CLI and worktree RPC for %s',
+    async (worktreeId) => {
+      const { publicLineageFixture, canonicalChatRow, LINEAGE_PARENT, LINEAGE_CHILD } = lineage
+      const f = publicLineageFixture(worktreeId)
+      try {
+        const dispatcher = catalog.createLineageCatalogDispatcher(f.build)
+        const resultOf = (response: unknown) => JSON.parse(JSON.stringify(response)).result
+        const request = (params = {}) =>
+          dispatcher.dispatch({
+            id: 'req_worktree_ps',
+            authToken: 'test',
+            method: 'worktree.ps',
+            params
+          })
+        const legacy = await request()
+        expect(legacy).toMatchObject({
+          ok: true,
+          result: {
+            worktrees: [
+              {
+                agents: [
+                  { parentPaneKey: null },
+                  {
+                    parentPaneKey: canonicalChatRow(LINEAGE_PARENT),
+                    taskTitle: 'Build the worker result'
+                  }
+                ]
+              }
+            ]
+          }
+        })
+        callMock.mockResolvedValueOnce(legacy)
+        const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+        await main(['worktree', 'ps', '--json'], '/workspace')
+        const printed = JSON.parse(String(log.mock.calls[0]?.[0]))
+        expect(printed.result.worktrees[0].agents[1].paneKey).toBe(canonicalChatRow(LINEAGE_CHILD))
+        expect(JSON.stringify(printed)).not.toContain(f.privateHandle)
+        expect(JSON.stringify(printed)).not.toContain(f.privatePane)
+        const first = resultOf(await request({ afterSnapshotId: null }))
+        expect(resultOf(await request({ afterSnapshotId: first.snapshotId }))).toMatchObject({
+          unchanged: true
+        })
+        f.db.db
+          .prepare(
+            'UPDATE runs SET coordinator_orca_session_id = NULL, coordinator_orca_session_id_generation = NULL WHERE id = ?'
+          )
+          .run(f.run.id)
+        expect(resultOf(await request({ afterSnapshotId: first.snapshotId })).snapshotId).not.toBe(
+          first.snapshotId
+        )
+        log.mockRestore()
+      } finally {
+        f.db.close()
+      }
+    }
+  )
+
   it('marks a stale runtime host that no caller can select', async () => {
-    // Why: `omittedHostIds` is built from the runtime's own bookkeeping, so it names `runtime:`
-    // ids for servers that are no longer paired. An agent looping over the list to complete a
-    // partial listing hard-errors on those — 6 of 9 in the recorded QA run.
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-paired', 'm4air')
     queueFixtures(
       callMock,
@@ -133,8 +211,6 @@ describe('omittedHostIds selector annotation', () => {
   ] as const)(
     'only suggests flags that `%s %s` accepts',
     async (group, action, requestId, rows) => {
-      // Why: `--host local` / `--host ssh:<id>` were suggested here, and the listing rejected
-      // them as unknown flags, breaking the agent loop the annotation exists for (#29901).
       pairRuntimeEnvironment(listEnvironmentsMock, 'env-paired', 'm4air')
       queueFixtures(
         callMock,
@@ -166,7 +242,7 @@ describe('omittedHostIds selector annotation', () => {
           expect(spec?.allowedFlags).toContain(selector.split(' ')[0].replace(/^--/, ''))
         }
       }
-      // An SSH host is reached through the answering runtime, so no target lookup is needed.
+      // SSH hosts are reached through the answering runtime, without another target lookup.
       expect(callMock).toHaveBeenCalledTimes(1)
     }
   )
@@ -192,8 +268,6 @@ describe('omittedHostIds selector annotation', () => {
   })
 
   it('never keeps a host id out of omittedHostIds', async () => {
-    // Why: filtering the unreachable ones would shrink what the listing admits it did not cover.
-    // The gap is real whether or not this machine can name the host that owns it.
     listEnvironmentsMock.mockReturnValue([])
     queueFixtures(
       callMock,
@@ -222,11 +296,24 @@ describe('omittedHostIds selector annotation', () => {
         hostScope: { hostIds: ['local'], omittedHostIds: [] }
       })
     )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['terminal', 'list', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('terminal.list', {
+      worktree: undefined,
+      limit: undefined,
+      includeVisualLayouts: false
+    })
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: true,
+      result: {
+        terminals: [TERMINAL_ROW],
+        totalCount: 1,
+        truncated: false,
+        hostScope: { hostIds: ['local'], omittedHostIds: [] }
+      }
+    })
   })
 })
 

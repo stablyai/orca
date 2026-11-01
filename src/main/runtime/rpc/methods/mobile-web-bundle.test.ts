@@ -118,8 +118,7 @@ describe('an install that carries a mobile web bundle', () => {
     expect(body.manifest.assets).toEqual(bundle.assets)
   })
 
-  // Read once per process: without the cache every chunk request re-parses the manifest, and the
-  // schema's refinement recomputes the buildId with a pure-JS sha256 on the event loop.
+  // Cache manifest parsing and buildId hashing rather than repeat event-loop work per chunk.
   it('answers from the manifest it already read, without going back to disk', async () => {
     const first = await call('mobileWeb.bundle.manifest')
     writeFileSync(join(bundle.root, 'manifest.json'), 'not json', 'utf8')
@@ -156,8 +155,7 @@ describe('an install that carries a mobile web bundle', () => {
     expect(eofs).toEqual([false, false, true])
   })
 
-  // An asset whose length is an exact multiple of the chunk size must still end somewhere, and the
-  // only offset a client could try next is one the host rejects.
+  // Exact chunk multiples must report EOF now; the next offset is invalid.
   it('ends an exactly-one-chunk asset on its first chunk', async () => {
     const stylesheet = bundle.assets.find((asset) => asset.path.endsWith('.css'))!
     expect(stylesheet.byteLength).toBe(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
@@ -173,8 +171,7 @@ describe('an install that carries a mobile web bundle', () => {
     expect(errorMessage(past)).toBe('mobile_web_bundle_offset_invalid')
   })
 
-  // Offset 0 is in range for every asset, including an empty one, so a client never has to special
-  // case a zero-byte member it cannot ask about.
+  // Allow offset zero for empty assets so clients can fetch every manifest member.
   it('serves a zero-byte asset as one empty chunk at eof', async () => {
     const mark = bundle.assets.find((asset) => asset.byteLength === 0)!
 
@@ -206,9 +203,7 @@ describe('an install that carries a mobile web bundle', () => {
     expect(errorMessage(response)).not.toBe('mobile_web_bundle_asset_unknown')
   })
 
-  // The auto-update case: the desktop replaced the bundle between the client's manifest call and
-  // its next chunk. The client must be told to restart from the manifest, not that its path is
-  // gone, so this is checked before the asset lookup.
+  // After auto-update, report build-changed before path lookup so clients restart from the manifest.
   it('refuses the old buildId after the install swaps bundles mid-download', async () => {
     const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
     expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
@@ -223,8 +218,7 @@ describe('an install that carries a mobile web bundle', () => {
     expect(errorMessage(stale)).toBe('mobile_web_bundle_build_changed')
   })
 
-  // index.html is the one path a rebuild keeps, so a verdict keyed by path alone would carry build
-  // A's `false` onto build B's honest file and refuse it for the life of the process.
+  // A path survives rebuild; key verdicts by build too so an old failure cannot poison new bytes.
   it('does not carry a failed verdict from one build onto the next build of the same path', async () => {
     writeFileSync(join(bundle.root, 'index.html'), mobileWebBundleFiller(640, 99))
     expect(
@@ -240,9 +234,7 @@ describe('an install that carries a mobile web bundle', () => {
     expect(errorMessage(response)).toBeUndefined()
   })
 
-  // A dev rebuild under a live runtime, or a permissions change, reaches the filesystem after the
-  // verdict is already cached. The client must still land inside the six codes, and the host's
-  // absolute install path must not ride out on the reply.
+  // Map post-verification filesystem failure to a contract code without exposing the host install path.
   it('answers a changed asset, not the filesystem error, when the asset is gone after its verdict', async () => {
     const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
     expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
@@ -258,8 +250,7 @@ describe('an install that carries a mobile web bundle', () => {
     expect(console.warn).toHaveBeenCalled()
   })
 
-  // The only way a positional read on a regular file comes back short: the file was truncated after
-  // its verdict was cached. Answering the short chunk would page the client past the truncation.
+  // Truncation after verification must not return a short chunk and let clients page past missing bytes.
   it('answers a changed asset when the file is shorter than the manifest promised', async () => {
     const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
     expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
@@ -270,9 +261,7 @@ describe('an install that carries a mobile web bundle', () => {
     expect(errorMessage(response)).toBe('mobile_web_bundle_asset_changed')
   })
 
-  // Deliberate: a packaged bundle is immutable for the life of the install, so the verdict is worth
-  // one hash per asset rather than one per 48 KiB. Restoring the bytes without restarting is a dev
-  // scenario, and it stays refused until the process does.
+  // Packaged assets are immutable; one cached hash per asset is enough, and dev byte restoration requires restart.
   it('remembers the verdict, so one hash per asset covers every later chunk', async () => {
     const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
     const corrupted = mobileWebBundleFiller(script.byteLength, 99)
@@ -290,8 +279,7 @@ describe('an install that carries a mobile web bundle', () => {
     expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
   })
 
-  // Off the E2EE channel the bucket key is the device's pairing token, so a map that never drops a
-  // key retains one credential per socket, and reconnect churn is normal on mobile.
+  // Plain-WebSocket buckets may hold pairing tokens; drop empty buckets during mobile reconnect churn.
   it('keeps no bucket for a connection that finished its reads', () => {
     for (let socket = 0; socket < 50; socket++) {
       const release = acquireMobileWebBundleReadSlot(`device-token-${String(socket)}`)
@@ -343,7 +331,6 @@ describe('where the resolver probes', () => {
     expect(getBundledMobileWebBundleRoot()).toBe(bundle.root)
   })
 
-  // orcad's appPath is its slot root, and the slot ships the page at ORCAD_MOBILE_WEB_DIR.
   it('finds the page an orcad slot ships, without a resolver of its own', () => {
     const bundle = writeSyntheticMobileWebBundle(
       join(scratch, ...ORCAD_MOBILE_WEB_DIR.split('/')),
@@ -360,7 +347,6 @@ describe('where the resolver probes', () => {
     expect(getBundledMobileWebBundleRoot()).toBeUndefined()
   })
 
-  // Unpacked electron-vite entrypoints set appPath to out/main, next to the bundle.
   it('finds the bundle beside an out/main app path', async () => {
     const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
     installMobileWebBundleAppPath(join(scratch, 'out', 'main'))
@@ -407,9 +393,7 @@ describe('an install with no mobile web bundle', () => {
   })
 })
 
-// Registration in ALL_RPC_METHODS is pinned by the generated params catalog; authorization is not,
-// and the mobile scanner only checks used ⊆ allowlist, so no mobile caller exists to miss these
-// until A5 ships one.
+// Registry presence does not prove mobile authorization; used-subset checks miss methods before a client uses them.
 describe('mobile authorization', () => {
   it('lets a paired phone call both bundle methods', () => {
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has(MOBILE_WEB_BUNDLE_MANIFEST_METHOD)).toBe(true)
@@ -417,9 +401,7 @@ describe('mobile authorization', () => {
   })
 })
 
-// fs.read may answer short of the window before EOF, so one call proves nothing; every other
-// positional reader in the repo fills the window first, and a client must never be handed a short
-// chunk because the kernel felt like splitting one.
+// Regular-file reads may split before EOF; fill the window before returning a chunk.
 describe('filling a read window', () => {
   const source = mobileWebBundleFiller(64, 3)
 

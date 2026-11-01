@@ -12,7 +12,7 @@ import {
 } from '../../../shared/mobile-e2ee-v2-framing'
 import { deriveSharedKey } from '../../../shared/e2ee-crypto'
 import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 
 const MOBILE_E2EE_V2_FRAME_OVERHEAD_BYTES = 82
 export const MAX_MOBILE_E2EE_V2_TEXT_FRAME_BASE64_CHARACTERS =

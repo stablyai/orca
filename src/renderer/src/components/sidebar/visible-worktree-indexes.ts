@@ -4,18 +4,7 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 
 type WorktreesByRepo = Record<string, Worktree[]>
 
-/**
- * Non-archived rows by host identity — the map `computeVisibleWorktrees` hands to
- * the lineage projection.
- *
- * Why cached: `getSidebarLineageParentsByIdentity` keys its memo on this map's
- * identity, so a per-call Map is a guaranteed miss that re-walks every workspace
- * and re-runs cycle detection on each PTY, tab and agent-status write.
- *
- * Why not the store's `getIndexedWorktreeMap`: this index excludes archived rows
- * (an archived parent resolving as a valid ancestor would inject a phantom row),
- * and keeps both rows of a two-host id collision.
- */
+/** Cache non-archived rows by host identity to preserve twins and avoid repeated lineage/cycle scans. */
 const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, Map<string, Worktree>>()
 
 export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<string, Worktree> {
@@ -33,10 +22,7 @@ export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<s
   return index
 }
 
-/**
- * Rank of each key in the frozen sidebar sort order. Keyed on the array the sort
- * hook already holds identity-stable across unrelated store writes.
- */
+/** Reuse ranks while the frozen sidebar sort array retains its identity. */
 const sortedWorktreeRankIndexCache = new WeakMap<readonly string[], Map<string, number>>()
 
 export function getSortedWorktreeRankIndex(sortedIds: readonly string[]): Map<string, number> {

@@ -1,6 +1,4 @@
-// Editor tabs follow a file the window renamed or moved on disk. The window picks each file's new
-// id (a bare path, an owner-qualified id, a diff id…), so main renames by the window's ids rather
-// than re-deriving them from paths; two open files are never merged into one tab.
+// Use window-chosen IDs when files move/rename; deriving from paths would lose owned/diff identities or merge distinct open files.
 
 import { applied, refuse, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf } from './workspace-layout-command-types'
@@ -10,10 +8,7 @@ import { EDITOR_KINDS } from './workspace-layout-workspace-move'
 
 type Renames = CommandOf<'renameEditorFiles'>['renames']
 
-/**
- * The renames in the command's workspace and in each `alsoIn` one, as one change: refused as a
- * whole when any workspace's would be, so main and the window never keep half a disk move.
- */
+/** Apply all workspace renames atomically so main/window cannot retain half a disk move. */
 export function renameEditorFiles(
   model: WorkspaceLayoutModel,
   command: CommandOf<'renameEditorFiles'>
@@ -41,12 +36,7 @@ export function renameEditorFiles(
   return applied(next, { renamedTabIds })
 }
 
-/**
- * Every editor tab showing a renamed file takes its new id, and a tab-bar id that is the file's
- * id follows it too, as the window rekeys them. Refused as a whole when two files would get one
- * id, or a file would take the id of an open one that is not itself renamed. Files no tab shows
- * change nothing but their record.
- */
+/** Rekey every affected tab and file-named tab-bar ID. Reject conflicting destinations atomically; unshown files only change their records. */
 function renameInWorkspace(
   model: WorkspaceLayoutModel,
   workspaceKey: string,

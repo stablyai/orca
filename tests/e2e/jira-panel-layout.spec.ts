@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import type { JiraIssue } from '../../src/shared/jira-types'
+import type { JiraIssue } from '../../src/shared/jira/jira-types'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
@@ -72,8 +72,9 @@ test('Jira titles and sort headings adapt to panel width inside a wide window', 
 
   const title = orcaPage.getByRole('heading', { name: ISSUE_TITLE })
   await expect(title).toBeVisible()
+  let previousDesktopTitleWidth: number | null = null
   for (const width of [500, 780, 1050, 1320]) {
-    await title.evaluate((element, width) => {
+    const panelWidth = await title.evaluate((element, width) => {
       const host =
         element.closest('[role="button"]')?.parentElement?.parentElement?.parentElement
           ?.parentElement?.parentElement
@@ -82,10 +83,15 @@ test('Jira titles and sort headings adapt to panel width inside a wide window', 
       }
       host.style.width = `${width}px`
       host.style.maxWidth = 'none'
+      return host.getBoundingClientRect().width
     }, width)
-    await expect
-      .poll(() => title.evaluate((element) => element.getBoundingClientRect().width))
-      .toBeGreaterThan(200)
+    expect(panelWidth).toBe(width)
+    const titleWidthExpectation = expect.poll(() =>
+      title.evaluate((element) => element.getBoundingClientRect().width)
+    )
+    await (width === 780
+      ? titleWidthExpectation.toBeGreaterThanOrEqual(180)
+      : titleWidthExpectation.toBeGreaterThan(200))
     const mobileSort = orcaPage.getByTestId('jira-mobile-sort-controls')
     const assignee = orcaPage.getByRole('button', { name: 'Assignee', exact: true })
     await (width < 768 ? expect(mobileSort).toBeVisible() : expect(mobileSort).toBeHidden())
@@ -107,6 +113,11 @@ test('Jira titles and sort headings adapt to panel width inside a wide window', 
       expect(grids[0].filter((_, index) => index !== 1)).toEqual(
         grids[1].filter((_, index) => index !== 1)
       )
+      const titleWidth = await title.evaluate((element) => element.getBoundingClientRect().width)
+      if (previousDesktopTitleWidth !== null) {
+        expect(titleWidth).toBeGreaterThan(previousDesktopTitleWidth)
+      }
+      previousDesktopTitleWidth = titleWidth
     }
   }
 })

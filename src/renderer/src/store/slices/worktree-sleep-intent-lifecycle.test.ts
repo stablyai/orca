@@ -25,9 +25,7 @@ function seedWorktree(store: ReturnType<typeof createTestStore>): void {
   })
 }
 
-// Why this suite exists: the sleep marker outlives teardown so mounted panes stay cold
-// (#10205). Every route that makes a workspace awake again must release it, or the
-// workspace is stuck cold and its PTY exits stop counting as activity.
+// Sleep intent keeps mounted panes cold after teardown; every wake route must release it or PTYs stay cold and exits cease counting as activity (#10205).
 describe('worktree sleep intent lifecycle', () => {
   beforeEach(() => {
     clearWorktreeSleepIntent(WORKTREE_ID)

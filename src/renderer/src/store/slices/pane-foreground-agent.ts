@@ -15,20 +15,14 @@ export type PaneForegroundAgentEntry = {
   routingTrusted?: boolean
   /** True after exit/input evidence revokes routing until provider confirmation. */
   routingRevoked?: boolean
-  /** True while previously trusted routing awaits provider revalidation. Retains
-   *  Shift+Enter byte capability only — the Ctrl+Enter resolver deliberately does
-   *  not read it, because its fallback is a plain CR that submits either way. */
+  /** Pending revalidation retains only Shift+Enter bytes; Ctrl+Enter intentionally uses plain CR fallback that submits either way. */
   routingConfirmationPending?: boolean
   /** True once the foreground is proven back at the shell (OSC 133;D) —
    *  process-grade launched-agent exit evidence, independent of titles. */
   shellForeground: boolean
 }
 
-/**
- * Process-table identity for local panes, read at OSC 133 command boundaries
- * (see pane-foreground-agent-tracker). Sits below hook rows in the tab-icon
- * resolution; covers agents that emit neither hooks nor titles.
- */
+/** Local process-table evidence at OSC 133 boundaries supports agents without hooks/titles, below hook rows in icon priority. */
 export type PaneForegroundAgentSlice = {
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   setPaneForegroundAgent: (paneKey: string, entry: PaneForegroundAgentEntry) => void
@@ -84,9 +78,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
     )
   },
   clearPaneForegroundAgentByWorktree: (worktreeId) => {
-    // Why: entries carry no worktreeId, so this must run while the worktree's
-    // tabs are still in tabsByWorktree (removeWorktree prunes them only after
-    // awaiting terminal teardown).
+    // Entries lack worktree IDs; sweep while tabs still exist, before removeWorktree prunes after terminal teardown.
     set((s) => {
       const prefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
       return (

@@ -45,7 +45,6 @@ describe('Pi hook normalization', () => {
       modelSwitchCommand: 'orca-model'
     })
 
-    // Pi posts carry no model, and none is invented for them.
     const pi = _internals.normalizeHookPayload(
       'pi',
       buildBody({ hook_event_name: 'before_agent_start', prompt: 'status for pi' }),
@@ -83,7 +82,6 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'model_select', model: 'minimax-cn/MiniMax-M3' }),
       'production'
     )
-    // Why: a switch between turns changes the model, never the state or the prompt.
     expect(switched?.payload).toMatchObject({
       state: 'done',
       prompt: 'status for omp',
@@ -228,7 +226,6 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'message_end', role: 'user', text: 'hi' }),
       'production'
     )
-    // Why: pi captures the user prompt via before_agent_start, so a user-role message_end must not flip lastAssistantMessage.
     expect(result?.payload.lastAssistantMessage).toBeUndefined()
   })
 
@@ -248,7 +245,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'session_shutdown' }),
       'production'
     )
-    // Why: Pi emits shutdown on reload/replace while the PTY stays alive; only agent_end proves turn completion.
+    // Pi shutdown also means reload/replace while the PTY survives; it cannot prove turn completion.
     expect(result).toBeNull()
   })
 
@@ -343,7 +340,7 @@ describe('Pi-family child rows through the hook lane', () => {
       subagents: [REVIEWER]
     })
 
-    // Why: the roster is a full restatement, so an update without one clears every child row.
+    // Roster updates replace the full roster; omitted children are removed.
     await post('pi', { hook_event_name: 'subagents_update' })
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working', prompt: 'fan out' })
     expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
@@ -363,7 +360,6 @@ describe('Pi-family child rows through the hook lane', () => {
     expect(placeholder).toMatchObject({ providerSessionOnly: true, state: 'done' })
     expect(placeholder?.subagents).toBeUndefined()
 
-    // Why: the same guard covers Pi's model_select, which shares this path.
     await post('pi', { hook_event_name: 'model_select', model: 'anthropic/claude-opus-5' })
     expect(server.getStatusSnapshot()[0]).toMatchObject({ providerSessionOnly: true })
     expect(server.getStatusSnapshot()[0]?.model).toBeUndefined()
@@ -389,9 +385,6 @@ describe('Pi-family child rows through the hook lane', () => {
   })
 })
 
-// Why: publishing a roster for Pi puts its panes on the same child-work guard Claude and Codex
-// already sit behind, which changes what Ctrl+C records. Pinned here so the next change to the
-// guard — or to the extension, once it reports a main-agent state of its own — has to face it.
 describe('a Pi cancel beside a live child row', () => {
   let server: AgentHookServer
 
@@ -443,9 +436,7 @@ describe('a Pi cancel beside a live child row', () => {
     })
   })
 
-  // Why: without a main-agent state from the extension, Orca cannot tell a cancelled turn from
-  // Ctrl+C at the idle prompt of a lead that children alone hold open — where it cancels nothing.
-  // It keeps the live row rather than claiming a cancellation the children contradict.
+  // Without main-agent evidence, live children make turn cancellation indistinguishable from idle-prompt Ctrl+C.
   it('leaves the working row alone while a child still runs', async () => {
     await startTurn([{ id: 'run-scout', state: 'working', startedAt: 1_000, agentType: 'scout' }])
 
@@ -457,5 +448,46 @@ describe('a Pi cancel beside a live child row', () => {
     })
     expect(row?.interrupted).toBeUndefined()
     expect(row?.mainAgent).toBeUndefined()
+  })
+})
+
+describe('a Pi compaction that tails a finished reply', () => {
+  const turn_completed_at = 1_700_000_005_000
+  let server: AgentHookServer
+
+  beforeEach(async () => {
+    server = new AgentHookServer()
+    await server.start({ env: 'production' })
+  })
+
+  afterEach(() => {
+    server.stop()
+  })
+
+  async function post(payload: Record<string, unknown>): Promise<void> {
+    const response = await postHookEvent(server, buildBody(payload), '/hook/pi')
+    expect(response.status).toBe(204)
+  }
+
+  it('keeps the reply finish time from the compaction rows through settle', async () => {
+    await post({ hook_event_name: 'before_agent_start', prompt: 'summarize' })
+    await post({ hook_event_name: 'message_end', role: 'assistant', text: 'Summary ready.' })
+    await post({ hook_event_name: 'compaction_start', turn_completed_at })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      prompt: 'summarize',
+      lastAssistantMessage: 'Summary ready.',
+      turnCompletedAt: turn_completed_at
+    })
+    await post({ hook_event_name: 'agent_end', turn_completed_at })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'done',
+      turnCompletedAt: turn_completed_at
+    })
+
+    // The same prompt again is a new turn, not the finished one.
+    await post({ hook_event_name: 'before_agent_start', prompt: 'summarize' })
+    expect(server.getStatusSnapshot()[0]?.state).toBe('working')
+    expect(server.getStatusSnapshot()[0]?.turnCompletedAt).toBeUndefined()
   })
 })

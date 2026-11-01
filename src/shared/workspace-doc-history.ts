@@ -1,11 +1,7 @@
 import type { BrowserPageDocLocation } from './browser-workspace-types'
 import { isDocPreviewUrl } from './doc-preview-scheme'
 
-/**
- * A previewed workspace document the URL-bar dropdown can offer again. The document is the whole
- * identity — there is deliberately no url field, so the grant URL a preview is served over has
- * nowhere to land in history: confinement by absence, like the registry split.
- */
+/** Persist document identity only; omitting URL gives preview grant URLs no place in history. */
 export type WorkspaceDocHistoryEntry = {
   docLocation: BrowserPageDocLocation
   title: string
@@ -15,10 +11,7 @@ export type WorkspaceDocHistoryEntry = {
 
 export const MAX_WORKSPACE_DOC_HISTORY_ENTRIES = 100
 
-/**
- * Shallow-equal over whatever keys an entry actually carries, rather than a hand-listed subset, so
- * a field added to `WorkspaceDocHistoryEntry` later cannot slip past a skip-if-unchanged check.
- */
+/** Compare actual keys so future fields cannot bypass unchanged-entry checks. */
 export function workspaceDocHistoryEntriesEqual(
   left: WorkspaceDocHistoryEntry,
   right: WorkspaceDocHistoryEntry
@@ -56,9 +49,7 @@ export function normalizeWorkspaceDocHistoryEntries(
     ) {
       continue
     }
-    // Nested, not a joined key: any separator would collide with worktree ids or paths that
-    // contain it. Must stay equivalent to `browserPageDocLocationsEqual`, which the store's
-    // doc-history dedupe still uses — divergence would show up as duplicate dropdown rows.
+    // Nest workspace/path maps to avoid delimiter collisions; keep equivalent to browserPageDocLocationsEqual or dedupe creates duplicate history rows.
     const { worktreeId, filePath } = entry.docLocation
     const seenPaths = seenPathsByWorktree.get(worktreeId)
     if (seenPaths?.has(filePath)) {

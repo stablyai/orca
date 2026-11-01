@@ -6,14 +6,8 @@ import {
   type MobileStatusToken
 } from '../components/pr-sidebar/pr-checks-presentation'
 
-// Pure derivation of the branch-card PR chip from the shared PR sidebar state.
-// No React/native imports so the rollup precedence is unit-testable (KTD5). The
-// chip and the Pull Request segment read the SAME PrSidebarState, so the chip's
-// check rollup can never disagree with the checks list it links to.
+// Use the sidebar’s same state so the chip and linked checks list cannot disagree.
 
-// The single check-rollup token the chip shows. Exactly one wins, by precedence:
-// merge conflict > failing > running > passed > no checks. Worst-actionable-first
-// so a red/amber signal is never hidden behind a green count.
 export type MobilePrChipRollup =
   | { kind: 'conflict'; text: string; token: MobileStatusToken }
   | { kind: 'failing'; text: string; token: MobileStatusToken }
@@ -23,11 +17,7 @@ export type MobilePrChipRollup =
 
 export type MobilePrChipSummary =
   | { kind: 'loading' }
-  // GitHub repo, but this branch has no open/linked PR — the chip becomes a
-  // "create pull request" affordance that routes to the PR segment's composer.
   | { kind: 'none' }
-  // A permanent (auth/permission) or transient failure loading PR data. The chip
-  // degrades to a muted, tappable line rather than vanishing.
   | { kind: 'unavailable'; message: string }
   | {
       kind: 'ready'
@@ -35,14 +25,10 @@ export type MobilePrChipSummary =
       stateLabel: string
       stateToken: MobileStatusToken
       rollup: MobilePrChipRollup
-      // Unresolved review-comment count, when the deferred details payload has
-      // loaded; null while it is still loading or unavailable.
       commentCount: number | null
     }
 
-// Unresolved review threads (the "💬 n" count). Counts each inline thread once by
-// threadId when it is not resolved; top-level conversation comments (no threadId)
-// are not review threads and don't count. Returns null when details haven't loaded.
+// Count unresolved inline threads once per threadId; conversation comments are not review threads.
 export function countUnresolvedReviewThreads(
   comments: PRComment[] | null | undefined
 ): number | null {
@@ -86,11 +72,10 @@ export function buildMobilePrChipSummary(
 }
 
 function buildChipRollup(state: Extract<PrSidebarState, { kind: 'ready' }>): MobilePrChipRollup {
-  // Conflicts win: the checks may be green, but the PR still can't merge.
   if (state.data.pr.mergeable === 'CONFLICTING') {
     return { kind: 'conflict', text: 'Conflicts', token: 'statusAmber' }
   }
-  // Shared classifier so the chip, the Checks list and the tasks grid never disagree about the same PR.
+  // Share classification with the checks list and tasks grid.
   const checks = summarizeProviderChecks(state.data.checks)
   if (checks.failed > 0) {
     return { kind: 'failing', text: `${checks.failed} failing`, token: 'statusRed' }
@@ -101,7 +86,7 @@ function buildChipRollup(state: Extract<PrSidebarState, { kind: 'ready' }>): Mob
   if (checks.passed > 0) {
     return { kind: 'passed', text: `${checks.passed}/${checks.total}`, token: 'statusGreen' }
   }
-  // Checks that exist but resolved to nothing actionable are not "no checks".
+  // Existing checks with no actionable outcome are still distinct from no checks.
   return {
     kind: 'none',
     text: checks.total === 0 ? 'No checks' : 'Unresolved checks',

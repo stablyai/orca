@@ -17,14 +17,14 @@ import { resolveOrcaSessionParty } from '../../../orchestration/orchestration-pa
 import { locateOrchestrationParty } from '../../../orchestration/orchestration-party-location'
 import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-lineage'
 import { defineMethod } from '../../core'
+import { ensureStructuredHostInstalled } from '../structured-agent-session-gate'
 
 export const ORCHESTRATION_CALLER_METHODS = [
   defineMethod({
     name: 'orchestration.callerShow',
     permission: 'workspace',
     params: null,
-    // Why no params: the dispatch entry already resolved the session the caller's environment names,
-    // and a session it cannot admit never reaches here: its refusal is the answer.
+    // Dispatch already admitted the environment's session; do not resolve another caller from params.
     handler: (_params, { orchestrationCaller }): OrchestrationCallerShowResult => ({
       caller: orchestrationCaller
         ? { orcaSessionId: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId), live: true }
@@ -35,7 +35,7 @@ export const ORCHESTRATION_CALLER_METHODS = [
     name: 'orchestration.sessionAddress',
     permission: 'workspace',
     params: SessionAddressParams,
-    // Why host-side: only the host's session records know a chat's `/clear` root.
+    // Only host records know the chat's /clear root.
     handler: (params, { runtime }): OrchestrationSessionAddressResult => {
       if (!isOrcaSessionId(params.sessionId)) {
         throw new OrchestrationError(
@@ -52,17 +52,26 @@ export const ORCHESTRATION_CALLER_METHODS = [
     name: 'orchestration.partyLocation',
     permission: 'workspace',
     params: PartyLocationParams,
-    // Why host-side: a chat sender's live session follows its `/clear` lineage on this host.
-    handler: (params, { runtime }): OrchestrationPartyLocationResult =>
-      locateOrchestrationParty(
+    // Resolve the chat sender's live /clear successor on its owning host.
+    handler: async (params, ctx): Promise<OrchestrationPartyLocationResult> => {
+      let records: ReturnType<typeof readAgentSessionRecordStore> = null
+      try {
+        await ensureStructuredHostInstalled(ctx)
+        records = readAgentSessionRecordStore()
+      } catch {
+        // Terminal routing remains usable when chat records cannot be installed.
+      }
+      const { runtime } = ctx
+      return locateOrchestrationParty(
         params.address,
         {
           db: runtime.getOrchestrationDb(),
-          records: readAgentSessionRecordStore(),
+          records,
           terminalPaneKey: (handle) => runtime.getTerminalPaneKey(handle),
           terminalHandleForPaneKey: (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey)
         },
         params.messageIds
       )
+    }
   })
 ]

@@ -1,13 +1,4 @@
-/**
- * STA-4343: the confirmed row's host decides which workspace a batch delete
- * resolves to.
- *
- * Both the delete-confirmation dialog and the batch shortcut funnel through
- * `resolveWorktreeBatchDeleteTargets`. It used to take an id-keyed map, which
- * holds ONE row per `repoId::path` — so on a two-host collision the second
- * host's row could never be resolved at all, and a confirmed remote row could
- * silently resolve to a local checkout at the same path.
- */
+/** Resolve confirmation-dialog and batch-shortcut deletes by host; same-ID twins must remain separately reachable. */
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -113,8 +104,7 @@ describe('resolveWorktreeBatchDeleteTargets', () => {
 
 describe('readWorktreeDeleteIdentities', () => {
   it('carries the host through the modal data round trip', () => {
-    // Modal data crosses an unknown boundary, so the host has to survive parsing
-    // or the dialog resolves the confirmed row on the wrong host.
+    // The host must survive unknown modal-data parsing to preserve the confirmed delete target.
     const parsed = readWorktreeDeleteIdentities([
       { id: SHARED_ID, instanceId: 'instance-ssh', hostId: SSH }
     ])

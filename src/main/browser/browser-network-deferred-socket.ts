@@ -26,8 +26,7 @@ export class BrowserNetworkDeferredSocket
     source.setNoDelay?.(this.noDelay)
     source.on('data', (bytes: Buffer) => {
       this.emit('data', bytes)
-      // Why: tunnel-socket listeners own emitted bytes and push back via pause(), but a
-      // credit-accounted source re-grants its peer window only for settled bytes.
+      // Grant source credit only after listeners own the bytes and can pause further reads.
       source.settleRead?.(bytes.byteLength)
     })
     source.on('end', () => this.emit('end'))

@@ -115,7 +115,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
           'orca_test_status() { return 42; }; orca_test_status\n'
         )
       }
-      // Replay Ubuntu's later widget binding before the user's own startup changes.
       const stockWidget =
         stockBinding || stickyPrecmd || scheduledPrecmd
           ? USER_WIDGET.replaceAll('orca_test_line_init', 'zle-line-init')
@@ -137,7 +136,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
         HOME: home,
         USERPROFILE: home,
         PATH: `${ambientBin}:/usr/bin:/bin`,
-        // Stock cases replay this replacement after the fixture installs its own widgets.
         DEBIAN_PREVENT_KEYBOARD_CHANGES: '1',
         ZDOTDIR: wrapperDir,
         ORCA_HISTFILE: join(home, 'scoped-history')
@@ -293,7 +291,6 @@ describe('zsh plugins that call deferred line-init by name', () => {
       roots.push(home)
       const wrapperDir = join(home, 'wrapper')
       mkdirSync(wrapperDir)
-      // Some input plugins copy the bound widget's function name into their own body.
       writeFileSync(
         join(home, '.zshrc'),
         `functions[orca_test_app_mode]=\${widgets[zle-line-init]#user:}'

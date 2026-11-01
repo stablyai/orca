@@ -1,11 +1,4 @@
-/**
- * Regression tests for repos:add + git worktrees.
- *
- * A linked worktree reports itself as its own `--show-toplevel`, so the path-based dedupe in
- * addLocalRepoFromPath cannot see that it belongs to an already-tracked repo. Adding it anyway
- * produced a second ready ProjectHostSetup on the same project and host — a duplicate "Local Mac"
- * run-target row pointing at a transient worktree path.
- */
+/** Linked worktrees report their own toplevel; deduplicate by common repo to avoid duplicate run-target rows. */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
@@ -109,7 +102,7 @@ describe('repos:add with git worktrees', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
     isGitRepoMock.mockReset().mockReturnValue(true)
-    // A linked worktree is its own toplevel — this is exactly why path dedupe alone misses it.
+    // A linked worktree's own toplevel cannot identify its already-tracked main repo.
     getGitRepoRootMock.mockReset().mockImplementation((path: string) => path)
     getLinkedWorktreeMainRepoRootMock.mockReset().mockReturnValue(null)
     detectRepoIconAndUpstreamMock.mockReset().mockResolvedValue({})

@@ -1,13 +1,6 @@
 import { runRelayBackgroundOperation } from '../relay-background-operation.js'
 
-// The twelve periodic assignment sweeps the director runs every 30s. Each step
-// re-derives its state from the database and is idempotent, so they carry no
-// intra-tick ordering dependency — which is what makes per-step isolation
-// sound: one failing sweep costs one tick of itself, never the other eleven.
-// (A single poisoned rehome row once silenced the whole chained form
-// fleet-wide.) Sweep failures are logged, never fed into the rehome worker's
-// dispatch-failure budget: a sweep exception is not a dispatch failure and
-// must not durably disable regional rehoming.
+// Each 30s sweep is idempotent and re-derives DB state, so isolate failures per step. Log sweep errors without spending dispatch-failure budget or disabling rehoming.
 export type AssignmentCleanupStore = {
   refreshRegionalRehomeLeases(): Promise<unknown>
   completeReadyEvacuations(): Promise<unknown>

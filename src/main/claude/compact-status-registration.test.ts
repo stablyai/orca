@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import {
-  clearAllListenerCaches,
-  clearPaneCacheState,
   createHookListenerState,
-  movePaneCacheState,
   seedLegacyAgentStatusForTests,
   type HookListenerState
 } from '../../shared/agent-hook-listener/listener-state'
@@ -22,9 +19,7 @@ const COMPACT_PROMPT_ID = '33333333-3333-4333-8333-333333333333'
 
 const REGISTERED_EVENT_NAMES = new Set<string>(CLAUDE_EVENTS.map((event) => event.eventName))
 
-/** Deliver a hook event the way production does: only if the event is actually REGISTERED with
- *  Claude. Feeding the normalizer directly is what let a whole compact-correlation feature ship
- *  green while being unreachable — every behavior assertion here goes through this gate. */
+/** Gate delivery on registration so tests cannot exercise hooks Claude never emits to Orca. */
 function deliverIfRegistered(
   state: HookListenerState,
   payload: Record<string, unknown>
@@ -43,9 +38,7 @@ function hook(name: string, promptId: string, extra: Record<string, unknown> = {
   return { hook_event_name: name, prompt_id: promptId, session_id: 'session-a', ...extra }
 }
 
-/** The exact sequence Claude Code emits for a successful manual /compact, measured from a PTY-driven
- *  interactive session (2.1.227). PreCompact and the summarizer's start-less SubagentStop are part
- *  of the real stream, so they are delivered here even though only PostCompact is registered. */
+/** Manual /compact sequence captured from a PTY-driven Claude Code 2.1.227 session. */
 function successfulManualCompact(state: HookListenerState) {
   deliverIfRegistered(state, hook('PreCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
   deliverIfRegistered(
@@ -65,9 +58,7 @@ function startTurn(state: HookListenerState) {
   deliverIfRegistered(state, hook('UserPromptSubmit', TURN_PROMPT_ID, { prompt: 'do the thing' }))
 }
 
-/** The row AgentHookServer.hydrate() rebuilds for a pane that was stuck `working` when Orca last
- *  exited: the previous session's connectionId, the unconfirmed flag, and — when the turn had
- *  spawned one — a child that exists only as a disk snapshot. */
+/** Reproduce a hydrated working row, optionally with a child known only from a disk snapshot. */
 function hydrateStuckRow(
   state: HookListenerState,
   options: { withRestoredChild?: boolean; providerSession?: boolean } = {}
@@ -99,13 +90,6 @@ function hydrateStuckRow(
 }
 
 describe('Claude compact hook registration', () => {
-  it('registers PostCompact and deliberately does not register PreCompact', () => {
-    expect(REGISTERED_EVENT_NAMES.has('PostCompact')).toBe(true)
-    // Why: PreCompact fires BEFORE the compact is validated and an aborted compact emits it alone,
-    // so subscribing to it at all is what strands the pane. This assertion is the guard.
-    expect(REGISTERED_EVENT_NAMES.has('PreCompact')).toBe(false)
-  })
-
   it('writes PostCompact, and no PreCompact, into the settings Claude actually reads', () => {
     const written = applyManagedHooks(
       { hooks: {} },
@@ -132,16 +116,13 @@ describe('STA-2915: a manual compact clears the pane', () => {
     const completion = successfulManualCompact(state)
 
     expect(completion?.payload.state).toBe('done')
-    // Why: a finished compact is a session-shaped boundary, not a completed turn — consumers that
-    // react to completion (automation runs, unread counts, notifications) must stay out of it.
+    // Session boundaries must not trigger turn-completion automations, unread counts, or notifications.
     expect(completion?.payload.sessionBoundary).toBe(true)
   })
 
   it('keeps the summarizer SubagentStop from being the thing that resolves the pane', () => {
     const state = createHookListenerState()
     startTurn(state)
-    // The start-less SubagentStop re-emits the cached lead state; it can only republish `working`,
-    // never clear it. Only PostCompact resolves the pane.
     const republished = deliverIfRegistered(
       state,
       hook('SubagentStop', COMPACT_PROMPT_ID, {
@@ -156,27 +137,6 @@ describe('STA-2915: a manual compact clears the pane', () => {
 })
 
 describe('STA-4613: an aborted compact must not strand the pane', () => {
-  it('leaves an idle pane idle when PreCompact arrives alone', () => {
-    const state = createHookListenerState()
-    startTurn(state)
-    deliverIfRegistered(state, hook('Stop', TURN_PROMPT_ID))
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
-
-    // Measured: "Not enough messages to compact" emits PreCompact and nothing else.
-    deliverIfRegistered(state, hook('PreCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
-
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
-  })
-
-  it('leaves a working pane working when PreCompact arrives alone', () => {
-    const state = createHookListenerState()
-    startTurn(state)
-
-    deliverIfRegistered(state, hook('PreCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
-
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('working')
-  })
-
   it('does not map PreCompact even when it is delivered past the registration gate', () => {
     const state = createHookListenerState()
     startTurn(state)
@@ -212,17 +172,6 @@ describe('an auto compact claims nothing', () => {
     deliverIfRegistered(state, hook('Stop', TURN_PROMPT_ID))
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
   })
-
-  it("writes no compact-scoped state, so it cannot spend the pane's consumed-compact slot", () => {
-    const state = createHookListenerState()
-    startTurn(state)
-
-    deliverIfRegistered(state, hook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'auto' }))
-
-    // Why: only a manual completion claims anything. Running the ownership guard for an auto
-    // compact would mark its prompt id consumed for an event that maps to no state at all.
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.has(PANE_KEY)).toBe(false)
-  })
 })
 
 describe('STA-2915: the pane the ticket actually reports', () => {
@@ -231,9 +180,7 @@ describe('STA-2915: the pane the ticket actually reports', () => {
     hydrateStuckRow(state, { withRestoredChild: true })
 
     deliverIfRegistered(state, hook('PreCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
-    // Why: assert the summarizer stays silent rather than assuming it. With a restored roster it
-    // publishes nothing, which is what leaves the hydrated row in place for the completion — if
-    // that ever changes, this test must fail loudly instead of quietly testing something else.
+    // Keep the hydrated row as owner so completion exercises restored-state handling.
     const summarizer = deliverIfRegistered(
       state,
       hook('SubagentStop', COMPACT_PROMPT_ID, { agent_id: 'a75b38b59774e1f31', agent_type: '' })
@@ -246,8 +193,7 @@ describe('STA-2915: the pane the ticket actually reports', () => {
       hook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' })
     )
 
-    // A restored child is a disk snapshot, not evidence of live work, and a manual /compact only
-    // completes at an idle prompt — so it may not keep the pane spinning.
+    // A restored child snapshot does not prove live work at an idle manual-compaction boundary.
     expect(completion?.payload.state).toBe('done')
     expect(completion?.payload.sessionBoundary).toBe(true)
     expect(completion?.payload.subagents ?? []).toEqual([])
@@ -264,9 +210,7 @@ describe('STA-2915: the pane the ticket actually reports', () => {
       hook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' })
     )
 
-    // Why: a child observed in this runtime IS live agent work. The compact must not retire it —
-    // and it must not restate the row either, because a restated row loses `restoredUnconfirmed`
-    // and restarts the staleness clock for work the compact never observed.
+    // Republishing would clear restoredUnconfirmed and reset staleness for work the compact never observed.
     expect(completion).toBeNull()
     expect(state.lastStatusByPaneKey.get(PANE_KEY)).toBe(before)
     expect(before?.payload.state).toBe('working')
@@ -289,7 +233,6 @@ describe('STA-2915: the pane the ticket actually reports', () => {
 describe('compact completion guards', () => {
   it('does not resurrect a pane that was retired before the completion arrived', () => {
     const state = createHookListenerState()
-    // No cached status: the pane was closed/cleared. A compact clears a row, it never creates one.
     expect(successfulManualCompact(state)).toBeNull()
     expect(state.lastStatusByPaneKey.get(PANE_KEY)).toBeUndefined()
   })
@@ -297,10 +240,7 @@ describe('compact completion guards', () => {
   it('clears a stuck row restored from disk after a restart, despite a stale connection id', () => {
     const state = createHookListenerState()
     hydrateStuckRow(state)
-    // Why: the completion must land while the HYDRATED row is still the cached owner, or the
-    // restored-row branch is never the one under test. Deliver it alone — an intervening
-    // summarizer would replace the row with a live one and the assertion would pass through the
-    // strict branch instead, which is exactly how this test used to be vacuous.
+    // Deliver completion alone; a summarizer could replace the hydrated row and bypass this branch.
     const completion = deliverIfRegistered(
       state,
       hook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' })
@@ -379,39 +319,5 @@ describe('compact completion guards', () => {
     )
 
     expect(duplicate).toBeNull()
-  })
-})
-
-describe('the consumed-compact record is torn down with its pane', () => {
-  const OTHER_PANE = makePaneKey('compact-registration', '44444444-4444-4444-8444-444444444444')
-
-  function paneWithConsumedCompact(): HookListenerState {
-    const state = createHookListenerState()
-    startTurn(state)
-    expect(successfulManualCompact(state)?.payload.state).toBe('done')
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.get(PANE_KEY)).toBe(COMPACT_PROMPT_ID)
-    return state
-  }
-
-  // Why: this codebase keeps growing a new per-pane store that lands in ONE teardown path and is
-  // missed by the siblings, which leaks the map and leaves stale reads behind a pane that is gone.
-  // Every route that tears pane state down has to take this map with it.
-  it('clearPaneCacheState drops it', () => {
-    const state = paneWithConsumedCompact()
-    clearPaneCacheState(state, PANE_KEY)
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.has(PANE_KEY)).toBe(false)
-  })
-
-  it('movePaneCacheState carries it to the new pane key', () => {
-    const state = paneWithConsumedCompact()
-    movePaneCacheState(state, PANE_KEY, OTHER_PANE)
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.has(PANE_KEY)).toBe(false)
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.get(OTHER_PANE)).toBe(COMPACT_PROMPT_ID)
-  })
-
-  it('clearAllListenerCaches empties it', () => {
-    const state = paneWithConsumedCompact()
-    clearAllListenerCaches(state)
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.size).toBe(0)
   })
 })

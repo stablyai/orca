@@ -7,8 +7,7 @@ import {
 
 type ChildAgentLineageEntry = Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
 
-/** Minimal structural input: a full AgentPaneThread satisfies it (pinned by the
- *  classifier tests), and count/badge callers can feed synthetic rows uncast. */
+/** Accept full threads or synthetic structural rows without casts; classifier tests pin compatibility. */
 export type ChildAgentClassifiableThread = {
   paneKey: string
   currentAgentEntry?: ChildAgentLineageEntry | null
@@ -40,15 +39,7 @@ function firstReportedTerminalHandle(thread: ChildAgentClassifiableThread): stri
   return undefined
 }
 
-/**
- * Pane keys of threads that are children of another currently listed thread.
- * Delegates to the dashboard's lineage model so both surfaces classify the same
- * pane identically: a parent reference only counts while the parent thread is
- * still listed, so orphaned workers (their coordinator pane closed) and cycle
- * members are promoted to top level instead of staying hidden behind the
- * child-agent filter. Classification is sticky across a thread's older events:
- * the newest entry whose parent still resolves wins.
- */
+/** Reuse dashboard lineage classification: the newest still-resolving parent wins across history. Orphans and cycles remain top-level rather than disappearing behind child filters. */
 export function collectChildAgentPaneKeys(
   threads: readonly ChildAgentClassifiableThread[]
 ): Set<string> {

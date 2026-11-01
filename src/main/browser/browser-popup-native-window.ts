@@ -9,7 +9,7 @@ import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-windo
 import { describeCommittedPopupOrigin } from './popup-committed-origin'
 
 const rejectedNativePopups = new WeakSet<BrowserWindow>()
-// Why: like Electron, an opener's latest script admission answers the next child it shows.
+// The latest script admission belongs to the next child the opener shows.
 const pendingScriptedNativePopups = new WeakMap<
   WebContents,
   ((window: BrowserWindow) => void) | null
@@ -28,10 +28,7 @@ export function isNativeBrowserPopupRequest(input: {
   )
 }
 
-/**
- * OpenURL constructs this window synchronously, before resuming its native navigation; a script
- * window.open constructs it in a later task, when the renderer shows the child it created.
- */
+// OpenURL creates synchronously; scripted window.open creates its child in a later task.
 export function allowNativeBrowserPopup(input: {
   opener: WebContents
   options: Electron.BrowserWindowConstructorOptions
@@ -39,11 +36,12 @@ export function allowNativeBrowserPopup(input: {
   canPresent?: () => boolean
   onCreated: (options: PopupChildWindowOptions) => WebContents
 }): Electron.WindowOpenHandlerResponse {
+  const openerSession = input.opener.session
   const mayPresent = !isBackgroundLaunch() && input.options.show !== false
   const admit = (window: BrowserWindow): void => {
     markNativeBrowserPopupWindow(window)
     try {
-      if (input.opener.isDestroyed() || window.webContents.session !== input.opener.session) {
+      if (input.opener.isDestroyed() || window.webContents.session !== openerSession) {
         rejectNativeBrowserPopup(window)
         return
       }
@@ -58,7 +56,7 @@ export function allowNativeBrowserPopup(input: {
               window.isDestroyed() ||
               window.webContents.isDestroyed() ||
               input.opener.isDestroyed() ||
-              window.webContents.session !== input.opener.session ||
+              window.webContents.session !== openerSession ||
               (input.canPresent && !input.canPresent())
             ) {
               return
@@ -73,11 +71,19 @@ export function allowNativeBrowserPopup(input: {
   }
   let admitted = false
   const onCreated = (_event: Electron.Event, window: BrowserWindow): void => {
+    if (
+      window.isDestroyed() ||
+      window.webContents.isDestroyed() ||
+      window.webContents.session !== openerSession
+    ) {
+      return
+    }
+    app.off('browser-window-created', onCreated)
     admitted = true
     admit(window)
   }
   // Prepend prevents another browser-window-created listener from navigating the child first.
-  app.prependOnceListener('browser-window-created', onCreated)
+  app.prependListener('browser-window-created', onCreated)
   // A canceled native creation must not grant the next unrelated window this admission.
   queueMicrotask(() => {
     app.off('browser-window-created', onCreated)
@@ -96,13 +102,12 @@ export function allowNativeBrowserPopup(input: {
       useContentSize: true,
       minWidth: MIN_POPUP_CONTENT_WIDTH,
       minHeight: MIN_POPUP_CONTENT_HEIGHT,
-      webPreferences: { ...input.options.webPreferences, session: input.opener.session }
+      webPreferences: { ...input.options.webPreferences, session: openerSession }
     }
   }
 }
 
-// Electron emits did-create-window on the opener synchronously after constructing the child, before
-// the child's first request; unadmitted native children there are discarded rather than left bare.
+// did-create-window runs before the child's first request, allowing unadmitted children to be rejected.
 function awaitScriptedNativePopup(
   opener: WebContents,
   admit: (window: BrowserWindow) => void
@@ -128,7 +133,6 @@ function awaitScriptedNativePopup(
   pendingScriptedNativePopups.set(opener, admit)
 }
 
-/** Ends popup contents Chromium created before their pending first request can leave. */
 export function discardBrowserPopupContents(contents: WebContents): void {
   if (contents.isDestroyed()) {
     return
@@ -147,7 +151,7 @@ export function discardBrowserPopupContents(contents: WebContents): void {
 function rejectNativeBrowserPopup(window: BrowserWindow): void {
   rejectedNativePopups.add(window)
   discardBrowserPopupContents(window.webContents)
-  // Destroy only after Electron's constructor returns, even if close failed or was intercepted.
+  // Wait for Electron's constructor to return before destroying the window.
   queueMicrotask(() => {
     if (!window.isDestroyed()) {
       window.destroy()

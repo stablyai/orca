@@ -15,8 +15,7 @@ import {
 } from '../../src/main/daemon/daemon-spawner'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 
-// Why a connect and not existsSync: a departing daemon leaves its endpoint entry on disk by
-// design, so presence no longer distinguishes a live daemon from a dead one.
+// Connect to prove liveness: retired daemons deliberately leave endpoint entries on disk.
 function connectsTo(socketPath: string): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = connect({ path: socketPath })
@@ -215,8 +214,7 @@ test('v22 stays reattachable while v24 retires after its last empty client disco
     })
     await secondCurrentClient.ensureConnected()
 
-    // Why: failed adoption may overlap another authenticated app client, so
-    // only daemon-owned idle retirement can safely decide whether to exit.
+    // Only daemon-owned idle retirement can safely exit while other authenticated clients may remain.
     await currentAdapter.disconnectOnly()
     expect(current.child.exitCode).toBeNull()
     await expect(secondCurrentClient.request('listSessions', undefined)).resolves.toEqual({
@@ -228,10 +226,7 @@ test('v22 stays reattachable while v24 retires after its last empty client disco
     expect(existsSync(current.tokenPath)).toBe(false)
     expect(existsSync(current.pidPath)).toBe(false)
     if (process.platform !== 'win32') {
-      // Why reachability and not absence: a departing daemon deliberately leaves its endpoint
-      // entry behind for the next publisher to replace in one rename. Removing it would mean
-      // fencing that removal against a replacement, which is the defect class this design
-      // retired. What must be true is that nothing answers there any more.
+      // Retirement leaves the entry for atomic replacement; prove no listener answers rather than expecting unlink.
       await expect(connectsTo(current.socketPath)).resolves.toBe(false)
     }
     expect(legacy.child.exitCode).toBeNull()

@@ -1,13 +1,4 @@
-/**
- * A process's identity as orcad's records carry it (instance lock, managed stop).
- *
- * Windows reuses PIDs aggressively and `getProcessStartedAtMs` answers null there, so a PID
- * alone would be the whole identity. The process-tree addon orcad's Windows slot stages reads
- * the kernel creation time for one PID without a table snapshot or a PowerShell spawn.
- * Linux derives wall-clock start time from `/proc/stat` btime, which drifts (WSL2, NTP slews),
- * so there the kernel start ticks plus boot id are the identity and wall time is only a hint.
- * Null still means "cannot say": callers must never read it as proof of exit.
- */
+// Linux ticks/boot ID avoid drifting wall time; Windows uses kernel creation time. Unknown never proves exit.
 import { readFileSync, statSync } from 'node:fs'
 import { parseLinuxStartTicks } from '../agent-hooks/managed-hook-owner-identity'
 import {
@@ -19,19 +10,16 @@ import { readWindowsProcessCreationTime } from '../windows/windows-process-table
 
 export type OrcadProcessIncarnation = { linuxStartTicks: string; bootId: string }
 
-/** What a lock or stop request recorded; the incarnation is absent from older writers. */
+/** Older writers omit incarnation fields. */
 export type OrcadRecordedIdentity = {
   startedAtMs: number | null
   linuxStartTicks?: string
   bootId?: string
-  /** The lock's identity: the holder's POSIX uid as a decimal string, or a Windows username. */
+  /** Holder POSIX uid (decimal) or Windows username. */
   identity?: string
 }
 
-/**
- * `differs` proves the PID now names another process. `unproven` is a wall-clock disagreement
- * that proves nothing, because the clock it was derived from can drift.
- */
+/** Only differs proves PID reuse; unproven means wall-clock drift may explain the mismatch. */
 export type OrcadProcessIdentityVerdict = 'matches' | 'differs' | 'unknown' | 'unproven'
 
 export type OrcadProcessIdentityReaders = {
@@ -47,7 +35,7 @@ export function readOrcadProcessStartedAtMs(pid: number): number | null {
     : getProcessStartedAtMs(pid)
 }
 
-/** Linux only: `/proc/<pid>/stat` field 22 and the kernel boot id, neither tied to a clock. */
+/** Linux start ticks and boot ID are independent of wall-clock adjustments. */
 export function readOrcadProcessIncarnation(pid: number): OrcadProcessIncarnation | null {
   if (process.platform !== 'linux') {
     return null
@@ -63,7 +51,7 @@ export function readOrcadProcessIncarnation(pid: number): OrcadProcessIncarnatio
   }
 }
 
-/** Linux: the uid owning `/proc/<pid>`, which is the process's effective uid, or root if non-dumpable. */
+/** Non-dumpable Linux processes may appear owned by root. */
 export function readOrcadProcessOwnerUid(pid: number): number | null {
   try {
     return statSync(`/proc/${pid}`).uid
@@ -72,7 +60,6 @@ export function readOrcadProcessOwnerUid(pid: number): number | null {
   }
 }
 
-/** Linux: the live process's short command name, for telling the user what holds a PID. */
 export function readOrcadProcessName(pid: number): string | null {
   try {
     const name = readFileSync(`/proc/${pid}/comm`, 'utf8')
@@ -93,10 +80,7 @@ function readLinuxOverflowUid(): number {
   }
 }
 
-/**
- * orcad never changes uid, so a PID owned by another uid is proof of reuse. Root and the overflow
- * uid prove nothing: /proc shows a non-dumpable process as root, and an unmapped root as overflow.
- */
+/** Different uid proves reuse except root/overflow, which may mask non-dumpable or unmapped owners. */
 function ownerProvesAnotherProcess(
   pid: number,
   recorded: OrcadRecordedIdentity,
@@ -122,7 +106,6 @@ export function recordedOrcadProcessIncarnation(
     : null
 }
 
-/** Prefers the recorded incarnation; wall time decides only for records that lack one. */
 export function compareOrcadProcessIdentity(
   pid: number,
   recorded: OrcadRecordedIdentity,
@@ -145,7 +128,7 @@ export function compareOrcadProcessIdentity(
   if (startTimesWithinTolerance(actual, recorded.startedAtMs, START_TIME_TOLERANCE_MS)) {
     return 'matches'
   }
-  // Windows and macOS report a stored creation time; Linux recomputes it from a drifting btime.
+  // Only Linux recomputes creation time from a drifting btime.
   if ((readers.platform ?? process.platform) !== 'linux') {
     return 'differs'
   }

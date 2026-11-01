@@ -123,7 +123,6 @@ it('rejects a casting suppression on an added line that omits the SAFETY: ration
 
     expect(findings.map((finding) => finding.labels[0].span.line)).toEqual([1])
 
-    // Unchanged lines stay out of the gate.
     expect(
       findCastingDirectivesMissingSafety(root, new Map([[relative, [{ start: 3, end: 4 }]]]))
     ).toEqual([])
@@ -132,8 +131,7 @@ it('rejects a casting suppression on an added line that omits the SAFETY: ration
   }
 })
 
-// Why: an earlier pattern skipped a directive whose `//` sat right after a quote, which let an
-// unjustified cast through the gate -- the wrong failure direction for a gate.
+// Directive immediately after quote once bypassed the gate, admitting an unjustified cast.
 it('catches a trailing casting suppression that abuts a string literal', () => {
   const directory = mkdtempSync(path.join(root, 'config', 'casting-lint-test-'))
   const file = path.join(directory, 'fixture.test.ts')

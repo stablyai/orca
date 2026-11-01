@@ -2,8 +2,11 @@ import {
   AGENT_SESSION_REWIND_REASONS,
   type AgentSessionRewindParams,
   type AgentSessionRewindReason
-} from '../../../shared/agent-session-rewind'
-import { refuse, type AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import {
+  refuse,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export function rewindRefusal(reason: AgentSessionRewindReason): {
@@ -30,8 +33,7 @@ export function rewindRefusal(reason: AgentSessionRewindReason): {
   }
 }
 
-/** A rewind to a row a /clear left behind, or against an epoch since moved, is refused before any
- *  agent starts for it; null when the journal has no clear to check against. */
+/** Refuse pre-/clear targets or moved epochs before starting an agent. */
 export function rewindRefusalBehindClear(
   journal: Pick<AgentSessionJournal, 'context' | 'cursor' | 'snapshot'> | undefined,
   target: Pick<AgentSessionRewindParams, 'itemId' | 'expectedEpoch'>

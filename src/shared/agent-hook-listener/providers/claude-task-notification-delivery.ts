@@ -11,8 +11,7 @@ import { readClaudeTaskNotification } from '../../claude-task-notification-text'
 import type { HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
 
-/** Fold one MAIN-agent event into the pane's record of launched background tasks. A sub-agent's
- *  own launches are excluded by the caller: their notifications wake that sub-agent, not the pane. */
+/** Track main-agent launches only: child-launched task notifications wake that child, not this pane. */
 export function trackClaudeTaskNotificationDelivery(
   state: HookListenerState,
   paneKey: string,
@@ -24,7 +23,7 @@ export function trackClaudeTaskNotificationDelivery(
   if (eventName === 'PostToolUse') {
     const toolName = readString(hookPayload, 'tool_name')
     const response = hookPayload['tool_response']
-    const launch = readClaudeBackgroundTaskLaunch(toolName, response)
+    const launch = readClaudeBackgroundTaskLaunch(toolName, response, hookPayload['tool_input'])
     if (launch) {
       const launched = tasks ?? new Map()
       state.claudeLaunchedBackgroundTasksByPaneKey.set(paneKey, launched)
@@ -58,8 +57,22 @@ export function trackClaudeTaskNotificationDelivery(
       settleClaudeTaskNotification(tasks, notification.taskId)
     }
     return knownTask || continuesWakeupTurn
-  } else if (tasks && (eventName === 'Stop' || eventName === 'StopFailure') && inventory.present) {
-    oweClaudeShellTaskNotifications(tasks, new Set(inventory.runningNonAgentTaskIds), Date.now())
+  } else if ((eventName === 'Stop' || eventName === 'StopFailure') && inventory.present) {
+    if (inventory.runningAgentWaitIds.length > 0) {
+      tasks ??= new Map()
+      state.claudeLaunchedBackgroundTasksByPaneKey.set(paneKey, tasks)
+      for (const id of inventory.runningAgentWaitIds) {
+        recordClaudeBackgroundTaskLaunch(tasks, {
+          id,
+          kind: 'shell',
+          awaitsAgents: true,
+          listedOnly: true
+        })
+      }
+    }
+    if (tasks) {
+      oweClaudeShellTaskNotifications(tasks, new Set(inventory.runningNonAgentTaskIds), Date.now())
+    }
   }
   return false
 }

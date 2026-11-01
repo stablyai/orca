@@ -3,13 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
+import { agentBrowserCommandOf } from '../browser/agent-browser-bridge-test-harness'
 import { ExternalChromiumBrowserProcess } from './external-chromium-browser-process'
 import {
   installedElectronCandidates,
   resolveInstalledElectronExecutable,
   resolveOrcadBrowserProvider
 } from './orcad-browser-provider'
-import { orcadAgentBrowserNativeName } from './orcad-agent-browser-binary'
+import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
 import {
   runtimeBrowserUnavailableCause,
   setRuntimeBrowserUnavailableCause
@@ -31,14 +32,6 @@ let root: string
 let screenshotPath: string
 let browserState: BrowserState
 
-function commandFromArgs(args: readonly string[]): string[] {
-  let index = 0
-  while (['--session', '--profile', '--args'].includes(args[index] ?? '')) {
-    index += 2
-  }
-  return args.slice(index, -1)
-}
-
 function success(data: unknown) {
   return Promise.resolve({
     code: 0,
@@ -51,7 +44,7 @@ function success(data: unknown) {
 
 function installAgentBrowserMock(): void {
   runProcessMock.mockImplementation(async (spec) => {
-    const command = commandFromArgs(spec.args ?? [])
+    const command = agentBrowserCommandOf(spec.args ?? [], spec.input)
     if (command[0] === 'open') {
       const active = browserState.tabs.find((tab) => tab.tabId === browserState.activeTabId)!
       active.url = command[1]
@@ -75,6 +68,9 @@ function installAgentBrowserMock(): void {
     }
     if (command[0] === 'screenshot') {
       return success({ path: screenshotPath })
+    }
+    if (command.join(' ') === 'snapshot -i --delta') {
+      return success({ snapshot: { kind: 'unchanged', revision: 2, baseRevision: 1 } })
     }
     if (command[0] === 'close') {
       return success({ closed: true })
@@ -110,11 +106,10 @@ describe('ExternalChromiumBrowserProcess', () => {
     )
     await processHandle.start()
     const commands = processHandle.createCommands({
+      getRuntimeId: () => 'fixture-runtime',
       getAgentBrowserBridge: () => null,
-      resolveWorktreeSelector: async (selector) => ({ id: selector }),
+      resolveWorkspaceSelector: async (selector) => ({ id: selector }),
       resolveBrowserWorkspace: async (selector) => ({ id: selector }),
-      // Unused by the sidecar command paths under test; the daemon's real host is
-      // OrcaRuntimeService, which owns the client-hosted registries.
       resolveBrowserNetworkExecutionHost: () => {
         throw new Error('No browser network execution host')
       },
@@ -155,6 +150,18 @@ describe('ExternalChromiumBrowserProcess', () => {
     await expect(
       commands.browserScreenshot({ format: 'png', worktree: 'worktree-1', page: 'page-1' })
     ).resolves.toEqual({ data: Buffer.from('fixture-image').toString('base64'), format: 'png' })
+    await expect(
+      commands.browserSnapshot({
+        interactive: true,
+        delta: true,
+        worktree: 'worktree-1',
+        page: 'page-1'
+      })
+    ).resolves.toMatchObject({
+      browserPageId: 'page-1',
+      snapshot: { kind: 'unchanged', revision: 2, baseRevision: 1 },
+      url: 'https://fixture.test/next'
+    })
     await expect(
       commands.browserExec({
         page: 'page-1',

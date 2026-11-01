@@ -7,7 +7,7 @@ import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-s
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import { releaseRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { SHIFT_ENTER_RECONFIRM_IDLE_MS } from './foreground-output-scan'
 import type { PanePtyBinding } from './pane-pty-binding'
 
@@ -62,6 +62,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
   }
 
   return {
+    getOwnerContext: () => session.ownerContext,
     syncProcessTracking() {
       session.agentCompletionCoordinator.startProcessTracking()
       // Why: the hidden-delivery gate must follow every pane visibility flip.
@@ -72,6 +73,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     },
     // Why: visible-resume size readback repairs dropped hidden resizes without refitting against xterm's transient hidden DOM fallback.
     noteVisibilityResume() {
+      session.foregroundGridDriftProbeSettled = false
       session.armVisibleRemoteViewportClaim()
       session.claimPendingVisibleRemoteViewport()
       session.ptySizeReassertion.request({ fit: false })
@@ -83,6 +85,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.sampleVisiblePaneForegroundAgent()
     },
     reassertPtySizeAfterWindowWake() {
+      session.foregroundGridDriftProbeSettled = false
       session.armVisibleRemoteViewportClaim()
       session.claimPendingVisibleRemoteViewport()
       session.ptySizeReassertion.request({ fit: false })
@@ -100,8 +103,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       if (consumedClaimKey) {
         return consumedClaimKey
       }
-      // Why: wake arrived mid-hibernation-kill before onExit armed the wake target (transport still bound to the dying PTY).
-      // Only the exact PTY marked for suppressed shutdown may latch — never a stale/manual record beside an ordinary live PTY.
+      // Latch mid-kill mobile wakes only for the exact suppressed PTY, never unrelated stale/manual records.
       const state = useAppStore.getState()
       const recordEntry = session.getSleepingRecordForPane(state)
       const currentPtyId = session.transport.getPtyId()
@@ -148,6 +150,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      session.discardAgentPreReadyDraft?.()
       session.cleanupKittyFileReader()
       session.disposeSpawnDeferral()
       session.startupTiming?.finish('disposed')
@@ -158,14 +161,12 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
           .then(() => window.api.pty.kill(unsentReplacedPtyId))
           .catch((err: unknown) => console.warn('[terminal] failed to stop a replaced PTY:', err))
       }
-      // A successor can claim the numeric pane slot before this retired
-      // binding's disposal callback runs; do not clear its pane-scoped error.
+      // Successors may reuse numeric pane slots before disposal; leave their errors untouched.
       const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
       if (!currentPaneTransport || currentPaneTransport === session.transport) {
         session.deps.onPtyErrorClearedRef?.current?.(session.pane.id)
       }
-      // Why: a detached client stops observing the pane's bytes, so it must cede
-      // agent-status authority back to the host on the next mirrored snapshot.
+      // Detached observers cede byte-derived agent-status authority to the host’s next mirror snapshot.
       session.releaseRendererOwnedAgentStatusPane?.()
       // Why: a stalled xterm replay may never reach its finally; release live-frame credit when this renderer no longer owns the stream.
       const queue = session.deferredReattachLiveData
@@ -195,6 +196,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         cancelAnimationFrame(session.pendingForegroundGridDriftCheckRaf)
         session.pendingForegroundGridDriftCheckRaf = null
       }
+      session.clearForegroundGridDriftTrailingProbe()
       // Why: a pane unmount must never leave its PTY delivery gated — the parked watcher or remounted pane re-decides.
       session.releaseHiddenRendererPtyDelivery()
       if (session.terminalKeyTargetSupportsEvents) {
@@ -206,8 +208,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.pendingTerminalInputWrite = null
       session.interruptInference.dispose()
       session.clearTitleOnlyInterruptTimer()
-      // Why release, not cancel: the pending settle belongs to the turn, not to
-      // this pane — a park mid-settle hands it to the parked watcher instead.
+      // Release without cancelling the turn’s settle deadline so the parked watcher inherits it.
       session.releaseCommandCodeDoneSettleExecutor()
       if (session.shiftEnterReconfirmTimer !== null) {
         clearTimeout(session.shiftEnterReconfirmTimer)

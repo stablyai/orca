@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { withClaudeProfileTerminalEnv } from '../claude-accounts/claude-profile-installed-router'
 import { getSelectedClaudeAccountIdForTarget } from '../claude-accounts/runtime-selection'
 import { getSelectedCodexAccountIdForTarget } from '../codex-accounts/runtime-selection'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { installWslOrcadAccountEnvDependencies } from '../wsl/wsl-orcad-account-env'
 import {
   WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL,
@@ -37,7 +37,6 @@ function broadcastAccountNotApplied(distro: string): void {
   }
 }
 
-/** The desktop's account services behind the WSL orcad accounts shim. */
 export function installWslOrcadAccountShim(store: Pick<Store, 'getSettings'>): void {
   installWslOrcadAccountEnvDependencies({
     prepareClaudeLaunch: (target) => {
@@ -53,8 +52,7 @@ export function installWslOrcadAccountShim(store: Pick<Store, 'getSettings'>): v
       if (!runtimeHome || !getSelectedCodexAccountIdForTarget(store.getSettings(), target)) {
         return null
       }
-      // Why not prepareCodexRuntimeHomeForLaunch: its hook install targets this desktop's relay,
-      // while agent status on a WSL host belongs to that host's orcad.
+      // Do not install desktop relay hooks: WSL agent status belongs to that host's orcad.
       return runtimeHome.prepareForCodexLaunchAsync(target)
     },
     managedAccountSelected: (target) => {

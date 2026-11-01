@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import {
   observeWslOrcadHostResponse,
+  onWslOrcadHostAutomationsChanged,
   registerWslOrcadHostEnvironment,
   unregisterWslOrcadHostEnvironment,
   wslOrcadHostSupports
@@ -62,5 +63,27 @@ describe('wslOrcadHostSupports', () => {
     await expect(wslOrcadHostSupports('ssh-1', CAPABILITY, async () => status([]))).resolves.toBe(
       'unknown'
     )
+  })
+})
+
+describe('onWslOrcadHostAutomationsChanged (E9)', () => {
+  afterEach(() => unregisterWslOrcadHostEnvironment('env-1', 'Ubuntu'))
+
+  it('tells the wake schedule when this desktop changed a WSL host’s automations', () => {
+    registerWslOrcadHostEnvironment('env-1', 'Ubuntu')
+    const listener = vi.fn()
+    const stop = onWslOrcadHostAutomationsChanged(listener)
+    const ok = (id: string): RuntimeRpcResponse<unknown> => ({
+      id,
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'r' }
+    })
+    observeWslOrcadHostResponse('env-1', 'automation.delete', ok('automation.delete'))
+    observeWslOrcadHostResponse('env-1', 'automation.update', ok('automation.update'))
+    observeWslOrcadHostResponse('env-1', 'automation.list', ok('automation.list'))
+    observeWslOrcadHostResponse('ssh-box', 'automation.create', ok('automation.create'))
+    expect(listener.mock.calls).toEqual([['env-1'], ['env-1']])
+    stop()
   })
 })

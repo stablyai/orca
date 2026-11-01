@@ -5,10 +5,8 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore, makeTabGroup, makeUnifiedTab, makeWorktree } from './store-test-helpers'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -27,8 +25,6 @@ describe('TabsSlice', () => {
   beforeEach(() => {
     store = createTestStore()
   })
-
-  // ─── hydrateTabsSession ───────────────────────────────────────────
 
   describe('hydrateTabsSession', () => {
     it('hydrates floating workspace unified tabs without a repo worktree', () => {

@@ -14,16 +14,21 @@ import type {
 } from '../../runtime-terminal-state-records'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-agent-status-projection'
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
+import { createTerminalInputReservation } from '../../terminal-input-admission'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import { hasExplicitIdleTitle } from '../../tui-idle-evidence'
-import { readTuiIdleHookTurn, type TuiIdleHookTurn } from '../../tui-idle-hook-lane'
+import {
+  readTuiIdleHookTurn,
+  retainedTailIncludes,
+  type TuiIdleHookTurn
+} from '../../tui-idle-hook-lane'
+import { selectFreshExplicitAgentStatusRow } from '../../runtime-hook-agent-row-selection'
+import { isClaudeDialogHoldingPane } from '../../claude-open-dialog-hold'
 
 import type { OrcaRuntimeWithStopExactTerminalsForWorktree } from '../stop/worktree-terminal-stop-targets'
 
@@ -71,9 +76,10 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
   /** Undefined when the pane changed or exited during a screen read; the caller then has no answer. */
   protected readTerminalInteractiveWaitEvidence(
     handle: string,
-    ptyId: string
+    ptyId: string,
+    paneAgent: TerminalAgent | null = this.getPaneAgentForTuiIdle(ptyId)
   ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined> {
-    if (this.getPaneAgentForTuiIdle(ptyId) !== 'claude' || !this.headlessTerminals.has(ptyId)) {
+    if (paneAgent !== 'claude' || !this.headlessTerminals.has(ptyId)) {
       return this.buildTerminalInteractiveWaitEvidence(handle, ptyId, 'not-read')
     }
     return this.readCurrentTerminalWaitScreen(ptyId).then((screen) =>
@@ -159,11 +165,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       : null
   }
 
-  /**
-   * The title snapshot and prompt lifecycle the blocked-dialog check compares, both as display
-   * shows them, so the check reaches main's verdict: main compared the pair a stale-working clear
-   * left, and comparing a renderer's echoed clear with the native lifecycle hid a later dialog.
-   */
+  /** Compare display-projected title and lifecycle together; mixing an echoed stale-working clear with native lifecycle can hide a later dialog. */
   protected getTerminalWaitPermissionInputs(
     handle: string,
     ptyId: string,
@@ -184,21 +186,11 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
   /** The pane's main-agent turn from the hook server's store, for tui-idle's hook lane. */
   protected readTuiIdleHookTurnForPty(ptyId: string, agent: TuiAgent): TuiIdleHookTurn | null {
     const pty = this.ptysById.get(ptyId)
-    if (!pty) {
+    const join = this.readHookRowJoinForPty(ptyId)
+    if (!pty || !join) {
       return null
     }
-    const handles = this.getExistingTerminalHandlesForPtyId(ptyId)
-    const paneKeys = this.collectPaneKeysForPty(ptyId)
-    if (pty.paneKey) {
-      paneKeys.add(pty.paneKey)
-    }
-    const readPane = this.getAgentStatusSnapshotForPaneFn
-    const hookRows = readPane
-      ? [...new Set([...paneKeys].flatMap((key) => readPane(key)))]
-      : this.getAgentStatusSnapshotFn?.()
-    if (!hookRows) {
-      return null
-    }
+    const { handles, paneKeys, hookRows } = join
     return readTuiIdleHookTurn({
       agent,
       handles,
@@ -211,9 +203,42 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       hasExplicitIdleTitle: hasExplicitIdleTitle(pty),
       respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(ptyId),
       lastInputAt: this.terminalRunFacts.readLastInputAt(ptyId),
+      tailIncludes: (text) => retainedTailIncludes(pty.tailBuffer, pty.tailPartialLine, text),
       resolveBlockedText: (state, row) =>
         this.resolveTuiIdleHookBlockedText(ptyId, handles, state, row)
     })
+  }
+
+  protected isPtyAwaitingUserInput(ptyId: string): boolean {
+    const join = this.readHookRowJoinForPty(ptyId)
+    return isClaudeDialogHoldingPane({
+      row: join ? selectFreshExplicitAgentStatusRow(join) : null,
+      respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(ptyId),
+      readScreenLines: () => this.readLiveTerminalScreenLines(ptyId)
+    })
+  }
+
+  private readHookRowJoinForPty(ptyId: string): {
+    handles: string[]
+    paneKeys: Set<string>
+    hookRows: readonly AgentStatusIpcPayload[]
+  } | null {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty) {
+      return null
+    }
+    const paneKeys = this.collectPaneKeysForPty(ptyId)
+    const ptyPaneKey = this.paneOfPty(pty).paneKey
+    if (ptyPaneKey) {
+      paneKeys.add(ptyPaneKey)
+    }
+    const readPane = this.getAgentStatusSnapshotForPaneFn
+    const hookRows = readPane
+      ? [...new Set([...paneKeys].flatMap((key) => readPane(key)))]
+      : this.getAgentStatusSnapshotFn?.()
+    return hookRows
+      ? { handles: this.getExistingTerminalHandlesForPtyId(ptyId), paneKeys, hookRows }
+      : null
   }
 
   private resolveTuiIdleHookBlockedText(
@@ -252,7 +277,10 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     payload: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
-    return this.terminalWriter.writeAction(ptyId, action, payload, options)
+    return this.terminalWriter.writeAction(ptyId, action, payload, {
+      ...options,
+      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
+    })
   }
 
   protected writeTerminalInputChunks(
@@ -260,28 +288,14 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     text: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
-    return this.terminalWriter.writeChunks(ptyId, text, options)
+    return this.terminalWriter.writeChunks(ptyId, text, {
+      ...options,
+      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
+    })
   }
 
-  /** Platform of the host whose pty transport ingests our writes -- deliberately NOT the OS
-   *  the command runs under. A WSL pane is spawned as `wsl.exe` through the Windows ConPTY
-   *  (see local-pty-provider), so it pays the ConPTY ingest cost even though its shell is
-   *  Linux; an SSH pane is spawned by node-pty on the remote host, so the client's
-   *  process.platform says nothing about it. */
   protected getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {
-    const pty = this.ptysById.get(ptyId)
-    const connectionId = pty?.connectionId
-    if (!connectionId) {
-      return process.platform
-    }
-    const remotePlatform = getRegisteredSshState(connectionId)?.remotePlatform
-    if (remotePlatform) {
-      return remotePlatform
-    }
-    // Why: remotePlatform only arrives with the relay handshake; until then the worktree path
-    // flavor is the same signal getAgentLaunchPlatformForRepo already trusts for a remote repo.
-    const worktreePath = pty ? splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath : null
-    return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'linux'
+    return resolvePtyWriteHostPlatform(this.ptysById.get(ptyId))
   }
 
   protected getPtyAgent(ptyId: string): TerminalAgent | null {
@@ -289,14 +303,20 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     return pty?.launchAgent ?? pty?.foregroundAgent ?? null
   }
 
+  protected isAgentPromptPermissionBlocked(
+    baseline: AgentPromptActivity,
+    current: AgentPromptActivity
+  ): boolean {
+    return (
+      current.status === 'permission' || current.permissionSequence > baseline.permissionSequence
+    )
+  }
+
   protected assertAgentPromptPermissionSafe(
     baseline: AgentPromptActivity,
     current: AgentPromptActivity
   ): void {
-    if (
-      current.status === 'permission' ||
-      current.permissionSequence > baseline.permissionSequence
-    ) {
+    if (this.isAgentPromptPermissionBlocked(baseline, current)) {
       throw new Error('agent_prompt_blocked')
     }
   }

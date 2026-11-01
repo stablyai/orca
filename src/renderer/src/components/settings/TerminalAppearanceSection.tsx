@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TerminalThemeSlot } from '../../../../shared/terminal-color-overrides'
 import {
   matchesSettingsSearch,
   normalizeSettingsSearchQuery,
@@ -49,10 +50,8 @@ type TerminalAppearanceSectionProps = {
   forceVisiblePrimary?: boolean
 }
 
-type TerminalThemeTarget = 'dark' | 'light'
-
 function scoreThemeTargetIntent(searchQuery: string, entries: SettingsSearchEntry[]): number {
-  // Why: descriptions mention dark/light incidentally; target intent should come from labels and aliases.
+  // Infer dark/light target from labels/aliases, not incidental description mentions.
   return scoreSettingsSearch(
     searchQuery,
     entries.map(({ title, keywords }) => ({ title, keywords }))
@@ -62,7 +61,7 @@ function scoreThemeTargetIntent(searchQuery: string, entries: SettingsSearchEntr
 function getPreferredThemeTarget(
   darkThemeSearchScore: number,
   lightThemeSearchScore: number
-): TerminalThemeTarget | undefined {
+): TerminalThemeSlot | undefined {
   if (darkThemeSearchScore === lightThemeSearchScore) {
     return undefined
   }
@@ -100,8 +99,7 @@ export function TerminalAppearanceSection({
   const lightThemeTargetScore = scoreThemeTargetIntent(searchQuery, lightThemeSearchEntries)
   const preferredThemeTarget = getPreferredThemeTarget(darkThemeTargetScore, lightThemeTargetScore)
 
-  // Why: low-frequency knobs are force-opened during search; render each group
-  // only when its own search matches so an active query never leaves a dangling header.
+  // Filter each advanced group independently so search cannot leave empty headers.
   const typographyMatches = matchesSettingsSearch(
     searchQuery,
     getTerminalAdvancedTypographySearchEntries()
@@ -128,53 +126,62 @@ export function TerminalAppearanceSection({
     showDesktopThemeImports && (!isSearching || forceVisiblePrimary || ghosttyImportMatches)
   const showTypographyAdvancedDisclosure = !isSearching || typographyMatches
 
-  const advancedGroups = [
-    cursorMatches
-      ? {
-          key: 'cursor',
-          node: (
-            <TerminalCursorAppearanceSection settings={settings} updateSettings={updateSettings} />
-          )
-        }
-      : null,
-    paneMatches
-      ? {
-          key: 'pane',
-          node: (
-            <TerminalPaneAppearanceSection settings={settings} updateSettings={updateSettings} />
-          )
-        }
-      : null,
-    windowMatches
-      ? {
-          key: 'window',
-          node: <TerminalWindowSection settings={settings} updateSettings={updateSettings} />
-        }
-      : null
-  ].filter((group): group is { key: string; node: React.JSX.Element } => group !== null)
-  const showAdvancedDisclosure = !isSearching || advancedGroups.length > 0
-  const previewAdvancedContent = showAdvancedDisclosure ? (
-    <AppearanceAdvancedDisclosure
-      showTopBorder={false}
-      className="mt-0 pt-2"
-      contentClassName="ml-4 pt-4"
-    >
-      {advancedGroups.map((group, index) => (
-        <div
-          key={group.key}
-          className={index > 0 ? 'mt-2 border-t border-border/60 pt-4' : undefined}
-        >
-          {group.node}
-        </div>
-      ))}
-    </AppearanceAdvancedDisclosure>
-  ) : null
+  const advancedGroups = (colorOverrideSlot: TerminalThemeSlot) =>
+    [
+      cursorMatches
+        ? {
+            key: 'cursor',
+            node: (
+              <TerminalCursorAppearanceSection
+                settings={settings}
+                updateSettings={updateSettings}
+              />
+            )
+          }
+        : null,
+      paneMatches
+        ? {
+            key: 'pane',
+            node: (
+              <TerminalPaneAppearanceSection settings={settings} updateSettings={updateSettings} />
+            )
+          }
+        : null,
+      windowMatches
+        ? {
+            key: 'window',
+            node: (
+              <TerminalWindowSection
+                settings={settings}
+                updateSettings={updateSettings}
+                colorOverrideSlot={colorOverrideSlot}
+              />
+            )
+          }
+        : null
+    ].filter((group): group is { key: string; node: React.JSX.Element } => group !== null)
+  const showAdvancedDisclosure = !isSearching || cursorMatches || paneMatches || windowMatches
+  const renderPreviewAdvancedContent = (colorOverrideSlot: TerminalThemeSlot): ReactNode =>
+    showAdvancedDisclosure ? (
+      <AppearanceAdvancedDisclosure
+        showTopBorder={false}
+        className="mt-0 pt-2"
+        contentClassName="ml-4 pt-4"
+      >
+        {advancedGroups(colorOverrideSlot).map((group, index) => (
+          <div
+            key={group.key}
+            className={index > 0 ? 'mt-2 border-t border-border/60 pt-4' : undefined}
+          >
+            {group.node}
+          </div>
+        ))}
+      </AppearanceAdvancedDisclosure>
+    ) : null
 
   return (
     <div className="space-y-5">
-      {/* Primary: font + theme + previews. The expanded section column is far
-          narrower than the xl breakpoint, so the preview grids inside the
-          theme catalog already stack full-width below their controls. */}
+      {/* Preview grids stack full-width because this expanded column stays narrower than xl. */}
       {showPrimaryTypography ? (
         <section className="space-y-3 pt-2">
           <SettingsSubsectionHeader
@@ -263,7 +270,7 @@ export function TerminalAppearanceSection({
           warpThemes={warpThemes}
           showThemeImport={showDesktopThemeImports}
           preferredTarget={preferredThemeTarget}
-          advancedContent={previewAdvancedContent}
+          renderAdvancedContent={renderPreviewAdvancedContent}
         />
       ) : null}
 

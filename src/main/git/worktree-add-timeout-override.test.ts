@@ -1,4 +1,3 @@
-// resolveWorktreeAddTimeoutMs: ORCA_WORKTREE_ADD_TIMEOUT_MS parsing, clamping, and warnings.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
@@ -15,7 +14,14 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-import { resolveWorktreeAddTimeoutMs, WORKTREE_ADD_TIMEOUT_MS } from './worktree-operation-options'
+import { GitCommandTimeoutError } from '../../shared/git-command-timeout'
+import { addWorktree } from './worktree'
+import {
+  resolveWorktreeAddTimeoutMs,
+  WORKTREE_ADD_TIMEOUT_MAX_MS,
+  WORKTREE_ADD_TIMEOUT_MS,
+  worktreeAddTimeoutMessage
+} from './worktree-operation-options'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 
 registerWorktreeSuiteHooks()
@@ -49,8 +55,6 @@ describe('resolveWorktreeAddTimeoutMs', () => {
     )
   })
 
-  // Why: `=Infinity` is the natural way to say "stop killing my checkout"; collapsing it to the
-  // default would hand the operator back the exact failure they set the variable to escape.
   it('treats an infinite override as the maximum, not the default', () => {
     expect(resolveWorktreeAddTimeoutMs({ ORCA_WORKTREE_ADD_TIMEOUT_MS: 'Infinity' })).toBe(
       1_800_000
@@ -59,14 +63,11 @@ describe('resolveWorktreeAddTimeoutMs', () => {
     expect(resolveWorktreeAddTimeoutMs({ ORCA_WORKTREE_ADD_TIMEOUT_MS: '-Infinity' })).toBe(
       WORKTREE_ADD_TIMEOUT_MS
     )
-    // Why: `Infinity` is a number that got clamped, so reporting "is not a number" while naming the
-    // number it used would misdirect exactly the operator this override exists for.
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('"Infinity" is outside [180000, 1800000]ms; using 1800000ms')
     )
   })
 
-  // Why: trimming and fractional truncation alter the value but are not operator error.
   it('stays quiet when the value is unset, blank, or lands in range', () => {
     resolveWorktreeAddTimeoutMs({})
     resolveWorktreeAddTimeoutMs({ ORCA_WORKTREE_ADD_TIMEOUT_MS: '   ' })
@@ -76,18 +77,16 @@ describe('resolveWorktreeAddTimeoutMs', () => {
     expect(warnSpy).not.toHaveBeenCalled()
   })
 
-  // Why: the seconds/ms mixup is the whole reason the floor exists — it must not be silent.
+  // A seconds-versus-milliseconds mistake should warn when clamped.
   it('warns with the range when it clamps an out-of-range value', () => {
     resolveWorktreeAddTimeoutMs({ ORCA_WORKTREE_ADD_TIMEOUT_MS: '300' })
 
     expect(warnSpy).toHaveBeenCalledTimes(1)
-    // Why: pin the prefix and variable name too — a warning nobody can grep for is not a diagnostic.
     expect(warnSpy).toHaveBeenCalledWith(
       '[git/worktree] ORCA_WORKTREE_ADD_TIMEOUT_MS="300" is outside [180000, 1800000]ms; using 180000ms'
     )
   })
 
-  // Why: `600_000` copied out of worktree.ts is NaN, not out of range — a range complaint would misdirect.
   it('warns that an unparseable value is not a number rather than out of range', () => {
     resolveWorktreeAddTimeoutMs({ ORCA_WORKTREE_ADD_TIMEOUT_MS: '600_000' })
 
@@ -97,7 +96,6 @@ describe('resolveWorktreeAddTimeoutMs', () => {
     )
   })
 
-  // Why: `=300` means seconds to most operators; clamping it up keeps every create working instead of failing in 300ms.
   it('never lowers the timeout below the stall-guard default', () => {
     expect(resolveWorktreeAddTimeoutMs({ ORCA_WORKTREE_ADD_TIMEOUT_MS: '300' })).toBe(
       WORKTREE_ADD_TIMEOUT_MS
@@ -107,6 +105,29 @@ describe('resolveWorktreeAddTimeoutMs', () => {
     )
     expect(resolveWorktreeAddTimeoutMs({ ORCA_WORKTREE_ADD_TIMEOUT_MS: '-1' })).toBe(
       WORKTREE_ADD_TIMEOUT_MS
+    )
+  })
+})
+
+describe('addWorktree timeout', () => {
+  it('names the limit and the override when git worktree add times out', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('worktree')) {
+        throw new GitCommandTimeoutError(WORKTREE_ADD_TIMEOUT_MS)
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const error = await addWorktree('/repo', '/repo-feature', 'feature').catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(GitCommandTimeoutError)
+    expect(String(error)).toContain('180 seconds')
+    expect(String(error)).toContain('ORCA_WORKTREE_ADD_TIMEOUT_MS')
+  })
+
+  it('drops the override advice once the limit is already at the maximum', () => {
+    expect(worktreeAddTimeoutMessage(WORKTREE_ADD_TIMEOUT_MAX_MS)).not.toContain(
+      'ORCA_WORKTREE_ADD_TIMEOUT_MS'
     )
   })
 })

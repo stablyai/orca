@@ -67,7 +67,7 @@ describe('browser external app launch', () => {
     vi.useFakeTimers()
     mocks.openExternal.mockClear()
     renderer = mockRenderer(10)
-    // Each request comes from its own page, so none shares a prompt with another.
+    // Give each request its own page to avoid prompt sharing.
     let page = 0
     resolveTarget = () => ({ browserPageId: `page-${++page}`, renderer })
   })
@@ -116,6 +116,8 @@ describe('browser external app launch', () => {
     'blob:https://example.com/id',
     'about:blank',
     'orca-preview://doc/index.html',
+    'chrome-extension://nngceckbapebfimnlniiiahkandclblb/popup/index.html',
+    'orca-extension-api://api/call',
     'shell:startup',
     'vbscript:msgbox(1)',
     'hcp://system/sysinfo',
@@ -127,11 +129,6 @@ describe('browser external app launch', () => {
     expect(renderer.send).not.toHaveBeenCalled()
   })
 
-  it('names no site when the asking frame is unknown', () => {
-    ask(OKTA_URL, null)
-    expect(sentRequests(renderer)[0].details).toMatchObject({ origin: null })
-  })
-
   it('refuses a page with no window on this computer', () => {
     resolveTarget = () => null
     expect(ask()).toBe(false)
@@ -140,7 +137,6 @@ describe('browser external app launch', () => {
   it('keeps blocking the link while its page already has a prompt open', () => {
     resolveTarget = () => ({ browserPageId: 'page-1', renderer })
     ask()
-    // A page looping a deep link gets no second dialog, and its link still never loads.
     expect(ask()).toBe(true)
     expect(sentRequests(renderer)).toHaveLength(1)
   })

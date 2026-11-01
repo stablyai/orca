@@ -21,7 +21,7 @@ function codeReads(): unknown[] {
   return vi
     .mocked(readFileSync)
     .mock.calls.map(([path]) => path)
-    .filter((path) => typeof path === 'string' && path.endsWith('.js'))
+    .filter((path) => typeof path === 'string' && (path.endsWith('.js') || path.endsWith('.node')))
 }
 
 const originalPlatform = process.platform

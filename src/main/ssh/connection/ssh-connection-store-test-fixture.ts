@@ -82,7 +82,6 @@ export function createMockStore() {
     releaseRemovedSshTargetTombstone: vi.fn(dropTombstone),
     reassignSshTargetId: vi.fn((oldTargetId: string, newTargetId: string) => {
       reassignments.push({ oldTargetId, newTargetId })
-      // Pretend one repo referenced the old id.
       return ['repo-1']
     })
   }

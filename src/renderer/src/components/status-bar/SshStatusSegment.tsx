@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { Loader2, MonitorSmartphone, Server, ServerOff } from 'lucide-react'
+import { MonitorSmartphone, Server } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -24,19 +24,13 @@ import {
   runtimePairingRepairRoute
 } from '../../../../shared/runtime-environments'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
-import {
-  connectedHostCountLabel,
-  connectingHostsLabel,
-  moreSshHostsLabel
-} from './ssh-status-segment-copy'
+import { connectedHostCountLabel, moreSshHostsLabel } from './ssh-status-segment-copy'
 import { SshHostFindPopover } from './SshHostFindPopover'
 import { splitSshStatusMenuRows } from './ssh-status-menu-rows'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import { syncSshConfigTargetsPassively } from '../../lib/ssh-config-passive-sync'
 import { connectRuntimeHostAndReloadProjects } from './runtime-environment-explicit-connect'
 import {
-  overallDotColor,
-  overallStatus,
   runtimeHostBlockedCopy,
   runtimeHostConnectionDetail,
   runtimeHostStatusForOverall,
@@ -93,8 +87,7 @@ export function SshStatusSegment({
     ).map((host) => [host.id, host])
   )
   const targets = Array.from(sshTargetLabels.entries())
-    // Why: runtime-owned (per-workspace-env) SSH targets are hidden — never list them
-    // as a user-facing SSH host in the status bar.
+    // Hide runtime-owned per-workspace SSH targets from the user-managed host list.
     .filter(([id]) => !isOwnedSshTargetId(id) && visibleHosts.has(toSshExecutionHostId(id)))
     .map(([id, label]) => {
       const state = sshConnectionStates.get(id)
@@ -133,8 +126,7 @@ export function SshStatusSegment({
     ...host,
     state: runtimeHostConnectionStateForEntry(runtimeStatusByEnvironmentId.get(host.id))
   }))
-  // Available remote servers are online even when they are not the active runtime.
-  // Keep host health separate from the advanced active-server selection.
+  // Host health is independent of active runtime selection; available remote servers remain online.
   const connectedRuntimeHosts = runtimeHostRows.filter((host) =>
     isConnectedRuntimeHostState(host.state)
   )
@@ -182,9 +174,7 @@ export function SshStatusSegment({
     ...targets.map((t) => sshStatusForOverall(t.status)),
     ...runtimeHostRows.map((host) => runtimeHostStatusForOverall(host.state, host.blockedReason))
   ]
-  const overall = overallStatus(statuses)
   const connectedHostCount = statuses.filter((status) => status === 'connected').length
-  const anyConnecting = overall === 'connecting'
   const openRepair = (host: { id: string; label: string }): void => {
     // Why close first: the dialog must not open underneath the menu's focus trap.
     setMenuOpen(false)
@@ -206,53 +196,32 @@ export function SshStatusSegment({
         <button
           ref={triggerRef}
           type="button"
-          className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
+          className="inline-flex shrink-0 items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 text-muted-foreground hover:bg-accent/70"
           aria-label={translate(
             'auto.components.status.bar.SshStatusSegment.fdc57e9970',
             'Remote host connection status'
           )}
         >
           {iconOnly ? (
-            <span className="inline-flex items-center gap-1">
-              <span
-                className={`inline-block size-2 rounded-full ${overallDotColor(overall, connectedHostCount)}`}
-              />
-              {anyConnecting ? (
-                <Loader2 className="size-3 animate-spin text-muted-foreground" />
-              ) : (
-                <MonitorSmartphone className="size-3 text-muted-foreground" />
-              )}
-            </span>
+            <MonitorSmartphone className="size-3" />
           ) : (
-            <span className="inline-flex items-center gap-1.5">
-              {anyConnecting ? (
-                <Loader2 className="size-3 animate-spin text-yellow-500" />
-              ) : overall === 'connected' ? (
-                <Server className="size-3 text-emerald-500" />
-              ) : overall === 'attention' ? (
-                connectedHostCount > 0 ? (
-                  <Server className="size-3 text-destructive" />
-                ) : (
-                  <ServerOff className="size-3 text-destructive" />
-                )
-              ) : overall === 'partial' ? (
-                <Server className="size-3 text-muted-foreground" />
-              ) : (
-                <ServerOff className="size-3 text-muted-foreground" />
-              )}
+            <>
+              <Server className="size-3" />
               {!compact && (
-                <span className="text-[11px]">
-                  <span className="text-muted-foreground">
-                    {anyConnecting
-                      ? connectingHostsLabel()
-                      : connectedHostCountLabel(connectedHostCount)}
+                <span className="inline-grid text-2xs tabular-nums">
+                  {/* Reserve both localized forms so count changes don't resize the bar. */}
+                  <span aria-hidden className="invisible col-start-1 row-start-1">
+                    {connectedHostCountLabel(1)}
+                  </span>
+                  <span aria-hidden className="invisible col-start-1 row-start-1">
+                    {connectedHostCountLabel(Math.max(99, statuses.length))}
+                  </span>
+                  <span className="col-start-1 row-start-1">
+                    {connectedHostCountLabel(connectedHostCount)}
                   </span>
                 </span>
               )}
-              <span
-                className={`inline-block size-1.5 rounded-full ${overallDotColor(overall, connectedHostCount)}`}
-              />
-            </span>
+            </>
           )}
         </button>
       </DropdownMenuTrigger>

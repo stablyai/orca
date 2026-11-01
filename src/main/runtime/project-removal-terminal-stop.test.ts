@@ -1,7 +1,4 @@
-/**
- * The host owns a project's shells, so removing the project stops them itself: a client only
- * stops the workspaces it has loaded, and an unhydrated or hidden one would keep running.
- */
+/** Host-owned project removal stops even hidden/unhydrated workspace shells that no client can sweep. */
 import { describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../shared/repo-types'

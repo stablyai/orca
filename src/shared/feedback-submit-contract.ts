@@ -1,7 +1,4 @@
-/**
- * The `feedback:submit` IPC contract. Shared so the preload bridge's declared
- * shape cannot drift from what the main-process handler actually returns.
- */
+/** Share feedback:submit’s result between preload and main to prevent IPC shape drift. */
 
 export type FeedbackImageAttachment = {
   contentType: string

@@ -4,15 +4,13 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { resolveHostCodexManagedHomeVerdict } from './host-codex-managed-home-ownership'
 
-// Where the desktop creates a managed Codex account's home inside a guest (a WSL distro):
-// `$HOME/<root>/<accountId>/home`, owned by an `.orca-managed-home` marker holding the id.
+// Guest homes use $HOME/<root>/<accountId>/home with an account-ID ownership marker.
 export const GUEST_CODEX_ACCOUNTS_ROOT_SEGMENTS = ['.local', 'share', 'orca', 'codex-accounts']
 
 function guestCodexAccountsRoot(home: string): string {
   return join(home, ...GUEST_CODEX_ACCOUNTS_ROOT_SEGMENTS)
 }
 
-/** The canonical home when `candidate` is an Orca-owned account home on this host, else null. */
 export function resolveGuestCodexAccountHome(
   candidate: string | undefined,
   home: string = homedir()
@@ -23,7 +21,7 @@ export function resolveGuestCodexAccountHome(
   }
   const path = resolve(raw)
   const root = guestCodexAccountsRoot(home)
-  // Why lexical first: the path comes off the wire, and a stat of a stalled mount would block.
+  // Reject foreign wire paths lexically before a stat can block on a stalled mount.
   if (basename(path) !== 'home' || dirname(dirname(path)) !== resolve(root)) {
     return null
   }
@@ -36,7 +34,6 @@ export function resolveGuestCodexAccountHome(
   return verdict.kind === 'owned' ? verdict.homePath : null
 }
 
-/** Every Orca-owned account home on this host; none where the desktop never made one. */
 export function listGuestCodexAccountHomes(home: string = homedir()): string[] {
   const root = guestCodexAccountsRoot(home)
   let accountIds: string[]

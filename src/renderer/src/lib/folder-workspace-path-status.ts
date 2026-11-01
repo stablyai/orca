@@ -6,8 +6,7 @@ import type {
 import { blocksFolderWorkspaceActivation } from '../../../shared/folder-workspace-path-status'
 import { isHandledWireDiscriminant } from '../../../shared/handled-wire-discriminant'
 
-// Why: the status is cast, not decoded, off the runtime RPC wire, so a newer host can send a fifth
-// reason. The keys are the union itself, so a new member fails typecheck here and in both switches.
+// Guard unknown RPC reasons at runtime; union-keyed records make newly known reasons fail typecheck here and in both switches.
 const HANDLED_PATH_STATUS_REASONS: Record<FolderWorkspacePathStatusReason, true> = {
   missing: true,
   'not-directory': true,
@@ -26,8 +25,7 @@ export function getFolderWorkspacePathStatusTitle(
   if (!status || status.exists) {
     return null
   }
-  // Why: without this the switch matches nothing, returns undefined, and FolderPathStatusIndicator's
-  // `!title` check drops the whole marker — a broken folder workspace then renders as healthy.
+  // Unknown wire values must not drop the marker and make a broken folder appear healthy.
   if (!isHandledPathStatusReason(status.reason)) {
     return translate(
       'auto.lib.folderWorkspacePathStatus.title.unrecognized',

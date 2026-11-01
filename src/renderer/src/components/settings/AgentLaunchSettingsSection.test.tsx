@@ -29,13 +29,18 @@ vi.mock('./HostAgentLaunchSettings', async () => {
   }
 })
 vi.mock('./AgentLaunchSettingsCatalog', () => ({
+  AgentLaunchSettingsLoading: () => <button disabled>Permissions</button>,
   AgentLaunchSettingsCatalog: (props: unknown) => {
     state.local(props)
     return <p>Local launch settings</p>
   }
 }))
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 beforeEach(() => {
+  vi.stubGlobal('api', { platform: { get: () => ({ platform: 'darwin' }) } })
   state.runtimeEnvironments = [
     { id: 'ssh-host', name: 'SSH host', createdAt: 1, pairingRevision: 17 }
   ]
@@ -89,7 +94,7 @@ describe('launch settings host', () => {
   it('waits for the server list instead of displaying desktop defaults', () => {
     state.runtimeEnvironments = []
     render(section(SSH_HOST))
-    expect(screen.getByText('Loading agent settings…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Permissions' })).toHaveProperty('disabled', true)
     expect(state.local).not.toHaveBeenCalled()
     expect(state.remote).not.toHaveBeenCalled()
   })

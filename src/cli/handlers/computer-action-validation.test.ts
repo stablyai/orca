@@ -9,10 +9,7 @@ vi.mock('../runtime-client', async () => {
     openOrca = vi.fn()
   }
 
-  // Why: re-export the REAL error classes rather than redefining them. format.ts
-  // narrows with `instanceof` against ./runtime/types, so a look-alike class
-  // here would make every CLI error fall through to the generic `runtime_error`
-  // shape — mirroring the barrel keeps the mock faithful to production.
+  // Error formatting uses instanceof, so preserve the production error classes.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
   return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })
@@ -139,7 +136,8 @@ describe('orca computer action CLI validation', () => {
       session: 'manual',
       app: 'Finder',
       key: '+',
-      noScreenshot: true
+      noScreenshot: true,
+      treeDiff: true
     })
     expect(vi.mocked(console.error)).not.toHaveBeenCalled()
     expect(process.exitCode).toBeUndefined()
@@ -246,9 +244,9 @@ describe('orca computer action CLI validation', () => {
     )
 
     expect(callMock).not.toHaveBeenCalled()
-    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0]) as {
+    const output: {
       error: { code: string; message: string; data?: { nextSteps?: string[] } }
-    }
+    } = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
     expect(output.error.code).toBe('invalid_argument')
     expect(output.error.message).toContain('Invalid positive integer for --click-count')
     expect(output.error.data?.nextSteps).toEqual([
@@ -418,7 +416,8 @@ describe('orca computer action CLI validation', () => {
       app: 'Finder',
       elementIndex: 1,
       value: '',
-      noScreenshot: true
+      noScreenshot: true,
+      treeDiff: true
     })
     expect(vi.mocked(console.error)).not.toHaveBeenCalled()
     expect(process.exitCode).toBeUndefined()

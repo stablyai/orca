@@ -35,18 +35,14 @@ export type OwnProjectCatalog = {
   setups: readonly ProjectHostSetup[]
 }
 
-/**
- * The sidebar's project catalog: this host's own rows, then each paired server's, adopted and
- * folded host by host as the window's all-host fetch does, in the desktop's manual repo order.
- */
+/** Merge own then paired catalogs host by host like the window’s all-host fetch, respecting desktop manual repo order. */
 export function buildSidebarProjectCatalog(
   own: OwnProjectCatalog,
   servers: readonly PairedServerCatalog[],
   ui: Pick<PersistedUIState, 'manualRepoOrder' | 'projectOrderBy'> | undefined
 ): MobileProjectSectionCatalog {
   const local = { kind: 'local' } as const
-  // Folded host by host as the window's mergeFetchedReposForHost does: a server's copy of a
-  // grouped project joins the group the copies listed before it have.
+  // Fold each server into project groups established by earlier copies, matching mergeFetchedReposForHost.
   let merged: Repo[] = own.repos.map((repo) => adoptEndpointRepo(local, repo))
   for (const server of servers) {
     merged = [...merged, ...applyInheritedProjectGroups(merged, server.repos)]
@@ -68,7 +64,6 @@ export function buildSidebarProjectCatalog(
     resolveProjectHostSetupProjection(repos, rows.projects, rows.projectHostSetups),
     ui?.projectOrderBy ?? 'manual',
     [
-      // Stamped as the window's adoption stamps this host's groups.
       ...own.projectGroups.map((group) => ({
         ...group,
         executionHostId: group.connectionId

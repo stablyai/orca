@@ -248,7 +248,7 @@ describe('Linear teams', () => {
         { id: 'label-3', name: 'Backend', color: '#ff0000' }
       ])
       expect(connection.fetchNext).toHaveBeenCalledTimes(3)
-      expect(getClients).toHaveBeenCalledWith('workspace-1')
+      expect(getClients).toHaveBeenCalledWith('workspace-1', undefined)
       expect(entry.client.team).toHaveBeenCalledWith('team-1')
       expect(labels).toHaveBeenCalledWith({ first: 100 })
     }

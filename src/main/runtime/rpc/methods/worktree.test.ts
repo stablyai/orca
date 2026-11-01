@@ -20,8 +20,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
-// worktree.create routes through the runtime's clientMutationId idempotency
-// wrapper; these unit mocks run the create straight through (no dedupe).
+// Mocks bypass runtime clientMutationId deduplication.
 const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () => Promise<T>) =>
   run()
 
@@ -61,8 +60,7 @@ describe('worktree RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
-    // The mobile WebSocket path always uses dispatchStreaming, which threads the
-    // authenticated device scope as clientKind even for non-streaming methods.
+    // Mobile always uses dispatchStreaming, which supplies authenticated device scope even for non-streaming methods.
     const replies: string[] = []
     await dispatcher.dispatchStreaming(
       makeRequest('worktree.activate', { worktree: 'id:wt-1', notifyClients: false }),
@@ -137,6 +135,7 @@ describe('worktree RPC methods', () => {
       createdWithAgent: undefined,
       automationProvenance: undefined,
       allowLocalBaseFallback: true,
+      wslUserAct: true,
       creatorProvenance: { kind: 'host' },
       startup: undefined,
       startupDraft: undefined,
@@ -729,6 +728,14 @@ describe('worktree RPC methods', () => {
       headRefName: 'feature/pr-head',
       isCrossRepository: false
     })
+    // A paired client's create-from-PR wake reaches the host; anything else is dropped (E9).
+    for (const wakeWslDistro of [true, 'yes']) {
+      await dispatcher.dispatch(
+        makeRequest('worktree.resolvePrBase', { repo: 'id:repo-1', prNumber: 42, wakeWslDistro })
+      )
+    }
+    const wakes = vi.mocked(runtime.resolveManagedPrBase).mock.calls.map(([a]) => a.wakeWslDistro)
+    expect(wakes).toEqual([undefined, true, undefined])
   })
 
   it('passes explicit repo selectors to MR base resolution', async () => {

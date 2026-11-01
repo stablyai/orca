@@ -32,10 +32,6 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
 import {
   formatWorkspaceCreateError,
@@ -111,11 +107,8 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           quickAgent: agent,
           launchChoice: options?.launchChoice,
           autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
+          settings: settings ?? undefined,
           agentCmdOverrides: settings?.agentCmdOverrides,
-          agentArgs: agent
-            ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs)
-            : undefined,
-          agentEnv: agent ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv) : undefined,
           terminalWindowsShell: settings?.terminalWindowsShell,
           isRemote: folderTargetIsRemote,
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',

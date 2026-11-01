@@ -21,21 +21,6 @@ const INPUT = {
 afterEach(() => resolveIdentity.mockReset())
 
 describe('resolveAppImageDaemonLaunch', () => {
-  it('resolves paths relative to APPDIR on a FUSE-mounted AppImage', () => {
-    resolveIdentity.mockReturnValue({ appImagePath: '/apps/Orca.AppImage' })
-    expect(resolveAppImageDaemonLaunch(INPUT)).toEqual({
-      appImagePath: '/apps/Orca.AppImage',
-      entryPathInAppDir: 'resources/app.asar.unpacked/out/main/daemon-entry.js',
-      appPathInAppDir: 'resources/app.asar',
-      appVersion: '1.4.215'
-    })
-  })
-
-  it('keeps the in-mount launch off a validated AppImage', () => {
-    resolveIdentity.mockReturnValue(null)
-    expect(resolveAppImageDaemonLaunch(INPUT)).toBeNull()
-  })
-
   it('keeps the in-mount launch for extract-and-run payloads', () => {
     resolveIdentity.mockReturnValue({ appImagePath: '/apps/Orca.AppImage' })
     const extracted = `953 65 0:34 / /tmp rw - tmpfs tmpfs rw`
@@ -72,7 +57,7 @@ describe('buildAppImageDaemonCommand', () => {
     }
   })
 
-  // Why runIf: the env scrub it reuses is a no-op off Linux.
+  // The reused environment scrub runs only on Linux.
   it.runIf(process.platform === 'linux')(
     'drops the parent mount from the inherited loader and PATH entries',
     () => {

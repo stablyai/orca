@@ -25,8 +25,7 @@ import {
 } from './windows-process-tree-gyp-rebuild.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', import.meta.url))
-// The import walk sees `from './x.mjs'` only, so the createRequire'd CJS
-// siblings have to be named. Without them the temp project cannot even load.
+// Fixture import walk misses createRequire CJS edges; name siblings explicitly or temp project cannot load.
 const REQUIRED_CJS_SIBLINGS = [
   'node-pty-job-ownership.cjs',
   'windows-process-tree-creation-time.cjs'
@@ -273,8 +272,7 @@ describe('ensure-native-runtime', () => {
 
 function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-native-runtime-'))
-  // Walked, not listed: the script imports windows-process-tree-gyp-rebuild.mjs, and a fixture
-  // missing it fails every case with a module-resolution error instead of the defect under test.
+  // Copy walked windows-process-tree-gyp-rebuild dependency or every case fails before its intended check.
   copyScriptWithLocalModules(sourceScriptPath, join(projectDir, 'config', 'scripts'))
   const processPackage = join(projectDir, 'node_modules', '@orca', 'process-host')
   mkdirSync(processPackage, { recursive: true })
@@ -343,7 +341,8 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
     module: {
       listJobProcessIds() {},
       terminateJob() {},
-      assignCurrentProcessToJob() {}
+      assignCurrentProcessToJob() {},
+      assignCurrentProcessToStrictJob() {}
     }
   }
 }
@@ -353,7 +352,13 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
   if (process.platform === 'win32') {
     const buildDir = join(nodePtyDir, 'build', 'Release')
     writePatchedNodePtyBuildArtifacts(projectDir)
-    writeFileSync(join(buildDir, 'conpty.node'), Buffer.from('msys-2.0.dll', 'utf16le'))
+    writeFileSync(
+      join(buildDir, 'conpty.node'),
+      Buffer.concat([
+        Buffer.from('msys-2.0.dll', 'utf16le'),
+        Buffer.from('assignCurrentProcessToStrictJob')
+      ])
+    )
   }
 }
 
@@ -383,7 +388,8 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
     module: {
       listJobProcessIds: () => [],
       terminateJob: () => true,
-      assignCurrentProcessToJob: () => true
+      assignCurrentProcessToJob: () => true,
+      assignCurrentProcessToStrictJob: () => true
     }
   }
 }
@@ -417,7 +423,10 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   )
   const securityDir = join(projectDir, 'node_modules', '@orca', 'windows-security')
   mkdirSync(securityDir, { recursive: true })
-  writeFileSync(join(securityDir, 'index.js'), "exports.currentUserSid = () => 'S-1-5-18'\n")
+  writeFileSync(
+    join(securityDir, 'index.js'),
+    "exports.currentUserSid = () => 'S-1-5-18'; exports.hasNativeExport = () => true\n"
+  )
 }
 
 function writeNodePtyPatchFile(projectDir) {

@@ -29,11 +29,7 @@ vi.mock('./PRSection', () => ({
   PRSection: ({ children }: { children: unknown }) => children
 }))
 
-/**
- * A PR the resolver gives the refresh commands to, which is the only path that copies: the host
- * reports CONFLICTING, has no file list to show, and the local merge came back clean — the
- * disagreement the commands exist to resolve.
- */
+// Refresh-command path requires hosted CONFLICTING with no file list but clean local simulation; copying commands resolves that disagreement.
 const PR: Pick<PRInfo, 'mergeable' | 'conflictSummary'> = {
   mergeable: 'CONFLICTING',
   conflictSummary: {
@@ -95,8 +91,7 @@ describe('copying the mergeability refresh commands', () => {
   })
 
   it('says it failed instead of saying nothing at all', async () => {
-    // The seam rejects when the pasteboard refused, which inside the page is a route that was not
-    // granted the verb. Dropped, the tap is indistinguishable from one that copied nothing.
+    // Expose refused clipboard write; otherwise missing shell grant looks indistinguishable from successful copy.
     clipboard.writeText.mockRejectedValue(new Error('the clipboard did not accept this text'))
     const rendered = await render()
     await press(rendered)

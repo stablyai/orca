@@ -315,7 +315,6 @@ describe('orchestration mutation recovery', () => {
     expect((result.data as { recovery: object }).recovery).not.toHaveProperty('retryCommand')
   })
 
-  // Pins the outcome-unknown codes (round-2 S5): only these get recovery guidance.
   it.each([
     ['runtime_unavailable', true],
     ['remote_runtime_unavailable', true],

@@ -19,10 +19,24 @@ vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
 }))
 vi.mock('./claude-oauth-usage-request', () => ({ fetchClaudeOAuthUsage: calls.usage }))
 const runningDistros = vi.hoisted(() => ({
-  filter: vi.fn(async (paths: readonly string[]) => [...paths])
+  filter: vi.fn(async (paths: readonly string[], _options?: { requireConfirmed?: boolean }) => [
+    ...paths
+  ])
 }))
-vi.mock('../wsl-running-path-filter', () => ({
-  filterPathsToRunningWslDistrosAsync: runningDistros.filter
+// The settled gate asks the running list for the path's distro; `filter` stands in for it.
+const settledGate = vi.hoisted(() => ({
+  override: vi.fn((): { distro: string; state: 'stopped' } | undefined => undefined)
+}))
+vi.mock('../wsl/wsl-unc-access-gate', () => ({
+  blockedWslDistroForPath: async (path: string) => {
+    const override = settledGate.override()
+    if (override !== undefined) {
+      return override
+    }
+    return (await runningDistros.filter([path], { requireConfirmed: true })).length > 0
+      ? null
+      : { distro: 'Ubuntu', state: 'stopped' }
+  }
 }))
 vi.mock('@orca/process-host', () => ({
   spawnProcess: () => {
@@ -75,7 +89,12 @@ it('lets the server decide a locally expired token and never refreshes it', asyn
   writeFileSync(
     file,
     JSON.stringify({
-      claudeAiOauth: { accessToken: 'expired-fake', refreshToken: 'must-not-be-used', expiresAt: 1 }
+      claudeAiOauth: {
+        accessToken: 'expired-fake',
+        refreshToken: 'must-not-be-used',
+        expiresAt: 1,
+        refreshTokenExpiresAt: 4_102_444_800_000
+      }
     })
   )
   vi.stubGlobal('fetch', () => {
@@ -84,20 +103,39 @@ it('lets the server decide a locally expired token and never refreshes it', asyn
   calls.usage.mockRejectedValue(new OAuthUsageError('Invalid OAuth token.', 401, true, null))
   expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
     status: 'error',
-    error: 'Claude usage has expired. Start Claude in this account to refresh it.',
+    error: 'Claude usage updates the next time Claude runs.',
     usageMetadata: { failureKind: 'stale-token' }
   })
   expect(calls.usage.mock.calls.map(([token]) => token)).toEqual(['expired-fake'])
   const system = systemDefault()
   writeFileSync(
     join(system.home, '.credentials.json'),
-    JSON.stringify({ claudeAiOauth: { accessToken: 'expired-default', expiresAt: 1 } })
+    JSON.stringify({
+      claudeAiOauth: { accessToken: 'expired-default', refreshToken: 'unused', expiresAt: 1 }
+    })
   )
   calls.usage.mockResolvedValueOnce({ provider: 'claude', status: 'ok' })
   expect(await fetchActiveClaudeRateLimits(system.options)).toMatchObject({ status: 'ok' })
   expect(await fetchActiveClaudeRateLimits(system.options)).toMatchObject({
     error: 'Claude usage updates the next time Claude runs.',
     usageMetadata: { failureKind: 'stale-token' }
+  })
+})
+it.each([
+  ['no refresh token', {}, 'Invalid OAuth token.'],
+  ['an expired refresh token', { refreshToken: 'fake', refreshTokenExpiresAt: 1 }, 'Invalid'],
+  ['a revoked refresh token', { refreshToken: 'fake' }, 'OAuth token has been revoked.']
+])('asks a login with %s to sign in again instead of waiting for Claude', async (_, oauth, msg) => {
+  const f = profile()
+  writeFileSync(
+    join(f.home, '.credentials.json'),
+    JSON.stringify({ claudeAiOauth: { accessToken: 'expired-fake', expiresAt: 1, ...oauth } })
+  )
+  calls.usage.mockRejectedValue(new OAuthUsageError(msg, 401, true, null))
+  expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
+    status: 'error',
+    error: 'Sign in again to use this account.',
+    usageMetadata: { failureKind: 'missing-credentials' }
   })
 })
 it('reads only the requested scoped Keychain, with no unsuffixed fallback', async () => {
@@ -258,6 +296,19 @@ it('reads an inactive WSL account where the WSL router says its launches would r
     wslLinuxAuthPath: '/home/u/.local/share/orca/claude-accounts/acct/auth'
   })
   expect(wslRouter.accountUsagePreparation).toHaveBeenCalledWith('Ubuntu', 'acct')
+})
+it('does not read an inactive WSL account a running list still names while it stops (E9)', async () => {
+  const { fetchInactiveClaudeAccountUsage } = await import('./claude-managed-account-usage')
+  settledGate.override.mockReturnValueOnce({ distro: 'Ubuntu', state: 'stopped' })
+  wslRouter.accountUsagePreparation.mockClear()
+  const result = await fetchInactiveClaudeAccountUsage({
+    id: 'acct',
+    managedAuthRuntime: 'wsl',
+    wslDistro: 'Ubuntu',
+    wslLinuxAuthPath: '/home/u/.local/share/orca/claude-profiles/acct/home'
+  })
+  expect(result).toMatchObject({ usageMetadata: { failureKind: 'usage-unavailable' } })
+  expect(wslRouter.accountUsagePreparation).not.toHaveBeenCalled()
 })
 it('does not read an inactive WSL account through a stopped distro', async () => {
   const { fetchInactiveClaudeAccountUsage } = await import('./claude-managed-account-usage')

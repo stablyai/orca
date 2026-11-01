@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
-// Why: bespoke radio row instead of SettingsSegmentedControl — needs two-line
-// title + description + trailing badge (STYLEGUIDE "real difference in role").
+// Use a bespoke radio for two-line copy plus badge (STYLEGUIDE’s distinct-role exception).
 export function MobilePairingPathOption({
   selected,
   onSelect,
@@ -48,7 +47,7 @@ export function MobilePairingPathOption({
       }}
       className={cn(
         'flex cursor-pointer items-start gap-3 px-3 py-2.5 outline-none transition-colors',
-        // Why: match SettingsFormControls focus ring when selected uses bg-accent/40.
+        // Match SettingsFormControls focus styling over the selected accent background.
         'focus-visible:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50',
         disabled && 'cursor-not-allowed opacity-60',
         selected ? 'bg-accent/40' : 'hover:bg-accent/20'

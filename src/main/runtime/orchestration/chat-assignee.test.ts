@@ -1,5 +1,6 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { sessionRecord } from '../rpc/orchestration-session-caller-test-fixture'
 import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
@@ -9,8 +10,9 @@ const CHAT = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
 
 function store(record: AgentSessionRecord, visible: boolean): AgentSessionRecordReader {
   return {
-    getRecord: (sessionId) => (sessionId === record.sessionId ? record : null),
-    listRecords: () => [record],
+    getRecord: (sessionId) =>
+      sessionId === record.sessionId ? agentSessionConversationView(record) : null,
+    listRecords: () => [agentSessionConversationView(record)],
     getVisibleSessionTabIndex: () => ({ present: true, sessionIds: visible ? [CHAT] : [] })
   }
 }

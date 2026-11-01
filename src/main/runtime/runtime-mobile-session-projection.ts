@@ -14,6 +14,7 @@ import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import {
+  demoteRuntimeMobileAgentStatus,
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
@@ -26,6 +27,7 @@ import {
   getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
 export function projectRuntimeMobileSessionTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
@@ -88,20 +90,22 @@ export function projectRuntimeMobileSessionTabs(
     }
     return [...paneRows, ...handleRows.filter((row) => !paneRows.includes(row))]
   }
-  // Why: a live PTY backs one surface; claim each once so two leaves resolving to it can't emit duplicate React keys and crash the client.
+  // Claim each live PTY once or duplicate leaf keys crash client React.
   const claimedLivePtyIds = new Set<string>()
+  const isPtyLive = (ptyId: string): boolean =>
+    host.getPtyAvailability(ptyId) ?? host.ptysById.get(ptyId)?.connected ?? false
   for (const tab of snapshot.tabs) {
     if (tab.type === 'browser') {
       const liveTab = tab.browserPageId ? liveBrowserTabsByPageId.get(tab.browserPageId) : undefined
-      if (!liveTab) {
+      if (!liveTab && !host.isRendererOwnedMobileBrowserTab(snapshot, tab)) {
         continue
       }
-      // Why: renderer snapshots lag BrowserView teardown/process swaps; only surface pages the browser bridge can still route to.
+      // Renderer snapshots stay authoritative while unmounted; only headless/client rows need a live bridge page.
       tabs.push({
         ...tab,
-        title: liveTab.title || tab.title,
-        url: liveTab.url || tab.url,
-        // Why: bridge "active" means active BrowserView/webContents, not active Orca tab; preserve the renderer's session focus.
+        title: liveTab?.title || tab.title,
+        url: liveTab?.url || tab.url,
+        // Bridge active means BrowserView/webContents, not Orca tab; retain renderer session focus.
         isActive: tab.isActive
       })
       continue
@@ -116,7 +120,7 @@ export function projectRuntimeMobileSessionTabs(
     }
     const syncedTab = host.tabs.get(tab.parentTabId)
     const leaf = host.leaves.get(host.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
-    const liveLeaf = leaf?.ptyId && leaf.connected ? leaf : null
+    const liveLeaf = leaf?.ptyId && isPtyLive(leaf.ptyId) ? leaf : null
     const liveLeafPtyId = liveLeaf?.ptyId ?? null
     const liveLeafPty = liveLeafPtyId ? (host.ptysById.get(liveLeafPtyId) ?? null) : null
     const pty = liveLeaf
@@ -124,8 +128,8 @@ export function projectRuntimeMobileSessionTabs(
       : host.findPty(snapshot.worktree, tab, {
           allowWorktreeOnlyMatch: !snapshot.publicationEpoch.startsWith('headless')
         })
-    const livePty = pty?.connected ? pty : null
-    // Why: enforce one-live-PTY-per-tab; drop a later tab resolving to an already-claimed PTY so no two tabs share a handle.
+    const livePty = pty?.connected && isPtyLive(pty.ptyId) ? pty : null
+    // Drop later tabs sharing an already-claimed PTY so handles stay unique.
     const resolvedLivePtyId = liveLeafPtyId ?? livePty?.ptyId ?? null
     if (resolvedLivePtyId !== null) {
       if (claimedLivePtyIds.has(resolvedLivePtyId)) {
@@ -138,17 +142,14 @@ export function projectRuntimeMobileSessionTabs(
       ? makePaneKey(tab.parentTabId, tab.leafId)
       : `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
     const mobileStatusPty = livePty ?? pty
-    // Why: headless hooks live in main's status store; reuse this lookup
-    // for both title ownership and status publication so the two cannot diverge.
+    // Use one main hook lookup for both headless title ownership and status to prevent divergence.
     const retainedAgentStatus = tab.agentStatus
       ? null
       : host.getRetainedStatus(paneKey, liveLeafPty ?? mobileStatusPty, tab, getStatusRows)
     const hookAgentStatus = tab.agentStatus
       ? selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
       : null
-    // Why not tab.ptyId: findPtyForMobileTerminalTab already rejected it when it returned
-    // null, because persisted ids can collide with an unrelated pane after restart — reading
-    // that pane's tracker would publish its title here, ahead of every other source.
+    // Do not revive rejected persisted tab.ptyId; after restart it may name another pane and publish its title here.
     const trackerOnlyTitle = host.getTrackedTitle(liveLeafPtyId ?? pty?.ptyId ?? null)
     const displayLeaf = leaf
       ? getLeafDisplayRecord(leaf, host.getTitleDisplayClear(leaf.ptyId))
@@ -183,11 +184,10 @@ export function projectRuntimeMobileSessionTabs(
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
     const liveTitle = trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title
     const agentTitle = normalizeCompatibleAgentTitleForOwner(liveTitle, ownerAgent, ownerOptions)
-    // Why: the desktop's ranking over main's fresher live title; the window sends a generated
-    // name only while the desktop shows it, so it is passed as enabled.
+    // Preserve desktop ranking over fresher main titles; window emits generated names only while shown.
     const title = resolveTerminalTabTitle({ ...tab, title: agentTitle }, true, agentTitle)
     const liveTitleEvidence = leafTitle ?? ptyTitle
-    // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
+    // Renderer status may precede hook session identity; native chat still needs a transcript address.
     const rendererStatusAgent =
       resolveCompatibleAgentTypeForOwner(tab.agentStatus?.agentType, ownerAgent, ownerOptions) ??
       ownerAgent ??
@@ -224,40 +224,30 @@ export function projectRuntimeMobileSessionTabs(
       statusPty,
       { preserveQuestionUnderShellTitle: true }
     )
-    // Why: keep rich status on a live prompt/tool, or interactivePrompt is lost under a non-agent title.
+    // Live prompt/tool status must survive non-agent titles or interactivePrompt disappears.
     const hasLiveAgentSignal =
       normalizedTabAgentStatus?.interactivePrompt != null ||
       normalizedTabAgentStatus?.toolName != null
-    // Why: only shell/management evidence proves the agent released the pane
-    // (same predicate as the terminal-status API). A merely neutral live title
-    // — 'Terminal', an editor, a cwd — proves nothing, and treating it as
-    // completion published a synthetic `done` that fought the client's own
-    // live status on every republication.
+    // A title renew already dated against the hook (e.g. ConPTY's spawn-time shell title) cannot re-demote it (#32467).
+    const hookOutlivedAdjudicatedTitle =
+      normalizedTabAgentStatus?.state !== 'done' &&
+      statusPty?.lastOscTitleEpochMs != null &&
+      liveTitleEvidence === (statusPty.lastOscTitle?.trim() || null)
+    // Only shell/management proves release; neutral Terminal/editor/cwd titles cannot justify done that fights clients' live status.
     const keepFullAgentStatus =
       normalizedTabAgentStatus &&
-      (!terminalTitleBlocksExplicitAgentStatus(liveTitleEvidence) || hasLiveAgentSignal)
+      (hookOutlivedAdjudicatedTitle ||
+        !terminalTitleBlocksExplicitAgentStatus(liveTitleEvidence) ||
+        hasLiveAgentSignal)
     const agentStatus = keepFullAgentStatus
       ? { agentStatus: normalizedTabAgentStatus }
-      : // Why: idle live title → drop stale "working" (no spinner) but keep agent identity so native chat can still address the transcript.
+      : // Idle titles drop stale working spinners but retain transcript identity for native chat.
         normalizedTabAgentStatus?.agentType != null
         ? {
-            agentStatus: {
-              state: 'done' as const,
-              prompt: '',
-              updatedAt: statusPty?.lastOscTitleEpochMs ?? normalizedTabAgentStatus.updatedAt,
-              stateStartedAt:
-                statusPty?.lastAgentStatusStartedAtEpochMs ??
-                normalizedTabAgentStatus.stateStartedAt,
-              paneKey: normalizedTabAgentStatus.paneKey,
-              stateHistory: [],
-              agentType: normalizedTabAgentStatus.agentType,
-              ...(normalizedTabAgentStatus.providerSession
-                ? { providerSession: normalizedTabAgentStatus.providerSession }
-                : {})
-            }
+            agentStatus: demoteRuntimeMobileAgentStatus(normalizedTabAgentStatus, statusPty)
           }
         : null
-    // Why: web/mobile clients hold handles across renderer graph syncs; leaf handles are epoch-bound but PTY handles stay streamable.
+    // PTY handles survive renderer graph syncs; epoch-bound leaf handles do not.
     const terminalPty = liveLeafPtyId
       ? host.recordPty(liveLeafPtyId, snapshot.worktree, {
           tabId: tab.parentTabId,
@@ -269,7 +259,8 @@ export function projectRuntimeMobileSessionTabs(
     const projectedAgentStatus =
       agentStatus ??
       host.buildPtyStatus(
-        mobileStatusPty,
+        // Main layout supplies the live pane leaf whose terminal owns status.
+        ORCA_LAYOUT_OWNER_IS_MAIN ? (liveLeafPty ?? mobileStatusPty) : mobileStatusPty,
         tab,
         terminalHandle,
         retainedAgentStatus,

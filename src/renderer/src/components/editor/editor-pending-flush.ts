@@ -57,10 +57,7 @@ export function hasPendingEditorBufferChange(
   )
 }
 
-/**
- * Before tabs close: commits pending text from every pane of these files and the views sharing
- * their records. Idle panes no-op; panes of other files are left alone, so their edits continue.
- */
+/** Before closing, flush all panes and shared-record views of these files only; idle panes no-op and unrelated edits continue. */
 export function flushClosingEditorBuffers(
   state: EditorBufferViewIndex,
   fileIds: Iterable<string>
@@ -75,7 +72,7 @@ export function flushClosingEditorBuffers(
     try {
       entry.flush()
     } catch (error) {
-      // Why: one pane failing to flush must not block the close, nor lose the pane's input.
+      // A failed flush must preserve input without blocking other panes from closing.
       console.error('[editor] flushing pending edits before tabs close failed', error)
       try {
         entry.preserve?.()
@@ -84,4 +81,49 @@ export function flushClosingEditorBuffers(
       }
     }
   }
+}
+
+/** Resolves false when the view still holds edits it could not hand to the buffer. */
+type FrameFlush = () => Promise<boolean>
+const frameFlushes = new Map<string, Set<FrameFlush>>()
+
+/** For editors whose pending edits live in another frame, so flushing them is a round trip. */
+export function registerEditorFrameFlush(fileId: string, flush: FrameFlush): () => void {
+  const entries = frameFlushes.get(fileId) ?? new Set<FrameFlush>()
+  entries.add(flush)
+  frameFlushes.set(fileId, entries)
+  return () => {
+    entries.delete(flush)
+    if (!entries.size && frameFlushes.get(fileId) === entries) {
+      frameFlushes.delete(fileId)
+    }
+  }
+}
+
+/** Flushes every frame view of `fileId`'s record; false if any kept edits back, so a save must
+ *  not write the buffer as if it were the latest. */
+export async function flushEditorFrames(
+  state: EditorBufferViewIndex,
+  fileId: string
+): Promise<boolean> {
+  const flushes = editorBufferSiblingViewIds(state, fileId).flatMap((viewId) => [
+    ...(frameFlushes.get(viewId) ?? [])
+  ])
+  if (flushes.length === 0) {
+    return true
+  }
+  const results = await Promise.all(flushes.map((flush) => flush().catch(() => false)))
+  return results.every(Boolean)
+}
+
+/** Every view's pending edits, frames first since they land in the buffer as text edits. False
+ *  when a frame kept edits back: a save must then not write the buffer as the latest. */
+export async function flushEditorViewsForSave(
+  getState: () => EditorBufferViewIndex,
+  fileId: string,
+  autosave = false
+): Promise<boolean> {
+  const framesFlushed = await flushEditorFrames(getState(), fileId)
+  flushPendingEditorBuffer(getState(), fileId, autosave)
+  return framesFlushed
 }

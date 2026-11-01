@@ -3,8 +3,7 @@ import { expect } from 'vitest'
 
 const READY_ATTRIBUTE = 'data-hidden-frame-input-ready'
 
-// A new sandboxed iframe runs in its own renderer and can finish loading before the browser routes
-// pointer input to it; until then Playwright's click lands on the parent and the frame sees nothing.
+// A sandboxed iframe can finish loading before pointer input reaches its renderer.
 export async function waitForHiddenFrameInput(target: Locator): Promise<void> {
   await target.evaluate((element, attribute) => {
     element.removeAttribute(attribute)

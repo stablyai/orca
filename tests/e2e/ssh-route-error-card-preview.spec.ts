@@ -1,8 +1,4 @@
-// Throwaway interactive preview (untracked): shows the SSH-routing error cards
-// in a headed app and holds it open for review. The prepare IPC is stubbed at
-// the window level; everything else (gate, settings writes, escape hatch) is real.
-// Run: ORCA_SSH_CARD_PREVIEW=1 pnpm exec playwright test --config tests/playwright.config.ts \
-//   --project electron-headless --workers=1 tests/e2e/ssh-route-error-card-preview.spec.ts
+// Interactive SSH-routing card preview; run electron-headless with ORCA_SSH_CARD_PREVIEW=1 on an isolated display.
 import { expect, test } from './helpers/orca-app'
 
 test.skip(
@@ -50,9 +46,7 @@ test('shows the SSH routing error cards and holds for review', async ({
     state?.setActiveWorktree(worktree.id)
   }, testRepoPath)
 
-  // Stage with a REAL registered SSH target (a dead address) — no stubbing:
-  // prepare runs the true main-process path and fails as 'ssh-unavailable',
-  // rendering the classified card exactly as a user would see it.
+  // Use a real unreachable registered target so production prepare classifies ssh-unavailable.
   const targetId = await orcaPage.evaluate(async () => {
     const added = (await window.api.ssh.addTarget({
       target: {
@@ -69,8 +63,7 @@ test('shows the SSH routing error cards and holds for review', async ({
     return id
   })
   await orcaPage.evaluate((id) => {
-    // Why: the active-workspace host id wins resolution precedence and was
-    // stamped 'local' at activation; the gate consults it first.
+    // Replace the activation-stamped local host id because it has resolution precedence.
     window.__store?.setState({
       activeWorkspaceExecutionHostId: `ssh:${encodeURIComponent(id)}`
     })

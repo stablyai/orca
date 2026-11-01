@@ -1,11 +1,4 @@
-/**
- * One activation or rollback per host, and the fence an interrupted one leaves behind.
- *
- * The lock lives in the transaction root, so releasing it also removes the journal. A run
- * that cannot prove the host is back to one serving slot retains both and marks the lock
- * ownerless; only recovery may take a retained fence over, and it waits out the install lock's
- * stale window only for a fence whose holder may still be working.
- */
+// Retain journal and fence until one serving slot is proven; release removes both, while only recovery may take retained state over.
 import { randomUUID } from 'node:crypto'
 import {
   execOrcadRemote,
@@ -44,15 +37,15 @@ const ORCAD_ACTIVATION_MAX_READINESS_TIMEOUT_MS = 5 * 60_000
 export type OrcadActivationLockOptions = OrcadRemoteExecTarget & { remoteHome: string }
 
 export type OrcadActivationLockControl = {
-  /** Keep the fence if the run throws: a journal now describes host state. */
+  /** Retain on throw once a journal describes possibly changed host state. */
   retainOnError(): void
-  /** Keep the fence even on return: the host is not proven back to one serving slot. */
+  /** Retain on success too when serving-slot ownership remains unproven. */
   retain(): void
-  /** The host is proven back on its recorded slot: release even if the run then throws. */
+  /** Release even on later throw once the recorded slot is proven restored. */
   recovered(): void
 }
 
-/** Bounded so a crashed holder's lock goes stale long before a live holder could still be waiting. */
+/** Bound readiness below the stale-lock window so live waiters do not look abandoned. */
 export function resolveOrcadActivationReadinessTimeout(
   configured: number | undefined,
   fallback: number
@@ -70,13 +63,10 @@ export function resolveOrcadActivationReadinessTimeout(
   return timeout
 }
 
-// Long enough for a brief hold (a wake, a retried lock command), short beside a lifecycle queue.
+// Tolerate brief concurrent work without stalling the lifecycle queue for a full stale window.
 const ORCAD_ACTIVATION_FENCE_WAIT_MS = 5_000
 
-/**
- * A fence still held after a short wait answers `held()`: a retained one never clears by waiting.
- * `token` names this run's generation; a wake passes its own so it can prove an interrupted fence.
- */
+/** Report held after a brief wait; token identifies this generation for subsequent recovery proof. */
 export async function withOrcadActivationLock<T>(
   options: OrcadActivationLockOptions,
   run: (control: OrcadActivationLockControl) => Promise<T>,
@@ -89,7 +79,7 @@ export async function withOrcadActivationLock<T>(
     await acquireInstallLock(options.conn, lockRoot, options.host, {
       signal: options.signal,
       relayGcClaim: false,
-      // A retained fence means state ownership is unresolved. Age cannot make it safe.
+      // Unresolved state ownership cannot become safe through age alone.
       allowStaleTakeover: false,
       waitTimeoutMs: ORCAD_ACTIVATION_FENCE_WAIT_MS,
       owner: { fileName: ORCAD_FENCE_OWNER_FILENAME, token }
@@ -121,7 +111,7 @@ export async function withOrcadActivationLock<T>(
     await (retain ? orphanRetainedFence(options, fence) : releaseActivationFence(options, fence))
     return result
   } catch (error) {
-    // A remote mutation whose teardown is unconfirmed may still be running: keep its fence fresh.
+    // Unconfirmed host work may still mutate state, so do not age its fence.
     if (!isUnconfirmedSshCommandTermination(error)) {
       await (
         retainOnError ? orphanRetainedFence(options, fence) : releaseActivationFence(options, fence)
@@ -135,10 +125,7 @@ export async function withOrcadActivationLock<T>(
   }
 }
 
-/**
- * Takes over only a stale or previous-boot fence, or one this desktop's exited process left;
- * a fresh one throws `RemoteInstallLockBusyError`.
- */
+/** Recover stale, previous-boot or proven exited-own fences; a fresh live owner remains busy. */
 export async function withStaleOrcadActivationRecoveryLock<T>(
   options: OrcadActivationLockOptions,
   run: (control: Pick<OrcadActivationLockControl, 'retain'>) => Promise<T>
@@ -146,7 +133,7 @@ export async function withStaleOrcadActivationRecoveryLock<T>(
   const lockRoot = orcadActivationTransactionRoot(options.host, options.remoteHome)
   const token = randomUUID()
   rememberHeldOrcadFence(token)
-  // The takeover writes this run's token, so the holder it replaced can no longer act or release.
+  // Takeover replaces the token so the predecessor can neither act nor release.
   await acquireInstallLock(options.conn, lockRoot, options.host, {
     signal: options.signal,
     relayGcClaim: false,
@@ -172,7 +159,7 @@ export async function withStaleOrcadActivationRecoveryLock<T>(
       return run({ retain: () => (retain = true) })
     })
   } catch (error) {
-    // Any throw keeps the fence: recovery failed to prove one serving slot.
+    // Failed recovery retains ownership fencing until one serving slot is proven.
     if (!isUnconfirmedSshCommandTermination(error)) {
       await orphanRetainedFence(options, fence).catch(() => undefined)
     }
@@ -182,7 +169,7 @@ export async function withStaleOrcadActivationRecoveryLock<T>(
   return result
 }
 
-/** Re-stamps a taken-over run's journal with this generation, so this run's release removes it. */
+/** Adopt the journal into this generation so release recognizes it as owned. */
 async function adoptInterruptedJournal(options: OrcadActivationLockOptions): Promise<void> {
   const journal = await readOrcadActivationTransaction(options).catch(() => null)
   if (journal) {
@@ -194,12 +181,7 @@ function activationFence(options: OrcadActivationLockOptions, token: string): Or
   return { lockDir: orcadActivationFenceLockDir(options.host, options.remoteHome), token }
 }
 
-/**
- * A fence this run keeps after it is done: nothing of ours still works under it, so the next
- * recovery may take it over at once. Left fresh, every failed recovery would restart the stale
- * window it waits out, and the host could never be recovered. Guarded, so a superseded run
- * never ages its successor's fence.
- */
+/** Age retained, finished work for immediate recovery; token guards prevent aging a successor's fence. */
 async function orphanRetainedFence(
   options: OrcadActivationLockOptions,
   fence: OrcadFence
@@ -213,14 +195,14 @@ async function orphanRetainedFence(
     )
     forgetHeldOrcadFence(fence.token)
   } catch (error) {
-    // Best effort: the fence still holds; recovery then waits out the stale window as before.
+    // Failed orphan marking keeps the fence held until its normal stale window expires.
     console.warn(
       `[orcad] Could not mark a retained activation fence as ownerless: ${String(error)}`
     )
   }
 }
 
-/** Whether any lock is held; a lost probe throws rather than reading as open. */
+/** Failed probes throw; unreadable must never mean unfenced. */
 export async function orcadActivationFenceExists(
   options: OrcadActivationLockOptions
 ): Promise<boolean> {
@@ -234,7 +216,6 @@ export async function orcadActivationFenceExists(
   return answer === 'LOCKED'
 }
 
-/** Drops the fence `token` names, and nothing else: a successor's fence carries its own token. */
 export function releaseOrcadActivationFence(
   options: OrcadActivationLockOptions,
   token: string
@@ -242,17 +223,14 @@ export function releaseOrcadActivationFence(
   return releaseActivationFence(options, activationFence(options, token))
 }
 
-/**
- * Conditional on the host: only while the lock still carries this run's token, journal first,
- * then the lock renamed aside and removed, so a successor's fresh lock is never what goes.
- */
+/** Remove only this generation: journal first, then rename the owned lock aside before deletion. */
 async function releaseActivationFence(
   options: OrcadActivationLockOptions,
   fence: OrcadFence
 ): Promise<void> {
   const lockRoot = orcadActivationTransactionRoot(options.host, options.remoteHome)
   const journal = orcadActivationTransactionPath(options.host, options.remoteHome)
-  // Why no signal: a cancelled run must still be able to drop a fence it proved unnecessary.
+  // Cancellation must not prevent releasing a fence already proven unnecessary.
   const target = withoutAbortSignal(options)
   const command = isWindowsRemoteHost(options.host)
     ? orcadWindowsHomeOpCommand(options.host, options.remoteHome, 'fence-release', [
@@ -268,10 +246,7 @@ async function releaseActivationFence(
   }
 }
 
-/**
- * Each piece is renamed aside first and kept only if it is ours, else put straight back: a release
- * that stalls after its token check can then never delete a successor's journal or lock.
- */
+/** Rename then check ownership, restoring foreign entries so stalled release cannot delete a successor's state. */
 export function posixReleaseFenceCommand(
   fence: OrcadFence,
   journal: string,
@@ -293,7 +268,6 @@ export function posixReleaseFenceCommand(
   ].join(' ')
 }
 
-/** How a journal this generation wrote names it (see writeOrcadActivationTransaction). */
 function journalFenceStamp(token: string): string {
   return `"fenceToken": ${JSON.stringify(token)}`
 }

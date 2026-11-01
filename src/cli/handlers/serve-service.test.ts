@@ -115,10 +115,13 @@ describe('orca serve service', () => {
     calls = []
     await expect(uninstallServeService(d)).resolves.toMatchObject({ removed: true })
     expect(existsSync(String(result.unitPath))).toBe(false)
-    expect(calls[0]).toMatch(/^systemctl --user disable --now orca-serve-/)
+    expect(calls).toEqual([
+      `systemctl --user disable --now ${String(result.name)}`,
+      'systemctl --user daemon-reload'
+    ])
   })
 
-  it('never picks a version-scoped launcher from the profile or a mounted AppImage', async () => {
+  it('skips a profile launcher and refuses a bare Linux orca', async () => {
     const scoped = join(home, 'profile', 'cli', 'bin')
     await mkdir(scoped, { recursive: true })
     await writeFile(join(scoped, 'orca'), '#!/bin/sh\n')
@@ -152,7 +155,7 @@ describe('orca serve service', () => {
     ).toThrow(/PATH/)
   })
   it('names the command to run when only a server-only orca exists here', async () => {
-    // The `orca` an SSH-launched Orca server puts on a remote host runs on plain Node.
+    // SSH server launchers run on plain Node, without an installed Electron desktop.
     const serverCli = (platform: NodeJS.Platform, path: string): ServeServiceDeps => {
       const base = deps(platform)
       const { ELECTRON_RUN_AS_NODE: _electron, ...env } = base.env
@@ -169,7 +172,6 @@ describe('orca serve service', () => {
       installServeService({ command: null, dryRun: true }, serverCli('darwin', scoped))
     ).rejects.toThrow(/`orca serve service install`/)
     expect(calls).toEqual([])
-    // An installed app's launcher on PATH (or named by --command) still works from that terminal.
     await expect(
       installServeService({ command: null, dryRun: true }, serverCli('linux', `${scoped}:${bin}`))
     ).resolves.toMatchObject({ dryRun: true })
@@ -181,6 +183,25 @@ describe('orca serve service', () => {
     ).resolves.toMatchObject({ dryRun: true })
   })
 
+  it('keeps an AppImage launch and profile directories out of the unit PATH (#36000)', async () => {
+    const profileBin = join(home, 'profile', 'cli', 'bin')
+    const d = deps('linux')
+    d.env = {
+      ...d.env,
+      PATH: [
+        '/tmp/.mount_orca-lonOeOb',
+        '/tmp/.mount_orca-lonOeOb/usr/sbin',
+        '/tmp/appimage_extracted_0f3a/usr/bin',
+        profileBin,
+        'relative/bin',
+        '/usr/local/bin',
+        bin
+      ].join(':')
+    }
+    const result = await installServeService({ command: join(bin, 'orca-ide'), dryRun: true }, d)
+    expect(String(result.content)).toContain(`Environment=PATH=/usr/local/bin:${bin}\n`)
+  })
+
   it('refuses a --command tied to one Orca version', async () => {
     const scoped = join(home, 'profile', 'cli', 'bin')
     await mkdir(scoped, { recursive: true })
@@ -189,6 +210,19 @@ describe('orca serve service', () => {
     expect(() =>
       resolveServiceCommand(join(scoped, 'orca'), {
         platform: 'darwin',
+        env: { ORCA_USER_DATA_PATH: join(home, 'profile') }
+      })
+    ).toThrow(/one Orca version/)
+  })
+
+  it('refuses a --command inside an extract-and-run AppImage copy', async () => {
+    const extracted = join(home, 'appimage_extracted_0f3a')
+    await mkdir(extracted)
+    await writeFile(join(extracted, 'AppRun'), '#!/bin/sh\n')
+    await chmod(join(extracted, 'AppRun'), 0o755)
+    expect(() =>
+      resolveServiceCommand(join(extracted, 'AppRun'), {
+        platform: 'linux',
         env: { ORCA_USER_DATA_PATH: join(home, 'profile') }
       })
     ).toThrow(/one Orca version/)

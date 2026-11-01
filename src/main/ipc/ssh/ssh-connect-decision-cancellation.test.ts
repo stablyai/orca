@@ -205,7 +205,6 @@ describe('a connect cancelled during its server decision', () => {
   })
 })
 
-/** The stand-in transports these tests hand the mocked pool. */
 type FakeTransport = { id: string }
 
 function asTransport(value: FakeTransport): SshConnection {

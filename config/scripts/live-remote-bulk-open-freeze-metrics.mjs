@@ -1,7 +1,4 @@
-/**
- * Pure metrics helpers for the live remote bulk-open freeze harness.
- * Kept separate so unit tests can drive the same code the repro uses.
- */
+// Keep metrics separate so unit tests exercise the live repro’s calculations.
 
 export const DEFAULT_SOFT_MS = 2000
 export const DEFAULT_HARD_MS = 5000
@@ -61,10 +58,7 @@ export function worktreeSelector(wt) {
   return null
 }
 
-/**
- * Peak stall across individual switch latency and concurrent batch wall.
- * Hard freeze when peak >= hardMs (default 5000).
- */
+// Classify peak individual-switch/batch-wall stall as hard freeze at hardMs (default 5000).
 export function evaluateFreezeSignals({
   maxSwitchMs = 0,
   maxBatchWallMs = 0,
@@ -105,10 +99,7 @@ export const REALISTIC_SCENARIOS = [
   'lockup-storm'
 ]
 
-/**
- * Permanent lockup: app/host stops making progress — not a single recovered timeout.
- * Distinct from multi-second hard stall that still recovers (status answers, most opens ok).
- */
+// Permanent lockup means no app/host progress; recovered timeouts or multi-second stalls with healthy status/mostly successful opens do not qualify.
 export function evaluatePermanentLockup({
   timedOutOps = 0,
   statusHangMs = 0,
@@ -137,10 +128,7 @@ export function evaluatePermanentLockup({
   }
 }
 
-/**
- * Peak across open latencies + optional reconnect-refresh wall + probes.
- * Used by the naturalistic harness (no parallel switch amp).
- */
+// Naturalistic harness peak includes opens, reconnect-refresh wall and probes, without parallel-switch amplification.
 export function evaluateRealisticFreezeSignals({
   maxOpenMs = 0,
   firstOpenMs = 0,
@@ -174,10 +162,7 @@ export function humanPaceDelayMs(baseMs, jitterMs = 0) {
 export const DEFAULT_FOREVER_WINDOW_MS = 30_000
 export const DEFAULT_STATUS_SLOW_MS = 15_000
 
-/**
- * Analyze mid-storm status samples for a continuous unhealthy window.
- * Sample: { tMs, ms, ok, hang }
- */
+// Find continuous unhealthy window from {tMs, ms, ok, hang} status samples.
 export function evaluateFullAppFreeze({
   statusSamples = [],
   statusSummary = {},

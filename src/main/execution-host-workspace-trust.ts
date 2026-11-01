@@ -1,13 +1,14 @@
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { markQoderWorkspaceTrusted } from './qoder/workspace-trust'
 import {
   type AgentTrustPreset,
   markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
+  markCursorWorkspaceTrusted,
+  markKimiWorkspaceTrusted
 } from './agent-trust-presets'
 import { awaitAgentTrustWriteWithinDeadline } from './agent-trust-write-deadline'
 import {
@@ -16,10 +17,7 @@ import {
 } from './claude/claude-folder-trust-file'
 import { isTooBroadToPreTrust } from '../shared/home-or-filesystem-root'
 
-/**
- * What the host that runs the agent knows about where that agent reads trust. Relay-safe:
- * main describes this machine or a WSL guest, the SSH relay describes its own host.
- */
+/** Resolve trust on the agent’s execution host, including WSL guests and SSH relays. */
 export type WorkspaceTrustHost = {
   /** Homes the agent may read trust under; with none known, an agent that inherits trust writes nothing. */
   homes: readonly (string | null | undefined)[]
@@ -29,6 +27,8 @@ export type WorkspaceTrustHost = {
   claudeConfig: () => ClaudeTrustConfigTarget | null
   /** Every config.toml the launched Codex may read, in the hook installer's lock order. */
   codexConfigFiles: () => readonly string[]
+  /** KIMI_CODE_HOME for the launched Kimi; unset means `<agentHome>/.kimi-code`. */
+  kimiHome?: string
   deadlineMs: number
 }
 
@@ -39,13 +39,7 @@ export function launchedAgentHome(
   return (process.platform === 'win32' ? launchEnv?.USERPROFILE : launchEnv?.HOME) || homedir()
 }
 
-/**
- * Whether trust on a home or a disk root would also trust the folders below it, per each agent's
- * own lookup; such trust is never pre-written. Claude walks up parent folders (to the repo root,
- * else the disk root); Copilot and Qoder accept any trusted ancestor. Codex matches its start
- * folder or that folder's repo root, Antigravity the exact folder, and Cursor never inherits from
- * a home, a folder above one or a shallow path.
- */
+/** Never prewrite home/root trust for agents whose trust lookup includes descendants. */
 export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean> = {
   claude: true,
   codex: false,
@@ -53,14 +47,14 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
   copilot: true,
   qoder: true,
   'qoder-cn': true,
-  antigravity: false
+  antigravity: false,
+  kimi: false
 }
 
-/**
- * Agents whose lookup keys on the folder they start in, so Orca trusts that folder, not the
- * workspace root, even outside any workspace. Codex checks its start folder, then that folder's
- * repo root; a non-git workspace root above the start folder is neither.
- */
+/** Exact-folder agents that load project config (Kimi: MCP servers) from a trusted home or root. */
+const AGENT_TRUST_UNSAFE_AT_A_HOME: ReadonlySet<AgentTrustPreset> = new Set(['kimi'])
+
+/** Trust these agents’ starting folders; a workspace ancestor may not be a valid trust key. */
 export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean> = {
   claude: false,
   codex: true,
@@ -68,10 +62,11 @@ export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean
   copilot: false,
   qoder: false,
   'qoder-cn': false,
-  antigravity: false
+  antigravity: false,
+  kimi: true
 }
 
-// Why resolve() too: Claude stores it, and it collapses `..` even where realpath fails.
+// Claude stores resolved paths; resolve also collapses .. when realpath fails.
 function withResolvedForm(path: string): string[] {
   try {
     return [path, resolve(path), realpathSync.native(path)]
@@ -80,10 +75,7 @@ function withResolvedForm(path: string): string[] {
   }
 }
 
-/**
- * Whether trust stored for `storedPath` would cover a home: it is a root, a home or a folder
- * above one. Both sides are compared given and resolved, since the writers store the realpath.
- */
+/** Compare raw and resolved forms because writers store realpaths. */
 function wouldTrustAHome(storedPath: string, homes: readonly string[]): boolean {
   const homeForms = homes.flatMap(withResolvedForm)
   return withResolvedForm(storedPath).some((form) => isTooBroadToPreTrust(form, homeForms))
@@ -114,14 +106,15 @@ async function writePreset(
       return markQoderWorkspaceTrusted(storedPath, host.agentHome)
     case 'antigravity':
       return markAntigravityWorkspaceTrusted(storedPath, host.agentHome)
+    case 'kimi':
+      return markKimiWorkspaceTrusted(
+        storedPath,
+        host.kimiHome || join(host.agentHome, '.kimi-code')
+      )
   }
 }
 
-/**
- * The one place a preset's trust is written, on the host that runs the agent. For an agent that
- * inherits trust from a home, refuses when the path the writer would store covers a home. Never
- * throws or waits past the host's deadline: any failure or miss means the agent asks.
- */
+/** Reject inherited home trust; failures and deadline misses leave the agent to ask. */
 export async function applyWorkspaceTrustOnThisHost(
   preset: AgentTrustPreset,
   workspacePath: string,
@@ -129,7 +122,7 @@ export async function applyWorkspaceTrustOnThisHost(
 ): Promise<void> {
   try {
     const host = describeHost()
-    if (AGENT_TRUST_INHERITS_FROM_A_HOME[preset]) {
+    if (AGENT_TRUST_INHERITS_FROM_A_HOME[preset] || AGENT_TRUST_UNSAFE_AT_A_HOME.has(preset)) {
       const homes = host.homes.filter((home): home is string => Boolean(home))
       if (homes.length === 0 || wouldTrustAHome(workspacePath, homes)) {
         return

@@ -19,7 +19,7 @@ export function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
   }
 }
 
-/** Why: a Project row may not belong to the active repo; when set, mutations route through slug-addressed IPCs against `owner`/`repo` so edits don't land on the workspace's repo. See docs/design/github-project-view-tasks.md §Dialog editing from Project rows. */
+/** Project rows may belong to another repo; route mutations by their slug instead of the active workspace. */
 export type GitHubWorkItemProjectOrigin = {
   owner: string
   repo: string
@@ -32,8 +32,7 @@ export type GitHubWorkItemProjectOrigin = {
   cacheKey: string
 }
 
-// Why: every PR mutation needs the same host-pinned identity so process GH_HOST
-// cannot redirect a github.com item or a Project row to the wrong server.
+// Pin the GitHub host for every PR mutation so process GH_HOST cannot redirect the item.
 export function resolvePullRequestRepo(
   item: Pick<GitHubWorkItem, 'prRepo' | 'url'>,
   projectOrigin?: Pick<GitHubWorkItemProjectOrigin, 'owner' | 'repo' | 'host'>

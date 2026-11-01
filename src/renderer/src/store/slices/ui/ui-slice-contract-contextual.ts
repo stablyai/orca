@@ -4,7 +4,7 @@ import type {
   FeatureInteractionState
 } from '../../../../../shared/feature-interactions'
 import type { FeatureTipId } from '../../../../../shared/feature-tips'
-import type { NativeChatUpgradeTipVariant } from '../../../../../shared/native-chat-upgrade-tip-audience'
+import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
 import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
@@ -24,7 +24,7 @@ export type UISliceContextual = {
     hostId: ExecutionHostId,
     setupId?: string
   ) => void
-  /** One-shot Appearance accordion to expand for nested Settings deep links (e.g. Usage percentages under Window & Sidebar). Cleared when Appearance consumes it. */
+  /** One-shot nested Settings accordion deep link; Appearance clears it on consumption. */
   appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
   setAppearanceAccordionDeepLink: (
     section: NonNullable<UISliceContextual['appearanceAccordionDeepLink']>
@@ -60,9 +60,9 @@ export type UISliceContextual = {
   closeModal: () => void
   featureTipsSeenIds: FeatureTipId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
-  /** Main's once-decided native chat upgrade tip variant; null until read. */
-  nativeChatUpgradeTipVariant: NativeChatUpgradeTipVariant | null
-  setNativeChatUpgradeTipVariant: (variant: NativeChatUpgradeTipVariant) => void
+  /** Main's once-decided Chat UI launch tip variant; null until read. */
+  chatUiLaunchTipVariant: ChatUiLaunchTipVariant | null
+  setChatUiLaunchTipVariant: (variant: ChatUiLaunchTipVariant) => void
   featureInteractions: FeatureInteractionState
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
   contextualToursSeenIds: ContextualTourId[]
@@ -124,6 +124,8 @@ export type UISliceContextual = {
   dismissStatusBarCompactChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
+  pluginsAlphaNoticeDismissed: boolean
+  dismissPluginsAlphaNotice: () => void
   codexTerminalServerIsolationNoticeSeen: boolean
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean

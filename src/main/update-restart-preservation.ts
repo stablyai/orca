@@ -2,9 +2,9 @@ import {
   preserveAgentAuthBeforeRestart,
   type CodexRuntimeAuthSync
 } from './agent-auth-restart-preservation'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 
-/** Before any update restart, desktop or headless serve: save agent auth, then a full store checkpoint. */
+// Save agent auth before checkpointing the store on desktop and headless restarts.
 export async function preserveStateBeforeUpdateRestart({
   codexRuntimeHome,
   store

@@ -9,17 +9,14 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
   ): Promise<boolean> {
     const mode = this.getMobileDisplayMode(ptyId)
 
-    // Cancel pending restore timer for this ptyId — any new subscriber
-    // supersedes any old client's pending restore.
+    // Any new subscriber supersedes the prior client's pending restore.
     const pendingRestore = this.pendingRestoreTimers.get(ptyId)
     if (pendingRestore) {
       clearTimeout(pendingRestore.timer)
       this.pendingRestoreTimers.delete(ptyId)
     }
 
-    // Resubscribe-grace honor: same client returning within soft-leave
-    // window restores prior record (preserving baseline so we don't capture
-    // phone-fitted dims as the new baseline).
+    // Same-client soft-leave returns retain their original desktop baseline.
     const softLeaver = this.pendingSoftLeavers.get(ptyId)
     if (softLeaver && softLeaver.clientId === clientId) {
       clearTimeout(softLeaver.timer)
@@ -65,16 +62,7 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
       this.mobileSubscribers.set(ptyId, inner)
     }
 
-    // Capture restore baseline BEFORE applyLayout writes the override.
-    // Multi-mobile: peer joiner against an already-fitted PTY captures null
-    // — the existing baseline-holder's snapshot remains canonical. See
-    // docs/mobile-presence-lock.md.
-    //
-    // Resubscribe-after-indefinite-hold: the held override carries the only
-    // authoritative pre-fit dims across the no-subscriber gap. Inherit it
-    // first; otherwise rendererSize/currentSize would be the held phone dims
-    // and applyLayout would clobber the override's previousCols with phone
-    // dims, making any subsequent Restore a no-op.
+    // Capture before fitting; peer joiners inherit no baseline. An indefinite hold's override outranks current phone dimensions.
     const heldOverride = this.terminalFitOverrides.get(ptyId)
     const existing = inner.get(clientId)
     const someoneAlreadyFitted = [...inner.values()].some((s) => s.wasResizedToPhone)
@@ -92,9 +80,7 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
     const subscribedAt = existing?.subscribedAt ?? now
 
     if (!viewport) {
-      // Why: mobile can subscribe before its WebView has measured. Keep the
-      // subscriber + desktop baseline so updateViewport/setDisplayMode can
-      // late-bind the viewport without recapturing phone dims.
+      // Unmeasured mobile views retain the subscriber and desktop baseline until a later viewport update.
       inner.set(clientId, {
         clientId,
         viewport: null,
@@ -113,9 +99,7 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
     )
 
     if (mode === 'desktop') {
-      // Passive watch — null baseline (we'll capture later if user toggles
-      // to auto/phone, since safeFit will have converged by then). Do not
-      // flip driver.
+      // Desktop-mode subscribe is passive; capture no baseline or floor until a deliberate gesture.
       inner.set(clientId, {
         clientId,
         viewport,
@@ -141,9 +125,7 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
     // Subscribe-fresh with auto/phone counts as "take the floor".
     this.setDriver(ptyId, { kind: 'mobile', clientId })
 
-    // Route the actual resize through the state machine. The fresh-subscribe
-    // gate lets enqueueLayout's "no layouts entry" short-circuit pass on
-    // the very first transition for this PTY.
+    // The first transition has no layout entry yet; admit it through the fresh-subscribe guard.
     this.freshSubscribeGuard.add(ptyId)
     try {
       await this.enqueueLayout(ptyId, {

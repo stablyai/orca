@@ -13,26 +13,13 @@ export type OrderEmptyQueryInputs = {
 }
 
 export type OrderEmptyQueryResult = {
-  /** Full visible list (including current). Drives "has any worktrees"
-   *  / loading / empty-state decisions so the palette never claims to be
-   *  empty just because the only visible worktree is the current one. */
+  /** Keep current workspace in visibility/empty-state counts even though switchable rows exclude it. */
   visibleWorktreesForState: readonly Worktree[]
-  /** Switchable rows for the Worktrees section — current worktree excluded,
-   *  sorted by focus-recency with lastActivityAt fallback and displayName
-   *  tie-breaker. v1 has no "Current" row variant. */
+  /** Switchable rows exclude current workspace; order by visit tier/recency, activity fallback and resolved display label. */
   switchableWorktreesForRows: Worktree[]
 }
 
-/**
- * Pure ordering helper for Cmd+J's empty-query Worktrees section.
- * See docs/cmd-j-empty-query-ordering.md — this function encodes the
- * ordering-rule block:
- *   1. primary: lastVisitedAtByWorktreeId[id] (focus recency)
- *   2. fallback: Worktree.lastActivityAt (for never-visited / pre-migration)
- *   3. stable tie-breaker: displayName.localeCompare
- * The current worktree is intentionally excluded from rows but kept in
- * visibleWorktreesForState so empty-state logic isn't affected.
- */
+/** Order visited workspaces ahead of unvisited, then recency/activity and display label (cmd-j-empty-query-ordering.md); retain current in empty-state inputs only. */
 export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEmptyQueryResult {
   const {
     visibleWorktrees,
@@ -40,17 +27,11 @@ export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEm
     activeWorkspaceExecutionHostId,
     lastVisitedAtByWorktreeId
   } = inputs
-  // Why the host too (STA-4343): `repoId::path` repeats across hosts, so filtering on the
-  // bare id drops BOTH same-id rows as "current" and the other host becomes unreachable.
+  // Same IDs repeat across hosts; bare-ID filtering would hide the other host’s selectable twin (STA-4343).
   const switchable = visibleWorktrees.filter(
     (w) => !isPaletteCurrentWorktree(w, activeWorktreeId, activeWorkspaceExecutionHostId)
   )
-  // Why: a visited worktree must always outrank a never-visited one,
-  // even when the never-visited worktree has a newer lastActivityAt.
-  // Mixing the two signals into a single numeric score would let
-  // incidental background activity on a local worktree push a just-
-  // visited SSH worktree below the fold — the exact bug the feature
-  // fixes. Compare presence first, then value within each tier.
+  // Compare visited presence before timestamps so noisy unvisited workspaces cannot outrank deliberate recent SSH focus.
   const sorted = [...switchable].sort((a, b) => {
     const aVisited = getWorktreeVisitTimestamp(lastVisitedAtByWorktreeId, a)
     const bVisited = getWorktreeVisitTimestamp(lastVisitedAtByWorktreeId, b)

@@ -8,14 +8,31 @@ import { linearError } from '../linear/issue-context/errors'
 import { RuntimeLinearTaskFieldCommands } from './runtime-linear-task-fields-commands'
 
 export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldCommands {
-  public linearSavedIssueMatchesIntent(
+  public async linearSavedIssueMatchesIntent(
+    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
+    fields: LinearIssueUpdate
+  ): Promise<boolean> {
+    if (!this.linearSavedIssueFieldsMatchIntent(issue, fields)) {
+      return false
+    }
+    const description = issue.description ?? ''
+    if (fields.description === undefined || description === fields.description) {
+      return true
+    }
+    // Why dynamic: keeps the Markdown parser off startup while every bundle (Electron, orcad) inlines it.
+    const { linearIssueDescriptionComparisonKey } =
+      await import('./linear-issue-description-comparison')
+    return (
+      linearIssueDescriptionComparisonKey(description) ===
+      linearIssueDescriptionComparisonKey(fields.description)
+    )
+  }
+
+  private linearSavedIssueFieldsMatchIntent(
     issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
     fields: LinearIssueUpdate
   ): boolean {
     if (fields.title !== undefined && issue.title !== fields.title) {
-      return false
-    }
-    if (fields.description !== undefined && (issue.description ?? '') !== fields.description) {
       return false
     }
     if (fields.parentId !== undefined && (issue.parent?.id ?? null) !== fields.parentId) {
@@ -53,11 +70,13 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
       labels?: string[]
       projectInput?: string
     },
-    team: { id: string; workspaceId: string }
+    team: { id: string; workspaceId: string },
+    signal?: AbortSignal
   ): Promise<LinearCreateFieldIntent> {
+    signal?.throwIfAborted()
     const fields: LinearCreateFieldIntent = {}
     if (params.state) {
-      const states = await this.getLinearTeamStatesForWrite(team.id, team.workspaceId)
+      const states = await this.getLinearTeamStatesForWrite(team.id, team.workspaceId, signal)
       const state = this.resolveLinearAgentState(params.state, states)
       if (!state) {
         throw linearError(
@@ -72,7 +91,8 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
       fields.assigneeId = await this.resolveLinearAssignee(
         params.assignee,
         team.id,
-        team.workspaceId
+        team.workspaceId,
+        signal
       )
     }
     if (params.priority !== undefined) {
@@ -85,11 +105,16 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
       fields.dueDate = params.dueDate
     }
     if (params.labels && params.labels.length > 0) {
-      const labels = await this.resolveLinearLabelsForTeam(team.id, params.labels, team.workspaceId)
+      const labels = await this.resolveLinearLabelsForTeam(
+        team.id,
+        params.labels,
+        team.workspaceId,
+        signal
+      )
       fields.labelIds = labels.map((label) => label.id)
     }
     if (params.projectInput) {
-      const project = await this.resolveLinearCreateProject(params.projectInput, team)
+      const project = await this.resolveLinearCreateProject(params.projectInput, team, signal)
       fields.projectId = project.id
     }
     return fields

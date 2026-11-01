@@ -1,17 +1,12 @@
 import { isActivatingBrowserGuestInput } from './browser-guest-input-gesture'
 
-// Contents ids whose last prompt was declined or ignored; they cannot prompt until the user acts.
 const quietContents = new Set<number>()
 
 export function isBrowserPagePromptQuiet(contents: Electron.WebContents): boolean {
   return quietContents.has(contents.id)
 }
 
-/**
- * Why: prompts are app-modal, so a page that asks again after every Cancel (a deep-link loop, a 401
- * page that reloads itself) would lock the user out of Orca. As in Chrome, it stays quiet until the
- * user clicks or types in it, or starts a navigation from Orca's toolbar.
- */
+// Suppress repeated modal prompts after dismissal until the user acts on the page.
 export function quietBrowserPagePrompts(contents: Electron.WebContents): void {
   const { id } = contents
   if (contents.isDestroyed() || quietContents.has(id)) {
@@ -33,7 +28,7 @@ export function quietBrowserPagePrompts(contents: Electron.WebContents): void {
       release()
     }
   }
-  // Why: the address bar, reload and back/forward start navigations no frame initiated.
+  // Toolbar navigation has no initiating frame.
   const onNavigation = (
     details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
   ): void => {

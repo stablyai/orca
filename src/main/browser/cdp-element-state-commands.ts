@@ -39,7 +39,7 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
         object: { objectId: string }
       }
 
-      // Why: match on label (textContent) and value so opaque option IDs still select; also handles combobox via click.
+      // Labels allow selection when option values are opaque IDs.
       await refSender('Runtime.callFunctionOn', {
         objectId: object.objectId,
         functionDeclaration: `function(val) {
@@ -121,7 +121,7 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
           clickCount: 1
         })
 
-        // Why: custom checkboxes may not toggle from a coordinate click; verify state and fall back to programmatic .click().
+        // Some custom checkboxes need a programmatic click after coordinate delivery.
         try {
           const { result: afterState } = (await refSender('Runtime.callFunctionOn', {
             objectId: object.objectId,
@@ -136,7 +136,7 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
             })
           }
         } catch {
-          // objectId stale after re-render — click was dispatched, accept the result
+          // Re-rendering can invalidate the object ID after the click has been sent.
         }
       }
 

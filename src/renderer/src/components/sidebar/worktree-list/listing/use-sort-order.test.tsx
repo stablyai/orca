@@ -10,7 +10,15 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import { useSidebarWorktreeSortOrder } from './use-sort-order'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import { makeTerminalTab } from '../../../../store/slices/worktrees-slice-test-fixtures'
+
+// The sort ranks each card by host identity; these rows carry no host.
+const key = (id: string): string => composeWorktreeHostIdentity(undefined, id)
+const keys = (...ids: string[]): string[] => ids.map(key)
 
 const initialState = useAppStore.getInitialState()
 const repo = makeRepo()
@@ -117,14 +125,14 @@ describe('useSidebarWorktreeSortOrder', () => {
       'manual'
     )
     const { result } = renderSortOrder({ strict: true })
-    expect(result.current).toEqual(['a', 'b'])
+    expect(result.current).toEqual(keys('a', 'b'))
     act(() =>
       replaceWorktrees([
         makeWorktree('a', 'A', { manualOrder: 2 }),
         makeWorktree('b', 'B', { manualOrder: 3 })
       ])
     )
-    expect(result.current).toEqual(['b', 'a'])
+    expect(result.current).toEqual(keys('b', 'a'))
   })
 
   it('survives a burst of synchronous store bumps in Manual', () => {
@@ -154,7 +162,7 @@ describe('useSidebarWorktreeSortOrder', () => {
           // Why newest activity: a structural add must land at its sorted position (first) immediately.
           worktrees = [...worktrees, makeWorktree(`w${i}`, `W${i}`, { lastActivityAt: i * 100 })]
           flushSync(() => replaceWorktrees(worktrees))
-          expect(view.latest.ids[0]).toBe(`w${i}`)
+          expect(view.latest.ids[0]).toBe(key(`w${i}`))
         } else {
           // Why reversed activity: these bumps reorder rows, so only the settle may apply them.
           worktrees = worktrees.map((w, index) => ({ ...w, lastActivityAt: i * 100 - index }))
@@ -162,15 +170,15 @@ describe('useSidebarWorktreeSortOrder', () => {
           flushSync(() => bumpSortEpoch())
         }
       }
-      expect(view.latest.ids[0]).toBe('w77')
+      expect(view.latest.ids[0]).toBe(key('w77'))
       expect(view.errors).toEqual([])
       flushSync(() => vi.advanceTimersByTime(3_000))
       expect(view.errors).toEqual([])
       const expected = [...useAppStore.getState().worktreesByRepo[repo.id]]
         .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
-        .map((w) => w.id)
+        .map(getWorktreeHostIdentity)
       expect(view.latest.ids).toEqual(expected)
-      expect(view.latest.ids[0]).toBe('w0')
+      expect(view.latest.ids[0]).toBe(key('w0'))
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       view.unmount()
@@ -187,16 +195,16 @@ describe('useSidebarWorktreeSortOrder', () => {
       'recent'
     )
     const { result } = renderSortOrder()
-    expect(result.current).toEqual(['a', 'b'])
+    expect(result.current).toEqual(keys('a', 'b'))
     act(() =>
       replaceWorktrees([
         makeWorktree('a', 'A', { lastActivityAt: 2_000 }),
         makeWorktree('b', 'B', { lastActivityAt: 3_000 })
       ])
     )
-    expect(result.current).toEqual(['a', 'b'])
+    expect(result.current).toEqual(keys('a', 'b'))
     act(() => vi.advanceTimersByTime(3_000))
-    expect(result.current).toEqual(['b', 'a'])
+    expect(result.current).toEqual(keys('b', 'a'))
   })
 
   it('applies an added worktree immediately in debounced modes', () => {
@@ -204,7 +212,7 @@ describe('useSidebarWorktreeSortOrder', () => {
     seed([makeWorktree('a', 'A')], 'name')
     const { result } = renderSortOrder()
     act(() => replaceWorktrees([makeWorktree('a', 'A'), makeWorktree('0', '0 first')]))
-    expect(result.current).toEqual(['0', 'a'])
+    expect(result.current).toEqual(keys('0', 'a'))
   })
 
   it('re-sorts on Manual -> Recent and stays put at settle', () => {
@@ -220,9 +228,9 @@ describe('useSidebarWorktreeSortOrder', () => {
     for (let i = 0; i < 5; i++) {
       act(() => bumpSortEpoch())
     }
-    expect(result.current).toEqual(['a', 'b'])
+    expect(result.current).toEqual(keys('a', 'b'))
     act(() => useAppStore.getState().setSortBy('recent'))
-    expect(result.current).toEqual(['b', 'a'])
+    expect(result.current).toEqual(keys('b', 'a'))
     const afterSwitch = result.current
     act(() => vi.advanceTimersByTime(3_000))
     expect(result.current).toBe(afterSwitch)
@@ -247,9 +255,9 @@ describe('useSidebarWorktreeSortOrder', () => {
     act(() => vi.advanceTimersByTime(2_000))
     act(() => bumpSortEpoch())
     act(() => vi.advanceTimersByTime(2_000))
-    expect(result.current).toEqual(['a', 'b'])
+    expect(result.current).toEqual(keys('a', 'b'))
     act(() => vi.advanceTimersByTime(1_000))
-    expect(result.current).toEqual(['b', 'a'])
+    expect(result.current).toEqual(keys('b', 'a'))
   })
 
   it('applies a removed worktree immediately in debounced modes', () => {
@@ -269,7 +277,7 @@ describe('useSidebarWorktreeSortOrder', () => {
         makeWorktree('c', 'C', { lastActivityAt: 4_000 })
       ])
     )
-    expect(result.current).toEqual(['c', 'b'])
+    expect(result.current).toEqual(keys('c', 'b'))
   })
 
   it('does not re-sort when rows change without a sortEpoch bump', () => {
@@ -318,7 +326,7 @@ describe('useSidebarWorktreeSortOrder', () => {
     )
     expect(vi.getTimerCount()).toBe(1)
     act(() => useAppStore.getState().setSortBy('name'))
-    expect(result.current).toEqual(['b', 'a'])
+    expect(result.current).toEqual(keys('b', 'a'))
     expect(useAppStore.getState().settledSortEpoch).toBe(useAppStore.getState().sortEpoch)
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -331,9 +339,9 @@ describe('useSidebarWorktreeSortOrder', () => {
         sortBy
       )
       const { result } = renderSortOrder()
-      expect(result.current).toEqual(['a', 'b'])
+      expect(result.current).toEqual(keys('a', 'b'))
       act(() => publishSortOrders({ a: 1, b: 2 }))
-      expect(result.current).toEqual(['b', 'a'])
+      expect(result.current).toEqual(keys('b', 'a'))
       expect(useAppStore.getState().sortEpoch).toBe(1)
     }
   )
@@ -380,9 +388,9 @@ describe('useSidebarWorktreeSortOrder', () => {
       latched.unmount()
 
       const cold = renderSortOrder()
-      expect(cold.result.current).toEqual(['b', 'a'])
+      expect(cold.result.current).toEqual(keys('b', 'a'))
       act(() => publishSortOrders({ a: 3 }))
-      expect(cold.result.current).toEqual(['a', 'b'])
+      expect(cold.result.current).toEqual(keys('a', 'b'))
     } finally {
       vi.unstubAllGlobals()
     }

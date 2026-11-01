@@ -1,11 +1,7 @@
 import { lstatSync, readlinkSync, realpathSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
-/**
- * Where a promotion write actually lands. `~/.codex/config.toml` is commonly a
- * dotfile-manager symlink, so the write has to follow it — including when the
- * link is dangling, which `realpathSync` cannot resolve.
- */
+/** Follow dotfile-manager symlinks, including dangling links realpath cannot resolve. */
 export function resolvePromotionWriteTarget(systemTomlPath: string): {
   path: string
   mode: number
@@ -41,6 +37,6 @@ function resolveDanglingSymlinkTarget(linkPath: string): string {
       return currentPath
     }
   }
-  // Why: replacing any link in a cycle would destroy dotfile-manager state; abort instead.
+  // Abort rather than overwrite a link in the dotfile-manager cycle.
   throw new Error(`Codex config symlink cycle at ${linkPath}`)
 }

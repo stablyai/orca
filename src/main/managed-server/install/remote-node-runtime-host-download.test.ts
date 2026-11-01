@@ -35,7 +35,6 @@ function which(tool: string): string | null {
   return result.code === 0 ? result.stdout.trim() : null
 }
 
-/** A host whose PATH holds only the shell basics plus the given download-tool shims. */
 function fakeHost(tools: Record<string, string>): { bin: string; stage: string } {
   const root = mkdtempSync(join(tmpdir(), 'orca-host-download-'))
   directories.push(root)
@@ -55,19 +54,24 @@ function fakeHost(tools: Record<string, string>): { bin: string; stage: string }
   return { bin, stage }
 }
 
-// Writes `$1` to the file after the given output flag, wherever it appears in argv.
 const writeTo = (flag: string, content: string): string =>
   `while [ $# -gt 0 ]; do if [ "$1" = ${flag} ]; then printf '%s' '${content}' > "$2"; fi; shift; done`
 
 function runOnHost(
   bin: string,
   stage: string,
-  options: { mirror?: string; env?: Record<string, string>; timeoutMs?: number } = {}
+  options: {
+    mirror?: string
+    env?: Record<string, string>
+    timeoutMs?: number
+    connectTimeoutSeconds?: number
+  } = {}
 ): string {
   const command = hostDownloadNodeRuntimeCommand(host, {
     stageDir: stage,
     target: TARGET,
-    mirror: options.mirror
+    mirror: options.mirror,
+    connectTimeoutSeconds: options.connectTimeoutSeconds
   })
   const result = runProcessSync({
     program: '/bin/sh',
@@ -85,7 +89,6 @@ const read = (bin: string, name: string): string[] =>
     .split('\n')
 const mirrored = (base: string): string =>
   `${base}/v${NODE_RUNTIME_PIN.version}/${originalAsset.archive}`
-// Records each URL and --max-time, and serves only URLs with the given prefix.
 const curlServing = (prefix: string, failure = "echo 'curl: (22) 404' >&2; exit 22"): string =>
   [
     `prev=; for a in "$@"; do case "$a" in http*) echo "$a" >> "\${0%/*}/urls";; esac;`,
@@ -101,8 +104,26 @@ describe.skipIf(process.platform === 'win32')('the host-side pinned Node downloa
     expect(readHostNodeDownload(runOnHost(bin, stage))).toEqual({ ok: true })
     expect(existsSync(join(stage, originalAsset.archive))).toBe(true)
     expect(read(bin, 'urls')).toEqual([hostNodeRuntimeUrl(TARGET)])
-    // 200 MiB in 512-byte blocks: an endless response can't fill the host's disk.
+    // Cap endless downloads at 200 MiB, expressed in 512-byte blocks.
     expect(read(bin, 'file-limit')).toEqual(['409600'])
+  })
+
+  it.each([
+    ['SSH hosts keep the default', undefined, '20'],
+    ['a WSL deploy bounds it', 15, '15']
+  ])('gives each source a connect budget: %s', (_name, connectTimeoutSeconds, expected) => {
+    const recordFlag = (flag: string, file: string): string =>
+      `prev=; for a in "$@"; do [ "$prev" = ${flag} ] && echo "$a" >> "\${0%/*}/${file}"; prev=$a; done`
+    const { bin, stage } = fakeHost({
+      curl: `${recordFlag('--connect-timeout', 'connect-timeouts')}\n${writeTo('-o', PAYLOAD)}`
+    })
+    runOnHost(bin, stage, { connectTimeoutSeconds })
+    expect(read(bin, 'connect-timeouts')).toEqual([expected])
+    const wget = fakeHost({
+      wget: `${recordFlag('-T', 'wget-timeouts')}\n${writeTo('-O', PAYLOAD)}`
+    })
+    runOnHost(wget.bin, wget.stage, { connectTimeoutSeconds })
+    expect(read(wget.bin, 'wget-timeouts')).toEqual([expected])
   })
 
   it('uses wget where the host has no curl', () => {
@@ -114,7 +135,6 @@ describe.skipIf(process.platform === 'win32')('the host-side pinned Node downloa
     'stops a trickling wget at its share of the deadline, without the timeout command',
     { timeout: 90_000 },
     () => {
-      // Deadline 1840; every later reading leaves 31 s.
       const { bin, stage } = fakeHost({
         date: `if [ -e "\${0%/*}/clock" ]; then echo 1809; else : > "\${0%/*}/clock"; echo 1000; fi`,
         wget: 'exec sleep 120'

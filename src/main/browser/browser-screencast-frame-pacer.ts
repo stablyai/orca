@@ -38,8 +38,7 @@ export function createBrowserScreencastFramePacer(
     if (sessionId === undefined) {
       return
     }
-    // Why: CDP only sends the next frame after ACK; delaying ACK for
-    // throttled frames applies back-pressure before Chromium/base64 work piles up.
+    // Delay ACKs for throttled frames to limit Chromium encoding work.
     void sendDebuggerCommand(dbg, 'Page.screencastFrameAck', { sessionId }).catch(() => {})
   }
 
@@ -65,8 +64,6 @@ export function createBrowserScreencastFramePacer(
         opcode: BrowserScreencastOpcode.Frame,
         seq: seq++,
         format: options.format,
-        // Why: Chromium sometimes omits device dimensions on static/mobile
-        // pages; carrying viewport/image dimensions prevents client stretch.
         metadata: frame.metadata,
         image: frame.image
       })
@@ -115,9 +112,7 @@ export function createBrowserScreencastFramePacer(
       return
     }
 
-    // Why: static UI changes can be the last frame Chromium emits. Keep the
-    // newest throttled frame and flush it after the interval instead of
-    // dropping it forever.
+    // Retain the newest throttled frame: a static page may never emit another.
     if (pendingFrame?.sessionId !== frame.sessionId) {
       ackScreencastFrame(pendingFrame?.sessionId)
     }

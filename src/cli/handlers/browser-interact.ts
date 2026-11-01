@@ -13,12 +13,14 @@ import type {
   BrowserUploadResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
+import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { printResult } from '../format'
 import {
   getOptionalNumberFlag,
   getOptionalStringFlag,
   getRequiredFiniteNumber,
-  getRequiredStringFlag
+  getRequiredStringFlag,
+  getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import { getBrowserCommandTarget } from '../selectors'
 
@@ -50,7 +52,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   fill: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    const value = getRequiredStringFlag(flags, 'value')
+    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserFillResult>('browser.fill', {
       element,
@@ -67,7 +69,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   select: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    const value = getRequiredStringFlag(flags, 'value')
+    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserSelectResult>('browser.select', {
       element,
@@ -131,7 +133,12 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
       files,
       ...target
     })
-    printResult(result, json, (v) => `Uploaded ${v.uploaded} file(s)`)
+    printResult(
+      result,
+      json,
+      (v) =>
+        `Uploaded ${v.uploaded} file(s)${v.frameUrl ? ` to a file input in ${v.frameUrl}` : ''}`
+    )
   },
   scrollintoview: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
@@ -206,11 +213,19 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
       text,
       ...target
     })
-    printResult(result, json, (v) => JSON.stringify(v, null, 2))
+    // Effects print under the result, so the JSON body leaves them out.
+    printResult(result, json, (v) =>
+      JSON.stringify(v, (key, value: unknown) => (key === 'effects' ? undefined : value), 2)
+    )
   },
   download: async ({ flags, client, cwd, json }) => {
     const selector = getRequiredStringFlag(flags, 'selector')
-    const path = getRequiredStringFlag(flags, 'path')
+    const path = resolveRepoPathArgument(
+      getRequiredStringFlag(flags, 'path'),
+      cwd,
+      client.isRemote,
+      'Remote browser download'
+    )
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<unknown>('browser.download', { selector, path, ...target })
     printResult(result, json, () => `Downloaded to ${path}`)

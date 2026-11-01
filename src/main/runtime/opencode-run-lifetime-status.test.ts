@@ -61,7 +61,6 @@ describe('OpenCodeRunLifetimeStatus', () => {
     expect(states()).toEqual(['working', 'done'])
     expect(published.map((entry) => entry.ptyId)).toEqual(['pty-1', 'pty-1'])
     expect(published.map((entry) => entry.payload.agentType)).toEqual(['opencode', 'opencode'])
-    // Both writes yield to a hook that reports after this command started.
     expect(new Set(published.map((entry) => entry.yieldsToHookSince))).toEqual(new Set([1_000]))
   })
 
@@ -120,7 +119,7 @@ describe('OpenCodeRunLifetimeStatus', () => {
     }
   })
 
-  // Why: another agent, an editor or a dev server never execs OpenCode as the pane's foreground.
+  // Non-OpenCode foregrounds must stop polling instead of being treated as agent startup.
   it.each(['claude', 'codex', 'vim', 'sleep', 'python3'])(
     'reads %s once and stops',
     async (name) => {

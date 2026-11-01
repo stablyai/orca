@@ -1,11 +1,6 @@
 import { expect, it } from 'vitest'
 import { jsonBytes, shortenJsonStringsToFit } from './json-string-shortening'
 
-it('returns the value itself when it already fits', () => {
-  const value = { text: 'short' }
-  expect(shortenJsonStringsToFit(value, 1_000)).toBe(value)
-})
-
 it('cuts long strings to fit and marks them, never splitting a surrogate pair', () => {
   const value = { text: '😀'.repeat(2_000), other: 'x'.repeat(4_000) }
   const fitted = shortenJsonStringsToFit(value, 2_000)

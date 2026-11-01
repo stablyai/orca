@@ -37,8 +37,6 @@ vi.mock('@/hooks/useModalReturnFocus', () => ({
   useModalReturnFocus: () => ({ captureReturnFocus: vi.fn(), skipReturnFocus: vi.fn() })
 }))
 
-vi.mock('./quick-open-file-navigation', () => ({ openQuickOpenFile: vi.fn() }))
-
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))

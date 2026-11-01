@@ -1,5 +1,4 @@
-// Unpacks a hash-checked runtime zip in-process, so installing never depends on the host having
-// `unzip`. Only the pinned members land, at their pinned sizes; any other entry fails.
+// Extract pinned members in-process without requiring unzip; reject unexpected entries or sizes.
 
 import { createReadStream } from 'node:fs'
 import { open, type FileHandle } from 'node:fs/promises'
@@ -42,7 +41,7 @@ export async function extractPinnedZipMembers(
   })
   unzip.register(UnzipInflate)
   const handles = new Map<string, FileHandle>()
-  // Each read's output is written before the next read, which bounds memory.
+  // Flush each decoded chunk before reading another to bound memory.
   const push = async (chunk: Uint8Array, final: boolean): Promise<void> => {
     unzip.push(chunk, final)
     for (const { name, data } of pending.splice(0)) {

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostAccountSignInStatus } from '../../../shared/host-account-sign-in-types'
+import { i18n } from '@/i18n/i18n'
+import es from '@/i18n/locales/es.json'
 
 type RecordedCall = { method: string; params: unknown; revision: number | undefined }
 const rpc = vi.hoisted(() => {
@@ -33,7 +35,7 @@ import {
   HOST_SIGN_IN_RETRY_WINDOW_MS,
   addCodexAccountOnHost,
   cancelHostAccountSignIn,
-  readHostAccountSignIn,
+  hostAccountSignInFailureText,
   retryLostAnswers,
   runningHostAccountSignInOwner
 } from './runtime-host-account-sign-in-client'
@@ -56,20 +58,6 @@ afterEach(() => {
 const timedOut = (): Error => Object.assign(new Error('Request timed out'), { code: 'rpc_timeout' })
 
 describe('host account sign-in client', () => {
-  it('pins every call to the pairing the sign-in started on and returns the added roster', async () => {
-    rpc.answer = (method) =>
-      method === 'accounts.hostSignInStart'
-        ? status({})
-        : status({ revision: 2, phase: 'signedIn', codex: CODEX })
-    await expect(addCodexAccountOnHost(OWNER)).resolves.toEqual(CODEX)
-    expect(rpc.calls.map((call) => call.method)).toEqual([
-      'accounts.hostSignInStart',
-      'accounts.hostSignInWait'
-    ])
-    expect(rpc.calls.every((call) => call.revision === 7)).toBe(true)
-    expect(readHostAccountSignIn(OWNER, 'codex')).toBeNull()
-  })
-
   it('starts nothing on the host when Cancel lands during the capability check', async () => {
     const capability = Promise.withResolvers<void>()
     rpc.capability = capability.promise
@@ -150,6 +138,32 @@ describe('host account sign-in client', () => {
     await expect(cancelHostAccountSignIn(OWNER, 'codex')).rejects.toThrow('unavailable')
     await expect(adding).rejects.toThrow('Codex sign-in was cancelled.')
     expect(cancels).toBe(2)
+  })
+})
+
+describe('hostAccountSignInFailureText', () => {
+  it('translates a coded host failure and keeps uncoded login text verbatim', async () => {
+    const originalLanguage = i18n.language
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    try {
+      const english = 'An account change on this host stopped the sign-in. Start it again.'
+      expect(
+        hostAccountSignInFailureText(
+          status({ phase: 'failed', error: english, errorCode: 'superseded' })
+        )
+      ).toBe(es.accounts.hostSignIn.errors.superseded)
+      expect(
+        hostAccountSignInFailureText(
+          status({ phase: 'failed', error: english, errorCode: 'fromNewerHost' })
+        )
+      ).toBe(english)
+      expect(
+        hostAccountSignInFailureText(status({ phase: 'failed', error: 'Codex login failed: boom' }))
+      ).toBe('Codex login failed: boom')
+    } finally {
+      await i18n.changeLanguage(originalLanguage)
+    }
   })
 })
 

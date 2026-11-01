@@ -1,9 +1,4 @@
-/**
- * E2E test for a long tab strip: a change to one tab must re-render that tab, not the strip.
- *
- * Why E2E: only the whole app shows every React commit a tab change causes — the store write, the
- * strip's projections, and the drag-and-drop context every tab reads.
- */
+// Require one-tab changes to rerender only that tab across the whole app’s store/projection/drag-context commits.
 
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -67,8 +62,7 @@ test.describe('Tab strip tab render isolation', () => {
     expect(Math.max(...backgroundRetitle)).toBe(1)
 
     await waitForQuietStrip(orcaPage)
-    // A node script, so the title is emitted the same way under PowerShell, cmd and POSIX shells.
-    // It stays alive until the title is read; a shell prompt would retitle the tab straight back.
+    // Use a cross-shell Node emitter and keep it alive until the title is read, before the prompt overwrites it.
     const retitle = await runNodeScriptInTerminal(
       orcaPage,
       ptyId,

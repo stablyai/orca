@@ -15,11 +15,7 @@ export function getWslCliCommandName(isPackaged: boolean): string {
 
 let warnedMissingRuntime = false
 
-/**
- * Directory holding this app's WSL launcher and bridge, or null when the CLI runtime is
- * missing or unwritable. Content-addressed like shell-ready wrappers: builds sharing userData
- * never overwrite each other, and a present file is complete because each one lands by rename.
- */
+// Content-addressed, atomically published files let builds share userData without overwriting peers.
 export function getManagedWslCliDir(opts: {
   isPackaged: boolean
   userDataPath: string

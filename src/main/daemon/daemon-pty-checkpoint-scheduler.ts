@@ -25,11 +25,11 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     ) {
       return
     }
-    // Why: dirty-gate the timer — a permanent 5s interval woke the main process for idle terminals with nothing to write.
+    // Dirty-gate timers so idle terminals do not wake the main process.
     this.checkpointTimer = setTimeout(
       () => {
         this.checkpointTimer = null
-        // Why: don't overlap checkpoint passes — concurrent tmp-file writes can lose a rename and disable future history writes.
+        // Serialize checkpoint passes: concurrent temporary-file renames can disable history writes.
         if (this.checkpointInFlight) {
           this.scheduleCheckpointTimer()
           return
@@ -43,7 +43,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
               this.scheduleCheckpointTimer()
             }
           })
-          // Why: .finally() re-throws, so a rejected checkpoint would surface as an unhandled rejection here.
+          // finally preserves rejection; handle it on this unawaited timer task.
           .catch(() => {})
       },
       (this.constructor as typeof DaemonPtyCheckpointScheduler).CHECKPOINT_INTERVAL_MS
@@ -62,8 +62,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     if (!this.historyManager || this.dirtySessionVersions.size === 0) {
       return
     }
-    // Why: dirty-version filtering avoids re-serializing every idle session every 5s (CPU/disk on large workspaces)
-    // while not dropping writes that arrive mid-checkpoint.
+    // Track versions so idle sessions stay cheap and writes arriving mid-checkpoint remain dirty.
     const versions = new Map(
       [...this.dirtySessionVersions].filter(([sessionId]) => this.activeSessionIds.has(sessionId))
     )
@@ -87,13 +86,11 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     options: { rescheduleDirty?: boolean; callerDeadlineMs?: number } = {}
   ): Promise<boolean> {
     this.stopCheckpointTimer()
-    // Why: a promise tail keeps every waiter ordered; awaiting one active operation lets sibling waiters resume together.
+    // Chain every waiter; awaiting only the active operation would release siblings together.
     const previous = this.checkpointInFlight ?? Promise.resolve()
     const checkpoint = previous.catch(() => {}).then(operation)
     this.checkpointInFlight = checkpoint
-    // Why the release rides the checkpoint instead of the caller's await: a caller that walks away
-    // at its deadline must leave this checkpoint as the tail, so the durable write still runs to
-    // completion, still commits, and the next waiter still queues behind it (STA-4228).
+    // Release on checkpoint settlement, not caller timeout, so durable writes finish and later waiters stay ordered.
     const settled = checkpoint.then(
       () => this.releaseExclusiveCheckpoint(checkpoint, options.rescheduleDirty),
       (err: unknown) => {
@@ -121,8 +118,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     }
   }
 
-  // Why final=true not teardown: clean disconnect needs the full daemon-window snapshot as the restore source, but the
-  // detached daemon's PTYs keep running for warm reattach, so shell-ready scanner state must stay intact.
+  // Final disconnect snapshots preserve scanner state because daemon PTYs remain alive for reattach.
   protected async checkpointAllSessions(): Promise<void> {
     const completed = await this.checkpointSessions(this.activeSessionIds, { final: true })
     for (const sessionId of completed) {
@@ -166,7 +162,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
           teardown: opts?.teardown === true
         })
           .then((result) => {
-            // Why: deferred sessions stay dirty so the checkpoint timer keeps retrying until their full-snapshot cooldown expires.
+            // Deferred sessions stay dirty for later checkpoint retries.
             if (result === 'done') {
               completed.add(sessionId)
             }
@@ -174,7 +170,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
           .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
       }
     }
-    // Why: snapshot/checkpoint writes are CPU/disk heavy; cap prevents one tick snapshotting every dirty terminal at once.
+    // Limit simultaneous CPU and disk work across dirty terminals.
     const workers = Array.from(
       {
         length: Math.min(
@@ -188,14 +184,14 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     return completed
   }
 
-  // Why cooldown starts only after the first full snapshot: a checkpoint-less session must be able to write one immediately.
+  // A session without a checkpoint must write its first snapshot immediately.
   protected isFullCheckpointCoolingDown(sessionId: string): boolean {
     const last = this.lastFullCheckpointAt.get(sessionId)
     if (last === undefined) {
       return false
     }
     const elapsed = Date.now() - last
-    // Why elapsed < 0 counts as expired: a backward wall-clock jump must not extend the deferral window.
+    // A backward clock jump must not extend cooldown.
     return (
       elapsed >= 0 &&
       elapsed <
@@ -207,15 +203,13 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
   ): Promise<'done' | 'deferred'> {
-    // Why final waits without a deadline: sleep/disconnect needs the last snapshot on disk, and
-    // deferring there would silently drop what the user left on screen rather than delay it.
+    // Final writes must persist the last screen; wait for queued compaction instead of deferring.
     if (opts.final) {
       return await this.checkpointQueue.run(sessionId, () =>
         this.writeSessionCheckpoint(sessionId, opts)
       )
     }
-    // Why 'deferred' is safe: the session stays dirty, so the operation that beat us to the queue
-    // still commits and the next tick retries this one. Nothing on disk is discarded.
+    // Deferral preserves dirty state and lets admitted writes commit before the next retry.
     if (
       this.checkpointQueue.isSaturated(sessionId) ||
       !this.tryAdmitNonFinalCheckpoint(sessionId)

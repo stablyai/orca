@@ -1,4 +1,3 @@
-/** How orcad loads or first creates its master key, in the owner-only record beside the credentials. */
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -38,13 +37,12 @@ export type StoreState =
   | { kind: 'unavailable'; message: string }
 
 export type OrcadSecretStorePrepareOptions = {
-  /** Orca's credential directory (`~/.orca`), so the key lives exactly as long as what it seals. */
+  /** Keep the key beside the credentials so their lifetimes match. */
   keyDir: string
-  /** A temporary profile keeps the legacy behavior and leaves `keyDir` untouched. */
+  /** Disposable profiles leave persistent keys untouched. */
   userDataPath?: string
   platform?: NodeJS.Platform
   env?: NodeJS.ProcessEnv
-  /** Reads a key an older build kept in the OS keyring; only for migrating its record. */
   legacyKeyring?: OrcadLegacyKeyringReader | null
   machineIdentity?: () => string | null
   isTemporaryKeyDir?: (keyDir: string) => boolean
@@ -74,13 +72,7 @@ function newFileRecord(machineId: string | null): StoredKeyState {
   }
 }
 
-/**
- * Migration (removable a few releases after it ships): copies a key an older build kept in the OS
- * keyring into the file record once. Keyring keys are never machine-bound, so an unbound file
- * record derives the same sealing key. When the keyring cannot give it up without UI (locked,
- * missing, slow), start a fresh file key instead of failing closed for good: credentials sealed
- * under the old key then report the plain decrypt error, and the user reconnects them.
- */
+/** Migrate legacy keyring keys once; inaccessible keys are replaced and old credentials need reconnecting. */
 async function migrateKeyringRecord(
   stored: Extract<StoredKeyState, { backend: 'os-keyring' }>,
   context: Context
@@ -122,12 +114,12 @@ async function loadStoredRecord(
   context: Context
 ): Promise<StoreState | 'reload'> {
   if (stored.backend === 'os-keyring') {
-    // Why a lock: concurrent starts must not each replace the record with a different key.
-    // Why 4 retries: about 15s of backoff, longer than one bounded keyring read.
+    // Serialize concurrent key migrations.
+    // Retry beyond the bounded keyring read budget.
     return withFileTransactionLock(
       context.statePath,
       async () => {
-        // Why re-read under the lock: another start may have migrated it while this one waited.
+        // Another start may have migrated the record while this one waited.
         const current = readStoredRecord(context.statePath)
         return current.kind === 'record' &&
           current.stored.backend === 'os-keyring' &&
@@ -167,8 +159,7 @@ export async function resolveState(
   if (env[ORCAD_PLAINTEXT_SECRETS_ENV] === 'plaintext') {
     return { kind: 'plaintext', reason: describeOrcadPlaintextOptOut() }
   }
-  // Why: a disposable run (tests, smoke launchers) must not create keys in, or re-seal, the
-  // user's persistent ~/.orca; credentials it saves would outlive the run unreadable by others.
+  // Disposable runs must not alter persistent keys or re-seal credentials that outlive them.
   if (
     options.userDataPath &&
     (options.isTemporaryKeyDir ?? isTemporaryKeyDir)(options.userDataPath)
@@ -190,7 +181,7 @@ export async function resolveState(
       message: describeOrcadSealingUnavailable(reason, statePath)
     })
   }
-  // Why loop: a lost create race or a migrated record means the record on disk is the one to load.
+  // Reload the winning record after publication races or migration.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const existing = readStoredRecord(statePath)
     if (existing.kind === 'record') {
@@ -204,7 +195,7 @@ export async function resolveState(
       return context.unavailable(existing.reason)
     }
     const record = newFileRecord(machineId)
-    // Why fail closed: sealing with a key that did not reach disk loses every credential on restart.
+    // A key that never reaches disk would lose every sealed credential on restart.
     const published = publishRecordExclusively(statePath, record)
     if (published === 'published') {
       continue

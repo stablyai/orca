@@ -4,8 +4,7 @@ import {
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
 
-/** Checkout paths the memo maps `scope` to, or null when any part of it cannot
- *  be attributed (global scope, or an entry/primary the memo has not resolved). */
+/** Return null if any scoped checkout is unattributable; callers must then refresh globally. */
 export function cachedWorktreePathsForScope(
   cache: WorktreeHeadIdentityCache,
   scope: WorktreeHeadIdentityScope
@@ -20,8 +19,7 @@ export function cachedWorktreePathsForScope(
     }
     paths.push(cache.primary.worktreePath)
   }
-  // Why: keys fold case, so on case-sensitive filesystems `Foo` and `foo` are
-  // distinct admin dirs sharing one key; name both rather than drop the writer.
+  // Case-folded keys can match distinct Foo/foo entries; preserve every checkout path.
   const pathsByEntryKey = new Map<string, string[]>()
   for (const [name, identity] of cache.entries) {
     const key = headIdentityEntryKey(name)

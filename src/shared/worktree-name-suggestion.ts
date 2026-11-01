@@ -1,15 +1,12 @@
 import { MARINE_CREATURES } from './marine-creatures'
-import { clampExhaustedTiers, creatureNameAtTier } from './worktree/retired-name-registry'
+import {
+  clampExhaustedTiers,
+  creatureNameAtTier,
+  EMPTY_RETIRED_NAME_REGISTRY,
+  type RetiredNameRegistry
+} from './worktree/retired-name-registry'
 
-/** Shared selection core for generated workspace names.
- *
- *  Why this lives in shared: desktop and mobile each need to suggest a name before creating a
- *  workspace, and they previously hand-duplicated this algorithm. The two copies had to agree —
- *  both dedupe on the on-disk directory basename, both lowercase to match branch convention, and
- *  both degrade to suffixed tiers rather than recycling — so they are one implementation now.
- *
- *  Callers assemble the used set themselves because they source it differently (a by-repo map on
- *  desktop, a flat path list on mobile) and because retired names arrive from different places. */
+/** Desktop and mobile share selection rules; callers supply live/retired names from their own stores. */
 
 export function normalizeSuggestedName(name: string): string {
   return name.trim().toLowerCase()
@@ -19,8 +16,7 @@ function stripTrailingSeparators(path: string): string {
   return path.replace(/[\\/]+$/, '')
 }
 
-/** Cross-platform basename: worktree paths can be POSIX, Windows, or SSH-host paths, and the
- *  collision that matters is on the directory name rather than the user-facing display name. */
+/** Compare directory basenames across POSIX, Windows and SSH paths; display names do not determine collisions. */
 export function suggestionPathBasename(path: string): string {
   const normalized = stripTrailingSeparators(path)
   const index = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
@@ -31,17 +27,8 @@ function pickRandom<T>(items: readonly T[], random: () => number): T {
   return items[Math.floor(random() * items.length)]
 }
 
-/** Picks a name no one has taken, at random rather than in list order so fresh workspaces don't
- *  all start at the same creature and march down the list together.
- *
- *  `usedNames` must include retired names as well as live ones. A name whose workspace was deleted
- *  still owns its old directory path in any agent CLI that keys conversation state by cwd, so
- *  reissuing it hands the next occupant someone else's history. Once every base name is spent the
- *  pool degrades to `name-2`, `name-3`, and those variants are equally subject to retirement.
- *
- *  `exhaustedTiers` is the retirement registry's compaction watermark. The registry stops listing
- *  a tier's names individually once every one of them is spent, so those tiers must be skipped
- *  here rather than looked up — they are absent from `usedNames` precisely because they are gone. */
+/** Randomize unused names, then advance through suffix tiers. Include retired names: reusing a deleted workspace’s cwd can expose its agent conversation history.
+ * Skip exhaustedTiers outright; compaction removed their individually listed names because they are all spent. */
 export function selectSuggestedCreatureName(
   usedNames: Iterable<string>,
   random: () => number = Math.random,
@@ -62,4 +49,20 @@ export function selectSuggestedCreatureName(
     }
     tier += 1
   }
+}
+
+/** Collisions use the on-disk basename, not displayName. Retired names may retain conversation state keyed by cwd; exhaustedTiers covers compacted names a host no longer lists. */
+export function suggestCreatureNameForPaths(
+  existingPaths: readonly string[],
+  random: () => number = Math.random,
+  retired: RetiredNameRegistry = EMPTY_RETIRED_NAME_REGISTRY
+): string {
+  const used = new Set<string>()
+  for (const path of existingPaths) {
+    used.add(normalizeSuggestedName(suggestionPathBasename(path)))
+  }
+  for (const retiredName of retired.names) {
+    used.add(normalizeSuggestedName(retiredName))
+  }
+  return selectSuggestedCreatureName(used, random, retired.exhaustedTiers)
 }

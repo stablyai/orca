@@ -1,18 +1,12 @@
 import { handleMsg, type TerminalHostMessage } from './host-message-router'
-import { notify, reportEngineError, type TerminalEngineError } from './host-notify'
+import { notify, reportEngineError } from './host-notify'
 import { laidOutCellBox } from './laid-out-cell-box'
 import { prepareTerminal } from './terminal-init'
 import { refreshTerminalSurface } from './webgl-recovery'
 import type { TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHostFrame } from './document-host-seams'
 
-/**
- * One frame from the host, routed.
- *
- * The parse is here rather than in the transport because the shape it parses into is the router's:
- * a bridge hands over JSON text and a host that holds `send` hands over the object, and either way
- * the document reads the same message.
- */
+// Parse at the router boundary so native JSON transport and embedded object sends share one message shape.
 export function handleIncomingMessage(
   scope: TerminalDocumentScope,
   frame: TerminalDocumentHostFrame
@@ -29,20 +23,13 @@ export function handleIncomingMessage(
     reportEngineError(
       scope,
       msg && msg.type === 'init' ? 'terminal init failed' : 'terminal message failed',
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a catch binding is `unknown`; the reporter reads only `message` and falls back to String().
-      ex as TerminalEngineError,
+      ex,
       msg && msg.type === 'init' && !scope.everReady
     )
   }
 }
 
-/**
- * The document's answer to its host: whatever transport the host has, and readiness.
- *
- * Both are seams because the two hosts differ on both (ruling 24). The WebView is sent frames as
- * `message` events and loads its engine from a script tag that can fail; the page calls `send`
- * directly and imported the engine before it built this document.
- */
+// Native receives events and may lack its engine script; embedded hosts call send and import the engine before startup.
 export function startMessageBridge(scope: TerminalDocumentScope) {
   scope.uninstallHostTransport = scope.installHostTransport((frame) =>
     handleIncomingMessage(scope, frame)
@@ -52,7 +39,7 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
       return
     }
     if (scope.hasEngine()) {
-      // Why: ready carries the cell box xterm itself laid out, so the host sizes the first subscribe.
+      // Ready must carry xterm’s measured cell box to size the first host subscription.
       if (scope.start().shown) {
         prepareTerminal(scope)
       }
@@ -62,14 +49,19 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
       reportEngineError(scope, 'terminal engine missing', 'xterm failed to load', true)
     }
   }
-  // The WebGL atlas retains missing glyphs if it paints before the bundled font finishes loading.
-  if (document.fonts && !document.fonts.check('13px "Orca Nerd Font Symbols"', '\ue0b0')) {
+  // The WebGL atlas retains missing glyphs if it paints before the bundled fonts finish loading.
+  if (document.fonts && !document.fonts.check(...TERMINAL_FONT_PROBE)) {
     return waitForTerminalFont(scope, reportReady)
   }
   reportReady()
 }
 
 const FONT_READY_TIMEOUT_MS = 2000
+// One glyph per bundled face, so check and load cover both.
+const TERMINAL_FONT_PROBE = [
+  '13px "Orca Nerd Font Symbols", "Orca Terminal Symbols"',
+  '\ue0b0\u23f5'
+] as const
 
 function waitForTerminalFont(scope: TerminalDocumentScope, reportReady: () => void) {
   return new Promise<void>((resolve, reject) => {
@@ -118,10 +110,7 @@ function waitForTerminalFont(scope: TerminalDocumentScope, reportReady: () => vo
         finish()
       }
     }
-    observeFontCompletion(
-      document.fonts.load('13px "Orca Nerd Font Symbols"', '\ue0b0'),
-      completion
-    )
+    observeFontCompletion(document.fonts.load(...TERMINAL_FONT_PROBE), completion)
   })
 }
 

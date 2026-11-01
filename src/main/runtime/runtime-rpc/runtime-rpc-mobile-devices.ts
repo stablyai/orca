@@ -30,8 +30,7 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         return false
       }
     }
-    // Why: unpairing must delete the phone's push token at the gateway too, and the
-    // registration id is only readable while the device row still exists.
+    // Capture gateway registration before deleting its device row so unpair also revokes push.
     this.queuePushUnregister(deviceId, device.pushRegistration?.registrationId)
     if (!this.deviceRegistry?.removeDevice(deviceId)) {
       return false
@@ -48,7 +47,7 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
       return false
     }
     for (const child of this.deviceRegistry?.listDelegatedMobileDevices(deviceId) ?? []) {
-      // Why: keep the parent until every child's cleanup is saved, so a retry can still find them.
+      // Keep parent until child cleanup is durable so retry can rediscover them.
       if (!this.revokeMobileDeviceNow(child.deviceId)) {
         return false
       }
@@ -80,8 +79,17 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         throw new Error('delegated_device_revoke_failed')
       }
     }
+    let devices = registry.upsertDelegatedMobileDevices(parent, phones)
+    // A child removed on disk meanwhile is dropped by the save; one rerun mints it fresh.
+    if (devices.length < phones.length) {
+      const current = registry.getDevice(parentDeviceId)
+      if (current?.scope !== 'runtime') {
+        throw new Error('delegated_device_parent_unavailable')
+      }
+      devices = registry.upsertDelegatedMobileDevices(current, phones)
+    }
     return {
-      devices: registry.upsertDelegatedMobileDevices(parent, phones).map((device) => ({
+      devices: devices.map((device) => ({
         phoneKey: device.phoneKey,
         deviceId: device.deviceId,
         token: device.token

@@ -39,8 +39,7 @@ async function countTerminals(
   params: z.infer<typeof OrcadTerminalCensusParamsSchema>,
   runtime: Pick<OrcaRuntimeService, 'releaseFinishedAutomationRunTerminals'>
 ): Promise<OrcadTerminalCensus> {
-  // Why lazy: the census reaches the daemon modules, whose xterm polyfill defines a global
-  // `window`; importing them statically would load it into every process with the dispatcher.
+  // Import lazily: daemon modules install xterm's global window and must not contaminate every dispatcher process.
   const { collectOrcadTerminalCensus } = await import('../../../orcad/orcad-terminal-census')
   if (!params.releaseFinishedAutomationTerminals) {
     return collectOrcadTerminalCensus(params.activatedAt)

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { probeClaudeCliVersion } from './claude/claude-hook-event-versions'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { checkAgentCliVersion } from './agent-cli-version-probe'
 
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
@@ -19,6 +20,7 @@ function prints(stdout: string, result: Record<string, unknown> = {}): void {
 }
 
 describe('checkAgentCliVersion', () => {
+  afterEach(() => vi.restoreAllMocks())
   beforeEach(() => runProcess.mockReset())
 
   it('asks the program for its version, bounded, where and as the launch would run it', async () => {
@@ -30,6 +32,7 @@ describe('checkAgentCliVersion', () => {
     expect(runProcess).toHaveBeenCalledWith({
       ...INPUT,
       args: ['--version'],
+      terminationBarrier: true,
       timeoutMs: 5_000,
       maxOutputBytes: 4_096,
       killOnOutputLimit: true
@@ -104,4 +107,34 @@ describe('checkAgentCliVersion', () => {
     ])
     warn.mockRestore()
   })
+})
+
+it('probes the agent behind a launcher with tree teardown', async () => {
+  prints('0.84.0')
+  await checkAgentCliVersion({ ...INPUT, prefixArgs: ['run', '--', 'pi'] }, ['0.84.0'])
+  expect(runProcess).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      program: INPUT.program,
+      args: ['run', '--', 'pi', '--version'],
+      terminationBarrier: true
+    })
+  )
+})
+
+it('probes Claude through its prefix with the same tree teardown', async () => {
+  prints('2.1.280 (Claude Code)')
+  await expect(
+    probeClaudeCliVersion(INPUT.program, {
+      cwd: INPUT.cwd,
+      env: INPUT.env,
+      prefixArgs: ['run', '--', 'claude']
+    })
+  ).resolves.toBe('2.1.280')
+  expect(runProcess).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      program: INPUT.program,
+      args: ['run', '--', 'claude', '--version'],
+      terminationBarrier: true
+    })
+  )
 })

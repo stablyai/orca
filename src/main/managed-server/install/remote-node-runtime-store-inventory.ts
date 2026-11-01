@@ -1,7 +1,3 @@
-/**
- * One read-only pass over `~/.orca-remote/` answering what the runtime store GC needs: store
- * entries, which runtimes are referenced, verified order, and which a running process holds.
- */
 import {
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
@@ -11,7 +7,7 @@ import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
-/** A version dir names a runtime it needs with an empty file of this prefix + sha (design D5). */
+/** Empty per-version reference files protect runtimes from GC. */
 export const RUNTIME_REF_NODE_PREFIX = '.runtime-ref-node-'
 export const RUNTIME_STORE_TOMBSTONE_PREFIX = '.gc-tombstone-'
 export const INVENTORY_OK = '__ORCA_RUNTIME_STORE__OK'
@@ -24,22 +20,19 @@ export const RUNTIME_STORE_ENTRY_NAME = new RegExp(
 export const RUNTIME_STORE_TOMBSTONE_NAME = new RegExp(
   `^${RUNTIME_STORE_TOMBSTONE_PREFIX.replace(/\./g, '\\.')}${ORCAD_NODE_RUNTIME_DIR_PREFIX}([0-9a-f]{64})\\.[0-9]+\\.([0-9]+)$`
 )
-// Why `[/\\]`: Windows process paths use backslashes (see remote-node-runtime-store-windows.ts).
+// Windows process paths use backslashes.
 const HELD_PATH = new RegExp(
   `[/\\\\]${ORCAD_RUNTIMES_DIRNAME}[/\\\\](?:${RUNTIME_STORE_TOMBSTONE_PREFIX.replace(/\./g, '\\.')})?${ORCAD_NODE_RUNTIME_DIR_PREFIX}([0-9a-f]{64})[./\\\\]`,
   'i'
 )
 
 export type RuntimeStoreInventory = {
-  /** Store entry names: `node-<sha>` and this GC's tombstones. */
   entries: string[]
-  /** `node-<sha>` names with `.verified`, newest first. */
   verifiedNewestFirst: string[]
   referenced: Set<string>
   held: Set<string>
-  /** False when neither `ps` nor `/proc` answered; nothing may then be called idle. */
+  /** False process evidence cannot establish idleness. */
   processCheckRan: boolean
-  /** Other `~/.orca-remote/` directory names, for legacy diagnostics. */
   dirNames: string[]
 }
 
@@ -53,8 +46,7 @@ export function runtimeStoreInventoryCommand(host: RemoteHostPlatform, remoteHom
     `[ -d "$rt" ] || { printf '%s\\n' ${INVENTORY_OK}; exit 0; }`,
     `[ -r "$root" ] && [ -x "$root" ] || { printf '%s\\n' ${REFS_ERR}; exit 0; }`,
     'n=0',
-    // Why every sibling and not a prefix: a directory this client does not recognise may still
-    // be a newer Orca's install that names a runtime.
+    // Newer clients' unrecognized install directories may still reference runtimes.
     'for d in "$root"/* "$root"/.[!.]*; do',
     '  [ -d "$d" ] || continue',
     '  name=${d##*/}',
@@ -80,8 +72,7 @@ export function runtimeStoreInventoryCommand(host: RemoteHostPlatform, remoteHom
     `  order=$(ls -1t -- "$@") || { printf '%s\\n' ${REFS_ERR}; exit 0; }`,
     `  printf '%s\\n' "$order" | while IFS= read -r v; do v=\${v%/.verified}; printf 'VERIFIED %s\\n' "\${v##*/}"; done`,
     'fi',
-    // Process checks only add holds, so an unmatched `grep` is not an error. Why not "$rt/":
-    // /proc exe and argv may name the store through another spelling of a symlinked home.
+    // Processes only add holds; match runtime-relative paths to allow alternate symlinked-home spellings.
     'if ps_out=$(ps -e -o args= 2>/dev/null); then',
     "  printf 'PROCESS_CHECK ps\\n'",
     `  printf '%s\\n' "$ps_out" | grep -F -- /${ORCAD_RUNTIMES_DIRNAME}/ | sed 's/^/HOLD /'`,
@@ -97,7 +88,7 @@ export function runtimeStoreInventoryCommand(host: RemoteHostPlatform, remoteHom
   ].join('\n')
 }
 
-/** Null when the host could not produce a complete inventory; that keeps every runtime. */
+/** Incomplete inventories keep every runtime. */
 export function parseRuntimeStoreInventory(output: string): RuntimeStoreInventory | null {
   const lines = output.split(/\r?\n/).map((line) => line.trim())
   if (!lines.includes(INVENTORY_OK) || lines.includes(REFS_ERR)) {
@@ -116,7 +107,7 @@ export function parseRuntimeStoreInventory(output: string): RuntimeStoreInventor
     const tag = space === -1 ? line : line.slice(0, space)
     const value = space === -1 ? '' : line.slice(space + 1).trim()
     if (tag === 'REF') {
-      // An unattributable reference could name any runtime, so it stops the pass.
+      // Invalid references could protect any runtime; stop collection.
       if (!SHA256.test(value)) {
         return null
       }

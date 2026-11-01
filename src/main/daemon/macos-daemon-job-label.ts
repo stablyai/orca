@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { PROTOCOL_VERSION } from './daemon-protocol-version'
 
-/** One job per profile and protocol, including jobs retained across app upgrades. */
+/** Keep labels stable across upgrades, isolated by profile and protocol. */
 export function macDaemonJobLabel(
   userDataPath: string,
   protocolVersion = PROTOCOL_VERSION

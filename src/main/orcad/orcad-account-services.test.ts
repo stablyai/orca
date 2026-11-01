@@ -23,13 +23,12 @@ function tempDirectory(): string {
 }
 
 beforeEach(() => {
-  // Why a temp home and userData: the account services resolve ~/.codex, ~/.claude and their
-  // managed homes from these, and a test must never touch the developer's own.
+  // Isolate home/userData so account discovery cannot touch developer credentials.
   const home = tempDirectory()
   const userData = tempDirectory()
   vi.stubEnv('HOME', home)
   vi.stubEnv('USERPROFILE', home)
-  // Why: the Codex runtime home reads this (as the host seeds it); otherwise XDG_CONFIG_HOME wins on CI.
+  // Explicit host data root must win over inherited CI XDG configuration.
   vi.stubEnv('ORCA_USER_DATA_PATH', userData)
   installFakeAppEnvironment({
     getPath: (name) => (name === 'home' ? home : name === 'temp' ? tmpdir() : userData)
@@ -66,7 +65,6 @@ function createRuntime(): { runtime: OrcaRuntimeService; store: Store } {
 const CLIENT_HOME = '/home/user/.local/share/orca/codex-accounts/client-account/home'
 
 function create(store: Store, isWslHost: boolean): ReturnType<typeof createOrcadAccountServices> {
-  // Stands in for orcadCodexAccountHomes: only CLIENT_HOME is a client-owned account home.
   const clientHome = (launchEnv?: NodeJS.ProcessEnv): string | null =>
     launchEnv?.CODEX_HOME === CLIENT_HOME ? CLIENT_HOME : null
   return createOrcadAccountServices({
@@ -103,7 +101,6 @@ describe('orcad account services', () => {
   it('serves accounts.* from this host', async () => {
     const { runtime, store } = createRuntime()
     expect(install(runtime, store, false)).not.toBeNull()
-    // Saved MiniMax/GLM keys refresh this host's own usage poller.
     expect(runtime.getUsageRateLimits()).not.toBeNull()
     expect(runtime.getStatus().capabilities).toContain(USAGE_CREDENTIALS_RUNTIME_CAPABILITY)
 
@@ -133,7 +130,7 @@ describe('orcad account services', () => {
 
     await expect(prepareCodexStructuredLaunch({ launchEnv: clientEnv })).resolves.toBe(CLIENT_HOME)
     expect(resolveCodexStructuredLaunchHome({ launchEnv: clientEnv })).toBe(CLIENT_HOME)
-    // The system default selected here: null is the real ~/.codex, not an ambient CODEX_HOME.
+    // Null selects the real default home, not ambient CODEX_HOME.
     await expect(prepareCodexStructuredLaunch({ launchEnv: {} })).resolves.toBeNull()
     expect(resolveCodexStructuredLaunchHome({ launchEnv: {} })).toBeNull()
     expect(services.listCodexSessionHomes()).toEqual(expect.any(Array))
@@ -153,7 +150,6 @@ describe('orcad account services', () => {
       })
 
     await expect(resume({ CODEX_HOME: CLIENT_HOME })).resolves.toBeNull()
-    // No trusted home records the session, so the pane starts fresh instead of resuming blind.
     await expect(resume({})).resolves.toMatchObject({ outcome: 'fresh' })
   })
 
@@ -161,13 +157,11 @@ describe('orcad account services', () => {
     const { runtime, store } = createRuntime()
     expect(install(runtime, store, true)).toBeNull()
     expect(runtime.getUsageRateLimits()).toBeNull()
-    // No poller here reads a saved key, so clients are not offered the methods that save one.
     expect(runtime.getStatus().capabilities).not.toContain(USAGE_CREDENTIALS_RUNTIME_CAPABILITY)
 
     await expect(call(runtime, 'accounts.list', { refreshUsage: false })).rejects.toThrow(
       'Account services are not configured on this runtime'
     )
-    // The desktop's push must still land.
     expect(() =>
       runtime.setHostAccountLaunchEnv({ wslDistro: 'Ubuntu', claude: {}, terminal: {} })
     ).not.toThrow()

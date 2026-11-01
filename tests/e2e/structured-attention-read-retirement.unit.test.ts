@@ -18,23 +18,23 @@ import {
 import { Fragment, createElement, StrictMode } from 'react'
 import { act, render, waitFor } from '@testing-library/react'
 import { expect, it, describe } from 'vitest'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionAttentionSubjectPrefix,
   agentSessionPromptAttentionKey
-} from '../../src/shared/agent-session-attention'
+} from '../../src/shared/agent-session/agent-session-attention'
 import { SESSION } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
 import {
   projectStructuredAgentSessionStatusState,
   structuredAgentSessionPaneKey
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { useAppStore } from '@/store'
 import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
 import { useStructuredAgentSessionRead } from '@/components/native-chat/use-structured-agent-session-read'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -179,12 +179,14 @@ describe('Explicit desktop read acknowledgements', () => {
         ]
       ]),
       readStatusState: () => projectStructuredAgentSessionStatusState(otherItems),
+      readChildWork: () => undefined,
       now: () => 42
     })
     const delivery = createStructuredAttentionMobileDelivery({
       readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
       readWorkspaceLabels: () => ({}),
       isWorkspaceMuted: () => false,
+      readOrchestration: () => undefined,
       dispatch: (event) => fixture.controller.dispatch(event),
       reconcile: (state) => fixture.controller.reconcileStructuredPromptAttention(state),
       now: () => 42

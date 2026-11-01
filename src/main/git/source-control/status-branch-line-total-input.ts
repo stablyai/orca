@@ -11,7 +11,6 @@ import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 import type { GetStatusOptions } from './get-status-options'
 
-/** Undefined — and therefore zero extra work — unless status succeeded and the caller asked for a valid base. */
 export function createBranchLineTotalInput(
   worktreePath: string,
   entries: GitStatusEntry[],
@@ -21,8 +20,7 @@ export function createBranchLineTotalInput(
   | { mergeBase: string; compute: () => Promise<GitBranchLineTotal | null | undefined> }
   | undefined {
   const mergeBase = readGitBranchLineTotalMergeBaseParam(options.branchLineTotalMergeBase)
-  // Why: a failed status scan leaves the untracked list untrustworthy, so the
-  // total would silently under-count rather than be absent.
+  // Failed status leaves the untracked list incomplete; omit rather than under-count the total.
   if (mergeBase === undefined || !statusSucceeded) {
     return undefined
   }
@@ -31,9 +29,9 @@ export function createBranchLineTotalInput(
     compute: () =>
       computeGitBranchLineTotal({
         worktreePath,
-        // Why: the untracked tally reads files directly, so it needs Node's spelling, not git's.
+        // Direct file reads need Node's path spelling.
         filesystemWorktreePath: resolveWorktreeFilesystemPath(worktreePath, options),
-        // Why: the same path can be a different filesystem per WSL distro.
+        // Identical paths can name different filesystems in different WSL distros.
         hostKey: options.wslDistro ?? 'native',
         mergeBase,
         untrackedPaths: entries
@@ -42,7 +40,7 @@ export function createBranchLineTotalInput(
         runDiffNumstat: (args, signal) =>
           gitExecFileAsync(args, {
             ...gitReadOptionsForWorktree(worktreePath, options),
-            // Why: after the spread, so the shared lease signal wins over this caller's own.
+            // The shared lease owns cancellation, not this individual caller.
             signal,
             env: gitOptionalLocksDisabledEnv(),
             timeout: GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS
@@ -56,6 +54,6 @@ export function getStatusLineStatsCacheKey(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): string {
-  // Why: identical paths can map to different WSL-distro filesystems, so key stats by Git's execution host.
+  // Scope filesystem stats to Git's execution host, including the WSL distro.
   return `${options.wslDistro ?? 'native'}\0${worktreePath}`
 }

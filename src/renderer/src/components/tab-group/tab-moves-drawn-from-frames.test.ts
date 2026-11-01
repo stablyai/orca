@@ -1,6 +1,4 @@
-// A tab move in a layout-owner build: main applies it and its frame draws it; on main's answer the
-// window selects the moved tab. Main's frames run through the shared transport, whose apply check
-// fails any flush that differs from the full build.
+// Exercise main-owned moves through the real frame transport and its full-build parity check.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -17,7 +15,7 @@ import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
 import { moveTabToNewPaneColumn } from '../tab-bar/tab-move-to-pane-column'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-// Main's answer to the window's layout commands and its frames, as a switch-on build sends them.
+// Simulate main’s layout-command answers and frames.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

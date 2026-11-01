@@ -2,10 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
 import { ClientRequestAborts } from './client-request-aborts'
 
-// Why operation counts and not milliseconds: each assertion below is about how many entries a hot
-// path visits, which is the property. A duration is only a proxy for it, and a proxy needs a
-// threshold calibrated against observed runtimes -- which makes the test about the observation.
-// These counts are exact and identical under any machine load.
+// Count exact entry visits to verify complexity independently of machine speed or load.
 
 /** Counts entries yielded by a real Map's iterators without changing the code under test. */
 class CountingMap<K, V> extends Map<K, V> {
@@ -98,12 +95,7 @@ function dispatcherWithClients(clientCount: number): {
 describe('relay hot-path operation counts', () => {
   afterEach(() => vi.useRealTimers())
 
-  // Why this is the guard and not a duration: abortClient runs on every closeClient and every
-  // setWrite. Under the flat composite-key map it replaced, one client's teardown enumerated every
-  // controller in the relay, so a full churn of N clients holding K requests cost K*N*(N+1)/2 visits
-  // -- measured at 50 -> 5,100, 100 -> 20,200, 200 -> 80,400, 400 -> 320,800, exactly 4x per
-  // doubling. Teardown must now visit only what the client owns, and must not enumerate the client
-  // index at all: enumerating it *is* the old scan.
+  // Per-client abort must visit only its requests; enumerating the client index would restore quadratic churn cost.
   it('abortClient visits only the target client, and never enumerates the client index', () => {
     const clientCount = 40
     const inFlightPerClient = 4
@@ -117,8 +109,7 @@ describe('relay hot-path operation counts', () => {
     const byClient = (aborts as unknown as { byClient: Map<number, Map<string, AbortController>> })
       .byClient
 
-    // The census must be able to find things: prove the maps really hold 160 controllers across 40
-    // buckets before asserting that a teardown only touches 4 of them.
+    // Prove the census sees populated buckets before measuring teardown visits.
     expect(byClient.size).toBe(clientCount)
     let totalControllers = 0
     for (const bucket of byClient.values()) {
@@ -147,9 +138,7 @@ describe('relay hot-path operation counts', () => {
     expect(index.has(1)).toBe(false)
   })
 
-  // Scope: this is the idle arm, where every key has to be read whatever the call shape is. It
-  // guards against a per-client lookup becoming a per-client scan; it does NOT guard the thunk --
-  // the counts below are identical with and without it. The loaded arm is the next test.
+  // The idle arm pins one lookup per client; it cannot measure lazy-key savings under aggregate pressure.
   it('notifyLegacyCapacity costs exactly one ledger lookup per active client when idle', () => {
     vi.useFakeTimers()
     for (const clientCount of [50, 100, 200, 400]) {
@@ -163,17 +152,13 @@ describe('relay hot-path operation counts', () => {
     }
   })
 
-  // Why the loaded ledger is the one that measures the thunk: the aggregate ceiling answers first
-  // and on its own, so a caller passing an eager array has already built one key string per client
-  // before learning they were never going to be read. That is the whole saving, and it is invisible
-  // below the low-water mark -- which is why counting an idle dispatcher guards nothing.
+  // Above aggregate low-water, lazy keys avoid enumerating clients that admission never needs.
   it('does not enumerate clients at all once the aggregate ceiling answers', () => {
     vi.useFakeTimers()
     for (const clientCount of [50, 100, 200, 400]) {
       const { d, clients, ledger } = dispatcherWithClients(clientCount)
       loadLedgerAboveLowWater(d)
-      // The census must be able to find things: a reserve that silently failed would leave the
-      // ledger idle and make every count below pass for the wrong reason.
+      // Prove reserve succeeded or an idle ledger could make the loaded-path assertion vacuous.
       expect(d.publicationLedger.retainedBytes).toBeGreaterThan(d.publicationLedger.relayLowBytes)
       clients.visits = 0
       ledger.getCalls = 0

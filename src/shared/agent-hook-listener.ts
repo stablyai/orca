@@ -1,9 +1,7 @@
-import { readAgentProcessIdentity } from './agent-process-presence'
-import { resolveAgentStatusIdentity } from './agent-status-identity'
-import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
+import { readHookAgentProcess } from './agent-process-presence'
+import { isInheritedHookStatus } from './agent-hook-presence-transition'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
-import { extractAgentProviderSession } from './agent-session-resume'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
@@ -29,6 +27,10 @@ import {
 } from './agent-hook-listener/opencode-session-registry'
 import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
+import {
+  hasSeparateHookSessionAdmission,
+  readPaneSessionContext
+} from './agent-hook-listener/pane-provider-session'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
   'prompt_input_exit',
@@ -45,6 +47,7 @@ export function normalizeHookPayload(
   options: {
     deferCompactOwnershipToClient?: boolean
     previousOpenCodeMainAgent?: AgentMainAgentStatus
+    bindingStatusByPaneKey?: ReadonlyMap<string, AgentHookEventPayload>
     admitOpenCodeTui?: (
       identity: Pick<
         AgentHookEventPayload,
@@ -59,6 +62,7 @@ export function normalizeHookPayload(
   }
   const {
     record,
+    eventName,
     paneKey: stampedPaneKey,
     hookPayloadRecord,
     tabId: stampedTabId,
@@ -68,19 +72,8 @@ export function normalizeHookPayload(
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
-  const eventName =
-    readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
-    hookPayloadRecord.hook_event_name ??
-    hookPayloadRecord.hookEventName ??
-    // Why jcode only: its payload names the lifecycle point `event`, and it is posted
-    // verbatim through the shared transport rather than re-stated as a form field.
-    // Scoped so another provider's unrelated `event` key cannot become an event name.
-    (source === 'jcode' ? hookPayloadRecord.event : undefined)
-  // Codex child hooks expose the child's session_id on the parent's pane.
-  const providerSession =
-    source === 'codex' && readString(hookPayloadRecord, 'agent_id')
-      ? null
-      : extractAgentProviderSession(source, hookPayloadRecord)
+  const sessions = readPaneSessionContext(state, source, envelope, eventName)
+  const { providerSession, statusAdmissionSession } = sessions
   if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
     return null
   }
@@ -106,10 +99,7 @@ export function normalizeHookPayload(
   if (tuiAdmission === false) {
     return null
   }
-  // Why (#21359): an OpenCode 1 `serve` process stamps every post with its own
-  // frozen pane. When the binder has mapped this session to its real pane,
-  // the stamp is replaced before anything downstream (status lookup, dispatch,
-  // fences) can act on the wrong owner. Unbound sessions keep the stamp.
+  // Rewrite frozen OpenCode1 server stamps before status/routing/fences use the wrong pane (#21359).
   const stamped = {
     paneKey: stampedPaneKey,
     tabId: stampedTabId,
@@ -126,9 +116,7 @@ export function normalizeHookPayload(
           sessionId: providerSession?.id,
           body: record
         })
-  // Why after the resolve: tracking the stamped token first would let a stale
-  // shared-server stamp overwrite the pane's live token; the resolved envelope
-  // carries the stored token (or nothing) for bound sessions instead.
+  // Track only resolved tokens or stale shared-server stamps can poison the live pane cache.
   if (tuiAdmission !== 'preserve-poster') {
     trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
   }
@@ -144,8 +132,7 @@ export function normalizeHookPayload(
     (hookPayloadRecord.trigger === 'manual' || hookPayloadRecord.trigger === 'auto')
       ? hookPayloadRecord.trigger
       : undefined
-  // Why: fail closed for Claude only. A malformed compact payload must not reach the mapping, but
-  // the old guard was source-BLIND and pre-empted every other provider's normalizer before it ran.
+  // Reject malformed Claude compacts without suppressing other providers' normalizers.
   if (
     source === 'claude' &&
     (eventName === 'PreCompact' || eventName === 'PostCompact') &&
@@ -154,45 +141,32 @@ export function normalizeHookPayload(
     return null
   }
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
-  const previousReceivedAt =
-    previousStatus &&
-    'receivedAt' in previousStatus &&
-    typeof previousStatus.receivedAt === 'number'
-      ? previousStatus.receivedAt
-      : previousStatus?.hostEvidenceObservedAt
-  // Reject before provider folds mutate the pane's prompt, tool and child caches.
+  const agentProcess = readHookAgentProcess(source, record.agentProcess)
+  const admissionStatus =
+    hasSeparateHookSessionAdmission(source) && options.bindingStatusByPaneKey
+      ? options.bindingStatusByPaneKey.get(paneKey)
+      : previousStatus
   if (
-    previousStatus &&
-    previousReceivedAt !== undefined &&
-    sameAgentStatusTerminalOwner(
-      { connectionId: previousStatus.connectionId ?? null, worktreeId: previousStatus.worktreeId },
-      { connectionId: null, worktreeId }
-    ) &&
-    resolveAgentStatusIdentity({
-      existing: {
-        agentType: previousStatus.payload.agentType,
-        state: previousStatus.payload.state,
-        updatedAt: previousReceivedAt,
-        restoredUnconfirmed: previousStatus.restoredUnconfirmed,
-        agentPresence: previousStatus.providerSessionOnly ? undefined : previousStatus.agentPresence
+    isInheritedHookStatus(
+      {
+        paneKey,
+        worktreeId,
+        connectionId: null,
+        providerSession: providerSession ?? undefined,
+        statusAdmissionSession,
+        agentPresence: agentProcess ? { agent: source, process: agentProcess } : undefined,
+        payload: { agentType: source, state: 'working', prompt: '' }
       },
-      incoming: source,
-      now: Date.now()
-    }).inheritedFromActivePane
+      admissionStatus
+    )
   ) {
     return null
   }
-  // Why: only a MANUAL completion claims anything, so only it may write compact-scoped state. An
-  // auto compact runs inside a turn that resumes and emits its own Stop; running the ownership
-  // guard for it would burn the pane's consumed-compact slot on an event that maps to nothing.
+  // Only manual PostCompact clears a turn; auto compaction must not consume its ownership slot.
   const isCompactCompletion =
     source === 'claude' && eventName === 'PostCompact' && compactTrigger === 'manual'
   if (isCompactCompletion) {
-    // Why: a relay is a forwarder, not the authority on pane identity — pane retirement, tab
-    // closure and hydrated rows all live on the client, and the client re-runs this exact guard on
-    // ingest. Enforcing it on the relay too only adds a way to LOSE the event: the relay's cache is
-    // per-process and capped, so a relay restart or an eviction silently drops the one signal that
-    // can clear a remote pane. Ownership is deferred there, never skipped.
+    // Relay restarts/evictions lose ownership evidence; defer the guard to client ingest, which owns pane retirement and hydrated rows.
     if (options.deferCompactOwnershipToClient !== true) {
       if (
         isClaudeCompactCompletionConsumed(
@@ -215,16 +189,12 @@ export function normalizeHookPayload(
         providerPromptId
       )
     }
-    // Why: the compact's own event carries no prompt; keep the pane's label from the turn it
-    // summarized rather than blanking the row as it clears.
+    // Compacts have no prompt; retain the summarized turn's label.
     if (previousStatus?.payload.prompt && !state.lastPromptByPaneKey.has(paneKey)) {
       state.lastPromptByPaneKey.set(paneKey, previousStatus.payload.prompt)
     }
   }
 
-  // Why: presence needs the agent's own process; without it the hook cannot speak for liveness.
-  const agentProcess =
-    source === 'claude' ? readAgentProcessIdentity(record.agentProcess) : undefined
   const agentPresence = agentProcess
     ? { agent: source, process: agentProcess, sessionOwner: true as const }
     : undefined
@@ -233,8 +203,7 @@ export function normalizeHookPayload(
     eventName === 'SessionEnd' &&
     agentPresence &&
     !readString(hookPayloadRecord, 'agent_id') &&
-    // Why: only reasons that end the process; /clear and /resume keep it running, and an unknown
-    // reason is left to the process check rather than guessed.
+    // Only known process-exit reasons prove session death; /clear, /resume and unknown reasons do not.
     sessionEndReason !== undefined &&
     CLAUDE_EXIT_SESSION_END_REASONS.has(sessionEndReason)
   ) {
@@ -328,6 +297,7 @@ export function normalizeHookPayload(
         }
       : {}),
     ...(providerSession ? { providerSession } : {}),
+    ...(statusAdmissionSession ? { statusAdmissionSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...dispatched.hostTurnSignals,
     payload: transportPayload

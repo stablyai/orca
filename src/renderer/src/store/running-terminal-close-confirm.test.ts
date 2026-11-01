@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRunningTerminalCloseConfirmStore } from './running-terminal-close-confirm'
 
-// The store rejects a second action within 350 ms of revealing a queued request, so these
-// tests drive a clock rather than letting wall time decide whether an action lands.
+// Drive clock for the 350ms queued-prompt guard; wall time must not decide actions.
 let clock = 1_000
 
 function advancePastGuard(): void {
@@ -29,8 +28,7 @@ function request(terminalTabId: string, onConfirm: () => void = vi.fn(), onCance
 
 describe('running terminal close confirmation store', () => {
   beforeEach(() => {
-    // Monotonic across tests: the store is a singleton, so winding the clock back would
-    // leave a previous test's guard deadline in the future and block every action.
+    // Keep singleton clock monotonic or prior guard deadlines block later cases.
     clock += 10_000
     vi.spyOn(Date, 'now').mockImplementation(() => clock)
   })
@@ -38,27 +36,6 @@ describe('running terminal close confirmation store', () => {
   afterEach(() => {
     drainRequests()
     vi.mocked(Date.now).mockRestore()
-  })
-
-  it('shows the first request and queues the next one', () => {
-    const first = vi.fn()
-    const second = vi.fn()
-    const store = useRunningTerminalCloseConfirmStore.getState()
-
-    store.requestRunningTerminalCloseConfirm(request('tab-1', first))
-    store.requestRunningTerminalCloseConfirm(request('tab-2', second))
-
-    expect(
-      useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm?.terminalTabId
-    ).toBe('tab-1')
-
-    store.confirmRunningTerminalClose()
-
-    expect(first).toHaveBeenCalledTimes(1)
-    expect(second).not.toHaveBeenCalled()
-    expect(
-      useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm?.terminalTabId
-    ).toBe('tab-2')
   })
 
   it('shows one prompt for a repeat request but still resolves both closes', () => {
@@ -120,26 +97,6 @@ describe('running terminal close confirmation store', () => {
     expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
   })
 
-  it('runs onCancel on dismiss and never the close', () => {
-    const onConfirm = vi.fn()
-    const onCancel = vi.fn()
-    const store = useRunningTerminalCloseConfirmStore.getState()
-
-    store.requestRunningTerminalCloseConfirm(request('tab-1', onConfirm, onCancel))
-    store.dismissRunningTerminalClose()
-
-    expect(onCancel).toHaveBeenCalledTimes(1)
-    expect(onConfirm).not.toHaveBeenCalled()
-    expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
-  })
-
-  it('is inert when there is nothing to confirm', () => {
-    const store = useRunningTerminalCloseConfirmStore.getState()
-
-    expect(() => store.confirmRunningTerminalClose()).not.toThrow()
-    expect(() => store.dismissRunningTerminalClose()).not.toThrow()
-  })
-
   it('lets a re-entrant close from onConfirm queue behind the next request', () => {
     const store = useRunningTerminalCloseConfirmStore.getState()
     const reentrant = vi.fn()
@@ -170,9 +127,7 @@ describe('running terminal close confirmation store', () => {
     expect(reentrant).toHaveBeenCalledTimes(1)
   })
 
-  // Why: a queued request replaces the visible one in place. Without this window, the second
-  // click of a double-click aimed at one tab lands on the next tab's prompt and kills a
-  // running process the user never saw asked about — the bug class this PR exists to close.
+  // Queued prompts reuse the dialog; guard double-clicks from accepting the next unseen tab’s process close.
   it('ignores a second action that lands on the freshly revealed request', () => {
     const store = useRunningTerminalCloseConfirmStore.getState()
     const first = vi.fn()

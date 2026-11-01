@@ -43,9 +43,7 @@ type Args = {
   terminalTabId: string
 }
 
-// The composer sits inside the terminal surface, which accepts the same drag and
-// pastes it into the shell. Claiming the event here is what keeps a drop aimed at
-// the composer out of the terminal behind it — including when we refuse it.
+// Claim even refused composer drops so the terminal surface behind it cannot paste them into the shell.
 function claimWorkspaceFileDrag(event: React.DragEvent<HTMLDivElement>): void {
   event.preventDefault()
   event.stopPropagation()
@@ -74,9 +72,7 @@ export function useNativeChatWorkspaceFileDrop({
   structuredWorktreeId,
   terminalTabId
 }: Args): WorkspaceFileDropHandlers {
-  // The IME-flush check runs against a closure captured at drop time. Reading
-  // the prop through a ref keeps "is this still my workspace?" a real question
-  // rather than a comparison of one captured value against itself.
+  // IME flushing retains the drop-time closure; read live workspace ownership through a ref to detect later switches.
   const structuredWorktreeIdRef = useRef(structuredWorktreeId)
   useLayoutEffect(() => {
     structuredWorktreeIdRef.current = structuredWorktreeId
@@ -88,8 +84,7 @@ export function useNativeChatWorkspaceFileDrop({
         return
       }
       claimWorkspaceFileDrag(event)
-      // A guarded composer answers `none` rather than promising a copy it will
-      // then drop on the floor: the cursor refuses, and no drop event follows.
+      // Refuse guarded composers via the cursor; promising copy would silently discard the drop.
       setDropEffect(event.dataTransfer, disabled ? 'none' : 'copy')
     },
     [disabled]

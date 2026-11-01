@@ -1,21 +1,20 @@
 import { newChatPermissionModeForSettings } from '../../../../shared/agent-chat-permission-mode'
 import { translate } from '@/i18n/i18n'
-import { hostPermissionRefusedText } from '@/lib/structured-agent-session-launch-permission-notice'
+import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { useStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
 export type NativeChatHostPermissionGate = {
-  /** Present while Send is held: what the user can do about it. */
+  /** User action required to unblock Send. */
   sendBlockedReason: string | null
   notice: NativeChatComposerNotice | null
 }
 
 const OPEN: NativeChatHostPermissionGate = { sendBlockedReason: null, notice: null }
 
-/** Holds Send on a paired host that would run this chat with more access than this client asks
- *  for: an older host ignores per-chat modes and runs its own Agent Permissions. */
+/** Block sends to older paired hosts that ignore per-chat modes and would grant more access than requested. */
 export function useNativeChatHostPermissionGate(
   target: RuntimeClientTarget,
   agent: string,

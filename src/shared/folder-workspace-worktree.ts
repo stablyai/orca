@@ -11,13 +11,8 @@ import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provena
 import { getWorkspaceAttachments } from './workspace-attachments'
 import { normalizeWorkspaceAttachment } from './workspace-attachment-normalization'
 
-/**
- * A folder workspace has no git repo, so its synthetic `Worktree` borrows the `repoId` slot to
- * name the PROJECT GROUP it belongs to. The value is never null, so a caller testing `repoId` for
- * absence to detect "no repo" will be wrong for every folder workspace.
- *
- * Minting and recognising it live together here so the two cannot drift.
- */
+/** Folder Worktrees borrow repoId for their project group; it is never null, so absence cannot detect a non-Git workspace.
+ * Keep prefix creation/recognition together to avoid drift. */
 const FOLDER_WORKSPACE_REPO_ID_PREFIX = 'folder-workspace:'
 
 export function folderWorkspaceRepoId(projectGroupId: string): string {

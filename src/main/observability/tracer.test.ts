@@ -1,7 +1,3 @@
-// Tracer tests: context propagation, exit-status recording, redaction
-// integration. The sink is mocked so we can inspect the records that would
-// have been pushed.
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   _resetTracerForTests,
@@ -24,12 +20,8 @@ function makeCapturingSink(): CapturedSink {
     push(r) {
       records.push(r)
     },
-    flush() {
-      /* no-op */
-    },
-    close() {
-      /* no-op */
-    }
+    flush() {},
+    close() {}
   }
 }
 
@@ -143,12 +135,10 @@ describe('tracer — context propagation via AsyncLocalStorage', () => {
       await withSpan('inner', async () => {
         const innerCtx = getActiveSpanContext()
         expect(innerCtx?.traceId).toBe(outerCtx?.traceId)
-        // spanId should be different — inner has its own.
         expect(innerCtx?.spanId).not.toBe(outerCtx?.spanId)
       })
     })
 
-    // Two records: inner first (it ended first), then outer.
     expect(sink.records).toHaveLength(2)
     const inner = sink.records[0] as {
       name: string
@@ -163,9 +153,7 @@ describe('tracer — context propagation via AsyncLocalStorage', () => {
   })
 
   it('a top-level span has no parentSpanId', async () => {
-    await withSpan('top', async () => {
-      /* */
-    })
+    await withSpan('top', async () => {})
     const r = sink.records[0] as { parentSpanId?: string }
     expect(r.parentSpanId).toBeUndefined()
   })
@@ -197,7 +185,6 @@ describe('tracer — no-op when sink is unset', () => {
     const span = startSpan('detached')
     span.setAttribute('x', 1)
     span.fail('whatever')
-    // Nothing observable happens.
     expect(sink.records).toHaveLength(0)
   })
 })

@@ -4,9 +4,7 @@ import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from '../../o
 export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTerminalForDesktop {
   protected abstract applyLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult>
 
-  // Why: with multiple subscribers, the active phone-fit dims follow the
-  // most recent mobile actor (argmax(lastActedAt)). See
-  // docs/mobile-presence-lock.md "Active phone-fit dim selection".
+  // Most-recent mobile actor owns phone-fit dimensions (docs/mobile-presence-lock.md).
   protected pickMostRecentActor(
     inner: Map<string, { clientId: string; lastActedAt: number }>
   ): { clientId: string; lastActedAt: number } | null {
@@ -19,10 +17,7 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
     return best
   }
 
-  // Why: restore-target selection on last-subscriber-leaves picks the
-  // earliest-by-subscribe-time subscriber AMONG those with non-null
-  // previousCols/Rows. Desktop-mode joins carry null and are skipped — they
-  // never captured pre-fit dims by design.
+  // Restore from the earliest subscriber with a non-null baseline; passive desktop joins captured none.
   protected pickEarliestRestoreTarget(
     inner: Map<
       string,
@@ -45,39 +40,20 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
     return best ? { previousCols: best.previousCols, previousRows: best.previousRows } : null
   }
 
-  // ─── Layout state machine ─────────────────────────────────────────
-  //
-  // See docs/mobile-terminal-layout-state-machine.md.
-  //
-  // applyLayout is the SOLE writer of:
-  //   - this.layouts
-  //   - this.terminalFitOverrides (except the sanctioned dead-pty cleanups in
-  //     onPtyExit and reclaimTerminalForDesktop's orphan branch, which delete)
-  //   - this.ptyController.resize (i.e. the actual PTY dims)
-  //
-  // Every trigger that wants to change PTY dims or flip mode goes through
-  // enqueueLayout, which serializes calls behind a per-PTY async queue
-  // (the await on ptyController.resize would otherwise let seq bumps reach
-  // the wire out of order).
+  // applyLayout owns layout, fit overrides and PTY resize, except dead-PTY cleanup deletes.
+  // Serialize all triggers through enqueueLayout so resize awaits cannot reorder wire seq (docs/mobile-terminal-layout-state-machine.md).
 
   getLayout(ptyId: string): PtyLayoutState | null {
     return this.layouts.get(ptyId) ?? null
   }
 
-  // Why: `enqueueLayout`'s "no layouts entry" short-circuit must not fire
-  // on the very first transition for a PTY (where the entry doesn't exist
-  // yet *because* we're about to create it). handleMobileSubscribe adds
-  // the ptyId to `freshSubscribeGuard` before calling enqueueLayout and
-  // removes it in a finally block.
+  // First subscribe must pass the missing-entry guard before creating its layout.
   protected isFreshSubscribe(ptyId: string): boolean {
     return this.freshSubscribeGuard.has(ptyId)
   }
 
-  // Why: four-step fallback chain for desktop-restore targets. Always
-  // returns a value; the terminal {80,24} branch is reached only under
-  // bug. Wrapping the chain as a single helper prevents callsite drift.
+  // Keep restore fallback order in one place to prevent caller drift; 80x24 is the last resort.
   protected resolveDesktopRestoreTarget(ptyId: string): { cols: number; rows: number } {
-    // 1. Earliest-by-subscribedAt subscriber with non-null baseline.
     const inner = this.mobileSubscribers.get(ptyId)
     if (inner) {
       const earliest = this.pickEarliestRestoreTarget(inner)
@@ -85,24 +61,18 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
         return { cols: earliest.previousCols, rows: earliest.previousRows }
       }
     }
-    // 2. Most-recent desktop renderer geometry report.
     const renderer = this.lastRendererSizes.get(ptyId)
     if (renderer) {
       return { cols: renderer.cols, rows: renderer.rows }
     }
-    // 3. Current PTY size.
     const size = this.getTerminalSize(ptyId)
     if (size) {
       return { cols: size.cols, rows: size.rows }
     }
-    // 4. Hard default.
     return { cols: 80, rows: 24 }
   }
 
-  // Why: a new viewport-only update from the same owner supersedes a
-  // queued same-shape tail. Mode flips, owner changes, and take-back
-  // append (losing a take-floor to a viewport tick would be a fairness
-  // hole — see "enqueueLayout coalescing" in the design doc).
+  // Coalesce viewport ticks only for the same kind/owner; append mode, floor and owner changes to preserve fairness.
   protected coalescesWith(prev: PtyLayoutTarget, next: PtyLayoutTarget): boolean {
     if (prev.kind !== next.kind) {
       return false
@@ -119,8 +89,7 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
   }
 
   protected enqueueLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
-    // Why: PTY-exit short-circuit. Fresh-subscribe gate lets the very first
-    // transition through even though `layouts` has no entry yet.
+    // Missing layout means exit unless this is the first subscribe transition.
     if (!this.layouts.has(ptyId) && !this.isFreshSubscribe(ptyId)) {
       return Promise.resolve({ ok: false, reason: 'pty-exited' })
     }
@@ -156,9 +125,7 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
     try {
       result = await this.applyLayout(ptyId, target)
     } catch (err) {
-      // Why: defensive — applyLayout itself catches resize errors, but a
-      // throw from one of the synchronous map writes (e.g. notifier hook)
-      // must not jam the queue forever.
+      // Synchronous notifier/map failures must not jam the queue even though applyLayout already catches resize errors.
       console.error('[layout] applyLayout threw', { ptyId, err })
       result = { ok: false, reason: 'resize-failed' }
     }
@@ -175,8 +142,7 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
       queue.running = this.runLayoutSlot(ptyId, next.target, next.waiters)
     } else {
       queue.running = null
-      // Why: drop the entry once empty so the map doesn't grow without bound
-      // across short-lived PTYs.
+      // Drop empty queues so short-lived PTYs do not accumulate entries.
       this.layoutQueues.delete(ptyId)
     }
     return result

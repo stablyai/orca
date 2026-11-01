@@ -1,3 +1,4 @@
+import { isViewEntry, type WorktreeNavHistoryEntry } from '@/store/slices/worktree-nav-history'
 import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -8,12 +9,7 @@ import {
   type RenderedWorkspaceRow
 } from './worktree-sidebar-row-preference'
 
-/** Host-resolved identity for a cyclable row.
- *
- * Why resolved rather than `getWorktreeHostIdentity`: a local worktree carries no
- * `hostId` (`withRepoHostOwnership` leaves it unqualified), but every activation
- * path stores the host it resolved to, so raw and resolved identities never match.
- */
+/** Resolve host ownership like activation does; raw local rows omit hostId and would fail identity matching. */
 export function getCyclableRowIdentity(row: RenderedWorkspaceRow): string {
   return composeWorktreeHostIdentity(
     getWorktreeExecutionHostId(row.worktree, row.repo),
@@ -28,7 +24,6 @@ export function getCyclableWorktreeRows(
   return getRenderedWorkspaceRowsInSidebarOrder(rows, pinnedDisplayPolicy)
 }
 
-/** Identity that locates the active workspace among the cyclable rows. */
 export function resolveActiveCycleIdentity(args: {
   rows: readonly RenderedWorkspaceRow[]
   activeWorktreeId: string | null
@@ -46,8 +41,7 @@ export function resolveActiveCycleIdentity(args: {
   return row ? getCyclableRowIdentity(row) : null
 }
 
-/** Workspace ids in sidebar order, taken from the rows the sidebar actually
- *  rendered, so collapsed groups and collapsed host sections drop out on their own. */
+/** Use rendered sidebar rows so collapsed groups and hosts also leave the keyboard cycle. */
 export function getCyclableWorktreeIds(
   rows: readonly HostSectionRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
@@ -72,8 +66,52 @@ export function getCyclableWorktrees(
   return getCyclableWorktreeRows(rows, pinnedDisplayPolicy).map((row) => row.worktree)
 }
 
-/** Pick the worktree that `worktree.navigateUp` / `worktree.navigateDown` moves
- *  to, cycling within the worktrees the sidebar is currently showing. */
+export function resolveCycleAnchorWorktreeId(args: {
+  activeWorktreeId: string | null
+  navHistory: readonly WorktreeNavHistoryEntry[]
+  navHistoryIndex: number
+  worktreeIds: readonly string[]
+}): string | null {
+  if (args.activeWorktreeId !== null) {
+    return args.activeWorktreeId
+  }
+  const cyclable = new Set(args.worktreeIds)
+  // Entries ahead of the cursor belong to forward navigation.
+  for (
+    let index = Math.min(args.navHistoryIndex, args.navHistory.length - 1);
+    index >= 0;
+    index--
+  ) {
+    const entry = args.navHistory[index]
+    if (entry !== undefined && !isViewEntry(entry) && cyclable.has(entry)) {
+      return entry
+    }
+  }
+  return null
+}
+
+export type LastActiveCycleWorkspace = {
+  worktreeId: string
+  executionHostId: ExecutionHostId | null
+}
+
+export function resolveCycleAnchorExecutionHostId(args: {
+  anchorWorktreeId: string | null
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+  lastActiveWorkspace: LastActiveCycleWorkspace | null
+}): ExecutionHostId | null {
+  if (args.anchorWorktreeId === null) {
+    return null
+  }
+  if (args.anchorWorktreeId === args.activeWorktreeId) {
+    return args.activeWorkspaceExecutionHostId
+  }
+  return args.lastActiveWorkspace?.worktreeId === args.anchorWorktreeId
+    ? args.lastActiveWorkspace.executionHostId
+    : null
+}
+
 export function resolveCycledWorktreeId(args: {
   worktreeIds: readonly string[]
   activeWorktreeId: string | null
@@ -86,12 +124,49 @@ export function resolveCycledWorktreeId(args: {
 
   const currentIndex = args.activeWorktreeId ? worktreeIds.indexOf(args.activeWorktreeId) : -1
   if (currentIndex === -1) {
-    // Why: the active worktree can sit inside a collapsed group, so it is absent
-    // from the cyclable list; enter from the end the keypress points away from.
+    // If collapse hides the active row, enter from the end appropriate to the navigation direction.
     return (direction === 'down' ? worktreeIds[0] : worktreeIds.at(-1)) ?? null
   }
 
   const step = direction === 'down' ? 1 : -1
   const nextIndex = (currentIndex + step + worktreeIds.length) % worktreeIds.length
   return worktreeIds[nextIndex] ?? null
+}
+
+/** The rendered row one keyboard step lands on, in exact sidebar order. */
+export function resolveCycledWorkspaceRow(args: {
+  rows: readonly HostSectionRow[]
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+  lastActiveWorkspace: LastActiveCycleWorkspace | null
+  navHistory: readonly WorktreeNavHistoryEntry[]
+  navHistoryIndex: number
+  direction: 'up' | 'down'
+}): RenderedWorkspaceRow | null {
+  const worktreeRows = getCyclableWorktreeRows(args.rows, args.pinnedDisplayPolicy)
+  const anchorWorktreeId = resolveCycleAnchorWorktreeId({
+    activeWorktreeId: args.activeWorktreeId,
+    navHistory: args.navHistory,
+    navHistoryIndex: args.navHistoryIndex,
+    worktreeIds: worktreeRows.map((row) => row.worktree.id)
+  })
+  const nextIdentity = resolveCycledWorktreeId({
+    worktreeIds: worktreeRows.map(getCyclableRowIdentity),
+    activeWorktreeId: resolveActiveCycleIdentity({
+      rows: worktreeRows,
+      activeWorktreeId: anchorWorktreeId,
+      activeWorkspaceExecutionHostId: resolveCycleAnchorExecutionHostId({
+        anchorWorktreeId,
+        activeWorktreeId: args.activeWorktreeId,
+        activeWorkspaceExecutionHostId: args.activeWorkspaceExecutionHostId,
+        lastActiveWorkspace: args.lastActiveWorkspace
+      })
+    }),
+    direction: args.direction
+  })
+  if (nextIdentity === null) {
+    return null
+  }
+  return worktreeRows.find((row) => getCyclableRowIdentity(row) === nextIdentity) ?? null
 }

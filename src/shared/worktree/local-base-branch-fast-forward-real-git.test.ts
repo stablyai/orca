@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseWorktreeList } from '../git-worktree-porcelain-parser'
 import {
@@ -144,8 +145,7 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
     expect(existsSync(marker)).toBe(true)
   })
 
-  // Why: each setting is live (the control shows a plain `merge --ff-only` obeying it), yet the owner
-  // update must still land main exactly on the target as a fast-forward.
+  // Control commands prove each merge setting is active; Orca must still fast-forward exactly to the target.
   it.each([
     ['merge.verifySignatures', 'true', 'refuses'],
     ['branch.main.mergeOptions', '--verify-signatures', 'refuses'],
@@ -176,7 +176,7 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
       }
       plainMerge()
       if (control === 'merge-commit') {
-        // A merge commit that keeps local's tree and drops upstream's changes.
+        // This merge commit keeps the local tree and drops upstream changes.
         expect(fixture.git(['rev-list', '--parents', '-1', 'main'])).toMatch(
           new RegExp(` ${fixture.localOid} ${fixture.remoteOid}$`)
         )
@@ -233,8 +233,27 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
     expect(fixture.git(['reflog', 'show', '--format=%gs', '-1', 'main'])).toBe(
       'orca: fast-forward to refs/remotes/origin/main'
     )
-    // The checked-out branch and its files are untouched.
     expect(fixture.git(['symbolic-ref', 'HEAD'])).toBe('refs/heads/develop')
     expect(await readFile(join(fixture.repoPath, 'version.txt'), 'utf8')).toBe('one\n')
+  })
+
+  it('flags a local branch hidden below a shallow boundary, and moves it once history is complete', async () => {
+    const fixture = await createBehindRepo()
+    const upstreamPath = join(fixture.repoPath, '..', 'upstream')
+    fixture.git(['init', '--quiet', '--bare', upstreamPath])
+    fixture.git(['push', '--quiet', upstreamPath, `${fixture.remoteOid}:refs/heads/main`])
+    fixture.git(['remote', 'add', 'origin', pathToFileURL(upstreamPath).href])
+    // Why file://: Git ignores --depth for plain-path remotes.
+    fixture.git(['fetch', '--quiet', '--depth=1', 'origin', 'main'])
+    const real = realGit(fixture)
+
+    expect(await fastForward(fixture, real.git)).toEqual({
+      status: 'skipped_not_fast_forward',
+      shallowHistory: true
+    })
+
+    fixture.git(['fetch', '--quiet', '--unshallow', 'origin'])
+    expect(await fastForward(fixture, real.git)).toMatchObject({ status: 'updated' })
+    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.remoteOid)
   })
 })

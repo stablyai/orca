@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { JiraIssue, JiraMutationResult } from '../../../../shared/jira-types'
+import type { JiraIssue, JiraMutationResult } from '../../../../shared/jira/jira-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext

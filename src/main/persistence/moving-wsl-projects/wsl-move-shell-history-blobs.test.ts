@@ -145,7 +145,7 @@ describe('WSL move shell history blobs', () => {
     utimesSync(legacy, 1_000, 1_000)
     utimesSync(current, 2_000, 2_000)
 
-    // The newer id is listed first; the merge still puts its commands last.
+    // Input order must not outrank history age.
     const blobs = await build([
       { sourceWorktreeId: SOURCE_ID, destinationWorktreeId: DESTINATION_ID },
       { sourceWorktreeId: legacyId, destinationWorktreeId: DESTINATION_ID }

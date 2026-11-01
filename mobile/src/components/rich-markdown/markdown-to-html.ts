@@ -1,9 +1,10 @@
-import { escapeAttr, escapeHtml } from './markdown-escaping'
+import { escapeAttr, escapeLiteralHtml } from './markdown-escaping'
 import { renderInline } from './markdown-inline-render'
 import { renderListItems } from './markdown-list-render'
 import { parseListTree } from './markdown-list-parse'
 import { closesFence, openingFence } from './markdown-code-fence'
 import { isTableSeparator, splitTableRow } from './markdown-table-rows'
+import { blockMarkdown } from './html-block-markdown'
 import type { RichMarkdownEditorScope } from './document-scope'
 
 /** Whether a line opens a block of its own, which is what ends the paragraph being gathered. */
@@ -11,18 +12,53 @@ export function isBlockStart(line: string): boolean {
   return /^(```|#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+|\s*(-{3,}|\*{3,}|_{3,})\s*$)/.test(line)
 }
 
-/**
- * Markdown as the markup the editable surface holds.
- *
- * Block by block rather than by one pass of replacements, because fenced code, tables and lists
- * each consume a run of lines whose length only their own reader knows. An empty source still
- * renders a paragraph, which is what carries the placeholder.
- */
-export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string): string {
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
-  const html: string[] = []
+// Use quote blocks only when they save the source or what the literal paragraph saves; the list reader drops continuation and lazy lines.
+function quoteMarkup(probe: () => Element, quote: string[], structured: string): string {
+  const literal = `<p>${renderInline(quote.join('\n').trim()).replace(/\n/g, '<br />')}</p>`
+  if (structured === literal) {
+    return structured
+  }
+  const element = probe()
+  element.innerHTML = structured
+  const structuredMarkdown = blockMarkdown(element)
+  if (structuredMarkdown.replace(/^> /gm, '').trim() === quote.join('\n').trim()) {
+    return structured
+  }
+  element.innerHTML = literal
+  return blockMarkdown(element) === structuredMarkdown ? structured : literal
+}
+
+// Read fenced/table/list blocks by their own consumed line runs, not flat replacements; empty source still needs paragraph for placeholder.
+// Inside a list item paragraphs read `<br>` tokens, the item writer's only line-break spelling.
+export function markdownToHtml(
+  scope: RichMarkdownEditorScope,
+  markdown: string,
+  insideListItem = false
+): string {
+  let lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  let html: string[] = []
   let index = 0
-  while (index < lines.length) {
+  const parents: { lines: string[]; html: string[]; index: number }[] = []
+  let quoteProbe: Element | null = null
+  // Inert document so probed images and links never load.
+  const probe = () =>
+    (quoteProbe ??= scope
+      .getDocument()
+      .implementation.createHTMLDocument('')
+      .createElement('blockquote'))
+  while (index < lines.length || parents.length > 0) {
+    if (index >= lines.length) {
+      const parent = parents.pop()
+      if (!parent) {
+        break
+      }
+      const markup = quoteMarkup(probe, lines, html.join('\n') || '<p><br /></p>')
+      lines = parent.lines
+      html = parent.html
+      index = parent.index
+      html.push(`<blockquote>${markup}</blockquote>`)
+      continue
+    }
     const line = lines[index] ?? ''
     if (!line.trim()) {
       index += 1
@@ -40,7 +76,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         index += 1
       }
       html.push(
-        `<pre data-language="${escapeAttr(fence.language)}"><code>${escapeHtml(code.join('\n'))}</code></pre>`
+        `<pre data-language="${escapeAttr(fence.language)}"><code>${escapeLiteralHtml(code.join('\n'))}</code></pre>`
       )
       continue
     }
@@ -65,11 +101,11 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         rows.push(splitTableRow(lines[index] ?? ''))
         index += 1
       }
-      const head = headers.map((cell) => `<th>${renderInline(cell)}</th>`).join('')
+      const head = headers.map((cell) => `<th>${renderInline(cell, true)}</th>`).join('')
       const body = rows
         .map(
           (row) =>
-            `<tr>${headers.map((_, cellIndex) => `<td>${renderInline(row[cellIndex] ?? '')}</td>`).join('')}</tr>`
+            `<tr>${headers.map((_, cellIndex) => `<td>${renderInline(row[cellIndex] ?? '', true)}</td>`).join('')}</tr>`
         )
         .join('')
       html.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`)
@@ -88,17 +124,19 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         quote.push((lines[index] ?? '').replace(/^>\s?/, ''))
         index += 1
       }
-      html.push(
-        `<blockquote><p>${renderInline(quote.join('\n').trim()).replace(/\n/g, '<br />')}</p></blockquote>`
-      )
+      parents.push({ lines, html, index })
+      lines = quote
+      html = []
+      index = 0
       continue
     }
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
       const list = parseListTree(lines, index)
-      // Why: a marker with nothing after it parses as no item, so the run is empty and the index
-      // has not moved. Falling through rather than continuing makes the line the text it is.
+      // Empty marker produces no list item and no index progress; fall through as text instead of continuing forever.
       if (list.nextIndex > index) {
-        html.push(renderListItems(scope, list.items))
+        html.push(
+          renderListItems(scope, list.items, (content) => markdownToHtml(scope, content, true))
+        )
         index = list.nextIndex
         continue
       }
@@ -118,13 +156,13 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index += 1
     }
     if (paragraph.length === 0) {
-      // Why: a line that opens a block by `isBlockStart` but matches no block reader's own grammar
-      // — `# `, `- `, a fence with a backtick in its language — is gathered by nothing, and the
-      // loop would read it again forever. It is text.
+      // Consume text when isBlockStart admits line no reader accepts (# /- /invalid fence language); otherwise loop never advances.
       paragraph.push(lines[index] ?? '')
       index += 1
     }
-    html.push(`<p>${renderInline(paragraph.join('\n')).replace(/\n/g, '<br />')}</p>`)
+    html.push(
+      `<p>${renderInline(paragraph.join('\n'), insideListItem).replace(/\n/g, '<br />')}</p>`
+    )
   }
   return html.join('\n') || '<p class="is-empty"><br /></p>'
 }

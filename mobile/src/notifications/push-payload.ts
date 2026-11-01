@@ -1,6 +1,4 @@
-// Why two shapes: APNs nests Orca's fields under `orca` beside `aps`, while FCM
-// carries them flat in `data` as strings. Both reach JS as the notification's
-// `content.data`, so the reader accepts either and coerces the numeric fields.
+// APNs nests custom fields under orca; FCM data is flat/string-valued. Read both and coerce numeric fields.
 export type OrcaPushPayload = {
   readonly kind?: 'alert' | 'dismiss'
   readonly hostFingerprint: string
@@ -10,6 +8,8 @@ export type OrcaPushPayload = {
   readonly paneKey?: string
   readonly worktreeId?: string
   readonly executionHost?: string
+  readonly source?: string
+  readonly agentState?: string
 }
 
 function readString(value: unknown): string | undefined {
@@ -27,7 +27,7 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
   }
   const nested = (data as { orca?: unknown }).orca
   const record = (nested && typeof nested === 'object' ? nested : data) as Record<string, unknown>
-  // The fingerprint is what makes this a gateway push; locally scheduled data never has one.
+  // Push and socket alerts use the same paired-host identity.
   const hostFingerprint = readString(record.hostFingerprint)
   if (!hostFingerprint) {
     return null
@@ -40,6 +40,8 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
     notificationEpoch: readString(record.notificationEpoch),
     paneKey: readString(record.paneKey),
     worktreeId: readString(record.worktreeId),
-    executionHost: readString(record.executionHost)
+    executionHost: readString(record.executionHost),
+    source: readString(record.source),
+    agentState: readString(record.agentState)
   }
 }

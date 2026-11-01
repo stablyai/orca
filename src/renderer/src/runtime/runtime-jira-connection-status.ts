@@ -3,7 +3,7 @@ import type {
   JiraConnectionStatus,
   JiraSite,
   JiraViewer
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
 
 // Coverage records: tsc fails when the shared union gains or loses an arm.

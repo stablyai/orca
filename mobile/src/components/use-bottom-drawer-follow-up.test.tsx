@@ -5,6 +5,11 @@ import { BottomDrawer } from './BottomDrawer'
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
 import { useBottomDrawerFollowUp } from './use-bottom-drawer-follow-up'
 
+// BottomDrawer also carries the option pager, which loads these at import.
+vi.mock('react-native', () => ({ StyleSheet: { create: <T,>(sheet: T) => sheet }, View: 'View' }))
+vi.mock('react-native-reanimated', async () =>
+  (await import('../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
 vi.mock('./mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'MountedBottomDrawer' }))
 
 describe('drawer handoff', () => {

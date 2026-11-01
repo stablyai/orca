@@ -1,5 +1,4 @@
-// A window reload republishes the same rows under a new publication stamp: main stores that stamp,
-// so its next unchanged sync needs no republish (switch on).
+// Store new reload publication stamps even for identical rows so unchanged syncs need no republish.
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import {
@@ -26,10 +25,7 @@ const terminalRow = (parentTabId: string, leafId: string, isActive = false) => (
   isActive
 })
 
-/**
- * The window's rows: its browser tab sits in a group of its own between the terminals, so main's
- * order (the browser joins main's group, at its end) differs from the window's only in order.
- */
+/** Window browser rows have a separate group; main groups them after terminals, producing order-only differences. */
 function windowRows(publicationEpoch: string): RuntimeMobileSessionTabsSnapshot {
   return {
     worktree: TEST_WORKTREE_ID,

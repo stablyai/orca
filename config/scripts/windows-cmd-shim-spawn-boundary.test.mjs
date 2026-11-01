@@ -29,7 +29,6 @@ const WINDOWS_SHIM_SPAWN_ALLOWLIST = [
   // Write or assert on shim files rather than spawning one.
   'config/scripts/dev-cli-terminal-wrapper.mjs',
   'config/scripts/dev-cli-terminal-wrapper.test.mjs',
-  'config/scripts/electron-builder-config.test.mjs',
   'config/scripts/live-remote-freeze-rpc.mjs',
   'config/scripts/pty-transcript-secret-scan.test.mjs',
   'config/scripts/remote-agent-session-authority-repro.mjs',
@@ -45,8 +44,6 @@ const WINDOWS_SHIM_SPAWN_ALLOWLIST = [
   'config/scripts/run-ssh-staged-upload-reliability.mjs',
   'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
   'config/scripts/run-terminal-scale-perf-e2e.mjs',
-  // Routes its shim through an explicit `cmd.exe /d /s /c`, which is the correct form.
-  'config/scripts/verify-skill-update-roundtrip.mjs',
   'tests/tools/benchmarks/startup-time-bench.mjs',
   'tests/tools/benchmarks/worktree-deletion-dev-bench.mjs',
   'tests/tools/repro-terminal-send-submit.mjs'

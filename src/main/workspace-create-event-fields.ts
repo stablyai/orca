@@ -26,7 +26,6 @@ export type WorkspaceCreateFailureFields = OptionalEventFields<
 type WorktreeCountBucket = (typeof WORKTREE_COUNT_BUCKETS)[number]
 type RepoFileCountBucket = (typeof REPO_FILE_COUNT_BUCKETS)[number]
 
-/** What the create's owner knows beyond the timing the create recorded. */
 export type WorkspaceCreateEventContext = {
   entryPoint: WorkspaceCreateEntryPoint
   concurrency: WorktreeCreateConcurrency
@@ -73,7 +72,7 @@ export function bucketRepoFileCount(count: number): RepoFileCountBucket {
 function phaseTotals(phases: WorktreeCreateTiming['phases']): Map<WorktreeCreatePhase, number> {
   const totals = new Map<WorktreeCreatePhase, number>()
   for (const phase of phases) {
-    // Unknown names are dropped rather than forwarded: only the closed vocabulary may leave.
+    // Restrict telemetry to the approved phase vocabulary.
     if (isKnownPhase(phase.phase)) {
       totals.set(phase.phase, (totals.get(phase.phase) ?? 0) + phase.durationMs)
     }
@@ -122,7 +121,6 @@ function worktreeCountFields(count: number | undefined): WorkspaceCreateTimingFi
   return count === undefined ? {} : { worktree_count_bucket: bucketWorktreeCount(count) }
 }
 
-/** Event fields for a finished create, built only from what the create already measured. */
 export function workspaceCreateTimingFields(
   timing: WorktreeCreateTiming,
   context: WorkspaceCreateEventContext & { repoFacts?: CreateEventRepoFacts }
@@ -142,8 +140,6 @@ export function workspaceCreateTimingFields(
   }
 }
 
-/** Event fields for a failed create: where it died, how long it had run, and what the prepared
- *  checkout did before it. */
 export function workspaceCreateFailureFields(
   recorder: Pick<WorktreeCreateTimingRecorder, 'failedPhase' | 'finish'>,
   context: WorkspaceCreateEventContext & { error: unknown }

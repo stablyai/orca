@@ -30,6 +30,7 @@ import { isWindowsUserAgent } from '../terminal-pane/pane-helpers'
 import { McpConfigFileRow, type LoadedMcpConfigInspection } from './McpConfigFileRow'
 import { McpMissingConfigList } from './McpMissingConfigList'
 import { loadMcpConfigInspections } from './mcp-config-inspection'
+import { formatMcpConfigSummary } from './mcp-config-summary'
 import { translate } from '@/i18n/i18n'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
@@ -47,10 +48,6 @@ type McpConfigSectionProps = {
 
 const EMPTY_WORKTREES: Worktree[] = []
 
-function countServers(configs: LoadedMcpConfigInspection[]): number {
-  return configs.reduce((sum, config) => sum + config.servers.length, 0)
-}
-
 export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Element {
   const openFile = useAppStore((state) => state.openFile)
   const setActiveView = useAppStore((state) => state.setActiveView)
@@ -61,7 +58,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const allWorktreesForRepo = useAppStore(
     (state) => selectWorktreesByRepo(state)[repo.id] ?? EMPTY_WORKTREES
   )
-  // Why: a path only means something on the host that owns this repo row, not the focused one.
+  // Paths belong to the repo row’s host, independent of focused host.
   const repoHostId = getRepoExecutionHostId(repo)
   const repoHost = parseExecutionHostId(repoHostId)
   const runtimeEnvironmentId = repoHost?.kind === 'runtime' ? repoHost.environmentId : null
@@ -91,7 +88,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       if (active) {
         return active
       }
-      // Why: an active row owned by another host must not lend this repo its worktree id.
+      // Another host’s active row cannot lend this repo its worktree ID.
       if (!allWorktreesForRepo.some((worktree) => worktree.id === activeWorktreeId)) {
         return { id: activeWorktreeId, path: repo.path }
       }
@@ -140,7 +137,6 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       })),
     [targetRootPath]
   )
-  const serverCount = useMemo(() => countServers(configs), [configs])
   const canCreateStarter = detectedCount === 0 && !inspectionUnavailable
 
   const loadConfigs = useCallback(async (): Promise<void> => {
@@ -254,9 +250,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             runtimeEnvironmentId
           )
         : {}
-      // Why: v1 only creates the root workspace config so we do not need to
-      // guess per-agent directory layouts or mutate agent-specific files.
-      // Why: the listing can be stale; never replace a config something else just created.
+      // Create only root workspace config; avoid agent-specific layouts and refuse to overwrite files created since the listing.
       assertFileWriteApplied(
         await writeRuntimeFile(
           { ...fileContext, ...sshExpectation },
@@ -361,13 +355,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
       <div className="rounded-md border border-border/50 bg-muted/20">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>
-            {detectedCount}{' '}
-            {translate('auto.components.settings.McpConfigSection.251b96564a', 'detected ·')}{' '}
-            {serverCount}{' '}
-            {translate('auto.components.settings.McpConfigSection.3b224167ff', 'server')}
-            {serverCount === 1 ? '' : 's'}
-          </span>
+          <span>{formatMcpConfigSummary(configs)}</span>
           {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
         </div>
         <div>

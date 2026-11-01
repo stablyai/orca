@@ -13,10 +13,8 @@ export function createGitRemoteStatus(
   | 'remoteStatusesByWorktree'
   | 'setUpstreamStatus'
   | 'isRemoteOperationActive'
-  | 'remoteOperationDepth'
-  | 'inFlightRemoteOpKind'
+  | 'remoteOperations'
   | 'beginRemoteOperation'
-  | 'endRemoteOperation'
   | 'fetchUpstreamStatus'
 > {
   return {
@@ -34,25 +32,19 @@ export function createGitRemoteStatus(
         }
       }),
     isRemoteOperationActive: false,
-    remoteOperationDepth: 0,
-    inFlightRemoteOpKind: null,
-    beginRemoteOperation: (kind) =>
+    remoteOperations: [],
+    beginRemoteOperation: (kind, worktreeId) => {
+      const operation = { kind, worktreeId }
       set((s) => ({
-        remoteOperationDepth: s.remoteOperationDepth + 1,
-        isRemoteOperationActive: true,
-        // Why: last-write-wins on the kind; the UI blocks a second user-initiated op, so the most recent kind matches what the user is watching.
-        inFlightRemoteOpKind: kind ?? s.inFlightRemoteOpKind
-      })),
-    endRemoteOperation: () =>
-      set((s) => {
-        const next = Math.max(0, s.remoteOperationDepth - 1)
-        return {
-          remoteOperationDepth: next,
-          isRemoteOperationActive: next > 0,
-          // Why: keep the in-flight kind (its label/spinner) until depth reaches 0 and no remote op remains.
-          inFlightRemoteOpKind: next > 0 ? s.inFlightRemoteOpKind : null
-        }
-      }),
+        remoteOperations: [...s.remoteOperations, operation],
+        isRemoteOperationActive: true
+      }))
+      return () =>
+        set((s) => {
+          const remoteOperations = s.remoteOperations.filter((entry) => entry !== operation)
+          return { remoteOperations, isRemoteOperationActive: remoteOperations.length > 0 }
+        })
+    },
     fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
       const runtimeTarget = tryResolveGitOperationTarget(get(), worktreeId, options)
       if (!runtimeTarget) {
@@ -74,7 +66,7 @@ export function createGitRemoteStatus(
         }
         return status
       } catch (error) {
-        // Why: keep prior status on error — a synthetic {hasUpstream:false} would flash 'Publish Branch' on a tracked branch and a click could re-publish, clobbering the upstream.
+        // Retain prior status on error; fake no-upstream flashes Publish and can overwrite real upstream on click.
         if (pushTarget) {
           // Why: don't let an old automatic-poll cache entry suppress the next retry after a transient refresh failure.
           invalidateAutomaticPushTargetUpstreamStatusCache({

@@ -16,8 +16,7 @@ type ClientBacklog = {
 export class DaemonStreamBackpressure {
   private readonly clients = new Map<string, ClientBacklog>()
   private readonly pausedSessions = new Set<string>()
-  // Sessions the producer-stall watchdog gave up on. Keep-tail dropping bounds them now, so re-pausing
-  // would only re-freeze the shell behind the same unreachable consumer.
+  // Keep-tail dropping bounds stalled consumers; pausing again would freeze the shell behind them.
   private readonly stallReleasedSessions = new Set<string>()
   private pressured = false
 
@@ -29,8 +28,7 @@ export class DaemonStreamBackpressure {
     ) => void,
     private readonly isDroppable: (sessionId: string) => boolean,
     private readonly ownsSession: (clientId: string, sessionId: string) => boolean = () => true,
-    // Already-queued data is pinned to the droppable membership cached when it was enqueued, so a
-    // stall release has to ask the batcher to reconcile it.
+    // Stall release must reconcile cached droppability for already-queued data.
     private readonly onDroppabilityChanged: (sessionId: string) => void = () => {}
   ) {}
 
@@ -77,8 +75,7 @@ export class DaemonStreamBackpressure {
 
   refresh(): void {
     const bytesBySession = new Map<string, number>()
-    // Every session with anything accounted anywhere, droppable or not: a stall ends when the session's
-    // last byte leaves the daemon, which the pausing totals alone cannot see.
+    // Include droppable data: stall release ends only when all queued and in-flight bytes leave.
     const accountedSessions = new Set<string>()
     let total = 0
     for (const [clientId, client] of this.clients) {
@@ -126,18 +123,14 @@ export class DaemonStreamBackpressure {
       }
     }
     for (const sessionId of this.stallReleasedSessions) {
-      // Nothing of this session's is queued or in flight any more, so the consumer caught up (or went
-      // away) and ordinary producer pausing applies again.
+      // Resume ordinary pausing only after this session has no remaining backlog.
       if (!accountedSessions.has(sessionId)) {
         this.stallReleasedSessions.delete(sessionId)
       }
     }
   }
 
-  /** The producer-stall watchdog gave up on this session's consumer. Hand its backlog to the keep-tail
-   *  machinery and let the PTY run: the user gets a dataGap (the renderer restores the pane from the
-   *  daemon's snapshot) rather than a shell frozen behind an unreachable client. Says nothing about the
-   *  child process — loss of contact is not evidence of an exit, and nothing here reports one. */
+  /** Release a stalled producer into keep-tail dropping; lost contact does not prove child exit. */
   releaseStalledSession(sessionId: string): void {
     this.stallReleasedSessions.add(sessionId)
     this.onDroppabilityChanged(sessionId)

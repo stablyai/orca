@@ -1,17 +1,17 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Context facts ride turn rows. Every kind the writer produces must replay, and
-// one this build cannot read must cost the fact, never the row or the journal.
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import type {
-  AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import { parseJournalRow } from './journal-row-schema'
 import {
   createTrackedJournalOpener,
@@ -19,7 +19,7 @@ import {
   liveTestJournalRows,
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalRowContextUsageTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -37,7 +37,6 @@ export function registerJournalRowContextUsageTests(): void {
     outputTokens: 5
   }
 
-  /** One of each part and kind, as the writer builds them. */
   const FACTS: AgentSessionContextUsage[] = [
     { window: { tokens: 1_000_000, capturedAt: 3 } },
     { used: { kind: 'estimate', usage: USAGE, capturedAt: 4 } },
@@ -62,7 +61,7 @@ export function registerJournalRowContextUsageTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
 
   const open = () =>
     journals.open({
@@ -126,10 +125,10 @@ export function registerJournalRowContextUsageTests(): void {
       try {
         const rowJson = liveTestJournalRows(opened.db, IDENTITY.sessionId)[1]?.rowJson ?? ''
         const future = JSON.parse(rowJson)
-        future.body.contextUsage = { used: { kind: 'measured-later', tokens: 'many' } }
+        future.body.contextUsage = { used: { kind: 'unknown', capturedAt: 'later' } }
         updateTestJournalRowJson(opened.db, IDENTITY.sessionId, 2, JSON.stringify(future))
       } finally {
-        opened.close()
+        await opened.close()
       }
 
       const reopened = await open()

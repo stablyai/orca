@@ -1,7 +1,6 @@
 const WORKSPACE_SEPARATOR = '\u0000'
 
-/** A paired host's agent list is per workspace: two projects on one Windows host can run in
- *  different runtimes (native vs a WSL distro). No workspace means the host-default list. */
+/** One Windows host can have native and WSL workspaces with different agents; absent workspace uses host defaults. */
 export function getRuntimeAgentInventoryKey(
   environmentId: string,
   worktreeId?: string | null

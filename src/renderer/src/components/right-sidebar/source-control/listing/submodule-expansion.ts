@@ -1,7 +1,7 @@
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { basename } from '@/lib/path'
-import type { SourceControlSectionArea } from './section-order'
-import type { SourceControlTreeNode } from '../../source-control-tree'
+import type { SourceControlSectionArea } from '../../../../../../shared/source-control-section-order'
+import type { SourceControlTreeNode } from '../../../../../../shared/source-control-tree'
 import type { FlatEntry } from './use-selection'
 
 export type SubmoduleSectionTreeNode = SourceControlTreeNode<
@@ -9,11 +9,7 @@ export type SubmoduleSectionTreeNode = SourceControlTreeNode<
   SourceControlSectionArea
 >
 
-/**
- * Loading/empty/error placeholder shown beneath an expanded submodule while its
- * inner status is fetched on demand. Kept separate from real tree nodes so it
- * never leaks into selection or bulk path collection.
- */
+/** Keep loading/empty/error placeholders distinct from real nodes so they cannot enter selection or bulk path collection. */
 export type SubmodulePlaceholderNode = {
   type: 'submodule-placeholder'
   key: string
@@ -49,12 +45,7 @@ export function parseSubmoduleExpansionKey(
   return path ? { area, path } : null
 }
 
-/**
- * Any changed submodule is shown as an expandable row: worktree dirtiness
- * (tracked/untracked) expands to the inner `git status`, and a moved commit
- * pointer expands to the files changed between the recorded and checked-out
- * commits. Already-inner rows (`submoduleRoot` set) never expand again.
- */
+/** Expand dirtiness into inner status and moved gitlinks into commit diffs; already-inner rows never recurse. */
 export function isExpandableSubmoduleEntry(entry: GitStatusEntry): boolean {
   const submodule = entry.submodule
   if (!submodule || entry.submoduleRoot) {
@@ -63,14 +54,7 @@ export function isExpandableSubmoduleEntry(entry: GitStatusEntry): boolean {
   return submodule.commitChanged || submodule.trackedChanges || submodule.untrackedChanges
 }
 
-/**
- * Build the read-only inner entry for a submodule child row. The inner path is
- * relative to the submodule root, so it is prefixed with the submodule path
- * (drives diff routing) and stamped with `submoduleRoot` (drives read-only
- * gating). Staged parent gitlink rows force staged children because their
- * expansion represents HEAD->index, but worktree-only rows keep the inner
- * entry's own area so staged-only submodule changes don't open empty diffs.
- */
+/** Stamp inner paths/read-only ownership; staged gitlinks force staged diffs, while worktree rows retain inner areas. */
 export function buildSubmoduleChildEntry(
   submodulePath: string,
   innerEntry: GitStatusEntry,
@@ -86,9 +70,6 @@ export function buildSubmoduleChildEntry(
   }
 }
 
-/**
- * Build the child file rows for an expanded submodule (tree view).
- */
 export function buildSubmoduleChildNodes(
   parent: SubmoduleSectionTreeNode & { type: 'file' },
   innerEntries: GitStatusEntry[]
@@ -108,19 +89,11 @@ export function buildSubmoduleChildNodes(
   })
 }
 
-/**
- * Flat-list (non-tree) variant of an expanded source-control row: either a real
- * status entry or a submodule placeholder. Used by the list view, which renders
- * raw entries instead of tree nodes.
- */
 export type RenderableSubmoduleListItem =
   | { type: 'entry'; entry: GitStatusEntry }
   | SubmodulePlaceholderNode
 
-/**
- * Splice lazily-loaded submodule children into a flat list of status entries
- * (list view). Mirrors injectExpandedSubmoduleRows but operates on entries.
- */
+/** Inject lazy children into flat entries, mirroring tree-row expansion. */
 export function injectExpandedSubmoduleEntries(
   entries: readonly GitStatusEntry[],
   expandedSubmoduleKeys: ReadonlySet<string>,
@@ -189,12 +162,7 @@ export function injectExpandedSubmoduleEntries(
   return result
 }
 
-/**
- * Map injected list rows to selection entries. List-view selection/range/open-key
- * bookkeeping must read the same submodule-injected rows it renders; otherwise an
- * expanded submodule's child files render with handlers but stay unselectable.
- * Placeholders are skipped because they are not selectable.
- */
+/** Select from rendered injected rows so expanded children remain selectable; exclude placeholders. */
 export function collectListSelectionEntries(
   rows: readonly RenderableSubmoduleListItem[]
 ): FlatEntry[] {
@@ -211,11 +179,7 @@ export function collectListSelectionEntries(
   return result
 }
 
-/**
- * Splice lazily-loaded submodule children into a flattened tree row list. Only
- * expanded submodules are touched; everything else passes through untouched so
- * the status poll stays free of submodule recursion.
- */
+/** Expand only requested submodules so parent status polling never recurses. */
 export function injectExpandedSubmoduleRows(
   nodes: SubmoduleSectionTreeNode[],
   expandedSubmoduleKeys: ReadonlySet<string>,

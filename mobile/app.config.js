@@ -1,18 +1,13 @@
-// Why this file exists: a bare "expo-notifications" plugin entry writes
-// `aps-environment: development` into the iOS entitlements, while push-token.ts
-// reports `production` for every non-__DEV__ build. A TestFlight or App Store build
-// would then register a production APNs token against a sandbox entitlement, and the
-// gateway's pushes would be accepted by Apple and delivered nowhere. Deriving the
-// mode from an env var the release workflow sets makes the two agree by construction
-// instead of relying on the export step to rewrite the entitlement.
-//
-// app.json stays the source for everything else: Expo reads it first and hands it to
-// this function, so the fastlane version/buildNumber rewrite still flows through.
+// Bare expo-notifications defaults to sandbox entitlements while non-dev push-token.ts reports production, silently losing TestFlight/App Store pushes.
+// Derive APNs mode from release workflow env; Expo still supplies app.json, including Fastlane version/buildNumber rewrites, for everything else.
 const APS_ENVIRONMENT =
   process.env.ORCA_IOS_APS_ENVIRONMENT === 'production' ? 'production' : 'development'
 
 module.exports = ({ config }) => ({
   ...config,
+  // `expo run` installs a dev-client build cached for the current native fingerprint instead of
+  // rebuilding; scripts/native-client.mjs populates the cache.
+  buildCacheProvider: { plugin: './scripts/native-build-cache.cjs' },
   ios: {
     ...config.ios,
     entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }

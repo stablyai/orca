@@ -1,5 +1,4 @@
-// `agentSession.regenerateName` — the user asks the host to name a chat again after naming failed.
-// It answers once the run is accepted; the status feed carries the new name or the new failure.
+// Accept rename retries now; status stream reports the resulting name or failure.
 
 import { defineMethod } from '../core'
 import { requireInstalledStructuredHost } from './structured-agent-session-gate'

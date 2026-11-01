@@ -27,7 +27,6 @@ function getIndexedTab(
   return tabIndex.get(tabId)
 }
 
-/** The row's conversation name, or null when nothing usable exists. */
 export function useAgentRowConversationName(agent: DashboardAgentRow): string | null {
   const parentPaneKey = agent.entry.orchestration?.parentPaneKey
   const usesParentTab =
@@ -49,12 +48,9 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
       : structuredChatTabById(s.unifiedTabsByWorktree, agent.tab.worktreeId, agent.tab.id)
   )
   const conversationName = useStructuredChatTabConversationName(structuredTab)
-  // Why: parsed per render rather than inside the selector, which runs on every
-  // store update and must stay allocation-free.
+  // Parse once per render; selectors run on every store write and must stay allocation-free.
   const ownLeafId = cannotOwnTabName ? null : parsePaneKey(agent.paneKey)?.leafId
-  // Why: in a split tab the tab title belongs to whichever pane has focus, so
-  // this row reads its OWN pane's title. Returns a primitive, so a row
-  // re-renders only when its own pane's title changes.
+  // Select this split pane’s primitive title so sibling focus/title changes cannot rename or re-render its row.
   const paneLiveTitle = useAppStore((s) =>
     cannotOwnTabName
       ? undefined

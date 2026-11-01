@@ -1,16 +1,10 @@
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
 
-// agent-browser's own session-name rule; doubles as a traversal fence for the `join` below.
+// Match agent-browser session names and reject path traversal.
 const SAFE_SESSION_NAME = /^[A-Za-z0-9_-]+$/
 
-/**
- * True when no daemon can be holding `sessionName`, so closing it would only start one.
- *
- * Only an Orca-derived socket directory proves that (`ownsSocketDirectory`): it is a
- * private per-profile `/tmp` directory, never an inherited one shared with a second
- * profile, and never Windows, which uses named pipes and leaves no socket to inspect.
- */
+/** Skip daemon-starting resets only when this profile's owned Unix socket is provably absent. */
 export function canSkipAgentBrowserSessionReset(options: {
   ownsSocketDirectory: boolean
   socketDirectory: string | undefined
@@ -26,5 +20,23 @@ export function canSkipAgentBrowserSessionReset(options: {
   } catch (error) {
     // Only a proven-absent socket is safe to skip; permission and other failures prove nothing.
     return (error as NodeJS.ErrnoException).code === 'ENOENT'
+  }
+}
+
+const DAEMON_EXIT_WAIT_MS = 1_000
+const DAEMON_EXIT_POLL_MS = 25
+
+/** agent-browser answers `close`, then exits and removes its socket ~100 ms later; a command sent meanwhile reaches the dying daemon. */
+export async function waitForAgentBrowserSessionExit(options: {
+  ownsSocketDirectory: boolean
+  socketDirectory: string | undefined
+  sessionName: string
+}): Promise<void> {
+  if (!options.ownsSocketDirectory) {
+    return
+  }
+  const deadline = Date.now() + DAEMON_EXIT_WAIT_MS
+  while (!canSkipAgentBrowserSessionReset(options) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, DAEMON_EXIT_POLL_MS))
   }
 }

@@ -1,11 +1,24 @@
+import type { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
+import type { LocalFileAccess } from '../../../../shared/local-file-access'
 import type { EditorSaveResult, EditorSaveTrigger } from './editor-save-disk-precondition'
 
+export type EditorSaveAcquisition =
+  | {
+      operation: ReturnType<typeof acquireEditorFileOperation>
+      access: LocalFileAccess | undefined
+    }
+  | { error: unknown }
+
 export type EditorSaveRequest = {
+  invocation: EditorSaveAcquisition
+  viewIds: readonly string[]
   fileId: string
   fallbackContent: string
   trigger: EditorSaveTrigger
   /** Dirty when asked: finding the tab clean later means its edits were saved or dropped. */
   requestedDirty: boolean
+  /** The record the request was queued under; `discardEpoch` is its epoch then. */
+  recordId: string
   /** A discard since the request voids it, whatever the trigger. */
   discardEpoch: number
 }
@@ -19,7 +32,8 @@ const TRIGGER_RANK: Record<EditorSaveTrigger, number> = {
   autosave: 0,
   user: 1,
   restart: 1,
-  overwrite: 2
+  convert: 2,
+  overwrite: 3
 }
 
 const ignore = (): void => undefined
@@ -38,17 +52,17 @@ export function createEditorSaveSlots(
   const enqueue = (key: string, incoming: EditorSaveRequest): Promise<EditorSaveResult> => {
     const slot = slots.get(key)
     if (slot?.queued) {
-      // Why: the queued save reads the latest text when it runs, so a later request joins it.
+      // Queued saves read live text, so subsequent requests can join the same write.
       const { request } = slot.queued
       if (request.discardEpoch !== incoming.discardEpoch) {
-        // Why: a discard voided the queued request, so the newer one replaces it outright.
+        // A discard invalidates the old request; retain the new request’s epoch and intent.
         Object.assign(request, incoming)
         return slot.queued.promise
       }
       request.fallbackContent = incoming.fallbackContent
       request.requestedDirty ||= incoming.requestedDirty
-      if (TRIGGER_RANK[incoming.trigger] > TRIGGER_RANK[request.trigger]) {
-        request.trigger = incoming.trigger
+      if (TRIGGER_RANK[incoming.trigger] >= TRIGGER_RANK[request.trigger]) {
+        Object.assign(request, incoming, { requestedDirty: request.requestedDirty })
       }
       return slot.queued.promise
     }

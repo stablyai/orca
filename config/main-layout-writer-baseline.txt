@@ -3,10 +3,9 @@
 # This is a RATCHET: counts may only go DOWN. Layout moves to one runtime owner; do not add
 # writers. Prune after removing writers: pnpm check:layout-writer-ratchets --prune
 1 src/main/ipc/pty/ipc/leaf-move.ts
-1 src/main/ipc/pty/ipc/spawn-commit-persist.ts
 1 src/main/ipc/pty/pane/pane-owner-replacement.ts
 3 src/main/ipc/pty/pane/stable-owner.ts
-1 src/main/ipc/pty/runtime/spawn-commit.ts
+2 src/main/ipc/pty/spawn-commit-binding.ts
 1 src/main/ipc/renderer-shutdown-checkpoint.ts
 1 src/main/ipc/runtime-environments/runtime-environment-removal-cleanup.ts
 1 src/main/ipc/runtime-environments/runtime-environment-session-reconcile.ts
@@ -22,7 +21,7 @@
 1 src/main/persistence/loading-store/metadata-lineage-operations.ts
 1 src/main/persistence/loading-store/mobile-tab-selection-persistence.ts
 1 src/main/persistence/loading-store/normalize-loaded-profile-state.ts
-10 src/main/persistence/loading-store/pty-binding-persistence.ts
+8 src/main/persistence/loading-store/pty-binding-persistence.ts
 10 src/main/persistence/loading-store/pty-binding-session-update.ts
 10 src/main/persistence/loading-store/repo-lifecycle-operations.ts
 10 src/main/persistence/loading-store/session-host-partitions.ts
@@ -41,6 +40,7 @@
 3 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session-layout.ts
 4 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session-subtraction.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session.ts
+2 src/main/persistence/moving-wsl-projects/wsl-move-main-rewrite-stores.ts
 1 src/main/persistence/restoring-sessions/folder-workspace-operations.ts
 1 src/main/persistence/restoring-sessions/invalid-workspace-layout-purge.ts
 5 src/main/persistence/restoring-sessions/session-owner-fields.ts

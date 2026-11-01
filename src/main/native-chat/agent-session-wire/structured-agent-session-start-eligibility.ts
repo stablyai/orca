@@ -1,12 +1,12 @@
-// Whether a session's record may start its agent on this host, read in the commit after the
-// lease is adjudicated and recovery concluded, so it sees the lease the resolver handed back.
+// Read eligibility after ownership recovery commits so startup uses the resolver’s current lease.
 
 import {
+  isAgentSessionRefusalError,
   refuse,
-  type AgentSessionRefusalDetailsByCode,
   type AgentSessionWireRefusalCode
-} from '../../../shared/agent-session-wire-refusals'
-import { terminalOwnerRefusalMessage } from '../../../shared/agent-session-legacy-handoff-lease'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalDetailsByCode } from '../../../shared/agent-session/failures/agent-session-refusal-details'
+import { terminalOwnerRefusalMessage } from '../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import { hostCanStartRecord } from './structured-agent-session-provider-support'
@@ -15,8 +15,6 @@ import {
   structuredAgentSessionResumeParams
 } from './structured-agent-session-resume-eligibility'
 
-/** The eligibility read, in the commit after recovery: the params the attach acts on, or why the
- *  record may not start here. */
 export function structuredAgentSessionStartParams(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
@@ -28,7 +26,15 @@ export function structuredAgentSessionStartParams(
       params: NonNullable<ReturnType<typeof structuredAgentSessionResumeParams>>
       startupOptions?: Readonly<Record<string, string>>
     } {
-  const record = context.deps.store.getRecord(sessionId)
+  let record
+  try {
+    record = context.deps.store.requireWritableRecord(sessionId)
+  } catch (error) {
+    if (isAgentSessionRefusalError(error)) {
+      return { ok: false, refusal: error.refusal }
+    }
+    throw error
+  }
   if (!record) {
     return refusedStructuredAgentSessionStart(
       'agent_session_identity_required',

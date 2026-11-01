@@ -14,7 +14,7 @@ const { spawnMock, resolveLocalServeRuntimeMock, serveWithOrcadMock, refuseIfPro
   }))
 
 vi.mock('child_process', () => ({ spawn: spawnMock, spawnSync: vi.fn() }))
-// Why: these cover host selection; the pre-exec profile check would read this machine's own profile.
+// Isolate host selection from the preflight that reads this machine’s profile.
 vi.mock('./serve-electron-preflight', () => ({
   preflightElectronServe: () => null,
   recordElectronServeStartupAbort: vi.fn(),
@@ -36,7 +36,6 @@ class FakeChildProcess extends EventEmitter {
   pid = 4101
 }
 
-/** Electron serve that exits cleanly once spawned, whenever selection gets to spawning it. */
 function electronChild(): void {
   spawnMock.mockImplementation(() => {
     const child = new FakeChildProcess()
@@ -96,7 +95,6 @@ describe('orca serve host selection', () => {
     }
   })
 
-  // #30100: the slot carries no browser client, so orcad must be handed the app's.
   it("serves on orcad by default, handing it the app's browser client", async () => {
     const appRoot = await mkdtemp(join(tmpdir(), 'orca-serve-orcad-web-'))
     try {
@@ -117,7 +115,6 @@ describe('orca serve host selection', () => {
         expect.any(String),
         expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: expect.anything() }),
         join(appRoot, 'out', 'web'),
-        // #31174: and the app's speech recognizer.
         process.platform === 'win32' ? undefined : join(appRoot, 'node_modules', recognizer)
       )
       expect(spawnMock).not.toHaveBeenCalled()
@@ -216,7 +213,7 @@ describe('orca serve host selection', () => {
       expect(resolveLocalServeRuntimeMock).toHaveBeenCalledWith(
         expect.objectContaining({ userDataPath: profile })
       )
-      // A dev build ignores --user-data-dir and reads this instead.
+      // Dev builds read the profile from the environment rather than --user-data-dir.
       expect(electronSpawn().env).toMatchObject({
         ORCA_DEV_USER_DATA_PATH: profile,
         ORCA_SERVE_USER_DATA_PATH: profile

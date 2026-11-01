@@ -21,6 +21,8 @@ type GitHubWorkItemByOwnerRepoLookupArgs = GitHubWorkItemLookupArgs & {
   repo: string
   host?: string
   type: 'issue' | 'pr'
+  /** One light call for hover cards; older hosts ignore it. */
+  preview?: boolean
 }
 
 type GitHubWorkItemDetailsLookupArgs = {
@@ -76,7 +78,8 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
             ownerRepo: args.repo,
             ...(args.host ? { host: args.host } : {}),
             number: args.number,
-            type: args.type
+            type: args.type,
+            ...(args.preview ? { preview: true } : {})
           },
           { timeoutMs: 30_000 }
         )
@@ -88,7 +91,8 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           repo: args.repo,
           ...(args.host ? { host: args.host } : {}),
           number: args.number,
-          type: args.type
+          type: args.type,
+          ...(args.preview ? { preview: true } : {})
         })
   return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
 }

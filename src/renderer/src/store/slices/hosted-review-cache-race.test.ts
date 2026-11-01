@@ -155,8 +155,7 @@ describe('hosted review cache race protection', () => {
       vi.setSystemTime(300)
       rejectFetch(new Error('older lookup failed'))
 
-      // Why: a failed lookup preserves (and returns) the last known review
-      // instead of caching a definitive miss that would blank the card.
+      // Lookup failures retain last review instead of caching a definitive miss and blanking cards.
       await expect(request).resolves.toEqual(newerReview)
       expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
         data: newerReview,
@@ -202,8 +201,7 @@ describe('hosted review cache race protection', () => {
       rejectFetch(new Error('transient gh failure'))
 
       await expect(request).resolves.toEqual(cachedReview)
-      // Why: the cached review survives untouched; no fresh `data: null` miss is
-      // written, so the card keeps showing the PR and retries on the next poll.
+      // No fresh null miss: preserve review and retry next poll.
       expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
         data: cachedReview,
         fetchedAt: 100,
@@ -325,7 +323,8 @@ describe('hosted review cache race protection', () => {
       linkedGitHubPR: null,
       linkedGitLabMR: null,
       linkedGiteaPR: null,
-      repoPath: '/repo'
+      repoPath: '/repo',
+      reportReadOutcome: true
     })
     resolveGitHubLookup(githubReview)
 

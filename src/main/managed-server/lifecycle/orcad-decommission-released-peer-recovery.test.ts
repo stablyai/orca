@@ -1,8 +1,4 @@
-/**
- * A stop interrupted on a newer desktop, then recovered by a released, older one. Its parser,
- * recovery planner and auto-update planner below are frozen copies of what already shipped, so
- * this pins the journal form against code that can no longer change.
- */
+// Frozen released-client logic verifies that older desktops can safely recover newer stop journals.
 import { describe, expect, it } from 'vitest'
 import {
   coreOrcadActivationRecord,
@@ -60,7 +56,7 @@ const sameCore = (a: OrcadActivationRecord, b: OrcadActivationRecord): boolean =
   serializeOrcadActivationRecord(coreOrcadActivationRecord(a)) ===
   serializeOrcadActivationRecord(coreOrcadActivationRecord(b))
 
-/** Frozen: the released parser's decommission checks; its zod object drops unknown fields. */
+/** Frozen released parser: unknown fields are dropped. */
 function releasedParse(raw: string): ReleasedJournal {
   const journal: ReleasedJournal = JSON.parse(raw)
   if ((journal.phase === 'prepared') !== (journal.request === null)) {
@@ -80,7 +76,7 @@ function releasedParse(raw: string): ReleasedJournal {
   return journal
 }
 
-/** Frozen: released recovery, as the record it leaves once the stop is settled as exited. */
+/** Frozen released recovery record. */
 function releasedRecover(
   journal: ReleasedJournal,
   current: OrcadActivationRecord
@@ -91,11 +87,10 @@ function releasedRecover(
   if (!sameCore(current, journal.recordBefore)) {
     throw new Error('record changed')
   }
-  // process-exited confirms, stop-dispatched resumes the stop: both write recordAfter verbatim.
   return journal.phase === 'prepared' ? current : journal.recordAfter
 }
 
-/** Frozen: the released auto-update planner for a host with nothing newer rolled back. */
+/** Frozen released auto-update planner. */
 function releasedAutoUpdate(record: OrcadActivationRecord, candidate: string): 'update' | 'skip' {
   if (record.active === candidate || record.rolledBackFrom === candidate) {
     return 'skip'

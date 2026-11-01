@@ -1,3 +1,4 @@
+import { registerEditorAutosaveAcquisitionBudgetTests } from './editor-autosave-acquisition-budget.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
@@ -15,9 +16,18 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { emptyTabLayoutState } from '../../store/slices/editor-slice-test-harness'
-import { withLoadedBaselines } from './editor-autosave-controller-test-fixture'
+import {
+  stubEditorWindowWithDisk,
+  withLoadedBaselines
+} from './editor-autosave-controller-test-fixture'
+import {
+  makeFolderWorkspace,
+  makeProjectGroup
+} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
 
 const mocks = vi.hoisted(() => ({
   getConnectionIdForFile: vi.fn()
@@ -53,6 +63,8 @@ function createEditorStore(): StoreApi<AppState> {
       editorAutoSaveDelayMs: 1000
     },
     repos: [],
+    folderWorkspaces: [],
+    projectGroups: [],
     worktreesByRepo: {
       'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
     },
@@ -219,15 +231,23 @@ describe('attachEditorAutosaveController', () => {
     const store = createEditorStore()
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
     store.setState({
+      folderWorkspaces: [
+        makeFolderWorkspace({
+          folderPath: '/home/neil/platform',
+          executionHostId: 'ssh:ssh-1',
+          connectionId: 'ssh-1'
+        })
+      ],
+      projectGroups: [{ ...makeProjectGroup(), executionHostId: 'ssh:ssh-1' }],
       worktreesByRepo: {
         'folder-workspace-1': [
-          {
+          makeWorktree({
             id: workspaceKey,
             repoId: 'folder-workspace-1',
             path: '/home/neil/platform',
             hostId: 'ssh:ssh-1'
-          }
-        ] as never
+          })
+        ]
       },
       sshConnectionStates: new Map([
         [
@@ -360,78 +380,103 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
-  it('saves remote files through the owning runtime environment', async () => {
-    clearRuntimeCompatibilityCacheForTests()
-    const writeFile = vi.fn().mockResolvedValue(undefined)
-    const runtimeCall = vi.fn().mockResolvedValue({
-      ok: true,
-      result: {},
-      _meta: { runtimeId: 'runtime-env-1' }
-    })
-    const runtimeTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
-      return (
-        createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-env-1') ?? runtimeCall(args)
-      )
-    })
-    const eventTarget = new EventTarget()
-    vi.stubGlobal('window', {
-      addEventListener: eventTarget.addEventListener.bind(eventTarget),
-      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
-      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
-      setTimeout: globalThis.setTimeout.bind(globalThis),
-      clearTimeout: globalThis.clearTimeout.bind(globalThis),
-      api: {
-        fs: { writeFile },
-        runtimeEnvironments: { call: runtimeTransportCall }
+  it.each(['unique', 'conflict-first', 'conflict-last'] as const)(
+    'keeps legacy runtime saves on a unique published directory (%s)',
+    async (variant) => {
+      clearRuntimeCompatibilityCacheForTests()
+      const writeFile = vi.fn().mockResolvedValue(undefined)
+      const runtimeCall = vi.fn().mockResolvedValue({
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'runtime-env-1' }
+      })
+      const runtimeTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
+        return (
+          createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-env-1') ?? runtimeCall(args)
+        )
+      })
+      const eventTarget = new EventTarget()
+      vi.stubGlobal('window', {
+        addEventListener: eventTarget.addEventListener.bind(eventTarget),
+        removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+        dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+        api: {
+          fs: { writeFile },
+          runtimeEnvironments: { call: runtimeTransportCall }
+        }
+      } satisfies WindowStub)
+
+      const store = createEditorStore()
+      const worktrees = [
+        makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/remote/repo', hostId: undefined })
+      ]
+      if (variant !== 'unique') {
+        worktrees.push(
+          makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/different/repo', hostId: undefined })
+        )
+        if (variant === 'conflict-first') {
+          worktrees.reverse()
+        }
       }
-    } satisfies WindowStub)
+      store.setState({
+        settings: {
+          ...getDefaultSettings('/tmp'),
+          editorAutoSave: true,
+          editorAutoSaveDelayMs: 1000,
+          activeRuntimeEnvironmentId: 'env-2'
+        },
+        worktreesByRepo: {
+          'repo-1': worktrees
+        }
+      })
+      const fileId = store.getState().openFile({
+        filePath: '/remote/repo/file.ts',
+        relativePath: 'file.ts',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: 'env-1',
+        language: 'typescript',
+        mode: 'edit'
+      })
+      store.getState().setEditorDraft(fileId, 'edited')
+      store.getState().markFileDirty(fileId, true)
 
-    const store = createEditorStore()
-    store.setState({
-      settings: {
-        editorAutoSave: true,
-        editorAutoSaveDelayMs: 1000,
-        activeRuntimeEnvironmentId: 'env-2'
-      } as never,
-      worktreesByRepo: {
-        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' }] as never
+      const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
+      try {
+        if (variant !== 'unique') {
+          await expect(requestDirtyFileSave()).rejects.toThrow(
+            'Remote file is outside the owning runtime worktree'
+          )
+          expect(runtimeCall).not.toHaveBeenCalled()
+          expect(writeFile).not.toHaveBeenCalled()
+          expect(store.getState().editorDrafts[fileId]).toBe('edited')
+          expect(store.getState().openFiles[0]?.isDirty).toBe(true)
+          return
+        }
+        await requestDirtyFileSave()
+
+        expect(runtimeCall).toHaveBeenCalledWith(
+          expect.objectContaining({
+            selector: 'env-1',
+            method: 'files.writeIfUnchanged',
+            expectedEnvironmentPairingRevision: undefined,
+            params: {
+              worktree: 'id:wt-1',
+              relativePath: 'file.ts',
+              content: 'edited',
+              expectedExecutionHostId: 'local',
+              diskPrecondition: expect.objectContaining({ allowMissing: true })
+            },
+            timeoutMs: 15_000
+          })
+        )
+        expect(writeFile).not.toHaveBeenCalled()
+      } finally {
+        cleanup()
       }
-    })
-    const fileId = store.getState().openFile({
-      filePath: '/remote/repo/file.ts',
-      relativePath: 'file.ts',
-      worktreeId: 'wt-1',
-      runtimeEnvironmentId: 'env-1',
-      language: 'typescript',
-      mode: 'edit'
-    })
-    store.getState().setEditorDraft(fileId, 'edited')
-    store.getState().markFileDirty(fileId, true)
-
-    const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
-    try {
-      await requestDirtyFileSave()
-
-      expect(runtimeCall).toHaveBeenCalledWith(
-        expect.objectContaining({
-          selector: 'env-1',
-          method: 'files.writeIfUnchanged',
-          expectedEnvironmentPairingRevision: undefined,
-          params: {
-            worktree: 'id:wt-1',
-            relativePath: 'file.ts',
-            content: 'edited',
-            expectedExecutionHostId: 'local',
-            diskPrecondition: expect.objectContaining({ allowMissing: true })
-          },
-          timeoutMs: 15_000
-        })
-      )
-      expect(writeFile).not.toHaveBeenCalled()
-    } finally {
-      cleanup()
     }
-  })
+  )
 
   it('flushes mounted rich-editor changes before restart-driven dirty-file saves', async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)
@@ -651,6 +696,12 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
+  registerEditorAutosaveAcquisitionBudgetTests(() => {
+    const disk = stubEditorWindowWithDisk()
+    const store = createEditorStore()
+    return { store, disk, stampBaselines: () => withLoadedBaselines(store, disk) }
+  })
+
   it('skips the open-file scan for unrelated store mutations', () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const eventTarget = new EventTarget()
@@ -677,26 +728,26 @@ describe('attachEditorAutosaveController', () => {
     })
 
     const openFiles = store.getState().openFiles
-    const originalMap = openFiles.map.bind(openFiles)
-    let mapCalls = 0
-    Object.defineProperty(openFiles, 'map', {
+    const originalIterator = openFiles[Symbol.iterator].bind(openFiles)
+    let openFileScans = 0
+    Object.defineProperty(openFiles, Symbol.iterator, {
       configurable: true,
-      value: (...args: Parameters<typeof openFiles.map>) => {
-        mapCalls += 1
-        return originalMap(...args)
+      value: () => {
+        openFileScans += 1
+        return originalIterator()
       }
     })
 
     const cleanup = attachEditorAutosaveController(store)
     try {
-      expect(mapCalls).toBe(1)
-      mapCalls = 0
+      expect(openFileScans).toBe(1)
+      openFileScans = 0
 
       store.setState({ activeWorktreeId: 'wt-2' } as Partial<AppState>)
-      expect(mapCalls).toBe(0)
+      expect(openFileScans).toBe(0)
 
       store.getState().setEditorDraft('/repo/file.ts', 'edited')
-      expect(mapCalls).toBe(1)
+      expect(openFileScans).toBe(1)
     } finally {
       cleanup()
     }

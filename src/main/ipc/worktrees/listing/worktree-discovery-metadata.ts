@@ -19,7 +19,7 @@ export function getProjectHostSetupMetaUpdates(
     existing?.projectHostSetupId === undefined ||
     existing.projectHostSetupId === ownership.projectHostSetupId
   return {
-    // Why: project IDs can upgrade from legacy repo IDs to provider-backed ones; repair ownership on discovery when the host setup matches.
+    // Repair legacy project identity only when host setup still matches.
     ...(sameSetup && existing?.projectId !== ownership.projectId
       ? { projectId: ownership.projectId }
       : {}),
@@ -30,7 +30,7 @@ export function getProjectHostSetupMetaUpdates(
   }
 }
 
-// Why: disk-discovered worktrees have no WorktreeMeta, so lastActivityAt=0 sinks them to the bottom of "Recent"; also backfill host-setup ownership here.
+// First-discovered worktrees need activity timestamps to avoid sinking to the bottom of Recent.
 export function resolveWorktreeMetaWithDiscoveryBackfill(
   store: Store,
   repo: Repo,
@@ -40,7 +40,7 @@ export function resolveWorktreeMetaWithDiscoveryBackfill(
 ): WorktreeMeta {
   const target = hostWorktreeTargetForRepo(worktreeId, repo)
   const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
-  // Why: the locator-keyed row is only a stand-in for a missing snapshot, so don't read it when we have one.
+  // Use locator-keyed metadata only when no snapshot is available.
   const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
   const existing =
     readWorktreeMetaForRepo(store, worktreeId, repo) ??
@@ -57,7 +57,7 @@ export function resolveWorktreeMetaWithDiscoveryBackfill(
       ...ownershipUpdates
     }
     if (Object.keys(updates).length > 0) {
-      // Why: pre-lineage profiles already have WorktreeMeta rows; backfill on discovery so upgraded workspaces get lineage and host routing.
+      // Discovery backfills lineage and routing for profiles whose metadata predates them.
       return store.setWorktreeMeta(target, updates)
     }
     return existing

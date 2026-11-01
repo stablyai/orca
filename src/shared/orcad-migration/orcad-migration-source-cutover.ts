@@ -1,7 +1,4 @@
-/**
- * The client-side journal of a dormant migration from a relay-hosted SSH target into a managed
- * orcad. Kept outside the profile store so an older build rewriting the profile cannot strip it.
- */
+/** Keep the dormant-migration cutover journal outside the profile store so older builds cannot strip it when saving. */
 import { z } from 'zod'
 import {
   MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES,
@@ -10,6 +7,7 @@ import {
   parseOrcadMigrationManifest
 } from './orcad-migration-manifest-validation'
 import type { OrcadMigrationManifest } from './orcad-migration-manifest'
+import { MAX_ORCAD_MIGRATION_DORMANT_ROWS } from './orcad-migration-dormant-value-validation'
 import { isOrcadMigrationLocalWslSource } from './orcad-migration-source-kind'
 
 export const ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION = 1
@@ -26,7 +24,7 @@ export const ORCAD_MIGRATION_SOURCE_CUTOVER_PHASES = [
 export type OrcadMigrationSourceCutoverPhase =
   (typeof ORCAD_MIGRATION_SOURCE_CUTOVER_PHASES)[number]
 
-// Why not strict: a newer build's optional field must not make every journal unreadable here.
+// Accept newer optional journal fields instead of making the whole journal unreadable.
 const CutoverRecordSchema = z.object({
   version: z.literal(ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION),
   migrationId: z.string().min(1).max(128),
@@ -35,7 +33,7 @@ const CutoverRecordSchema = z.object({
   updatedAt: z.string().datetime(),
   destinationEnvironmentId: z.string().min(1).max(256),
   destinationName: z.string().min(1).max(1_024),
-  // What the fence binds to: the exact registration and the manifest the destination will see.
+  // Bind the fence to the exact registration and destination manifest.
   sshTargetId: z.string().min(1).max(1_024),
   sshTargetGeneration: z.number().int().positive(),
   manifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -46,6 +44,11 @@ const CutoverRecordSchema = z.object({
   bridgedPtyIds: z.array(z.string().min(1).max(256)).max(10_000).optional(),
   // Committed, with the source rows kept so a downgraded build still sees the host's projects.
   sourceRetainedAt: z.string().datetime().optional(),
+  // Moved automations enabled on this desktop, still to be re-enabled on the server.
+  automationsToEnableOnServer: z
+    .array(z.string().min(1).max(1_024))
+    .max(MAX_ORCAD_MIGRATION_DORMANT_ROWS)
+    .optional(),
   // A delta move after an older build changed the source: the migration it extends, never merges.
   supersedesMigrationId: z.string().min(1).max(128).optional(),
   // What the retained source must still look like; absent means this manifest's own catalog.
@@ -88,7 +91,6 @@ export function isRetainedOrcadMigrationSourceCutover(
   return cutover.phase === 'destination-committed' && cutover.sourceRetainedAt !== undefined
 }
 
-/** Throws on anything that is not exactly a cutover whose manifest matches its binding. */
 export function parseOrcadMigrationSourceCutover(value: unknown): OrcadMigrationSourceCutover {
   const record = CutoverRecordSchema.parse(value)
   const manifest = parseOrcadMigrationManifest(record.manifest)

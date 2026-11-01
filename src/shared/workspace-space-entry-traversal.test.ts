@@ -189,8 +189,7 @@ describe('scanWorkspaceSpaceEntryTree', () => {
     await expect(scan).rejects.toBeInstanceOf(WorkspaceSpaceScanCapacityError)
   })
 
-  // Why: a cap N workers can each charge scales the verdict with concurrency,
-  // which docs/workspace-space-scan-resource-bounds.md forbids.
+  // Per-worker entry caps make capacity depend on concurrency (docs/workspace-space-scan-resource-bounds.md).
   describe('capacity depends on directory shape, not tree size or concurrency', () => {
     function buildWideTree(dirCount: number, filesPerDir: number) {
       const directories = new Map<string, readonly Entry[]>()
@@ -242,10 +241,9 @@ describe('scanWorkspaceSpaceEntryTree', () => {
     }, 30_000)
   })
 
-  // Why: the cases above pin maxRetainedBytes open, so only these see the byte
-  // cap — and its verdict must not depend on where the worktree is checked out.
+  // Unlike the tests above, these exercise the production byte cap across checkout depths.
   describe('capacity at the production default limits', () => {
-    // A real worktree checkout path; the bug appeared above ~58 characters.
+    // The regression appeared for checkout paths longer than about 58 characters.
     const DEEP_ROOT = '/Users/octocat/projects/orca/.claude/worktrees/wf_d39acf3c-e7d-2'
 
     function scanAtDefaults(

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/repo-types'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 
 const { listRepoWorktreesMock, getLocalProjectWorktreeGitOptionsMock, workerState } = vi.hoisted(
   () => ({
@@ -140,9 +140,6 @@ describe('analyzeWorkspaceSpace', () => {
   })
 
   it('omits prunable worktree registrations from the Space scan', async () => {
-    // Why: a prunable registration has no directory to size or reclaim (issue
-    // #8389); before this filter it rendered as a dead "Missing" row whose
-    // checkbox stayed disabled with no prune/remove action.
     const root = tempDir!
     const mainPath = join(root, 'repo')
     const stalePath = join(root, 'stale')

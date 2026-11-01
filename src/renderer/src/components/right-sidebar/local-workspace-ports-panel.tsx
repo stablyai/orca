@@ -27,7 +27,6 @@ import { LocalPortSection } from './local-port-section'
 import { LocalPortDetailsDialog } from './local-port-details-dialog'
 import { SshForwardedPortsSection } from './ssh-forwarded-ports-section'
 
-/** Right-sidebar Ports panel for a workspace that runs on an endpoint's own machine. */
 export function LocalWorkspacePortsPanel({
   isVisible,
   runtimeTarget,
@@ -40,7 +39,7 @@ export function LocalWorkspacePortsPanel({
   sshForwardTargetId?: string | null
 }): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
-  // Why the workspace's repoId, not a repo row: a folder workspace has no repo, only a synthetic id.
+  // Use workspace repoId directly because folder workspaces have only a synthetic ID, not a repo row.
   const activeRepoId = activeWorktree?.repoId ?? null
   const settings = useAppStore((s) => s.settings)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
@@ -100,8 +99,7 @@ export function LocalWorkspacePortsPanel({
     setWorkspacePortScanRefreshing
   ])
 
-  // Why: WorkspacePortScanner already owns the 30s all-worktree poll. The
-  // panel scopes that shared result instead of starting a second scan loop.
+  // Scope WorkspacePortScanner's shared 30s results instead of starting another poll loop.
   const displayScan = isVisible && scanKey ? (scansByKey[scanKey] ?? null) : null
 
   const toggleSection = useCallback((sectionId: string) => {

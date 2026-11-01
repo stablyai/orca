@@ -29,7 +29,6 @@ type RuntimeInstallServerDialogProps = {
   onDeployed: () => Promise<void> | void
 }
 
-/** Install a managed Orca server on an SSH host that doesn't run one yet. */
 export function RuntimeInstallServerDialog({
   open,
   api,
@@ -44,7 +43,7 @@ export function RuntimeInstallServerDialog({
   const [targetId, setTargetId] = useState('')
   const [deploying, setDeploying] = useState(false)
   const openRef = useRef(open)
-  // Why: bumps on every open, so a background install only resets the session it started in.
+  // Scope completion resets to the opening session so background installs cannot clear reopened forms.
   const sessionRef = useRef(0)
   useEffect(() => {
     openRef.current = open
@@ -75,7 +74,6 @@ export function RuntimeInstallServerDialog({
             }
           )
         )
-        // Why: leave a form the user reopened since this install started alone.
         const sameSession = session === sessionRef.current
         if (mountedRef.current && (!openRef.current || sameSession)) {
           setName('')
@@ -109,7 +107,7 @@ export function RuntimeInstallServerDialog({
   }
 
   return (
-    // Why closable mid-deploy: an SSH install can take minutes; it finishes in the background.
+    // Allow closing long SSH installs because deployment continues in the background.
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <form
@@ -136,7 +134,7 @@ export function RuntimeInstallServerDialog({
                     'Orca installs itself on an empty SSH host and keeps itself up to date.'
                   )}
                 </p>
-                {/* Why: this is the moment something moves, so say what does and doesn't. */}
+                {}
                 <p>
                   {translate(
                     'auto.components.settings.managedServers.reassurance',

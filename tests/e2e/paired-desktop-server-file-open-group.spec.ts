@@ -1,22 +1,11 @@
-/**
- * A switch-on desktop paired to a switch-on `orca serve` reports the group it shows in each server
- * workspace its frames draw (`layout.reportView`), so a file the CLI opens on the server lands in
- * that group, whichever of the workspace's groups the server's saved view names (H5c-v).
- *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
- *   pnpm exec playwright test tests/e2e/paired-desktop-server-file-open-group.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=2
- */
+// H5c-v: with ORCA_LAYOUT_OWNER=main, layout.reportView must send the desktop’s shown group so server CLI file-open lands there, independent of saved server selection.
 import { existsSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { pairedRuntimeConnectionFromOffer } from '../../src/shared/paired-runtime-connection'
-import { decodePairingOffer } from '../../src/shared/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../src/shared/remote-runtime-client'
 import { HOST_TERMINAL_SURFACE_SEPARATOR } from '../../src/shared/terminal-surface-id'
 import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../src/shared/workspace-layout/layout-intents-capability'
 import type { PublishedWorkspaceLayout } from '../../src/shared/workspace-layout/workspace-layout-published'
-import { readWorkspaceLayoutStreamFrame } from '../../src/shared/workspace-layout/workspace-layout-stream-frames'
 import { expect, test } from './helpers/orca-app'
+import { readServerLayout } from './helpers/paired-desktop-server-layout'
 import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost
@@ -29,38 +18,6 @@ import {
 const LAYOUT_OWNER_BUILD = existsSync(
   path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
 )
-
-/** The server's own layout of the workspace: the first snapshot of a stream of the test's own. */
-async function readServerLayout(
-  host: HeadlessPairedRuntimeHost,
-  worktreeId: string
-): Promise<PublishedWorkspaceLayout | null> {
-  let resolveSnapshot: (value: unknown) => void = () => {}
-  const snapshot = new Promise<unknown>((resolve) => {
-    resolveSnapshot = resolve
-  })
-  const subscription = await subscribeRemoteRuntimeRequest<unknown>(
-    pairedRuntimeConnectionFromOffer(decodePairingOffer(host.offer.pairingUrl)),
-    'layout.subscribe',
-    { workspaces: [worktreeId] },
-    30_000,
-    {
-      onResponse: (response) => resolveSnapshot(response.ok ? response.result : null),
-      onError: () => resolveSnapshot(null),
-      onClose: () => resolveSnapshot(null)
-    }
-  )
-  try {
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000))
-    const frame = readWorkspaceLayoutStreamFrame(await Promise.race([snapshot, timeout]))
-    if (frame?.type !== 'snapshot') {
-      return null
-    }
-    return frame.workspaces.find((entry) => entry.key === worktreeId)?.layout ?? null
-  } finally {
-    subscription.close()
-  }
-}
 
 function groupOfTab(layout: PublishedWorkspaceLayout | null, tabId: string): string | null {
   return layout?.groups.find((group) => group.tabIds.includes(tabId))?.id ?? null

@@ -31,8 +31,7 @@ export async function startSystemSshDynamicForwardProcess(
   }
   const args = buildForwardProcessSshArgs(target, { ...options, nonInteractive: true })
   const destinationIndex = args.lastIndexOf('--')
-  // Why `no`: an ssh_config forward the main connection already holds would end this one; the
-  // listener probe below is what proves our own -D bound.
+  // Configured forwards may already be held by the main login; probe our -D listener instead of exiting on their collisions.
   const dynamicArgs = ['-N', '-o', 'ExitOnForwardFailure=no', '-D', `127.0.0.1:${localPort}`]
   args.splice(destinationIndex === -1 ? 0 : destinationIndex, 0, ...dynamicArgs)
   const process = spawn(sshPath, args, {

@@ -27,8 +27,7 @@ export function WindowsFirewallNotice({
   const inspectIdRef = useRef(0)
 
   const inspect = useCallback(async (): Promise<WindowsMobileFirewallStatus | null> => {
-    // Why: UAC elevation steals and returns window focus, so a focus-triggered
-    // inspection can race the post-repair one; only the latest result may win.
+    // UAC focus changes can race post-repair inspection; publish only the latest result.
     const inspectId = ++inspectIdRef.current
     if (!pairingReady) {
       setStatus(null)
@@ -82,8 +81,7 @@ export function WindowsFirewallNotice({
         return
       }
       if (result.ok) {
-        // Why: elevation success only confirms the script ran; managed policy
-        // can still leave an overriding Block rule in effect.
+        // Successful elevation proves execution, not that managed policy removed overriding Block rules.
         const next = await inspect()
         if (!mountedRef.current) {
           return

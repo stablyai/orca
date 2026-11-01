@@ -21,19 +21,14 @@ import type {
 } from '../../../../shared/runtime-terminal-contracts'
 import {
   buildPtyTerminalWaitBlockedResult,
-  buildPtyTerminalWaitResult,
-  buildTerminalWaitBlockedResult,
-  buildTerminalWaitResult
+  buildPtyTerminalWaitResult
 } from '../../terminal-wait-results'
+import { outputClockOf } from '../../tui-idle-evidence-source'
 import { createSetupCompletionScanner } from '../../orchestration/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
-  /** One bounded look at the provider's screen for an adopted PTY whose retained
-   *  readiness metadata was lost. Deliberately single-shot: it answers "is the
-   *  screen already showing a settled prompt", and the poll above owns every
-   *  later transition. A provider screen that is still working when this fires
-   *  resolves through the poll, not here. */
+  /** One bounded readiness read for adopted PTYs with lost metadata; later working-to-idle transitions belong to the poll. */
   protected startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
@@ -67,10 +62,12 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
       null
     )
       .then((projection) => {
+        const pty = this.ptysById.get(waiter.ptyId)
         if (
           !projection ||
           projection.source !== 'screen' ||
-          !this.terminalWaiters.get(waiter.handle)?.has(waiter)
+          !pty ||
+          !this.terminalWaiters.has(waiter)
         ) {
           return
         }
@@ -83,16 +80,15 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
               agent,
               () => restoreProjectedComposerDraft(projection.tail, projection.draft),
               // Why read now: output since the probe started makes the pane clocked.
-              (
-                this.getLivePtyForHandle(waiter.handle)?.pty ??
-                this.getLiveLeafForHandle(waiter.handle).leaf
-              ).lastOutputAt !== null
+              outputClockOf(this.tuiIdleEvidenceSource, pty) !== null
             )
           : isKnownReadyPromptSettled(snapshotText)
         if (!blockedReason && !ready) {
           return
         }
-        const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
+        const result = blockedReason
+          ? buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, blockedReason)
+          : buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty)
         if (waiter.cancelIdlePoll) {
           waiter.cancelIdlePoll()
         }
@@ -105,16 +101,10 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     handle: string,
     blockedReason: RuntimeTerminalWaitBlockedReason | null
   ): RuntimeTerminalWait {
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      return blockedReason
-        ? buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty.pty, blockedReason)
-        : buildPtyTerminalWaitResult(handle, 'tui-idle', pty.pty)
-    }
-    const { leaf } = this.getLiveLeafForHandle(handle)
+    const { pty } = this.getTerminalPtyForHandle(handle)
     return blockedReason
-      ? buildTerminalWaitBlockedResult(handle, 'tui-idle', leaf, blockedReason)
-      : buildTerminalWaitResult(handle, 'tui-idle', leaf)
+      ? buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, blockedReason)
+      : buildPtyTerminalWaitResult(handle, 'tui-idle', pty)
   }
 
   async waitForSetupTerminalCompletion(

@@ -1,23 +1,4 @@
-/** One rAF loop for every shown client-hosted page overlay.
- *
- * Each overlay has to re-read its container's rect every frame, because a pane can MOVE
- * without resizing or scrolling and nothing fires an event for that. Per-host loops made
- * that cost linear in shown hosts (N loops × N forced layouts per frame); one driver
- * syncing N registered hosts keeps the loop count at one.
- *
- * Deliberately NOT gated on document visibility. Measured on Electron 43 / macOS: when the
- * window is hidden, minimized or fully occluded, `visibilityState` is 'hidden' AND Chromium
- * already runs 0 rAF callbacks/s, so a gate saves nothing it does not already save. Its only
- * effect would be in the state where `visibilityState` is wedged at 'hidden' while frames
- * still flow — Chromium's macOS occlusion tracker does that after display sleep and never
- * fires another `visibilitychange` (see `terminal-pane/stale-document-visibility.ts`) — and
- * there a gate would freeze every overlay on a window the user is looking at, with no
- * recovery. Zero upside, unrecoverable downside: let Chromium's own throttling do it.
- *
- * Sharing one loop would otherwise make a throwing host everyone's problem, so each sync is
- * isolated and the reschedule is unconditional: one bad host is skipped, never one that
- * wedges every other overlay at a stale rect with no event left to recover it.
- */
+/** One loop tracks eventless pane moves for all hosts. Trust Chromium rAF throttling, not macOS’s potentially stale hidden state; isolate host errors and always reschedule. */
 
 /** Re-reads one host's container rect and repositions its overlay. */
 export type BrowserClientPagePositionSync = () => void

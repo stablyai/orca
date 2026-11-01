@@ -112,12 +112,10 @@ describe('browser HTTP auth prompt', () => {
     await expect(answer(renderer, request.requestId, CREDENTIALS)).resolves.toBe('answered')
     expect(signIn.callback).toHaveBeenCalledWith('qa', 'hunter2')
 
-    // The site turned the password down, so the next question says so.
     const retry = challenge(guest, { firstAuthAttempt: false })
     const [, retryRequest] = sentRequests(renderer)
     expect(retryRequest.details.retry).toBe(true)
     await answer(renderer, retryRequest.requestId, null)
-    // Called with no credentials, Electron cancels and the page shows the site's 401 page.
     expect(retry.callback).toHaveBeenCalledWith()
   })
 

@@ -29,7 +29,6 @@ describe('structured chat coverage', () => {
     return root
   }
 
-  // Every lane that must exist.
   const requiredLanes = {
     'src/main/native-chat/reader.ts': 'export {}',
     'src/main/claude/claude-session.ts': 'export {}',

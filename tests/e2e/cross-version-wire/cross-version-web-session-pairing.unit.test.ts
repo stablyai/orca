@@ -8,11 +8,7 @@ import { DEVICE_REGISTRY_FILENAME } from '../../../src/main/runtime/mobile-pairi
 import { DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY } from '../../../src/shared/device-key-capability'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-/**
- * Session-only browser keys add an `ephemeral` flag to keyed rows. A released host (desktop
- * downgrade) must keep such rows, keep token rows authenticating, and never advertise the
- * capability that makes a browser send `ephemeral` to it.
- */
+// Across downgrade, preserve ephemeral key rows and token auth; only hosts advertising the capability may receive session-only registration.
 // The last release without session-only keys; a newer baseline would itself drop the row.
 const PRE_EPHEMERAL_REF = 'v1.4.224'
 const SUITE_TIMEOUT_MS = 180_000

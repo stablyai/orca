@@ -31,10 +31,7 @@ describe('structured parent reopening', () => {
     expect(replica.getParent(subject)).toEqual(owner.getParent(subject))
     expect(replica.getParent(subject)?.firstObservedAt).toBe(30)
 
-    // Outcome only, deliberately: a spent replay is refused and a resequenced one is not. Which
-    // layer refuses it is NOT asserted, because no test at this API can tell — transport
-    // consecutiveness, the parent-revision validator and the tombstone guard each refuse it alone,
-    // and ablating any two leaves this green. Attributing one of them here would be a false claim.
+    // Assert replay refusal only: transport order, parent revision and tombstones independently reject it, so this API test cannot credit one layer.
     expect(replica.applyTransportEnvelope(oldPublication)).toBe(false)
     expect(replica.getParent(subject)?.firstObservedAt).toBe(30)
     const resequenced = owner.applyMutation({ parent: { subject, firstObservedAt: 10 } })

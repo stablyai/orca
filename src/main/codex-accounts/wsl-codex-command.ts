@@ -20,15 +20,7 @@ export type WslCodexIdentityProbe = {
   readStdout: (stdout: string) => string | null
 }
 
-/**
- * Probe the distro's Codex path and version.
- *
- * Why fenced: this reads the login shell's stdout positionally (path before the
- * first newline, version after), and an interactive login shell prints the
- * distro rc/motd to stdout ahead of it — which silently moves that split into
- * the banner. The payload ends in `exec`, so no closing fence is ever written;
- * `readStdout` returns everything after the opening one.
- */
+/** Fence off login banners; exec leaves no closing fence after the path/version payload. */
 export function buildWslCodexIdentityProbe(distro: string): WslCodexIdentityProbe {
   const command = [
     buildCodexPathLookup(),
@@ -75,7 +67,7 @@ export function buildWslCodexLoginArgs(
     '  exit 127',
     'fi',
     `export CODEX_HOME=${quotePosixShell(linuxHomePath)}`,
-    // Why: Orca opens the printed link itself; a distro opener would open a second tab.
+    // Avoid a second tab when Orca opens the link.
     ...(options.orcaOpensSignInLink ? ['export BROWSER=true'] : []),
     'exec "$resolved" login'
   ].join('\n')
@@ -83,9 +75,7 @@ export function buildWslCodexLoginArgs(
 }
 
 function buildCodexPathLookup(): string {
-  // Same skip as agent detection: otherwise detection can report the guest
-  // codex while this resolves the Windows one ahead of it on PATH, and Orca
-  // launches a different binary than the one it said was installed.
+  // Match detection by skipping Windows mount directories when resolving the guest CLI.
   return buildPosixCommandPathLookupScript(
     { kind: 'literal', value: 'codex' },
     { skipWindowsMountDirs: true }
@@ -93,7 +83,6 @@ function buildCodexPathLookup(): string {
 }
 
 function buildWslCodexShellArgs(distro: string, command: string): string[] {
-  // Why: Codex must use the distro user's configured login shell, whose PATH
-  // can differ from a hard-coded non-login bash invocation.
+  // Use the configured login shell so CLI launches inherit the user's PATH.
   return buildWslExecArgs(distro, ['sh', '-c', buildWslLoginShellCommand(command)])
 }

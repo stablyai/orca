@@ -1,11 +1,13 @@
 import { app } from 'electron'
-import { existsSync, accessSync, chmodSync, constants } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { platform, arch } from 'node:os'
 import type { WebContents } from 'electron'
 import { BrowserError } from './cdp-bridge'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { EMBEDDED_NAVIGATION_TIMEOUT_MS } from './agent-browser-bridge-types'
+import { ensureDependencyBinaryExecutable } from './agent-browser-dependency-binary'
+import { isAgentBrowserStaleRefError } from './agent-browser-batch-command'
 
 export function agentBrowserNativeName(): string {
   const ext = process.platform === 'win32' ? '.exe' : ''
@@ -13,7 +15,7 @@ export function agentBrowserNativeName(): string {
 }
 
 export function resolveAgentBrowserBinary(): string {
-  // Why: use Electron's resourcesPath (not hand-rolled ../resources) so packaged macOS case-sensitive builds resolve the binary.
+  // resourcesPath preserves the case-sensitive macOS Resources path.
   const bundledResourcesPath =
     process.resourcesPath ??
     (process.platform === 'darwin'
@@ -24,7 +26,7 @@ export function resolveAgentBrowserBinary(): string {
     return bundled
   }
 
-  // Why: dev mode — resolve from node_modules via app.getAppPath(); __dirname is unreliable after electron-vite bundling.
+  // Bundling makes __dirname unreliable for locating development dependencies.
   const nmBin = join(
     app.getAppPath(),
     'node_modules',
@@ -33,21 +35,13 @@ export function resolveAgentBrowserBinary(): string {
     agentBrowserNativeName()
   )
   if (existsSync(nmBin)) {
-    if (process.platform !== 'win32') {
-      try {
-        accessSync(nmBin, constants.X_OK)
-      } catch {
-        chmodSync(nmBin, 0o755)
-      }
-    }
+    ensureDependencyBinaryExecutable(nmBin)
     return nmBin
   }
 
-  // Last resort: assume it's on PATH
   return 'agent-browser'
 }
 
-// Why: exec commands arrive as one string; split on whitespace but respect quotes so quoted args stay intact.
 export function parseShellArgs(input: string): string[] {
   const args: string[] = []
   let current = ''
@@ -91,9 +85,9 @@ export function stripAgentBrowserTargetArgs(args: string[]): string[] {
   return stripped
 }
 
-// Why: agent-browser returns generic errors for stale/unknown refs; map to a specific code so agents can detect and re-snapshot.
+// Stale refs need a distinct code so agents can retry with a fresh snapshot.
 export function classifyErrorCode(message: string): string {
-  if (/unknown ref|ref not found|element not found: @e/i.test(message)) {
+  if (isAgentBrowserStaleRefError(message)) {
     return 'browser_stale_ref'
   }
   return 'browser_error'
@@ -111,7 +105,15 @@ export function isWebContentsLoading(wc: WebContents): boolean {
   try {
     return wc.isLoading()
   } catch {
-    // Why: destruction races are resolved against the authoritative page registration after the wait.
+    // The caller rechecks authoritative page registration after waiting.
+    return false
+  }
+}
+
+export function isLoadingMainFrame(wc: WebContents): boolean {
+  try {
+    return wc.isLoadingMainFrame()
+  } catch {
     return false
   }
 }
@@ -161,7 +163,7 @@ export function waitForAbortedNavigationReplacement(
     )
     timeout.unref?.()
 
-    // Why: the replacement can finish between loadURL rejecting and listener attachment.
+    // Loading may finish between loadURL rejection and listener attachment.
     if (!isWebContentsLoading(wc)) {
       finish()
     }

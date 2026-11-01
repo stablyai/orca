@@ -130,7 +130,6 @@ describe('workspace lifecycle commands', () => {
         throw new Error('selector_not_found')
       }
     }
-    // Any answer is the host answering.
     await expect(observeTerminals(gone, 'id:a')()).resolves.toBeUndefined()
   })
 
@@ -143,7 +142,6 @@ describe('workspace lifecycle commands', () => {
         postStopFailure: 'terminal_liveness_unavailable'
       })
     ).toBe('unverifiable')
-    // A terminal observed still running is a definite answer.
     expect(
       sleepOutcome({
         ...sleep,
@@ -157,7 +155,6 @@ describe('workspace lifecycle commands', () => {
     ).toBe('settled')
     const closed = { closed: 1, stopped: 1, retiredSurfaces: true as const }
     expect(closeOutcome({ ...closed, ptyStopVerdict: 'unverifiable' })).toBe('unverifiable')
-    // A terminal observed still live is a definite answer, not an unconfirmed one.
     expect(closeOutcome({ ...closed, ptyStopVerdict: 'live' })).toBe('settled')
   })
 })

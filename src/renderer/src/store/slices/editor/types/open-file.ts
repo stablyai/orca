@@ -30,13 +30,13 @@ export type CommitCompareLike = Pick<
   message?: string
 }
 
-// OpenFile is one type (not a `mode` union); consumers reading `filePath` must check `mode` first — conflict-review tabs use the worktree root, not a real file.
-// `skippedConflicts` lives on the tab so the combined-diff exclusion notice stays stable; live status changing between polls would make it flicker.
-// `branchEntriesSnapshot` keeps a combined-branch tab's file list known after switching away from an inactive worktree whose compare data is stale.
+// Check mode before filePath: OpenFile is not a discriminated union and conflict-review paths name roots, not files.
+// Snapshot skippedConflicts to keep combined-diff exclusion notices stable across polls.
+// Keep combined-branch entries across inactive-workspace switches when compare caches are stale.
 export type OpenFile = {
-  id: string // use filePath as unique key
-  filePath: string // absolute path
-  relativePath: string // relative to worktree root
+  id: string
+  filePath: string
+  relativePath: string
   worktreeId: string
   language: string
   isDirty: boolean
@@ -44,7 +44,7 @@ export type OpenFile = {
   runtimeEnvironmentId?: string | null
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string
-  /** Host grant for a read-only file outside every workspace on `runtimeEnvironmentId`; never persisted. */
+  /** Host grant for a file outside every workspace on `runtimeEnvironmentId`; never persisted. */
   terminalArtifactGrantId?: string
   /** Host provenance captured when the tab opened; mutations reject replacement owners. */
   operationProvenance?: EditorFileOperationProvenance
@@ -57,17 +57,16 @@ export type OpenFile = {
   commitCompare?: CommitCompareSnapshot
   branchOldPath?: string
   combinedAlternate?: CombinedDiffAlternate
-  combinedAreaFilter?: string // filter combined diff to a specific area (e.g. 'staged', 'unstaged', 'untracked')
+  combinedAreaFilter?: string
   branchEntriesSnapshot?: GitBranchChangeEntry[]
   commitEntriesSnapshot?: GitBranchChangeEntry[]
-  /** Why: snapshot uncommitted entries at tab-open so a later commit can't yank them out from under the combined diff (rebuild + lost scroll). */
+  // Snapshot uncommitted entries at open or later commits rebuild the diff and lose loaded content/scroll.
   uncommittedEntriesSnapshot?: GitStatusEntry[]
   conflict?: OpenConflictMetadata
   skippedConflicts?: CombinedDiffSkippedConflict[]
   conflictReview?: ConflictReviewState
-  isPreview?: boolean // preview tabs are replaced when another file is single-clicked
-  isUntitled?: boolean // true for files created via "New Markdown" that haven't been renamed yet
-  // Why: templated New Markdown files have real content at creation, unlike blank placeholders that can be discarded.
+  isPreview?: boolean
+  isUntitled?: boolean
   deleteUntouchedOnClose?: boolean
   // Why: external delete/rename of an open file keeps the tab (strikethrough label); 'changed' = rewritten on disk under unsaved edits → changed-on-disk banner (#7265).
   externalMutation?: 'deleted' | 'renamed' | 'changed'
@@ -75,7 +74,7 @@ export type OpenFile = {
   lastKnownDiskSignature?: string
   /** Blocks saves while a restored tab's filesystem authority is being replaced. */
   pendingOwnerMigration?: boolean
-  /** Why: routes an Orca-owned move's destination-watcher echo into content verification. On the tab so it survives the atomic rekey; operationId supersedes a stale verification on re-move. Not persisted. */
+  // Transient Orca move echo proof; survives atomic rekey, operationId supersedes prior verifications after re-move.
   pendingSelfMoveEcho?: { operationId: string; targetPath: string }
   /** Why: diff bodies are cached in EditorPanel; bump this on re-select so the panel refetches instead of reusing a stale snapshot. */
   diffContentReloadNonce?: number
@@ -83,9 +82,9 @@ export type OpenFile = {
   fileContentReloadNonce?: number
   /** Why: CI check-details tabs are virtual editor tabs backed by fetched PR check-run metadata, not a file on disk. */
   checkRunDetails?: OpenCheckRunDetailsState
-  /** Why: web-client tab mirrored from the host snapshot; only mirrored tabs may be culled when they vanish, locally-opened tabs must survive. */
+  // Only host-mirrored tabs may be culled on omission; locally opened tabs survive.
   mirroredFromRuntimeSession?: boolean
-  /** Why: orthogonal to `mode` — an edit-mode tab that must never accept edits/autosave/rename (AI Vault View Log). Persisted only when true. */
+  // Read-only is orthogonal to mode: logs cannot edit/autosave/rename; persist only true.
   readOnly?: boolean
   /** Transient: paged CSV data must never become an editable buffer. */
   csvPreviewOnly?: boolean

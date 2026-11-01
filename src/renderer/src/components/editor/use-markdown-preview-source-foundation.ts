@@ -48,7 +48,6 @@ export function useMarkdownPreviewSourceFoundation({
   const matchesRef = useRef<Range[]>([])
   const searchInstanceRef = useRef<MarkdownPreviewSearchInstance>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
-  const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
@@ -60,7 +59,6 @@ export function useMarkdownPreviewSourceFoundation({
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const frontmatterVisibleByFile = useAppStore((s) => s.markdownFrontmatterVisible)
-  const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -175,7 +173,6 @@ export function useMarkdownPreviewSourceFoundation({
     matchesRef,
     searchInstanceRef,
     lastAppliedInitialAnchorRef,
-    pendingEditorRevealFrameIdsRef,
     isSearchOpen,
     setIsSearchOpen,
     query,
@@ -192,7 +189,6 @@ export function useMarkdownPreviewSourceFoundation({
     openMarkdownPreview,
     setMarkdownViewMode,
     frontmatterVisibleByFile,
-    setPendingEditorReveal,
     addDiffComment,
     deleteDiffComment,
     updateDiffComment,

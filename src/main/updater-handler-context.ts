@@ -1,7 +1,6 @@
 import type { UpdateStatus } from '../shared/update-status-types'
 import type { ElectronAutoUpdater } from './electron-updater-loader'
 
-/** Updater state and actions that the electron-updater event handlers read and drive. */
 export type UpdaterHandlerContext = {
   autoUpdater: ElectronAutoUpdater
   clearBackgroundCheckLaunchPending: () => void

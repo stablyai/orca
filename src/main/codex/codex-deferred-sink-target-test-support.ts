@@ -1,9 +1,5 @@
-// A journal target for the deferred sink that records the bodies written to it, in order.
-
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionEventTarget } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'

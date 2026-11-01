@@ -6,9 +6,7 @@ import {
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { getWindowsSystem32Path } from '../agent-hooks/windows-powershell-hook-launcher'
 
-// Why: Copilot's user-level hook files can use VS Code-compatible PascalCase
-// names, which match the event vocabulary already normalized by Orca's hook
-// server and avoid wrapper-side event remapping.
+// VS Code-compatible PascalCase names reuse the hook server's event normalization.
 export const COPILOT_EVENTS = [
   'SessionStart',
   'SessionEnd',
@@ -16,9 +14,7 @@ export const COPILOT_EVENTS = [
   'PreToolUse',
   'PostToolUse',
   'PostToolUseFailure',
-  // Why: GitHub's current reference documents subagentStart with only the
-  // camelCase payload shape. The wrapper passes the event name separately, so
-  // Orca can normalize it without depending on a PascalCase payload.
+  // This event is documented only in camelCase; the wrapper supplies its name for normalization.
   'subagentStart',
   'SubagentStop',
   'PreCompact',
@@ -32,11 +28,9 @@ export function getManagedCommand(scriptPath: string, eventName: string): string
   if (process.platform !== 'win32') {
     return wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
   }
-  // Why an argument, not the hook `env` map: every Copilot version runs the command text, so the
-  // event survives runners that ignore `env`, and each event keeps a distinct managed command.
+  // Arguments survive runners that ignore hook env maps and keep managed commands distinct per event.
   const direct = wrapWindowsDirectCmdHookCommand(scriptPath)
-  // Why `/d`: Copilot runs the `powershell` field only under PowerShell, which starts a bare .cmd
-  // without `/d`, so a printing cmd AutoRun would land ahead of the `{}` Copilot parses.
+  // /d suppresses cmd AutoRun output that would corrupt the {} response Copilot parses.
   return direct
     ? `${getWindowsSystem32Path('cmd.exe')} /d /c ${direct} ${eventName}`
     : wrapWindowsHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })

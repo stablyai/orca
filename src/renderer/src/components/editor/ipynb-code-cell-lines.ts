@@ -31,8 +31,7 @@ export function getIpynbCodeCellPreviewLines(source: string): string[] {
 }
 
 function sliceIpynbCodeCellPreviewLine(source: string, lineStart: number, lineEnd: number): string {
-  // Why: inactive notebook cells are colorized as one joined string; bound each
-  // preview line so a single pasted line cannot monopolize the renderer.
+  // Bound preview lines so colorizing an inactive cell’s joined text cannot monopolize the renderer.
   const normalizedLineEnd =
     lineEnd > lineStart && source.charCodeAt(lineEnd - 1) === CARRIAGE_RETURN_CODE_UNIT
       ? lineEnd - 1

@@ -23,7 +23,6 @@ function assignSuccessResponse(): Response {
   })
 }
 
-// Advances only when the gate sleeps, so a wait is observable as an exact duration.
 function fakeAssignClock(onSleep?: () => void) {
   let now = 1_000_000
   const sleeps: number[] = []
@@ -380,10 +379,7 @@ describe('relay assignment rate gate', () => {
       .mockResolvedValueOnce(assignSuccessResponse())
 
     await expect(request({ fetch, assignRateGate })).rejects.toThrow('relay_assignment_failed_429')
-    // A reconcile() cancels the armed retry timer and resets attempts; only the
-    // gate still remembers what the director asked for. A wait beyond the
-    // inline cap fails fast with the remainder instead of parking the caller
-    // (pairing IPC awaits reconcile inline).
+    // Reconcile resets retry timers; the gate must retain long Retry-After and fail inline with the remainder.
     clock.advance(6_000)
     await expect(request({ fetch, assignRateGate })).rejects.toMatchObject({
       statusCode: 429,
@@ -411,7 +407,6 @@ describe('relay assignment rate gate', () => {
     await assignRateGate.reserve(key)
     await assignRateGate.reserve(key)
 
-    // First slice consumes 1s of the 5s interval; the raise then owes 10s more.
     expect(clock.sleeps.reduce((sum, ms) => sum + ms, 0)).toBe(11_000)
   })
 
@@ -454,7 +449,6 @@ describe('relay assignment rate gate', () => {
     const clock = fakeAssignClock()
     const assignRateGate = new RelayAssignRateGate(clock.options)
     const fetch = vi.fn<typeof globalThis.fetch>(async () => assignSuccessResponse())
-    // First reads happen inside reserve(); the last read guards the send.
     const currency = [true, false]
 
     await expect(

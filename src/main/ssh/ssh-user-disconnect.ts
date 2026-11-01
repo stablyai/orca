@@ -1,14 +1,10 @@
+import { formatSshUserDisconnectedMessage } from '../../shared/ssh-user-disconnect-message'
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
 
-/**
- * Hosts the user pressed Disconnect on. Until the user explicitly connects again, no background
- * dial (a managed server's tunnel or status check, a census, a pane or automation restore) may
- * reconnect them. Session-only, like a paired server's manual disconnect, so both halves of a
- * managed host are forgotten together at restart.
- */
+/** Session-only disconnect blocks every background dial until explicit connect; restart clears both SSH and managed-server disconnects together. */
 const userDisconnectedTargets = new Set<string>()
 
 export function recordSshUserDisconnected(targetId: string): void {
@@ -40,7 +36,7 @@ export function resetSshUserDisconnectsForTests(): void {
 
 /** Not an auth or transient failure: callers neither ask for a sign-in nor retry it. */
 export function createSshUserDisconnectedError(label: string): Error {
-  return Object.assign(new Error(`${label} was disconnected. Connect to use it again.`), {
+  return Object.assign(new Error(formatSshUserDisconnectedMessage(label)), {
     code: 'ssh_user_disconnected'
   })
 }

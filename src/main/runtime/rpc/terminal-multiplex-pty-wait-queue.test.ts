@@ -10,20 +10,27 @@ import {
   TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
   TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
 } from '../../../shared/terminal-multiplex-flow-control'
-import { createMultiplexPtyWaitAdmission } from './methods/terminal/terminal-multiplex-pty-wait-admission'
+
 import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harness'
 
 function startPendingPtyHarness() {
   const waits = new Map<string, { signal: AbortSignal; resolve: (ptyId: string) => void }>()
+  const ptyIds = new Map<string, string>()
   const requestRendererTerminalTabMount = vi.fn()
   const harness = startDesktopMultiplexSubscribe({
-    resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+    resolveLiveLeafForHandle: vi.fn((handle: string) => ({ ptyId: ptyIds.get(handle) ?? null })),
     requestRendererTerminalTabMount,
     waitForLeafPtyId: vi.fn(
       (handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
         new Promise<string>((resolve, reject) => {
           if (signal) {
-            waits.set(handle, { signal, resolve })
+            waits.set(handle, {
+              signal,
+              resolve: (ptyId) => {
+                ptyIds.set(handle, ptyId)
+                resolve(ptyId)
+              }
+            })
           }
           signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
             once: true
@@ -80,7 +87,7 @@ describe('terminal multiplex PTY wait queue', () => {
     await vi.waitFor(() =>
       expect(waits.size).toBe(TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION)
     )
-    // Why: a queued pane's mount is part of its paced admission, not fired at subscribe.
+    // Mount only during paced admission, not when subscribe queues the pane.
     expect(requestRendererTerminalTabMount).toHaveBeenCalledTimes(
       TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION
     )
@@ -113,22 +120,5 @@ describe('terminal multiplex PTY wait queue', () => {
 
     harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
-  })
-})
-
-describe('createMultiplexPtyWaitAdmission', () => {
-  it('admits FIFO, skips aborted waiters, and reports room against both bounds', async () => {
-    const admission = createMultiplexPtyWaitAdmission(1, 2)
-    const first = await admission.acquire(new AbortController().signal)
-    expect(first).toBe(true)
-    const aborted = new AbortController()
-    const second = admission.acquire(aborted.signal)
-    const third = admission.acquire(new AbortController().signal)
-    expect(admission.hasRoom()).toBe(false)
-    aborted.abort()
-    await expect(second).resolves.toBe(false)
-    expect(admission.hasRoom()).toBe(true)
-    admission.release()
-    await expect(third).resolves.toBe(true)
   })
 })

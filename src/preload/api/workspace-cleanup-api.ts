@@ -20,7 +20,7 @@ export type WorkspaceCleanupApi = {
     onProgress?: (progress: WorkspaceCleanupScanProgress) => void
   ) => Promise<WorkspaceCleanupScanResult>
   cancelScan?: (scanId: string) => Promise<boolean>
-  /** Last persisted broad-scan snapshot; null until one completes or when the cache is stale/corrupt. */
+  /** Null until a scan completes or when its cache is stale/corrupt. */
   getCachedScan: () => Promise<WorkspaceCleanupScanResult | null>
   dismiss: (args: WorkspaceCleanupDismissArgs) => Promise<void>
   clearDismissals: () => Promise<void>
@@ -31,12 +31,11 @@ export type WorkspaceCleanupApi = {
 
 export type WorkspaceSpaceApi = {
   analyze: () => Promise<WorkspaceSpaceAnalyzeResult>
-  /** Last persisted analysis (topLevelItems pruned to bound the payload); null until one completes. */
+  /** Cached analysis prunes topLevelItems to bound the payload. */
   getCachedAnalysis: () => Promise<WorkspaceSpaceAnalysis | null>
   cancel: () => Promise<boolean>
   onProgress: (callback: (progress: WorkspaceSpaceScanProgress) => void) => () => void
   openWindow?: () => Promise<void>
-  closeWindow?: () => Promise<void>
   publishWindowState?: (state: unknown) => Promise<void>
   requestWindowState?: () => Promise<void>
   onWindowStateRequested?: (callback: () => void) => () => void

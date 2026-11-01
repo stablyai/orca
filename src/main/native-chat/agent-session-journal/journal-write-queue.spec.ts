@@ -1,17 +1,13 @@
-// A write has landed in the fold when its call returns. A write issued from inside a running write
-// joins the line behind it, never nested.
-// A read in the queue always settles: behind a write that failed, and refused once closed.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -19,7 +15,7 @@ import {
 import type { AgentSessionJournal } from './journal-store'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { JournalWriteQueue } from './journal-write-queue'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalWriteQueueTests(): void {
   const IDENTITY = {
@@ -54,7 +50,7 @@ export function registerJournalWriteQueueTests(): void {
 
   afterEach(async () => {
     await Promise.allSettled(opened.splice(0).map((journal) => journal.close()))
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   })
 
@@ -97,7 +93,7 @@ export function registerJournalWriteQueueTests(): void {
       let inner: Promise<unknown> | null = null
       let innerLandedDuringOuter = false
 
-      // Issued from inside the outer write, before that write has committed its row.
+      // Reentrant writes must queue rather than nesting inside the uncommitted write.
       const outer = journal.appendResolvedItem(() => {
         inner = journal.appendItem(item(2), reply('inner'), OPTIONS)
         innerLandedDuringOuter = journal.itemBody(agentJournalItemKey(item(2))) !== null
@@ -198,7 +194,6 @@ export function registerJournalWriteQueueTests(): void {
       const queue = new JournalWriteQueue('session-1')
       let failed: Promise<unknown> = Promise.resolve()
       let read: Promise<string> = Promise.resolve('')
-      // Issued from inside a running write, so both join the line.
       await queue.serialize(() => {
         failed = queue.serialize(() => {
           throw new Error('disk I/O error')

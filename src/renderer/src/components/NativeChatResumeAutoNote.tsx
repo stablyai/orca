@@ -3,10 +3,7 @@ import { useAppStore } from '../store'
 import { Button } from './ui/button'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './settings/native-chat-resume-setting-target'
 
-/**
- * Says a run started on its own, in the place the "Don't ask again" box takes in the picker, and
- * where to change that. Only a run this launch's preference started gets it.
- */
+/** Explain automatic resume only for runs started by this launch’s saved preference, with its settings link. */
 export function NativeChatResumeAutoNote({
   inFlight,
   onOpenSettings

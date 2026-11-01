@@ -21,8 +21,7 @@ const { fsCalls, removeHostTreeMock } = vi.hoisted(() => ({
 
 vi.mock('./host-tree-removal', () => ({ removeHostTree: removeHostTreeMock }))
 
-// Why wrap the real module rather than stub it: this suite measures how many filesystem
-// requests one GC pass issues, so every call has to still hit the disk it is counting.
+// Count real filesystem calls so the measured I/O still reaches disk.
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
   const call = (name: 'readdir' | 'stat', fn: unknown) => {
@@ -52,7 +51,7 @@ let userDataDir: string
 let historyRoot: string
 let originalXdgDataHome: string | undefined
 
-/** The pre-dirent decision logic, verbatim apart from reporting names instead of deleting. */
+// Pre-dirent pruning oracle; reports names instead of deleting.
 function referencePruneDecisions(root: string, liveWorktreeIds: Set<string>): string[] {
   const decisions: string[] = []
   const now = Date.now()
@@ -74,7 +73,7 @@ function referencePruneDecisions(root: string, liveWorktreeIds: Set<string>): st
       }
       decisions.push(entry)
     } catch {
-      // Skip individual entries that fail, as the walk under test does.
+      // Match the production walk's tolerance for unreadable entries.
     }
   }
   return decisions
@@ -96,7 +95,6 @@ function meta(worktreeId: string): string {
   })
 }
 
-/** DIR_COUNT directories of three files each: meta.json plus two shell history files. */
 function seedFixture(): void {
   for (let i = 0; i < DIR_COUNT; i++) {
     const orphan = i % ORPHAN_EVERY === 0
@@ -108,7 +106,6 @@ function seedFixture(): void {
   }
 }
 
-/** Symlinks included, and tolerant of a broken one, which `statSync` cannot be. */
 function survivingDirs(): Set<string> {
   return new Set(
     readdirSync(historyRoot).filter(
@@ -117,12 +114,10 @@ function survivingDirs(): Set<string> {
   )
 }
 
-/** Stats on the root's own entries — the `isDirectory()` probe the dirent now answers. */
 function statsOnEntries(): string[] {
   return fsCalls.stat.filter((path) => dirname(path) === historyRoot)
 }
 
-/** Stats on files inside a history directory — the per-file size estimation this pass dropped. */
 function statsInsideEntries(): string[] {
   return fsCalls.stat.filter((path) => dirname(dirname(path)) === historyRoot)
 }
@@ -132,8 +127,7 @@ beforeEach(() => {
   historyRoot = join(userDataDir, 'terminal-history')
   mkdirSync(historyRoot, { recursive: true })
   installFakeAppEnvironment({ getPath: () => userDataDir })
-  // Why: the fish sweep resolves a real user data dir otherwise, and would delete the
-  // developer's own orca fish history files while this suite runs.
+  // Isolate fish data so the sweep cannot delete the developer's own history.
   originalXdgDataHome = process.env.XDG_DATA_HOME
   process.env.XDG_DATA_HOME = userDataDir
   fsCalls.readdir.length = 0
@@ -169,14 +163,10 @@ describe('history GC filesystem request count', () => {
 
     const tombstoneLists = fsCalls.readdir.filter((p) => p.endsWith(PENDING_DELETE_DIR_NAME))
     const scanLists = fsCalls.readdir.filter((p) => !p.endsWith(PENDING_DELETE_DIR_NAME))
-    // The size estimation walked into every directory; the pass now only lists the root.
     expect(scanLists).toEqual([historyRoot])
-    // The tombstone drain (formerly a blocking readdirSync per completion) lists pending-delete a
-    // bounded number of times, never once per entry it removes.
     expect(tombstoneLists.length).toBeLessThanOrEqual(12)
-    // No stat on the entries themselves: the root dirent already carries the type.
     expect(statsOnEntries()).toEqual([])
-    // The one surviving stat per directory is readHistoryMetaAsync enforcing its size cap.
+    // Metadata reads still stat each file to enforce its size cap.
     expect(statsInsideEntries().sort()).toEqual(
       Array.from({ length: DIR_COUNT }, (_, i) => join(historyRoot, `wt-${i}`, 'meta.json')).sort()
     )
@@ -199,7 +189,7 @@ describe('history GC filesystem request count', () => {
       symlinkSync(liveTarget, join(historyRoot, 'link-live'), 'dir')
       symlinkSync(join(userDataDir, 'nowhere'), join(historyRoot, 'link-broken'), 'dir')
     } catch {
-      // Unprivileged Windows cannot create symlinks; the dirent path is covered above.
+      // Unprivileged Windows may refuse symlink creation.
       return
     }
     seedDir('plain-orphan', { 'meta.json': meta(`${DEAD_WORKTREE_ID}-plain`) })
@@ -210,9 +200,7 @@ describe('history GC filesystem request count', () => {
     expect(after.has('link-orphan')).toBe(false)
     expect(after.has('plain-orphan')).toBe(false)
     expect(after.has('link-live')).toBe(true)
-    // A dangling link fails its stat and is skipped, exactly as the pre-dirent walk skipped it.
     expect(after.has('link-broken')).toBe(true)
-    // Only the links cost a stat on the entry itself; plain-orphan costs none.
     expect(statsOnEntries().sort()).toEqual(
       ['link-broken', 'link-live', 'link-orphan'].map((name) => join(historyRoot, name))
     )

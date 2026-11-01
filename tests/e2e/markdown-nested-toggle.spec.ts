@@ -106,8 +106,7 @@ test.describe('Markdown nested toggle regression', () => {
         .toContain(sentinel)
       expectFileKeepsNesting(readFileSync(savedPath, 'utf8'), sentinel)
 
-      // The reported bug only appeared on reopen, so close the tab and parse
-      // the saved file again from scratch.
+      // Reopen the saved bytes from scratch; the reported bug appeared only after reparsing.
       await closeActiveEditorTab(orcaPage, savedPath)
       await openMarkdownFixture(orcaPage, context, savedPath)
       await waitForRichMarkdownEditor(orcaPage)

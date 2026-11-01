@@ -175,7 +175,6 @@ describe('attachment image helpers', () => {
   it('returns placeholder for external URLs that remain hostile after encode', async () => {
     const { createMediaMarkdownResolver } = await import('./images')
     const resolve = createMediaMarkdownResolver([], [])
-    // non-http rejected
     expect(resolve({ url: 'javascript:alert(1)', alt: 'x' })).toBe('*[x]*')
   })
 

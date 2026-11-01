@@ -33,13 +33,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-/** Records what a first successful check teaches the host; the cold path has its own test. */
 function rememberMergeTreeWritesTrees(): void {
   getLocalGitCapabilityCache().rememberSupported('merge-tree-write-tree')
 }
 
-// Why: every divergent `merge-tree --write-tree` used to leave unreachable loose objects in the
-// real store; enough of them keeps Git's auto-gc re-running forever on large repositories.
+// Quarantine throwaway merge objects so unreachable loose objects cannot repeatedly trigger auto-GC.
 describe('merge-tree runs against a scratch object store (real Git)', () => {
   let fixture: DivergentRepoFixture
 
@@ -91,7 +89,6 @@ describe('merge-tree runs against a scratch object store (real Git)', () => {
     expect(fixture.looseObjectCount()).toBe(before)
     expect(fixture.scratchDirectories()).toEqual([])
     expect(summary?.files).toEqual(['shared.txt'])
-    // The unquarantined run proves the fixture really writes objects and the output matches.
     expect(unquarantinedConflictFiles(cwd, base, head)).toEqual(summary?.files)
     expect(fixture.looseObjectCount()).toBeGreaterThan(before)
   })
@@ -119,7 +116,6 @@ describe('merge-tree runs against a scratch object store (real Git)', () => {
     expect(fixture.scratchDirectories()).toEqual([])
     expect(extra).toEqual({ preservedBranch: { branchName: 'feature-extra', head: extraHead } })
     expect(squashed).toEqual({})
-    // Same verdicts as an unquarantined merge-tree, which does write objects.
     const mainTree = fixture.git(cwd, 'rev-parse', 'main^{tree}').trim()
     const mergeTree = (branch: string): string =>
       fixture.git(cwd, 'merge-tree', '--write-tree', 'main', branch).trim()
@@ -143,7 +139,7 @@ describe('merge-tree runs against a scratch object store (real Git)', () => {
 
     expect(first?.files).toEqual(['shared.txt'])
     expect(second?.files).toEqual(['shared.txt'])
-    // The first check fetched the missing blobs into the real store; the second found them there.
+    // The first check lazily fetches missing blobs; the second reuses them.
     expect(packsAfterFirst).toBeGreaterThan(packsBefore)
     expect(clone.packCount()).toBe(packsAfterFirst)
     expect(clone.looseObjectCount()).toBe(looseBefore)
@@ -227,7 +223,6 @@ describe('merge-tree runs against a scratch object store (real Git)', () => {
   })
 })
 
-// Why: the quarantine must leave Git seeing exactly the object stores it sees without it.
 describe('merge-tree quarantine keeps the object stores Git would otherwise see (real Git)', () => {
   let fixture: DivergentRepoFixture
 
@@ -316,7 +311,6 @@ describe('merge-tree quarantine keeps the object stores Git would otherwise see 
 
     await expectUnquarantinedVerdicts(repo)
 
-    // Unquarantined, Git writes the merge results into the store it was handed.
     expect(fixture.looseObjectCount()).toBeGreaterThan(before)
     expect(fixture.scratchDirectories()).toEqual([])
   })
@@ -333,7 +327,6 @@ describe('merge-tree quarantine keeps the object stores Git would otherwise see 
 
     await expectUnquarantinedVerdicts(repo)
 
-    // A store with its own alternates runs unquarantined, so Git writes where it always has.
     expect(looseObjectsIn(repo)).toBeGreaterThan(0)
   })
 })

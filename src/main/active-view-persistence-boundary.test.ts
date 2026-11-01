@@ -2,7 +2,7 @@ import {
   closeTestStores,
   createSqliteTestStore,
   readPersistedStateJson
-} from './persistence-test-harness'
+} from './persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -41,7 +41,7 @@ describe('active-view persistence boundary', () => {
   it('persists a view switch without changing the global durable snapshot', async () => {
     vi.useFakeTimers()
     vi.resetModules()
-    const { Store } = await import('./persistence')
+    const { Store } = await import('./persistence/loading-store/store')
     const dataFile = join(testState.dir, 'orca-data.json')
     const store = createSqliteTestStore(Store, { dataFile })
     store.flush()

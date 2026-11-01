@@ -6,15 +6,10 @@ import { recordWorkspaceCleanupRemovalSnapshotPrune } from './workspace-cleanup-
 import { pruneWorkspaceCleanupScanSnapshot } from './workspace-cleanup-scan-snapshot'
 import { pruneWorkspaceSpaceAnalysisSnapshot } from './workspace-space-analysis-snapshot'
 
-/**
- * Process-local state keyed by the bare worktree id. Every removal path (desktop IPC and the
- * runtime: CLI, paired client, headless) calls this, and only when no same-id twin survives.
- */
+/** Drop host-blind process state only when no same-ID workspace survives on another host. */
 export function dropRemovedWorktreeProcessState(worktreeId: string): void {
   advertisedUrlWatcher.forgetWorktree(worktreeId)
-  // Why: label routes otherwise accumulate in the proxy's route maps for the whole session.
   localhostWorktreeLabelProxy.unregisterWorktree(worktreeId)
-  // Why: async history tree removal, never recursive-rmSync on the delete critical path.
   deleteWorktreeHistoryDir(worktreeId)
 }
 

@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -91,8 +91,7 @@ describe('cold-park store subscription narrowing', () => {
     container.remove()
   })
 
-  // Why: these two maps are app-global, so before narrowing any write re-rendered
-  // every mounted worktree's overlay layer.
+  // Global-map writes formerly rerendered every mounted worktree’s overlay.
   it('ignores a pending-startup write for another worktree tab', () => {
     act(() => {
       useAppStore.setState({ pendingStartupByTabId: { 'other-tab': { command: 'codex' } } })

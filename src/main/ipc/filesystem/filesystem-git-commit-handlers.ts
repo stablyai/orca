@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { commitChanges } from '../../git/status'
+import { commitChanges, completeMerge } from '../../git/status'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -14,7 +14,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       _event,
       args: { worktreePath: string; message: string; connectionId?: string }
     ): Promise<{ success: boolean; error?: string }> => {
-      // Why: validate at the IPC boundary so the renderer gets a clear error instead of an opaque execFile failure.
+      // Validate at IPC so users receive a clear error before process launch.
       if (typeof args.message !== 'string' || args.message.trim().length === 0) {
         throw new Error('Commit message is required')
       }
@@ -26,6 +26,25 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
         worktreePath
       )
       return commitChanges(worktreePath, args.message, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
+    }
+  )
+  ipcMain.handle(
+    'git:completeMerge',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<{ success: boolean; error?: string }> => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return completeMerge(worktreePath, {
         ...gitOptions,
         admissionTier: 'interactive'
       })

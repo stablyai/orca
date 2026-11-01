@@ -18,6 +18,12 @@ function currentOpenFdCount(): number {
     .filter((line) => line.trim().length > 0).length
 }
 
+function currentKqueueFdCount(): number {
+  return execFileSync('lsof', ['-p', String(process.pid)], { encoding: 'utf8' })
+    .split('\n')
+    .filter((line) => line.includes(' KQUEUE ')).length
+}
+
 function getExistingSpawnHelper(): string {
   const helperPath = getNodePtySpawnHelperCandidates().find((candidate) => existsSync(candidate))
   expect(helperPath).toBeTruthy()
@@ -42,6 +48,19 @@ async function spawnExitingPty(index: number): Promise<void> {
 const describeOnDarwin = process.platform === 'darwin' ? describe : describe.skip
 
 describeOnDarwin('node-pty macOS spawn fd handling', () => {
+  // Forty serial real shell launches need a 15-second budget.
+  it('releases the child-exit kqueue fd across repeated pty churn', async () => {
+    const before = currentKqueueFdCount()
+
+    for (let i = 0; i < 40; i++) {
+      await spawnExitingPty(i)
+    }
+
+    const after = currentKqueueFdCount()
+
+    expect(after - before).toBe(0)
+  }, 15000)
+
   it('does not leak revoked slave tty fds across exited pty spawns', async () => {
     const before = currentRevokedFdCount()
 
@@ -92,8 +111,7 @@ describeOnDarwin('node-pty macOS spawn fd handling', () => {
   }, 15000)
 })
 
-// Linux is the only platform where node-pty takes the forkpty() path, which has no atomic
-// O_CLOEXEC. /proc is what makes the inheritance observable, so the assertions live here.
+// Linux forkpty lacks atomic O_CLOEXEC; /proc exposes whether later execs inherit the master fd.
 const describeOnLinux = process.platform === 'linux' ? describe : describe.skip
 
 const O_CLOEXEC = 0o2000000
@@ -137,7 +155,6 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
         )
       }
 
-      // The masters this process owns must not survive an exec in any child it forks later.
       expect(terms.map((term) => isCloseOnExec(ptyMasterFd(term)))).toEqual([true, true, true])
 
       child = spawn('/bin/sh', ['-c', 'sleep 5'], { stdio: 'ignore' })
@@ -161,8 +178,7 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
       env: { ...process.env }
     })
     try {
-      // Why the read: the child must not be able to run its listing before onData is armed, or an
-      // empty capture would satisfy the negative assertion without inspecting a single fd.
+      // Hold the child until its listener is armed, or an empty capture could falsely prove no leaked fd.
       const second = pty.spawn(
         '/bin/sh',
         ['-c', `IFS= read -r _; printf '${LISTING_READY}\\n'; ls -l /proc/self/fd; exit 0`],
@@ -184,7 +200,7 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
       })
       await delay(100)
 
-      // The listing is the evidence; assert it arrived before reading anything into its absence.
+      // Prove the listing arrived before asserting that leaked master fds are absent.
       expect(output).toContain(LISTING_READY)
       expect(output).toMatch(/\d+ -> \/dev\/pts\//)
       expect(output).not.toMatch(/ptmx/)

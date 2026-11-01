@@ -1,15 +1,15 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
@@ -30,7 +30,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
@@ -109,7 +109,6 @@ async function attach(): Promise<AgentSessionRecord | null> {
   return store.getRecord(SESSION)
 }
 
-/** Emits a pending approval through the acquired provider sink. */
 async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
   const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
   const events = acquire.mock.calls.at(-1)?.[0].events
@@ -181,18 +180,17 @@ beforeEach(async () => {
 afterEach(async () => {
   await host.flushAllStreamedEvents()
   await journals.closeAll()
-  // A host a test replaced can still hold the capsule's lock directory under `root`.
+  // Replaced hosts may still hold recovery-capsule locks under root.
   await recoveryCapsule.settled()
   await rm(root, { recursive: true, force: true })
 })
 
-/** Waits out every recovery-capsule operation a host of this test started, replaced ones too. */
+/** Drain recovery work from current and replaced hosts. */
 function hostTestRecoveryCapsuleSettled(): Promise<void> {
   return recoveryCapsule.settled()
 }
 
-/** A restarted process swaps the store and the host under the same directories.
- *  The helpers here close over both, so they have to be told. */
+/** Update helper closures after restarting the host/store over the same directories. */
 export function replaceHostTestState(next: {
   store: AgentSessionRecordStore
   host: StructuredAgentSessionHost
@@ -201,21 +199,17 @@ export function replaceHostTestState(next: {
   host = next.host
 }
 
-/** Serves `records` as the session's child records through the status sink, as the host's store
- *  does. Call before `attach`: only the attach's publish carries the address a row lands under. */
+/** Install before attach, whose publication supplies the child-work row address. */
 export function serveHostTestChildWork(records: () => AgentChildWorkView[]): void {
   host.deps.statusSink = { publish: () => {}, forget: () => {}, readChildWork: records }
 }
 
-/** The live per-test state. Read it in a `beforeEach` so a suite's test bodies
- *  keep using bare `host` / `store` / `dispatch` exactly as they did when this
- *  setup was inline. */
 export function hostTestState() {
   return {
     root,
     store,
     host,
-    /** Every entry the beforeEach host logged; a host a test builds itself logs elsewhere. */
+    /** Logs from the beforeEach host only. */
     log,
     acquire,
     releaseAcquisition,

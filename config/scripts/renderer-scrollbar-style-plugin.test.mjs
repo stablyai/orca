@@ -17,40 +17,65 @@ function lintSources(sources) {
 }
 
 const violations = [
-  ['unstyled class', 'export const X = () => <div className="max-h-64 overflow-y-auto" />'],
+  [
+    'escaped class expression',
+    String.raw`export const X = () => <div className={'\x6fverflow-y-auto'} />`,
+    String.raw`'\x6fverflow-y-auto'`
+  ],
+  [
+    'unstyled class',
+    'export const X = () => <div className="max-h-64 overflow-y-auto" />',
+    '"max-h-64 overflow-y-auto"'
+  ],
   [
     'unstyled suffix-important class',
-    'export const X = () => <div className="max-h-64 overflow-y-auto!" />'
+    'export const X = () => <div className="max-h-64 overflow-y-auto!" />',
+    '"max-h-64 overflow-y-auto!"'
   ],
   [
     'unknown scrollbar class',
-    'export const X = () => <div className="overflow-auto scrollbar-none" />'
+    'export const X = () => <div className="overflow-auto scrollbar-none" />',
+    '"overflow-auto scrollbar-none"'
   ],
   [
     'separate class composer arguments',
-    "export const X = () => <div className={cn('overflow-y-auto', 'scrollbar-sleek')} />"
+    "export const X = () => <div className={cn('overflow-y-auto', 'scrollbar-sleek')} />",
+    "'overflow-y-auto'"
   ],
   [
     'conditional scrollbar',
-    "export const X = ({ enabled }) => <div className={cn('overflow-y-auto', enabled && 'scrollbar-sleek')} />"
+    "export const X = ({ enabled }) => <div className={cn('overflow-y-auto', enabled && 'scrollbar-sleek')} />",
+    "'overflow-y-auto'"
   ],
   [
     'arbitrary class wrapper',
-    "export const X = () => <div className={identity('overflow-y-auto')} />"
+    "export const X = () => <div className={identity('overflow-y-auto')} />",
+    "'overflow-y-auto'"
   ],
   [
     'mismatched responsive variants',
-    'export const X = () => <div className="overflow-y-auto md:scrollbar-sleek" />'
+    'export const X = () => <div className="overflow-y-auto md:scrollbar-sleek" />',
+    '"overflow-y-auto md:scrollbar-sleek"'
   ],
-  ['inline overflow', "export const X = () => <div style={{ overflowY: 'auto' }} />"],
+  [
+    'inline overflow',
+    "export const X = () => <div style={{ overflowY: 'auto' }} />",
+    "overflowY: 'auto'"
+  ],
   [
     'logical inline style spread',
-    "export const X = ({ open }) => <div style={{ ...(open && { overflowY: 'auto' }) }} />"
+    "export const X = ({ open }) => <div style={{ ...(open && { overflowY: 'auto' }) }} />",
+    "overflowY: 'auto'"
   ],
-  ['JSX spread class', "export const X = () => <div {...{ className: 'overflow-y-auto' }} />"],
+  [
+    'JSX spread class',
+    "export const X = () => <div {...{ className: 'overflow-y-auto' }} />",
+    "'overflow-y-auto'"
+  ],
   [
     'later spread override',
-    'export const X = () => <div className="scrollbar-sleek" {...{ className: \'overflow-y-auto\' }} />'
+    'export const X = () => <div className="scrollbar-sleek" {...{ className: \'overflow-y-auto\' }} />',
+    "'overflow-y-auto'"
   ]
 ]
 
@@ -103,8 +128,16 @@ beforeAll(() => {
 })
 
 describe('renderer scrollbar style Oxlint plugin', () => {
-  it.each(violations)('reports %s', (_name, source) => {
-    expect(diagnosticsBySource.get(source)).toHaveLength(1)
+  it.each(violations)('reports %s', (_name, source, reportedSource) => {
+    const findings = diagnosticsBySource.get(source)
+    expect(findings).toHaveLength(1)
+    expect(findings[0].code).toBe('renderer-scrollbar-style(require-styled-vertical-scrollbar)')
+    const { offset, length } = findings[0].labels[0].span
+    expect(
+      Buffer.from(source)
+        .subarray(offset, offset + length)
+        .toString('utf8')
+    ).toBe(reportedSource)
   })
 
   it.each(accepted)('accepts %s', (_name, source) => {

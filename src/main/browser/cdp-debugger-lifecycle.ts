@@ -39,7 +39,7 @@ export class CdpDebuggerLifecycle {
     }
 
     try {
-      // Why: BrowserManager already attached the debugger; reuse it to avoid "another debugger is already attached."
+      // Reuse BrowserManager’s attachment to avoid a second-debugger error.
       if (!guest.debugger.isAttached()) {
         guest.debugger.attach('1.3')
       }
@@ -55,14 +55,14 @@ export class CdpDebuggerLifecycle {
     await sender('DOM.enable')
     await sender('Network.enable')
 
-    // Why: OOPIF iframes are invisible to the parent CDP session; flatten:true gives each a targetable sessionId.
+    // Out-of-process iframes need flattened sessions to receive commands.
     await sender('Target.setAutoAttach', {
       autoAttach: true,
       waitForDebuggerOnStart: false,
       flatten: true
     })
 
-    // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.
+    // Screencast and proxy clients own their listeners on this shared debugger.
     this.removeDebuggerListeners(guest, state)
 
     const detachListener = (): void => {
@@ -85,7 +85,7 @@ export class CdpDebuggerLifecycle {
   makeCdpSender(guest: WebContents, sessionId?: string): CdpCommandSender {
     return (method: string, params?: Record<string, unknown>) => {
       const command = sendGuestCdpCommand(guest, method, params, sessionId)
-      // Why: Electron's CDP sendCommand can hang on a stale debugger session, so a 10s timeout bounds the RPC.
+      // Stale debugger sessions can hang; bound the RPC to 10 seconds.
       let timer: ReturnType<typeof setTimeout>
       return Promise.race([
         command.finally(() => clearTimeout(timer)),

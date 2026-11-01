@@ -3,23 +3,24 @@ import type {
   StructuredAgentSessionOptionsReportedEvent
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
+  CodexAppServerConnectionHandlers
+} from './app-server/codex-app-server-connection-types'
+import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredLaunch,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
-import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+} from './app-server/codex-app-server-connection'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredLaunch,
+  CodexStructuredSessionEvent,
+  CodexStructuredSessionAdapterDeps
+} from './codex-structured-session-state'
+
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const startLinks = new WeakMap<
   CodexStructuredSessionAdapter,
@@ -112,7 +113,7 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),
       respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
-      // As the real connection: the root's exit is reported, once, inside the close that ends it.
+      // Match the real connection's synchronous exit report during close.
       close: async () => {
         connection.closeCount += 1
         if (!connection.closed) {
@@ -141,7 +142,6 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
   return { connections, openConnection, routes }
 }
 
-/** A `turn/start` route for a Codex that opened the turn before its answer was read. */
 export function answerWithOpenedTurn(
   codex: Pick<ReturnType<typeof fakeCodex>, 'connections'>,
   turnId: string
@@ -158,7 +158,6 @@ export function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
   events: CodexStructuredSessionEvent[] = [],
-  /** Host wiring the runtime adds, such as the late dispatch settlement. */
   deps: Partial<CodexStructuredSessionAdapterDeps> = {}
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0

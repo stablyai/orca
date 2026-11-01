@@ -10,26 +10,22 @@ function savedPairingRevision(userDataPath: string, environmentId: string): numb
     return listEnvironments(userDataPath).find((entry) => entry.id === environmentId)
       ?.pairingRevision
   } catch {
-    // Why: the pairing is already saved; an unreadable store only means its status waits for a probe.
+    // Pairing is already saved; an unreadable registry delays status until the next probe.
     return undefined
   }
 }
 
-/**
- * Publishes the status a pairing was verified with, retiring the replaced pairing's owner first when
- * `replaced`. One choke point so every save-after-verify path fences against an overlapping save.
- */
+/** Retire replaced owners before publishing verified status; reject overlapping saves by pairing revision. */
 export async function publishVerifiedPairing(
   userDataPath: string,
   result: VerifiedPairing,
   replaced: { invalidateTransport: (environmentId: string) => Promise<void> | void } | null
 ): Promise<void> {
   const environmentId = result.environment.id
-  // Why before invalidating: a manually disconnected server would not get a fresh owner.
+  // Clear manual disconnect first so invalidation can create a fresh status owner.
   clearRuntimeEnvironmentManualDisconnect(environmentId)
-  // Retires the owner blocked under the replaced pairing; its replacement keys on the new revision.
   await replaced?.invalidateTransport(environmentId)
-  // Why: an overlapping save may have replaced this pairing during the await.
+  // Invalidation may yield to a newer pairing save.
   if (savedPairingRevision(userDataPath, environmentId) !== result.environment.pairingRevision) {
     return
   }

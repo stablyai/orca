@@ -9,11 +9,9 @@ import { isOpenCodeRunCommand } from '../../shared/opencode-headless-command'
 import { isShellProcess } from '../../shared/shell-process-detection'
 
 const SIGINT_EXIT_CODE = 130
-// Launchers that can still exec OpenCode after the first read (`npx`/`bunx opencode-ai run`).
 const OPENCODE_LAUNCHERS = new Set(['node', 'bun', 'bunx', 'npx', 'npm', 'pnpm', 'pnpx', 'yarn'])
 
-// Why these only: a shell means the command has not exec'd yet, and a launcher may still exec
-// OpenCode; any other program (another agent, vim, a dev server) never becomes OpenCode.
+// Shells/launchers may still exec OpenCode; other programs cannot.
 function mayStillBecomeOpenCode(processName: string): boolean {
   if (recognizeAgentProcess(processName) !== null) {
     return false
@@ -27,11 +25,10 @@ type OpenCodeAgent = 'opencode' | 'opencode2'
 type Dependencies = {
   /** Local PTYs only: SSH and WSL foregrounds cannot be read on this host. */
   isObservablePty(ptyId: string): boolean
-  /** The per-agent status switch the plugin install honours (#23667). */
   isStatusEnabled(agent: OpenCodeAgent): boolean
   readForegroundProcessName(ptyId: string): Promise<string | null>
   readForegroundCommandLine(ptyId: string, foregroundProcess: string): Promise<string | null>
-  /** `yieldsToHookSince`: the store drops this write once a hook reported the pane since then. */
+  /** Store discards this write if a hook reported the pane since yieldsToHookSince. */
   publish(ptyId: string, payload: ParsedAgentStatusPayload, yieldsToHookSince: number): void
   now(): number
 }
@@ -43,11 +40,7 @@ type CommandState = {
   armed: OpenCodeAgent | null
 }
 
-/**
- * Reports `opencode run` from its own process lifetime: Working once the pane's foreground
- * command is an OpenCode `run`, Done when that command finishes. OpenCode 2's `run` loads no
- * plugin, so nothing else can say which pane it runs in.
- */
+/** OpenCode 2 run loads no plugin; infer Working/Done from its local foreground command lifetime. */
 export class OpenCodeRunLifetimeStatus {
   private readonly commands = new Map<string, CommandState>()
   private nextGeneration = 0
@@ -55,7 +48,7 @@ export class OpenCodeRunLifetimeStatus {
   constructor(private readonly deps: Dependencies) {}
 
   onCommandStarted(ptyId: string): void {
-    // Why: a new command proves the armed one ended even though its 133;D never arrived.
+    // A new command proves the prior one ended even without OSC 133;D.
     this.onCommandFinished(ptyId, null)
     if (
       !this.deps.isObservablePty(ptyId) ||
@@ -152,7 +145,7 @@ export class OpenCodeRunLifetimeStatus {
       state.armed = agent
       this.deps.publish(ptyId, payload, state.startedAt)
     } catch {
-      // Why: a failed read is missing evidence; the pane stays silent rather than guessed.
+      // Failed reads prove no state; never guess.
     }
   }
 }

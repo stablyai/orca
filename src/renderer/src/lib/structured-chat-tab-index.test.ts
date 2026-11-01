@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
-import { structuredChatTabById, structuredChatTabBySessionId } from './structured-chat-tab-index'
+import {
+  structuredChatTabById,
+  structuredChatTabBySessionId,
+  structuredChatWorkspacesBySessionId,
+  chatWorkspaceByTabId
+} from './structured-chat-tab-index'
 
 function tab(id: string, contentType: Tab['contentType'] = 'agent-session'): Tab {
   return {
@@ -56,4 +61,25 @@ describe('structured chat tab index', () => {
       expect(structuredChatTabById(tabsByWorkspace, workspaceId, 'chat')).toBeUndefined()
     }
   )
+})
+
+it('keeps own-key order, prototype-named ids, and separate session and tab keys across snapshots', () => {
+  const chat = { ...tab('__proto__'), entityId: '__proto__' }
+  const snapshot: Record<string, Tab[]> = {}
+  Object.setPrototypeOf(snapshot, { inherited: [chat] })
+  Object.assign(snapshot, {
+    constructor: [tab('terminal', 'terminal'), chat, chat],
+    second: [chat]
+  })
+  expect(structuredChatWorkspacesBySessionId(snapshot, '__proto__')).toEqual([
+    'constructor',
+    'second'
+  ])
+  expect(chatWorkspaceByTabId(snapshot, '__proto__')).toBe('constructor')
+  expect(chatWorkspaceByTabId(snapshot, 'terminal')).toBeNull()
+  expect(structuredChatWorkspacesBySessionId({ second: [chat] }, '__proto__')).toEqual(['second'])
+  expect(structuredChatWorkspacesBySessionId(snapshot, '__proto__')).toEqual([
+    'constructor',
+    'second'
+  ])
 })

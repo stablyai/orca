@@ -1,9 +1,5 @@
 import type { ApplyLayoutResult, DriverState, PtyLayoutTarget } from '../../orca-runtime-core'
 import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from './terminal-orchestration-authority'
-import {
-  recentTerminalOutputIncludesPath,
-  recentTerminalPathCandidatesIncludePath
-} from '../../terminal-output-path-candidates'
 import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
 
 export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithGetOrchestrationDispatchAuthority {
@@ -18,23 +14,6 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
     isCurrent?: () => boolean
   ): Promise<void>
   protected abstract resolveDesktopRestoreTarget(ptyId: string): { cols: number; rows: number }
-
-  hasRecentTerminalOutputPath(handle: string, pathText: string, absolutePath: string): boolean {
-    // Why: safety net for any query path that never saw a mobile onReady —
-    // lazily backfill so the answer matches pre-gate behavior.
-    if (!this.recentPtyPathCandidateTrackingActive) {
-      this.activateRecentPtyPathCandidateTracking()
-    }
-    const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-    const recentOutput = ptyId ? this.recentPtyOutputById.get(ptyId)?.read() : null
-    if (recentOutput && recentTerminalOutputIncludesPath(recentOutput, pathText, absolutePath)) {
-      return true
-    }
-    const candidates = ptyId ? this.recentPtyPathCandidatesById.get(ptyId) : null
-    return candidates
-      ? recentTerminalPathCandidatesIncludePath(candidates, pathText, absolutePath)
-      : false
-  }
 
   // ─── Mobile Fit Override Management ─────────────────────────
 

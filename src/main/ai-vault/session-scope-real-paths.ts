@@ -8,30 +8,24 @@ import {
 import { sessionFileExecutionNamespace } from '../../shared/ai-vault-scope-cwd-match'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
-/** A scope path registered through a symlink, and where it really points on this host. */
 type AiVaultScopeLink = { scopePath: string; realPath: string }
 
 export type AiVaultScopeRealPaths = {
-  /** The registered paths plus their real paths, so the scan admits sessions recorded under either. */
+  /** Admit both registered spellings and resolved paths. */
   scanScopePaths: readonly string[]
   links: readonly AiVaultScopeLink[]
 }
 
-/**
- * Why here: this runs on the host that owns the files (the desktop for local
- * scans, orcad for SSH and server hosts), so a symlink resolves against the
- * disk the agents actually wrote their cwd on.
- */
+/** Resolve on the execution host so links refer to the filesystem that recorded each cwd. */
 export async function resolveAiVaultScopeRealPaths(
   scopePaths: readonly string[]
 ): Promise<AiVaultScopeRealPaths> {
   const links: AiVaultScopeLink[] = []
   for (const scopePath of scopePaths) {
-    // Why skip WSL UNC paths: Windows cannot resolve a Linux symlink through the share.
+    // Windows cannot resolve Linux symlinks through a WSL UNC share.
     if (!isAbsolute(scopePath) || parseWslUncPath(scopePath)) {
       continue
     }
-    // A path missing on this host belongs to another host's workspace; it stays unmatched.
     const realPath = await realpath(scopePath).catch(() => null)
     if (realPath && !sameComparisonPath(realPath, scopePath)) {
       links.push({ scopePath, realPath })
@@ -46,12 +40,7 @@ export async function resolveAiVaultScopeRealPaths(
   return { scanScopePaths, links }
 }
 
-/**
- * Gives each session recorded under a linked scope's real path the registered
- * spelling as a matching-only alias. Resume keeps reading the recorded `cwd`.
- * Why no realpath per cwd: a listing must not touch arbitrary cwds, which can sit
- * on hung network mounts or behind macOS privacy prompts.
- */
+/** Add matching-only aliases without resolving arbitrary cwds on network mounts or protected folders. */
 export function attachAiVaultScopeCwdAliases(
   result: AiVaultListResult,
   scope: AiVaultScopeRealPaths
@@ -64,7 +53,7 @@ export function attachAiVaultScopeCwdAliases(
   const sessions: AiVaultSession[] = []
   for (const session of result.sessions) {
     const cwd = session.cwd
-    // Why native only: WSL rows carry Linux cwds this Windows host cannot resolve.
+    // Windows cannot resolve the Linux cwds carried by WSL rows.
     if (!cwd || !isAbsolute(cwd) || sessionFileExecutionNamespace(session.filePath) !== 'native') {
       sessions.push(session)
       continue

@@ -21,11 +21,12 @@ export const WorkItem = RepoSelector.extend({
 export const WorkItemByOwnerRepo = RepoSelector.extend({
   owner: requiredString('Missing owner'),
   ownerRepo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
+  // Preserve Enterprise host through parsing for host-qualified gh requests.
   host: OptionalString,
   number: z.number().int().positive(),
-  type: z.enum(['issue', 'pr'])
+  type: z.enum(['issue', 'pr']),
+  // Older hosts strip it and answer with the full lookup.
+  preview: z.boolean().optional()
 })
 
 export const WorkItemDetails = WorkItem

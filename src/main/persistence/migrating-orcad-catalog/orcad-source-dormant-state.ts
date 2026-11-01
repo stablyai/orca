@@ -14,7 +14,7 @@ import { collectOrcadMigrationRetiredWorktreeNamespaces } from './orcad-source-r
 import { collectOrcadMigrationSourceAutomationState } from './orcad-source-automation-state'
 import { collectOrcadMigrationSourceWorkspaceSession } from './orcad-source-workspace-session'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
   orcadMigrationOwnerMatchesScope,
   unqualifyOrcadMigrationOwnerKey
 } from './orcad-source-scope'
@@ -41,16 +41,27 @@ type TransferredDormantKind = (typeof ORCAD_MIGRATION_TRANSFERRED_DORMANT_KINDS)
 export type OrcadMigrationSourceDormantInspection = {
   payload: OrcadMigrationDormantStatePayload
   blockedCounts: Record<TransferredDormantKind, number>
-  /** What blocks the saved tabs and panes, each with the way to clear it. */
+  /** Session blockers and remedies. */
   blockedSessionItems: string[]
-  /** What a confirmed "Move anyway" leaves in this desktop's retained profile. */
+  /** Automations that move once their in-flight run finishes. */
+  runningAutomationItems: string[]
+  /** Retained on this desktop after confirmed "Move anyway". */
   leftBehindItems: string[]
+  /** Automations a local WSL move carries disabled, to re-enable on the host once it commits. */
+  automationsEnabledAtSource: string[]
 }
 
-/** The user confirmed "Move anyway" for this host: what can't move stays on this desktop. */
-export function orcadMigrationLeavesBehind(state: PersistedState, targetId: string): boolean {
-  return state.sshTargets.some(
-    (target) => target.id === targetId && target.managedServerLeaveBehind !== undefined
+/** Confirmed "Move anyway" permits retaining unsupported state; unsaved-draft blockers still apply. */
+export function orcadMigrationLeavesBehind(
+  state: PersistedState,
+  targetId: string | null
+): boolean {
+  // A local WSL move has no "Move anyway": what can't move blocks it.
+  return (
+    targetId !== null &&
+    state.sshTargets.some(
+      (target) => target.id === targetId && target.managedServerLeaveBehind !== undefined
+    )
   )
 }
 
@@ -59,9 +70,11 @@ export function collectOrcadMigrationSourceDormantState(
   source: OrcadMigrationManifestSource,
   catalog: OrcadMigrationCatalogPayload,
   storage?: TerminalScrollbackSnapshotStorage,
-  destinationEnvironmentId?: string
+  destinationEnvironmentId?: string,
+  /** A WSL move's slept panes; see `projectOrcadMigrationSessionScrollback`. */
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): OrcadMigrationSourceDormantInspection {
-  const scope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const blockedCounts = emptyBlockedCounts()
   const destinationRepos = catalog.repositories.map(toOrcadDestinationRepository)
   const setupByRepoId = new Map(
@@ -149,7 +162,7 @@ export function collectOrcadMigrationSourceDormantState(
     (entry) => entry.childWorkspaceKey,
     () => (blockedCounts['workspace-lineage'] += 1)
   )
-  // A repo id another host shares keys one registry for both hosts: it stays where it is.
+  // Bare repo IDs shared across hosts cannot prove ownership.
   const ownedRepoIds = [...scope.repoIds].filter((repoId) => !scope.sharedRepoIds.has(repoId))
   const sparsePresets = ownedRepoIds
     .flatMap((repoId) => state.sparsePresetsByRepo[repoId] ?? [])
@@ -171,7 +184,8 @@ export function collectOrcadMigrationSourceDormantState(
     source,
     catalog,
     storage,
-    leaveBehind
+    leaveBehind,
+    daemonHistoryLeaf
   )
   const blockedSessionItems = [...workspaceSession.blockedItems]
   const automationState = collectOrcadMigrationSourceAutomationState(state, source, catalog)
@@ -190,13 +204,11 @@ export function collectOrcadMigrationSourceDormantState(
     { length: clientState.blockedCount },
     () => 'a browser page close saved twice'
   )
-  // "Move anyway": duplicate closes are already out of the payload. What the session still refuses
-  // is what can't be left behind (an unsaved draft), so it keeps blocking.
+  // Duplicate closes stay behind; unsaved drafts still block even after "Move anyway".
   ;(leaveBehind ? leftBehindItems : blockedSessionItems).push(...duplicateCloses)
   blockedCounts['workspace-session'] = blockedSessionItems.length
   if (leaveBehind) {
-    // Every row these counts name is already out of the payload. Saved port forwards never block,
-    // and the server itself refuses duplicate ports.
+    // These rows are excluded already; saved port conflicts are checked by the server.
     for (const kind of ORCAD_MIGRATION_TRANSFERRED_DORMANT_KINDS) {
       if (
         kind !== 'workspace-session' &&
@@ -237,7 +249,13 @@ export function collectOrcadMigrationSourceDormantState(
     },
     blockedCounts,
     blockedSessionItems,
-    leftBehindItems
+    runningAutomationItems: leaveBehind
+      ? []
+      : automationState.runningAutomationNames.map(
+          (name) => `${name} is running; wait for it to finish, then connect again`
+        ),
+    leftBehindItems,
+    automationsEnabledAtSource: automationState.enabledAtSourceIds
   }
 }
 

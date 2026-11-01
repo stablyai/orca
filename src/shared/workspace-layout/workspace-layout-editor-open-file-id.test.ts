@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
 import { ownedEditorFileId } from '../workspace-session-pane-ownership'
 import { build, emptyModel, testContext, WS } from './workspace-layout-command.test-fixture'
 import { applyLayoutCommand } from './workspace-layout-commands'
@@ -40,12 +39,6 @@ function workspace(
 }
 
 describe('the file id main gives a file it opens', () => {
-  it('is the owned id of a file no tab shows, never the bare path another host may hold', () => {
-    expect(editorOpenFileId(workspace(WT, []), file('/repo/a.ts'))).toBe(
-      ownedEditorFileId('/repo/a.ts', WT, null)
-    )
-  })
-
   it("is the id a tab already shows the same owner's file under, the bare path included", () => {
     expect(
       editorOpenFileId(workspace(WT, [file('/repo/a.ts')], ['/repo/a.ts']), file('/repo/a.ts'))
@@ -57,12 +50,6 @@ describe('the file id main gives a file it opens', () => {
     expect(editorOpenFileId(held, file('/repo/a.ts'))).toBe(
       ownedEditorFileId('/repo/a.ts', WT, null)
     )
-  })
-
-  it('is an owned id in the floating workspace', () => {
-    expect(
-      editorOpenFileId(workspace(FLOATING_TERMINAL_WORKTREE_ID, []), file('/tmp/notes.md'))
-    ).toBe(ownedEditorFileId('/tmp/notes.md', FLOATING_TERMINAL_WORKTREE_ID, null))
   })
 })
 

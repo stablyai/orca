@@ -1,3 +1,5 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { visibleGraphChangedWorktrees } from '../session-graph/visible-graph-changed-worktrees'
 import type { RuntimeSessionTabsInventoryPublication as SessionTabsInventoryPublicationMethods } from './session-tabs-inventory-publication'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as ResolveBrowserNetworkExecutionHostForWorktreeMethods } from '../terminal/launch/terminal-workspace-scope'
@@ -21,6 +23,12 @@ import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { PaneStartStatuses } from '../pane-start-statuses'
+import {
+  paneOfPty,
+  type PtyPane,
+  type PtyPaneSource,
+  type PtyPaneOf
+} from '../terminal/surface/pty-pane-query'
 
 export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends OrcaRuntimeWithSyncWindowGraph {
   abstract get workspaceLayoutReads(): WorkspaceLayoutReads
@@ -31,11 +39,28 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     windowId: number,
     graph: RuntimeSyncWindowGraph
   ): RuntimeSyncWindowGraph {
+    return this.mainSurfaces().withMainSurfaces(windowId, graph)
+  }
+
+  // Main's index answers with or without a window's graph: each layout write is a new partition.
+  protected paneOfPty(pty: PtyPaneSource | null | undefined): PtyPane {
+    return paneOfPty(pty, (ptyId) => this.mainSurfaces().findPaneForPty(ptyId))
+  }
+
+  protected captureTerminalPaneReader(): PtyPaneOf {
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      return (pty) => paneOfPty(pty, () => null)
+    }
+    const mainPane = this.mainSurfaces().capturePaneLookup()
+    return (pty) => paneOfPty(pty, mainPane)
+  }
+
+  private mainSurfaces(): ReturnType<typeof mainTerminalSurfaces> {
     const host = (): MainTerminalSurfacesHost => ({
       store: () => this.store,
       reads: () => this.workspaceLayoutReads,
       homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
-      registered: (ptyId) => this.ptysById.has(ptyId),
+      registered: (ptyId) => this.ptysById.get(ptyId) ?? null,
       // Certified exit only: a dropped relay leaves records disconnected but unverifiable.
       exited: (ptyId) => this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'exited',
       live: (ptyId) => this.ptysById.get(ptyId)?.connected === true,
@@ -51,7 +76,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       },
       fenceExited: (rows) => this.applyMobileSessionRetirementFences(rows)
     })
-    return mainTerminalSurfaces(this, host).withMainSurfaces(windowId, graph)
+    return mainTerminalSurfaces(this, host)
   }
 
   protected abstract getAuthoritativeSessionTabsInventoryEpoch(
@@ -130,43 +155,17 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     >
   ): ReturnType<SessionTabsInventoryPublicationMethods['waitForSessionTabsInventoryPublication']>
 
-  // Why: toMobileSessionTabsResult resolves handles/titles from this.tabs and
-  // this.leaves, so any tab/leaf delta a graph sync installs can flip the
-  // client payload (pending-handle → ready, tab title) with zero change to the
-  // stored snapshot. Compare exactly the projection-relevant fields and report
-  // the affected worktrees; false positives only cost a coalesced no-op emit.
+  // Graph changes can alter projected handles/titles without changing snapshot bytes; compare projection fields and fan out affected workspaces.
   protected collectMobileVisibleGraphChangedWorktrees(
-    previousTabs: Map<string, RuntimeSyncedTab>,
-    previousLeaves: Map<string, RuntimeLeafRecord>
+    previousTabs: ReadonlyMap<string, RuntimeSyncedTab>,
+    previousLeaves: ReadonlyMap<string, RuntimeLeafRecord>
   ): Set<string> {
-    const changed = new Set<string>()
-    for (const [tabId, tab] of this.tabs) {
-      const prev = previousTabs.get(tabId)
-      if (!prev || prev.title !== tab.title) {
-        changed.add(tab.worktreeId)
-      }
-    }
-    for (const [tabId, tab] of previousTabs) {
-      if (!this.tabs.has(tabId)) {
-        changed.add(tab.worktreeId)
-      }
-    }
-    for (const [leafKey, leaf] of this.leaves) {
-      const prev = previousLeaves.get(leafKey)
-      if (
-        !prev ||
-        prev.ptyId !== leaf.ptyId ||
-        prev.connected !== leaf.connected ||
-        prev.paneTitle !== leaf.paneTitle
-      ) {
-        changed.add(leaf.worktreeId)
-      }
-    }
-    for (const [leafKey, leaf] of previousLeaves) {
-      if (!this.leaves.has(leafKey)) {
-        changed.add(leaf.worktreeId)
-      }
-    }
+    const changed = visibleGraphChangedWorktrees(
+      previousTabs,
+      previousLeaves,
+      this.tabs,
+      this.leaves
+    )
     return changed
   }
 
@@ -183,13 +182,13 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       })
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
       await this.refreshMobileSessionPtyRecords(explicitWorktreeId)
-      // Why: the refresh may discover a surviving PTY under the host's original path spelling.
+      // Refresh may find surviving PTYs under the host's original path spelling.
       const resolvedId =
         this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? explicitWorktreeId
       this.restoreLivePairedRendererSessionOwnedMobileTerminals(resolvedId)
       return this.getMobileSessionTabsForWorktree(resolvedId, clientNavigationId, options)
     }
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
       allowAttachedWindow: true,
       onlyRuntimeOwnedTerminals: true

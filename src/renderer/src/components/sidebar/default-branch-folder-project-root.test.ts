@@ -32,8 +32,7 @@ function makeRow(repo: Repo, overrides: Partial<Worktree> & { id: string }): Wor
   }
 }
 
-// Mirrors mergeFolderWorkspace: every row of a folder project has no head or branch,
-// and only the root (id `${repoId}::${path}`) is the main worktree.
+// Mirror folder projection: rows lack Git head/branch and only repoId::path identifies the main root.
 function folderProjectRows(repo: Repo): { root: Worktree; instance: Worktree } {
   const rootId = `${repo.id}::${repo.path}`
   return {
@@ -89,13 +88,6 @@ describe('"Hide default branch" on folder projects', () => {
 
     expect(isDefaultBranchWorkspace(root, repo)).toBe(true)
     expect(isDefaultBranchWorkspace(instance, repo)).toBe(false)
-    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
-  })
-
-  it('hides the root of a folder project added from a git subdirectory', () => {
-    const repo = makeRepo('app', '/Users/me/monorepo/packages/app', 'folder')
-    const { root, instance } = folderProjectRows(repo)
-
     expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
   })
 

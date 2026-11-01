@@ -4,10 +4,7 @@ import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
-/**
- * The server managed over SSH that owns this workspace when it refuses this desktop and pairing
- * again over SSH failed; null otherwise. Nothing retries then, so the pane says so.
- */
+/** Expose terminal-owned SSH-managed server refusal when automatic re-pairing failed and no retry remains. */
 export function selectManagedPairingRefusedEnvironmentId(
   state: AppState,
   worktreeId: string | null | undefined

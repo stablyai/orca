@@ -15,8 +15,7 @@ const CODEX_AUTH_ERROR_PATTERNS = [
   /sign in with chatgpt/i,
   /token data is not available/i,
   /auth (?:is missing|tokens are missing|does not expose)/i,
-  // Why: app-server rejects account/rateLimits/read with this when auth.json
-  // holds only an API key; that home has no ChatGPT token, so a fallback read cannot succeed.
+  // API-key-only homes lack ChatGPT tokens, so account/rateLimits/read cannot recover through a fallback read.
   /chatgpt authentication required/i
 ]
 const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, 'g')

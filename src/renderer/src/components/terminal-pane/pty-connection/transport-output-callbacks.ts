@@ -1,3 +1,9 @@
+import {
+  applyTerminalLaunchResult,
+  captureTerminalLaunchContext
+} from './terminal-launch-result-policy'
+import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
+import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal-attachment-launch-result'
 import { isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { createTerminalStartupTiming } from '../terminal-startup-timing'
@@ -12,10 +18,11 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
   const ownerErrors = new Set<string>()
   session.captureTransportOutputCallbacks = (
     onError: (message: string) => void,
-    startup: PtyPaneStartup
+    startup: PtyPaneStartup,
+    savedStartup: ColdRestoreAgentResumeStartup | PtyPaneStartup = session.paneStartup
   ) => {
-    // Why: a new stream generation cannot inherit an old replay's pending
-    // destination-grid fit or keep its live-data waiter open.
+    const launchContext = captureTerminalLaunchContext(session, savedStartup)
+    // New stream generations drop old replay fit continuations and release live-data waiters.
     session.pendingHiddenSnapshotFit?.cancel()
     session.pendingHiddenSnapshotFit = null
     session.pendingReattachFit?.cancel()
@@ -26,9 +33,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
     const isCurrent = (): boolean =>
       !session.disposed &&
       generation === session.transportStreamGeneration &&
-      // A successor may occupy the same numeric pane slot before the old
-      // stream's queued callback runs; only the registered transport may
-      // mutate pane-scoped error/recovery state.
+      // Queued stale callbacks cannot mutate a successor reusing the numeric pane slot.
       session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
     session.startupTiming?.finish('replaced')
     session.startupTiming = createTerminalStartupTiming({
@@ -41,7 +46,19 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
     })
     return {
       generation,
+      launchContext,
       callbacks: {
+        onLaunchResult: (result: TerminalAttachmentLaunchResult): void => {
+          if (
+            isCurrent() &&
+            (!session.remotePtyIncarnationId ||
+              session.remotePtyIncarnationId === result.incarnationId)
+          ) {
+            session.remotePtyIncarnationId = result.incarnationId
+            session.noteBoundProcessIncarnation(result.incarnationId)
+            applyTerminalLaunchResult(session, result, launchContext, 'observer')
+          }
+        },
         onReattachDetermined: (): void => {
           if (isCurrent()) {
             session.beginReattachLiveDataDeferralIfUnowned(generation)
@@ -145,14 +162,12 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
   session.hiddenOutputRestoreLegacyPtyId = null
   // Bounded remote re-arms spent instead of the loss banner (per PTY stream).
   session.hiddenOutputRestoreRemoteAbandonCycles = 0
-  // Latest hidden-drop episode main reported, and the one a banner already disclosed:
-  // main's drop latch outlives unhide, so an unservable gap re-marks on every reveal.
+  // Track latest/disclosed drop episodes because main’s unserved-gap latch re-marks on every reveal.
   session.hiddenOutputRestoreLatestDropEpisode = null
   session.hiddenOutputRestoreUnhideSeq = null
   session.hiddenOutputRestoreDisclosedGap = null
   session.hiddenOutputSnapshotScrollRestore = null
-  // Why: hidden recovery state belongs to one PTY stream. Reattach/restart
-  // can reuse the pane object for a different session before visibility.
+  // Restore bookkeeping belongs to one PTY even when reattach reuses the pane object.
   session.hiddenOutputRestorePtyId = null
   // One recovery re-kick per xterm instance. Generation-aware cooldown and
   // window-cap retries keep a fresh-but-wedged replacement from fossilizing.
@@ -160,22 +175,14 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
   session.hiddenOutputRestoreGeneration = 0
   // Flood-backpressure suppression (HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS).
   session.hiddenOutputRestoreFloodSuppressedUntil = 0
-  // Why: queued replay writes still paint after deadline abandonment; the
-  // fallback drain must not write snapshot-covered live bytes a second time.
+  // Queued snapshot writes can outlive abandonment; fallback drain must not duplicate the live bytes they cover.
   session.hiddenOutputRestoreReplayingSnapshot = null
   session.hiddenOutputRestoreFloodRepaintTimer = null
   session.cancelHiddenOutputRestoreFloodRepaintPark = null
-  // Why: after a snapshot restore, main can still drain ACK-backlog chunks
-  // whose bytes the snapshot already covers — writing them unguarded
-  // duplicates visible output. Track the restored baseline seq (per PTY)
-  // and the expected next chunk start so session.dataCallback can drop/slice
-  // overlaps and detect seq gaps from main-side pending-cap trims whose
-  // one-shot marker was already consumed.
+  // Track restored seq and continuity per PTY to suppress ACK-backlog overlap and detect unmarked pending-cap trim gaps.
   session.restoredSnapshotBaselineSeq = null
   session.restoredSnapshotBaselinePtyId = null
   session.restoredSnapshotExpectedStartSeq = null
-  // Why: main samples its pending renderer-delivery queue with the snapshot.
-  // Chunks at or below this seq can never be backlog duplicates (delivery is
-  // once-and-in-order), so the dedupe window is (windowStart, baseline].
+  // In-order once-only delivery limits backlog dedup to (pending window start, snapshot baseline].
   session.restoredSnapshotDeliveryWindowStartSeq = null
 }

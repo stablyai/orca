@@ -455,7 +455,6 @@ describe('hidden Chromium native popup request compatibility', () => {
     const oauthPath = `/authorize-scripted?client_id=synthetic&redirect_uri=${origin}/callback&response_type=code`
     for (const [modifier, path, disposition] of [
       ['Shift', '/scripted-native', 'new-window'],
-      // A Cmd/Ctrl-opened OAuth child keeps its opener instead of becoming an Orca tab.
       ['ControlOrMeta', oauthPath, 'background-tab']
     ] as const) {
       const before = receipts.length
@@ -518,7 +517,6 @@ describe('hidden Chromium native popup request compatibility', () => {
         firstNavigationOwner: expect.any(Number)
       })
     }
-    // Four live native children fill the route popup cap.
     await page.locator('#blank').click()
     expect(await page.locator('body').getAttribute('data-handle')).toBe('false')
     expect(status().native.windows.slice(-4)).toEqual(
@@ -547,14 +545,15 @@ describe('hidden Chromium native popup request compatibility', () => {
         await page.locator('#scripted-native').click({ modifiers: ['Shift'] })
       }
       const child = await childPage(`${origin}${path}`)
-      // Control: the hidden native child does honor page resizes above the floor.
+      // Native size conversion can round by one pixel; the resize must still take effect.
       await child.evaluate('window.resizeTo(640, 480)')
       await expect
         .poll(async () => {
           await refreshStatus()
-          return status().native.windows.at(-1)?.contentSize[0]
+          const width = status().native.windows.at(-1)?.contentSize[0]
+          return Math.abs((width ?? Infinity) - 640)
         })
-        .toBe(640)
+        .toBeLessThanOrEqual(1)
       await child.evaluate('window.resizeTo(100, 100)')
       await expect
         .poll(async () => {

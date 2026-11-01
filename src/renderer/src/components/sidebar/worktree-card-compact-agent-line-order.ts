@@ -2,8 +2,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
 import type { getAgentDotState } from './worktree-card-agent-summary'
 
-/** The row's one line, lead first. A short status word the dot cannot carry leads, so the
- *  row's truncation cuts the prompt instead: monitoring, and a person's Stop ending the turn. */
+/** Lead with statuses the dot cannot express so truncation cuts the prompt instead. */
 export function getCompactAgentLineOrder(
   agent: DashboardAgentRowData,
   dotState: ReturnType<typeof getAgentDotState>,

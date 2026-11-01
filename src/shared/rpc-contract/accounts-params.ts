@@ -37,6 +37,11 @@ export const SelectAccountParams = z.object({
     .transform((v) => (v === null ? null : v))
 })
 
+export const SelectClaudeAccountParams = SelectAccountParams.extend({
+  // The web client moves running sessions in its own window; older hosts strip this.
+  movesRunningSessions: z.literal(true).optional()
+})
+
 export const SelectCodexAccountForTargetParams = SelectAccountParams.extend({
   target: CodexSelectionTarget
 })
@@ -56,8 +61,7 @@ export const CodexResetExpectedScope = z
 
 export const ConsumeCodexResetCreditParams = z
   .object({
-    // Why: one key per client attempt; the host ledger answers a retry of the same offer or
-    // account with the attempt it already recorded, so a credit is never spent twice.
+    // Retries share a host-ledger attempt so the same offer/account never spends a credit twice.
     idempotencyKey: z.uuid('Invalid idempotencyKey'),
     expectedScope: CodexResetExpectedScope
   })
@@ -80,9 +84,7 @@ export const AddCodexFromHomeParams = z.object({
   wslDistro: z.string().nullish()
 })
 
-// Why: `orca account list` prints only emails and the active ids, so it opts out
-// of the forced all-provider usage refresh below — that lane bypasses the poll
-// throttle and Retry-After gate and costs one serial round-trip per account.
+// Account list opts out: forced usage refresh bypasses throttle/Retry-After and costs a serial round trip per account.
 export const ListAccountsParams = z.object({
   refreshUsage: z.boolean().default(true)
 })

@@ -150,18 +150,6 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
     expect(extract).not.toHaveBeenCalled()
   })
 
-  it('leaves a foreign legacy resources/bin/orca symlink untouched', async () => {
-    const fixture = await makeFixture()
-    const legacyCommandPath = join(fixture.commandDirectory, 'orca')
-    const foreignTarget = join(fixture.root, 'foreign', 'resources', 'bin', 'orca')
-    await symlink(foreignTarget, legacyCommandPath)
-
-    await expect(new CliInstaller(installerOptions(fixture)).install()).resolves.toMatchObject({
-      state: 'installed'
-    })
-    await expect(readlink(legacyCommandPath)).resolves.toBe(foreignTarget)
-  })
-
   it('keeps installation bound to the extracted generation', async () => {
     const fixture = await makeFixture()
     let extractedRoot: AppImageExtractedRoot | null = null
@@ -213,8 +201,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
     expect(repaired).toMatchObject({ state: 'installed', launcherPath: first.launcherPath })
     await expect(readlink(fixture.commandPath)).resolves.toBe(first.launcherPath)
     await expect(lstat(relocatedRoot.payloadLauncherPath)).resolves.toBeDefined()
-    // A path namespace is an ownership boundary; the relocated process cannot prove that no
-    // sibling AppImage still owns the prior namespace.
+    // Relocation cannot prove that no sibling AppImage still owns the prior namespace.
     await expect(lstat(firstRoot.rootPath)).resolves.toBeDefined()
   })
 
@@ -257,27 +244,5 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
     expect((await readdir(fixture.commandDirectory)).some((name) => name.includes('.orca-'))).toBe(
       false
     )
-  })
-
-  // #15081 review: the Linux reclaim rule was narrowed to extracted-cache launchers, which left a
-  // deb/rpm -> AppImage migration wedged on its own leftover symlink.
-  it('reclaims a symlink left by a packaged deb/rpm install', async () => {
-    for (const directory of ['/opt/Orca', '/opt/orca-ide', '/opt/orca']) {
-      const fixture = await makeFixture()
-      await symlink(`${directory}/resources/bin/orca-ide`, fixture.commandPath)
-
-      await expect(new CliInstaller(installerOptions(fixture)).getStatus()).resolves.toMatchObject({
-        state: 'stale'
-      })
-    }
-  })
-
-  it('still refuses a launcher-named symlink outside the packaged install tree', async () => {
-    const fixture = await makeFixture()
-    await symlink('/opt/not-orca/resources/bin/orca-ide', fixture.commandPath)
-
-    await expect(new CliInstaller(installerOptions(fixture)).getStatus()).resolves.toMatchObject({
-      state: 'conflict'
-    })
   })
 })

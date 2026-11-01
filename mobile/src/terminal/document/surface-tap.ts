@@ -5,9 +5,13 @@ import {
   getMouseTrackingMode,
   isClickMouseTrackingMode
 } from './mouse-input-encoding'
-import { oscLinkAtViewportPoint, resolveTerminalFileUrlTap } from './osc-link-tap'
-import { filePathAtViewportPoint } from './path-tap'
-import { fileUrlAtViewportPoint, urlAtViewportPoint } from './url-tap'
+import { oscLinkAtViewportPoint } from './osc-link-tap'
+import { viewportToCell } from './viewport-cell'
+import type { ParsedFileLinkLocation } from '../../../../src/shared/file-link-location'
+import {
+  findTerminalFileLinksAtBufferPosition,
+  findTerminalHttpLinkAtBufferPosition
+} from '../../../../src/shared/terminal-link-buffer-hit-testing'
 
 export function notifyTerminalSurfaceTap(
   scope: TerminalDocumentScope,
@@ -17,50 +21,38 @@ export function notifyTerminalSurfaceTap(
 ) {
   const tappedOscLink = oscLinkAtViewportPoint(scope, originX, originY)
   if (tappedOscLink && tappedOscLink.kind === 'file') {
-    notify(scope, {
-      type: 'terminal-file-tap',
-      pathText: tappedOscLink.fileTap.pathText,
-      line: tappedOscLink.fileTap.line,
-      column: tappedOscLink.fileTap.column
-    })
+    notify(scope, { type: 'terminal-file-tap', candidates: [tappedOscLink.fileTap] })
     return
   }
-  const tappedFileUrl = fileUrlAtViewportPoint(scope, originX, originY)
-  const tappedFileUrlPath = tappedFileUrl ? resolveTerminalFileUrlTap(tappedFileUrl) : null
-  if (tappedFileUrlPath) {
-    notify(scope, {
-      type: 'terminal-file-tap',
-      pathText: tappedFileUrlPath.pathText,
-      line: tappedFileUrlPath.line,
-      column: tappedFileUrlPath.column
-    })
+  if (tappedOscLink && tappedOscLink.kind === 'url') {
+    notify(scope, { type: 'open-url', url: tappedOscLink.url })
     return
   }
-  const tappedUrl =
-    tappedOscLink && tappedOscLink.kind === 'url'
-      ? tappedOscLink.url
-      : urlAtViewportPoint(scope, originX, originY)
-  if (tappedUrl) {
-    notify(scope, { type: 'open-url', url: tappedUrl })
-    return
-  }
-  const tappedPath = filePathAtViewportPoint(scope, originX, originY)
-  if (tappedPath) {
-    notify(scope, {
-      type: 'terminal-file-tap',
-      pathText: tappedPath.pathText,
-      line: tappedPath.line,
-      column: tappedPath.column
-    })
-    return
+  const cell = viewportToCell(scope, originX, originY)
+  const term = scope.term
+  if (cell && term) {
+    // Desktop's link detectors take 1-based cells and rebuild rows that wrap.
+    const position = { x: cell.col + 1, y: cell.row + 1 }
+    const buffer = term.buffer.active
+    const url = findTerminalHttpLinkAtBufferPosition(buffer, position, term.cols)
+    if (url) {
+      notify(scope, { type: 'open-url', url })
+      return
+    }
+    const { links, guesses } = findTerminalFileLinksAtBufferPosition(buffer, position, term.cols)
+    // Why: a tap decides now, so only a path as written makes it a file tap; the host checks the guesses.
+    if (links.length > 0) {
+      const candidates = uniqueFileTapCandidates([...links, ...guesses])
+      notify(scope, { type: 'terminal-file-tap', candidates })
+      return
+    }
   }
   const clickInput = buildMouseClickInput(scope, originX, originY)
   if (clickInput) {
-    // A cursor-moving click must follow the live field's pending text.
+    // Flush pending live text before a click can move the TUI cursor.
     notify(scope, { type: 'terminal-input', bytes: clickInput, click: true })
   }
-  // Touch still needs native input focus after the TUI consumes its mouse click.
-  // A click with an unproven encoding reached no program, so it acts as a plain tap.
+  // Touch still needs native focus after TUI clicks; unproven mouse encoding falls back to a plain tap.
   if (
     focusKeyboard ||
     !isClickMouseTrackingMode(getMouseTrackingMode(scope)) ||
@@ -68,4 +60,17 @@ export function notifyTerminalSurfaceTap(
   ) {
     notify(scope, { type: 'terminal-tap' })
   }
+}
+
+// One reading per path, the first, as desktop's existence probes keep.
+function uniqueFileTapCandidates(links: readonly ParsedFileLinkLocation[]) {
+  const seen = new Set<string>()
+  const candidates: ParsedFileLinkLocation[] = []
+  for (const { pathText, line, column } of links) {
+    if (!seen.has(pathText)) {
+      seen.add(pathText)
+      candidates.push({ pathText, line, column })
+    }
+  }
+  return candidates
 }

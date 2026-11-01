@@ -4,7 +4,6 @@ import {
   type MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
-/** What went on screen instead, read off the state the decision produced rather than decided twice. */
 export function updateFailureOutcomeOf(
   state: MobileWebShellSessionState
 ): Pick<MobileWebShellUpdateFailureFacts, 'outcome' | 'wall'> {

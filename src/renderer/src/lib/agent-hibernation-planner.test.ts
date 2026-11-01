@@ -246,17 +246,14 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD - 1 } }))
     ).toEqual(['wt-bg'])
-    // A millisecond tie between the input stamp and the done transition
-    // resolves toward blocking — the keystroke may be a draft character.
+    // A millisecond tie may be a draft keystroke; block hibernation.
     expect(
       plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD } }))
     ).toEqual([])
   })
 
   it('blocks hibernation when real input arrived after the turn started', () => {
-    // Regression: a draft typed while the agent was still working lands before
-    // the done timestamp, so the old input-after-done compare was blind to it
-    // and the hibernation kill discarded the TUI composer's contents.
+    // A draft typed while working precedes done; checking only post-done input would lose it on PTY kill.
     const turnStartedAt = OLD - 60_000
     const withTurn = entry({
       stateHistory: [{ state: 'working', prompt: 'make it so', startedAt: turnStartedAt }]
@@ -291,11 +288,7 @@ describe('agent sleep planner', () => {
   })
 
   it('attributes input to its state segment across working/waiting cycles', () => {
-    // A turn can pause for permission (working → waiting → working → done). A
-    // draft typed during the FIRST working segment is older than the last
-    // working start, so a last-working-start guard misses it; and a permission
-    // answer typed during the waiting segment must NOT block, or every session
-    // with a mid-turn permission prompt would never hibernate.
+    // Inspect all working segments to protect early drafts; waiting-segment permission answers are consumed and must not block.
     const multiSegment = entry({
       stateHistory: [
         { state: 'working', prompt: 'make it so', startedAt: OLD - 90_000 },
@@ -303,7 +296,6 @@ describe('agent sleep planner', () => {
         { state: 'working', prompt: 'make it so', startedAt: OLD - 30_000 }
       ]
     })
-    // Draft typed during the first working segment: blocked.
     expect(
       plannedWorktrees(
         snapshot({
@@ -312,7 +304,6 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual([])
-    // Permission answer typed during the waiting segment: consumed, eligible.
     expect(
       plannedWorktrees(
         snapshot({
@@ -321,8 +312,7 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual(['wt-bg'])
-    // A submission typed in a PREVIOUS done segment that already transitioned
-    // onward was consumed and must not block the next completion.
+    // Input in a previous done segment was consumed when the next turn started.
     const resubmitted = entry({
       stateHistory: [
         { state: 'done', prompt: 'earlier turn', startedAt: OLD - 90_000 },
@@ -337,9 +327,7 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual(['wt-bg'])
-    // Boundary ties resolve toward blocking: input stamped exactly at a
-    // working-segment start blocks, and a tie at a waiting-segment start also
-    // blocks because it could belong to the preceding working segment.
+    // A tie at working or waiting start may belong to a working segment; block conservatively.
     expect(
       plannedWorktrees(
         snapshot({
@@ -389,9 +377,7 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
-  // Why: `activeWorktreeId` is the worktree under test, so this also pins #16211 — the planner
-  // used to skip the active tree wholesale and this case would return []. Lever from @sanshengai's
-  // #16214; it fails against the pre-fix planner, where a standalone background-worktree case does not.
+  // Use the active worktree to catch wholesale exclusion (#16211); lever from @sanshengai’s #16214.
   it('does not let one foreground terminal tab reset a sibling tab in the same worktree', () => {
     const siblingEntry = entry({
       paneKey: `tab-2:${OTHER_LEAF}`,
@@ -694,9 +680,7 @@ describe('agent sleep planner', () => {
 })
 
 describe('live resume anchors do not block hibernation (#10238 regression)', () => {
-  // Why: setAgentStatus writes an `origin: 'live'` anchor for EVERY resumable agent the
-  // moment its turn ends, but only Pi/OMP/prime-agent were exempted from the
-  // already-sleeping rejection — so no Claude or Codex pane could ever hibernate.
+  // Every resumable agent gets origin:live; treating that anchor as a sleep capture prevented Claude/Codex hibernation.
   const NON_PI_AGENTS = [
     'claude',
     'codex',
@@ -715,7 +699,6 @@ describe('live resume anchors do not block hibernation (#10238 regression)', () 
     agent: string,
     providerSession: { key: 'session_id' | 'conversation_id'; id: string }
   ) {
-    // Shaped exactly as sleepingRecordFromEntry builds it for a completed turn.
     return {
       paneKey: `tab-1:${LEAF}`,
       tabId: 'tab-1',
@@ -731,7 +714,6 @@ describe('live resume anchors do not block hibernation (#10238 regression)', () 
   }
 
   it.each(NON_PI_AGENTS)('plans a long-idle done %s pane holding only its live anchor', (agent) => {
-    // Antigravity resumes by conversation id; the rest resume by session id.
     const providerSession =
       agent === 'antigravity'
         ? ({ key: 'conversation_id', id: `${agent}-conversation-1` } as const)
@@ -753,8 +735,7 @@ describe('live resume anchors do not block hibernation (#10238 regression)', () 
 
 describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
   it('is not deferred by a done→done repaint that only advances updatedAt', () => {
-    // A metadata-less redelivery (OSC 9999 repaint / reconnect replay) bumps updatedAt
-    // while stateStartedAt correctly holds; the old anchor restarted the countdown.
+    // Repaint/reconnect changes updatedAt without changing stateStartedAt; it must not restart the idle clock.
     const repainted = entry({ stateStartedAt: OLD, updatedAt: NOW })
     expect(
       plannedPaneKeys(
@@ -789,7 +770,15 @@ describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
         })
       )[0]!.signature
     const baseline = sigFor(base)
-    // updatedAt held constant throughout, so today's signature would NOT change.
+    expect(
+      sigFor(
+        entry({
+          stateStartedAt: OLD,
+          updatedAt: OLD,
+          providerSession: { key: 'session_id', id: 'session-2' }
+        })
+      )
+    ).not.toBe(baseline)
     expect(sigFor(entry({ stateStartedAt: OLD, updatedAt: OLD, agentType: 'codex' }))).not.toBe(
       baseline
     )
@@ -811,7 +800,6 @@ describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
 
 describe('PTY binding and boundary floors', () => {
   it('defers a pane whose PTY binding was first seen this tick', () => {
-    // App restart / wake: main replays an ancient stateStartedAt, but the binding is new.
     expect(
       plannedPaneKeys(snapshot({ ptyBindingFirstSeenAtByPaneKey: { [`tab-1:${LEAF}`]: NOW } }))
     ).toEqual([])

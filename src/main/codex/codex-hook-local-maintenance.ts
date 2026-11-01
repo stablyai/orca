@@ -31,12 +31,11 @@ export async function refreshCodexRuntimeUserHooksExclusively(
   getStatus: (runtimeHomePath: string) => AgentHookInstallStatus
 ): Promise<AgentHookInstallStatus> {
   const configPath = getConfigPath(runtimeHomePath)
-  // Why: same as install() — capture in-Orca approvals before this refresh
-  // rewrites the runtime files they are keyed against.
+  // Save in-Orca approvals before rewriting the runtime positions they are keyed against.
   promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
   const config = readHooksJson(configPath)
   if (!config) {
-    // Why: disabled launch prep once called remove(); preserve that legacy cleanup even when runtime hooks.json is malformed.
+    // Malformed runtime hooks must not prevent legacy cleanup during disabled launch prep.
     await cleanupLegacyManagedHookRepresentations()
     return {
       agent: 'codex',
@@ -68,10 +67,7 @@ export async function refreshCodexRuntimeUserHooksExclusively(
       runtimeHomePath,
       systemHomePath: getSystemCodexHomePath()
     })
-    // Why: this path is used when Orca status hooks are off or Codex's hash is
-    // unknown. The runtime CODEX_HOME keeps user hooks, but not Orca-managed trust.
-    // Write current mirrored user trust first so stale cleanup compares
-    // against current hashes while deleting old managed hook keys.
+    // Write current user hashes before stale cleanup removes managed trust with status hooks unavailable.
     upsertHookTrustEntries(tomlPath, trustEntries)
     removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
     applyMirroredRuntimeUserHookTrustStates(tomlPath, hookPlan.trustEntries)
@@ -96,13 +92,13 @@ export async function removeCodexHooksExclusively(
 ): Promise<AgentHookInstallStatus> {
   const configPath = getConfigPath()
   if (existsSync(configPath)) {
-    // Why rebuild first: it also moves mirrored user approvals back from the slots Orca's group shifted.
+    // Rebuild first to move user approvals back from slots shifted by Orca's group.
     await refreshCodexRuntimeUserHooksExclusively(getOrcaManagedCodexHomePath(), getStatus)
   }
   const configExists = existsSync(configPath)
   const config = readHooksJson(configPath)
   if (!config) {
-    // Why: a malformed hooks.json shouldn't strand old hooks in ~/.codex or the legacy profile after disabling.
+    // A malformed runtime file must not strand real-home or legacy hooks after disabling.
     await removeRealHomeCodexHookForOptOut(codexHashes)
     await cleanupLegacyManagedHookRepresentations()
     return {
@@ -114,13 +110,12 @@ export async function removeCodexHooksExclusively(
     }
   }
 
-  // Why strip as well: the rebuild leaves the file as it was when ~/.codex's hooks.json is unreadable.
+  // Rebuild leaves runtime hooks untouched when system hooks are unreadable, so strip them here too.
   const nextHooks = { ...config.hooks }
-  // Why: same broad matcher as install() so stale entries from older builds get cleaned even if scriptPath moved.
+  // Match by filename to remove older builds' hooks even after script relocation.
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (!Array.isArray(definitions)) {
-      // Why: a non-array event value would make removeManagedCommands throw; skip it.
       continue
     }
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
@@ -131,15 +126,13 @@ export async function removeCodexHooksExclusively(
     }
   }
   if (configExists) {
-    // Why: remove() may be the only repair path for a file whose top-level plugin metadata makes Codex reject hooks.json.
+    // Strip top-level plugin metadata that makes Codex reject hooks.json.
     writeCodexHooksJson(configPath, nextHooks)
   }
 
-  // Why: drop trust entries so config.toml doesn't accumulate dead [hooks.state] blocks across install/remove cycles.
   removeRuntimeManagedHookTrustEntries(configPath, codexHashes)
 
-  // Why here and nowhere automatic: the real-home entry is shared by every Orca
-  // on this HOME, so only the user's explicit opt-out may strip it.
+  // Shared real-home hooks may be removed only on explicit opt-out.
   await removeRealHomeCodexHookForOptOut(codexHashes)
   await cleanupLegacyManagedHookRepresentations()
 

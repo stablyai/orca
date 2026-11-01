@@ -92,8 +92,7 @@ describe('browser client page retained registry', () => {
     await expect(mounted).resolves.toEqual({ webContentsId: 41 })
   })
 
-  // The host is a click target painted above the pane, so the New Tab page beneath a blank guest
-  // is only usable while the whole host is hidden, not just the guest.
+  // Hide the whole host: its hit target otherwise blocks the New Tab page beneath the blank guest.
   it('hides the retained host while its guest shows a blank page', async () => {
     const { registry, webviews } = createRig()
     void registry.mountPage(PAGE)
@@ -111,9 +110,7 @@ describe('browser client page retained registry', () => {
     expect(host.style.visibility).toBe('')
   })
 
-  // The guest lives in a fixed-position overlay, never inside its pane, so nothing in the DOM says
-  // which row a `<webview>` belongs to unless the host carries the page id. The paired restart e2e
-  // binds its marker read to exactly this stamp.
+  // The guest lives outside its pane; stamp the stable page ID so the paired restart E2E can bind its reads.
   it('stamps the retained host with the page id it hosts, and keeps it across a rekey', async () => {
     const { registry, webviews } = createRig()
     const mounting = registry.mountPage(PAGE)

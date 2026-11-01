@@ -2,6 +2,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { getEditorDisplayLabel } from './editor-labels'
+import { translate } from '@/i18n/i18n'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 export type EditorHeaderCopyState = {
@@ -24,17 +25,25 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
   if (file.mode === 'conflict-review') {
     return {
       copyText: file.filePath,
-      copyToastLabel: 'Worktree path copied',
-      pathLabel: 'Conflict Review',
+      copyToastLabel: translate(
+        'auto.components.editor.editorHeader.worktreePathCopied',
+        'Worktree path copied'
+      ),
+      pathLabel: translate('auto.components.editor.editorLabels.conflictReview', 'Conflict Review'),
       pathTitle: file.filePath
     }
   }
 
   if (file.mode === 'check-details') {
-    const label = file.checkRunDetails?.check.name ?? 'Check details'
+    const label =
+      file.checkRunDetails?.check.name ??
+      translate('auto.components.editor.editorHeader.checkDetails', 'Check details')
     return {
       copyText: null,
-      copyToastLabel: 'Check details copied',
+      copyToastLabel: translate(
+        'auto.components.editor.editorHeader.checkDetailsCopied',
+        'Check details copied'
+      ),
       pathLabel: label,
       pathTitle: label
     }
@@ -50,7 +59,10 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
   if (isCombinedDiff) {
     return {
       copyText: file.filePath,
-      copyToastLabel: 'Worktree path copied',
+      copyToastLabel: translate(
+        'auto.components.editor.editorHeader.worktreePathCopied',
+        'Worktree path copied'
+      ),
       pathLabel: file.relativePath,
       pathTitle: file.filePath
     }
@@ -60,7 +72,10 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
 
   return {
     copyText: file.filePath,
-    copyToastLabel: 'File path copied',
+    copyToastLabel: translate(
+      'auto.components.editor.editorHeader.filePathCopied',
+      'File path copied'
+    ),
     pathLabel: displayLabel,
     pathTitle: displayLabel
   }
@@ -90,9 +105,7 @@ export function getEditorHeaderOpenFileState(
     return { canOpen: false }
   }
 
-  // Why: diff tabs can outlive the current Source Control snapshot. If the
-  // live entry is missing, keep the action enabled instead of hiding a valid
-  // open-file path just because sidebar polling has moved on.
+  // Diff snapshots outlive status rows; missing live entries must not hide an otherwise valid open-file action.
   if (!worktreeEntry) {
     return { canOpen: true }
   }

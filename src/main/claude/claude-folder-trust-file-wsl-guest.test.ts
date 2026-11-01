@@ -26,8 +26,7 @@ function toGuestDisk(path: string): string {
   return path.startsWith(GUEST_PREFIX) ? `${guest.root}${path.slice(GUEST_PREFIX.length)}` : path
 }
 
-// Why: models Windows Node over \\wsl.localhost: a synthetic 0o666 mode, chmod that cannot reach
-// the guest bits, and new files at the guest's default 0644 whatever mode was requested.
+// Model UNC's synthetic 0666 metadata, ignored chmod and guest-default 0644 creation.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const onGuest = (path: unknown): path is string =>
@@ -75,7 +74,6 @@ vi.mock('proper-lockfile', () => ({
 const runWslProcess = vi.hoisted(() => vi.fn<(spec: WslSpec) => Promise<WslResult>>())
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess }))
 
-/** Runs `chmod --reference=<from> -- <to>` as the guest would. */
 async function guestChmod(spec: WslSpec): Promise<WslResult> {
   const [reference, separator, target] = spec.args ?? []
   expect(spec).toMatchObject({ distro: DISTRO, loginPath: 'none', program: 'chmod' })

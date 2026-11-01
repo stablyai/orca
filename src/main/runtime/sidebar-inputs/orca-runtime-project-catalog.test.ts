@@ -10,6 +10,7 @@ import { ALL_RPC_METHODS } from '../rpc/methods'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { requireSwitchedOn } from './require-switched-on'
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
+import { partialRuntimeStore } from '../runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -36,8 +37,7 @@ function setup() {
     getRepos: () => repos,
     getProjectGroups: () => [group('a'), group('school')]
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog reads only repos and groups; other domains fail soft.
-  const runtime = new OrcaRuntimeService(store as RuntimeStore)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   const events: RuntimeClientEvent[] = []
   runtime.onClientEvent((event) => events.push(event))
   const feed = requireSwitchedOn(runtime.sidebarInputsFeed)

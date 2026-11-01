@@ -94,8 +94,7 @@ export const ZH_VALUE_OVERRIDES = {
     '仓库操作方案。在此仓库自定义之前，将使用全局设置。',
   'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.':
     '为源代码管理的提交、拉取请求、分支命名和修复操作添加操作方案。',
-  // Workspace status icon and color swatch labels; siblings below are translated, so English
-  // pins here would leave the picker half-Chinese on the next catalog regeneration.
+  // Picker siblings are translated; English pins here would regenerate half-Chinese UI.
   Play: '播放',
   Flag: '标记',
   Zinc: '锌灰',
@@ -117,6 +116,24 @@ export const ZH_VALUE_OVERRIDES = {
   'Conductor Progress': 'Conductor 进度',
   'Conductor Review': 'Conductor 评审',
   'Conductor Done': 'Conductor 完成',
+  'Detecting agents...': '正在检测智能体...',
+  'Agents spawned': '已启动智能体',
+  'floating terminal': '浮动终端',
+  'New Issue': '新建议题',
+  'No issues match the selected filters. Clear a filter or try different criteria.':
+    '没有议题符合所选筛选条件。请清除筛选条件或尝试其他条件。',
+  'No issues in this workspace scope. Try searching or adjusting teams.':
+    '此工作区范围内没有议题。请尝试搜索或调整团队。',
+  'Close as duplicate': '作为重复议题关闭',
+  'Reply in this review thread': '在此评审线程中回复',
+  'Failed to add review comment.': '添加评审评论失败。',
+  'Localhost Worktree Labels': 'localhost 工作树标签',
+  'Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.':
+    '将工作区端口作为工作树专属的 Orca localhost URL 打开，便于区分浏览器标签页。',
+  'Permanently deletes the remote Git worktrees and their branches. Cannot be undone.':
+    '永久删除远程 Git 工作树及其分支。此操作不可撤销。',
+  'Clears them from Orca only. Remote files, worktrees, and branches are left untouched.':
+    '仅从 Orca 中清除。远程文件、工作树和分支均不受影响。',
   'GitHub reports this pull request is blocked': 'GitHub 报告此拉取请求已被阻塞',
   'GitHub requires review approval before this pull request can merge':
     'GitHub 需要评审批准才能合并此拉取请求',

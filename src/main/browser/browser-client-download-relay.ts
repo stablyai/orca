@@ -30,19 +30,18 @@ export type BrowserClientDownloadRoute = {
 }
 
 export type BrowserClientDownloadRouteOutcome =
-  /** This composition hosts no page behind the WebContents; another one may. */
+  /** Another composition may own this WebContents. */
   | { kind: 'unowned' }
   | { kind: 'remote'; route: BrowserClientDownloadRoute }
-  /** Mixed-version host with no file channel: the deliberate desktop Downloads carve-out. */
+  /** A legacy host without the file channel permits a local save. */
   | { kind: 'local-fallback' }
-  /** The owning page's channel is negotiated but not usable right now: fail closed. */
+  /** The owning page has no usable channel; refuse the download. */
   | { kind: 'unavailable' }
 
 type RelayFilesystem = {
-  // Why: Electron's will-download handler must call setSavePath synchronously, so the staging
-  // directory has to exist before the handler returns.
+  // will-download must setSavePath synchronously, so create the directory before returning.
   mkdirSync(directory: string): void
-  // Why: sync so the sweep cannot delete a transfer directory a download already staged into.
+  // Sweep synchronously before any new transfer can stage bytes.
   removeDirectorySync(directory: string): void
   readChunks(filePath: string, chunkBytes: number): AsyncIterable<Buffer>
   size(filePath: string): Promise<number>
@@ -77,11 +76,6 @@ const nodeRelayFilesystem: RelayFilesystem = {
   }
 }
 
-/**
- * Streams a client-hosted page's download into the remote workspace. Chromium writes into a
- * main-owned temp file, the bytes are pushed over the negotiated file channel, and the temp copy is
- * always removed — the desktop Downloads folder is never used for a client-placed page.
- */
 export class BrowserClientDownloadRelay {
   private readonly filesystem: RelayFilesystem
 
@@ -97,18 +91,13 @@ export class BrowserClientDownloadRelay {
   ) {
     this.filesystem = options.filesystem ?? nodeRelayFilesystem
     try {
-      // Why: an abnormal exit leaves staged bytes behind, and nothing else ever revisits this root.
+      // Remove staging left by abnormal exits; no other cleanup revisits this root.
       this.filesystem.removeDirectorySync(options.stagingRoot)
     } catch {
-      // A root that cannot be swept still accepts fresh per-transfer directories.
+      // Let new transfers try even if startup cleanup fails.
     }
   }
 
-  /**
-   * Ownership first: a WebContents this composition does not own is `unowned` so the caller can keep
-   * asking the composition that does, instead of reading one composition's miss as permission to
-   * write the bytes to the client's Downloads folder.
-   */
   route(input: { guestWebContentsId: number }): BrowserClientDownloadRouteOutcome {
     const page = this.options.resolvePage(input.guestWebContentsId)
     if (!page) {
@@ -162,8 +151,7 @@ export class BrowserClientDownloadRelay {
         stagingPath,
         BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES
       )) {
-        // Why: the commit spans hundreds of round trips, so every resumption re-reads the cancel --
-        // otherwise a canceled download keeps streaming and still lands in the remote workspace.
+        // Cancellation can arrive between chunks; recheck before every write.
         assertNotCanceled(transfer)
         await this.write(authority, {
           transferId,
@@ -175,7 +163,7 @@ export class BrowserClientDownloadRelay {
         offset += chunk.byteLength
       }
       assertNotCanceled(transfer)
-      // Why: an empty download still needs one final chunk so the remote commits a zero-byte file.
+      // Send a final chunk even for empty files so the remote commits them.
       const workspaceRelativePath = await this.write(authority, {
         transferId,
         filename,
@@ -225,7 +213,7 @@ export class BrowserClientDownloadRelay {
 
   private abort(page: BrowserClientHostedPageInventory, transfer: StagedTransfer): Promise<void> {
     transfer.canceled = true
-    // Why: a cancel and the streaming loop's own failure handler both abort the same transfer.
+    // Cancellation and streaming failure may both abort the same transfer.
     transfer.aborting ??= this.dispatchAbort(page, transfer)
     return transfer.aborting
   }
@@ -249,7 +237,6 @@ export class BrowserClientDownloadRelay {
 
 type StagedTransfer = {
   transferId: string
-  /** Owns the staged file: removing it is what keeps the staging root from growing per download. */
   directory: string
   stagingPath: string
   canceled: boolean

@@ -36,6 +36,13 @@ import type {
   SkillRemoveRequest
 } from '../../shared/skill-install-contract'
 import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
+import type {
+  BundledSkillAutoUpdateRequest,
+  BundledSkillExecuteRequest,
+  BundledSkillInstallResult,
+  BundledSkillPlan,
+  BundledSkillPlanRequest
+} from '../../shared/bundled-skill-plan'
 export type RuntimeSkillCommandSurface = {
   setSkillCloudService(service: SkillCloudService): void
   assertAgentSkillSharingAllowed(): void
@@ -80,11 +87,6 @@ export type RuntimeSkillCommandSurface = {
     shareId: string,
     options: SkillCloudOptions
   ): ReturnType<SkillCloudService['revokeShare']>
-  deleteSkillPackageVersion(
-    packageId: string,
-    versionId: string,
-    options: SkillCloudOptions
-  ): ReturnType<SkillCloudService['deleteVersion']>
   deleteSkillPackage(
     packageId: string,
     options: SkillCloudOptions
@@ -98,6 +100,11 @@ export type RuntimeSkillCommandSurface = {
     signal?: AbortSignal,
     onProgress?: (progress: SkillBundleInstallProgress) => void
   ): Promise<SkillBundleInstallResult>
+  planLocalBundledSkills(request: BundledSkillPlanRequest): Promise<BundledSkillPlan>
+  executeLocalBundledSkills(request: BundledSkillExecuteRequest): Promise<BundledSkillInstallResult>
+  autoUpdateLocalBundledSkills(
+    request: BundledSkillAutoUpdateRequest
+  ): Promise<BundledSkillInstallResult>
   getSharedSkillInstallProgress(operationId: string): SkillBundleInstallProgress | null
   cancelSharedSkillInstall(operationId: string): boolean
   previewSharedSkillInstallRequest(

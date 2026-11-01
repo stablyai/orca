@@ -1,13 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 
-// Why: xterm draws an open syllable from its own CompositionHelper, which iPad
-// Hangul never reaches — it fires no composition events. Korean users expect to
-// watch `하` become `한`, so Orca drives xterm's `.composition-view` itself.
-//
-// Cell metrics come from the public `.xterm-screen` bounds (xterm sizes that
-// element to cols x rows cells) rather than `_core._renderService.dimensions`,
-// matching `terminal-ime-candidate-anchor.ts` — an xterm bump cannot silently
-// move the overlay off the cursor.
+// iPad hardware Hangul fires no composition events, so render the held syllable through xterm’s view using public screen bounds rather than private dimensions.
 
 /**
  * Returns a renderer for the held Hangul syllable, or a no-op when the terminal
@@ -43,10 +36,8 @@ export function createTerminalIosHangulPreeditRenderer(terminal: Terminal): (tex
     view.style.lineHeight = `${cellHeight}px`
     view.style.fontFamily = terminal.options.fontFamily ?? ''
     view.style.fontSize = `${terminal.options.fontSize ?? 0}px`
-    // Clip at the terminal's right edge instead of overflowing the pane.
     view.style.maxWidth = `${terminal.cols * cellWidth - left}px`
     view.style.overflow = 'hidden'
-    // Themed rather than stock #000/#FFF, so light themes keep contrast.
     view.style.background = terminal.options.theme?.background ?? '#000'
     view.style.color = terminal.options.theme?.foreground ?? '#FFF'
   }

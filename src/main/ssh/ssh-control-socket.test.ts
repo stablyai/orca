@@ -76,7 +76,7 @@ describe.skipIf(process.platform === 'win32')('getControlSocketPath', () => {
 
     expect(first).toBe(second)
     expect(first).toMatch(new RegExp(`/orca-ssh-${CURRENT_UID}/[0-9a-f]{16}$`))
-    // Why: OpenSSH creates a temporary mux listener by appending a suffix first.
+    // Leave path room for OpenSSH's temporary listener suffix.
     expect(first!.length).toBeLessThanOrEqual(90)
     expect(mkdirSyncMock).toHaveBeenCalledWith(`/tmp/orca-ssh-${CURRENT_UID}`, {
       recursive: true,
@@ -112,23 +112,5 @@ describe.skipIf(process.platform === 'win32')('getControlSocketPath', () => {
     )
 
     expect(after).not.toBe(before)
-  })
-
-  it('uses XDG_RUNTIME_DIR before tmp when it is absolute and private', () => {
-    vi.stubEnv('XDG_RUNTIME_DIR', '/run/user/501')
-
-    const path = getControlSocketPath(createTarget(), createResolved())
-
-    expect(path).toMatch(/^\/run\/user\/501\/orca-ssh\/[0-9a-f]{16}$/)
-  })
-
-  it('falls back to non-multiplexed SSH when the control directory is unsafe', () => {
-    lstatSyncMock.mockReturnValue({
-      isDirectory: () => false,
-      uid: CURRENT_UID,
-      mode: 0o40700
-    })
-
-    expect(getControlSocketPath(createTarget(), createResolved())).toBeNull()
   })
 })

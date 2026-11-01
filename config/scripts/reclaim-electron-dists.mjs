@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-// Converts worktrees that already have their own Electron dist over to the shared cache.
-// Healthy installs also share now; this migrates worktrees without waiting for their next install.
+// Migrate existing worktree-local Electron distributions to shared cache without waiting for next install.
 
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'

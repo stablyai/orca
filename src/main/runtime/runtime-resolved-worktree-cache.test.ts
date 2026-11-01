@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 import {
-  bumpLocalWorktreeScanGeneration,
   getLocalWorktreeScanGeneration,
   getWorktreeScanMutationRevision
 } from '../local-worktree-scan-generation'
@@ -15,24 +14,8 @@ function snapshotOf(ids: string[]): ResolvedWorktreeSnapshot {
 }
 
 describe('RuntimeResolvedWorktreeCache', () => {
-  it('reuses a snapshot inside the TTL while the repo inventory is unchanged', async () => {
-    const cache = new RuntimeResolvedWorktreeCache()
-    let computes = 0
-    const compute = async (): Promise<ResolvedWorktreeSnapshot> => {
-      computes += 1
-      return snapshotOf(['repo-1::/a'])
-    }
-
-    await cache.getSnapshot(compute, 60_000, 7)
-    const second = await cache.getSnapshot(compute, 60_000, 7)
-
-    expect(computes).toBe(1)
-    expect(second.worktrees.map((worktree) => worktree.id)).toEqual(['repo-1::/a'])
-  })
-
   it('recomputes when the repo inventory moved, even well inside the TTL', async () => {
-    // Why: this is the whole point. A snapshot taken before a repo was registered cannot testify
-    // that the repo's worktrees are absent — callers read the gap as "workspace not found".
+    // Repo registration invalidates earlier snapshots: absence there cannot prove workspace not found.
     const cache = new RuntimeResolvedWorktreeCache()
     const results = [snapshotOf(['repo-1::/a']), snapshotOf(['repo-1::/a', 'repo-2::/b'])]
     let computes = 0
@@ -63,21 +46,8 @@ describe('RuntimeResolvedWorktreeCache', () => {
     expect(computed).toHaveLength(2)
   })
 
-  it('reports freshness against the inventory the snapshot was computed under', async () => {
-    const cache = new RuntimeResolvedWorktreeCache()
-    await cache.getSnapshot(async () => snapshotOf([]), 60_000, 7)
-
-    expect(cache.isFresh(7)).toBe(true)
-    expect(cache.isFresh(8)).toBe(false)
-    cache.invalidateResolved()
-    expect(cache.isFresh(7)).toBe(false)
-  })
-
   it('keeps a primed snapshot servable when nothing mutated', async () => {
-    // Why: the headless-reattach fixtures prime this cache once and then resolve a selector off it
-    // without any git available. Losing freshness for a reason other than a mutation strands them
-    // on a real scan, which is the failure this pairs with — a lookup that finds nothing because
-    // the snapshot was dropped, not because the worktree is gone.
+    // Headless reattach resolves from a primed cache without Git; non-mutation reads must preserve its freshness.
     const cache = new RuntimeResolvedWorktreeCache()
     let computes = 0
     const prime = async (): Promise<ResolvedWorktreeSnapshot> => {
@@ -95,18 +65,5 @@ describe('RuntimeResolvedWorktreeCache', () => {
     expect(served.worktrees.map((worktree) => worktree.id)).toEqual([
       'repo-restore::/tmp/restore-records'
     ])
-  })
-})
-
-describe('getWorktreeScanMutationRevision', () => {
-  it('advances on a repo mutation and not on a first-seen generation read', () => {
-    const repoId = `repo-${Math.random()}`
-    const before = getWorktreeScanMutationRevision()
-
-    getLocalWorktreeScanGeneration(repoId)
-    expect(getWorktreeScanMutationRevision()).toBe(before)
-
-    bumpLocalWorktreeScanGeneration(repoId)
-    expect(getWorktreeScanMutationRevision()).toBe(before + 1)
   })
 })

@@ -39,7 +39,6 @@ test.describe('Feature tour modal', () => {
     })
     await expect(orcaPage.getByText('Reopen any time from Help > Explore Orca.')).toBeVisible()
 
-    // Five workflow rows in the rail.
     const rail = orcaPage.getByRole('navigation', { name: 'Workflows' })
     await expect(rail.getByRole('tab')).toHaveCount(5)
     await expect(rail.getByRole('tab', { name: /Workspaces/i })).toHaveAttribute(
@@ -49,7 +48,6 @@ test.describe('Feature tour modal', () => {
 
     await expect(orcaPage.locator('[data-ws-id]')).toHaveCount(3)
 
-    // ArrowDown moves selection through the rail.
     await rail.getByRole('tab', { name: /Workspaces/i }).focus()
     await orcaPage.keyboard.press('ArrowDown')
     await expect(rail.getByRole('tab', { name: /Tasks/i })).toHaveAttribute('aria-selected', 'true')

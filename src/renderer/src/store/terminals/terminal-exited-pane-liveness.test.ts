@@ -8,9 +8,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 
 createStoreSessionMockApi()
 
-// "Is this pane running" reads the liveness map; an exit leaves the pane's layout binding in place
-// for its one stale reattach. The mirror refactor keeps this split: liveness stays in the window,
-// the binding becomes main's.
+// Exited panes retain one stale reattach binding; liveness stays window-owned while layout bindings move to main.
 
 const WORKTREE = 'repo1::/path/wt1'
 const LEFT = '11111111-1111-4111-8111-111111111111'

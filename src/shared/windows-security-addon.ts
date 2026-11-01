@@ -4,7 +4,12 @@ import { basename, isAbsolute, join, relative, toNamespacedPath } from 'node:pat
 import type * as WindowsSecurityModule from '@orca/windows-security'
 import { ORCAD_WINDOWS_SECURITY_FILENAME } from './orcad-artifacts'
 
-export type { GrantAccessOptions, WindowsAce, WindowsDacl } from '@orca/windows-security'
+export type {
+  GrantAccessOptions,
+  StdHandleInheritanceFailure,
+  WindowsAce,
+  WindowsDacl
+} from '@orca/windows-security'
 export type WindowsSecurityAddon = typeof WindowsSecurityModule
 
 /** The addon (every path namespaced, async writes ordered per path) and the token's user SID. */
@@ -22,12 +27,8 @@ const requireFromHere = createRequire(__filename)
 
 let loaded: WindowsSecurity | { error: string } | null = null
 
-/**
- * The addon, or why it cannot load on this host. orcad ships the bare binary at its slot root,
- * beside its server bundles and two levels above its CLI bundle (`out/cli/index.js`). Desktop and
- * the CLI load the workspace package, but only from inside the app: a bare specifier otherwise
- * walks every parent up to `C:\node_modules`, which any local user may create.
- */
+/** Load orcad’s staged binary at its slot root; desktop/CLI packages must resolve inside the app.
+ * Bare package lookup could escape to C:\node_modules, which another local user can create. */
 export function loadWindowsSecurity(): WindowsSecurity | { error: string } {
   loaded ??= loadOnce()
   return loaded
@@ -54,10 +55,7 @@ function loadOnce(): WindowsSecurity | { error: string } {
   return { error: failures.join('; ') }
 }
 
-/**
- * Where the app's own node_modules live: the packaged resources directory, or this checkout
- * (electron-vite puts shared code one level deeper, in `out/main/chunks`).
- */
+/** Packaged resources or checkout root; electron-vite chunks sit one level deeper in out/main/chunks. */
 function appRoots(): string[] {
   const checkout =
     basename(__dirname) === 'chunks'
@@ -82,15 +80,8 @@ export function trustedPackagePath(resolved: string, roots: readonly string[]): 
   return real
 }
 
-/**
- * Every path is namespaced (`\\?\`) once, here: the Win32 security APIs are MAX_PATH-limited.
- *
- * Async DACL writes to one path run in order. A grant reads the DACL and writes back a merge, so
- * one racing a re-lock on another pool thread could land last and restore the broader DACL. A
- * synchronous grantDirAcl is not ordered against them, but it runs to completion on the main
- * thread, so restrictAsync's post-apply verify (a later main-thread continuation) sees its result:
- * a resurrected broad DACL fails that verify, which evicts the directory to retry under the budget.
- */
+/** Namespace paths once for MAX_PATH-limited Win32 APIs. Serialize async writes per path so a read/merge grant cannot race a re-lock and restore broader access.
+ * Sync grants finish on main before restrictAsync’s post-apply verification; a broader result fails verification and evicts the directory for bounded retry. */
 function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
   const writes = new Map<string, Promise<unknown>>()
   const inPathOrder = (path: string, write: (namespaced: string) => Promise<void>) => {
@@ -114,22 +105,30 @@ function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
       setDaclSddl: (path, sddl) => raw.setDaclSddl(toNamespacedPath(path), sddl),
       setDaclSddlAsync: (path, sddl) =>
         inPathOrder(path, (namespaced) => raw.setDaclSddlAsync(namespaced, sddl)),
-      createFileWithDacl: (path, sddl, data) =>
-        raw.createFileWithDacl(toNamespacedPath(path), sddl, data),
+      createFileWithDacl: (path, sddl, data, strict) =>
+        raw.createFileWithDacl(toNamespacedPath(path), sddl, data, strict),
+      readFileWithDacl: (path, maxBytes) => raw.readFileWithDacl(toNamespacedPath(path), maxBytes),
+      readGenericCredential: (target) => raw.readGenericCredential(target),
+      writeGenericCredential: (target, user, data) =>
+        raw.writeGenericCredential(target, user, data),
       grantAccess: (path, sid, mask, options) =>
         raw.grantAccess(toNamespacedPath(path), sid, mask, options),
       grantAccessAsync: (path, sid, mask, options) =>
-        inPathOrder(path, (namespaced) => raw.grantAccessAsync(namespaced, sid, mask, options))
+        inPathOrder(path, (namespaced) => raw.grantAccessAsync(namespaced, sid, mask, options)),
+      clearStdHandleInheritance: () => raw.clearStdHandleInheritance(),
+      spawnDetachedIsolated: (file, commandLine, cwd, environmentBlock, onExit) =>
+        raw.spawnDetachedIsolated(file, commandLine, cwd, environmentBlock, onExit),
+      isolatedSpawnBreaksAwayFromJob: () => raw.isolatedSpawnBreaksAwayFromJob(),
+      hasNativeExport: (name) => raw.hasNativeExport(name)
     }
   }
 }
 
-/** Installs `addon` (a fake, or null for "cannot load") behind the same wrapping as the real one. */
+/** Wrap fake addons identically to production; null simulates load failure. */
 export function setWindowsSecurityForTests(addon: WindowsSecurityAddon | null): void {
   loaded = addon ? prepare(addon) : { error: 'disabled for tests' }
 }
 
-/** Forgets the loaded addon and its SID. */
 export function resetWindowsSecurityLoadForTests(): void {
   loaded = null
 }

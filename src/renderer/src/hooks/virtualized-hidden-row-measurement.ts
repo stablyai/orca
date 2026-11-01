@@ -5,15 +5,7 @@ export function hasLayoutBox(element: Element): boolean {
   return element.getClientRects().length > 0
 }
 
-/**
- * TanStack `measureElement` that keeps each row's last size while the scroll
- * element has no layout box (a `display: none` ancestor, e.g. a hidden worktree).
- *
- * Hidden rows report 0px through ResizeObserver. Caching that collapses rows
- * above the viewport, so the unchanged scrollTop shows later content on re-show.
- * Unlike `useCachedMeasurements`, this reads the DOM, so it needs no visibility
- * prop and covers every hiding ancestor.
- */
+/** Keep TanStack row measurements while any ancestor hides the scroller; caching ResizeObserver’s hidden 0px reports shifts visible content on re-show. DOM visibility needs no caller prop. */
 export function measureVirtualRowRetainingHiddenSize<TScrollElement extends Element>(
   element: Element,
   entry: ResizeObserverEntry | undefined,

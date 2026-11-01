@@ -35,9 +35,8 @@ export type RuntimeServerStatusInput = {
   managedNotRunning?: boolean
 }
 
-/** One status per row; it replaces the old stack of "Disconnected", "Offline" and "Status unavailable". */
 export function getRuntimeServerStatusIndicator(input: RuntimeServerStatusInput): ServerRowStatus {
-  // Why: the host answered and refused our token, so "Disconnected" would misstate a reachable host.
+  // Token refusal proves reachability; Disconnected would misdescribe the host.
   if (input.accessRevoked) {
     return {
       label: translate(
@@ -74,7 +73,7 @@ export function getRuntimeServerStatusIndicator(input: RuntimeServerStatusInput)
       tone: 'destructive'
     }
   }
-  // Why after the states above: revoked, updating, connecting or incompatible say more than this.
+  // Revoked/updating/connecting/incompatible states take priority over Not running.
   if (input.managedNotRunning && !isConnectedRuntimeHostState(input.connectionState)) {
     return {
       label: translate('auto.components.settings.managedServers.row.notRunning', 'Not running'),
@@ -93,7 +92,7 @@ export function getRuntimeServerStatusIndicator(input: RuntimeServerStatusInput)
     case 'workspace-window-closed':
       return { label, tone: 'warning' }
     case 'disconnected':
-      // Why "Unreachable": a probe that got no answer doesn't prove the host is down.
+      // Label silent probes Unreachable; they cannot establish that the host is down.
       return input.probeFailed
         ? {
             label: translate('auto.components.settings.serverList.unreachable', 'Unreachable'),

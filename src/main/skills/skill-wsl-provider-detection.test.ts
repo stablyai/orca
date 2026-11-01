@@ -19,10 +19,7 @@ describe('detectSkillProvidersInWsl', () => {
   })
 
   it('asks for the login PATH so a nvm/mise-only install is still found (regression)', async () => {
-    // Before this migration the site ran `sh -c` with no login shell, so an
-    // nvm-installed codex/claude -- reachable only through the PATH a login
-    // shell assembles from rc files -- resolved to nothing via `command -v`
-    // and read as not installed.
+    // Without login-shell PATH, nvm-installed agents look absent under bare sh -c.
     runWslProcessMock.mockResolvedValue({
       environmentResolved: true,
       code: 0,
@@ -92,10 +89,7 @@ describe('detectSkillProvidersInWsl', () => {
     ['reports unverifiable even on a partial hit', 'claude\n', true],
     ['still trusts a genuine empty result', '', false]
   ])('%s', async (_case, stdout, unresolved) => {
-    // The script ends in `|| true`, so "ran without the login PATH" and "no
-    // providers installed" are the same exit 0 with the same empty stdout.
-    // Callers skip the ~/.codex and ~/.claude skill roots on an empty list, so
-    // conflating them loses an nvm-installed provider's skills (#9725).
+    // The script always exits 0; unresolved login PATH must not be mistaken for no installed providers (#9725).
     runWslProcessMock.mockResolvedValue({
       environmentResolved: !unresolved,
       code: 0,

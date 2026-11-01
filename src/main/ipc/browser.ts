@@ -25,6 +25,10 @@ import type {
   BrowserPagePromptResult
 } from '../../shared/browser-page-prompt'
 import { respondToBrowserPagePrompt } from '../browser/browser-page-prompts'
+import { recordActiveBrowserPage } from '../browser/extensions/browser-extension-tab-model'
+import { announceRegisteredBrowserExtensionTab } from '../browser/extensions/api/tabs-lifecycle'
+import { registerBrowserExtensionHandlers } from './browser-extensions'
+import { registerBrowserExtensionContextMenuHandlers } from './browser-extension-context-menu'
 
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
@@ -80,10 +84,7 @@ export function registerBrowserHandlers(): void {
       }
       browserManager.attachGuestPolicies(guest)
     }
-    // Why: when Chromium swaps a guest's renderer process (navigation,
-    // crash recovery), the renderer re-registers the same browserPageId
-    // with a new webContentsId. The bridge must destroy the old session's
-    // proxy (its webContents is gone) and let the next command recreate it.
+    // Guest process swaps require retiring the old proxy; the next command recreates it.
     const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
     const registered = browserManager.registerGuest({
       ...args,
@@ -96,6 +97,7 @@ export function registerBrowserHandlers(): void {
       agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
     }
     resolveTabRegistrationWaiters(args.browserPageId, args.worktreeId)
+    announceRegisteredBrowserExtensionTab(args.browserPageId, args.webContentsId)
     return true
   }
 
@@ -103,8 +105,7 @@ export function registerBrowserHandlers(): void {
     registerGuest(event, args, false)
   )
 
-  // Why: an SSH workspace's page may only mount on a proxy-verified partition,
-  // so the renderer asks main to prepare it and blocks the webview until then.
+  // Block SSH webview mounting until its proxy-verified partition is ready.
   ipcMain.handle(
     'browser:prepareSshWorkspacePartition',
     async (
@@ -116,8 +117,7 @@ export function registerBrowserHandlers(): void {
         expectedSshTargetGeneration?: unknown
       }
     ) => {
-      // Why (review P1-2): preparing mints bindings whose LRU eviction destroys
-      // cookie jars; only the trusted renderer naming a REGISTERED target may.
+      // Preparation can evict cookie jars; require a trusted renderer and registered target.
       if (!isTrustedBrowserRenderer(event.sender)) {
         throw new Error('browser_local_route_renderer_untrusted')
       }
@@ -170,15 +170,11 @@ export function registerBrowserHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
-    // Why the whole door and not just the manager call: a document page shares this renderer, and
-    // the grab disposal below drops the intent an in-flight preview grab compares by identity —
-    // that grab would then answer ok without ever arming. A document page withdraws by revoking
-    // its grant, so its id arriving here is misaddressed however it got here.
+    // Documents withdraw by grant revocation; dropping their intent here could silently settle an unarmed grab.
     if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
       return false
     }
-    // Why: notify bridge before unregistering so it can destroy the session
-    // process and proxy. Must happen before unregisterGuest clears the mapping.
+    // Destroy bridge sessions before unregistering clears the guest mapping.
     const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
     if (wcId !== null && agentBrowserBridgeRef) {
       agentBrowserBridgeRef.onTabClosed(wcId)
@@ -226,21 +222,19 @@ export function registerBrowserHandlers(): void {
     }
   )
 
-  // Why: keeps the bridge's active tab in sync with the renderer's UI state.
-  // Without this, a user switching tabs in the UI would leave the agent operating
-  // on the previous tab, which is confusing.
+  // Keep agent commands aligned with the tab the user selected.
   ipcMain.handle('browser:activeTabChanged', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
+    if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
       return false
     }
+    // Why before the bridge check: extensions need the active tab even when no agent bridge exists.
+    recordActiveBrowserPage(args.browserPageId)
     if (!agentBrowserBridgeRef) {
       return false
     }
     const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
     if (wcId !== null) {
-      // Why: renderer tab changes are scoped to a worktree. If we only update
-      // the global active guest, later worktree-scoped commands can still
-      // resolve to the previously active page inside that worktree.
+      // Update worktree-scoped active state as well as the global guest.
       agentBrowserBridgeRef.onTabChanged(
         wcId,
         browserManager.getWorktreeIdForTab(args.browserPageId)
@@ -251,11 +245,10 @@ export function registerBrowserHandlers(): void {
 
   registerBrowserGuestViewHandlers()
 
-  // --- Browser Context Grab IPC ---
-
   registerBrowserGrabHandlers()
 
-  // --- Browser Session Profile IPC ---
-
   registerBrowserSessionProfileHandlers()
+
+  registerBrowserExtensionHandlers()
+  registerBrowserExtensionContextMenuHandlers()
 }

@@ -127,7 +127,7 @@ it.skipIf(skip)(
         timeoutMs: 15_000
       })
       expect(skill.code, skill.stderr).toBe(0)
-      expect(skill.stdout).toContain('Worker obligations')
+      expect(skill.stdout).toContain('## When Orca wakes you')
       const version = await runProcess({
         program: childEnv.ORCA_CLI_COMMAND!,
         args: ['--version'],
@@ -136,7 +136,6 @@ it.skipIf(skip)(
       })
       expect(version.code, version.stderr).toBe(0)
       expect(version.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/u)
-      // A person's own selector on the server is honoured, as on any machine.
       const person = await runProcess({
         program: launcher,
         args: ['status', '--json'],

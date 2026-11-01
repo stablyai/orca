@@ -50,11 +50,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     }
   }
 
-  /** The daemon keep-tail dropped this PTY's oldest undelivered output; the
-   *  next delivered chunk is discontinuous. Reset every cross-chunk parse
-   *  carry so a half-open escape from before the gap cannot corrupt what
-   *  follows, and drop the mobile headless mirror — it rebuilds from the
-   *  delivered tail / snapshot seeds instead of parsing a gapped stream. */
+  /** Output gaps reset every cross-chunk parser carry and the headless mirror; rebuild from delivered suffix or snapshot instead of parsing discontinuous escapes. */
   notePtyDataGap(ptyId: string, droppedChars = 0): void {
     if (droppedChars > 0) {
       // Why: the daemon snapshot's seq counts bytes its monitoring stream
@@ -136,11 +132,12 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         connectionId
       }
     }
-    if (pty?.paneKey) {
+    const recorded = this.paneOfPty(pty)
+    if (pty && recorded.paneKey) {
       return {
         worktreeId: pty.worktreeId,
-        ...(pty.tabId ? { tabId: pty.tabId } : {}),
-        paneKey: pty.paneKey,
+        ...(recorded.tabId ? { tabId: recorded.tabId } : {}),
+        paneKey: recorded.paneKey,
         connectionId
       }
     }
@@ -191,6 +188,11 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
       }
     }
     return null
+  }
+
+  /** The same title for main's synthetic title producer, which must see its own frames. */
+  getTrackedPtyTitle(ptyId: string): string | null {
+    return this.getTrackedRawTitleForPty(ptyId)
   }
 
   protected isLiveCursorNativeTitle(rawTitle: string, meta?: TerminalTitleFactMeta): boolean {

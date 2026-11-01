@@ -1,10 +1,4 @@
-/**
- * What every managed-orcad operation on a Windows host needs before its first host op: this
- * client's pinned node.exe in the runtime store, and the host script it runs.
- *
- * Both are idempotent: a present runtime costs one probe and nothing is uploaded, and the host
- * script is content-addressed, so rewriting it changes nothing a running orcad depends on.
- */
+// Stage pinned Node and a content-addressed host script so Windows operations share verified bytes without replacing running clients' code.
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
@@ -28,7 +22,7 @@ export async function prepareWindowsOrcadHost(options: {
   await ensureRemoteOrcadNodeRuntime({
     conn: options.conn,
     host: options.host,
-    // Only its parent is read: the runtime store sits beside the slots.
+    // The runtime store is a sibling of slots; only this synthetic slot's parent is used.
     slotDir: joinRemotePath(options.host, baseDir, 'orcad-host'),
     target: options.serverTarget,
     archivePath: () =>

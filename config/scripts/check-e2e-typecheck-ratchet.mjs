@@ -10,9 +10,7 @@ import {
   totalCount
 } from './ratchet-baseline.mjs'
 
-// Ratchet on type errors under tests/. tests/ has never been typechecked, so a spec can import a
-// helper that doesn't exist (convertThenRetire, #30231) and nothing notices until a host-gated
-// lane runs it. Counts per file may only go down.
+// Ratchet tests/ type errors downward: missing helpers otherwise hide until gated hosts run their specs (#30231).
 
 const BASELINE_PATH = 'config/e2e-typecheck-baseline.txt'
 const HEADER = [
@@ -21,8 +19,7 @@ const HEADER = [
   '# Prune after a fix: pnpm check:e2e-typecheck-ratchet --prune'
 ]
 
-// Only tests/ rows: errors tsc reports in imported cloud/ or mobile/ sources depend on whether
-// those workspaces are installed, which differs between CI jobs.
+// Count tests/ only; imported mobile/cloud errors vary with each CI job’s installed workspaces.
 const TEST_ERROR_ROW = /^(tests\/[^(\s]+)\(\d+,\d+\): error TS\d+:/
 
 export function countTestTypeErrors(tscOutput) {

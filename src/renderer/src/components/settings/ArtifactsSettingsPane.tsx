@@ -20,8 +20,7 @@ export function ArtifactsSettingsPane({
   const openArtifactsPage = useAppStore((state) => state.openArtifactsPage)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const signedIn = authStatus?.state === 'connected'
-  // Why: the capability lives in the desktop host's store and is deliberately absent from the
-  // settings.update allowlist, so a web client can only mirror it — never grant it.
+  // Only the desktop host can grant sharing; web clients mirror it because settings.update excludes this capability.
   const isWebClient = isWebClientLocation()
   const sharingEnabled = settings.artifactSharingEnabled === true
 

@@ -39,7 +39,7 @@ function documentWithAtoms(): ProseMirrorNode {
   })
 }
 
-// The per-character map the composer used to rebuild on every read: the behaviour these reads keep.
+// Reference the previous per-character map to verify the optimized reads preserve behavior.
 function characterPositions(doc: ProseMirrorNode): { text: string; positions: number[] } {
   let text = ''
   const positions = [1]
@@ -62,7 +62,6 @@ function characterPositions(doc: ProseMirrorNode): { text: string; positions: nu
   return { text, positions }
 }
 
-/** Text carets and paragraph node selections, including positions between paragraphs. */
 function selectablePositions(doc: ProseMirrorNode): number[] {
   const positions = [0, doc.content.size]
   doc.forEach((block, blockOffset) => {
@@ -114,7 +113,6 @@ describe('prompt document reads', () => {
     }
     expect(promptTextOffset(doc, 4)).toBe(3)
     expect(promptTextOffset(doc, 5)).toBe(7)
-    // Off a pill, both sides agree.
     expect(promptTextPosition(doc, 3, 'after')).toBe(promptTextPosition(doc, 3, 'before'))
     expect(promptTextPosition(doc, 7, 'after')).toBe(promptTextPosition(doc, 7, 'before'))
   })

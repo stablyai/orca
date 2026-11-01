@@ -11,8 +11,8 @@ import { getRepoLucideIconOptions } from '../../../repo/repo-icon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { repoIconPickFailureText } from './repo-icon-pick-failure-text'
 
-// Deferred so emoji-picker-react's ~500KB chunk only loads once the Emoji tab renders.
 const RepositoryIconEmojiPicker = lazyWithRetry(
   () =>
     import('./RepositoryIconEmojiPicker').then((module) => ({
@@ -45,6 +45,10 @@ export function RepositoryIconTabs({
     try {
       const result = await window.api.shell.pickRepoIconImage()
       if (!result || !mountedRef.current) {
+        return
+      }
+      if ('error' in result) {
+        toast.error(repoIconPickFailureText(result))
         return
       }
       onSetIcon({
@@ -172,7 +176,7 @@ export function RepositoryIconTabs({
                   className="size-8"
                   onClick={() => onSetIcon({ type: 'lucide', name: option.name })}
                   aria-label={translate(
-                    'auto.components.settings.RepositoryIconPicker.2b7d27b93c',
+                    'auto.components.settings.RepositoryIconPicker.useRepoIcon',
                     'Use {{value0}} repo icon',
                     { value0: option.label }
                   )}

@@ -16,19 +16,17 @@ export type WorktreeCreateTimingRecorder = {
   time<T>(phase: WorktreeCreatePhase, operation: () => Promise<T>): Promise<T>
   timeSync<T>(phase: WorktreeCreatePhase, operation: () => T): T
   recordPreparedCheckout(outcome: PreparedCheckoutOutcome): void
-  /** The prepared checkout this create claimed, so its build is not counted as competing work. */
+  /** Exclude the adopted preparation from competing disk work. */
   recordAdoptedPreparation(work: PreparationWork): void
   recordExecutionHost(host: WorktreeCreateExecutionHost): void
   recordWorktreeCount(count: number): void
-  /** The outermost phase this error (or one in its cause chain) propagated out of; undefined when none did. */
+  /** Outermost failed phase found for this error or its cause chain. */
   failedPhase(error: unknown): WorktreeCreatePhase | undefined
-  /** Also closes the concurrency window, so work this create starts afterwards (its own re-arm)
-   *  is not counted against it. */
+  /** Close concurrency tracking before this create launches replacement work. */
   finish(): WorktreeCreateTiming
 }
 
-/** A local repo's create host by the Git routing rule: a \\wsl.localhost repo runs Git in WSL even
- *  without a WSL project runtime. */
+/** WSL paths execute Git in WSL even without a project runtime. */
 export function localWorktreeCreateExecutionHost(gitExecOptions: {
   cwd?: string
   wslDistro?: string
@@ -66,7 +64,7 @@ export function createWorktreeCreateTimingRecorder(
   let preparedCheckout: PreparedCheckoutOutcome | undefined
   let executionHost: WorktreeCreateExecutionHost | undefined
   let worktreeCount: number | undefined
-  // Keyed by the thrown value, so a caught failure or a concurrent sibling cannot be misattributed.
+  // Attribute phases by thrown object so caught failures and concurrent siblings cannot mix.
   const phaseByError = new WeakMap<object, WorktreeCreatePhase>()
 
   const recordPhase = (phase: WorktreeCreatePhase, operationStartedAt: number): void => {
@@ -115,7 +113,6 @@ export function createWorktreeCreateTimingRecorder(
       worktreeCount = count
     },
     failedPhase(error: unknown) {
-      // Bounded so a cyclic cause chain cannot loop.
       let current = error
       for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
         if (typeof current !== 'object' || current === null) {

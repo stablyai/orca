@@ -9,7 +9,7 @@ import type {
   LinearFilter
 } from './mobile-tasks-view-state-types'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
-import type { JiraIssue } from '../../../src/shared/jira-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 import type {
   GitHubWorkItem,
   GitLabTodo,
@@ -76,8 +76,7 @@ export function projectRowType(row: GitHubProjectRow): 'issue' | 'pr' | null {
 }
 
 export function canCreateWorkspaceFromProjectRow(row: GitHubProjectRow): boolean {
-  // Why: desktop only exposes Project "Start work" for backed issue/PR rows
-  // with enough GitHub identity to build the linked work item.
+  // Match desktop: Project Start work requires a backed issue/PR with enough identity to link the work item.
   return projectRowType(row) !== null && row.content.number != null && Boolean(row.content.url)
 }
 
@@ -253,8 +252,7 @@ export async function mapWithConcurrency<T, R>(
 export function createJiraTask(issue: JiraIssue): Extract<TaskItem, { provider: 'jira' }> {
   const project = issue.project.name.trim() || issue.project.key
   return {
-    // Keys are site-qualified because the 'all' selection fans out across sites
-    // and two sites can hand back the same issue id.
+    // Site-qualify keys because all-sites queries can return colliding issue ids.
     key: `jira:${issue.siteId ?? 'site'}:${issue.id}`,
     provider: 'jira',
     title: issue.title,

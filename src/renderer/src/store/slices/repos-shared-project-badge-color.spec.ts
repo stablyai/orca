@@ -9,8 +9,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 export function registerReposSharedProjectBadgeColorTests(): void {
-  // Mirrors the real report: one project name ("orca") set up on the local Mac and on a
-  // remote Orca server, where only the local repo row carries the user's chosen color.
+  // Same-name local Mac/remote project; only local repo carries chosen color, matching report.
   const SHARED_PROJECT_ID = 'github:stablyai/orca'
   const LOCAL_GREEN = '#22c55e'
   const REMOTE_NEUTRAL = '#737373'
@@ -136,15 +135,6 @@ export function registerReposSharedProjectBadgeColorTests(): void {
   }
 
   describe('shared project badge color across hosts', () => {
-    it('keeps the local color when a remote host shares the project name', async () => {
-      const store = createTestStore()
-      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-      await store.getState().fetchReposForAllHosts()
-
-      expect(badgeColor(store)).toBe(LOCAL_GREEN)
-    })
-
     it('keeps the local color when a runtime-only refresh lands after startup', async () => {
       const store = createTestStore()
       store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })

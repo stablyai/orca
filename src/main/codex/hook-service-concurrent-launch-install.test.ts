@@ -30,7 +30,6 @@ vi.mock('./codex-hook-local-install', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexHookLocalInstall>()),
   installCodexHooksExclusively: installExclusivelyMock
 }))
-// Why: stands in for asking a real Codex for its hook hashes.
 vi.mock('./codex-hook-hash-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexHookHashLookup>()),
   resolveCodexHookAnswerForLaunch: answerMock
@@ -47,7 +46,6 @@ let tmpHome: string
 let userDataDir: string
 let previousUserDataPath: string | undefined
 
-/** Stands in for a managed-home install's file writes. */
 const INSTALL_MS = 60
 
 function installedStatus(configPath: string): AgentHookInstallStatus {
@@ -110,7 +108,7 @@ describe('launch-prep Codex hook install sharing', () => {
   it("never joins a Codex launch to a plain terminal's run that went ahead without the answer", async () => {
     const service = new CodexHookService()
     const home = join(userDataDir, 'managed')
-    // Why: Codex answers 20 ms in; a plain terminal waits 0 ms, a Codex launch up to 3 s.
+    // Model a delayed answer available only to launches that wait for it.
     const codexHashes = { stop: 'sha256:from-codex' }
     answerMock.mockImplementation(async (waitMs) => {
       await delay(Math.min(waitMs, 20))
@@ -124,7 +122,6 @@ describe('launch-prep Codex hook install sharing', () => {
       service.installForLaunchPrep(home, true, () => true)
     ])
 
-    // Why: the plain terminal goes ahead on Orca's own hash; the Codex launch still gets Codex's.
     expect(installExclusivelyMock.mock.calls.map(([, hashes]) => hashes)).toContainEqual(
       codexHashes
     )

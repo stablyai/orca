@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssueFilter } from '../../shared/jira-types'
+import type { JiraIssueFilter } from '../../shared/jira/jira-types'
 import type { JiraClientForSite } from './authenticated-request'
 
 const { getClients, jiraRequest, clearToken } = vi.hoisted(() => ({

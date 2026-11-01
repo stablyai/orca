@@ -8,8 +8,6 @@ import {
 const MiB = 1024 * 1024
 
 it('merges skips by start offset and keeps the larger size', () => {
-  // The same unterminated record, re-skipped at the same offset once its
-  // newline arrives: one entry, grown — not two.
   expect(
     mergeSkippedTranscriptRecords(
       [{ byteOffset: 40, approximateBytes: 11 * MiB }],

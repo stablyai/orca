@@ -73,9 +73,9 @@ function buildTargetPackage(target) {
       packageDir
     ],
     cwd: root,
-    // Why no agent-browser: the template ships inside every desktop build (design D2), and seven
-    // ~10 MB browsers would outweigh everything else in it; a slot without one reports no browser.
-    env: { ...process.env, ORCAD_OMIT_AGENT_BROWSER: '1' },
+    // Desktop template omits optional ~10MB browsers per target; packaging references the app's own copy instead.
+    // A checkout has no app copy, so ORCAD_OMIT_AGENT_BROWSER=0 keeps drivers for local Chromium serve.
+    env: { ...process.env, ORCAD_OMIT_AGENT_BROWSER: process.env.ORCAD_OMIT_AGENT_BROWSER ?? '1' },
     stdio: 'inherit',
     timeoutMs: null
   })
@@ -107,10 +107,7 @@ function stageTarget(target, packageDir) {
   return { files, browserName, browserSha256: sha256(browserDestination) }
 }
 
-/**
- * `--targets a,b` builds a partial template for CI jobs that can fill only some prebuild slots
- * (the SSH hostile-host matrix). A shipped template always carries every target.
- */
+// Allow partial CI --targets only; shipped templates require every target.
 export function requestedTemplateTargets(argv = process.argv) {
   const index = argv.indexOf('--targets')
   if (index === -1) {
@@ -126,11 +123,7 @@ export function requestedTemplateTargets(argv = process.argv) {
   return [...new Set(targets)]
 }
 
-/**
- * A compat target (design D6 rung B) is its base target's package with the compat slot's addons
- * and runtime marker swapped in; everything else is target-independent or libc-static.
- * Omitted, not failed, when this build has no compat slot: rung B then refuses as unavailable.
- */
+// Compat target reuses base package with slot addons/runtime marker swapped; omit missing slots so rung B reports unavailable.
 function stageCompatTarget(compat, basePackageDir) {
   const problems = findSlotProblems(readManifest(ORCAD_PREBUILDS_DIR), ORCAD_PREBUILDS_DIR, [
     compat

@@ -171,6 +171,7 @@ export class DaemonServerLifecycle {
   }
 
   retireAfterIdleReply(clientId: string, requestId: string, socket: Socket): void {
+    this.options.onShutdownRequested()
     this.state = 'shutting-down'
     this.initialAdoptionDeadlineMs = null
     this.retirementRequested = false
@@ -210,6 +211,7 @@ export class DaemonServerLifecycle {
       this.reevaluateIdleShutdown()
       return
     }
+    this.options.onShutdownRequested()
     this.state = 'shutting-down'
     const serverClose = this.beginServerClose()
     this.shutdownPromise = this.finishIdleShutdown(serverClose)

@@ -1,5 +1,4 @@
-// Layout-owner build: main's one start of a restored pane, shared by a client's first view and a
-// CLI or orchestration trigger.
+// Restored panes share main's starter across first-view, CLI and orchestration triggers.
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -14,19 +13,21 @@ const {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } = await import('./orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./bind-first-pane.test-fixture')
 
 const PANE = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }
 
 function windowlessRuntime() {
-  // The pane's stored terminal is gone: the host lists no live terminal.
   const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
   )
   const runtime = new OrcaRuntimeService(runtimeStore)
   const started = deferred<{ id: string }>()
-  const spawn = vi.fn(() => started.promise)
+  const spawn = vi.fn(
+    (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => started.promise
+  )
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => false,
     stopAndWait: async () => true,
@@ -57,7 +58,6 @@ describe('a restored pane with no live terminal, on a host with no window (layou
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'persisted-pty', tabId: 'host-tab' })
     )
-    // Live now: a later trigger starts nothing.
     await expect(runtime.ensureRestoredPaneStarted(PANE)).resolves.toEqual({ id: 'persisted-pty' })
     expect(spawn).toHaveBeenCalledOnce()
   })

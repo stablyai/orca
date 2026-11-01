@@ -35,11 +35,7 @@ async function setOnlyRuntimeHostHealth(page: Page, health: HostHealth): Promise
     if (nextHealth === 'blocked' && !current?.status) {
       throw new Error('Paired web runtime status unavailable for compatibility fault')
     }
-    // Why rewrite the snapshot and not just the status: since #20003 the published snapshot owns
-    // host health. A bare `status: null` leaves the paired-web client's verified/ready snapshot in
-    // place, addRuntimeHost reads transport 'ready' before it ever looks at status, and the host
-    // still renders Connected. Pinning at the top sequence also stops the live status owner
-    // restoring the host mid-assertion.
+    // #20003: rewrite the authoritative health snapshot, not status alone; pin its sequence above live ready publications.
     const verified = current?.status ?? current?.snapshot?.status ?? null
     const snapshot = {
       environmentId: environment.id,
@@ -55,9 +51,7 @@ async function setOnlyRuntimeHostHealth(page: Page, health: HostHealth): Promise
         : {
             status: null,
             verification: 'unavailable' as const,
-            // Why 'unknown' and not 'disconnected': an unavailable/unknown snapshot falls
-            // through to disconnected health; explicit disconnected transport is treated as
-            // reconnecting and renders Connecting.
+            // Unknown/unavailable renders disconnected; explicit disconnected transport renders reconnecting instead.
             transport: 'unknown' as const
           })
     }

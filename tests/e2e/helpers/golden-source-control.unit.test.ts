@@ -41,7 +41,6 @@ const gitCallsFor = (): GitCall[] =>
     cwd: (options as { cwd?: string } | undefined)?.cwd
   }))
 
-/** Args-only view for lookups that locate a call rather than assert its full shape. */
 const gitArgsFor = (): string[][] => gitCallsFor().map((call) => call.args)
 
 /** Returns the thrown value itself; `toThrow` only compares messages, not identity. */
@@ -108,7 +107,6 @@ describe('createGoldenWorktree', () => {
     realpathSyncNativeMock.mockImplementation((value: string) => value)
   })
 
-  /** A half-built worktree leaks into later runs unless both the worktree and the branch go away. */
   it('rolls back the worktree and branch when a configuration command fails', () => {
     const setupError = new Error('git config --worktree unsupported')
     execFileSyncMock.mockImplementation(((_file: string, args: string[]) => {
@@ -129,7 +127,6 @@ describe('createGoldenWorktree', () => {
     expect(gitCallsFor()).toContainEqual({ args: ['branch', '-D', branchName], cwd: '/repo' })
   })
 
-  /** Rollback must still be attempted in full, and its own failure must not mask the setup cause. */
   it('keeps the setup error when rollback itself fails', () => {
     const setupError = new Error('git config --worktree unsupported')
     execFileSyncMock.mockImplementation(((_file: string, args: string[]) => {
@@ -153,7 +150,7 @@ describe('createGoldenWorktree', () => {
     expect(gitCallsFor()).toContainEqual({ args: ['branch', '-D', branchName], cwd: '/repo' })
   })
 
-  /** The identity config must land on the worktree, not the repo, or commits pick up the host author. */
+  // Configure identity on the worktree so commits cannot inherit the host author.
   it('returns the fixture when every setup command succeeds', () => {
     execFileSyncMock.mockReturnValue('')
 
@@ -161,7 +158,6 @@ describe('createGoldenWorktree', () => {
 
     expect(fixture.branchName).toMatch(/^e2e-golden-happy-/)
     expect(fixture.worktreePath).toBe(path.join(os.tmpdir(), fixture.branchName))
-    // Exhaustive: also proves no rollback ran.
     expect(gitCallsFor()).toEqual([
       { args: ['worktree', 'add', fixture.worktreePath, '-b', fixture.branchName], cwd: '/repo' },
       { args: ['config', 'extensions.worktreeConfig', 'true'], cwd: fixture.worktreePath },

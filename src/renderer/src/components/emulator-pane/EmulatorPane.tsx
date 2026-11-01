@@ -3,7 +3,9 @@ import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
+import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type EmulatorPaneProps = {
   tab?: Tab
@@ -13,6 +15,7 @@ type EmulatorPaneProps = {
 }
 
 export default function EmulatorPane({ tab, worktreeId, isActive = true }: EmulatorPaneProps) {
+  useUiLanguageRevision()
   const {
     devices,
     selectedUdid,
@@ -20,6 +23,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     loading,
     error,
     attach,
+    markStreamLost,
     shutdown,
     sendTap,
     sendButton,
@@ -65,7 +69,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
       ) : null}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-muted px-3 py-6">
-        <MobileEmulatorAgentSetupGuideLayer isActive={isActive} worktreeId={worktreeId}>
+        <MobileEmulatorAgentSetupGuideLayer isActive={isActive}>
           {!isLive && !loading ? (
             <p className="mb-4 text-center text-xs text-muted-foreground">
               {translate(
@@ -85,6 +89,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             isActive={isActive}
             onTap={(x, y) => void sendTap(x, y)}
             onGesture={(points) => void sendGesture(points)}
+            onStreamLost={scrcpyDeviceIdFromStreamUrl(previewUrl) ? markStreamLost : undefined}
           />
         </MobileEmulatorAgentSetupGuideLayer>
       </div>

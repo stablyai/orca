@@ -14,9 +14,7 @@ export function GrokUsagePane(): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  // Why: settled snapshots keep their status during refetches (no 'fetching'
-  // repaint), so manual-refresh feedback must be renderer-local, matching the
-  // StatusBar refresh button.
+  // Settled snapshots hide background refetch status; track manual-refresh feedback locally like StatusBar.
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const handleRefresh = (): void => {

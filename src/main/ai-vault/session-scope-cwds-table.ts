@@ -1,12 +1,8 @@
-// The scope_cwds table of the session parse cache database: a transcript
-// version's cwd learned without a parse, read beside each parse row's own cwd.
 import type SyncDatabase from '../sqlite/sync-database'
 import { parsePersistedSidecar } from './session-sidecar-stat'
 import type { SessionScopeCwdLookup, SessionScopeCwdStamp } from './session-parse-cache-store'
 
-// A transcript's cwd learned without a parse (its opening records, or a small
-// file its parser reads it from). Versioned apart from rows, so a reader fix
-// resets only these.
+// Version cwd probes separately so reader fixes do not invalidate full parse rows.
 const SCOPE_CWDS_VERSION = '1'
 const SCOPE_CWDS_SQL = `
 CREATE TABLE IF NOT EXISTS scope_cwds(

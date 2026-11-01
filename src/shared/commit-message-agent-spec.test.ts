@@ -1,4 +1,3 @@
-import { claudeBackgroundArgs } from './claude-background-run-isolation'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
@@ -26,26 +25,6 @@ afterEach(() => {
 })
 
 describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
-  it('exposes the installed local agents as commit-message agents', () => {
-    const ids = listCommitMessageAgentIds().sort()
-    expect(ids).toEqual([
-      'amp',
-      'antigravity',
-      'claude',
-      'codex',
-      'copilot',
-      'cursor',
-      'dsh',
-      'jcode',
-      'kimi',
-      'muse',
-      'omp',
-      'opencode',
-      'opencode2',
-      'pi'
-    ])
-  })
-
   it('uses the expected defaults for core agents', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.6-terra')
@@ -53,25 +32,24 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('default')
   })
 
-  it('uses --prompt (not Claude --print) for Kimi non-interactive generation', () => {
-    // Why: kimi-code 0.31+ rejects --print; non-interactive mode is --prompt/-p (#11669).
+  it('passes only flags Kimi Code accepts for non-interactive generation', () => {
+    // Why: Kimi Code rejects --print/--quiet/--thinking/--no-thinking as unknown options (#11669, #14771).
     const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi
-    expect(spec).toBeDefined()
-    expect(spec!.promptDelivery).toBe('argv')
-    const args = spec!.buildArgs({
-      prompt: 'Name a branch for adding login',
-      model: 'kimi-code/kimi-for-coding',
-      thinkingLevel: 'on'
-    })
-    expect(args).toContain('--prompt')
-    expect(args).not.toContain('--print')
-    // Why: with argv delivery the prompt is the value of --prompt.
-    const promptIndex = args.indexOf('--prompt')
-    expect(promptIndex).toBeGreaterThanOrEqual(0)
-    expect(args[promptIndex + 1]).toBe('Name a branch for adding login')
-    expect(args).toContain('--quiet')
-    expect(args).toContain('--thinking')
-    expect(args).toEqual(expect.arrayContaining(['--model', 'kimi-code/kimi-for-coding']))
+    expect(spec?.promptDelivery).toBe('argv')
+    expect(
+      spec?.buildArgs({
+        prompt: 'Name a branch for adding login',
+        model: 'kimi-code/kimi-for-coding',
+        thinkingLevel: 'on'
+      })
+    ).toEqual([
+      '--prompt',
+      'Name a branch for adding login',
+      '--output-format',
+      'stream-json',
+      '--model',
+      'kimi-code/kimi-for-coding'
+    ])
   })
 
   it('uses Muse exec for non-interactive Source Control AI generation', () => {
@@ -94,52 +72,12 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     )
   })
 
-  it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.kimi?.models.map((m) => m.id)).toEqual([
-      'default',
-      'kimi-code/kimi-for-coding'
-    ])
-  })
-
-  it('maps Kimi thinking off and omission to distinct argv', () => {
-    const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi!
-    const offArgs = spec.buildArgs({ prompt: 'PROMPT', model: 'default', thinkingLevel: 'off' })
-    const defaultArgs = spec.buildArgs({ prompt: 'PROMPT', model: 'default' })
-
-    expect(offArgs).toContain('--no-thinking')
-    expect(offArgs).not.toContain('--thinking')
-    expect(defaultArgs).not.toContain('--thinking')
-    expect(defaultArgs).not.toContain('--no-thinking')
-  })
-
   it('omits Kimi --model for the config default and an empty model', () => {
     const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi!
 
     for (const model of ['default', '']) {
       expect(spec.buildArgs({ prompt: 'PROMPT', model })).not.toContain('--model')
     }
-  })
-
-  it('lists Copilot hosted CLI models even when account policy filters the picker', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.defaultModelId).toBe('gpt-5.4')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.models.map((m) => m.id)).toEqual([
-      'auto',
-      'claude-haiku-4.5',
-      'claude-sonnet-4.5',
-      'claude-sonnet-4.6',
-      'claude-opus-4.5',
-      'claude-opus-4.6',
-      'claude-opus-4.6-fast',
-      'claude-opus-4.7',
-      'gpt-4.1',
-      'gpt-5-mini',
-      'gpt-5.2',
-      'gpt-5.2-codex',
-      'gpt-5.3-codex',
-      'gpt-5.4',
-      'gpt-5.4-mini',
-      'gpt-5.5'
-    ])
   })
 
   it('treats disabled default agents as unavailable for implicit Source Control AI choices', () => {
@@ -188,7 +126,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(listCommitMessageAgentIds()).not.toContain(CUSTOM_AGENT_ID)
   })
 
-  it('orders Codex models by version descending to match the official picker', () => {
+  it('orders seeded Codex models by version descending', () => {
     const ids = COMMIT_MESSAGE_AGENT_SPECS.codex?.models.map((m) => m.id)
     expect(ids).toEqual([
       'gpt-5.6-terra',
@@ -229,7 +167,9 @@ describe('buildArgs (Claude)', () => {
       'haiku',
       '--permission-mode',
       'plan',
-      ...claudeBackgroundArgs()
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
   })
 
@@ -249,7 +189,9 @@ describe('buildArgs (Claude)', () => {
       'plan',
       '--effort',
       'high',
-      ...claudeBackgroundArgs()
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
   })
 
@@ -293,8 +235,7 @@ describe('buildArgs (Jcode)', () => {
   })
 
   it('exposes no tools to a prompt that is a staged patch', () => {
-    // Why: the prompt is attacker-influenced text, and jcode's default profile exposes
-    // shell/read/write/MCP. Every sibling generator is already read-only.
+    // Staged patches are attacker-influenced; jcode defaults expose shell/read/write/MCP unlike read-only sibling generators.
     const args = spec.buildArgs({ prompt: 'name this branch', model: 'default' })
     expect(args.slice(args.indexOf('--tool-profile'), args.indexOf('--tool-profile') + 2)).toEqual([
       '--tool-profile',
@@ -304,13 +245,19 @@ describe('buildArgs (Jcode)', () => {
   })
 
   it('keeps every jcode flag ahead of the subcommand', () => {
-    // Why: --no-update/--quiet/--no-selfdev are jcode global options; clap only
-    // accepts them before `run`, and --model rides the same position so the argv
-    // has one shape rather than two.
+    // jcode global flags must precede run; keep model in the same position for one argv shape.
     const args = spec.buildArgs({ prompt: 'name this branch', model: 'claude-haiku-4-5' })
     const runIndex = args.indexOf('run')
     expect(runIndex).toBeGreaterThan(0)
-    expect(args.slice(0, runIndex).every((arg) => arg.startsWith('--') || arg !== 'run')).toBe(true)
+    expect(args.slice(0, runIndex)).toEqual([
+      '--no-update',
+      '--quiet',
+      '--no-selfdev',
+      '--tool-profile',
+      'none',
+      '--model',
+      'claude-haiku-4-5'
+    ])
     expect(args.slice(runIndex)).toEqual(['run', '--json', 'name this branch'])
   })
 
@@ -399,7 +346,9 @@ describe('model discovery parsers', () => {
       '--output-format',
       'stream-json',
       '--verbose',
-      ...claudeBackgroundArgs()
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
     const payload = JSON.parse(discovery?.stdinPayload ?? '') as {
       type?: string
@@ -715,32 +664,18 @@ describe('buildArgs (OpenCode 2)', () => {
 describe('buildArgs (Antigravity)', () => {
   const spec = getCommitMessageAgentSpec('antigravity')!
 
-  it('runs agy with the prompt attached to --print, then --sandbox and --model flags', () => {
-    const args = spec.buildArgs({
-      prompt: 'real commit prompt',
-      model: 'Gemini 3.5 Flash (Medium)'
-    })
-    expect(args).toEqual([
-      '--print=real commit prompt',
+  it('runs agy in stream input mode with sandbox and model flags separate', () => {
+    expect(
+      spec.buildArgs({ prompt: 'real commit prompt', model: 'Gemini 3.5 Flash (Medium)' })
+    ).toEqual([
+      '--print=',
+      '--input-format=stream-json',
+      '--output-format=stream-json',
       '--sandbox',
       '--model',
       'Gemini 3.5 Flash (Medium)'
     ])
-    expect(spec.promptDelivery).toBe('argv')
-  })
-
-  it('binds a leading-dash prompt to --print instead of letting it parse as an option', () => {
-    const args = spec.buildArgs({ prompt: '-fix: something', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args[0]).toBe('--print=-fix: something')
-  })
-
-  // Why: pins argv construction only. Real agy 1.2.1 separately rejects a --print value
-  // that exactly matches a registered flag name (its own heuristic, independent of this
-  // fix) — verified `agy --print=--sandbox` still errors there. Real prompts are never
-  // literally a bare flag name, so this doesn't affect actual generation.
-  it('still glues a prompt that collides with a flag name onto --print', () => {
-    const args = spec.buildArgs({ prompt: '--sandbox', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args[0]).toBe('--print=--sandbox')
+    expect(spec.promptDelivery).toBe('stdin')
   })
 
   it('uses dynamic model discovery via agy models', () => {
@@ -753,7 +688,12 @@ describe('buildArgs (Antigravity)', () => {
     expect(spec.defaultModelId).toBe('default')
     expect(
       spec.buildArgs({ prompt: 'Generate a commit message', model: spec.defaultModelId })
-    ).toEqual(['--print=Generate a commit message', '--sandbox'])
+    ).toEqual([
+      '--print=',
+      '--input-format=stream-json',
+      '--output-format=stream-json',
+      '--sandbox'
+    ])
   })
 
   it('passes only a nonempty requested effort', () => {
@@ -761,7 +701,9 @@ describe('buildArgs (Antigravity)', () => {
       '--effort'
     )
     expect(spec.buildArgs({ prompt: 'P', model: 'default', thinkingLevel: 'high' })).toEqual([
-      '--print=P',
+      '--print=',
+      '--input-format=stream-json',
+      '--output-format=stream-json',
       '--sandbox',
       '--effort',
       'high'

@@ -4,18 +4,16 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
+import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
+import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 import { useAppStore } from '../../store'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutHintList } from './AppearanceShortcutHintList'
-import {
-  FontAutocomplete,
-  SettingsRow,
-  SettingsSegmentedControl,
-  SettingsSwitchRow
-} from './SettingsFormControls'
+import { FontAutocomplete, SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import {
+  getCodeEditorThemeEntries,
   getLanguageEntries,
   getMenuBarIconEntries,
   getSystemTrayEntries,
@@ -32,7 +30,14 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
+import {
+  AppearanceThemeControl,
+  AppearanceThemeSlotSelect,
+  CodeEditorThemeSelect
+} from './AppearanceThemeControl'
+import { usePluginIconThemes } from '@/store/plugin-icon-themes'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -57,6 +62,46 @@ export function AppearanceInterfaceSection({
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const pluginLanguagePacks = usePluginLanguagePacks()
+  const pluginIconThemes = usePluginIconThemes()
+  const themeSlots = [
+    {
+      base: 'light' as const,
+      title: translate(
+        'auto.components.settings.AppearanceInterfaceSection.lightTheme',
+        'Light theme'
+      )
+    },
+    {
+      base: 'dark' as const,
+      title: translate(
+        'auto.components.settings.AppearanceInterfaceSection.darkTheme',
+        'Dark theme'
+      )
+    }
+  ]
+  const editorThemeEntry = getCodeEditorThemeEntries()[0]
+  const editorThemeSlots = [
+    {
+      base: 'light' as const,
+      title: translate('settings.appearance.editorTheme.light', 'Light editor theme'),
+      description: translate(
+        'settings.appearance.editorTheme.lightDescription',
+        'Code editor, diff and notebook colors while the app is light.'
+      )
+    },
+    {
+      base: 'dark' as const,
+      title: translate('settings.appearance.editorTheme.dark', 'Dark editor theme'),
+      description: translate(
+        'settings.appearance.editorTheme.darkDescription',
+        'Code editor, diff and notebook colors while the app is dark.'
+      )
+    }
+  ]
+  const iconThemeTitle = translate(
+    'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.title',
+    'Icon theme'
+  )
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
@@ -68,8 +113,10 @@ export function AppearanceInterfaceSection({
   const titlebarEntry = getTitlebarEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
+  const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
   const advancedEntries = [
     ...getTitlebarEntries(),
+    ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
@@ -87,31 +134,119 @@ export function AppearanceInterfaceSection({
         <SettingsRow
           label={themeLabel}
           control={
-            <SettingsSegmentedControl
-              ariaLabel={themeLabel}
-              value={settings.theme}
-              onChange={(option) => {
-                updateSettings({ theme: option })
-                applyTheme(option)
-              }}
-              options={[
-                {
-                  value: 'system',
-                  label: translate('auto.components.settings.AppearancePane.fb0e0b4453', 'System')
-                },
-                {
-                  value: 'dark',
-                  label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
-                },
-                {
-                  value: 'light',
-                  label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
-                }
-              ]}
+            <AppearanceThemeControl
+              label={themeLabel}
+              settings={settings}
+              updateSettings={updateSettings}
+              applyTheme={applyTheme}
             />
           }
         />
       </SearchableSetting>
+
+      {themeSlots.map((slot) => (
+        <SearchableSetting
+          key={slot.base}
+          title={slot.title}
+          description={translate(
+            'auto.components.settings.AppearanceInterfaceSection.themeSlot.description',
+            'App colors for this mode.'
+          )}
+          keywords={[
+            'plugin',
+            'theme',
+            'terminal',
+            slot.base,
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.matchTerminal',
+              'match terminal'
+            )
+          ]}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={slot.title}
+            control={
+              <AppearanceThemeSlotSelect
+                base={slot.base}
+                label={slot.title}
+                settings={settings}
+                updateSettings={updateSettings}
+              />
+            }
+          />
+        </SearchableSetting>
+      ))}
+
+      {editorThemeSlots.map((slot) => (
+        <SearchableSetting
+          key={slot.base}
+          title={slot.title}
+          description={editorThemeEntry?.description}
+          keywords={editorThemeEntry?.keywords ?? []}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={slot.title}
+            description={slot.description}
+            control={
+              <CodeEditorThemeSelect
+                base={slot.base}
+                label={slot.title}
+                settings={settings}
+                updateSettings={updateSettings}
+              />
+            }
+          />
+        </SearchableSetting>
+      ))}
+
+      {pluginIconThemes.length > 0 ? (
+        <SearchableSetting
+          title={iconThemeTitle}
+          description={translate(
+            'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.description',
+            'File and folder icons from an enabled plugin.'
+          )}
+          keywords={['plugin', 'icon', 'file', 'folder']}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={iconThemeTitle}
+            control={
+              <Select
+                value={
+                  pluginIconThemes.find((theme) => theme.id === settings.pluginIconTheme)?.id ??
+                  'built-in'
+                }
+                onValueChange={(value) =>
+                  updateSettings({
+                    pluginIconTheme:
+                      pluginIconThemes.find((theme) => theme.id === value)?.id ?? null
+                  })
+                }
+              >
+                <SelectTrigger size="sm" className="min-w-[220px]" aria-label={iconThemeTitle}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="built-in">
+                    {translate(
+                      'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
+                      'Built-in'
+                    )}
+                  </SelectItem>
+                  {pluginIconThemes.map((theme) => (
+                    <SelectItem key={theme.id} value={theme.id}>
+                      {theme.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          />
+        </SearchableSetting>
+      ) : null}
 
       {SHOW_UI_LANGUAGE_SETTING ? (
         <SearchableSetting
@@ -138,7 +273,7 @@ export function AppearanceInterfaceSection({
                   ))}
                   {pluginLanguagePacks.map((pack) => (
                     <SelectItem key={pack.id} value={pack.id}>
-                      {pack.locale} — {pack.pluginKey}
+                      {pack.displayName ?? `${pack.locale} — ${pack.pluginKey}`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -156,9 +291,7 @@ export function AppearanceInterfaceSection({
       >
         <SettingsRow
           label={translate('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
-          // Why: keep only the shortcut hint — the control itself makes "scale the
-          // interface" obvious, but the keyboard gesture and its terminal-pane
-          // exception are not discoverable from the buttons alone.
+          // Explain the shortcut and terminal exception; the zoom buttons already explain scaling.
           description={
             <>
               <ShortcutHintList combos={zoomInKeyCombos} /> /{' '}
@@ -218,6 +351,12 @@ export function AppearanceInterfaceSection({
               />
             </SearchableSetting>
 
+            <ReduceVisualEffectsSetting
+              entry={reduceVisualEffectsEntry}
+              enabled={settings.reduceVisualEffects === true}
+              updateSettings={updateSettings}
+            />
+
             {isDesktopWindows ? (
               <SearchableSetting
                 title={translate(
@@ -232,8 +371,7 @@ export function AppearanceInterfaceSection({
                     'auto.components.settings.AppearancePane.2edf606c46',
                     'Minimize to Tray on Close'
                   )}
-                  // Why: platform constraint + "close keeps Orca running" consequence are
-                  // both non-obvious from the label alone.
+                  // Explain the non-obvious platform restriction and keep-running consequence.
                   description={translate(
                     'auto.components.settings.AppearancePane.b707773a0d',
                     'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
@@ -254,8 +392,7 @@ export function AppearanceInterfaceSection({
               >
                 <SettingsSwitchRow
                   label={translate('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
-                  // Why: this opt-out removes only the status item; macOS Dock
-                  // activation and the close-keeps-running lifecycle stay intact.
+                  // Hiding the status item preserves Dock activation and close-keeps-running behavior.
                   description={translate(
                     'settings.appearance.menuBarIcon.description',
                     'Keep an Orca shortcut and activity indicator in the macOS menu bar.'

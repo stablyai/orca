@@ -61,12 +61,7 @@ export function resolveRuntimePaneTitleLeafId(
   return resolveRuntimePaneTitleLeafIdFromRoot(tabLayout?.root, runtimePaneId)
 }
 
-/**
- * Resolve the runtime-reported pane title for a specific layout leaf. Pane
- * title maps are keyed by runtime pane id, which only lines up with the leaf id
- * after replay-order resolution — split tabs can carry a sparse title map, so a
- * lone background title must not be attributed to an unrelated leaf.
- */
+/** Resolve runtime pane IDs by replay order before assigning sparse titles; a lone background title may belong to another leaf. */
 export function resolveRuntimePaneTitleForLeaf(
   tabLayout: { root?: TerminalLayoutSnapshot['root'] } | undefined,
   paneTitles: Record<number, string> | undefined,
@@ -107,8 +102,7 @@ export function resolveRuntimePaneTitleLeafResolution(
     }
   }
 
-  // Why: without a layout root, only a single reported pane title can be
-  // attributed; any pane title still suppresses stale tab-title fallback.
+  // Without layout, attribute only a lone title; any pane title suppresses stale tab-title fallback.
   if (!tabLayout?.root && hasOnePaneTitle && !hasMultiplePaneTitles) {
     return { title: firstTitle, hasAnyPaneTitle: true }
   }
@@ -129,6 +123,14 @@ export function resolveRuntimePaneTitleLeafIdFromRoot(
   }
   const leafIds = collectLeafIdsInReplayCreationOrder(root)
   return leafIds[numericPaneId - FIRST_PANE_ID] ?? null
+}
+
+/** Numeric slots survive pane closes with gaps, so only absent durable leaf ids prove removal. */
+export function isRuntimePaneTitleOrphan(
+  runtimePaneId: string,
+  layoutLeafIds: ReadonlySet<string>
+): boolean {
+  return isTerminalLeafId(runtimePaneId) && !layoutLeafIds.has(runtimePaneId)
 }
 
 /**

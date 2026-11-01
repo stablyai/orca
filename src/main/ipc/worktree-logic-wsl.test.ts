@@ -17,6 +17,7 @@ import {
   computeWorktreePath,
   computeWorktreePathAsync,
   computeWorkspaceRootAsync,
+  computeWorkspaceRootWithin,
   getWorktreePathSettings
 } from './worktree-logic'
 import {
@@ -51,6 +52,42 @@ describe('computeWorktreePath WSL layout', () => {
     }
     expect(getWslHomeAsyncMock).toHaveBeenCalledExactlyOnceWith('Ubuntu')
     expect(getWslHomeMock).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting for a WSL home at the deadline and falls back, leaving the probe running', async () => {
+    vi.useFakeTimers()
+    try {
+      parseWslPathMock.mockReturnValue({ distro: 'Ubuntu', linuxPath: '/home/jin/repo' })
+      const repoPath = String.raw`\\wsl.localhost\Ubuntu\home\jin\repo`
+      const settings = { workspaceDir: 'C:\\workspaces', nestWorkspaces: true }
+      getWslHomeAsyncMock.mockReturnValue(new Promise<string>(() => {}))
+      const pending = computeWorkspaceRootWithin(repoPath, settings, 5_000)
+      await vi.advanceTimersByTimeAsync(5_000)
+      const fallback = await pending
+      expect(fallback).not.toContain('orca')
+      expect(getWslHomeMock).not.toHaveBeenCalled()
+
+      getWslHomeAsyncMock.mockResolvedValue(String.raw`\\wsl.localhost\Ubuntu\home\jin`)
+      expect(await computeWorkspaceRootWithin(repoPath, settings, 5_000)).toBe(
+        win32.join(String.raw`\\wsl.localhost\Ubuntu\home\jin`, 'orca', 'workspaces')
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reads the home through the lookup its main-side caller injects', async () => {
+    parseWslPathMock.mockReturnValue({ distro: 'Ubuntu', linuxPath: '/home/jin/repo' })
+    const readHome = vi.fn(async () => null)
+    const root = await computeWorkspaceRootWithin(
+      String.raw`\\wsl.localhost\Ubuntu\home\jin\repo`,
+      { workspaceDir: 'C:\\workspaces' },
+      5_000,
+      readHome
+    )
+    expect(root).not.toContain('orca')
+    expect(readHome).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+    expect(getWslHomeAsyncMock).not.toHaveBeenCalled()
   })
 
   it('places WSL repo worktrees under the distro home workspace root', () => {
@@ -98,7 +135,6 @@ describe('computeWorktreePath WSL layout', () => {
     expect(computeWorktreePath('feature', repo.path, getWorktreePathSettings(repo, settings))).toBe(
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.orca-worktrees\\feature'
     )
-    // Why repeat: cached follow-up calls must resolve identically to the first.
     expect(computeWorktreePath('feature', repo.path, getWorktreePathSettings(repo, settings))).toBe(
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.orca-worktrees\\feature'
     )
@@ -156,7 +192,6 @@ describe('computeWorktreePath WSL layout', () => {
       worktreeBasePath: 'D:\\trees'
     }
 
-    // Why: desktop drive roots keep WSL worktrees on the WSL filesystem by design.
     expect(
       computeWorktreePath(
         'feature',
@@ -183,17 +218,14 @@ describe('computeWorktreePath WSL layout', () => {
         kind: 'git',
         worktreeBasePath
       } as Repo
-      // Why: the resolver exists so these two layers agree; assert the
-      // invariant directly instead of two hardcoded strings that happen to match.
+      // Create and allowed-root resolvers must agree on placement.
       const createdPath = computeWorktreePath(
         'feature',
         repo.path,
         getWorktreePathSettings(repo, settings)
       )
       const layouts = buildKnownOrcaWorkspaceLayouts({ ...settings, workspaceDirHistory: [] }, repo)
-      // Why containment, not just ownership: a regressed resolver lands in the
-      // ~/orca/workspaces mirror layout, which also classifies 'external'.
-      // layouts[0] is the repo-base layout — it is always pushed first.
+      // Ownership alone also accepts mirror layout; require containment in the selected repo-base layout.
       expect(relativePathInsideRoot(layouts[0].path, createdPath)).not.toBeNull()
       expect(
         classifyWorktreeOwnership({
@@ -282,9 +314,7 @@ describe('computeWorktreePath WSL layout', () => {
     ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees\\feature')
   })
 
-  // The C:\ repo + WSL runtime case: git status stats every working-tree file,
-  // so a tree on the Windows drive costs ~46s across the 9p mount versus ~0.2s
-  // native with only the gitdir left behind.
+  // WSL Git stats Windows-drive worktrees through slow 9p; keep the tree on Linux and only Git metadata on Windows.
   describe('Windows-drive repo whose project runs in WSL', () => {
     it('places worktrees inside the distro', () => {
       parseWslPathMock.mockReturnValue(null)

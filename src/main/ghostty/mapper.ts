@@ -24,6 +24,15 @@ const PALETTE_INDEX_MAP: Record<number, keyof TerminalColorOverrides> = {
 
 type FieldAssignment = { key: keyof GlobalSettings; value: unknown }
 
+// Accepts `background-blur` (bool, radius, macos-glass-*) and its legacy `background-blur-radius` spelling.
+function mapGhosttyBackgroundBlur(v: string): FieldAssignment | null {
+  const radius = v === 'true' ? 1 : v === 'false' ? 0 : parseStrictInt(v)
+  if (v.startsWith('macos-glass-') || (radius !== null && radius > 0)) {
+    return { key: 'windowMaterial', value: 'blur' }
+  }
+  return radius === 0 ? { key: 'windowMaterial', value: 'translucent' } : null
+}
+
 type FieldResult =
   | FieldAssignment
   | FieldAssignment[]
@@ -130,13 +139,9 @@ export function mapGhosttyToOrca(
       return { colorOverrides: overrides }
     },
 
-    'background-blur-radius': (v) => {
-      const num = parseStrictInt(v)
-      if (num === null || num < 0) {
-        return null
-      }
-      return { key: 'windowBackgroundBlur', value: num > 0 }
-    },
+    // Ghostty shows the desktop through background-opacity either way; blur only adds the filter.
+    'background-blur': (v) => mapGhosttyBackgroundBlur(v),
+    'background-blur-radius': (v) => mapGhosttyBackgroundBlur(v),
 
     'split-divider-color': (v) => {
       if (!HEX_COLOR_RE.test(v)) {
@@ -172,9 +177,7 @@ export function mapGhosttyToOrca(
       return { key: 'terminalPaddingY', value: num }
     },
 
-    // Why: only percentages translate to xterm's line-height ratio; Ghostty's
-    // pixel form depends on the rendered cell height, which we can't know here.
-    // The settings UI clamps terminalLineHeight to [1, 3], so reject outside it.
+    // Pixel offsets need rendered cell height; accept percentages only within Orca's [1, 3] line-height range.
     'adjust-cell-height': (v) => {
       const match = /^\+?(\d+(?:\.\d+)?)%$/.exec(v.trim())
       if (!match) {
@@ -242,8 +245,6 @@ export function mapGhosttyToOrca(
     },
 
     'cursor-style-blink': (v) => {
-      // Why: Ghostty uses 'true'/'false' strings for booleans; anything else
-      // is treated as unsupported rather than silently coerced.
       if (v !== 'true' && v !== 'false') {
         return null
       }
@@ -251,8 +252,6 @@ export function mapGhosttyToOrca(
     },
 
     'focus-follows-mouse': (v) => {
-      // Why: Ghostty's focus-follows-mouse is semantically identical to Orca's
-      // terminalFocusFollowsMouse — both control pointer-hover focus transfer.
       if (v !== 'true' && v !== 'false') {
         return null
       }
@@ -270,17 +269,13 @@ export function mapGhosttyToOrca(
   for (const [key, rawValue] of Object.entries(parsed)) {
     const value = Array.isArray(rawValue) ? (rawValue.at(-1) ?? '') : rawValue
 
-    // Why: Ghostty's selection-word-chars defines characters that ARE part of a
-    // word, while xterm.js wordSeparator defines characters that BREAK words.
-    // Passing the same string inverts the semantics, and correctly inverting a
-    // character set is non-trivial. Treat as unsupported to avoid silent misbehavior.
+    // Ghostty lists word members; xterm lists separators, so importing unchanged would invert the meaning.
     if (key === 'selection-word-chars') {
       unsupportedKeys.push(key)
       continue
     }
 
-    // Why: xterm.js ITheme has no bold color slot (xtermjs/xterm.js#6032), so importing
-    // bold-color would render as a no-op; report it as unsupported instead of silently dropping.
+    // xterm has no bold-color theme slot, so report this unsupported rather than implying success.
     if (key === 'bold-color') {
       unsupportedKeys.push(key)
       continue
@@ -303,16 +298,12 @@ export function mapGhosttyToOrca(
       continue
     }
 
-    // Why: Orca's windowBackgroundBlur is a boolean; the numeric radius is lost.
-    // Only note the drop when blur is actually being turned on — a `0` cleanly
-    // maps to `false` and there is no radius to lose.
+    // Orca preserves only whether blur is enabled; report radius loss only for nonzero values.
     if (
-      key === 'background-blur-radius' &&
-      !Array.isArray(result) &&
-      'key' in result &&
-      result.value === true
+      (key === 'background-blur' || key === 'background-blur-radius') &&
+      (parseStrictInt(value) ?? 0) > 0
     ) {
-      unsupportedKeys.push('background-blur-radius (radius value not preserved)')
+      unsupportedKeys.push(`${key} (radius value not preserved)`)
     }
 
     if (Array.isArray(result)) {

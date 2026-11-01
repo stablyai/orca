@@ -457,7 +457,6 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     await releasing
 
     await expect(retaining).rejects.toThrow('browser_client_network_route_registry_retired')
-    // A retired registry must never mint the replacement route the waiter was queued for.
     expect(routeFactory).toHaveBeenCalledOnce()
     expect(route.start).toHaveBeenCalledOnce()
   })
@@ -561,7 +560,6 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
     expect(() => registry.retire()).toThrow('Browser client network route suspension failed')
 
-    // A second retire must report the same failure without re-suspending an already suspended route.
     await expect(registry.retire()).rejects.toThrow(
       'Browser client network route suspension failed'
     )

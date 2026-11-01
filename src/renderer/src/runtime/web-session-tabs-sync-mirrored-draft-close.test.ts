@@ -108,9 +108,7 @@ describe('tab-strip close of a client-dirty mirrored file after a host republish
   })
 
   it('routes the close to the unsaved-changes prompt instead of discarding the draft', () => {
-    // Why: this is the user-visible property. #21363 lost a draft on a transient error; this
-    // path loses one on an ordinary Cmd+W / tab X unless the client's dirty flag survives the
-    // host's republish, because the tab strip gates its prompt on that flag alone.
+    // Close prompts depend on the dirty flag alone; host republish must preserve client edits or Cmd+W/X silently discards drafts (#21363).
     const patch = applyWebSessionTabsSnapshot(
       useAppStore.getState(),
       hostCleanRepublish(),
@@ -123,7 +121,6 @@ describe('tab-strip close of a client-dirty mirrored file after a host republish
       notesUnifiedTab.id
     )
 
-    // Prompted, not closed: the request went to the save/discard queue and nothing was lost.
     expect(closeRequests).toEqual([notesPath])
     const state = useAppStore.getState()
     expect(state.openFiles.some((file) => file.id === notesPath)).toBe(true)

@@ -5,7 +5,6 @@ export type SshTargetGroupId = 'ssh-config' | 'manual'
 
 export type SshTargetGroup = { id: SshTargetGroupId; targets: SshTarget[] }
 
-/** Above this many hosts the list gets a filter field. */
 export const SSH_TARGET_FILTER_THRESHOLD = 8
 
 /** Config-synced hosts first; a legacy target without `source` is grouped by config sync's rule. */
@@ -19,7 +18,7 @@ export function groupSshTargetsBySource(targets: readonly SshTarget[]): SshTarge
   return groups.filter((group) => group.targets.length > 0)
 }
 
-/** Ids in the order rows render (grouped), which is the order a Shift-click range walks. */
+/** Shift-click ranges must follow grouped display order. */
 export function sshTargetDisplayOrder(targets: readonly SshTarget[]): string[] {
   return groupSshTargetsBySource(targets).flatMap((group) => group.targets.map((t) => t.id))
 }
@@ -46,10 +45,7 @@ export function filterSshTargets(targets: readonly SshTarget[], query: string): 
   )
 }
 
-/**
- * Applies a checkbox click. With Shift and a visible anchor, every row between the anchor and the
- * clicked row takes the clicked row's new state, like a file manager.
- */
+/** Shift-click applies the clicked row’s new state across the visible anchored range. */
 export function applySshTargetSelectionClick(args: {
   selected: ReadonlySet<string>
   orderedIds: readonly string[]
@@ -96,10 +92,7 @@ export type SshBulkRemovePlan = {
   skipped: { target: SshTarget; reason: SshBulkRemoveSkipReason }[]
 }
 
-/**
- * Hosts whose single removal needs its own decision (a managed server main refuses to drop, or
- * workspaces to keep or delete) are skipped, so one confirm never decides those silently.
- */
+/** Skip hosts needing their own managed-server/workspace decision; bulk confirmation cannot decide it. */
 export function planSshBulkRemove(
   targets: readonly SshTarget[],
   classify: (target: SshTarget) => SshBulkRemoveSkipReason | null
@@ -116,7 +109,6 @@ export function planSshBulkRemove(
   return plan
 }
 
-/** The key file's name; the full path is in the edit form. */
 export function sshIdentityFileName(identityFile: string | undefined): string | null {
   const trimmed = identityFile?.trim()
   if (!trimmed) {

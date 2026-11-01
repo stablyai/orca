@@ -13,8 +13,7 @@ export type AiVaultSessionSurfaceSwitchTargets = {
   resumeInNewCliWorktreeId: string | null
 }
 
-/** The one gate for moving a session between native chat and the CLI, shared by the session-history
- *  row and the tab menu so both offer the move in exactly the same cases. */
+/** Share native/CLI surface-switch eligibility between session rows and tab menus. */
 export function resolveAiVaultSessionSurfaceSwitchTargets(
   session: Pick<
     AiVaultSession,

@@ -78,7 +78,6 @@ function renderWatcherEffects(overrides: Partial<WatcherController> = {}): Promi
     measurableBackgroundWorktreeIdsRef: { current: new Set() },
     mountedWorktreeIdsRef: { current: new Set([PARKED_WORKTREE_ID]) },
     pendingStartupByTabId: {},
-    // Another workspace is on screen, so the mounted one is hidden and parks.
     renderedActiveWorktreeId: 'repo-1::/worktree-9',
     startupTerminalTabHold: null,
     tabsByWorktree: {
@@ -151,7 +150,7 @@ describe('parked terminal watcher sync entries', () => {
         .filter(([workspaceId]) => workspaceId !== PARKED_WORKTREE_ID)
         .map(([, entry]) => entry.parkedTabIds)
     )
-    // Pre-fix this was one empty Set per surface (422 of them) on every fire.
+    // Empty surfaces must not allocate a new Set on every store publication.
     expect(unmountedSets.size).toBe(1)
     expect([...unmountedSets][0]?.size).toBe(0)
   })

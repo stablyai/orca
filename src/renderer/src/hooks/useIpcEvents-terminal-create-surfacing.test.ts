@@ -1,51 +1,26 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { setupTerminalCreateSurfacing } from './ipc-events-terminal-create-test-harness'
 
 describe('useIpcEvents updater integration', () => {
   it('surfaces terminal creates without stealing focus unless requested', async () => {
-    let floatingPanelFocused = false
-    const scenario = await setupTerminalCreateSurfacing(() => floatingPanelFocused)
+    const scenario = await setupTerminalCreateSurfacing(() => false)
     const { createTab, setActiveView, setActiveWorktree, markWorktreeVisited } = scenario
     const { recordWorktreeVisit, setActiveTabType, setActiveTab } = scenario
     const { revealWorktreeInSidebar, setTabCustomTitle, queueTabStartupCommand } = scenario
     const { registerAgentLaunchConfig, updateTabPtyId, setTabLayout } = scenario
     const { replyTerminalCreate, dispatchEvent } = scenario
-    const { createFloatingWorkspaceTerminalTab } = scenario
     const { createWebRuntimeSessionTerminal, focusRuntimeTerminalSurface } = scenario
     const { focusTerminalTabSurface, storeState, createTerminalListenerRef } = scenario
     const { requestTerminalCreateListenerRef, focusTerminalListenerRef } = scenario
-    const { newTerminalTabListenerRef } = scenario
 
-    // The harness registers both listeners before returning; narrow them once.
-    if (!newTerminalTabListenerRef.current || !createTerminalListenerRef.current) {
-      throw new Error('Expected create-terminal and new-terminal-tab listeners to be registered')
+    // The harness registers the listener before returning; narrow it once.
+    if (!createTerminalListenerRef.current) {
+      throw new Error('Expected create-terminal listener to be registered')
     }
 
-    floatingPanelFocused = true
-    newTerminalTabListenerRef.current()
-    expect(createFloatingWorkspaceTerminalTab).toHaveBeenCalledWith(storeState)
-    expect(createTab).not.toHaveBeenCalled()
-
-    floatingPanelFocused = false
-    createFloatingWorkspaceTerminalTab.mockClear()
-    createTab.mockClear()
-    newTerminalTabListenerRef.current()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(createFloatingWorkspaceTerminalTab).not.toHaveBeenCalled()
-    expect(createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      // Why: multi-host scopes the new terminal to the worktree's own runtime
-      // env (null here -> falls back to the active env inside the helper).
-      environmentId: null,
-      activate: true
-    })
-    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, expect.anything())
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-
-    // Exact regression sequence: Local default -> connect/navigate Windows 2 ->
-    // reveal a local terminal -> restart. Connection and navigation are transient.
+    // Reproduce local default → remote navigation → local reveal → restart; transient connection/navigation must not change durable default.
     storeState.repos.push({
       id: 'windows-2-repo',
       connectionId: null,
@@ -210,7 +185,7 @@ describe('useIpcEvents updater integration', () => {
     focusTerminalTabSurface.mockClear()
     storeState.settings = {
       ...storeState.settings,
-      experimentalNativeChat: true
+      nativeChatProviders: EVERY_AGENT_CHAT
     }
     requestTerminalCreateListenerRef.current({
       requestId: 'req-renderer-backed',
@@ -517,7 +492,7 @@ describe('useIpcEvents updater integration', () => {
     })
 
     createTab.mockClear()
-    storeState.settings.experimentalNativeChat = false
+    storeState.settings.nativeChatProviders = {}
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
       ptyId: 'pty-explicit-chat',
@@ -530,7 +505,7 @@ describe('useIpcEvents updater integration', () => {
       launchAgent: 'codex',
       viewMode: 'chat'
     })
-    storeState.settings.experimentalNativeChat = true
+    storeState.settings.nativeChatProviders = EVERY_AGENT_CHAT
 
     createTab.mockClear()
     setActiveView.mockClear()

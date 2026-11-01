@@ -1,10 +1,4 @@
-/**
- * Runs the host script Windows orcad hosts execute, under this machine's node.
- *
- * They use only `fs`, `path` and `process.kill(pid, 0)`, whose ESRCH/EPERM split libuv gives on
- * every platform. The process-tree addon is faked by a preload that loads `*.node` as a table of
- * creation times, so the identity rules run for real without Windows.
- */
+// Run the host script locally with a fake process-tree addon to exercise Windows identity rules.
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -35,7 +29,7 @@ const FAKE_ADDON_PRELOAD = [
   'Module._extensions[".node"]=(m,f)=>{m.exports={getProcessCreationTime:(pid)=>{',
   'try{return JSON.parse(fs.readFileSync(f+".json","utf8"))[pid]}catch{return undefined}}}};'
 ].join('')
-// Above any real PID on macOS and Linux defaults, so kill(pid, 0) is ESRCH.
+// Above default macOS/Linux PID ranges so kill(pid, 0) reports ESRCH.
 const DEAD_PID = 4_194_303
 
 let dir = ''
@@ -127,7 +121,6 @@ describe('Windows liveness script', () => {
   })
 
   it('is UNKNOWN when nothing proves identity: no record, no time, no addon', async () => {
-    // A slot that never launched has neither a record nor a readiness file.
     expect(await liveness()).toBe('NEVER_LAUNCHED')
     writeFileSync(join(dir, ORCAD_READINESS_FILENAME), '')
     expect(await liveness()).toBe('UNKNOWN')
@@ -149,7 +142,6 @@ describe('Windows stop script', () => {
       .split(/\r?\n/u)
       .at(-1)
 
-  /** Stands in for orcad's stop-request listener: exits once the request file appears. */
   function fakeOrcad(): number {
     const child = spawnProcess({
       program: process.execPath,
@@ -195,7 +187,7 @@ describe('Windows stop script', () => {
     writeFileSync(join(dir, ORCAD_READINESS_FILENAME), readyLine({ pid: 1, stopRequests: 1 }))
     expect(await stop(false)).toBe('UNKNOWN')
     expect(existsSync(requestFile())).toBe(false)
-    // A settled stop needs readiness unless this client just launched the slot.
+    // Settled stops require readiness unless this client just launched the slot.
     writeFileSync(join(dir, ORCAD_READINESS_FILENAME), '')
     expect(await stop(false)).toBe('UNKNOWN')
   })

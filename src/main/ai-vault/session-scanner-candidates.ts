@@ -15,7 +15,6 @@ import type {
   SessionFileDiscovery
 } from './session-scanner-types'
 
-/** One discovery's files as parse candidates, attributed to their Codex home. */
 export function discoveryFileCandidates(
   discovery: SessionFileDiscovery,
   files: readonly FileWithMtime[],
@@ -55,15 +54,28 @@ export function dropCodexHardlinkAliases(
   return dedupeCodexRolloutFileAliases(candidates, CODEX_ALIAS_ACCESSORS)
 }
 
-/** Newest-first parse candidates for a discovery set, with Codex hardlink aliases collapsed. */
+// OMP inherits PI_CODING_AGENT_DIR; the Pi parse labels the OMP transcripts it reads, so read each once.
+function dropOmpCandidatesListedByPi(
+  candidates: readonly SessionFileCandidate[]
+): SessionFileCandidate[] {
+  const piPaths = new Set(
+    candidates.flatMap((candidate) => (candidate.agent === 'pi' ? [candidate.file.path] : []))
+  )
+  return candidates.filter(
+    (candidate) => candidate.agent !== 'omp' || !piPaths.has(candidate.file.path)
+  )
+}
+
 export async function sessionCandidatesFromDiscoveries(
   discoveries: SessionFileDiscovery[],
   options: AiVaultScanOptions
 ): Promise<SessionFileCandidate[]> {
   const candidates = await dedupeCodexRolloutAliases(
-    discoveries
-      .flatMap((discovery) => discoveryFileCandidates(discovery, discovery.files, options))
-      .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs),
+    dropOmpCandidatesListedByPi(
+      discoveries.flatMap((discovery) =>
+        discoveryFileCandidates(discovery, discovery.files, options)
+      )
+    ).sort((left, right) => right.file.mtimeMs - left.file.mtimeMs),
     CODEX_ALIAS_ACCESSORS,
     (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
     options.signal

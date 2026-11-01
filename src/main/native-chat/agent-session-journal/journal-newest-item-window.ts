@@ -1,6 +1,6 @@
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 
-/** The newest complete items that fit `maxBytes`; the latest item is always kept. */
+/** Keep newest whole items within budget, retaining at least the latest item. */
 export function createNewestItemWindow(maxBytes: number): {
   push(item: JournalReplacementItem): void
   items(): JournalReplacementItem[]
@@ -18,7 +18,7 @@ export function createNewestItemWindow(maxBytes: number): {
         entries[head] = undefined
         head += 1
       }
-      // Drop evicted entries in batches so a long source stays linear.
+      // Batch evictions keep long-source processing linear.
       if (head > 1024 && head * 2 > entries.length) {
         entries = entries.slice(head)
         head = 0

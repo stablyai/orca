@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_JIRA_STATUS_FILTERS, MAX_JIRA_STATUS_NAME_LENGTH } from '../jira-quick-filters'
+import { MAX_JIRA_STATUS_FILTERS, MAX_JIRA_STATUS_NAME_LENGTH } from '../jira/jira-quick-filters'
 
 const JiraStatuses = z
   .array(

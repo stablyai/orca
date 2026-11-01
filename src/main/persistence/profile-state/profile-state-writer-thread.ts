@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads'
 
-/** Owns one writer thread's lifetime so recovery can prove it exited before replacing it. */
+/** Recovery must observe thread exit before replacing its owner. */
 export class ProfileStateWriterThread {
   private readonly worker: Worker
   private readonly exit = Promise.withResolvers<void>()

@@ -32,7 +32,6 @@ export function findNewestCodexStateDbPath(codexHomePath: string): string | null
   return newest ? join(codexHomePath, newest.name) : null
 }
 
-/** Reads Codex-owned backfill metadata without creating or mutating its database. */
 export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStateDbBackfillStatus {
   const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
   if (!stateDbPath) {
@@ -71,10 +70,7 @@ export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStat
   }
 }
 
-/**
- * Lower-cased thread ids already in Codex's state DB, or null when the DB is
- * missing or unreadable. Read-only; never creates or mutates Codex's database.
- */
+/** Null means the database is absent or unreadable. */
 export function readIndexedCodexThreadIds(codexHomePath: string): Set<string> | null {
   const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
   if (!stateDbPath) {
@@ -118,7 +114,6 @@ export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number):
         pendingDirectories.push(join(directory, entry.name))
       } else if (
         entry.isFile() &&
-        // Why: Codex's startup backfill parses compressed rollouts too.
         (entry.name.endsWith('.jsonl') || entry.name.endsWith('.jsonl.zst'))
       ) {
         count += 1
@@ -135,7 +130,6 @@ export const BACKFILL_PENDING_MIN_SESSION_FILES = 100
 
 export type CodexStateDbBackfillPendingState = 'pending' | 'not-pending' | 'unreadable'
 
-/** `unreadable` means the index could not be read, so the caller picks its own safe side. */
 export function readCodexStateDbBackfillPendingState(
   codexHomePath: string
 ): CodexStateDbBackfillPendingState {

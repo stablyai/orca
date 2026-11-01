@@ -39,7 +39,7 @@ function matcherPatternForEvent(
   }
 }
 
-// Why: Codex hashes the normalized timeout; Interrupt defaults to 1s and clamps to 3s (discovery.rs normalize_command_hook).
+// Match discovery.rs normalize_command_hook because Codex hashes the normalized timeout.
 export function normalizeCodexHookTimeoutSec(
   eventLabel: CodexEventLabel,
   timeoutSec: number | undefined
@@ -80,13 +80,13 @@ export function getExplicitHomeCodexHookSourcePath(sourcePath: string): string {
   if (process.platform !== 'win32' && isUnambiguousWindowsPath(sourcePath)) {
     return normalizeCodexTrustSourcePath(sourcePath)
   }
-  // Why: hook discovery resolves the explicit home but keeps the hooks.json leaf logical.
+  // Match discovery: resolve the home while keeping the hooks.json leaf logical.
   return normalizeCodexTrustSourcePath(
     join(resolveThroughExistingAncestor(dirname(sourcePath)), basename(sourcePath))
   )
 }
 
-// Why the nearest existing ancestor: a home not created yet still sits under a resolved HOME.
+// Resolve ancestor symlinks even when the home does not exist yet.
 function resolveThroughExistingAncestor(path: string): string {
   const missing: string[] = []
   let current = path

@@ -16,11 +16,11 @@ describe('withSelectedTabs', () => {
 
   it('keeps a selection the move did not touch', () => {
     const before = [
-      { id: 'g1', activeTabId: 'a', tabOrder: ['a', 'b'] },
+      { id: 'g1', activeTabId: 'a', tabOrder: ['d', 'a', 'b'] },
       { id: 'g2', activeTabId: 'c', tabOrder: ['c'] }
     ]
     const after = [
-      { id: 'g1', tabOrder: ['a'] },
+      { id: 'g1', tabOrder: ['d', 'a'] },
       { id: 'g2', tabOrder: ['b', 'c'] }
     ]
     expect(withSelectedTabs(before, after, 'b').map((group) => group.activeTabId)).toEqual([

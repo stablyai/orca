@@ -8,11 +8,11 @@ import { findEnvironmentByName } from './host-selector-alternatives'
 
 export type OmittedHostScopeSelector = {
   hostId: ExecutionHostId
-  /** The flag that routes a follow-up query to this host, or null when it names nothing here. */
+  /** null means this machine has no selector for the omitted host. */
   selector: string | null
 }
 
-/** A host scope annotated on this machine. The runtime never sends `omittedHostSelectors`. */
+/** omittedHostSelectors is added locally, never sent by the runtime. */
 export type ListingHostScopeWithSelectors = RuntimeListingHostScope & {
   omittedHostSelectors?: OmittedHostScopeSelector[]
 }
@@ -21,23 +21,7 @@ export type WithAnnotatedHostScope<TResult> = Omit<TResult, 'hostScope'> & {
   hostScope?: ListingHostScopeWithSelectors
 }
 
-/**
- * Resolves how to reach each host a listing did not cover.
- *
- * `hostScope` is the documented way to complete a partial listing, but `omittedHostIds` is built
- * from the runtime's own bookkeeping — repos, folder workspaces, and workspace sessions — so it
- * names `runtime:` ids for servers that are no longer paired. An agent looping over the list to
- * finish the job hard-errors on those.
- *
- * The ids are kept rather than filtered: dropping one would shrink what the listing admits it did
- * not cover, and `docs/reference/ssh-execution-boundary.md` requires a listing to name its gaps.
- * A `null` selector marks the ones this machine cannot name, which is the part a caller needs.
- * Only the local pairing store is consulted, so this answers "can I select it", never "is it up" —
- * no host is claimed live or exited on this path.
- *
- * `local` and `ssh:` hosts get no selector: the listing commands take no `--host` (#29901), and
- * the runtime that answered is the one that reaches them, so no flag would route elsewhere.
- */
+// Preserve unreachable hosts as coverage gaps; pairing proves selectability, not liveness.
 export async function resolveOmittedHostScopeSelectors(
   omittedHostIds: readonly ExecutionHostId[]
 ): Promise<OmittedHostScopeSelector[]> {
@@ -73,10 +57,11 @@ function resolveSelector(
     const environment = findEnvironmentByName(environments, host.environmentId)
     return environment ? `--environment ${environment.name}` : null
   }
+  // Listings take no --host flag; local and SSH hosts are reached through the answering runtime.
   return null
 }
 
-/** Renders a scope line; an absent scope means the host never reported one, not full coverage. */
+/** An absent scope means coverage is unknown. */
 export function formatListingHostScope(scope: ListingHostScopeWithSelectors | undefined): string {
   if (!scope) {
     return 'scope: unverifiable — this host does not report which hosts it lists'
@@ -104,7 +89,6 @@ export function formatListingHostScope(scope: ListingHostScopeWithSelectors | un
   return `scope: ${covered} — not covered: ${omitted.join(', ')}`
 }
 
-/** Attaches the resolved selectors in place; a listing with no omitted hosts pays nothing. */
 export async function annotateOmittedHostScope(result: {
   hostScope?: ListingHostScopeWithSelectors
 }): Promise<void> {

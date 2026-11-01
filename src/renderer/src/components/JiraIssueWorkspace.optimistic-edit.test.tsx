@@ -16,7 +16,7 @@ import {
 } from './__mocks__/jira-issue-workspace-edit-fixture'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraMutationResult } from '../../../shared/jira-types'
+import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { getDefaultSettings } from '../../../shared/constants'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
@@ -193,8 +193,7 @@ describe('JiraIssueWorkspace optimistic edits', () => {
   })
 
   it('offers the new status transitions after a status change', async () => {
-    // Why: Jira only allows transitions out of the current status, so the menu
-    // must be reloaded once the issue has moved.
+    // Reload transitions after a status change; Jira accepts only current-state transitions.
     const inProgress = {
       id: '3',
       name: 'In Progress',
@@ -249,8 +248,7 @@ describe('JiraIssueWorkspace optimistic edits', () => {
   ] as const)(
     'stays on the newly opened issue when a save for the previous one %s',
     async (_, outcome) => {
-      // Why: the task page keeps one workspace instance across selections, so a
-      // save that finishes after switching must not write the old issue back.
+      // The task page reuses this instance; a late save must not restore a previously selected issue.
       const update = deferred<typeof outcome>()
       runtimeMocks.jiraUpdateIssueForTarget.mockReturnValue(update.promise)
       runtimeMocks.jiraGetIssueForTarget.mockImplementation(

@@ -1,6 +1,6 @@
 import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
 import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { isPaneColumnSplitDropNoOp } from '../../store/slices/pane-column-split-drop-no-op'
+import { isPaneColumnSplitDropNoOp } from '../../../../shared/workspace-layout/pane-column-split-drop-no-op'
 import {
   resolvePaneColumnEdgeZone,
   TAB_GROUP_TAB_STRIP_HEIGHT_PX,
@@ -12,6 +12,10 @@ import {
   isTabDragData,
   type TabDragItemData
 } from './tab-drag-data'
+import {
+  isDesktopCreatedTabInFrameDrawnServerWorkspace,
+  serverTabCount
+} from '@/lib/frame-drawn-desktop-created-tabs'
 
 export type TabGroupPanelGeometryEntry = {
   groupId: string
@@ -146,12 +150,15 @@ export function resolvePanelEdgePaneColumnSplit({
   panelRect?: DOMRect | null
   bodyRect?: DOMRect | null
 }): PaneColumnSplitTarget | null {
+  // A tab this desktop created has no place of its own in the server's groups: no split.
+  if (isDesktopCreatedTabInFrameDrawnServerWorkspace(worktreeId, activeDrag.unifiedTabId)) {
+    return null
+  }
   const panelRect = providedPanelRect ?? getTabGroupPanelRect(targetGroupId, worktreeId)
   if (!panelRect) {
     return null
   }
-  // Why: dnd-kit can keep a closest-center `over` target after the pointer
-  // leaves the pane; edge splits must only resolve inside the actual panel.
+  // Require the pointer inside the panel because dnd-kit can retain a closest-center target after exit.
   if (
     pointer.x < panelRect.left ||
     pointer.x > panelRect.left + panelRect.width ||
@@ -179,7 +186,7 @@ export function resolvePanelEdgePaneColumnSplit({
       sourceGroupId: activeDrag.groupId,
       targetGroupId,
       splitDirection: zone,
-      sourceTabCount: sourceGroup?.tabOrder.length ?? 0,
+      sourceTabCount: serverTabCount(worktreeId, sourceGroup?.tabOrder ?? []),
       layout: layoutByWorktree[worktreeId]
     })
   ) {
@@ -230,9 +237,7 @@ export function resolveActivePaneColumnSplitTarget({
   const panelHit = findTabGroupPanelUnderPointer(worktreeId, pointer, { geometry })
 
   if (isTabDragData(overData)) {
-    // Why: tab-strip drags target reorder/insertion slots. Split creation stays
-    // on pane/body edges so hovering over a tab never surprises the user with a
-    // new split.
+    // Reserve tab-strip hovers for insertion/reordering; create splits only on pane-body edges.
     if (!panelHit || pointer.y < panelHit.panelRect.top + TAB_GROUP_TAB_STRIP_HEIGHT_PX) {
       return null
     }

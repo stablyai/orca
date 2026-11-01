@@ -10,11 +10,4 @@ export type {
   AgentBrowserBridgeOptions
 } from './agent-browser-bridge-types'
 
-/**
- * Routes automation commands to the browser guest registered for the selected tab.
- *
- * The implementation is layered by responsibility (tab targeting, command queue,
- * session lifecycle, and command families) so each layer stays independently
- * reviewable while preserving this public facade.
- */
 export class AgentBrowserBridge extends AgentBrowserBridgeStateCommands {}

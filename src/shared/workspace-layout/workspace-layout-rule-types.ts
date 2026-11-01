@@ -2,7 +2,6 @@ import type { TerminalLeafOwner } from './terminal-owner-invariants'
 import type { ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 
-/** A pane as the pane rules see it, from the disk format or the model. */
 export type PaneOwner = Pick<
   TerminalLeafOwner,
   'hostId' | 'worktreeId' | 'leafId' | 'ptyId' | 'incarnationId'

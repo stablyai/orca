@@ -10,12 +10,15 @@ import { translate } from '@/i18n/i18n'
 
 function statusLabel(entry: PendingWorktreeCreation): string {
   if (entry.status === 'error') {
-    return entry.error ?? 'Creation failed'
+    return (
+      entry.error ??
+      translate('auto.components.sidebar.PendingWorktreeRow.creationFailed', 'Creation failed')
+    )
   }
   return getCreationProgressLabel(entry)
 }
 
-/** A create this host runs that the window holds no request for: a phone's, the CLI's. */
+/** Host-owned creation with no request in this window, such as a phone or CLI creation. */
 function HostCreationRow({ repoName }: { repoName: string | null }): React.JSX.Element {
   return (
     <div className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5">
@@ -35,11 +38,6 @@ function HostCreationRow({ repoName }: { repoName: string | null }): React.JSX.E
   )
 }
 
-/**
- * Sidebar row for an in-progress (or failed) worktree create. Rendered inline in
- * the worktree list under its target repo, so the new workspace appears where it
- * will land. Self-contained: reads its own entry + active state by creationId.
- */
 export function PendingWorktreeRow({
   creationId,
   repoName
@@ -65,8 +63,7 @@ export function PendingWorktreeRow({
     >
       <button
         type="button"
-        // Why: never route this through setActiveWorktree — there is no real
-        // worktree yet. activePendingCreationId drives the content loader instead.
+        // No real worktree exists yet; pending-creation activation owns the content loader.
         onClick={() => {
           const store = useAppStore.getState()
           store.setActivePendingWorktreeCreation(creationId)

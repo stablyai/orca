@@ -45,6 +45,8 @@ export function withRuntimeStatusOwners<T extends Record<string, Mock>>(transpor
       }
       return owner
     },
+    getRuntimeEnvironmentStatusSnapshot: (environmentId: string) =>
+      owners.get(environmentId)?.read() ?? null,
     getRuntimeEnvironmentStatusSnapshots: () => [...owners.values()].map((owner) => owner.read()),
     resetRuntimeEnvironmentStatusOwners: () => {
       owners.forEach((owner) => owner.dispose())
@@ -70,7 +72,6 @@ export function pairingCode(
   })
 }
 
-/** Resolves the `ipcMain.handle` callback a suite registered for `channel`. */
 export function channelHandlerLookup(handleMock: Mock) {
   return function handler<TArgs, TResult>(
     channel: string

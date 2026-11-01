@@ -1,5 +1,5 @@
 import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
 import { fakeSearchService } from '../../shared/ai-vault-search-test-fixture'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 describe('every search entry point carries the scope identity through', () => {
-  it('resolves over the in-process IPC entry point', async () => {
+  it('resolves a direct registry call using the IPC transport policy', async () => {
     const service = fakeSearchService()
     setSessionSearchService(service)
     installSessionSearchScopeCatalogSource(() => CATALOG)
@@ -63,11 +63,15 @@ describe('the shared remote client', () => {
     const service = fakeSearchService()
     setSessionSearchService(service)
     installSessionSearchScopeCatalogSource(() => CATALOG)
-    const client = createSessionSearchClient(
-      (_method, params) => searchSessionService(params, 'relay'),
-      'relay'
+    const call = vi.fn((_method: string, params: Record<string, unknown>) =>
+      searchSessionService(params, 'relay')
     )
+    const client = createSessionSearchClient(call, 'relay')
     await client.searchSessions({ query: 'needle', within: WITHIN })
+    expect(call).toHaveBeenCalledExactlyOnceWith(
+      'aiVault.searchSessions',
+      expect.objectContaining({ query: 'needle', within: WITHIN })
+    )
     expect(service.search).toHaveBeenCalledWith(expect.anything(), {
       kind: 'resolved',
       paths: ['/work/app']

@@ -8,7 +8,7 @@ const STOP_DICTATION_TIMEOUT_MS = 60_000
 export async function stopSttDictation(
   state: SttSessionState,
   owner = 'desktop',
-  options: { cancelStarting?: boolean } = { cancelStarting: true }
+  options: { cancelStarting?: boolean; discard?: boolean } = { cancelStarting: true }
 ): Promise<void> {
   if (options.cancelStarting !== false && state.startingOwner === owner) {
     state.canceledOwners.add(owner)
@@ -22,31 +22,48 @@ export async function stopSttDictation(
   }
 
   if (state.cloudSession) {
-    state.stopping = true
-    try {
-      const session = state.cloudSession
+    const session = state.cloudSession
+    const clearSession = (): void => {
       state.cloudSession = null
-      try {
-        const text = await session.finish()
-        if (text) {
-          state.eventSink?.({ type: 'final', text })
-        }
-      } catch (error) {
-        state.eventSink?.({
-          type: 'error',
-          error: error instanceof Error ? error.message : String(error)
-        })
-      } finally {
-        state.eventSink?.({ type: 'stopped' })
-        state.activeModelId = null
-        state.activeHotwordsFilePath = undefined
-        state.activeOwner = null
-        state.eventSink = null
-      }
-    } finally {
+      state.cloudStopInFlight = null
+      state.activeModelId = null
+      state.activeHotwordsFilePath = undefined
+      state.activeOwner = null
+      state.eventSink = null
       state.stopping = false
     }
-    return
+    if (options.discard) {
+      session.cancel()
+      clearSession()
+      return
+    }
+    if (state.cloudStopInFlight?.session === session) {
+      return state.cloudStopInFlight.promise
+    }
+    const capturedSink = state.eventSink
+    state.stopping = true
+    const stopPromise = (async (): Promise<void> => {
+      try {
+        const text = await session.finish()
+        if (state.cloudSession === session && text) {
+          capturedSink?.({ type: 'final', text })
+        }
+      } catch (error) {
+        if (state.cloudSession === session) {
+          capturedSink?.({
+            type: 'error',
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
+      } finally {
+        if (state.cloudSession === session) {
+          clearSession()
+          capturedSink?.({ type: 'stopped' })
+        }
+      }
+    })()
+    state.cloudStopInFlight = { session, promise: stopPromise }
+    return stopPromise
   }
 
   const worker = state.worker
@@ -75,7 +92,7 @@ export async function stopSttDictation(
   state.stopInFlight = { worker, owner, promise: stopPromise }
   state.stopping = true
   try {
-    worker.postMessage({ type: 'stop' })
+    worker.postMessage({ type: options.discard ? 'discard' : 'stop' })
     await stopPromise
   } finally {
     state.stopping = false

@@ -67,11 +67,7 @@ describe('tokenizeStartupCommand spans (windows shells)', () => {
 
 describe('one Unix startup dialect', () => {
   it('clears variables with a self-contained branch, not a per-shell builtin', () => {
-    // Why not `unset`/`set -e` alone, and why not a wrapper-defined helper:
-    // Orca only wraps zsh/bash/fish, so an `sh`/`dash`/`ksh` login shell — and
-    // any shell the user pastes copied text into — would not have the helper.
-    // startup-shell-portability.live-shell.test.ts proves this form works in
-    // real sh/bash/zsh/dash/ksh/fish.
+    // Commands can land in unwrapped sh/dash/ksh or pasted shells; no wrapper helper or single fish/sh builtin works everywhere.
     expect(clearEnvCommand('CODEX_HOME', 'posix')).toBe(
       `command test -n "$fish_pid" && set --erase -g CODEX_HOME; command test -z "$fish_pid" && unset CODEX_HOME; true`
     )
@@ -93,17 +89,13 @@ describe('one Unix startup dialect', () => {
     '$FOO',
     'PATH\nHOME'
   ])('refuses %j as an environment variable name', (bad) => {
-    // Why: the name is interpolated straight into a shell line. Anything but an
-    // identifier is a command injection, and in fish `set --erase -g` would
-    // really delete whatever it names — PATH or HOME included.
+    // Interpolated names must be identifiers; shell syntax would inject commands and fish erase could delete session variables.
     expect(() => clearEnvCommand(bad, 'posix')).toThrow(/not an environment variable name/)
     expect(() => clearEnvCommand(['OK', bad], 'posix')).toThrow(/not an environment variable name/)
   })
 
   it('quotes so fish reads back the same bytes sh does', () => {
-    // fish single quotes are NOT literal — `\\` and `\'` are escapes inside them —
-    // so the sh `'\''` idiom would halve these backslashes when fish read them,
-    // and a trailing backslash would be a hard syntax error.
+    // Fish single quotes interpret backslash/apostrophe escapes; plain sh quoting would alter backslashes or fail at a trailing one.
     expect(quoteStartupArg("it's", 'posix')).toBe(`'it'"'"'s'`)
     expect(quoteStartupArg(String.raw`\\server\share`, 'posix')).toBe(
       `"\\\\""\\\\"'server'"\\\\"'share'`

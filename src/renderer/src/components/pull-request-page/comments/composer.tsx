@@ -17,6 +17,7 @@ import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function GHCommentComposer({
   className,
@@ -88,7 +89,7 @@ export function GHCommentComposer({
         onCommentAdded(result.comment)
       } else {
         toast.error(
-          result.error ??
+          codeHostErrorText(result) ??
             translate('auto.components.PullRequestPage.1208347ac0', 'Failed to add comment')
         )
       }

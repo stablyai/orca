@@ -1,14 +1,4 @@
-/**
- * #30329 / #30386 live check: pane names between a desktop host and a paired desktop client.
- *
- * Topology: Orca desktop host (its own window owns the layout) + a separate paired Orca
- * desktop client, both hidden. Before the fix, the host ignored the client's pane rename, and
- * the client's open pane never showed a name the host set after it opened.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/paired-pane-title-desktop-host.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// #30329/#30386: with two hidden desktops, client pane rename must reach host layout authority and later host rename must reach the already-open client pane.
 import type { Page } from '@stablyai/playwright-test'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,

@@ -53,7 +53,6 @@ import type {
 import { RevisionedMap } from './revisioned-map'
 import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 
-/** Shared mutable state for the layered hook-server implementation. */
 export abstract class AgentHookServerState {
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
     return canAdmitLegacyAgentStatusEntry(
@@ -64,8 +63,7 @@ export abstract class AgentHookServerState {
     )
   }
 
-  // Why: the epoch is minted on first canonical use, so constructing the server — which happens at
-  // import time for the module singleton — owes nothing to a live crypto implementation.
+  // Lazy initialization avoids needing live crypto when the singleton module is imported.
   private canonicalStatusStoreInstance: AgentStatusStore | null = null
   protected get canonicalStatusStore(): AgentStatusStore {
     this.canonicalStatusStoreInstance ??= createAgentStatusStore({
@@ -75,10 +73,10 @@ export abstract class AgentHookServerState {
     return this.canonicalStatusStoreInstance
   }
   protected readonly canonicalListingOrder = new Map<string, number>()
-  /** When this host proved a pane's agent process ended; outlives the row the exit reconciles. */
+  /** Proven exits outlive the rows they reconcile. */
   protected readonly agentExitedAtByPaneKey = new Map<string, AgentExitEvidence>()
 
-  /** A new agent (or a new worker attach) claimed the pane; the previous exit no longer describes it. */
+  /** A successor or worker attach invalidates the old agent's exit. */
   forgetAgentExit(paneKey: string): void {
     const forgotten = forgetAgentExit(this.agentExitedAtByPaneKey, paneKey)
     if (
@@ -100,7 +98,7 @@ export abstract class AgentHookServerState {
   protected server: ReturnType<typeof createServer> | null = null
   protected port = 0
   protected token = ''
-  // Why: identifies this Orca instance so the server can detect dev vs. prod cross-talk; set at start() from packaged-build knowledge.
+  // Detect cross-talk between dev and packaged hook endpoints.
   protected env = 'production'
   protected onAgentStatus: ServerAgentStatusListener = null
   protected onClaudeStatusLine: ServerStatusLineListener = null
@@ -117,18 +115,14 @@ export abstract class AgentHookServerState {
   protected statusRowMutationListeners = new Set<StatusRowMutationListener>()
   // Hydration and spool replay belong to the owner lifetime, not each transport bind attempt.
   protected ownerStateInitialized = false
-  // Runtime terminal handles are stable across pane remints, unlike tab/leaf keys. This index is
-  // deliberately in-memory only and contains no rows of its own.
+  // Runtime handles survive pane remints; this in-memory index owns no rows.
   protected paneKeyByTerminalHandle = new Map<string, string>()
-  // Why: setListener is a single slot owned by the main-window fanout; the
-  // plugin event bus (and future consumers) need an additive subscription
-  // that also works in headless serve, where no window listener exists.
+  // Additive subscribers survive window teardown and work under headless serve.
   protected enrichedStatusListeners = new Set<(payload: EnrichedAgentHookEventPayload) => void>()
-  // Why: set via start()'s userDataPath so the class has no direct Electron dependency (mockable in vitest node env).
+  // start() supplies paths so the hook server has no Electron dependency.
   protected endpointDir: string | null = null
   protected endpointFilePathCache: string | null = null
   protected endpointFileWritten = false
-  // Why: per-instance (not module-level) so tests can spin up multiple servers without state cross-contamination.
   protected state: HookListenerState = createHookListenerState({
     nextListingOrder: this.nextStatusListingOrder,
     isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey)
@@ -141,11 +135,10 @@ export abstract class AgentHookServerState {
       this.onTransportInterference?.(report)
     }
   )
-  // Why: hydrated rows give UI continuity but aren't evidence of live agent work in this runtime.
+  // Hydrated work is UI continuity, not current-runtime liveness evidence.
   protected runtimeObservedStatusPaneKeys = new Set<string>()
   protected hydratedAuthorityCommitments: readonly AgentHookAuthorityEvidence[] = Object.freeze([])
-  // Why: revisioned so a persisted-authority change can bypass the write throttle (spool replay and
-  // restored-terminal attestation read these after a crash).
+  // Authority revisions bypass throttling to preserve replay fencing after a crash.
   protected hydratedLaunchTokenHashByPaneKey = new RevisionedMap<string, string>()
   protected persistedAuthorityCommitmentsByPaneKey = new RevisionedMap<
     string,
@@ -154,14 +147,11 @@ export abstract class AgentHookServerState {
   protected revokedHydratedAuthorityCommitments = new WeakSet<AgentHookAuthorityEvidence>()
   protected currentAuthorityObservations = new Map<string, AgentHookAuthorityEvidence>()
   protected legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
-  // Why: indexed by every key the retirement fenced, so a re-attach on any of them
-  // (owner, physical, or a deleted alias) finds the same record. Bounded like the maps
-  // it mirrors; an evicted record simply degrades to lifting the key it was handed.
+  // Index every retired alias so reattachment finds the full fence; eviction falls back to single-key lifting.
   protected retiredPaneFencesByKey = new Map<string, RetiredPaneFence>()
   protected paneKeyAliasPersistenceListener: PaneKeyAliasPersistenceListener | null = null
-  // Why: on-disk last-status cache path; null without a userDataPath (tests), where persistence is a no-op and only in-memory replay applies.
+  // Without userDataPath, persistence is disabled and replay remains in memory.
   protected lastStatusFilePath: string | null = null
-  // Why: leading-edge throttle timer, per-instance so test servers in one process don't share state.
   protected statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   protected statusPersistDueAt = 0
   protected lastStatusPersistStartedAt = Number.NEGATIVE_INFINITY
@@ -177,12 +167,9 @@ export abstract class AgentHookServerState {
     { hash: string; allowRetainedOwner?: true }
   >()
   protected connectionTimestampWatermarkById = new Map<string, number>()
-  // Why: survives the row itself. A transport clear deletes the pane's status row on purpose
-  // (absence, not completion), but the *age* of the evidence a later replay restates is not a
-  // claim about the pane and must not be lost with it. Bounded like its sibling maps.
+  // Transport clears remove rows, but replay must retain evidence age rather than renew it.
   protected evidenceObservedAtByPaneKey = new Map<string, number>()
-  // Why: main is the pane authority for local/WSL/SSH panes — hook HTTP, relay, and its own
-  // OSC parse all converge on applyNormalizedStatus, so one sequencer covers every ingress here.
+  // Main sequences HTTP, relay and OSC observations for local, WSL and SSH panes.
   protected readonly observations = new AgentStatusObservationSequencer(
     createAgentStatusAuthorityId('main-agent-hooks')
   )

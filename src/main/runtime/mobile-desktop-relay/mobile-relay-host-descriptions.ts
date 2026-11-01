@@ -17,7 +17,6 @@ export type DescribedRelayHost = MobileRelayHost & {
   identity: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
 }
 
-/** The configured servers the desktop shows, with health from its own status (the sidebar's mapping). */
 export function describeRelayHosts(
   hosts: Pick<MobileDesktopRelayHosts, 'list'>,
   hostLabelOverrides: ReadonlyMap<ExecutionHostId, string> = new Map()
@@ -39,7 +38,9 @@ export function describeRelayHosts(
         identity: { pairingRevision: identity.pairingRevision, runtimeId: identity.runtimeId },
         label: host.label,
         health: host.health,
-        relay: relayVerdict(host.health, answer)
+        relay: relayVerdict(host.health, answer),
+        ...(identity.stoppedOnDesktop ? { stoppedOnDesktop: true as const } : {}),
+        ...(identity.unavailableOnDesktop ? { unavailableOnDesktop: true as const } : {})
       }
     ]
   })
@@ -56,7 +57,7 @@ function relayVerdict(
   if (!answer) {
     return 'unavailable'
   }
-  // Why: a build's capabilities do not expire, so an old server stays update-needed while offline.
+  // Build capabilities remain valid offline; old servers still need an update.
   if (!(answer.capabilities ?? []).includes(DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY)) {
     return 'update-needed'
   }

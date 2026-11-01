@@ -11,7 +11,7 @@ function nameEmptyLayoutRoot(
   if (layout.root) {
     return layout
   }
-  // Same pane the window would mount, so a binding keeps its leaf; else the id phones already use.
+  // Preserve bound leaf identity, otherwise use the deterministic ID mobile clients already know.
   const leafId =
     resolveRootlessTerminalLayoutLeafId(layout) ?? deriveHeadlessLegacyTerminalLeafId(tabId)
   return { ...layout, root: { type: 'leaf', leafId }, activeLeafId: leafId, expandedLeafId: null }
@@ -30,11 +30,7 @@ function nameEmptyLayoutRootsInSession(session: WorkspaceSessionState): Workspac
   }
 }
 
-/**
- * Load-only repair. Sessions saved before tabs named their first pane can hold an empty layout
- * root; a later window save of that unmounted tab would drop a binding main made meanwhile.
- * Naming the pane once here means no save ever carries an empty root.
- */
+/** Name legacy empty roots at load so later window saves cannot drop intervening main-owned bindings. */
 export function nameEmptyPersistedTerminalLayoutRoots(state: PersistedState): PersistedState {
   const workspaceSession = nameEmptyLayoutRootsInSession(state.workspaceSession)
   const hostSessions = state.workspaceSessionsByHostId

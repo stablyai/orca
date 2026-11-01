@@ -100,8 +100,7 @@ export function makeFacets(input: FacetFixtureInput = {}): WorkspaceCleanupFacet
       input.agentStatus === undefined ? new Map() : new Map([[id, input.agentStatus]]),
     reviewInfoByWorktreeId:
       input.review === undefined ? new Map() : new Map([[id, makeReviewInfo(input.review)]]),
-    // Keyed the way the store writes dismissals: host-qualified identity, not a
-    // bare id — a bare-id fixture here would pass while production never matched.
+    // Use production’s host-qualified dismissal keys; bare-ID fixtures hide failed matching.
     dismissedIdentities: new Set(
       input.dismissed ? [getWorkspaceCleanupCandidateIdentity(candidate)] : []
     )

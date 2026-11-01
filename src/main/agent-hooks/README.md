@@ -13,7 +13,8 @@ status store.
 - hooks turned off,
 - hooks not installed (a fresh SSH host, an agent run by hand),
 - programs with no integration at all,
-- hooks that went silent for 2 minutes on a state the program has since left.
+- hooks that went silent for 2 minutes on a state the program has since left. A finished turn is
+  silent by design, so only new work takes it; an approval reported after it rides the facet.
 
 The next hook event takes the pane back. The rule lives in
 `server/program-status/hook-precedence.ts`; the parser and the mapping live in

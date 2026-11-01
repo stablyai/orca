@@ -74,19 +74,19 @@ import {
   runGHEditLabelToggle,
   runGHEditStateChange
 } from '../../src/renderer/src/components/github-item-dialog/edit-item-fields/gh-edit-section-mutations'
-import { findTaskPageDialogWorkItem } from '../../src/renderer/src/components/task-page-cache-selectors'
-import { getTaskPageRepoSourceContext } from '../../src/renderer/src/components/task-page-source-context'
+import { findTaskPageDialogWorkItem } from '../../src/renderer/src/components/task-page/task-page-cache-selectors'
+import { getTaskPageRepoSourceContext } from '../../src/renderer/src/components/task-page/task-page-source-context'
 import { workItemsCacheKey } from '../../src/renderer/src/store/github/cache-identity'
 import { createTestStore } from '../../src/renderer/src/store/slices/github-slice-test-harness'
 import { getTaskSourceCacheScope } from '../../src/shared/task-source-context'
 import { listLabels, listAssignableUsers } from '../../src/main/github/issue-field-options'
 import { useRepoLabels, useRepoAssignees } from '../../src/renderer/src/hooks/useIssueMetadata'
 import { updateIssue } from '../../src/main/github/issue-update'
-import { materializeTaskPageItemList } from '../../src/renderer/src/components/task-page-github-work-item-mutations'
+import { materializeTaskPageItemList } from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-pages'
 import {
   resetTaskPageGitHubMutationRegistryForTests,
   setTaskPageGitHubMutationQueryKey
-} from '../../src/renderer/src/components/task-page-github-work-item-mutation-registry'
+} from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-registry'
 
 function renderEditSection(props: Parameters<typeof GHEditSection>[0]): void {
   renderToStaticMarkup(createElement(GHEditSection, props))

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readRuntimeJiraImage } from './runtime-jira-image-client'
-import { encodeJiraImageFrame } from '../../../shared/jira-image-stream-frame'
+import { encodeJiraImageFrame } from '../../../shared/jira/jira-image-stream-frame'
 
 type Callbacks = Parameters<typeof window.api.runtimeEnvironments.subscribe>[1]
 const subscribe = vi.fn()

@@ -190,8 +190,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   })
 
   it('keeps the client viewMode when an in-flight host snapshot echoes the old value', () => {
-    // Echo-window: client just toggled to chat; a host snapshot carrying the
-    // pre-toggle 'terminal' value must not revert it (mirrors color/pin rule).
+    // Pre-toggle host echo must not revert client chat mode, like color/pin.
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
     const existingTab: TerminalTab = {
       id: mirroredId,

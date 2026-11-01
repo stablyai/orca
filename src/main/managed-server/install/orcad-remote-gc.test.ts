@@ -35,20 +35,29 @@ const conn: OrcadHostTransport = Object.create(null)
 const host = getRemoteHostPlatform('linux-x64')
 const mockExec = vi.mocked(execCommand)
 
-/**
- * Drive one GC pass against a scripted host. `listing` is what the remote listing command
- * returns; every other command answers from `responses`, defaulting to the happy path
- * (unlocked, complete, dead) so a candidate is removed unless a test says otherwise.
- */
+/** Script a host whose default GC verdicts are unlocked, complete and dead unless overridden. */
 function scriptHost(options: {
   listing: string[]
   liveness?: Record<string, 'LIVE' | 'DEAD' | 'UNKNOWN' | Error>
   removed: string[]
-  /** The activation journal: absent by default, raw contents, or a read with no answer. */
+  /** Absent by default; raw journal or error overrides the read. */
   journal?: string | Error
   fenceHeld?: boolean
+  /** Builds staged within the keep window; undefined leaves the answer incomplete. */
+  recentlyStaged?: string[]
+  /** The host could not date some build. */
+  ageUnknown?: boolean
 }): void {
   mockExec.mockImplementation(async (_conn, command: string) => {
+    if (command.includes('ORCAD_RECENT_STAGED_DONE')) {
+      return options.recentlyStaged === undefined
+        ? ''
+        : [
+            ...options.recentlyStaged.map((name) => `RECENT ${name}`),
+            ...(options.ageUnknown ? ['ERR'] : []),
+            'ORCAD_RECENT_STAGED_DONE'
+          ].join('\n')
+    }
     if (command.includes('__ORCAD_RECORD_PRESENT__') && command.includes('transaction.json')) {
       if (options.journal instanceof Error) {
         throw options.journal
@@ -114,7 +123,7 @@ describe('orcad GC', () => {
   })
 
   it('leaves relay directories alone even when the host hands them to it', async () => {
-    // The host is lying — or a future listing bug widened the glob. GC must still refuse.
+    // Even a widened listing must not authorize removal of another model's namespace.
     const removed: string[] = []
     scriptHost({
       listing: ['relay-0.1.0+aa', 'relay-0.0.9+ff', 'orcad-0.1.0+aa'],
@@ -136,7 +145,7 @@ describe('orcad GC', () => {
       listing: ['orcad-0.1.0+01d', 'orcad-0.2.0+9ee0', 'orcad-0.3.0+cc0'],
       removed
     })
-    await gcOldOrcadVersions({
+    const clean = await gcOldOrcadVersions({
       conn,
       host,
       remoteHome: '/home/u',
@@ -148,6 +157,8 @@ describe('orcad GC', () => {
       }
     })
     expect(removed).toEqual(['orcad-0.1.0+01d'])
+    // Pinned versions are not stale, so the pass still counts as clean.
+    expect(clean).toBe(true)
   })
 
   it('never removes the version a live daemon was forked from', async () => {
@@ -171,7 +182,7 @@ describe('orcad GC', () => {
       liveness: { 'orcad-0.1.0+bb0': 'UNKNOWN', 'orcad-0.0.9+dead': 'DEAD' },
       removed
     })
-    await gcOldOrcadVersions({
+    const clean = await gcOldOrcadVersions({
       conn,
       host,
       remoteHome: '/home/u',
@@ -179,6 +190,8 @@ describe('orcad GC', () => {
       record: emptyOrcadActivationRecord()
     })
     expect(removed).toEqual(['orcad-0.0.9+dead'])
+    // A kept candidate must be retried by a later pass.
+    expect(clean).toBe(false)
   })
 
   it('stops before later versions when liveness probe termination is unconfirmed', async () => {
@@ -203,7 +216,6 @@ describe('orcad GC', () => {
     ).rejects.toBe(error)
 
     expect(removed).toEqual([])
-    // Journal read and fence probe, then the GC pass up to the unconfirmed probe.
     expect(mockExec).toHaveBeenCalledTimes(6)
     expect(mockExec.mock.calls.at(-1)?.[1]).toContain('.orcad-pid')
   })
@@ -245,6 +257,33 @@ describe('orcad GC', () => {
 
     await gcOldOrcadVersions({ ...options, nodeRuntimePins: ['a'.repeat(64)] })
     expect(inventories()).toBe(1)
+  })
+
+  it('keeps builds another desktop staged recently, and all of them when it cannot tell', async () => {
+    const args = {
+      conn,
+      host,
+      remoteHome: '/home/u',
+      currentDirAbsPath: '/home/u/.orca-remote/orcad-0.4.0+dd0',
+      record: { ...emptyOrcadActivationRecord(), active: '0.1.0+01d' },
+      keepStagedWithinDays: 3
+    }
+    const listing = ['orcad-0.1.0+01d', 'orcad-0.2.0+9ee0', 'orcad-0.3.0+cc0', 'orcad-0.4.0+dd0']
+    const removed: string[] = []
+    scriptHost({ listing, removed, recentlyStaged: ['orcad-0.3.0+cc0'] })
+    expect(await gcOldOrcadVersions(args)).toBe(false)
+    expect(removed).toEqual(['orcad-0.2.0+9ee0'])
+
+    const kept: string[] = []
+    scriptHost({ listing, removed: kept })
+    await gcOldOrcadVersions(args)
+    expect(kept).toEqual([])
+
+    // An undatable build may be another desktop's fresh candidate.
+    const undated: string[] = []
+    scriptHost({ listing, removed: undated, recentlyStaged: [], ageUnknown: true })
+    await gcOldOrcadVersions(args)
+    expect(undated).toEqual([])
   })
 
   describe('with an activation transaction in flight', () => {

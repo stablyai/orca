@@ -22,37 +22,28 @@ async function fixture() {
 it('previews historical test caches, Electron cleanup, and Vite caches', async () => {
   const options = { ...(await fixture()), testsStopped: true }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(4)
+  expect(options.execute).toHaveBeenCalledTimes(7)
   expect(options.execute.mock.calls.flatMap(([spec]) => spec.args)).not.toContain('--apply')
 })
 
 it('forwards apply and repository selection to all cleanup operations', async () => {
   const options = { ...(await fixture()), apply: true, testsStopped: true }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(4)
+  expect(options.execute).toHaveBeenCalledTimes(7)
   for (const [spec] of options.execute.mock.calls) {
     expect(spec.args).toContain('--apply')
     expect(spec.args).toContain(options.repoRoot)
     expect(spec.terminationBarrier).toBe(true)
   }
-  const cache = options.execute.mock.calls[0][0]
+  const cache = options.execute.mock.calls.at(-1)[0]
   expect(cache.args).toContain('--tests-stopped')
   expect(cache.args).toContain('--import')
-  for (const [spec] of options.execute.mock.calls.slice(1)) {
+  for (const [spec] of options.execute.mock.calls.slice(0, -1)) {
     expect(spec.args).not.toContain('--tests-stopped')
   }
 })
 
-it('applies Electron and Vite cleanup while retaining unacknowledged test caches', async () => {
-  const options = { ...(await fixture()), apply: true }
-  await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(3)
-  expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).not.toContain(
-    'reclaim-release-test-caches'
-  )
-})
-
-it('leaves historical caches out of automatic invocations', async () => {
+it('includes generated and historical test cache cleanup in automatic invocations without the stopped-test override', async () => {
   const options = {
     ...(await fixture()),
     automatic: true,
@@ -61,34 +52,51 @@ it('leaves historical caches out of automatic invocations', async () => {
     excludeWorktree: '/dev-worktree'
   }
   await reclaimWorktreeSpace(options)
-  expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).not.toContain(
-    'reclaim-release-test-caches'
-  )
-  for (const [spec] of options.execute.mock.calls) {
+  expect(options.execute).toHaveBeenCalledTimes(7)
+  const args = options.execute.mock.calls.flatMap(([spec]) => spec.args)
+  expect(args.join(' ')).toContain('reclaim-release-test-caches')
+  expect(args.join(' ')).toContain('reclaim-worktree-generated-files')
+  expect(args).not.toContain('--tests-stopped')
+  for (const [spec] of options.execute.mock.calls.slice(0, -1)) {
     expect(spec.args).toEqual(
       expect.arrayContaining(['--exclude-worktree', options.excludeWorktree])
     )
   }
 })
 
-it('forwards an age override only to historical test cache cleanup', async () => {
-  const options = { ...(await fixture()), releaseCacheMinAgeDays: 7, testsStopped: true }
+it('routes independent age overrides only to their cleanup operation', async () => {
+  const options = {
+    ...(await fixture()),
+    releaseCacheMinAgeDays: 7,
+    generatedMinAgeDays: 3,
+    testsStopped: true
+  }
   await reclaimWorktreeSpace(options)
-  expect(options.execute.mock.calls[0][0].args).toEqual(
+  expect(options.execute.mock.calls.at(-1)[0].args).toEqual(
     expect.arrayContaining(['--min-age-days', '7'])
   )
-  for (const [spec] of options.execute.mock.calls.slice(1)) {
+  for (const [spec] of options.execute.mock.calls.slice(0, -1)) {
     expect(spec.args).not.toContain('--min-age-days')
+  }
+  for (const [spec] of options.execute.mock.calls) {
+    if (spec.args.some((arg) => arg.endsWith('reclaim-worktree-generated-files.mjs'))) {
+      expect(spec.args).toEqual(expect.arrayContaining(['--generated-min-age-days', '3']))
+    } else {
+      expect(spec.args).not.toContain('--generated-min-age-days')
+    }
   }
 })
 
-it('rejects an invalid cache age before starting cleanup', async () => {
-  const options = { ...(await fixture()), releaseCacheMinAgeDays: -1 }
-  await expect(reclaimWorktreeSpace(options)).rejects.toThrow('--release-cache-min-age-days')
+it.each([
+  ['releaseCacheMinAgeDays', '--release-cache-min-age-days'],
+  ['generatedMinAgeDays', '--generated-min-age-days']
+])('rejects invalid %s before starting cleanup', async (key, flag) => {
+  const options = { ...(await fixture()), [key]: -1 }
+  await expect(reclaimWorktreeSpace(options)).rejects.toThrow(flag)
   expect(options.execute).not.toHaveBeenCalled()
 })
 
-it('runs the CLI outside the repository and retains historical caches until acknowledged', async () => {
+it("runs the CLI outside the repository and retains an active worktree's historical caches until tests are stopped", async () => {
   const options = await fixture()
   const init = await runProcess({
     program: 'git',
@@ -139,7 +147,7 @@ it('runs the CLI outside the repository and retains historical caches until ackn
   expect(await readFile(dependency, 'utf8')).toContain('cached')
   const safe = await run(['--apply'])
   expect(safe.code, safe.stderr).toBe(0)
-  expect(safe.stdout).toContain('Historical test caches retained')
+  expect(safe.stdout).toContain('retained caches in 1 active worktree(s)')
   expect(await readFile(marker, 'utf8')).toContain(commit)
   expect(safe.stdout).toContain('Removed 1 Vite cache(s)')
   await expect(readFile(dependency)).rejects.toMatchObject({ code: 'ENOENT' })
@@ -172,7 +180,7 @@ it('rejects competing sweeps and releases the lock after a failed operation', as
   await rejected
   options.execute.mockResolvedValue({ code: 0, timedOut: false })
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(5)
+  expect(options.execute).toHaveBeenCalledTimes(8)
 })
 
 it('preserves the cleanup failure and reports a concurrent lock release failure separately', async () => {
@@ -199,5 +207,5 @@ it('fails if cleanup succeeds but the repository lock cannot be released', async
   await expect(reclaimWorktreeSpace({ ...options, acquireLock: async () => release })).rejects.toBe(
     failure
   )
-  expect(options.execute).toHaveBeenCalledTimes(4)
+  expect(options.execute).toHaveBeenCalledTimes(7)
 })

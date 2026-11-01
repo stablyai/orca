@@ -1,8 +1,4 @@
-// Resolve an SFTP transfer path when the SSH shell and the SFTP subsystem expose
-// different absolute namespaces for the same directory (e.g. Synology DSM's
-// /var/services/homes/alice shell home vs. /homes/alice SFTP start directory).
-//
-// See: docs/ssh-relay-sftp-namespace.md
+// Map differing shell/SFTP namespaces, such as Synology /var/services/homes/alice vs /homes/alice. See docs/ssh-relay-sftp-namespace.md.
 
 import type { SFTPWrapper } from 'ssh2'
 import { assertSafeRemotePathSegment, isWindowsRemoteHost } from './ssh-remote-platform'
@@ -16,8 +12,7 @@ export type SftpNamespacePathMapping = {
   homeRelativeProbePath: string
 }
 
-// SSH_FX_NO_SUCH_FILE. The only status that definitively proves a path is absent;
-// permission denied, generic failure, and code-less errors are inconclusive.
+// Only SSH_FX_NO_SUCH_FILE proves absence; permission/generic/code-less failures stay unknown.
 const SFTP_STATUS_NO_SUCH_FILE = 2
 
 type MarkerProbe =
@@ -116,8 +111,7 @@ function realpathSftp(sftp: SFTPWrapper, remotePath: string): Promise<string> {
   })
 }
 
-// Why: namespace selection must never treat an inconclusive lstat as absence,
-// so the probe reports "unknown" rather than collapsing to a boolean.
+// Preserve unknown lstat results; uncertainty cannot authorize namespace redirect.
 function probeMarkerPath(sftp: SFTPWrapper, remotePath: string): Promise<MarkerProbe> {
   return new Promise((resolve) => {
     sftp.lstat(remotePath, (err) => {
@@ -145,13 +139,7 @@ function logRetainedShellPath(operation: string, detail: string, shellAbsolutePa
   )
 }
 
-/**
- * Pick the path this SFTP session should transfer to.
- *
- * Returns `shellAbsolutePath` unless the session both fails to see the install
- * owner's marker there and does see it under its own start directory. Discovery
- * failures degrade to the shell path rather than inventing a namespace error.
- */
+/** Redirect only when the owner marker is proven absent at the shell path and present under SFTP start. Uncertain discovery keeps the original path. */
 export async function resolveSftpTransferPath(
   sftp: SFTPWrapper,
   shellAbsolutePath: string,
@@ -215,11 +203,7 @@ type SftpTransferPathOptions = {
   sftpNamespace?: SftpNamespacePathMapping
 }
 
-/**
- * Namespace-resolve a transfer path only when a mapping was supplied and the host
- * is not Windows, whose SFTP drive paths (`/C:/Users/...`) break the POSIX prefix
- * contract. Callers without a mapping issue no REALPATH or LSTAT.
- */
+/** Map only explicitly supplied POSIX namespaces; Windows /C:/ drive paths violate prefix rules. Unmapped calls issue no discovery requests. */
 export function resolveSftpTransferPathIfMapped(
   sftp: SFTPWrapper,
   shellAbsolutePath: string,

@@ -60,8 +60,6 @@ describe('a cwd scope is the sidebar key, or anything below it', () => {
     ['/work/a_b/src', '/work/a_b', true],
     ['/work/axb/src', '/work/a_b', false],
     ['/work/lone\ud800/src', '/work/lone\ud800', true],
-    // Roots: `/` is the one key that is already a separator, which is where a
-    // range bound is easiest to get wrong. A Windows key is not under POSIX `/`.
     ['/', '/', true],
     ['/work/app', '/', true],
     ['C:\\Work\\App', '/', false],
@@ -81,8 +79,6 @@ describe('a cwd scope is the sidebar key, or anything below it', () => {
   })
 
   it('narrows to nothing when no scope the caller gave could be keyed', async () => {
-    // `cwdKey` returns null for a scope it cannot key, and a scope that matches
-    // nothing must return nothing; dropping it would answer the whole index.
     const db = await openIndex()
     addSession(db, 1, '/work/app')
     addSession(db, 2, '/elsewhere')
@@ -91,9 +87,6 @@ describe('a cwd scope is the sidebar key, or anything below it', () => {
   })
 
   it('keeps a WSL UNC workspace distinct from the bare Linux spelling', async () => {
-    // PR 2 decided cwd_key does not qualify a Linux path with its distro: the
-    // collision is real but every SSH host has it too, and the fix is a column
-    // naming the execution host, not a key only some hosts spell differently.
     const db = await openIndex()
     addSession(db, 1, '\\\\wsl.localhost\\Ubuntu\\home\\ada\\app')
     addSession(db, 2, '/home/ada/app')

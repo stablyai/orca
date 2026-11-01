@@ -81,8 +81,7 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
       terminalProvenance === 'current_runtime' &&
       claimedPaneKey === terminal.paneKey
     ) {
-      // Why: the checks above bind a fresh launch to its live PTY, host, and
-      // launch secret. Only an exact live-pane match may skip hook attestation.
+      // Only an exact live-pane match may skip hook attestation after PTY, host and launch-secret checks.
       return this.freezeOrchestrationCompatibilityCallerAuthority(
         terminal,
         terminal.processIncarnation,
@@ -190,7 +189,7 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
     terminalHandle: string,
     incarnationId: string
   ): void {
-    const paneKey = pty.paneKey
+    const { paneKey } = this.paneOfPty(pty)
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (!paneKey || !parsePaneKey(paneKey) || !hostScope) {
       this.restoredOrchestrationAuthorityByPtyId.delete(pty.ptyId)

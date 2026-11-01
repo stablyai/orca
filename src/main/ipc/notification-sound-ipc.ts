@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, normalize } from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { NotificationSoundDataResult } from '../../shared/notification-settings-types'
 import {
   getSelectedNotificationSoundPath,
@@ -11,7 +11,7 @@ import {
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
 
 export function registerNotificationSoundHandlers(store: Store): void {
-  // Why: return the path so the preload's path-keyed cache skips the 10MB IPC round-trip on repeat dispatches.
+  // Return paths so preload caching avoids repeat 10MB sound transfers.
   ipcMain.removeHandler('notifications:resolveSoundPath')
   ipcMain.handle(
     'notifications:resolveSoundPath',

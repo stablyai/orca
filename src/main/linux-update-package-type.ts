@@ -6,14 +6,11 @@ import type { LinuxRootPackageType } from '../shared/update-status-types'
 
 export type { LinuxRootPackageType }
 
-/** The packaged Linux format that controls how updates may be installed. */
 export type LinuxPackageType = LinuxRootPackageType | 'non-root' | 'unusable'
 
-// Why: `undefined` means "not resolved yet"; every other value is stable for this process.
 let cachedPackageType: LinuxPackageType | undefined
 let cachedExternallyManaged: boolean | undefined
 
-// Bounded by construction: the marker is read at most once per process.
 function warnMarkerUnusable(detail: string): void {
   console.warn(`[updater] linux package-type marker unusable: ${detail}`)
 }
@@ -98,11 +95,7 @@ function readPackageTypeMarker(): LinuxPackageType {
   return 'unusable'
 }
 
-/**
- * Resolves the installed Linux package format. Packaged builds fail closed when their marker is
- * missing or unusable unless the legacy APPIMAGE runtime identity is valid. Unpackaged, non-Linux,
- * and identified AppImage runs are non-root.
- */
+/** Packaged Linux builds require a valid marker, except legacy AppImages with a missing marker. */
 export function getLinuxPackageType(): LinuxPackageType {
   if (cachedPackageType === undefined) {
     cachedPackageType = readPackageTypeMarker()
@@ -110,23 +103,12 @@ export function getLinuxPackageType(): LinuxPackageType {
   return cachedPackageType
 }
 
-/** Returns a root package type when this build supports manual package recovery. */
 export function getLinuxRootPackageType(): LinuxRootPackageType | null {
   const packageType = getLinuxPackageType()
   return packageType === 'deb' || packageType === 'rpm' ? packageType : null
 }
 
-/**
- * Whether the marker claims a root package format this host cannot install. Repackagers (AUR, Nix,
- * container rebuilds) unpack Orca's .deb and inherit its `package-type` verbatim, so the marker
- * describes the artifact Orca was built as, never the system that now owns the install. Without a
- * matching package manager no downloaded package can ever be applied here.
- *
- * A false positive is impossible by construction: this reuses the exact manager lists and resolver
- * that `buildLinuxPackageInstallCommand` already loops over, so any host flagged here would have
- * failed with `no-package-manager` after the download anyway. The gate only moves that verdict
- * earlier — it never refuses a host that could have installed the update.
- */
+/** Repackagers can inherit deb/rpm markers; require the same manager discovery used for installation. */
 export function isExternallyManagedLinuxInstall(): boolean {
   if (cachedExternallyManaged === undefined) {
     const packageType = getLinuxRootPackageType()

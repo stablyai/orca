@@ -1,3 +1,7 @@
+import type { PtyCreationDisposition } from '../../../shared/claimed-agent-pty-owner'
+import type { TerminalCreationWork } from '../terminal-creation-work'
+import { createDaemonPtyPhysicalOwner, type DaemonPtyPhysicalOwner } from './subprocess-handle'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import type * as pty from 'node-pty'
 import {
   hostReportsChildExitStatus,
@@ -6,21 +10,41 @@ import {
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 import { wrapPtySpawnInTerminalScope } from '../terminal-scopes-runtime'
+import { spawnConptyWithInputReader, type ConptyStartupEvents } from './conpty-startup-input-reader'
 
 async function loadNodePty(): Promise<typeof pty> {
   return import('node-pty')
 }
+
+export type DisposableNativePty = pty.IPty & {
+  destroy?: () => void
+  signalProcess?: (signal: string) => void
+  // node-pty emits these when its master stream retires; writes then become silent no-ops.
+  on?: (event: 'close' | 'error', listener: (error?: unknown) => void) => void
+  // False once node-pty's _close() retired the master; Windows never emits 'close' for that.
+  _writable?: boolean
+}
+
 export type SpawnedDaemonPty = {
   process: pty.IPty
+  physicalOwner?: DaemonPtyPhysicalOwner
   shellPath: string
   spawnCwd: string
   startupCommandDeliveredInShellArgs?: boolean
   /** False when a wrapper owns the reported status, so no exit code may be read from it. */
   reportsChildExitStatus: boolean
+  /** Windows: output seen while confirming ConPTY reads input; claim before subscribing. */
+  claimStartupEvents?: () => ConptyStartupEvents
 }
 
-/** Walks the Windows PowerShell -> cmd.exe fallback chain when ConPTY rejects the primary shell. */
+type SpawnedNativePty = {
+  proc: pty.IPty
+  physicalOwner: DaemonPtyPhysicalOwner
+  claimStartupEvents?: () => ConptyStartupEvents
+}
+
 export async function spawnNativeDaemonPty(args: {
+  creationWork?: TerminalCreationWork
   shellPath: string
   shellArgs: string[]
   spawnCwd: string
@@ -28,68 +52,126 @@ export async function spawnNativeDaemonPty(args: {
   cols: number
   rows: number
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
+  /** The primary shell's argv is Orca's interactive default, so a respawn cannot repeat a command. */
+  primaryArgsRespawnSafe?: boolean
   signal?: AbortSignal
+  assertCreateAllowed?: () => void
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }): Promise<SpawnedDaemonPty> {
   let reportsChildExitStatus = true
-  const spawnAt = async (
+  let unpublishedOwner: DaemonPtyPhysicalOwner | undefined
+  const spawnOnce = async (
     shellPath: string,
     shellArgs: string[],
     cwd: string
-  ): Promise<pty.IPty> => {
+  ): Promise<{ proc: pty.IPty; physicalOwner: DaemonPtyPhysicalOwner }> => {
     args.signal?.throwIfAborted()
+    assertWslDistroAllowed(shellPath, shellArgs)
     const tcc = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
-    // Linux: exec through systemd-run into this terminal's own scope.
     const wrapped = wrapPtySpawnInTerminalScope(tcc.file, tcc.args, args.env)
     const nodePty = await loadNodePty()
-    // Why: children inherit job membership, so the host job must exist before the first Windows PTY.
+    // Establish the host job before spawning so Windows PTYs inherit membership.
     if (process.platform === 'win32') {
       assignHostProcessToKillOnCloseJob()
     }
-    const proc = nodePty.spawn(wrapped.file, wrapped.args, {
-      name: args.env.TERM ?? 'xterm-256color',
-      cols: args.cols,
-      rows: args.rows,
-      cwd,
-      env: wrapped.env,
-      // Why: bundled ConPTY has the wrap-marker behavior xterm expects.
-      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
+    args.signal?.throwIfAborted()
+    args.assertCreateAllowed?.()
+    const attempt = Promise.withResolvers<PtyCreationDisposition>()
+    args.creationWork?.join(attempt.promise)
+    let proc: pty.IPty
+    try {
+      proc = nodePty.spawn(wrapped.file, wrapped.args, {
+        name: args.env.TERM ?? 'xterm-256color',
+        cols: args.cols,
+        rows: args.rows,
+        cwd,
+        env: wrapped.env,
+        // Bundled ConPTY provides the wrap-marker behavior xterm expects.
+        ...(process.platform === 'win32' ? { useConptyDll: true } : {})
+      })
+    } catch (error) {
+      attempt.resolve({ kind: 'failed', completion: Promise.resolve() })
+      throw error
+    }
+    const physical = createDaemonPtyPhysicalOwner(proc, shellPath)
+    unpublishedOwner = physical
+    attempt.resolve({
+      kind: 'physical',
+      completion: physical.completion,
+      exitCode: physical.exitCode,
+      recover: physical.recover
     })
+    physical.observeExit()
     reportsChildExitStatus = hostReportsChildExitStatus(tcc.file)
-    args.onMacosTccSpawnStrategy?.(tcc.file === shellPath ? 'direct' : 'wrapped')
-    return proc
+    try {
+      args.onMacosTccSpawnStrategy?.(tcc.file === shellPath ? 'direct' : 'wrapped')
+    } catch {
+      /* Diagnostics cannot revoke an owned child. */
+    }
+    return { proc, physicalOwner: physical }
+  }
+  const spawnAt = async (
+    shellPath: string,
+    shellArgs: string[],
+    cwd: string,
+    respawnSafe: boolean
+  ): Promise<SpawnedNativePty> => {
+    if (process.platform !== 'win32') {
+      return await spawnOnce(shellPath, shellArgs, cwd)
+    }
+    return spawnConptyWithInputReader(() => spawnOnce(shellPath, shellArgs, cwd), {
+      label: shellPath,
+      respawnSafe,
+      ...(args.signal ? { signal: args.signal } : {})
+    })
   }
 
   try {
-    const process_ = await spawnAt(args.shellPath, args.shellArgs, args.spawnCwd)
+    const spawned = await spawnAt(
+      args.shellPath,
+      args.shellArgs,
+      args.spawnCwd,
+      args.primaryArgsRespawnSafe === true
+    )
     return {
-      process: process_,
+      process: spawned.proc,
+      physicalOwner: spawned.physicalOwner,
       shellPath: args.shellPath,
       spawnCwd: args.spawnCwd,
-      reportsChildExitStatus
+      reportsChildExitStatus,
+      ...(spawned.claimStartupEvents ? { claimStartupEvents: spawned.claimStartupEvents } : {})
     }
   } catch (primaryErr) {
+    // A returned predecessor stays owned until exit, including failed observer/startup setup.
+    await unpublishedOwner?.recover()
     args.signal?.throwIfAborted()
     if (process.platform !== 'win32') {
       throw primaryErr
     }
     for (const attempt of args.windowsFallbackAttempts.slice(1)) {
       try {
-        const process = await spawnAt(attempt.shellPath, attempt.shellArgs, attempt.effectiveCwd)
+        const spawned = await spawnAt(
+          attempt.shellPath,
+          attempt.shellArgs,
+          attempt.effectiveCwd,
+          args.primaryArgsRespawnSafe === true && !attempt.startupCommandDeliveredInShellArgs
+        )
         const message = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
         console.warn(
           `[daemon/pty] Primary shell "${args.shellPath}" failed (${message}), fell back to "${attempt.shellPath}"`
         )
         return {
-          process,
+          process: spawned.proc,
+          physicalOwner: spawned.physicalOwner,
           shellPath: attempt.shellPath,
           spawnCwd: attempt.effectiveCwd,
           startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs,
-          reportsChildExitStatus
+          reportsChildExitStatus,
+          ...(spawned.claimStartupEvents ? { claimStartupEvents: spawned.claimStartupEvents } : {})
         }
       } catch {
+        await unpublishedOwner?.recover()
         args.signal?.throwIfAborted()
-        // This fallback shell also failed -- try the next link in the chain.
       }
     }
     throw primaryErr

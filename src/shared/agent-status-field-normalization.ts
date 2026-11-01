@@ -1,8 +1,4 @@
-// ─── Agent status field normalization ───────────────────────────────────────
-// String normalizers shared by every agent-status payload field: trim/fold to
-// a single line for previews, preserve structure for multiline bodies, and
-// truncate without splitting surrogate pairs. Extracted from
-// agent-status-types.ts, which owns the payload shapes and the caps no other module applies.
+// Share single-line previews and multiline bodies with surrogate-safe cuts; agent-status-types.ts owns payload shapes and caps.
 
 import { compactDispatchPromptForStatus } from './orca-dispatch-status-prompt'
 
@@ -17,11 +13,7 @@ export const AGENT_MODEL_MAX_LENGTH = 120
 const SINGLE_LINE_FIELD_SCAN_OVERHEAD = 64
 const SINGLE_LINE_FIELD_SCAN_MULTIPLIER = 8
 
-// Why: when truncation lands mid surrogate-pair (emoji / astral chars), the
-// high surrogate would be left dangling and render as the Unicode replacement
-// glyph. Drop the lone high surrogate so the result is always a valid UTF-16
-// sequence. Shared by the single-line and multiline normalizers so the
-// protection can't drift between them.
+// Drop high surrogates stranded by a cut so preview/body paths cannot render a replacement glyph.
 function truncatePreservingSurrogates(value: string, maxLength: number): string {
   if (value.length < maxLength) {
     return value
@@ -57,9 +49,7 @@ export function normalizePromptField(value: unknown): string {
 }
 
 function normalizeSingleLinePreview(value: string, maxLength: number): string {
-  // Why: hook prompt/tool fields are previews. Bound the source scan before
-  // folding line breaks so paste-sized status text cannot run a full regex
-  // replacement just to keep a small dashboard label.
+  // Bound source scans before folding previews so paste-sized text cannot force full regex passes for a short label.
   const scanEnd = Math.min(
     value.length,
     maxLength * SINGLE_LINE_FIELD_SCAN_MULTIPLIER + SINGLE_LINE_FIELD_SCAN_OVERHEAD
@@ -96,23 +86,12 @@ function normalizeSingleLinePreview(value: string, maxLength: number): string {
   return truncatePreservingSurrogates(normalized, maxLength)
 }
 
-// Why: assistant messages are a multi-paragraph "what did the agent say"
-// body that the dashboard renders with `whitespace-pre-wrap`. Collapsing
-// newlines here would erase structure the UI is designed to show. Still
-// normalize `\r\n` → `\n` and cap paragraph gaps at one blank line to keep
-// the bound meaningful, but otherwise preserve line breaks.
+// Preserve pre-wrap paragraph structure; normalize CRLF and cap paragraph gaps at one blank line.
 function normalizeMultilineField(value: unknown, maxLength: number): string {
   if (typeof value !== 'string') {
     return ''
   }
-  // Why: fold Unicode line/paragraph separators (U+2028, U+2029) into ordinary
-  // `\n` before the blank-line-run cap. These code points render as real line
-  // breaks under `whitespace-pre-wrap`, so leaving them untouched would let a
-  // buggy/malicious agent bypass the `\n{3,}` → `\n\n` safeguard by spamming
-  // arbitrarily many U+2029 paragraph breaks. Matches the single-line
-  // normalizer's treatment of the same code points, keeping the two paths in
-  // sync. Step order preserved: `\r\n` → `\n`, bare `\r` → `\n`,
-  // U+2028/U+2029 → `\n`, then collapse blank-line runs.
+  // Fold U+2028/U+2029 before capping blank lines: pre-wrap renders them as breaks, otherwise paragraph-separator runs bypass the cap. Order: CRLF, bare CR, Unicode separators, blank-line collapse.
   const { start, end } = getTrimmedStringBounds(value)
   let normalized = ''
   let newlineRun = 0
@@ -175,10 +154,7 @@ function isEcmaTrimWhitespace(code: number): boolean {
   )
 }
 
-// Why: tool/assistant fields are optional on the entry (absence = "no update
-// for this field"). We only surface them when the caller actually provided a
-// string value so a missing field doesn't overwrite the prior cached state.
-// Why: some agents submit option labels verbatim, so only presentation-only fields may shrink.
+// Only provided strings update optional fields; absence must not erase cached state. Preserve option labels and shorten presentation fields only.
 const COMPACTABLE_INTERACTIVE_PROMPT_FIELDS = new Set([
   'description',
   'detail',
@@ -204,8 +180,7 @@ function compactInteractivePromptValue(value: unknown, maxStringLength: number):
   )
 }
 
-/** Longest form of `prompt` that `fits` accepts, or null. A JSON prompt stays valid JSON with
- *  every option label intact by shortening only its presentation text; other text is cut. */
+/** Find the longest accepted prompt; JSON keeps structure/option labels by shortening presentation text only, while other text is cut. */
 export function fitInteractivePrompt(
   prompt: string,
   fits: (candidate: string) => boolean
@@ -236,10 +211,7 @@ export function fitInteractivePrompt(
   return fitted
 }
 
-// Why: interactivePrompt carries raw JSON (`{ questions: [...] }`) that clients
-// JSON.parse to render a structured card. Unlike the other normalizers we must
-// NOT trim, collapse newlines, or fold blank-line runs — any of those would
-// corrupt the JSON or alter option text inside it. Drop empty strings to undefined.
+// Preserve interactivePrompt JSON and option text verbatim; trimming/folding would corrupt structured cards. Empty strings become undefined.
 export function normalizeInteractivePromptField(
   value: unknown,
   maxLength: number

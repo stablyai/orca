@@ -97,8 +97,7 @@ export function enqueueDiffCommentPersist(
 ): Promise<void> {
   const folderExecutionHostId = mutation.folderExecutionHostId
   const queueKey = persistQueueKey(worktreeId, folderExecutionHostId)
-  // Why: a chain continues on whichever floor last produced this list, so a twin appearing or
-  // leaving mid-burst keeps the copy's floor; a new chain takes its twin's own floor.
+  // Continue the floor that produced this list across twin appearance/removal; new chains take the copy’s own floor.
   const floorKey =
     [...(floorKeysByQueue.get(queueKey) ?? [])].find(
       (key) => lastMutationNextByQueue.get(key) === mutation.previous
@@ -106,9 +105,7 @@ export function enqueueDiffCommentPersist(
   floorKeysByQueue.set(queueKey, (floorKeysByQueue.get(queueKey) ?? new Set()).add(floorKey))
   const prior = persistQueueByWorktree.get(queueKey) ?? Promise.resolve()
   // Why: an idle queue means disk still holds the pre-mutation list, so that list is this burst's rollback floor.
-  // Why: a `previous` that isn't the last mutation's `next` means something outside the mutators replaced the list
-  //      (hydration, folderWorkspaces refresh, remote push), so the old floor predates that state and must be re-seeded.
-  // Why: seed before the queue entry below, or `has` is always true and the floor is never seeded.
+  // If previous differs from last mutation’s next, hydration/refresh/push broke the chain; reseed floor before enqueue makes has true.
   const chainBroken = lastMutationNextByQueue.get(floorKey) !== mutation.previous
   if (
     !persistQueueByWorktree.has(queueKey) ||
@@ -120,11 +117,9 @@ export function enqueueDiffCommentPersist(
   }
   lastMutationNextByQueue.set(floorKey, mutation.next)
   const run = async (): Promise<void> => {
-    // Why: capture at dequeue time, alongside `stateList` — an epoch read at enqueue time would bar every write
-    //      that straddles a chain break from recording a floor its coalesced payload already carries.
+    // Capture epoch at dequeue with coalesced stateList; enqueue-time epochs would reject floors spanning chain breaks.
     const seedEpoch = floorSeedEpochByQueue.get(floorKey)
-    // Why: the state-side array, not the normalized copy sent to disk — restoring the same instance keeps
-    //      `getDiffComments` identity stable instead of churning selectors.
+    // Retain state-side array rather than disk-normalized clone so rollback preserves getDiffComments identity.
     let stateList: DiffComment[] | undefined
     try {
       const scope = parseWorkspaceKey(worktreeId)
@@ -172,8 +167,7 @@ export function enqueueDiffCommentPersist(
       rollback(set, worktreeId, floor, mutation)
       throw err
     }
-    // Why: a chain break re-seeded the floor to an out-of-band replacement while this write was awaiting, so the
-    //      list captured before the await predates it and must not be reinstated as the floor.
+    // Out-of-band replacement during await reseeded floor; never restore the older captured list as floor.
     if (floorSeedEpochByQueue.get(floorKey) === seedEpoch) {
       lastPersistedByQueue.set(floorKey, stateList)
     }
@@ -285,12 +279,11 @@ function rollback(
     if (!repoList) {
       return s
     }
-    // Why: only rows still holding this mutation's own array: no later mutation replaced them, and a
-    // twin it never wrote cannot hold it.
+    // Rollback only rows still holding this mutation’s array; later mutations and untouched twins must survive.
     const targets = repoList.filter(
       (w) => w.id === worktreeId && w.diffComments === expectedCurrent
     )
-    // Why: worktree gone since the mutation; bail before remapping so we don't allocate a new array identity and fire spurious notifications.
+    // Removed worktrees return before remapping to avoid pointless identity churn/notifications.
     if (targets.length === 0) {
       return s
     }

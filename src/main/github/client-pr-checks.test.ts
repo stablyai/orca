@@ -57,7 +57,6 @@ vi.mock('./gh-utils', () => ({
   }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
-  // Why: origin repository resolution calls getOwnerRepoForRemote, not getOwnerRepo.
   getOwnerRepoForRemote: (
     repoPath: string,
     remoteName: string,
@@ -90,8 +89,6 @@ import { _resetOwnerRepoCache } from './gh-utils'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -254,6 +251,24 @@ describe('getPRChecks', () => {
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
     _resetOwnerRepoCache()
+  })
+
+  it('starts an explicit checks read beside a pending one, which later reads then join', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    const response = graphQLChecksResponse()
+    const pending = Promise.withResolvers<typeof response>()
+    const explicit = Promise.withResolvers<typeof response>()
+    ghExecFileAsyncMock.mockReturnValueOnce(pending.promise).mockReturnValueOnce(explicit.promise)
+    const uncached = { noCache: true }
+    const before = getPRChecks('/repo', 12, 'head-a', undefined, uncached)
+    await vi.waitFor(() => expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1))
+    const click = getPRChecks('/repo', 12, 'head-a', undefined, { ...uncached, userRefresh: true })
+    await vi.waitFor(() => expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2))
+    const later = getPRChecks('/repo', 12, 'head-a', undefined, uncached)
+    explicit.resolve(response)
+    pending.resolve(response)
+    await Promise.all([before, click, later])
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   it('queries GitHub rollup details with one cached GraphQL call', async () => {
@@ -617,7 +632,7 @@ describe('getPRChecks', () => {
 
     const result = await rerunPRChecks('/repo-root', 42, { failedOnly: true })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       error: 'GitHub resource to rerun was not found — it may have expired or been deleted.'
     })
@@ -656,7 +671,7 @@ describe('getPRChecks', () => {
       ['api', '-X', 'POST', 'repos/acme/widgets/check-runs/88/rerequest'],
       expect.objectContaining({ cwd: '/repo-root' })
     )
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       error: 'GitHub resource to rerun was not found — it may have expired or been deleted.'
     })

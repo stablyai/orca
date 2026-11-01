@@ -1,6 +1,4 @@
-// A browser tab close in a layout-owner build: main closes the tab-bar entry and its record first,
-// and its frame drops both. The window then runs today's close over the tab as it drew it (the
-// reopen list, host pages, document grants), since the frame already took the record away.
+// Main frames drop tab/record before reply; then run window cleanup from captured drawn state for reopen history, host pages and document grants.
 
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
@@ -39,11 +37,7 @@ export function withDrawnBrowserPages(state: AppState, drawn: DrawnBrowserTab): 
   }
 }
 
-/**
- * Sends the close of the browser tab showing `browserTabId`; false when it shows in no tab-bar
- * entry or main is not asked (a paired server owns the workspace's layout): close it as today.
- * `closeHere` is today's close; given the drawn tab, it runs once main's frame dropped it.
- */
+/** Send close and run closeHere with captured state after frame removal. Return false without a unified entry or for paired-owned layouts so caller closes directly. */
 export function closeBrowserTabThroughLayoutOwner(
   get: BrowserSliceGet,
   browserTabId: string,

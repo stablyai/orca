@@ -1,5 +1,6 @@
 name: Terminal Perf
 
+# On demand only; see docs/readme/terminal-perf.md.
 on:
   workflow_dispatch:
     inputs:
@@ -43,10 +44,6 @@ on:
         description: Comma-separated hidden real-PTY pressure pane counts
         required: false
         type: string
-  schedule:
-    # Why: keep the expensive scale run off PRs, but exercise it daily so
-    # terminal throughput regressions are caught before users report typing lag.
-    - cron: '30 8 * * *'
 
 permissions:
   contents: read
@@ -57,7 +54,8 @@ cache-mode: read
 jobs:
   terminal-perf:
     name: terminal scale perf
-    runs-on: ubuntu-latest
+    # Presented-frame measurement only accepts GitHub-hosted Xvfb displays.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       NODE_OPTIONS: --max-old-space-size=4096
@@ -91,7 +89,9 @@ jobs:
             'node config/scripts/rebuild-native-deps.mjs',
             'pnpm run build:packages && node config/scripts/rebuild-native-deps.mjs'
           ]
-          const shared = process.env.RUNNER_KIND === 'github-hosted' && !process.env.JOB_CONTAINER &&
+          const supportedRunner = process.env.RUNNER_KIND === 'github-hosted' ||
+            process.env.RUNNER_NAME?.startsWith('blacksmith-')
+          const shared = supportedRunner && !process.env.JOB_CONTAINER &&
             process.env.RUNNER_OS === 'Linux' && process.env.RUNNER_ARCH === 'X64' &&
             manifest.engines?.node === '24' && typeof manifest.packageManager === 'string' &&
             manifest.packageManager.split('+')[0] === 'pnpm@12.14.0' &&

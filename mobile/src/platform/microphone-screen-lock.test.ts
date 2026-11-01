@@ -1,15 +1,7 @@
-/**
- * The screen lock a live microphone holds: one tag, taken once, given back once, in order.
- *
- * Driven against a device of its own rather than through a capture, because the arm that matters
- * is the one neither capture can stage — an activate the device is still working on when the
- * release is asked for. Ordered wrongly that activate lands last and the screen stays awake for
- * the life of the app, which is the failure the deleted tag bookkeeping existed to time out.
- */
+// Hold activation open across release to expose the race that leaves a screen awake after capture ends.
 import { describe, expect, it } from 'vitest'
 import { createMicrophoneScreenLock, type ScreenLockDevice } from './microphone-screen-lock'
 
-/** A device whose calls a case can hold open and settle when it chooses. */
 function createTestDevice() {
   const calls: string[] = []
   const settles: (() => void)[] = []
@@ -40,7 +32,6 @@ function createTestDevice() {
   }
 }
 
-/** The queue is microtasks; a case reads the device after they have run. */
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
@@ -70,8 +61,6 @@ describe('the lock a microphone holds', () => {
     lock.release()
     await flush()
     expect(calls).toEqual([])
-    // And deactivating an unheld tag is a native call this never makes, so a release after a
-    // release asks for nothing either.
     lock.hold()
     lock.release()
     lock.release()
@@ -85,8 +74,7 @@ describe('the lock a microphone holds', () => {
     holdCallsOpen()
     lock.hold()
     await flush()
-    // The release is asked for while the activate is still in flight. Unordered, the deactivate
-    // would reach a device holding nothing and the activate would land behind it.
+    // Release before activation settles must still deactivate last.
     lock.release()
     await flush()
     expect(calls).toEqual(['+orca-mic'])
@@ -111,8 +99,7 @@ describe('the lock a microphone holds', () => {
     lock.hold()
     lock.release()
     await flush()
-    // The refusal is swallowed — a screen that would not stay awake is not worth failing a
-    // dictation over — and it does not wedge the calls behind it.
+    // Failed wake locks must neither fail dictation nor block queued cleanup.
     expect(calls).toEqual(['+orca-mic', '-orca-mic'])
     lock.hold()
     await flush()

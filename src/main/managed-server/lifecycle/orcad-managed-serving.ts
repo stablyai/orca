@@ -1,12 +1,4 @@
-/**
- * Making sure a managed orcad is serving before a client relies on it: a server that answers
- * costs one round trip; one that does not is checked on the host and, only if proven stopped
- * (an idle stop, a kill, a host reboot), started from its activated slot. A daemon that survived
- * is adopted by the new orcad with its terminals; after a reboot both start fresh.
- *
- * Never throws. A server that cannot be started stays `unverifiable` with the reason, and is
- * never read as evidence that its terminals exited.
- */
+// Restart only proven-stopped slots; unverifiable serving state never proves terminal exit.
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { orcadBoundPort } from './orcad-managed-bound-port'
@@ -17,7 +9,7 @@ import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 
 export type OrcadManagedServing =
   | { state: 'serving' }
-  /** `boundPort` is the port the restarted server bound, which a forward must follow. */
+  /** Forwards must follow the restarted server's bound port. */
   | { state: 'started'; boundPort: number | null }
   | { state: 'unverifiable'; detail: string }
 
@@ -27,28 +19,22 @@ export type OrcadManagedServingInput = {
   connection: OrcadHostTransport
   remotePort: number
   probe: (environment: KnownRuntimeEnvironment, timeoutMs: number) => Promise<boolean>
-  /** When this environment's ready control socket last heard from its server, if it has. */
   answeredAt?: (environmentId: string) => number | null
 }
 
-/** A wake refused because another update, rollback or recovery holds the host; it clears itself. */
 export const MANAGED_ORCAD_FENCED_DETAIL =
   'An update, rollback or recovery holds this host; it was not started.'
 
-/** The host has no active version, e.g. another desktop stopped it; a connect redeploys it. */
 export const MANAGED_ORCAD_NOT_ACTIVATED_DETAIL = 'This host has no activated Orca server to start.'
 
 const PROBE_TIMEOUT_MS = 5_000
-// Why: a connect checks right after its fresh tunnel did; one verdict serves both, on that
-// transport and port only, so a kill, reboot or rebind is never answered from cache.
+// Share connect/tunnel verdicts only for the same transport and port; reboots/rebinds need fresh checks.
 const VERDICT_REUSE_MS = 5_000
-// Why: the control socket hears a pong every 10 s while healthy, and a kill, reboot, rebind or
-// stop closes it, so a recent answer on it proves serving without a fresh probe socket.
+// Recent control-socket pongs prove serving; stop/reboot/rebind closes that socket.
 const LIVE_ANSWER_PROOF_MS = 20_000
 
 type ServingTransport = { connection: OrcadHostTransport; generation: number; remotePort: number }
-// Why per transport: a check on a dropped connection fails, and a caller on the reconnected one
-// must run its own instead of inheriting that failure as "could not be started".
+// Reconnected transports need fresh checks instead of inheriting dropped-connection failures.
 type ServingCheck = ServingTransport & { check: Promise<OrcadManagedServing>; settledAt?: number }
 const checks = new Map<string, ServingCheck>()
 
@@ -58,15 +44,13 @@ function sameTransport(a: ServingTransport, b: ServingTransport): boolean {
   )
 }
 export type ManagedOrcadStartListener = {
-  /** Shows "Starting managed server…" for the host. */
   starting: (target: SshTarget) => void
-  /** The start finished; an `unverifiable` result carries why, with orcad.log's tail. */
+  /** Unverifiable results include the reason and log tail. */
   settled: (target: SshTarget, environmentId: string, serving: OrcadManagedServing) => void
 }
 
 let startListener: ManagedOrcadStartListener | null = null
 
-/** The SSH status wiring registers where a start is shown. */
 export function setManagedOrcadStartListener(listener: ManagedOrcadStartListener | null): void {
   startListener = listener
 }
@@ -91,13 +75,12 @@ export function ensureManagedOrcadServing(
   }
   const answeredAt = input.answeredAt?.(id) ?? null
   const answerAge = answeredAt === null ? null : now() - answeredAt
-  // Why the lower bound: a wall clock set backwards must not stretch the proof.
+  // Clock rollback must not extend the proof window.
   if (answerAge !== null && answerAge >= 0 && answerAge < LIVE_ANSWER_PROOF_MS) {
     return Promise.resolve({ state: 'serving' })
   }
   const next: ServingCheck = { ...transport, check: checkAndStart(input) }
   checks.set(id, next)
-  // A rejected check is never reused.
   void next.check.then(
     () => {
       next.settledAt = now()
@@ -109,7 +92,6 @@ export function ensureManagedOrcadServing(
   return next.check
 }
 
-/** Test-only: forget cached verdicts. */
 export function resetManagedOrcadServingForTests(): void {
   checks.clear()
 }
@@ -148,9 +130,9 @@ async function wakeIfStopped(
       console.info(`[ssh] Started the managed Orca server on ${label}; ${cause}.`)
       return { state: 'started', boundPort: orcadBoundPort(wake.readiness) }
     }
-    // A live process that did not answer may still be starting; it is not restarted.
+    // A live unanswered process may still be starting; never restart it.
     if (wake.outcome === 'serving') {
-      // Why: a live PID proves the process exists, not that it answers.
+      // A live PID alone does not prove the server answers.
       if (await input.probe(input.environment, PROBE_TIMEOUT_MS)) {
         return { state: 'serving' }
       }

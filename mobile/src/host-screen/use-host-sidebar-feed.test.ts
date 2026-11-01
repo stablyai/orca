@@ -45,12 +45,14 @@ describe('readHostSidebarFeed', () => {
   const snapshot = (semanticsVersion = SIDEBAR_INPUTS_SEMANTICS_VERSION) =>
     installSidebarFeedSnapshot(installed(semanticsVersion), null)
 
-  it('is loading until a batch installs, then ready at that revision', () => {
+  it('is loading until a batch installs, then exposes its domains', () => {
     expect(readHostSidebarFeed({ snapshot: null, unavailable: false })).toEqual({
       kind: 'loading'
     })
-    expect(readHostSidebarFeed({ snapshot: snapshot(), unavailable: false })).toMatchObject({
-      kind: 'ready'
+    const installed = snapshot()
+    expect(readHostSidebarFeed({ snapshot: installed, unavailable: false })).toEqual({
+      kind: 'ready',
+      domains: installed.domains
     })
   })
 

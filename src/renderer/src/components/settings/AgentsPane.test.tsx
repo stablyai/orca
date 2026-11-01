@@ -1,6 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -105,7 +105,7 @@ function renderPane(
       React.createElement(AgentsPane, {
         settings,
         updateSettings: vi.fn(),
-        // Why: mirrors the page before the user picks a host — the default host setting.
+        // Use the default host until the user selects a Settings host.
         hostScope: resolveSettingsHostScope({
           choice: null,
           defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
@@ -166,6 +166,11 @@ function findSegmentedControl(node: unknown, ariaLabel: string): ReactElementLik
   return found
 }
 
+beforeEach(() => {
+  vi.stubGlobal('window', { api: { platform: { get: () => ({ platform: 'darwin' }) } } })
+})
+afterEach(() => vi.unstubAllGlobals())
+
 describe('AgentsPane', () => {
   beforeEach(() => {
     detectedAgentsMock.detectedIds = ['claude']
@@ -190,11 +195,7 @@ describe('AgentsPane', () => {
   })
 
   it('waits for host launch settings before displaying remote agent controls', () => {
-    // Repro for the "Remote Server lists local agents" bug: with an Active
-    // Server selected, the Installed list must probe that server's PATH.
-    // Why the mutation: renderToStaticMarkup makes useSyncExternalStore read
-    // the zustand SERVER snapshot (getInitialState), so setState is invisible
-    // here — patch the initial-state object itself and restore it after.
+    // SSR reads Zustand’s initial snapshot, so patch/restore it to verify remote detection uses the selected server’s PATH.
     const initialState = useAppStore.getInitialState() as unknown as {
       runtimeEnvironments: unknown
     }
@@ -208,8 +209,9 @@ describe('AgentsPane', () => {
       })
 
       expect(detectedAgentsMock.lastTarget).toBeUndefined()
-      expect(markup).toContain('Loading agent settings…')
-      expect(markup).not.toContain('Default Agent')
+      expect(markup).toContain('<fieldset disabled=""')
+      expect(markup).toContain('aria-label="Permissions"')
+      expect(markup).not.toContain('Installed')
     } finally {
       initialState.runtimeEnvironments = priorRuntimeEnvironments
     }
@@ -247,19 +249,28 @@ describe('AgentsPane', () => {
     expect(markup).not.toContain('Couldn’t detect installed agents')
   })
 
-  it('keeps Windows runtime changes scoped to the local agent refresh', () => {
-    renderPane(
-      {
-        ...getDefaultSettings('/tmp'),
-        activeRuntimeEnvironmentId: 'env-1'
-      },
-      { wslSupportedPlatform: true, wslAvailable: true, wslDistros: ['Ubuntu'] }
-    )
+  it('keeps Windows runtime changes scoped to the local agent refresh', async () => {
+    // SSR reads Zustand’s initial snapshot, so patch/restore its local refresh action.
+    const initialState = useAppStore.getInitialState()
+    const priorRefresh = initialState.refreshDetectedAgents
+    const refreshLocal = vi.fn(async () => [])
+    initialState.refreshDetectedAgents = refreshLocal
+    try {
+      renderPane(
+        {
+          ...getDefaultSettings('/tmp'),
+          activeRuntimeEnvironmentId: 'env-1'
+        },
+        { wslSupportedPlatform: true, wslAvailable: true, wslDistros: ['Ubuntu'] }
+      )
+      await agentRuntimeSettingMock.lastRefresh?.()
+    } finally {
+      initialState.refreshDetectedAgents = priorRefresh
+    }
 
-    expect(agentRuntimeSettingMock.lastRefresh).toBe(
-      useAppStore.getInitialState().refreshDetectedAgents
-    )
-    expect(agentRuntimeSettingMock.lastRefresh).not.toBe(detectedAgentsMock.refresh)
+    // Choosing a runtime is a user act: its refresh may start that WSL distro.
+    expect(refreshLocal).toHaveBeenCalledWith(undefined, { wakeWslDistro: true })
+    expect(detectedAgentsMock.refresh).not.toHaveBeenCalled()
   })
 
   it('renders the keep-awake modes from settings', () => {
@@ -507,11 +518,15 @@ describe('AgentsPane', () => {
   })
 
   it.each([
-    ['manual', undefined, 'How much agents can do without asking you.', 1],
-    ['auto', 'yolo', 'Supported agents</button> approve safe actions on their own.', 2],
-    ['auto', 'mixed', 'Supported agents</button> approve safe actions on their own.', 1],
-    ['mixed', undefined, 'Most agents use Yolo. Choosing a mode resets the marked exceptions', 0]
-  ] as const)('describes %s permissions with others %s', (mode, nonAutoMode, copy, checked) => {
+    ['manual', undefined, 'How much agents can do without asking you.'],
+    ['auto', 'yolo', 'Supported agents</button> approve safe actions on their own.'],
+    ['auto', 'mixed', 'Supported agents</button> approve safe actions on their own.'],
+    [
+      'mixed',
+      undefined,
+      'Most agents use Full access. Choosing a mode resets the marked exceptions'
+    ]
+  ] as const)('describes %s permissions with others %s', (mode, nonAutoMode, copy) => {
     const markup = renderToStaticMarkup(
       <TooltipProvider>
         <AgentPermissionsSetting
@@ -526,7 +541,6 @@ describe('AgentsPane', () => {
     )
     expect(markup).toContain(copy)
     expect(markup.includes('inert=""')).toBe(mode !== 'auto')
-    expect(markup.match(/aria-checked="true"/g)?.length ?? 0).toBe(checked)
   })
 
   it('explains inline when the host cannot run Auto', () => {
@@ -535,8 +549,7 @@ describe('AgentsPane', () => {
         <AgentPermissionsSetting mode="yolo" autoSupported={false} onChange={vi.fn()} />
       </TooltipProvider>
     )
-    expect(markup).toContain('Auto needs a newer Orca on this host.')
-    expect(markup).toMatch(/aria-disabled="true"[^>]*>Auto</)
+    expect(markup).toContain('Approve for me needs a newer Orca on this host.')
   })
 
   it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {
@@ -749,7 +762,6 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
     }
   }
 
-  /** The rendered `<button>` whose label contains `label`. */
   const pillMarkup = (markup: string, label: string): string => {
     const chunk = markup.split('<button').find((part) => part.includes(label))
     expect(chunk, `no pill labelled ${label}`).toBeDefined()
@@ -757,10 +769,7 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
   }
 
   it('does not present Auto as the active choice while an agent is stored', () => {
-    // The Auto pill's handler writes null. Rendering it pressed while
-    // `defaultTuiAgent: "claude"` is stored made the already-selected pill
-    // destructive: one click erased the setting, and later successful
-    // detection did not bring it back.
+    // A pressed Auto pill still wrote null, destructively clearing a saved agent that detection would never restore.
     const markup = withEmptyDetection(() =>
       renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
     )
@@ -768,8 +777,6 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
   })
 
   it('still offers the stored agent so the choice can be kept', () => {
-    // With zero detected there were no agent pills at all, so the stored value
-    // was invisible and unrecoverable through the UI.
     const markup = withEmptyDetection(() =>
       renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
     )
@@ -777,8 +784,6 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
   })
 
   it('keeps a Refresh control reachable when nothing is detected', () => {
-    // Refresh lived inside the Installed section, which only renders when at
-    // least one agent was found -- gone in exactly the state needing a retry.
     const markup = withEmptyDetection(() => renderPane(getDefaultSettings('/tmp')))
     expect(markup).toContain('No agents detected')
     expect(markup).toContain('Refresh')

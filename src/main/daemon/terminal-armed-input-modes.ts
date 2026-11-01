@@ -1,30 +1,18 @@
-// Input modes a program arms for itself and must disarm on exit. `?2004` and `?1`
-// are left out because bash, zsh and PowerShell arm them at their own prompts.
-// `?66` is DECNKM, not `ESC =`: zle's smkx (`ESC[?1h ESC=`) stays untracked.
+// Exclude prompt-owned ?2004/?1 and zle’s ESC =; track keypad mode only through ?66.
 const TRACKED_PRIVATE_MODES = new Set([9, 1000, 1002, 1003, 1004, 1005, 1006, 1015, 1016, 66])
-// The one mode a terminal host arms for itself: ConPTY sends ?1004h at pane start and after RIS.
+// ConPTY enables focus reporting at startup and after RIS.
 const HOST_ARMABLE_MODE = 1004
-// Why one key per screen: kitty flags are per screen, so ownership must be too.
+// Kitty flags and their ownership are per screen.
 type ModeKey = number | 'kitty-main' | 'kitty-alt' | 'modify-other-keys'
-// host: HOST_ARMABLE_MODE armed before any marker or by a prompt a 133;C proved; the ground keeps it.
-// prompt: armed outside a command, unproven until C.
-// command: armed after C; still on at any 133;D, it triggers the ground until disarmed.
-// stale: anything else still on; the ground clears it without it ever triggering.
+// Host focus survives grounding; prompt enables await C; command modes trigger recovery; stale modes only clear.
 type ModeOwner = 'host' | 'prompt' | 'command' | 'stale'
 // Matches xterm.js's eviction limit, so the model drops the same entries.
 const KITTY_STACK_LIMIT = 16
 
-/**
- * Who armed each tracked input mode. A command that ends with a mode it armed
- * still on leaves that mode to the recovery barrier's ground, which keeps only
- * host-owned focus reporting.
- */
 export class TerminalArmedInputModes {
-  // Keys are exactly the armed modes.
   private readonly owners = new Map<ModeKey, ModeOwner>()
-  // Who an enable arriving now belongs to ('host' = before any marker). Without a 133;C nothing is a command's.
+  // Without OSC 133;C, no new enable belongs to a command.
   private enableOwner: 'host' | 'prompt' | 'command' = 'host'
-  // Mirrors xterm.js's kitty state: current flags, the other screen's flags, and a stack per screen.
   private kittyFlags = 0
   private kittyMainFlags = 0
   private kittyAltFlags = 0
@@ -85,17 +73,16 @@ export class TerminalArmedInputModes {
     if (this.kittyFlags === 0) {
       this.owners.delete(this.kittyKey())
     } else if (this.kittyFlags !== before) {
-      // Why no host stickiness: new flags are a new writer's, not a repeat.
+      // Changed flags belong to the current writer; unchanged flags retain ownership.
       this.owners.set(this.kittyKey(), this.ownerForEnable(this.kittyKey()))
     }
   }
 
-  /** `CSI > 4 ; n m`: pi arms modifyOtherKeys when its kitty query goes unanswered. */
   applyModifyOtherKeys(level: number): void {
     this.setArmed('modify-other-keys', level > 0)
   }
 
-  /** OSC 133;C: the prompt's enables were the host's; later ones are the command's. */
+  /** A command start proves prompt-owned focus is the host’s; other prompt modes become stale. */
   markCommandStart(): void {
     for (const [key, owner] of this.owners) {
       if (owner === 'prompt') {
@@ -109,8 +96,7 @@ export class TerminalArmedInputModes {
     this.enableOwner = 'prompt'
   }
 
-  /** OSC 133;D: true when a command's mode is still on. Not demoted: a nested shell's
-   *  stray D gets a refuted proof, and the app's real D must still trigger. */
+  /** Retain command ownership so a nested shell’s refuted D cannot hide the eventual real exit. */
   markCommandEnd(): boolean {
     let left = false
     for (const [key, owner] of this.owners) {
@@ -145,7 +131,7 @@ export class TerminalArmedInputModes {
     return this.onAlternateScreen ? 'kitty-alt' : 'kitty-main'
   }
 
-  // Why no claim when already armed: a pop or screen swap only uncovers flags an earlier writer set.
+  // Preserve known ownership when a pop or screen swap uncovers earlier flags.
   private uncoverKittyFlags(): void {
     if (this.kittyFlags === 0) {
       this.owners.delete(this.kittyKey())

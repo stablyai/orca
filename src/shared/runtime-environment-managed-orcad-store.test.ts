@@ -12,6 +12,7 @@ import {
 } from './runtime-environment-store'
 import {
   addManagedOrcadEnvironment,
+  moveManagedOrcadLocalPort,
   recordManagedOrcadMigration,
   refreshManagedOrcadPairing,
   removeManagedOrcadEnvironment
@@ -158,6 +159,35 @@ describe('managed orcad environment store', () => {
       environments[0]!.pairingRevision = 500
     })
     expect(listEnvironments(userDataPath)[0]?.orcadDeployment, 'store written').toEqual(deployment)
+  })
+
+  it('keeps a moved tunnel port consistent at every point of its two-file write', () => {
+    const before = add()
+    const store = readPersistedEnvironmentStore(userDataPath)
+    const existing = store.environments[0]!
+    const { binding: _binding, ...state } = readCurrentRuntimeEnvironmentSidecarEntry(
+      userDataPath,
+      existing
+    )!
+    const movedEndpoint = { ...existing.endpoints[0]!, endpoint: 'ws://127.0.0.1:50001/' }
+    const next = { ...existing, pairingRevision: 500, endpoints: [movedEndpoint] }
+    // The first write of a move, then a store that landed on the moved endpoint.
+    writeRuntimeEnvironmentSidecarEntry(userDataPath, store.environments, existing, state, next)
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment, 'store not yet written').toEqual(
+      deployment
+    )
+    shippedBuildRewrite(userDataPath, (environments) => {
+      environments[0] = next
+    })
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment, 'store written').toEqual({
+      ...deployment,
+      localPort: 50_001
+    })
+
+    const moved = moveManagedOrcadLocalPort(userDataPath, 'environment-1', 50_002, 600)
+    expect(moved.orcadDeployment).toEqual({ ...deployment, localPort: 50_002 })
+    expect(moved.endpoints[0]?.deviceToken).toBe(before.endpoints[0]?.deviceToken)
+    expect(listEnvironments(userDataPath)[0]).toEqual(moved)
   })
 
   it('keeps the re-paired device identity when a reply from the previous pairing lands late', () => {

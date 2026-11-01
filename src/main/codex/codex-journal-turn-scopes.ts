@@ -1,25 +1,17 @@
-// Which turn a Codex row belongs to, stated when the row is written.
-//
-// A primary-thread row belongs to the turn it names: that turn's lifecycle record, or the
-// conversation command that claimed it. A child thread has turns of its own that the timeline
-// does not draw, so its rows belong to the primary turn running when they arrive — the work the
-// user is watching — or to no turn once the primary is idle.
+// Child rows follow the active primary turn; their own turns are not drawn in the timeline.
 
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
 
 export class CodexJournalTurnScopes {
   constructor(
     private readonly deps: {
-      /** Without it no turn record is keyed, so every row reads as the thread's. */
+      /** Without session identity, rows fall back to thread scope. */
       sessionId: string | undefined
       primaryThreadId: () => string | null
       activeTurn: (threadId: string) => string | null
-      /** The command turn's scope, for a primary turn carrying a conversation command. */
       commandScope: (turnId: string) => AgentJournalTurnScope | null
     }
   ) {}

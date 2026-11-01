@@ -230,7 +230,6 @@ it('preserves first-wins duplicate rows and exact location/model tuple identity'
   expect(aggregation.aggregate(input).sessions[0].locationModelBreakdown).toHaveLength(2)
 })
 
-// Quotes and backslashes are the shapes a plain `::` separator would still collapse.
 it('keeps location/model tuples distinct under quote and backslash keys', () => {
   const input = events(4)
   input[0].projectKey = 'a"'
@@ -246,8 +245,7 @@ it('keeps location/model tuples distinct under quote and backslash keys', () => 
   expect(session.locationModelBreakdown.every((entry) => entry.eventCount === 1)).toBe(true)
 })
 
-// The merge index must learn the rows it appends, or a second source carrying the same
-// location/model would append a duplicate row instead of folding into the first.
+// Index newly appended rows too or later sources append duplicate location/model entries.
 it('folds later sources into rows the merge itself appended', () => {
   const [first] = events(1)
   first.projectKey = 'new-location'

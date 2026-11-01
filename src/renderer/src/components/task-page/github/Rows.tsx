@@ -1,12 +1,12 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
-import { formatPRDelta } from '@/components/task-page-pr-delta-summary'
+import { formatPRDelta } from '../task-page-pr-delta-summary'
 import {
   isTaskPageGitHubDraftPR,
   getTaskPageGitHubPRIconTone
-} from '@/components/task-page-github-work-item-status'
+} from '@/components/task-page/github/task-page-github-work-item-status'
 import {
   GitPullRequestDraft,
   GitPullRequest,
@@ -25,10 +25,10 @@ import {
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS,
   getTaskPageRepoSourceContext,
   formatRelativeTime
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page-github-work-item-status-badge'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { GHAssigneesCell } from './AssigneesCell'
 import { PRReviewCell } from './ReviewCell'
@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageGitHubRows({
   model
 }: {
@@ -80,10 +81,25 @@ export function TaskPageGitHubRows({
           const prDelta = item.type === 'pr' ? formatPRDelta(item) : null
           const githubTaskIdPill = (
             <span
-              // Why: no fill — a muted wash on the pill stacks on the
-              // row's hover:bg-accent and reads as a second hover tint.
+              // Avoid a pill fill that would stack with the row hover tint.
               className="inline-flex items-center gap-1 rounded-md border border-border/40 px-1.5 py-0.5 text-muted-foreground"
-              aria-label={`${item.type === 'pr' ? (isTaskPageGitHubDraftPR(item) ? 'Draft pull request' : 'Pull request') : 'Issue'} #${item.number}`}
+              aria-label={
+                item.type === 'pr'
+                  ? isTaskPageGitHubDraftPR(item)
+                    ? translate(
+                        'auto.components.TaskPage.draftPullRequestNumber',
+                        'Draft pull request #{{number}}',
+                        { number: item.number }
+                      )
+                    : translate(
+                        'auto.components.TaskPage.pullRequestNumber',
+                        'Pull request #{{number}}',
+                        { number: item.number }
+                      )
+                  : translate('auto.components.TaskPage.issueNumber', 'Issue #{{number}}', {
+                      number: item.number
+                    })
+              }
             >
               {item.type === 'pr' ? (
                 isTaskPageGitHubDraftPR(item) ? (
@@ -106,7 +122,7 @@ export function TaskPageGitHubRows({
           return (
             // Why: clickable div not a <button> — it nests buttons, and button-in-button is invalid HTML that breaks hydration.
             <div
-              // Why: key on repoId+item.id — repos sharing an upstream reuse item.id, so a bare key collides and React silently drops rows.
+              // Scope React keys by repo, host and item because twins and shared upstreams repeat item IDs.
               key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
               role="button"
               tabIndex={0}
@@ -118,10 +134,7 @@ export function TaskPageGitHubRows({
                 }
               }}
               className={cn(
-                // Why: sticky ID/Title paint the same bg-background /
-                // hover:bg-accent pair (with transition-colors) so the
-                // left columns don't flash a separate hover wash.
-                // Grid stretch (default) keeps sticky fills full-height.
+                // Match full-height sticky cells to the row surface/hover transition so columns do not flash separately.
                 'group/github-task-row grid min-h-12 cursor-pointer gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                 githubTaskGridClass
               )}
@@ -252,7 +265,7 @@ export function TaskPageGitHubRows({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {new Date(item.updatedAt).toLocaleString()}
+                  {new Date(item.updatedAt).toLocaleString(getIntlLocale())}
                 </TooltipContent>
               </Tooltip>
 
@@ -313,7 +326,7 @@ export function TaskPageGitHubRows({
                           {translate('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
                         <ExternalLink className="size-4" />
                         {translate('auto.components.TaskPage.c1d1600362', 'Open in browser')}
                       </DropdownMenuItem>
@@ -374,7 +387,7 @@ export function TaskPageGitHubRows({
                           {translate('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+                      <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
                         <ExternalLink className="size-4" />
                         {translate('auto.components.TaskPage.c1d1600362', 'Open in browser')}
                       </DropdownMenuItem>

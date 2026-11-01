@@ -1,19 +1,14 @@
-// A Stop that ends the child after its interrupt failed: its row reports on the run it stopped, so
-// one whose child end took back the send it found, with no turn running, leaves none. A client
-// draws that send where it was sent with its own row, and a second row would sit under the turn
-// before on an older client, as if that turn were stopped.
+// Accepted Stop retains its request note even when child exit takes back the send.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { performCancel, type AgentSessionTurnContext } from './structured-agent-session-turns'
@@ -122,35 +117,20 @@ async function stopEndingTheChild(options: {
 }
 
 describe('a Stop that ends the child after its interrupt failed', () => {
-  it('leaves no row when the child end took back the send, with no turn running', async () => {
+  it('records Stop when the child end took back the send, with no turn running', async () => {
     expect(await stopEndingTheChild({ turnRunning: false, takesSendBack: true })).toEqual({
-      cancelled: true,
-      rows: []
-    })
-  })
-
-  it('says cancellation was requested when the send stays in doubt', async () => {
-    expect(await stopEndingTheChild({ turnRunning: false, takesSendBack: false })).toEqual({
       cancelled: true,
       rows: ['Cancellation requested.']
     })
   })
 
-  // That send was never this child's to take back, so it does not keep the row.
-  it("leaves no row when the only other send in doubt was an earlier process's", async () => {
+  it("keeps Stop when the only other send in doubt was an earlier process's", async () => {
     expect(
       await stopEndingTheChild({
         turnRunning: false,
         takesSendBack: true,
         earlierProcessSendInDoubt: true
       })
-    ).toEqual({ cancelled: true, rows: [] })
-  })
-
-  it('says cancellation was requested on the turn it stopped, whatever became of the send', async () => {
-    expect(await stopEndingTheChild({ turnRunning: true, takesSendBack: true })).toEqual({
-      cancelled: true,
-      rows: ['Cancellation requested.']
-    })
+    ).toEqual({ cancelled: true, rows: ['Cancellation requested.'] })
   })
 })

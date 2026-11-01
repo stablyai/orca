@@ -5,7 +5,32 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const { verifyPackagedPluginResources } = require('./verify-packaged-plugin-resources.cjs')
+const {
+  hashPackagedPluginTree,
+  verifyPackagedPluginResources
+} = require('./verify-packaged-plugin-resources.cjs')
+
+const FIXTURE_KEY = 'stablyai.orca-multipass-recipes'
+
+/** Copies the launch tree and indexes one shipped pack so byte checks have something to verify. */
+async function copyIndexedLaunchTree(resourcesDir) {
+  const launchRoot = join(resourcesDir, 'plugins', 'launch')
+  await cp(join(process.cwd(), 'resources', 'plugins', 'launch'), launchRoot, { recursive: true })
+  await writeFile(
+    join(launchRoot, 'bundled-plugins.json'),
+    JSON.stringify({
+      version: 1,
+      plugins: [
+        {
+          pluginKey: FIXTURE_KEY,
+          path: FIXTURE_KEY,
+          contentHash: hashPackagedPluginTree(join(launchRoot, FIXTURE_KEY))
+        }
+      ]
+    })
+  )
+  return launchRoot
+}
 
 describe('verify packaged plugin resources', () => {
   it('accepts exact launch bytes copied into a packaged resources directory', async () => {
@@ -26,17 +51,12 @@ describe('verify packaged plugin resources', () => {
   it('rejects mutated bytes in the packaged output', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-plugins-'))
     try {
-      const launchRoot = join(resourcesDir, 'plugins', 'launch')
-      await cp(join(process.cwd(), 'resources', 'plugins', 'launch'), launchRoot, {
-        recursive: true
-      })
-      await writeFile(
-        join(launchRoot, 'stablyai.orca-navigation-shortcuts', 'extra.json'),
-        '{"mutated":true}\n'
-      )
+      const launchRoot = await copyIndexedLaunchTree(resourcesDir)
+      expect(() => verifyPackagedPluginResources(resourcesDir)).not.toThrow()
+      await writeFile(join(launchRoot, FIXTURE_KEY, 'extra.json'), '{"mutated":true}\n')
 
       expect(() => verifyPackagedPluginResources(resourcesDir)).toThrow(
-        'packaged bytes do not match stablyai.orca-navigation-shortcuts'
+        `packaged bytes do not match ${FIXTURE_KEY}`
       )
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
@@ -46,10 +66,7 @@ describe('verify packaged plugin resources', () => {
   it('rejects a CRLF checkout of the launch tree', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-plugins-'))
     try {
-      const launchRoot = join(resourcesDir, 'plugins', 'launch')
-      await cp(join(process.cwd(), 'resources', 'plugins', 'launch'), launchRoot, {
-        recursive: true
-      })
+      const launchRoot = await copyIndexedLaunchTree(resourcesDir)
       for (const entry of await readdir(launchRoot, { recursive: true })) {
         const path = join(launchRoot, entry)
         if (!(await stat(path)).isFile()) {
@@ -58,8 +75,7 @@ describe('verify packaged plugin resources', () => {
         await writeFile(path, (await readFile(path, 'utf8')).replace(/\r?\n/g, '\r\n'))
       }
 
-      // Every file is rewritten, so the first mismatch is whichever plugin sorts
-      // first — don't pin a name a later branch can reorder.
+      // Every plugin is rewritten; assert first sorted mismatch without pinning reorderable plugin name.
       expect(() => verifyPackagedPluginResources(resourcesDir)).toThrow(
         /packaged bytes do not match stablyai\./
       )

@@ -1,8 +1,4 @@
-/**
- * The Create PR intent notice pairs a wrapping sentence with a "Source Control
- * AI settings" link. In a minimum-width sidebar the link must not share the
- * message's row, or it squeezes the sentence into a one-word-per-line column.
- */
+// In a narrow sidebar, place the Source Control AI settings link below the wrapping intent sentence to prevent one-word lines.
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -19,8 +15,7 @@ test.describe('Source Control Create PR intent notice layout', () => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     const { prWorktreeId, prWorktreePath, primaryBranch } = await seedCreatePrComposer(orcaPage)
-    // A real staged change with no commit draft is what routes the intent run
-    // into the "configure Source Control AI" notice, which carries the link.
+    // Stage a real change without a commit draft to reach the configure-AI intent notice.
     createStagedCommitMessageChange(prWorktreePath)
 
     await orcaPage.evaluate(
@@ -79,7 +74,6 @@ test.describe('Source Control Create PR intent notice layout', () => {
       await notice.screenshot({ path: process.env.ORCA_PR_INTENT_NOTICE_SCREENSHOT_PATH })
     }
 
-    // The layout contract: the link starts below the message's last line.
     const messageBox = await notice.locator('span').first().boundingBox()
     const linkBox = await settingsLink.boundingBox()
     expect(messageBox).not.toBeNull()

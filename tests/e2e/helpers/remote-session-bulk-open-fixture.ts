@@ -10,11 +10,7 @@ function fixtureCommand(fixturePath: string, marker: string): string {
     : command.map(quotePosixShell).join(' ')
 }
 
-/**
- * Continuous remote-agent-like flood fixture for freeze repros.
- * Many remote sessions stream while the client bulk-opens them.
- * One-shot FLOOD is not enough — agents keep writing.
- */
+// Stream continuously while the client bulk-opens sessions; a one-shot flood misses ongoing agent output.
 export function createRemoteSessionBulkOpenFixture(): {
   command: (marker: string) => string
   dispose: () => void

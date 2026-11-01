@@ -1,16 +1,4 @@
-/**
- * Runtime probe for the active macOS keyboard layout.
- *
- * Runs at boot, on native macOS input-source notifications, and on focus as a
- * fallback. The browser Keyboard API has no usable layout-change event.
- *
- * The base-layer fingerprint cannot distinguish standard ABC/US from
- * composition layouts such as Polish Pro, US Extended, ABC Extended,
- * and CJK Roman IMEs. Native identity protects their Option text (#1205);
- * macOS stays conservative without native identity; other platforms use
- * the browser fingerprint as a fallback.
- * See ./input-source-id.ts for the exact standard-layout allowlist.
- */
+/** Probe at boot, native input-source changes and focus (browser Keyboard API lacks usable change events). Native identity protects US-shaped composition layouts; missing identity stays conservative on macOS (#1205), with browser fingerprints elsewhere. */
 import {
   detectOptionAsAltFromLayoutMap,
   type DetectedLayoutCategory,
@@ -34,21 +22,15 @@ type KeyboardLayoutChangeSubscriber = (
 ) => () => void
 
 export type OptionAsAltProbe = {
-  /** Current detected category. Starts `'unknown'` until the first probe
-   *  resolves (within a few ms of app boot); listeners fire on every
-   *  category change. */
+  /** Start unknown until the first probe settles; notify on category changes. */
   getCurrent: () => DetectedLayoutCategory
   subscribe: (listener: Listener) => () => void
-  /** Force a re-probe. Safe to call from tests or debug tooling. */
   refresh: () => Promise<void>
-  /** Detach all window listeners. Tests only. */
   dispose: () => void
 }
 
 type CreateProbeOptions = {
-  /** Injectable reader for the macOS input source ID. Defaults to the
-   *  preload `window.api.app.getKeyboardInputSourceId` when available.
-   *  Tests pass a stub to exercise the compose override deterministically. */
+  /** Inject native source identity for tests; defaults to the preload reader when available. */
   readInputSourceId?: InputSourceIdReader
   subscribeKeyboardLayoutChanged?: KeyboardLayoutChangeSubscriber
 }
@@ -168,8 +150,7 @@ export function createOptionAsAltProbe(
     }
 
     if (!keyboard?.getLayoutMap) {
-      // Non-Chromium or Electron stripped of the Keyboard API. Stay at
-      // 'unknown' → terminal defaults to 'false' (safe for non-US).
+      // Missing browser Keyboard API keeps unknown/composition-safe defaults.
       notify('unknown')
       return
     }
@@ -180,9 +161,7 @@ export function createOptionAsAltProbe(
       }
       notify(detectOptionAsAltFromLayoutMap(map))
     } catch (err) {
-      // getLayoutMap can reject in some Chromium corner cases (unavailable
-      // permission, transient failure). Log once and keep the last known
-      // good value so we don't silently regress a user mid-session.
+      // Log transient layout-map rejection once and retain the last good value to avoid changing behavior mid-session.
       console.warn('[option-as-alt-probe] getLayoutMap rejected:', err)
     }
   }
@@ -212,8 +191,6 @@ export function createOptionAsAltProbe(
   win.addEventListener('focus', onFocus)
   const unsubscribeKeyboardLayoutChanged = subscribeKeyboardLayoutChanged(onKeyboardLayoutChanged)
 
-  // Initial probe. Fire-and-forget; callers subscribe and pick up the
-  // result as soon as Chromium's layout map resolves.
   void probe()
 
   return {
@@ -234,9 +211,7 @@ export function createOptionAsAltProbe(
   }
 }
 
-/** Singleton probe for the app. Initialized lazily on first getter call so
- *  test environments without a `window` don't trigger side effects at
- *  import time. */
+/** Create lazily so importing in windowless test environments has no side effects. */
 let _singleton: OptionAsAltProbe | null = null
 
 export function getOptionAsAltProbe(): OptionAsAltProbe {

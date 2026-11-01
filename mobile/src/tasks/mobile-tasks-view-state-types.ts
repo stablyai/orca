@@ -6,7 +6,7 @@ import type {
   GitHubProjectRef
 } from './mobile-tasks-dependencies'
 import type { GitHubProjectSortDirection } from '../../../src/shared/github/project-types'
-import type { JiraIssueFilter } from '../../../src/shared/jira-types'
+import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
 export type GitHubTaskKind = 'issues' | 'prs'
 

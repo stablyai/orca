@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { runProcess } from '@orca/process-host'
 import {
   createCodexStructuredLaunchResolver,
@@ -58,7 +58,7 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
       const sources = {
         resolveCommand: (options?: { pathEnv?: string | null; homePath?: string }) =>
           resolveStructuredAgentCommand('codex', settings, options),
-        resolveAgentLaunchEnv: () => resolveTuiAgentLaunchEnv('codex', settings.agentDefaultEnv)
+        resolveAgentLaunchEnv: () => resolveTuiAgentLaunchEnv('codex', settings)
       }
       const environment = createStructuredAgentEnvironmentResolvers(sources)
       const record: AgentSessionRecord = {
@@ -98,7 +98,6 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
         await expect(
           resolve({ identity: identityFor(record.sessionId), spawnToken: TEST_SPAWN_TOKEN })
         ).rejects.toThrow('0.135.0')
-        // An external update is checked again on the next chat start.
         await writeFile(versionFile, '0.136.0')
         await expect(
           resolve({ identity: identityFor(record.sessionId), spawnToken: TEST_SPAWN_TOKEN })

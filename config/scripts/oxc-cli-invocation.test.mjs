@@ -13,16 +13,12 @@ for (const { name, resolveInvocation } of [
   { name: 'oxlint', resolveInvocation: () => resolveOxlintInvocation(repoRoot) }
 ]) {
   describe(`${name} CLI invocation`, () => {
-    it('runs under this process node without a batch shim', () => {
+    it('launches the installed CLI without a shell', () => {
       const { command, prefixArgs } = resolveInvocation()
       expect(command).toBe(process.execPath)
       expect(prefixArgs).toHaveLength(1)
       expect(prefixArgs[0]).not.toMatch(/\.(cmd|bat)$/i)
       expect(existsSync(prefixArgs[0])).toBe(true)
-    })
-
-    it('launches the installed CLI without a shell', () => {
-      const { command, prefixArgs } = resolveInvocation()
       const result = spawnSync(command, [...prefixArgs, '--help'], {
         cwd: repoRoot,
         encoding: 'utf8',

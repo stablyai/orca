@@ -1,16 +1,17 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { clearTransientTerminalState } from '../slices/terminal-helpers'
 import {
   clearCommittedPtyShutdownSettlements,
   markCommittedPtyShutdowns,
   settleDeferredPtyShutdownExits
 } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
-import {
-  removeSleepingRecordsReplacedByManualWorktreeSleep,
-  type AgentStatusWorktreeShutdownReason,
-  type RetainedAgentEntry
-} from '../slices/agent-status'
+import '../slices/agent-status/agent-status'
+import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../slices/agent-status/agent-status-sleeping-records'
+import type {
+  AgentStatusWorktreeShutdownReason,
+  RetainedAgentEntry
+} from '../slices/agent-status/agent-status-contract'
 import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { copyOnWriteRecord } from '../copy-on-write-record'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'
@@ -49,11 +50,7 @@ export function commitTerminalShutdownState({
               clearTransientTerminalState(tab, index)
             )
           }
-      // Why copy-on-write everywhere below: a worktree whose panes already exited hits
-      // this with nothing to clear, and unconditional spreads then hand every map a new
-      // identity for no data change. ptyIdsByTabId is the costly one — six components
-      // select it whole, and selectLivePtyIdsForWorktree memoizes per sidebar card on
-      // its identity, so churning it rebuilds that record once per card.
+      // Use copy-on-write for already-exited workspaces; churning ptyIdsByTabId invalidates whole-map selectors and every sidebar live-PTY memo.
       const ptyIdsByTabId = copyOnWriteRecord(state.ptyIdsByTabId)
       for (const tab of tabs) {
         // Why `!== undefined`: an absent key is not an empty array, and the spread this

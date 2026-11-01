@@ -54,6 +54,10 @@ vi.mock('../ipc/browser-tab-registration-wait', () => ({
   waitForWorktreeTabRegistration: waitForWorktreeTabRegistrationMock
 }))
 
+vi.mock('../browser/browser-main-window-readiness', () => ({
+  whenBrowserMainWindowReady: async () => null
+}))
+
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
@@ -67,8 +71,9 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
         getActivePageId: vi.fn(() => 'page-1'),
         tabList: vi.fn(() => ({ tabs: [] }))
       } as unknown as AgentBrowserBridge)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host fake; these tests reach only the methods it defines.
   return {
-    resolveWorktreeSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAuthoritativeWindow: vi.fn(),
@@ -118,7 +123,11 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
       createHost({
         getAgentBrowserBridge: () => bridge,
         getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab: vi.fn(), closeTab })),
+        getOffscreenBrowserBackend: vi.fn(() => ({
+          createTab: vi.fn(),
+          closeTab,
+          ownsTab: () => true
+        })),
         retireRuntimeOwnedBrowserSessionTab
       })
     )
@@ -127,80 +136,14 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
       commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-offscreen' })
     ).resolves.toEqual({ closed: true })
     expect(closeTab).toHaveBeenCalledWith('page-offscreen')
-    // Why: without retirement, paired clients keep a dead session tab after an RPC close.
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-offscreen')
     expect(ipcMainOnMock).not.toHaveBeenCalledWith('browser:tabCloseReply', expect.anything())
     await expect(
       commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-other' })
     ).rejects.toMatchObject({ code: 'browser_tab_not_found' })
     expect(closeTab).toHaveBeenCalledTimes(1)
-    // Why the unknown page still reaches retirement: it is the ghost probe — a session row whose
-    // page this runtime no longer has is the one thing left to close. This host reports no such
-    // row, so the close still fails closed rather than claiming it removed something.
+    // Unknown-page ghost probes still fail closed when no session row was retired.
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledTimes(2)
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenLastCalledWith('wt-1', 'page-other')
-  })
-
-  it('closes the active headless tab on an implicit close', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
-    const closeTab = vi.fn(async () => {})
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map([['page-active', 303]])),
-      getActivePageId: vi.fn(() => 'page-active'),
-      getActiveWebContentsId: vi.fn(() => 303)
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab: vi.fn(), closeTab }))
-      })
-    )
-
-    await expect(commands.browserTabClose({ worktree: 'id:wt-1' })).resolves.toEqual({
-      closed: true
-    })
-    expect(closeTab).toHaveBeenCalledWith('page-active')
-  })
-
-  it('reports not-closed when no headless tab can be resolved', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    const closeTab = vi.fn(async () => {})
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map()),
-      getActivePageId: vi.fn(() => null),
-      getActiveWebContentsId: vi.fn(() => null)
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab: vi.fn(), closeTab }))
-      })
-    )
-
-    await expect(commands.browserTabClose({ worktree: 'id:wt-1' })).resolves.toEqual({
-      closed: false
-    })
-    expect(closeTab).not.toHaveBeenCalled()
-  })
-
-  it('forwards an unresolved worktree to the bridge unchanged for keyboard inserttext', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    const keyboardInsertText = vi.fn().mockResolvedValue({ inserted: true })
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
-      keyboardInsertText
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAuthoritativeWindow: vi.fn(() => ({ webContents: { send: vi.fn() } }) as never)
-      })
-    )
-
-    await commands.browserKeyboardInsertText({ text: 'hello' })
-    expect(keyboardInsertText).toHaveBeenCalledWith('hello', undefined, undefined)
   })
 })

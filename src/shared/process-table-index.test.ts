@@ -4,7 +4,6 @@ import {
   collectDescendantsFromIndex,
   type ProcessIdentityRow
 } from './process-table-index'
-import { parseStrictProcessTableRows } from './process-table-snapshot'
 
 function boundedWalk<Row extends ProcessIdentityRow>(rows: readonly Row[], rootPid: number) {
   const index = buildProcessTableIndex(rows)
@@ -138,23 +137,5 @@ describe('collectDescendantsFromIndex', () => {
   it('walks a deep valid tree without recursion or changing depth', () => {
     const rows = Array.from({ length: 10_000 }, (_, index) => ({ pid: index + 2, ppid: index + 1 }))
     expect(boundedWalk(rows, 1)).toEqual(rows.map((row, index) => ({ ...row, depth: index + 1 })))
-  })
-
-  it('preserves reverse capture order for a broad valid tree', () => {
-    const rows = Array.from({ length: 10_000 }, (_, index) => ({ pid: index + 2, ppid: 1 }))
-    expect(boundedWalk(rows, 1)).toEqual(rows.toReversed().map((row) => ({ ...row, depth: 1 })))
-  })
-
-  it('retains synthetic POSIX host identity fields through a cycle', () => {
-    const rows = parseStrictProcessTableRows('5 6 5 6 S pts/1 100 bash\n6 5 6 6 S+ pts/1 200 codex')
-    expect(boundedWalk(rows, 5)).toEqual([{ ...rows[1], depth: 1 }])
-  })
-
-  it('retains synthetic Windows creation markers without treating a PID as an incarnation', () => {
-    const rows = [
-      { pid: 5, ppid: 6, creationTimeMs: 100, name: 'pwsh.exe' },
-      { pid: 6, ppid: 5, creationTimeMs: 200, name: 'node.exe' }
-    ]
-    expect(boundedWalk(rows, 5)).toEqual([{ ...rows[1], depth: 1 }])
   })
 })

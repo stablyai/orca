@@ -5,15 +5,13 @@ import { isAgentStatusHooksEnabled } from '../../shared/agent-status-hooks-setti
 
 type RuntimeDeps = NonNullable<ConstructorParameters<typeof OrcaRuntimeService>[2]>
 
-/** The hook-store bindings every runtime host (desktop, `orca serve`, orcad) gives its runtime. */
 export function agentHookRuntimeDeps(
   server: AgentHookServer,
   observedPaneIdentities: Pick<AgentStatusObservedPaneIdentities, 'read'>,
   getSettings: () => Parameters<typeof isAgentStatusHooksEnabled>[0]
 ) {
   return {
-    // Why: main's OSC parse is the only producer for a PTY agent, and this store is the only
-    // place `worktree.ps` and the mobile projection read from.
+    // OSC-derived PTY status feeds the store read by worktree.ps and mobile projections.
     onTerminalAgentStatus: (event) => server.ingestTerminalStatus(event),
     onTerminalProgramStatusFacet: (event) => server.ingestProgramStatusFacet(event),
     onClaudeTerminalEvidence: (paneKey, evidence) =>
@@ -21,15 +19,16 @@ export function agentHookRuntimeDeps(
     getAgentStatusSnapshot: () =>
       server.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
     getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
-    // Why unfiltered: resume-identity rows carry the provider session mobile native chat
-    // addresses transcripts by — Pi publishes identity that way and would otherwise be unreachable.
+    // Include resume identities so mobile can locate provider transcripts, including Pi sessions.
     getAgentProviderSessionSnapshot: () => server.getStatusSnapshot(),
     getAgentProviderSessionRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
-    // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
-    // read, so a row observed under one process otherwise acquires whatever owns the pane now.
+    subscribeAgentProviderSessionChanges: (listener) =>
+      server.subscribeProviderSessionChanges(listener),
+    // Use identity captured at observation; resolving now could attribute cached rows to a new process.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
-    // Why: structured chats have no hooks, so the host writes their projections into the same store.
+    // Structured chats publish here directly because they have no hooks.
     structuredAgentStatusSink: {
+      withSavedStatusGroup: (visit) => server.withSavedStructuredStatusGroup(visit),
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
       forget: (subject) => server.dropStructuredStatus(subject),
       publishChildWork: (subject, evidence, provider) =>

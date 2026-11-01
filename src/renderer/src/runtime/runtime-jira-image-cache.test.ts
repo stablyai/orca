@@ -9,7 +9,7 @@ import {
   onJiraImageCacheInvalidated
 } from './runtime-jira-image-cache'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { jiraImageReference } from '../../../shared/jira-attachment-image'
+import { jiraImageReference } from '../../../shared/jira/jira-attachment-image'
 
 const { download } = vi.hoisted(() => ({ download: vi.fn() }))
 vi.mock('./runtime-jira-image-client', () => ({ readRuntimeJiraImage: download }))

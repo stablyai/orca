@@ -7,10 +7,7 @@ export const FEED_PIN_MAX_BATCHES = 8
 
 type Pin = { pages: readonly SidebarInputsReadResult[]; bytes: number; expiresAt: number }
 
-/**
- * Batches whose later pages a reader fetches by token, unchanged and shared by every reader.
- * They stay within their bounds, except one batch larger than them all, pinned alone.
- */
+/** Pin immutable batches for shared page-token reads within count/byte bounds; one oversized batch may be pinned alone. */
 export class FeedPins {
   /** By batch key, oldest first. */
   private readonly pins = new Map<string, Pin>()

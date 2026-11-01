@@ -1,15 +1,18 @@
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentSessionFailureRowWords
-} from '../../shared/agent-session-failure-words'
+} from '../../shared/agent-session/failures/agent-session-failure-words'
 import {
   usageLimitResetsAt,
   type AgentSessionUsageLimit,
   type AgentSessionUsageLimitWindow
-} from '../../shared/agent-session-usage-limit'
+} from '../../shared/agent-session/failures/agent-session-usage-limit'
 import type { ClaudeOpenTurn } from './claude-open-turn'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 
 const CLAUDE_LIMIT_WINDOWS: Record<string, AgentSessionUsageLimitWindow> = {
   five_hour: 'session',
@@ -20,7 +23,6 @@ const CLAUDE_LIMIT_WINDOWS: Record<string, AgentSessionUsageLimitWindow> = {
   overage: 'credits'
 }
 
-/** The ends a result reports when a limit refused its request; any other is a different failure. */
 const LIMIT_TERMINAL_REASONS = ['api_error']
 
 export type ClaudeUsageLimitRow = AgentSessionFailureRowWords & {
@@ -117,7 +119,7 @@ export class ClaudeUsageLimits {
     }
   }
 
-  /** Every refusing limit must reset before a request can run, so the latest reset is the one. */
+  /** All rejecting limits must reset before requests can resume. */
   private limit(): AgentSessionUsageLimit | null {
     const now = this.now()
     for (const [type, resetsAt] of this.rejected) {

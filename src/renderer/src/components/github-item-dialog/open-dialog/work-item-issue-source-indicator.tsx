@@ -5,7 +5,7 @@ import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items'
 
-// Why: recover the PR-source slug the dialog lacks from workItemsCache, scoped to this repoPath so a sibling repo sharing the issue-source (e.g. two forks) can't mislabel the chip; hide when unknown rather than guess (design doc §1).
+// Recover the PR slug from this repo’s cache only; sibling forks may share an issue source but differ in PR origin.
 export function WorkItemIssueSourceIndicator({
   url,
   repoId,
@@ -15,7 +15,7 @@ export function WorkItemIssueSourceIndicator({
   repoId: string | null
   repoPath?: string | null
 }): React.JSX.Element | null {
-  // Why: resolve repo sources via the primary cache entry, or any sibling entry if the Tasks view only populated a query-keyed slot (sources are repo-level, so any is safe).
+  // Sources are repo-level; query-keyed sibling entries are safe when the primary cache slot is absent.
   const sources = useAppStore((s) =>
     s.getWorkItemsAnySourcesForRepo(repoId ?? '', PER_REPO_FETCH_LIMIT, repoPath ?? undefined)
   )

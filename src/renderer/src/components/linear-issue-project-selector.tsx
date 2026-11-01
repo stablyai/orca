@@ -1,3 +1,6 @@
+import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-publication'
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, FolderKanban, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -16,11 +19,9 @@ import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export function LinearIssueProjectSelector({
   issue,
-  onProjectChanged,
   sourceContext
 }: {
   issue: LinearIssue
-  onProjectChanged: (project: LinearProjectSummary) => void
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
@@ -56,7 +57,7 @@ export function LinearIssueProjectSelector({
           if (mountedRef.current && requestId === searchRequestIdRef.current) {
             toast.error(
               error instanceof Error
-                ? error.message
+                ? taskProviderErrorText(error.message)
                 : translate(
                     'auto.components.LinearIssueWorkspace.38b80780c2',
                     'Failed to load projects'
@@ -78,6 +79,7 @@ export function LinearIssueProjectSelector({
 
   const handleSelectProject = useCallback(
     async (project: LinearProjectSummary) => {
+      const scope = getLinearSourceScope(providerSettings)
       setSavingProjectId(project.id)
       try {
         const result = await linearUpdateIssue(
@@ -87,19 +89,23 @@ export function LinearIssueProjectSelector({
           issue.workspaceId
         )
         if (result.ok) {
-          onProjectChanged(project)
-          patchLinearIssue(issue.id, { project }, { sourceContext })
+          confirmLinearIssueWrite({
+            scope,
+            id: issue.id,
+            patch: { project },
+            publish: () => patchLinearIssue(issue.id, { project }, { scope })
+          })
           toast.success(
             translate('auto.components.LinearIssueWorkspace.f9d4ef9807', 'Project updated')
           )
           setOpen(false)
         } else {
-          toast.error(result.error)
+          toast.error(taskProviderErrorMessage(result))
         }
       } catch (error) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? taskProviderErrorText(error.message)
             : translate(
                 'auto.components.LinearIssueWorkspace.8b5b593053',
                 'Failed to update project'
@@ -109,14 +115,7 @@ export function LinearIssueProjectSelector({
         setSavingProjectId(null)
       }
     },
-    [
-      issue.id,
-      issue.workspaceId,
-      onProjectChanged,
-      patchLinearIssue,
-      providerSettings,
-      sourceContext
-    ]
+    [issue.id, issue.workspaceId, patchLinearIssue, providerSettings]
   )
 
   return (

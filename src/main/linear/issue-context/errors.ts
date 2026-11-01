@@ -1,11 +1,12 @@
 import type { LinearErrorCode, LinearIncludeErrorCode } from '../../../shared/linear/agent-access'
+import { linearTransportErrorCodes } from '../linear-request-recovery'
 
 export class LinearAgentAccessError extends Error {
   readonly code: LinearErrorCode
   readonly data?: unknown
 
-  constructor(code: LinearErrorCode, message: string, data?: unknown) {
-    super(message)
+  constructor(code: LinearErrorCode, message: string, data?: unknown, cause?: Error) {
+    super(message, cause ? { cause } : undefined)
     this.name = 'LinearAgentAccessError'
     this.code = code
     this.data = data
@@ -18,6 +19,19 @@ export function linearError(
   data?: unknown
 ): LinearAgentAccessError {
   return new LinearAgentAccessError(code, message, data)
+}
+
+export function toLinearAccessError(error: unknown): LinearAgentAccessError {
+  if (error instanceof LinearAgentAccessError) {
+    return error
+  }
+  const codes = linearTransportErrorCodes(error)
+  return new LinearAgentAccessError(
+    classifyLinearError(error),
+    linearMessage(error),
+    undefined,
+    codes.length ? new Error(`Linear transport failure: ${codes.join(', ')}`) : undefined
+  )
 }
 
 export function includeErrorCode(error: unknown): LinearIncludeErrorCode {
@@ -63,7 +77,7 @@ export function linearMessage(error: unknown): string {
 }
 
 export function sanitizeLinearErrorMessage(message: string): string {
-  // Why: provider text is useful in CLI errors, but raw SDK failures can embed secrets or user payloads.
+  // Preserve useful provider diagnostics while removing secrets and user payloads from SDK errors.
   return stripLinearStackTrace(message)
     .replace(
       /(headers?\s*[:=]\s*)\{[^{}]*(?:authorization|token|api[-_]?key)[^{}]*\}/gi,

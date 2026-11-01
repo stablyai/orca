@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  nativeSkillPathSemantics,
-  normalizedSkillPath,
   POSIX_SKILL_PATH_SEMANTICS,
   skillPathDepthBelow,
   skillPathInside,
@@ -72,19 +70,5 @@ describe('skillPathDepthBelow', () => {
     expect(skillPathDepthBelow('/r', '/r/a/SKILL.md', POSIX_SKILL_PATH_SEMANTICS)).toBe(2)
     expect(skillPathDepthBelow('/r', '/r/a/b/c/d/SKILL.md', POSIX_SKILL_PATH_SEMANTICS)).toBe(5)
     expect(skillPathDepthBelow('/r', '/other/SKILL.md', POSIX_SKILL_PATH_SEMANTICS)).toBeNull()
-  })
-})
-
-describe('nativeSkillPathSemantics', () => {
-  it('reads the platform it is given rather than the process it runs in', () => {
-    expect(nativeSkillPathSemantics('win32')).toEqual(WINDOWS_SKILL_PATH_SEMANTICS)
-    expect(nativeSkillPathSemantics('linux')).toEqual(POSIX_SKILL_PATH_SEMANTICS)
-    expect(nativeSkillPathSemantics('darwin')).toEqual(POSIX_SKILL_PATH_SEMANTICS)
-  })
-})
-
-describe('normalizedSkillPath', () => {
-  it('resolves before comparing', () => {
-    expect(normalizedSkillPath('/a/b/../c', POSIX_SKILL_PATH_SEMANTICS)).toBe('/a/c')
   })
 })

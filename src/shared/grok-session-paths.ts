@@ -18,12 +18,10 @@ export {
 } from './grok-session-path-lookup-queue'
 
 export const GROK_CHAT_HISTORY_FILE = 'chat_history.jsonl'
-// Why: Grok URL-encodes the cwd for the sessions group directory. When that
-// encoded name exceeds 255 bytes it switches to a slug+hash layout.
+// Grok switches encoded cwd names above 255 bytes to slug+hash groups.
 const GROK_ENCODED_CWD_DIR_MAX_BYTES = 255
 export const GROK_SESSION_ID_MAX_LENGTH = 128
-// Why: session discovery runs in hook/main hot paths; one corrupt or enormous
-// sessions root must not cause unbounded candidate probes.
+// Bound candidate probes so corrupt/enormous roots cannot stall hook/main hot paths.
 export const GROK_SESSION_GROUP_SCAN_MAX_ENTRIES = 2_048
 
 export type GrokSessionPathEnv =
@@ -202,8 +200,7 @@ async function scanGrokChatHistoryBySessionId(
   try {
     directory = await sessionDirectoryOpener(sessionsDir)
     let eligibleEntries = 0
-    // Why: the filesystem's iteration order defines the bounded subset; sorting
-    // would first materialize an unbounded sessions root on the main process.
+    // Use filesystem iteration order for a bounded subset; sorting would first materialize an unbounded root.
     for await (const entry of directory) {
       if (!entry.isDirectory() || entry.isSymbolicLink()) {
         continue
@@ -225,8 +222,7 @@ async function scanGrokChatHistoryBySessionId(
       try {
         await directory.close()
       } catch {
-        // Async iteration closes Node Dir handles automatically; custom/test
-        // iterators still get the explicit close attempt above.
+        // Node async iteration already closes Dir; custom/test iterators still need the explicit close attempt.
       }
     }
   }

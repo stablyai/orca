@@ -1,28 +1,19 @@
 import type { editor, ISelection } from 'monaco-editor'
 
-// Why: 20 entries covers a typical working set of open/recently-viewed files.
-// Eviction only means losing a scroll position (user sees top of file), not a
-// correctness bug, so a conservative cap is fine.
+// Twenty entries covers typical recent files; eviction only loses scroll position, not correctness.
 const CACHE_MAX_ENTRIES = 20
 
-// Why: Module-scoped Maps grow unboundedly as unique file keys accumulate.
-// Cap them with a simple LRU eviction: after each set, if the map exceeds
-// this limit, delete the oldest entry (Maps iterate in insertion order).
-// `maxEntries` is optional so consumers with their own Maps (like
-// CombinedDiffViewer) can use different limits.
+/** Bound module-scoped maps with insertion-order LRU, evicting one oldest entry after each set. Consumers may supply their own limit. */
 export function setWithLRU<K, V>(
   map: Map<K, V>,
   key: K,
   value: V,
   maxEntries: number = CACHE_MAX_ENTRIES
 ): void {
-  // Re-insert to refresh insertion order (move to end).
   map.delete(key)
   map.set(key, value)
   if (map.size > maxEntries) {
-    // Why: Use the iterator's `.done` property rather than checking
-    // `value !== undefined`, because K could legitimately be `undefined`
-    // in a generic Map — the undefined check would skip valid evictions.
+    // Use iterator.done: undefined can be a valid generic Map key and must still be evicted.
     const first = map.keys().next()
     if (!first.done) {
       map.delete(first.value)
@@ -30,24 +21,21 @@ export function setWithLRU<K, V>(
   }
 }
 
-// Why: A single shared Map for scroll positions across all editor components.
-// Module-scoped so it survives component unmount/remount without triggering
-// React re-renders (unlike Zustand, which would broadcast state changes on
-// every scroll event even though no component renders from scroll position).
+// Module maps preserve positions across remount without broadcasting store updates on every scroll.
 export const scrollTopCache = new Map<string, number>()
 
-// Why: Same rationale as scrollTopCache — module-scoped avoids Zustand
-// re-renders on every cursor or selection change.
+// Keep cursor/selection changes outside Zustand for the same no-rerender reason.
 export const editorSelectionCache = new Map<string, readonly ISelection[]>()
 
-// Why: PDFs store a pdf.js location in PDF user space, not a scrollTop — page
-// layout is rebuilt at a scale that depends on container width, so a pixel
-// offset restores to the wrong place at a different zoom or pane width.
+// Store pdf.js user-space locations; pixel offsets drift when pane width/zoom rebuilds page layout.
 export type PdfViewPosition = { pageNumber: number; top: number; left: number }
 export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
 
-// Why: Diff editors need more than a numeric scroll offset to restore the same
-// working context. Monaco's diff view state also carries cursor/selection state
-// for both sides plus diff model state, which matches VS Code's restore path
-// more closely than Orca's previous scroll-only cache.
+// Persist playback seconds across media-tab unmounts so return does not restart the clip.
+export const mediaPlaybackPositionCache = new Map<string, number>()
+
+// Monaco diff view state includes both cursors/selections and model state; preserve that context beyond numeric scrolling, as VS Code does.
 export const diffViewStateCache = new Map<string, editor.IDiffEditorViewState>()
+
+// Full Monaco view state carries folds and horizontal scroll that scrollTop/selection caches miss.
+export const editorViewStateCache = new Map<string, editor.ICodeEditorViewState>()

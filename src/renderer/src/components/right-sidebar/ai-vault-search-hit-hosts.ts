@@ -2,10 +2,7 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 
-/**
- * Each hit host's name, the same one the host menu shows, or null while every hit
- * shares one host: the badge only tells copies of a session on different hosts apart.
- */
+/** Use host-menu names to distinguish cross-host copies; return null when all hits share a host. */
 export function aiVaultSearchHitHostLabels(
   hits: readonly Pick<AiVaultSession, 'executionHostId'>[],
   hostOptions: readonly AiVaultHostScopeOption[]

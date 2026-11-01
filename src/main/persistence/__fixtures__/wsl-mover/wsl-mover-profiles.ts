@@ -1,9 +1,4 @@
-/**
- * Synthetic profiles for the WSL mover's projection tests. Each profile is one logical state,
- * rendered as the desktop holds it before a move (UNC paths, host `local`) or as the distro's
- * orcad holds it after (Linux paths, the host's own `local` view). Rows outside the move scope
- * exist only on the source side, as they would.
- */
+// Render the same logical state as desktop UNC paths or destination Linux paths; out-of-scope rows stay behind.
 import type {
   WslMoveProjectionInput,
   WslMoveProjectionScope
@@ -37,7 +32,10 @@ export function wslMoverProfileScope(
     repoIds: new Set(name === 'mixed-windows-wsl' ? ['repo-a'] : repoIds),
     folderWorkspaceIds: new Set(name === 'folders-and-automations' ? ['folder-1'] : []),
     ownerHostId: 'local',
-    hostAliases: side === 'source' ? ['local'] : ['local', `runtime:wsl:${WSL_MOVER_DISTRO}`]
+    hostAliases:
+      side === 'source'
+        ? ['local']
+        : ['local', `runtime:wsl:${WSL_MOVER_DISTRO}`, `wsl:${WSL_MOVER_DISTRO}`]
   }
 }
 
@@ -56,7 +54,6 @@ export function wslMoverProfile(
   }
 }
 
-/** A Windows-drive repo and a repo in another distro: neither moves, both stay on the source. */
 function withOutOfScopeRows(
   profile: WslMoveProjectionInput,
   side: WslMoverProfileSide,

@@ -16,17 +16,16 @@ import { getSystemCodexHomePath } from '../../../codex/codex-home-paths'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../../pty/codex-home-wsl-env'
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { parseWslPath } from '../../../wsl'
+import { isWslTerminalSpawn } from '../wsl-terminal-spawn'
 
 export function shouldSkipCodexHomeEnvForWindowsShell(
   shellPath: string | undefined,
   cwd: string | undefined
 ): boolean {
-  return isWslShellName(shellPath) || (typeof cwd === 'string' && parseWslPath(cwd) !== null)
+  return isWslTerminalSpawn(shellPath, cwd)
 }
 
-// Why: with the real-home flag ON, a host system-default launch resolves to a
-// null managed home. Signal the env builder to strip a nested-Orca-inherited
-// override instead of injecting one, so Codex runs on the user's own ~/.codex.
+// System-default real-home launches must remove inherited Orca overrides when no managed home is selected.
 export function shouldStripInheritedOrcaCodexHome(args: {
   target: CodexAccountSelectionTarget
   selectedCodexHomePath: string | null
@@ -40,19 +39,14 @@ export function shouldStripInheritedOrcaCodexHome(args: {
 
 export const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'ORCA_CODEX_HOME'] as const
 
-// Why: system-default real-home routing runs Codex on the user's own ~/.codex.
-// Nested Orca panes inherit the parent's Orca-owned override; strip only that
-// (CODEX_HOME matching Orca's private ORCA_CODEX_HOME marker), and always drop
-// the marker so a shell-ready wrapper cannot restore the managed home. A
-// user-set CODEX_HOME with no Orca marker is preserved untouched (see #8606).
+// Remove only overrides matching Orca's private marker, then drop the marker so wrappers cannot restore them; preserve user CODEX_HOME (#8606).
 export function stripInheritedOrcaCodexHomeOverride(baseEnv: Record<string, string>): void {
   for (const key of getLocalOrcaCodexHomeEnvKeysToDelete(baseEnv)) {
     delete baseEnv[key]
   }
 }
 
-// Why: in-process spawns share main's inherited environment, so equality with
-// the private marker is authoritative here. Persistent daemons compare locally.
+// Local spawns share this environment; persistent daemons must compare their own inherited values.
 export function getLocalOrcaCodexHomeEnvKeysToDelete(env: Record<string, string>): string[] {
   const inheritedOrcaOverride = env.ORCA_CODEX_HOME ?? process.env.ORCA_CODEX_HOME
   const inheritedCodexHome = env.CODEX_HOME ?? process.env.CODEX_HOME
@@ -200,12 +194,7 @@ export function codexHomePathsEqual(left: string | null, right: string): boolean
   return codexHomeSelectionsEqual(left, right)
 }
 
-// Why: CODEX_HOME is fixed in a shell's environment at spawn and the daemon
-// keeps that shell alive across app restarts, so the launch account is the only
-// way to tell later that a pane still runs Codex as the previously selected
-// account. A reattach inherits that baked environment rather than choosing one,
-// so re-recording it under the current selection would erase the very evidence
-// that the pane is stale.
+// Reattach retains the shell's original CODEX_HOME; recording the current selection would hide stale-account panes.
 export function recordCodexPaneAccountForSpawn(args: {
   ptyId: string | undefined
   isDaemonHostSpawn: boolean

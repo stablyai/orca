@@ -18,13 +18,7 @@ const paths = [
 ]
 
 describe('toEditorModelUri', () => {
-  it.each(paths)('yields the undo-preserving file scheme for %s', (path) => {
-    expect(URI.parse(toEditorModelUri(path)).scheme).toBe('file')
-  })
-
-  // Monaco keys its model registry by `uri.toString()`, and `@monaco-editor/react` builds the model
-  // by calling `Uri.parse` on the `path` prop — so the key a disposal lookup computes only matches
-  // the created model if the helper's output survives that parse unchanged.
+  // Model creation parses path strings and registry lookup uses toString; require round-trip stability so disposal finds the created model.
   it.each(paths)('round-trips through the Uri.parse the editor applies to %s', (path) => {
     const modelUri = toEditorModelUri(path)
     expect(URI.parse(modelUri).toString()).toBe(modelUri)
@@ -45,7 +39,7 @@ describe('toEditorModelUri', () => {
     const remoteUri = toEditorModelUri(path, '["hub-a","ssh:target#1"]')
     const remote = URI.parse(remoteUri)
     expect(remote.scheme).toBe('vscode-remote')
-    // A UNC server, the authority of a local file URI, moves into the path and marks the owner.
+    // Move UNC servers into owned URI paths and tag authorities to retain their distinct identity.
     expect(remote.authority).toMatch(local.authority ? /^[0-9a-f]{16}-unc$/ : /^[0-9a-f]{16}$/)
     expect(remote.path).toBe(local.authority ? `/${local.authority}${local.path}` : local.path)
     expect(remote.path).not.toMatch(/^\/\//)
@@ -54,11 +48,6 @@ describe('toEditorModelUri', () => {
     expect(toEditorModelUri(remoteUri)).toBe(remoteUri)
     expect(toEditorModelUri(path, '["hub-b","ssh:target#1"]')).not.toBe(remoteUri)
     expect(toEditorModelUri(remoteUri, '["hub-a","ssh:target#1"]')).toBe(remoteUri)
-  })
-
-  it('folds drive-letter case under an owner too', () => {
-    const owner = '["hub-a","ssh:target"]'
-    expect(toEditorModelUri('C:/repo/a.ts', owner)).toBe(toEditorModelUri('c:/repo/a.ts', owner))
   })
 
   it('keeps a UNC path apart from the same POSIX path under one owner', () => {

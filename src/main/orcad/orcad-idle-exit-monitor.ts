@@ -1,9 +1,4 @@
-/**
- * Decides when a managed orcad has been unused long enough to stop.
- *
- * Every probe must answer `idle` on the same check, continuously for the whole quiet period.
- * A probe that throws or cannot answer counts as busy: silence is never evidence of idleness.
- */
+// Require all probes idle throughout the quiet period; failed/unknown probes count as busy.
 
 export type OrcadIdleVerdict = 'idle' | 'busy' | 'unverifiable'
 
@@ -17,7 +12,7 @@ export type OrcadIdleExitEvidence = { quietSince: number; stoppedAt: number; tim
 type OrcadIdleExitMonitorOptions = {
   timeoutMs: number
   probes: readonly OrcadIdleProbe[]
-  /** Any client request restarts the quiet period, even one that came and went between checks. */
+  /** Include requests completed between checks when restarting the quiet period. */
   lastClientActivityAt: () => number
   onIdle: (evidence: OrcadIdleExitEvidence) => void | boolean | Promise<void | boolean>
   now?: () => number
@@ -56,7 +51,6 @@ export class OrcadIdleExitMonitor {
     }
   }
 
-  /** One check; resolves true once the quiet period elapsed and `onIdle` fired. */
   async check(): Promise<boolean> {
     const blocker = await this.findBlocker()
     if (this.stopped) {
@@ -119,7 +113,6 @@ export class OrcadIdleExitMonitor {
         .catch((error: unknown) => this.log(`[orcad] idle check failed: ${String(error)}`))
         .finally(() => this.schedule())
     }, this.pollMs)
-    // Never the reason the process stays alive.
     this.timer.unref?.()
   }
 }

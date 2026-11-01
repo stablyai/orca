@@ -24,7 +24,6 @@ export type MobileSessionLifecycleCloseHost = {
   republishSnapshot: (worktreeId: string) => void
 }
 
-/** Everything a close needs about the surface the request addresses, including one already retired. */
 export type MobileSessionLifecycleCloseContext = {
   closeParentTabId: string | null
   closeLeafId: string | null
@@ -80,10 +79,7 @@ export function resolveMobileSessionLifecycleCloseContext(args: {
         : null,
     parentLeaves,
     rendererLeaves,
-    // Why: exited PTYs keep a disconnected record for status reads, so record
-    // presence is not liveness — only `connected`, or a genuinely dead tab
-    // never retires and the echo loops forever. Daemon discovery can still
-    // prove a PTY live before its pane binding reconnects.
+    // Disconnected PTY records outlive exit; only connected/daemon evidence proves liveness.
     leafHasConnectedPty: (leaf) => {
       const snapshotPtyIds = [leaf.ptyId, leaf.parentLayout?.ptyIdsByLeafId?.[leaf.leafId]].filter(
         (ptyId): ptyId is string => Boolean(ptyId)
@@ -103,12 +99,7 @@ export function resolveMobileSessionLifecycleCloseContext(args: {
   }
 }
 
-/**
- * Adjudicates a close whose addressed surface is already absent.
- * Lifecycle echoes are idempotent: a provider exit may have already retired the
- * surface before the viewer reports its stale close. A user close still fails
- * closed so an unknown target cannot be hidden.
- */
+/** Absent lifecycle echoes are idempotent; absent user-close targets fail closed. */
 export function adjudicateAbsentMobileSessionTabClose(args: {
   host: MobileSessionLifecycleCloseHost
   context: MobileSessionLifecycleCloseContext
@@ -121,9 +112,7 @@ export function adjudicateAbsentMobileSessionTabClose(args: {
   if (reason === undefined || reason === 'user') {
     throw new Error(args.addressedByPtyCloseAuthority ? 'terminal_handle_stale' : 'tab_not_found')
   }
-  // A missing leaf can still be part of a live split parent. Closing that
-  // parent would take the surviving sibling down, so retain the refusal
-  // even though the addressed leaf has already been retired.
+  // A retired leaf can still have live siblings; never close their parent.
   const hasLiveRendererParentLeaf = context.rendererLeaves.some(context.rendererLeafHasConnectedPty)
   if (context.parentLeaves.some(context.leafHasConnectedPty) || hasLiveRendererParentLeaf) {
     const addressedDeadRendererLeaf =
@@ -139,9 +128,7 @@ export function adjudicateAbsentMobileSessionTabClose(args: {
     }
     return refusedMobileSessionTabClose('live-host-pty')
   }
-  // The renderer owns a graph-visible parent, including a dead leaf whose
-  // lifecycle echo arrived after main retired its mirror. Leave retirement
-  // to that renderer instead of acknowledging a host-side close.
+  // Renderer-visible parents remain renderer-owned even after main retires the mirrored dead leaf.
   if (context.closeParentTabId && host.tabs.has(context.closeParentTabId)) {
     return refusedMobileSessionTabClose('retirement-owner')
   }

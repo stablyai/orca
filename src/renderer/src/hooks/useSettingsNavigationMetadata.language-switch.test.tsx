@@ -8,10 +8,7 @@ import { i18n } from '../i18n/i18n'
 import { useSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 
-// Why: the Settings sidebar / Cmd+J nav labels are produced by translate() at
-// build time and memoized. Before the fix the memo deps excluded the active
-// locale, so a live language switch left the nav stuck in the old language
-// until Settings was remounted. This pins that the labels retranslate live.
+// A locale subscription rerender must also invalidate memoized Settings/Cmd+J labels.
 
 const roots: Root[] = []
 let latest: SettingsNavSection[] | null = null
@@ -56,11 +53,9 @@ it('retranslates the settings nav labels when the UI language changes live', asy
   await renderProbe()
   expect(agentsTitle()).toBe('Agents')
 
-  // Same path as the Settings → Appearance language switch.
   await act(async () => {
     await i18n.changeLanguage('es')
   })
 
-  // Without the active-locale memo dep this stays 'Agents' (stale cache).
   expect(agentsTitle()).toBe('Agentes')
 })

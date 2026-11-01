@@ -1,18 +1,12 @@
-/**
- * Which directory a POSIX host's orcad state hangs off when several machines share one `$HOME`
- * (an NFS home across a cluster) (#29059).
- *
- * Everything orcad keeps on a host — install slots, the PID and readiness files, activation
- * record, locks, runtime store and data root — names one machine's processes, and a PID is only
- * evidence on the machine that issued it. So the first machine to claim a home keeps the login
- * home's `~/.orca-remote` and `~/.orca` unchanged (no migration for single-machine installs); any
- * other machine gets a complete tree of its own under `~/.orca-remote/hosts/<key>/`. Even the
- * immutable install stays per machine: the runtime store's GC judges "in use" from processes it
- * can see, so a store shared across machines could be collected under another machine's server.
- */
-import { createHash } from 'node:crypto'
+// Shared-home hosts need per-machine state and runtime GC: a PID can prove ownership only on the machine that issued it (#29059).
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import {
+  machineKeyOf,
+  namedMachineHome,
+  ORCAD_MACHINE_NAME_PROBE,
+  parseOrcadMachineNameProbe
+} from './orcad-machine-name-home'
 import { ORCAD_ACTIVATION_FILENAME } from '../activation/orcad-activation-record'
 import { parseDarwinPlatformUuid } from '../../persistence/profile-state/profile-state-access-identity'
 import {
@@ -22,9 +16,7 @@ import {
   type RemoteHostPlatform
 } from '../../ssh/ssh-remote-platform'
 
-/** Under `~/.orca-remote`: names the one machine that owns the login home's orcad state. */
 export const ORCAD_MACHINE_CLAIM_FILENAME = 'orcad-machine.json'
-/** Under `~/.orca-remote`: one orcad home per other machine sharing this `$HOME`. */
 export const ORCAD_MACHINE_HOMES_DIRNAME = 'hosts'
 export const ORCAD_MACHINE_CLAIM_SCHEMA_VERSION = 1
 
@@ -34,7 +26,7 @@ const CLAIM_PRESENT = 'PRESENT'
 const RECORD_MAX_BYTES = 4096
 const ACCESS_ROOT = '.orca/.profile-state-access'
 const INSTALLED = 'INSTALLED'
-// What `stat -f -c %T` (GNU and busybox) names a local disk filesystem; anything else may be shared.
+// Unknown filesystem types may be shared; recognize only proven local disk types.
 const LOCAL_FILESYSTEM_TYPES = new Set([
   'ext2/ext3',
   'ext4',
@@ -57,9 +49,9 @@ const LOCAL_FILESYSTEM_TYPES = new Set([
 ])
 
 type OrcadMachineIdentity = {
-  /** Short, path-safe hash; the raw identity never lands on disk. */
+  /** Path-safe hash; raw machine identity is not persisted in the claim. */
   key: string
-  /** What the data root's profile-state owners record, to recognise another machine's. */
+  /** Match the identity recorded by profile-state owners. */
   machineIdentity: string
   hostname: string | null
 }
@@ -73,33 +65,29 @@ export type OrcadMachineHomeProbe = {
   loginHome: string
   identity: OrcadMachineIdentity | null
   claim: OrcadMachineClaimRead
-  /** Profile-state owners (live orcads, or crashed ones) in the login home's data root. */
+  /** Include live and crashed owners when attributing shared-home state. */
   dataRootOwners: readonly {
     host: string | null
     machineIdentity: string | null
   }[]
-  /** Keys that already have a machine home under `~/.orca-remote/hosts/`. */
   machineHomeKeys: readonly string[]
-  /** An orcad was already activated from the login home. */
   loginHomeInstalled: boolean
-  /** The login home sits on a local disk, so no other machine can have run that orcad. */
+  /** Local disks cannot belong to another machine's live server. */
   homeOnLocalDisk: boolean
+  /** Raw ORCA_MACHINE_NAME; invalid names refuse rather than fall back silently. */
+  machineName: string | null
 }
 
-type OrcadMachineHomeDecision =
+export type OrcadMachineHomeDecision =
   | { kind: 'login-home' }
   | { kind: 'claim'; machineKey: string }
   | { kind: 'machine-home'; machineKey: string }
-  /** A pre-claim install on a shared home that no record attributes to a machine. */
+  /** Shared pre-claim installs require attribution before takeover. */
   | { kind: 'unresolved'; machineKey: string; cause: OrcadMachineOwnershipUnresolvedCause }
 
-/** A stopped install left no owner; an older orcad's owner recorded no machine identity. */
 type OrcadMachineOwnershipUnresolvedCause = 'stopped-install' | 'unattributed-owner'
 
-/**
- * Reads the login home, this machine's identity, the claim, and who holds the shared data root,
- * in one exec. Identity sources match `profile-state-access-identity.ts`, so the two agree.
- */
+/** Probe home ownership once, using the same machine identity sources as profile-state access. */
 export function orcadMachineHomeProbeCommand(host: RemoteHostPlatform): string {
   const claim = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_CLAIM_FILENAME}`)}`
   const access = `"$HOME"/${quotePosixShell(ACCESS_ROOT)}`
@@ -108,12 +96,13 @@ export function orcadMachineHomeProbeCommand(host: RemoteHostPlatform): string {
   return [
     `printf '%s\\n' "$HOME"; echo ${SECTION};`,
     host.os === 'darwin'
-      ? // Bare first so a test (or a host that moved it) can supply its own ioreg.
+      ? // Try PATH first for relocated host tools before the standard macOS location.
         '{ ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null ||' +
         ' /usr/sbin/ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null; } | grep IOPlatformUUID;'
       : 'cat /etc/machine-id 2>/dev/null;',
-    `echo; echo ${SECTION}; uname -n 2>/dev/null; echo; echo ${SECTION};`,
-    // An empty claim is one a full disk cut short; the claim command replaces it.
+    `echo; echo ${SECTION}; uname -n 2>/dev/null; echo;`,
+    `${ORCAD_MACHINE_NAME_PROBE} echo ${SECTION};`,
+    // Full disks can leave an empty claim; publication can replace it.
     `if { [ ! -e ${claim} ] && [ ! -L ${claim} ]; } || { [ -f ${claim} ] && [ ! -s ${claim} ]; };`,
     `then echo ${CLAIM_ABSENT};`,
     `elif [ -f ${claim} ]; then echo ${CLAIM_PRESENT}; head -c ${RECORD_MAX_BYTES} ${claim}; echo;`,
@@ -122,7 +111,7 @@ export function orcadMachineHomeProbeCommand(host: RemoteHostPlatform): string {
     `[ -f "$f" ] && { head -c ${RECORD_MAX_BYTES} "$f"; echo; }; done; echo ${SECTION};`,
     `ls -1 ${homes} 2>/dev/null; echo ${SECTION};`,
     `[ -e ${activation} ] && echo ${INSTALLED}; echo ${SECTION};`,
-    // macOS `stat -f` takes a format, not a filesystem; its df source still names the device.
+    // BSD stat -f has different semantics; macOS uses df device source instead.
     host.os === 'darwin' ? '' : `stat -f -c %T "$HOME" 2>/dev/null; echo ${SECTION};`,
     `df -P "$HOME" 2>/dev/null | tail -n 1; true`
   ].join(' ')
@@ -139,13 +128,18 @@ export function parseOrcadMachineHomeProbe(
   const [homeRaw, machineRaw, hostnameRaw, claimRaw, ownersRaw, homesRaw, installedRaw] = sections
   const filesystemType = host.os === 'darwin' ? '' : sections[7].trim()
   const dfSource = sections.at(-1)?.trim().split(/\s+/u)[0] ?? ''
+  const hostnameLines = hostnameRaw.split('\n').map((line) => line.trim())
   const loginHome = normalizeRemoteHome(homeRaw, host)
   if (!validateRemoteHome(loginHome, host)) {
     throw new Error(`Remote home is not a valid path: ${loginHome.slice(0, 100)}`)
   }
   return {
     loginHome,
-    identity: orcadMachineIdentity(host, machineRaw.trim(), hostnameRaw.trim()),
+    identity: orcadMachineIdentity(
+      host,
+      machineRaw.trim(),
+      hostnameLines.find((line) => line && !line.startsWith('ORCA_')) ?? ''
+    ),
     claim: parseClaimSection(claimRaw.trim()),
     dataRootOwners: ownersRaw
       .split('\n')
@@ -156,18 +150,15 @@ export function parseOrcadMachineHomeProbe(
       .map((name) => name.trim())
       .filter((name) => /^[a-f0-9]{16}$/u.test(name)),
     loginHomeInstalled: installedRaw.trim() === INSTALLED,
-    // Without a filesystem type, only a device path is evidence of a local disk.
+    // Without a filesystem type, only a device source proves local storage.
     homeOnLocalDisk: filesystemType
       ? LOCAL_FILESYSTEM_TYPES.has(filesystemType)
-      : dfSource.startsWith('/dev/')
+      : dfSource.startsWith('/dev/'),
+    ...parseOrcadMachineNameProbe(hostnameLines)
   }
 }
 
-/**
- * The same machine identity the profile-state owners record: `/etc/machine-id` on Linux, the
- * hardware UUID on macOS. Neither changes when the host is renamed or a container is recreated
- * over a persistent home. A host without one keeps the login home, as before (#29059).
- */
+/** Prefer stable Linux machine-id or macOS hardware UUID over hostnames; missing identity retains login-home fallback. */
 export function orcadMachineIdentity(
   host: RemoteHostPlatform,
   machineRaw: string,
@@ -182,10 +173,7 @@ export function orcadMachineIdentity(
   if (!machineIdentity) {
     return null
   }
-  const key = createHash('sha256')
-    .update(`${host.os}:${machineIdentity}`)
-    .digest('hex')
-    .slice(0, 16)
+  const key = machineKeyOf(`${host.os}:${machineIdentity}`)
   const hostname = /^[\x21-\x7e]{1,255}$/u.test(hostnameRaw) ? hostnameRaw : null
   return { key, machineIdentity, hostname }
 }
@@ -238,12 +226,11 @@ function parseOwnerLine(line: string): OrcadMachineHomeProbe['dataRootOwners'][n
           : null
     }
   } catch {
-    // A torn or foreign file is not evidence of another machine.
+    // Malformed owner records cannot prove a foreign machine owns the home.
     return null
   }
 }
 
-/** Whether a data-root owner is this machine, another one, or cannot be told apart. */
 function ownerMachine(
   owner: OrcadMachineHomeProbe['dataRootOwners'][number],
   identity: OrcadMachineIdentity,
@@ -252,31 +239,27 @@ function ownerMachine(
   if (owner.machineIdentity) {
     return owner.machineIdentity.toLowerCase() === identity.machineIdentity ? 'this' : 'foreign'
   }
-  // An owner too old to record its machine is judged by hostname.
+  // Older owners lack machine identity, leaving only weaker hostname evidence.
   if (!owner.host || !identity.hostname) {
     return 'unknown'
   }
   if (owner.host === identity.hostname) {
     return 'this'
   }
-  // A macOS hostname follows the network, so a different one may still be this Mac.
+  // Network changes rename Macs, so differing hostnames cannot prove foreign ownership.
   return host.os === 'darwin' ? 'unknown' : 'foreign'
 }
 
-/**
- * An unclaimed home is claimed unless a live (or crashed) orcad from another machine holds its
- * data root: that one is the install's owner, and claiming it here would judge its PIDs on the
- * wrong machine. A machine that already has its own home keeps it, so a later claim cannot move
- * it off a server still running there. An unreadable claim throws: guessing can strand a server.
- * A cleanly stopped install leaves no owner, and an older orcad's owner may name no machine
- * (macOS hostnames drift), so on a home that may be shared its machine is unknown: claiming it
- * could hand one machine's pairing, projects and instance lock to another.
- */
+/** Keep established machine homes stable; refuse ambiguous prior owners or unreadable claims before risking another machine's state. */
 export function decideOrcadMachineHome(
   probe: OrcadMachineHomeProbe,
   host: RemoteHostPlatform
 ): OrcadMachineHomeDecision {
   const { identity, claim } = probe
+  // An explicit name never shares state by machine identity, which clones copy.
+  if (probe.machineName) {
+    return namedMachineHome(host, probe.machineName)
+  }
   if (!identity) {
     return { kind: 'login-home' }
   }
@@ -297,7 +280,7 @@ export function decideOrcadMachineHome(
   if (probe.homeOnLocalDisk) {
     return { kind: 'claim', machineKey: identity.key }
   }
-  // Claiming another machine's install would judge its PIDs here and admit a second writer.
+  // Unknown ownership could admit a second writer whose PIDs are judged on the wrong host.
   if (owners.includes('unknown')) {
     return { kind: 'unresolved', machineKey: identity.key, cause: 'unattributed-owner' }
   }
@@ -306,7 +289,6 @@ export function decideOrcadMachineHome(
     : { kind: 'claim', machineKey: identity.key }
 }
 
-/** Names the one-line claim the user can run on the machine that set the server up. */
 export function orcadMachineOwnershipUnresolvedMessage(
   machineKey: string,
   hostname: string | null,
@@ -335,10 +317,7 @@ export function orcadMachineHomeDir(
   return joinRemotePath(host, loginHome, RELAY_REMOTE_DIR, ORCAD_MACHINE_HOMES_DIRNAME, machineKey)
 }
 
-/**
- * A sibling of `~/.orca`, not inside the machine home: orcad binds its runtime socket in the data
- * root, and a deeper path would cross the Unix socket length limit on long cluster home paths.
- */
+/** Keep data roots shallow beside ~/.orca so long shared-home paths fit Unix socket limits. */
 export function orcadMachineDataRoot(
   host: RemoteHostPlatform,
   loginHome: string,

@@ -11,7 +11,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<typeof NodeFsPromisesModule>()
   return {
     ...original,
-    // Only the WSL request is faked; the local sibling reads a real temp file.
     lstat: (path: string, ...rest: unknown[]) =>
       path.startsWith('\\\\')
         ? mocks.lstat(path)

@@ -1,17 +1,13 @@
 import {
+  agentChildRowDetailText as sharedAgentChildRowDetailText,
   agentChildRowLeadTrail,
   agentChildRowName as sharedAgentChildRowName
 } from '../../../shared/agent-child-row-lead-trail'
 import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
-import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import { agentStateLabel } from '@/components/AgentStateDot'
-import {
-  backgroundTaskStateReason,
-  backgroundTaskStateWord
-} from '@/components/native-chat/background-task-roster'
+import { sayBackgroundTaskTranslated } from '@/components/native-chat/background-task-words-text'
 import { translate } from '@/i18n/i18n'
 import { agentNoUpdateLabel } from '../../../shared/agent-row-decay-state'
-import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
 
 export type AgentChildRowText = {
   /** Leads the line; kept when the row truncates. */
@@ -25,31 +21,14 @@ export function agentChildRowNoUpdateLabel(row: AgentChildRowModel, now: number)
   return agentNoUpdateLabel({ updatedAt: row.recencyAt }, now)
 }
 
-/** The words for a row's detail, reusing the phrasing a CLI agent row uses for the same fact. */
+const AGENT_CHILD_ROW_COPY = {
+  stateLabel: agentStateLabel,
+  ended: () => translate('components.agentChildRow.ended', 'Ended'),
+  sayBackgroundTask: sayBackgroundTaskTranslated
+}
+
 export function agentChildRowDetailText(row: AgentChildRowModel, now: number): string {
-  const detail = row.detail
-  if (!detail) {
-    return ''
-  }
-  switch (detail.kind) {
-    case 'operation':
-      return formatAgentToolPreview(
-        { toolName: detail.toolName, toolInput: detail.input },
-        'working'
-      )
-    case 'monitoring':
-      return agentStateLabel('monitoring')
-    case 'message':
-      return detail.text
-    case 'ended':
-      return translate('components.agentChildRow.ended', 'Ended')
-    case 'no-update':
-      return agentChildRowNoUpdateLabel(row, now)
-    case 'role':
-      return formatAgentTypeLabel(detail.agentType)
-    case 'reason':
-      return backgroundTaskStateReason(detail.state) ?? backgroundTaskStateWord(detail.state)
-  }
+  return sharedAgentChildRowDetailText(row, now, AGENT_CHILD_ROW_COPY)
 }
 
 /** The line beneath a full-width row: what the child said, or that it ended; '' otherwise. */

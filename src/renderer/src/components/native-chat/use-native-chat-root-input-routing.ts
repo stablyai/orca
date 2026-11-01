@@ -1,3 +1,4 @@
+import { nativeChatComposerDestination } from './native-chat-composer-destination'
 import {
   useCallback,
   useEffect,
@@ -14,11 +15,10 @@ import {
   type NativeChatComposerRevealFocusArgs
 } from './use-native-chat-composer-reveal-focus'
 
-// Revealed chat roots in this window: a floating panel can reveal one beside the workspace's.
+// Floating panels can reveal a chat beside the workspace’s chat.
 const revealedChatRoots = new Set<HTMLElement>()
 
-/** Brings focus to the chat's input when it is revealed, and sends keys typed or dictated in the
- *  chat, or with nothing focused around it, to that input. */
+/** Route revealed-pane typing/dictation to its input when focus is unowned or within that chat. */
 export function useNativeChatRootInputRouting(
   args: Omit<NativeChatComposerRevealFocusArgs, 'scheduleFrame'> & {
     questionAnswerInputRef: RefObject<HTMLInputElement | null>
@@ -29,15 +29,13 @@ export function useNativeChatRootInputRouting(
 } {
   const { rootRef, composerRef, questionAnswerInputRef } = args
   useNativeChatComposerRevealFocus(args)
-  // The one chat visible in the focused group takes keys typed with nothing focused.
   const revealed = args.isVisible && args.isFocusedGroup
   useEffect(() => {
     const root = rootRef.current
     if (!revealed || !root) {
       return
     }
-    // Focus on <body> or the pane's own cover (a click on blank chrome) has no key owner;
-    // with two chats revealed it has no clear target either.
+    // Body/cover focus has no input owner; multiple revealed chats make its destination ambiguous.
     const ownsUnfocusedInput = (target: EventTarget | null): boolean =>
       target instanceof Node &&
       target.contains(root) &&
@@ -45,13 +43,17 @@ export function useNativeChatRootInputRouting(
       !hasVisibleOverlay({ ignoreDismissed: true })
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.target !== root && ownsUnfocusedInput(event.target)) {
-        routeNativeChatRootKeyToInput(event, composerRef.current, questionAnswerInputRef.current)
+        routeNativeChatRootKeyToInput(
+          event,
+          nativeChatComposerDestination(rootRef.current, composerRef.current),
+          questionAnswerInputRef.current
+        )
       }
     }
     const onDictationFocusInput = (): void => {
       const active = root.ownerDocument.activeElement
       if (root.contains(active) || ownsUnfocusedInput(active)) {
-        composerRef.current?.focus()
+        nativeChatComposerDestination(rootRef.current, composerRef.current)?.focus()
       }
     }
     revealedChatRoots.add(root)
@@ -78,9 +80,13 @@ export function useNativeChatRootInputRouting(
   )
   const onKeyDownCapture = useCallback(
     (event: ReactKeyboardEvent) => {
-      // Menus and dialogs the chat portals out still bubble through its React tree.
+      // Portaled menus/dialogs still bubble through React; require a target inside this DOM root.
       if (event.target instanceof Node && rootRef.current?.contains(event.target)) {
-        routeNativeChatRootKeyToInput(event, composerRef.current, questionAnswerInputRef.current)
+        routeNativeChatRootKeyToInput(
+          event,
+          nativeChatComposerDestination(rootRef.current, composerRef.current),
+          questionAnswerInputRef.current
+        )
       }
     },
     [composerRef, questionAnswerInputRef, rootRef]

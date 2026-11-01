@@ -5,11 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// STA-4607: a briefly unreadable sessions tree used to read as "this rollout is
-// not bridged here", so the scan fell through to another account's home — and
-// that home becomes the resumed pane's CODEX_HOME. The session resumed under
-// account B's credentials while the UI still showed account A.
-
 const statFaults = vi.hoisted(() => {
   const state = {
     held: new Set<string>(),
@@ -115,8 +110,6 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
   it('refuses rather than resuming the selected account under another account home', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
     tempRoots.push(root)
-    // Both accounts hold the same rollout id — exactly the bridged state where
-    // the id alone no longer names an account.
     const selectedHome = makeHomeWithRollout(root, 'account-a')
     const otherHome = makeHomeWithRollout(root, 'account-b')
 
@@ -129,7 +122,6 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
       sharedRuntimeCodexHomePath: null
     }
 
-    // Anchor: with a readable tree the selected account wins, as designed.
     await expect(findTrustedCodexSessionResume(args)).resolves.toEqual({
       homePath: selectedHome,
       transcriptPath: join(
@@ -142,11 +134,9 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
       )
     })
 
-    // Now hold the selected account's sessions tree, the way an antivirus scan does.
     const selectedSessionsRoot = join(selectedHome, 'sessions')
     statFaults.hold(selectedSessionsRoot)
 
-    // THE FIX: refuse. Before it, this resolved to account B's home.
     await expect(findTrustedCodexSessionResume(args)).rejects.toBeInstanceOf(
       ManagedCodexHomeTemporarilyUnavailableError
     )
@@ -160,9 +150,6 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
     mkdirSync(selectedHome, { recursive: true })
     const otherHome = makeHomeWithRollout(root, 'account-b')
 
-    // Why: absence is a real answer — the rollout genuinely is not bridged into
-    // the selected home — so the scan must still fall through. The fix must not
-    // turn every miss into a refusal.
     await expect(
       findTrustedCodexSessionResume({
         sessionId: SESSION_ID,
@@ -198,17 +185,11 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
     ).rejects.toBeInstanceOf(ManagedCodexHomeTemporarilyUnavailableError)
   })
 
-  // Why: CodeRabbit read the callback's guard as matching only the exact sessions
-  // root and reported nested failures as leaking. The guard actually keys on the
-  // root being LISTED, not the failing directory, so a lock on a dated
-  // subdirectory is covered too. Pinned so the question cannot recur.
   it('refuses when a NESTED dated directory locks and the root stats fine', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
     tempRoots.push(root)
     const selectedHome = makeHomeWithRollout(root, 'account-a')
     const otherHome = makeHomeWithRollout(root, 'account-b')
-    // Only the dated directory faults; the sessions root itself reads fine, so
-    // the preliminary stat guard cannot be what catches this.
     listingFaults.hold(join(selectedHome, 'sessions', '2026', '07', '20'))
 
     await expect(
@@ -231,8 +212,6 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
     const otherHome = makeHomeWithRollout(root, 'account-b')
     const unrelatedHome = makeHomeWithRollout(root, 'account-c')
 
-    // Why: an unreadable home that is not the selected account cannot cause a
-    // wrong-account resume, so refusing there would strand the user for no gain.
     statFaults.hold(join(unrelatedHome, 'sessions'))
 
     await expect(

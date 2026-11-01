@@ -5,7 +5,6 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 describe('composeActiveTerminalTheme', () => {
   function settingsWith(partial: Partial<GlobalSettings>): GlobalSettings {
     return {
-      terminalColorOverrides: undefined,
       terminalCursorOpacity: undefined,
       terminalBackgroundOpacity: undefined,
       ...partial
@@ -38,16 +37,6 @@ describe('composeActiveTerminalTheme', () => {
     expect(result!.scrollbarSliderBackground).toBe('rgba(1, 2, 3, 0.4)')
   })
 
-  it('layers terminalColorOverrides on top of the base theme', () => {
-    const base = { background: '#101010', foreground: '#fafafa' }
-    const result = composeActiveTerminalTheme(
-      base,
-      settingsWith({ terminalColorOverrides: { foreground: '#00ff00' } })
-    )
-    expect(result!.foreground).toBe('#00ff00')
-    expect(result!.background).toBe('#101010')
-  })
-
   it('applies background opacity by converting the hex background to rgba', () => {
     const base = { background: '#112233' }
     const result = composeActiveTerminalTheme(
@@ -58,9 +47,7 @@ describe('composeActiveTerminalTheme', () => {
   })
 
   it('honors a zero background opacity', () => {
-    // Why: pin against a regression where the guard becomes truthy-only
-    // (e.g. `if (settings.terminalBackgroundOpacity)`) and silently drops
-    // the user's intent to make the background fully transparent.
+    // Opacity zero means intentional full transparency; truthiness guards would discard it.
     const base = { background: '#112233' }
     const result = composeActiveTerminalTheme(base, settingsWith({ terminalBackgroundOpacity: 0 }))
     expect(result!.background).toBe('rgba(17, 34, 51, 0)')

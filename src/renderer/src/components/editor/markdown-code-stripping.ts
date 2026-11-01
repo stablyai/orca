@@ -13,7 +13,6 @@ export function stripMarkdownCode(content: string): string {
     while (rangeIndex < ranges.length && ranges[rangeIndex][1] <= lineStart) {
       rangeIndex += 1
     }
-    // Emit the gaps between code ranges; the line break follows either way.
     let cursor = lineStart
     for (let i = rangeIndex; i < ranges.length && ranges[i][0] < lineEnd; i += 1) {
       sanitized += content.slice(cursor, Math.max(cursor, ranges[i][0]))

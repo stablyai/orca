@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { ChevronLeft, ExternalLink } from 'lucide-react'
@@ -6,6 +6,7 @@ import {
   LinearProjectTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageLinearCustomViewProjects({
   model
 }: {
@@ -54,7 +55,7 @@ export function TaskPageLinearCustomViewProjects({
           <Button
             variant="outline"
             size="xs"
-            onClick={() => void window.api.shell.openUrl(selectedLinearCustomView!.url!)}
+            onClick={(event) => openAppHttpLink(selectedLinearCustomView!.url!, { event })}
             className="gap-1 border-border/50 bg-background/70"
           >
             <ExternalLink className="size-3.5" />
@@ -80,7 +81,7 @@ export function TaskPageLinearCustomViewProjects({
           }
           onOpenProject={(project) => {
             if (project.url) {
-              void window.api.shell.openUrl(project.url)
+              openAppHttpLink(project.url)
             }
           }}
           onUseProjectIssues={(project) => {
@@ -95,7 +96,7 @@ export function TaskPageLinearCustomViewProjects({
         errors={linearCustomViewProjectsResult.errors}
         hasMore={linearCustomViewProjectsResult.hasMore}
         count={linearCustomViewProjectsResult.items.length}
-        label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
+        kind="projects"
       />
     </div>
   )

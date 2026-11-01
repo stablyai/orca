@@ -2,9 +2,13 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
-import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
+import {
+  pendingCreationChatDraftScopeKey,
+  withPendingChatInput,
+  type WorktreeCreationRequest
+} from '@/lib/pending-worktree-creation'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
+import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
@@ -29,16 +33,18 @@ type LaunchStructuredWorktreeSessionArgs = {
   primaryTabId: string | null
 }
 
-/**
- * The host's "no" to a create the user moved away from opens the agent terminal the way a
- * background terminal create does: in place, without selecting the workspace (#23974). A create the
- * user is still watching keeps the default, which opens it as a new agent tab there.
- */
+/** Host-declined chats keep background creates in place without navigation (#23974); still-visible creates use normal agent-tab fallback. */
 function openBackgroundDeclinedTerminal(
   args: LaunchStructuredWorktreeSessionArgs,
-  host: RuntimeClientTarget
+  host: RuntimeClientTarget,
+  heldChatMessage: string | undefined
 ): StructuredLaunchTerminal {
-  const startup = buildWorktreeCreationStartupOpt(args.request, false)
+  const built = buildWorktreeCreationStartupOpt(args.request, false)
+  // The submit-time plan never saw a message sent while the worktree was created; leave it unsent in the agent's input.
+  const startup =
+    built && heldChatMessage && !built.draftPrompt
+      ? { ...built, draftPrompt: heldChatMessage }
+      : built
   if (host.kind === 'environment') {
     ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
       startup,
@@ -79,21 +85,30 @@ export async function launchStructuredWorktreeSession(
   if (isCancelled()) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
-  // Why: the composer decided route and delivery mode before the worktree existed, and the request
-  // carries that verdict in renderer memory for the life of the create; re-entering with it is what
-  // keeps a retry from re-resolving against a host that has changed since.
+  // Lock before capturing: host admission and layout publication can both leave this composer visible.
+  useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
+    chatInputHandedOff: true
+  })
+  const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
+  const request = withPendingChatInput(pending, args.request)
+  // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
     route: args.agentLaunchRoute,
     // One create is one user action: a retry of it re-delivers the same request.
     requestId: args.creationId,
     agent,
-    prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt,
-    ...(args.request.promptDelivery ? { promptDelivery: args.request.promptDelivery } : {})
+    prompt: request.launchDraftPrompt ?? request.quickPrompt,
+    ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
+    // What the user left unsent in the chat shown while the worktree was created.
+    draftFromScope: pendingCreationChatDraftScopeKey(args.creationId)
   })
+  let layoutRefused = false
   const abandoned = new AbortController()
-  let ownershipTransferred = false
+  const tabOpen = Promise.withResolvers<string | null>()
+  const stopWaiting = (): void => tabOpen.resolve(null)
+  abandoned.signal.addEventListener('abort', stopWaiting, { once: true })
   const unsubscribe = useAppStore.subscribe((state) => {
-    if (!ownershipTransferred && !state.pendingWorktreeCreations[args.creationId]) {
+    if (!state.pendingWorktreeCreations[args.creationId]) {
       abandoned.abort()
     }
   })
@@ -105,42 +120,72 @@ export async function launchStructuredWorktreeSession(
       activate: args.shouldActivateOnCompletion,
       ...(args.shouldActivateOnCompletion
         ? {}
-        : { onHostDeclined: (host) => openBackgroundDeclinedTerminal(args, host) }),
-      beforeOpen: () => {
-        // Why: cancellation can arrive through the launch signal while reveal is running, before
-        // the pending-creation store snapshot has caught up.
-        if (abandoned.signal.aborted || isCancelled()) {
-          return false
-        }
-        if (args.shouldActivateOnCompletion && !activation) {
-          try {
-            activation = activateAndRevealWorktree(args.worktreeId, {
-              providesInitialSurface: true
-            })
-          } catch (error) {
-            // Why: without a revealed workspace the provisional tab has no visible owner.
-            console.error('worktree create: structured chat reveal failed', args.worktreeId, error)
-            activation = false
-            return false
-          }
-          if (activation === false) {
-            return false
-          }
-          primaryTabId = activation.primaryTabId
-        }
-        return !abandoned.signal.aborted && !isCancelled()
+        : {
+            onHostDeclined: (host) =>
+              openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
+          }),
+      beforeOpen: () => !abandoned.signal.aborted && !isCancelled(),
+      onTabOpenSettled: (tabId, reason) => {
+        layoutRefused = reason === 'layout-refused'
+        tabOpen.resolve(tabId)
       }
     })
-    ownershipTransferred = launch !== null
-    if (launch) {
+    if (launch && args.shouldActivateOnCompletion) {
+      // Keep the pending chat until the layout owner's answering frame provides its replacement.
+      primaryTabId = await tabOpen.promise
+      if (abandoned.signal.aborted || isCancelled()) {
+        launch.cancel()
+        return { ...settled, cancelled: true, activation, primaryTabId }
+      }
+      const stillVisible = (): boolean => {
+        const state = useAppStore.getState()
+        return (
+          !activation &&
+          state.activeView === 'terminal' &&
+          state.activePendingCreationId === args.creationId
+        )
+      }
+      let recoveryProvidesSurface = false
+      if (primaryTabId === null && plan.prompt && layoutRefused) {
+        const { launchAgentInNewTabWithOutcome } = await import('@/lib/launch-agent-in-new-tab')
+        if (abandoned.signal.aborted || isCancelled()) {
+          launch.cancel()
+          return { ...settled, cancelled: true, activation, primaryTabId }
+        }
+        const fallback = launchAgentInNewTabWithOutcome({
+          agent,
+          worktreeId: args.worktreeId,
+          prompt: plan.prompt,
+          promptDelivery: plan.promptDelivery,
+          activate: stillVisible(),
+          agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
+            route: 'terminal-tui',
+            requestId: args.creationId,
+            agent,
+            worktreeId: args.worktreeId
+          })
+        })
+        if (fallback && !('refused' in fallback)) {
+          recoveryProvidesSurface = true
+          primaryTabId = fallback.surface.kind === 'local-terminal' ? fallback.surface.tabId : null
+        }
+      }
+      if (stillVisible()) {
+        activation = activateAndRevealWorktree(args.worktreeId, {
+          providesInitialSurface: primaryTabId !== null || recoveryProvidesSurface,
+          worktreeCreationId: args.creationId
+        })
+        primaryTabId ??= activation === false ? null : activation.primaryTabId
+      }
+    } else if (launch) {
       primaryTabId = launch.tab?.id ?? primaryTabId
     }
   } catch (error) {
-    // Why: nothing awaits this creation's caller, so an escaped throw would strand the panel
-    // mid-create.
+    // Contain this fire-and-forget caller’s errors or the panel remains mid-create.
     console.error('worktree create: structured chat tab failed to open', args.worktreeId, error)
     return { ...settled, activation, primaryTabId }
   } finally {
+    abandoned.signal.removeEventListener('abort', stopWaiting)
     unsubscribe()
   }
   return { ...settled, activation, primaryTabId }

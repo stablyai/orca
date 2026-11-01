@@ -1,16 +1,12 @@
-// App-side emitters for `daemon_adopted`, `daemon_pty_cwd_denied`, and `daemon_pty_cwd_readable`
-// (#17696). All sit on the daemon launch / PTY spawn path, so every failure dies here — telemetry
-// can never cost a terminal.
-
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
+  classifyDaemonAppVersionMatch,
   classifyDaemonPtyCwd,
   classifyDaemonSpawnerPath,
   isMacTccFolderClass,
-  type DaemonAdoptedAppVersionMatch,
   type DaemonSpawnerPathClass
 } from '../../shared/daemon-adoption-telemetry'
 import { bucketDaemonLiveSessionCount } from '../../shared/daemon-lifecycle-telemetry'
@@ -44,15 +40,13 @@ function stableCopyPrefix(): string | null {
   }
 }
 
-/** Classifies the adopted daemon's pid record against the running app; enum-only by construction. */
 export async function classifyDaemonAdoptionOrigin(
   pidRecord: ParsedDaemonPid | null
 ): Promise<DaemonAdoptionOrigin> {
-  const appVersionMatch: DaemonAdoptedAppVersionMatch = !pidRecord?.appVersion
-    ? 'unknown'
-    : pidRecord.appVersion === getAppEnvironment().getVersion()
-      ? 'same'
-      : 'different'
+  const appVersionMatch = classifyDaemonAppVersionMatch(
+    pidRecord?.appVersion,
+    getAppEnvironment().getVersion()
+  )
   const spawnerPathClass: DaemonSpawnerPathClass = classifyDaemonSpawnerPath(
     pidRecord?.spawnerExecPath ?? null,
     existsSync,
@@ -65,7 +59,6 @@ export async function classifyDaemonAdoptionOrigin(
   }
 }
 
-// Adopted a daemon that a previous app launch forked (macOS only; that is where attribution matters).
 export async function trackDaemonAdopted(
   pidRecord: ParsedDaemonPid | null,
   tccAttribution: MacDaemonTccAttributionHealth,
@@ -82,11 +75,7 @@ export async function trackDaemonAdopted(
   }
 }
 
-/**
- * Proven divergence: the daemon reported the cwd unreadable AND this process can enumerate it.
- * A cwd neither can read (chmod, ENOENT, unmounted volume) is not the #17696 shape. Single oracle
- * for both the event below and the user-facing notice, so the app-side read happens once.
- */
+/** Confirm daemon denial with one app-side directory read shared by telemetry and the notice. */
 export async function hasDaemonPtyCwdDenialDiverged(
   cwd: string | undefined,
   cwdReadableByDaemon: boolean | undefined
@@ -101,15 +90,14 @@ export async function hasDaemonPtyCwdDenialDiverged(
   }
 }
 
-/** Emits a spawn's cwd verdict; `readable` is the control that gives `code_identity` a false-positive rate. */
+/** Readable spawns provide the control group for cwd-denial telemetry. */
 export async function trackDaemonPtyCwdVerdict(
   event: 'daemon_pty_cwd_denied' | 'daemon_pty_cwd_readable',
   cwd: string,
   pidPath: string | null
 ): Promise<void> {
   try {
-    // Why read now, not the adapter's startup snapshot: a respawn swaps the daemon under a
-    // long-lived adapter, and the verdict must be attributed to the daemon that just spawned.
+    // Re-read identity because a long-lived adapter may now use a respawned daemon.
     track(event, {
       cwd_class: classifyDaemonPtyCwd(cwd, homedir()),
       ...(await classifyDaemonAdoptionOrigin(readDaemonPidRecord(pidPath)))
@@ -119,14 +107,7 @@ export async function trackDaemonPtyCwdVerdict(
   }
 }
 
-/**
- * The spawn path's single reader of the daemon's cwd verdict: one directory read feeds both the
- * event and the user-facing notice. Local current-protocol daemons only — one that omits the
- * verdict reports nothing. Every failure dies here; neither may ever cost a terminal.
- *
- * Never rejects, and the caller must not wait for it: the app-side read is what raises the macOS
- * folder prompt, which holds the syscall for as long as the user leaves the sheet up.
- */
+/** Do not await: the app-side directory read can wait indefinitely on a macOS permission prompt. */
 export async function reportDaemonPtyCwdVerdict(args: {
   cwd: string | undefined
   cwdReadableByDaemon: boolean | undefined
@@ -152,7 +133,7 @@ export async function reportDaemonPtyCwdVerdict(args: {
     if (!(await hasDaemonPtyCwdDenialDiverged(cwd, args.cwdReadableByDaemon))) {
       return
     }
-    // Notice first: the event now waits on a codesign probe, and the user-facing notice must not.
+    // Show the notice before waiting for the codesign probe.
     recordDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
     await trackDaemonPtyCwdVerdict('daemon_pty_cwd_denied', cwd, args.pidPath)
   } catch {

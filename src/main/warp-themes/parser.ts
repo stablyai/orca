@@ -157,7 +157,7 @@ export function parseWarpThemeYaml(
     if (document.errors.length > 0) {
       return { ok: false, reason: document.errors[0]?.message ?? 'Invalid YAML' }
     }
-    // Why: cap alias expansion so a malicious YAML alias bomb can't blow up memory.
+    // Bound YAML alias expansion to prevent memory-exhaustion bombs.
     value = document.toJS({ maxAliasCount: 20 })
     if (parseTimedOut()) {
       return { ok: false, reason: 'Theme file took too long to parse.' }

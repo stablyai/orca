@@ -1,26 +1,19 @@
-// A queued command card's refusal at hand-over: nobody waits on it, so its own turn says why.
-
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
-} from '../../../shared/agent-session-failure-words'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
-import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
-import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import type { StructuredAgentSessionCommandHandoverContext } from './structured-agent-session-command-turn'
 
-/**
- * A queued command refused before it was handed over. Nothing reached the provider, so no hand-off
- * is recorded: the ended turn and its row land in one batch, then the submission is rejected while
- * still queued. A crash between leaves a queued submission, which a restart returns to waiting;
- * never a card gone with no row, nor a command that may have run.
- */
+/** Write refusal turn/row atomically before rejecting the still-queued submission; crash leaves recoverable waiting. */
 export async function refuseQueuedCommand(
   ctx: StructuredAgentSessionCommandHandoverContext,
   submission: AgentJournalSubmission,
