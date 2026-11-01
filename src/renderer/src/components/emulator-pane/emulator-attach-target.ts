@@ -30,8 +30,8 @@ export async function attachWithAvdFallback<T>(
     return await attachTo(target)
   } catch (error) {
     const avdName = devices.find((d) => d.udid === target && d.runtime === 'emulator')?.name
-    const notFound = error instanceof Error && 'code' in error
-    if (!avdName || avdName === target || !notFound || error.code !== 'emulator_device_not_found') {
+    const code = error instanceof Error && 'code' in error ? error.code : undefined
+    if (!avdName || avdName === target || code !== 'emulator_device_not_found') {
       throw error
     }
     onRetarget(avdName)
