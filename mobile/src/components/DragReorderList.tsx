@@ -43,6 +43,7 @@ export type DragReorderListProps<ItemT> = {
   itemKey: (item: ItemT) => string
   canMove?: (item: ItemT) => boolean
   isMoveDisabled?: (item: ItemT) => boolean
+  isItemDraggable?: (item: ItemT) => boolean
   rowHeight?: number
   scopeKey?: string
   rowPresentation?: 'settings' | 'plain'
@@ -67,6 +68,7 @@ export function DragReorderList<ItemT>({
   scopeKey = '',
   rowPresentation = 'settings',
   renderRow,
+  isItemDraggable,
   onReorder,
   onMove,
   onDragActiveChange,
@@ -240,12 +242,17 @@ export function DragReorderList<ItemT>({
     [setAutoScrollActive]
   )
 
+  const rowCanMove = useCallback(
+    (item: ItemT) => (!canMove || canMove(item)) && (isItemDraggable?.(item) ?? true),
+    [canMove, isItemDraggable]
+  )
+
   const commitReorder = useCallback(
     (orderedKeys: string[], movedId: string, dragged = false) => {
       if (currentCatalog.current !== catalog) {
         return
       }
-      const movableKeys = new Set(items.filter((item) => !canMove || canMove(item)).map(itemKey))
+      const movableKeys = new Set(items.filter(rowCanMove).map(itemKey))
       const nextMovable = orderedKeys.filter((key) => movableKeys.has(key))
       let at = 0
       const next = keys.map((key) => (movableKeys.has(key) ? nextMovable[at++]! : key))
@@ -274,7 +281,7 @@ export function DragReorderList<ItemT>({
       onMove,
       keySignature,
       catalog,
-      canMove,
+      rowCanMove,
       items,
       itemKey,
       keys,
@@ -287,7 +294,7 @@ export function DragReorderList<ItemT>({
   // move up/down accessibility actions that commit the same reorder.
   const moveRowByAccessibilityAction = useCallback(
     (key: string, delta: number) => {
-      const movableKeys = items.filter((item) => !canMove || canMove(item)).map(itemKey)
+      const movableKeys = items.filter(rowCanMove).map(itemKey)
       const fromIndex = movableKeys.indexOf(key)
       if (fromIndex === -1) {
         return
@@ -304,7 +311,7 @@ export function DragReorderList<ItemT>({
       const next = keys.map((entry) => (movable.has(entry) ? nextMovable[at++]! : entry))
       commitReorder(next, key)
     },
-    [keys, commitReorder, canMove, items, itemKey]
+    [keys, commitReorder, rowCanMove, items, itemKey]
   )
 
   // A removed handle may never finalize its native gesture.
@@ -346,7 +353,7 @@ export function DragReorderList<ItemT>({
           rowHeight={rowHeight}
           ready={ready}
           measurementKey={measurementKey}
-          movable={!canMove || canMove(item)}
+          movable={rowCanMove(item)}
           disabled={isMoveDisabled?.(item) ?? false}
           presentation={rowPresentation}
           onMeasure={onMeasure}
