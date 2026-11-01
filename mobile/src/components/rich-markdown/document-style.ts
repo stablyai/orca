@@ -132,7 +132,7 @@ export function richMarkdownEditorStyle(): string {
       border-collapse: collapse;
       font-size: 0.95em;
     }
-    /* break-word sizes columns to whole words (#editor's anywhere wraps letters); max-width caps unbreakable runs like URLs; 1% cells still stretch a narrow table to full width. */
+    /* break-word and keep-all size columns to whole words, CJK runs too (#editor's anywhere wraps letters); max-width caps unbreakable runs like URLs; 1% cells still stretch a narrow table to full width. */
     th, td {
       width: 1%;
       max-width: 16em;
@@ -141,6 +141,7 @@ export function richMarkdownEditorStyle(): string {
       text-align: left;
       vertical-align: top;
       overflow-wrap: break-word;
+      word-break: keep-all;
     }
     th {
       font-weight: 600;
