@@ -118,9 +118,15 @@ describe('orchestration recipient routing oracle', () => {
       subject: 'cross-run'
     })) as SendResult
 
-    expect(result.message).toMatchObject({
-      run_id: recipientRun.id,
-      to_handle: `run:${recipientRun.id}`
+    expect(result).toMatchObject({
+      message: { run_id: recipientRun.id, to_handle: `run:${recipientRun.id}` },
+      warnings: [
+        {
+          code: 'recipient_run_bound_redirect',
+          recipient: 'term_recipient',
+          message: `term_recipient coordinates Run ${recipientRun.id}; queued for run:${recipientRun.id}, the mailbox its orchestration check reads.`
+        }
+      ]
     })
     const check = (await harness.call(
       'orchestration.check',
