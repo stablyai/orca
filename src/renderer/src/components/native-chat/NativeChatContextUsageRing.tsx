@@ -12,7 +12,7 @@ const RING_SIZE = 16
 const RING_STROKE = 2
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
-/** Past this the window is nearly spent; the ring turns destructive to say so. */
+/** Past this the window is nearly spent; the ring changes to a warning color. */
 const CRITICAL_PERCENTAGE = 90
 /** Long enough that a pointer crossing the ring toward dictation doesn't flash the card. */
 const HOVER_OPEN_DELAY_MS = 150
@@ -77,11 +77,13 @@ function useContextCardOpen(): {
   return { open, setOpen, setOpenAfterHover }
 }
 
-/** Composer ring for context-window usage; hover, click, tap, or Enter shows the provider's breakdown. */
+/** The ring follows its surface's contrast; hover, click, tap, or Enter shows the breakdown. */
 export function NativeChatContextUsageRing({
-  usage
+  usage,
+  surface = 'composer'
 }: {
   usage: NativeChatContextUsageSummary
+  surface?: 'composer' | 'canvas'
 }): React.JSX.Element {
   const filled = Math.min(Math.max(usage.percentage, 0), 100)
   const critical = usage.percentage >= CRITICAL_PERCENTAGE
@@ -118,8 +120,9 @@ export function NativeChatContextUsageRing({
             data-native-chat-context-usage={usage.percentage}
             data-native-chat-context-usage-estimated={usage.estimated ? 'true' : undefined}
             className={cn(
-              'flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-11',
-              critical && 'text-destructive'
+              'flex size-7 items-center justify-center rounded-md outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-11',
+              surface === 'canvas' ? 'text-chat-foreground-faint' : 'text-muted-foreground',
+              critical && (surface === 'canvas' ? 'text-chat-warning' : 'text-destructive')
             )}
             // A read-only readout: clicking it must not pull focus out of the composer.
             onMouseDown={(event) => event.preventDefault()}

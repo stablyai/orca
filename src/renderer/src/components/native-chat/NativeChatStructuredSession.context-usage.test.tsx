@@ -81,6 +81,7 @@ it('keeps usage available while questions or approvals take the composer slot', 
   mocks.contextUsage = USAGE
   rerender(pane())
   const ring = document.querySelector<HTMLButtonElement>('button[data-native-chat-context-usage]')
+  expect(ring?.classList.contains('text-chat-foreground-faint')).toBe(true)
   expect(ring?.getAttribute('aria-label')).toContain('42k')
   expect(ring?.getAttribute('aria-label')).toContain('200k')
   expect(ring?.getAttribute('aria-label')).toContain('21%')
