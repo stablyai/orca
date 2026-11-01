@@ -1,4 +1,5 @@
 import { MARINE_CREATURES } from './marine-creatures'
+import { stripKnownHarnessEnvelope } from './harness-injected-user-turns'
 
 // Bound generated leaves after generation; leave prompts general so user naming instructions own style.
 export const MAX_BRANCH_NAME_WORDS = 4
@@ -90,7 +91,7 @@ export function buildBranchNamePrompt(context: BranchNameWorkContext, customProm
     'Output ONLY the branch name on a single line, nothing else.',
     ''
   )
-  sections.push('User request:', context.firstPrompt.trim())
+  sections.push('User request:', stripKnownHarnessEnvelope(context.firstPrompt))
   const assistant = context.assistantMessage?.trim()
   if (assistant) {
     sections.push('', "Agent's initial response:", assistant)
