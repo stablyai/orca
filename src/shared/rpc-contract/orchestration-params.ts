@@ -114,9 +114,7 @@ export const SessionAddressParams = z.object({
 /** Resolve earlier-run mailbox handles through the message’s recorded sender pane. */
 export const PartyLocationParams = z.object({
   address: requiredString('Missing address'),
-  messageIds: z.array(z.string().min(1).max(256)).max(50).optional(),
-  // Opt-in so older clients keep a read-only lookup; older hosts strip it.
-  openClosedWorker: OptionalBoolean
+  messageIds: z.array(z.string().min(1).max(256)).max(50).optional()
 })
 
 export const DispatchShowParams = z.object({

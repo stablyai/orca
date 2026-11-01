@@ -32,6 +32,8 @@ export type StructuredSessionOpenResult =
 type Located = OrchestrationPartyLocationResult | StructuredSessionOpenFailure
 export type StructuredSessionOpenDeps = {
   locate: (address: string, messageIds: readonly string[]) => Promise<Located>
+  /** A sender's lookup that may also open a closed worker's conversation; older hosts lack it. */
+  open?: (address: string, messageIds: readonly string[]) => Promise<Located>
   tabs: (target: StructuredSessionOpenTarget) => readonly StructuredSessionOpenTab[]
   refresh: (target: StructuredSessionOpenTarget) => Promise<void>
   activate: (
@@ -162,7 +164,10 @@ export async function openStructuredAgentSession(
       return { kind: 'failed', failure: structuredSessionOpenFailure(error) }
     }
   }
-  const resolved = await resolveStructuredSessionOpenSource(source, deps.locate)
+  const resolved = await resolveStructuredSessionOpenSource(
+    source,
+    source.kind === 'sender' && deps.open ? openingOrLocating(deps.open, deps.locate) : deps.locate
+  )
   if (!current()) {
     return { kind: 'superseded' }
   }
@@ -251,5 +256,23 @@ export async function openStructuredAgentSession(
     return current()
       ? { kind: 'failed', failure: failure(structuredSessionOpenFailure(error)) }
       : { kind: 'superseded' }
+  }
+}
+
+/** Older hosts refuse the opening call, so they keep answering the plain lookup. */
+function openingOrLocating(
+  open: NonNullable<StructuredSessionOpenDeps['open']>,
+  locate: StructuredSessionOpenDeps['locate']
+): StructuredSessionOpenDeps['locate'] {
+  return async (address, messageIds) => {
+    let opened: Located
+    try {
+      opened = await open(address, messageIds)
+    } catch (error) {
+      opened = structuredSessionOpenFailure(error)
+    }
+    return 'reason' in opened && (opened.code === 'method_not_found' || opened.code === 'forbidden')
+      ? locate(address, messageIds)
+      : opened
   }
 }

@@ -95,7 +95,7 @@ export async function chooseWorkerFollowUpPlacement(
   // Read after any close above, which saves the conversation the pane last reported.
   const session = readWorkerResumeSession(resource && db.getWorkerTerminalResource(resource.id))
   if (session && isResumableTuiAgent(session.agent)) {
-    const chat = await chatHoldingSession(runtime, session)
+    const chat = chatHoldingSession(session)
     if (chat) {
       return { delivery: 'follow_up', worktreeId: chat.workspaceId, terminal: chat.address }
     }
@@ -198,17 +198,22 @@ function chatTabOpen(db: OrchestrationDb, resource: WorkerTerminalResourceRow): 
 }
 
 /** A chat took the conversation over, as opening the closed worker does: the follow-up goes there, never to a second terminal on it. */
-async function chatHoldingSession(
-  runtime: OrcaRuntimeService,
+function chatHoldingSession(
   session: WorkerResumeSession
-): Promise<{ address: string; workspaceId: string } | null> {
-  const held = await chatHoldingWorkerConversation(runtime, session)
-  return held && isOrcaSessionId(held.sessionId)
-    ? {
-        address: formatOrcaSessionAddress(canonicalOrcaSessionId(held.sessionId)),
-        workspaceId: held.workspaceId
-      }
-    : null
+): { address: string; workspaceId: string } | null {
+  const held = chatHoldingWorkerConversation(session)
+  if (!held || !isOrcaSessionId(held.sessionId)) {
+    return null
+  }
+  try {
+    return {
+      address: formatOrcaSessionAddress(canonicalOrcaSessionId(held.sessionId)),
+      workspaceId: held.workspaceId
+    }
+  } catch {
+    // An unreadable chat journal leaves the terminal path as it was.
+    return null
+  }
 }
 
 /** The user resumed the conversation in a tab of their own: the follow-up goes there and the tab stays theirs. */

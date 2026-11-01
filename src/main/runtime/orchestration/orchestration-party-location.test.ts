@@ -87,28 +87,28 @@ function locate(
 }
 
 describe('where a sender opens', () => {
-  it("opens a chat at its `/clear` lineage's live session, in that session's worktree", async () => {
-    expect(await locate(`orca_session_id:${ROOT}`, { records: clearedChat() })).toEqual({
+  it("opens a chat at its `/clear` lineage's live session, in that session's worktree", () => {
+    expect(locate(`orca_session_id:${ROOT}`, { records: clearedChat() })).toEqual({
       location: { kind: 'chat', sessionId: LIVE, worktreeId: 'wt-chat' }
     })
-    expect(await locate(`orca_session_id:${ROOT}`)).toEqual({ location: null })
+    expect(locate(`orca_session_id:${ROOT}`)).toEqual({ location: null })
   })
 
-  it('distinguishes a missing root from an unreadable record, missing successor or cycle', async () => {
+  it('distinguishes a missing root from an unreadable record, missing successor or cycle', () => {
     const records = clearedChat()
     const getRecord = records.getRecord
     expect(
-      await locate(`orca_session_id:${ROOT}`, {
+      locate(`orca_session_id:${ROOT}`, {
         records: { ...records, getRecord: () => null, isSessionUnreadable: () => true }
       })
     ).toEqual({ location: null })
     expect(
-      await locate(`orca_session_id:${ROOT}`, {
+      locate(`orca_session_id:${ROOT}`, {
         records: { ...records, getRecord: () => null }
       })
     ).toEqual({ location: null, lost: 'chat' })
     expect(
-      await locate(`orca_session_id:${ROOT}`, {
+      locate(`orca_session_id:${ROOT}`, {
         records: {
           ...records,
           getRecord: () => {
@@ -118,19 +118,19 @@ describe('where a sender opens', () => {
       })
     ).toEqual({ location: null })
     expect(
-      await locate(`orca_session_id:${ROOT}`, {
+      locate(`orca_session_id:${ROOT}`, {
         records: { ...records, getRecord: (id) => (id === ROOT ? getRecord(id) : null) }
       })
     ).toEqual({ location: null })
     const root = getRecord(ROOT)
     expect(
-      await locate(`orca_session_id:${ROOT}`, {
+      locate(`orca_session_id:${ROOT}`, {
         records: { ...records, getRecord: () => root }
       })
     ).toEqual({ location: null })
   })
 
-  it('finds a terminal from an earlier run through the pane its mail was sent from', async () => {
+  it('finds a terminal from an earlier run through the pane its mail was sent from', () => {
     const sent = db.insertMessage({
       from: 'term_old',
       to: 'term_chat',
@@ -143,15 +143,15 @@ describe('where a sender opens', () => {
       subject: 's',
       senderPaneKey: PANE
     })
-    expect(await locate('term_old', {}, [sent.id])).toEqual({
+    expect(locate('term_old', {}, [sent.id])).toEqual({
       location: { kind: 'terminal', handle: 'term_now' }
     })
     // Only the sender's own mail can recover its old handle's location.
-    expect(await locate('term_old', {}, [other.id])).toEqual({ location: null, lost: 'terminal' })
-    expect(await locate('term_old')).toEqual({ location: null, lost: 'terminal' })
+    expect(locate('term_old', {}, [other.id])).toEqual({ location: null, lost: 'terminal' })
+    expect(locate('term_old')).toEqual({ location: null, lost: 'terminal' })
   })
 
-  it("opens a dispatch at its assignee's terminal, through the pane it was assigned", async () => {
+  it("opens a dispatch at its assignee's terminal, through the pane it was assigned", () => {
     const run = db.createRun({
       objective: 'o',
       coordinatorHandle: 'term_coord',
@@ -159,13 +159,13 @@ describe('where a sender opens', () => {
     })
     const task = db.createTask({ runId: run.id, spec: 'work' })
     const dispatch = createRootDispatch(db, task.id, 'term_old', PANE)
-    expect(await locate(`dispatch:${dispatch.id}`)).toEqual({
+    expect(locate(`dispatch:${dispatch.id}`)).toEqual({
       location: { kind: 'terminal', handle: 'term_now' }
     })
-    expect(await locate('dispatch:gone')).toEqual({ location: null })
+    expect(locate('dispatch:gone')).toEqual({ location: null })
   })
 
-  it('never calls a dispatch this host does not run gone: a federated one has no assignee here', async () => {
+  it('never calls a dispatch this host does not run gone: a federated one has no assignee here', () => {
     const run = db.createRun({
       objective: 'o',
       coordinatorHandle: 'term_coord',
@@ -179,17 +179,17 @@ describe('where a sender opens', () => {
       taskId: task.id,
       startOptions: {}
     })
-    expect(await locate(`dispatch:${started.dispatch.id}`)).toEqual({ location: null })
+    expect(locate(`dispatch:${started.dispatch.id}`)).toEqual({ location: null })
   })
 
-  it('calls a chat gone only on proof, and leaves any other failure to the caller', async () => {
+  it('calls a chat gone only on proof, and leaves any other failure to the caller', () => {
     resolveParty.mockImplementationOnce(() => {
       throw new OrchestrationError(CODES.notLive, 'lost its identity')
     })
-    expect(await locate(`orca_session_id:${ROOT}`)).toEqual({ location: null })
+    expect(locate(`orca_session_id:${ROOT}`)).toEqual({ location: null })
     resolveParty.mockImplementationOnce(() => {
       throw new Error('database is locked')
     })
-    await expect(locate(`orca_session_id:${ROOT}`)).rejects.toThrow('database is locked')
+    expect(() => locate(`orca_session_id:${ROOT}`)).toThrow('database is locked')
   })
 })

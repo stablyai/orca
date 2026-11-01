@@ -1,7 +1,4 @@
-import type {
-  OrchestrationPartyLocation,
-  OrchestrationPartyLocationResult
-} from '../../../shared/orchestration-caller-status'
+import type { OrchestrationPartyLocationResult } from '../../../shared/orchestration-caller-status'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import type { OrchestrationDb } from './db'
 import { resolveOrchestrationParty } from './orchestration-party'
@@ -15,16 +12,14 @@ type PartyLocationDeps = {
   /** Non-null only for a handle this runtime issued. */
   terminalPaneKey: (handle: string) => string | null
   terminalHandleForPaneKey: (paneKey: string) => string | null
-  /** A chat holding the conversation of a worker whose terminal Orca closed; null keeps the terminal answer. */
-  openClosedWorker?: (handle: string) => Promise<OrchestrationPartyLocation | null>
 }
 
 /** Locate through sender provenance in these messageIds, which survives handle reissue. */
-export async function locateOrchestrationParty(
+export function locateOrchestrationParty(
   address: string,
   deps: PartyLocationDeps,
   messageIds: readonly string[] = []
-): Promise<OrchestrationPartyLocationResult> {
+): OrchestrationPartyLocationResult {
   if (address.startsWith('dispatch:')) {
     return locateDispatchAssignee(address.slice('dispatch:'.length), deps)
   }
@@ -47,17 +42,13 @@ export async function locateOrchestrationParty(
 }
 
 /** Recover previous-run handles through the pane recorded on their sent mail. */
-async function locateTerminal(
+function locateTerminal(
   handle: string,
   deps: PartyLocationDeps,
   messageIds: readonly string[]
-): Promise<OrchestrationPartyLocationResult> {
-  const reopened = async () => {
-    const chat = await deps.openClosedWorker?.(handle)
-    return chat ? { location: chat } : null
-  }
+): OrchestrationPartyLocationResult {
   if (deps.terminalPaneKey(handle) !== null) {
-    return (await reopened()) ?? { location: { kind: 'terminal', handle } }
+    return { location: { kind: 'terminal', handle } }
   }
   for (const messageId of messageIds) {
     const message = deps.db?.getMessageById(messageId)
@@ -67,14 +58,14 @@ async function locateTerminal(
       return { location: { kind: 'terminal', handle: live } }
     }
   }
-  return (await reopened()) ?? { location: null, lost: 'terminal' }
+  return { location: null, lost: 'terminal' }
 }
 
 /** Resolve assignee pane, handle or remote attachment; absence at a federated Run home never proves worker exit. */
-async function locateDispatchAssignee(
+function locateDispatchAssignee(
   dispatchId: string,
   deps: PartyLocationDeps
-): Promise<OrchestrationPartyLocationResult> {
+): OrchestrationPartyLocationResult {
   const dispatch = deps.db?.getDispatchContextById(dispatchId)
   if (dispatch?.assignee_orca_session_id) {
     return locateSession(dispatch.assignee_orca_session_id, deps.records)
