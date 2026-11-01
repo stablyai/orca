@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
+import { MAX_TOOL_DETAIL_LENGTH } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
   loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
@@ -276,7 +277,7 @@ describe('tool sentence rows', () => {
   it.each([false, true])(
     'shows the full abbreviated command as plain text (JSON: %s)',
     (jsonInput) => {
-      const command = `pnpm test ${'src/renderer/tests/long-path/'.repeat(170)}end.test.ts`
+      const command = `pnpm test ${'src/renderer/tests/long-path/'.repeat(100)}end.test.ts`
       const input = jsonInput ? JSON.stringify({ command }) : { command }
       const { container } = render(
         <NativeChatToolLine
@@ -322,7 +323,7 @@ describe('tool sentence rows', () => {
   })
 
   it('keeps a long plain command with surrounding whitespace complete', () => {
-    const command = `  pnpm test ${'src/renderer/tests/long-path/'.repeat(170)}end.test.ts  `
+    const command = `  pnpm test ${'src/renderer/tests/long-path/'.repeat(100)}end.test.ts  `
     const { container } = render(
       <NativeChatToolLine
         block={{ type: 'tool-call', name: 'Bash', input: { command }, state: 'completed' }}
@@ -358,6 +359,49 @@ describe('tool sentence rows', () => {
     fireEvent.click(screen.getByRole('button'))
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true')
     expect(container.querySelector('pre')?.textContent).toBe(args)
+  })
+
+  it('names a call with no arguments once opened', () => {
+    const { container } = render(
+      <NativeChatToolLine
+        block={{ type: 'tool-call', name: 'mcp__linear__list_teams', input: {} }}
+        result={{ type: 'tool-result', output: 'Core' }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.getByText('mcp__linear__list_teams', { selector: 'p' })).toBeInTheDocument()
+    expect(container.querySelector('pre[data-native-chat-tool-input]')).toBeNull()
+  })
+
+  it('shows the kept head of an input the host shortened, not its wrapper', () => {
+    const { container } = render(
+      <NativeChatToolLine
+        block={{
+          type: 'tool-call',
+          name: 'Write',
+          state: 'running',
+          input: { truncated: true, byteLength: 52_341, digest: 'abc', head: '{"file_path":"/a' }
+        }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button'))
+    expect(container.querySelector('pre[data-native-chat-tool-input]')?.textContent).toBe(
+      '{"file_path":"/a'
+    )
+    expect(screen.getByText(/^Showing 16 B of 51\.1 KB\.$/)).toBeInTheDocument()
+  })
+
+  it('holds a long input to the inline bound until asked for in full', () => {
+    const body = 'x'.repeat(MAX_TOOL_DETAIL_LENGTH * 2)
+    const { container } = render(
+      <NativeChatToolLine block={{ type: 'tool-call', name: 'post_note', input: body }} />
+    )
+    fireEvent.click(screen.getByRole('button'))
+    const input = (): string | null | undefined =>
+      container.querySelector('pre[data-native-chat-tool-input]')?.textContent
+    expect(input()).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
+    fireEvent.click(screen.getByRole('button', { name: 'Show full input' }))
+    expect(input()).toBe(body)
   })
 
   it('offers nothing to open on a call with neither arguments nor output', () => {

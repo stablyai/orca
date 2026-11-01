@@ -1,5 +1,6 @@
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -22,8 +23,14 @@ import { nativeChatToolRowVerb } from './native-chat-tool-line-label'
 import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
 import {
   nativeChatToolLineInput,
-  nativeChatToolLineView
+  nativeChatToolLineView,
+  type NativeChatToolLineInput
 } from '../../../../shared/native-chat/tools/native-chat-tool-line-view'
+import { NATIVE_CHAT_TOOL_OUTPUT_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-output'
+import {
+  MAX_TOOL_DETAIL_LENGTH,
+  truncateToolDetail
+} from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 import type { NativeChatToolLineLabel } from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
 import type { NativeChatWebSearchResult } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import {
@@ -36,6 +43,42 @@ import { NativeChatToolOutput } from './NativeChatToolOutput'
 
 const TARGET_CLASS =
   'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
+
+/** A call's arguments, held to the inline output bound until asked for in full. */
+function ToolLineInput({ input }: { input: NativeChatToolLineInput }): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const clipped = !expanded && input.text.length > MAX_TOOL_DETAIL_LENGTH
+  const text = clipped ? truncateToolDetail(input.text) : input.text
+  return (
+    <div className="space-y-1">
+      <pre
+        data-native-chat-code-content
+        data-native-chat-tool-input
+        className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-chat-code-border bg-chat-code-surface p-2 font-mono text-chat-code text-chat-foreground scrollbar-sleek"
+      >
+        {input.language ? (
+          <NativeChatHighlightedCode code={text} language={input.language} />
+        ) : (
+          text
+        )}
+      </pre>
+      {input.partial ? (
+        <p className="text-xs text-chat-foreground-faint">
+          {translate(
+            'components.native-chat.tool.fullOutputPartial',
+            NATIVE_CHAT_TOOL_OUTPUT_COPY.partial,
+            input.partial
+          )}
+        </p>
+      ) : null}
+      {clipped ? (
+        <Button type="button" variant="ghost" size="xs" onClick={() => setExpanded(true)}>
+          {translate('components.native-chat.tool.showFullInput', 'Show full input')}
+        </Button>
+      ) : null}
+    </div>
+  )
+}
 
 /** Mount detail separately so collapsed rows do no diff or argument formatting work. */
 function ToolLineDetail({
@@ -53,34 +96,24 @@ function ToolLineDetail({
   results: NativeChatWebSearchResult[]
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
-  const diff = isToolCallBlock(block)
-    ? diffFromToolCall(block.name, block.input)
+  const call = isToolCallBlock(block) ? block : null
+  const diff = call
+    ? diffFromToolCall(call.name, call.input)
     : isToolResultBlock(block)
       ? diffFromText(block.output)
       : null
-  const input = hasInput && isToolCallBlock(block) ? nativeChatToolLineInput(block, label) : null
+  const input = hasInput && call ? nativeChatToolLineInput(call, label) : null
   return (
     <div className="ml-6 space-y-1.5 py-1">
+      {/* The row's verb or MCP label stands in for the tool; name it exactly once opened. */}
+      {call ? (
+        <p className="break-all font-mono text-xs text-chat-foreground-faint">{call.name}</p>
+      ) : null}
       {results.length > 0 ? (
         <NativeChatSearchResults results={results} onLinkClick={onLinkClick} />
       ) : null}
       {diff ? <NativeChatDiffView lines={diff} /> : null}
-      {input ? (
-        <div className="space-y-1">
-          <p className="break-all font-mono text-xs text-chat-foreground-faint">{input.name}</p>
-          <pre
-            data-native-chat-code-content
-            data-native-chat-tool-input
-            className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-chat-code-border bg-chat-code-surface p-2 font-mono text-chat-code text-chat-foreground scrollbar-sleek"
-          >
-            {input.language ? (
-              <NativeChatHighlightedCode code={input.text} language={input.language} />
-            ) : (
-              input.text
-            )}
-          </pre>
-        </div>
-      ) : null}
+      {input ? <ToolLineInput input={input} /> : null}
       {body ? <NativeChatToolOutput body={body} /> : null}
     </div>
   )

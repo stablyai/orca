@@ -27,15 +27,16 @@ import { pressedStyle } from '../theme/mobile-theme'
 
 type Load = 'idle' | 'loading' | 'failed'
 
-function ShowFull({
+export function ShowFull({
   label,
-  failedLabel,
-  load,
+  failedLabel = label,
+  load = 'idle',
   onPress
 }: {
   label: string
-  failedLabel: string
-  load: Load
+  /** Only a remote read can fail; a local reveal never does. */
+  failedLabel?: string
+  load?: Load
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()

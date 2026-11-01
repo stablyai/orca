@@ -19619,6 +19619,7 @@
         "interruptedCount": "{{value0}} interrupted",
         "interruptedCallsLabel": "Interrupted tool calls: {{value0}}",
         "showFullOutput": "Show full output",
+        "showFullInput": "Show full input",
         "fullOutputFailed": "Couldn't load the full output.",
         "fullOutputPartial": "Showing {{shown}} of {{total}}.",
         "copyDiff": "Copy diff",

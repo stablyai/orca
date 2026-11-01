@@ -1787,6 +1787,7 @@
     "nativeChatFullContent": {
       "partialOutput": "Showing {{shown}} of {{total}}.",
       "showFullOutput": "Show full output",
+      "showFullInput": "Show full input",
       "loadOutputFailed": "Show full output — couldn't load, tap to retry",
       "partialMessage": "Showing part of this message.",
       "showFullMessage": "Show full message",

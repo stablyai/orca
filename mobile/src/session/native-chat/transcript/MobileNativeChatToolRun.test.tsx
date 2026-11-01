@@ -178,6 +178,17 @@ describe('ToolRun', () => {
       expect(output?.endsWith('…')).toBe(true)
     })
 
+    it('bounds an opened input before native text layout until asked for in full', () => {
+      const body = 'x'.repeat(100_000)
+      const tree = render([{ type: 'tool-call', name: 'post_note', input: { body } }])
+      open(tree, 'post_note')
+      const shown = (): string =>
+        textIn(tree.root).reduce((longest, text) => (text.length > longest.length ? text : longest))
+      expect(shown()).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
+      act(() => pressable(tree, 'Show full input').props.onPress())
+      expect(shown()).toContain(body)
+    })
+
     it('draws command output that merely starts lines with - or + as plain text', () => {
       const listing = '-rw-r--r--  1 me  staff  12 a.ts\n-rw-r--r--  1 me  staff  14 b.ts'
       const tree = render([

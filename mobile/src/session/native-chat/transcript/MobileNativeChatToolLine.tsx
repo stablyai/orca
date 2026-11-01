@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
 import { ChevronRight } from 'lucide-react-native'
@@ -17,6 +17,10 @@ import {
   nativeChatToolLineInput,
   nativeChatToolLineView
 } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-view'
+import {
+  MAX_TOOL_DETAIL_LENGTH,
+  truncateToolDetail
+} from '../../../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import type { NativeChatToolLineLabel } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-label'
 import type {
   NativeChatToolCallBlock,
@@ -30,7 +34,7 @@ import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { highlightMobileCode } from '../../mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
-import { MobileNativeChatToolOutput } from '../../MobileNativeChatFullContent'
+import { MobileNativeChatToolOutput, ShowFull } from '../../MobileNativeChatFullContent'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
@@ -142,31 +146,39 @@ function ToolLineDetail({
     : body
       ? diffFromText(body.output)
       : null
+  const t = useMobileTranslation()
+  const [inputExpanded, setInputExpanded] = useState(false)
   const input = useMemo(() => {
     if (!hasInput || !call) {
       return null
     }
     const invocation = nativeChatToolLineInput(call, label)
+    // Bound native text layout as opened output is bounded.
+    const clipped = !inputExpanded && invocation.text.length > MAX_TOOL_DETAIL_LENGTH
+    const text = clipped ? truncateToolDetail(invocation.text) : invocation.text
     const segments = invocation.language
-      ? highlightMobileCode(invocation.text, invocation.language).segments
+      ? highlightMobileCode(text, invocation.language).segments
       : null
-    return { ...invocation, segments }
-  }, [hasInput, call, label])
+    return { text, segments, clipped, partial: invocation.partial }
+  }, [hasInput, call, label, inputExpanded])
   const type = toolType(fontScale).code
   const metaType = toolType(fontScale).meta
   const onLayout = useMobileNativeChatOpenedDetail()
   return (
     <View style={styles.detail} onLayout={onLayout}>
+      {/* The row's verb or MCP label stands in for the tool; name it exactly once opened. */}
+      {call ? (
+        <Text
+          selectable={INLINE_TEXT_SELECTION}
+          style={[styles.codeText, styles.lineMeta, metaType]}
+        >
+          {call.name}
+        </Text>
+      ) : null}
       {results.length > 0 ? <SearchResults results={results} fontScale={fontScale} /> : null}
       {diff ? <DiffView lines={diff} fontScale={fontScale} /> : null}
       {input ? (
-        <>
-          <Text
-            selectable={INLINE_TEXT_SELECTION}
-            style={[styles.codeText, styles.lineMeta, metaType]}
-          >
-            {input.name}
-          </Text>
+        <View>
           <MobileNativeChatOwnedScrollView
             rootIdentity={`${memberId ?? call?.callId ?? 'detail'}:command`}
             positionKey={`${disclosureKey ?? call?.callId ?? 'detail'}:command`}
@@ -178,7 +190,21 @@ function ToolLineDetail({
               {input.segments ? <MobileSyntaxSegments segments={input.segments} /> : input.text}
             </Text>
           </MobileNativeChatOwnedScrollView>
-        </>
+          {input.partial ? (
+            <Text style={[styles.lineMeta, metaType]}>
+              {t('session.nativeChatFullContent.partialOutput', 'Showing {{shown}} of {{total}}.', {
+                shown: input.partial.shown,
+                total: input.partial.total
+              })}
+            </Text>
+          ) : null}
+          {input.clipped ? (
+            <ShowFull
+              label={t('session.nativeChatFullContent.showFullInput', 'Show full input')}
+              onPress={() => setInputExpanded(true)}
+            />
+          ) : null}
+        </View>
       ) : null}
       {body ? (
         <MobileNativeChatToolOutput

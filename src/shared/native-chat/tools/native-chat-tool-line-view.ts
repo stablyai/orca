@@ -12,6 +12,8 @@ import {
   type NativeChatToolLineLabel
 } from './native-chat-tool-line-label'
 import { formatToolInput, hasToolInput } from './native-chat-tool-summary'
+import { nativeChatToolOutputPartialSizes } from './native-chat-tool-output'
+import type { AgentJournalBoundedPayload } from '../../agent-session/journal/agent-session-journal-types'
 
 export type NativeChatToolLineView = {
   call: NativeChatToolCallBlock | undefined
@@ -29,11 +31,11 @@ export type NativeChatToolLineView = {
 }
 
 export type NativeChatToolLineInput = {
-  /** The tool's own name, which a row's verb or MCP label stands in for. */
-  name: string
   text: string
   /** Grammar of a lone command; null for structured arguments. */
   language: string | null
+  /** Sizes when the host kept only the head of an oversized input. */
+  partial: { shown: string; total: string } | null
 }
 
 const NO_SEARCH_RESULTS: NativeChatWebSearchResult[] = []
@@ -51,10 +53,31 @@ export function nativeChatToolLineView(
   const results = call ? toolWebSearchResults(call.webSearchResults) : NO_SEARCH_RESULTS
   // An edit that has not landed has no output yet, but the change it proposes is worth opening.
   const diff = call !== undefined && diffFromToolCall(call.name, call.input) !== null
-  const hasInput = call !== undefined && !diff && hasToolInput(call.input)
+  const hasInput =
+    call !== undefined &&
+    !diff &&
+    hasToolInput(call.input) &&
+    nativeChatPlainCommandInput(call.input)?.trim() !== ''
   const hasDetail = body !== undefined || hasInput || results.length > 0 || diff
   const resultPreview = call ? '' : (body?.output.split('\n')[0]?.slice(0, 80) ?? '')
   return { call, label, body, resultPreview, failed, results, hasInput, hasDetail }
+}
+
+function boundedToolInput(input: unknown): AgentJournalBoundedPayload | null {
+  if (
+    input === null ||
+    typeof input !== 'object' ||
+    !('truncated' in input && 'head' in input && 'byteLength' in input && 'digest' in input)
+  ) {
+    return null
+  }
+  const { truncated, head, byteLength, digest } = input
+  return truncated === true &&
+    typeof head === 'string' &&
+    typeof byteLength === 'number' &&
+    typeof digest === 'string'
+    ? { truncated, head, byteLength, digest }
+    : null
 }
 
 /** An opened call's invocation: a lone command as typed, else every argument it was given. */
@@ -62,10 +85,19 @@ export function nativeChatToolLineInput(
   call: NativeChatToolCallBlock,
   label: NativeChatToolLineLabel | null
 ): NativeChatToolLineInput {
+  // The host swaps an oversized input for its JSON head; show that head, not the wrapper.
+  const bounded = boundedToolInput(call.input)
+  if (bounded) {
+    return {
+      text: bounded.head,
+      language: null,
+      partial: nativeChatToolOutputPartialSizes(bounded)
+    }
+  }
   const command = nativeChatPlainCommandInput(call.input)
   return {
-    name: call.name,
     text: command ?? formatToolInput(call.input),
-    language: command === null ? null : (label?.commandLanguage ?? null)
+    language: command === null ? null : (label?.commandLanguage ?? null),
+    partial: null
   }
 }
