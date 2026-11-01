@@ -45,12 +45,12 @@ function setup(
     files = [],
     activeSuggestion = 0,
     loading = false,
-    promptSuggestion = null
+    acceptPromptSuggestion
   }: {
     files?: readonly string[]
     activeSuggestion?: number
     loading?: boolean
-    promptSuggestion?: string | null
+    acceptPromptSuggestion?: () => void
   } = {}
 ) {
   const callbacks = {
@@ -70,7 +70,7 @@ function setup(
       mentionFiles: { files, loading, failed: false },
       activeSuggestion,
       draft,
-      promptSuggestion,
+      acceptPromptSuggestion,
       isComposing: () => composing,
       ...callbacks
     })
@@ -190,22 +190,16 @@ describe('useNativeChatComposerKeyDown', () => {
     }
   )
 
-  it('takes the prompt suggestion on Tab only from an empty composer', () => {
+  it('takes a shown prompt suggestion on Tab or Right Arrow, as Claude Code does', () => {
     const none: ComposerAutocomplete = { mode: 'none' }
-    const options = { promptSuggestion: 'add a test for it' }
-    const empty = setup(none, false, '', options)
-    press(empty.handler, 'Tab')
-    expect(empty.callbacks.setDraft).toHaveBeenCalledWith('add a test for it')
-    expect(empty.callbacks.setCaret).toHaveBeenCalledWith('add a test for it'.length)
-
-    for (const [draft, shiftKey] of [
-      ['fix it', false],
-      ['', true]
-    ] as const) {
-      const other = setup(none, false, draft, options)
-      press(other.handler, 'Tab', shiftKey)
-      expect(other.callbacks.setDraft).not.toHaveBeenCalled()
+    for (const key of ['Tab', 'ArrowRight']) {
+      const acceptPromptSuggestion = vi.fn()
+      press(setup(none, false, '', { acceptPromptSuggestion }).handler, key)
+      expect(acceptPromptSuggestion).toHaveBeenCalledOnce()
     }
+    const acceptPromptSuggestion = vi.fn()
+    press(setup(none, false, '', { acceptPromptSuggestion }).handler, 'Tab', true)
+    expect(acceptPromptSuggestion).not.toHaveBeenCalled()
   })
 
   it('dismisses Escape without interrupting the agent', () => {

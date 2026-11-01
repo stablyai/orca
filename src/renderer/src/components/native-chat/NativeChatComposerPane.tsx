@@ -300,7 +300,9 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       structuredTransport,
       editSession,
       isWorking,
-      canStop: hasPty && onStop !== undefined
+      canStop: hasPty && onStop !== undefined,
+      setDraft,
+      setCaret
     })
 
     const { send, chooseEditItem, fieldOverrides, dispatchPickerCommand } =
@@ -345,7 +347,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       interrupt: editSession?.cancel ?? interrupt,
       send,
       hasAttachments: imageAttachments.length > 0,
-      promptSuggestion: sendState.promptSuggestion,
+      acceptPromptSuggestion: sendState.promptSuggestion?.accept,
       ...(!editSession && steerHead ? { steerHead } : {}),
       setActiveSuggestion,
       setDraft,
