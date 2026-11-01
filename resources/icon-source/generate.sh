@@ -1,6 +1,7 @@
 #!/bin/bash
 # Generate app icons from Icon Composer .icon project
-# Produces: resources/build/icon.icns (macOS), resources/build/icon.png (fallback), resources/icon.png (tray)
+# Produces: resources/build/icon.icns (macOS), resources/build/Assets.car (macOS 26 icon styles),
+# resources/build/icon.png (fallback), resources/icon.png (tray)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -36,6 +37,26 @@ if [ ! -f "$TMP_DIR/icon.icns" ]; then
 fi
 
 cp "$TMP_DIR/icon.icns" "$BUILD_DIR/icon.icns"
+
+# #16495: macOS 26 renders Clear/Tinted/Dark icon styles only from the layered Assets.car,
+# which actool emits for a 26.0 deployment target; the .icns above stays the fallback.
+CATALOG_DIR="$TMP_DIR/catalog"
+mkdir -p "$CATALOG_DIR"
+xcrun actool \
+  --compile "$CATALOG_DIR" \
+  --platform macosx \
+  --minimum-deployment-target 26.0 \
+  --app-icon icon \
+  --output-partial-info-plist "$CATALOG_DIR/partial.plist" \
+  "$ICON_SOURCE" >/dev/null
+
+if [ ! -f "$CATALOG_DIR/Assets.car" ]; then
+  echo "Error: actool failed to produce Assets.car (Xcode 26 or newer is required)" >&2
+  exit 1
+fi
+
+cp "$CATALOG_DIR/Assets.car" "$BUILD_DIR/Assets.car"
+echo "  -> resources/build/Assets.car"
 
 # macOS list views use the small .icns slots directly. Icon Composer keeps the
 # safe-area inset there, so trim only those slots while preserving larger icons.
