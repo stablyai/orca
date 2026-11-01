@@ -93,6 +93,7 @@ describe('host prompt delivery and retirement', () => {
             customSoundPath: null,
             customSoundVolume: 1,
             mutedNotificationSourceIds: [],
+            phoneMutedNotificationSourceIds: [],
             notifyHiddenWorkspaces: true
           }),
           readWorkspaceLabels: () => ({}),

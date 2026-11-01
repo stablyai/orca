@@ -91,6 +91,7 @@ function attentionPath(directory: string) {
       customSoundPath: null,
       customSoundVolume: 1,
       mutedNotificationSourceIds: [],
+      phoneMutedNotificationSourceIds: [],
       notifyHiddenWorkspaces: false
     }),
     readWorkspaceLabels: () => ({}),

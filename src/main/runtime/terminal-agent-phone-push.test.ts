@@ -68,6 +68,7 @@ function harness(
       customSoundPath: null,
       customSoundVolume: 1,
       mutedNotificationSourceIds: [],
+      phoneMutedNotificationSourceIds: [],
       notifyHiddenWorkspaces: true,
       ...options.settings
     }),
@@ -300,6 +301,7 @@ describe('TerminalAgentPhonePush', () => {
         customSoundPath: null,
         customSoundVolume: 1,
         mutedNotificationSourceIds: [],
+        phoneMutedNotificationSourceIds: [],
         notifyHiddenWorkspaces: true
       }),
       findActiveWindow: () => null,

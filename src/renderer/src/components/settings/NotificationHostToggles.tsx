@@ -12,26 +12,37 @@ import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
 
 type NotificationHostTogglesProps = {
   mutedNotificationSourceIds: readonly NotificationSourceId[]
+  /** Sources this desktop leaves out of its phone pushes; absent hides the phone switches. */
+  phoneMutedNotificationSourceIds?: readonly NotificationSourceId[]
   disabled: boolean
   /** Every id the toggled machine stands for: an SSH host and its managed server mute together. */
   onChange: (hostIds: readonly NotificationSourceId[], muted: boolean) => void
+  onPhoneChange?: (hostIds: readonly NotificationSourceId[], muted: boolean) => void
 }
 
 export function NotificationHostToggles({
   mutedNotificationSourceIds,
+  phoneMutedNotificationSourceIds,
   disabled,
-  onChange
+  onChange,
+  onPhoneChange
 }: NotificationHostTogglesProps): React.JSX.Element | null {
   const hostOptions = pickerExecutionHosts(useNotificationSourceOptions())
   const mutedSourceIds = new Set(mutedNotificationSourceIds)
   const isMuted = (host: (typeof hostOptions)[number]): boolean =>
     [host.id, ...(host.aliasHostIds ?? [])].some((id) => mutedSourceIds.has(id))
+  const phoneMutedSourceIds = new Set(phoneMutedNotificationSourceIds)
+  const isPhoneMuted = (host: (typeof hostOptions)[number]): boolean =>
+    [host.id, ...(host.aliasHostIds ?? [])].some((id) => phoneMutedSourceIds.has(id))
   const mutedHosts = hostOptions.filter(isMuted)
   const mutedCount = mutedHosts.length
   // Pin muted hosts so row limits cannot hide the switch needed to unmute.
-  const rows = useBoundedHostRows(hostOptions, new Set(mutedHosts.map((host) => host.id)))
+  const rows = useBoundedHostRows(
+    hostOptions,
+    new Set([...mutedHosts, ...hostOptions.filter(isPhoneMuted)].map((host) => host.id))
+  )
   // Keep an effective mute reachable after the last remote machine is removed.
-  if (hostOptions.length <= 1 && mutedCount === 0) {
+  if (hostOptions.length <= 1 && mutedCount === 0 && !hostOptions.some(isPhoneMuted)) {
     return null
   }
   return (
@@ -72,14 +83,39 @@ export function NotificationHostToggles({
               <HostListSearchField value={rows.query} onChange={rows.setQuery} />
             ) : null}
             {rows.shown.map((host) => (
-              <NotificationSettingToggle
-                key={host.id}
-                label={host.label}
-                description={host.detail}
-                checked={!isMuted(host)}
-                disabled={disabled}
-                onToggle={() => onChange([host.id, ...(host.aliasHostIds ?? [])], !isMuted(host))}
-              />
+              <div key={host.id}>
+                <NotificationSettingToggle
+                  label={host.label}
+                  description={host.detail}
+                  checked={!isMuted(host)}
+                  disabled={disabled}
+                  onToggle={() => onChange([host.id, ...(host.aliasHostIds ?? [])], !isMuted(host))}
+                />
+                {onPhoneChange && host.kind !== 'local' ? (
+                  <div className="ml-4">
+                    <NotificationSettingToggle
+                      label={translate(
+                        'auto.components.settings.NotificationHostToggles.phone',
+                        'Push to phone'
+                      )}
+                      description={translate(
+                        'auto.components.settings.NotificationHostToggles.phoneDescription',
+                        'Turn off if another computer already pushes this machine’s alerts to your phone.'
+                      )}
+                      ariaLabel={translate(
+                        'auto.components.settings.NotificationHostToggles.phoneAriaLabel',
+                        'Push {{host}} to phone',
+                        { host: host.label }
+                      )}
+                      checked={!isPhoneMuted(host)}
+                      disabled={disabled}
+                      onToggle={() =>
+                        onPhoneChange([host.id, ...(host.aliasHostIds ?? [])], !isPhoneMuted(host))
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
             ))}
             <HostListOverflowNote hiddenCount={rows.hiddenCount} />
           </div>

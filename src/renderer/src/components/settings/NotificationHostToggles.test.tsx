@@ -88,20 +88,49 @@ describe('NotificationHostToggles', () => {
   it('allows expansion while the master switch disables machine changes', () => {
     hostOptions.current = [host('local', 'Local Mac'), host('runtime:m4air', 'M4Air mac')]
     const onChange = vi.fn()
+    const onPhoneChange = vi.fn()
     const { getByRole, getAllByRole } = render(
       <NotificationHostToggles
         mutedNotificationSourceIds={['local']}
+        phoneMutedNotificationSourceIds={[]}
         disabled
         onChange={onChange}
+        onPhoneChange={onPhoneChange}
       />
     )
     const heading = getByRole('button', { name: /Machines/ })
     expect(heading.hasAttribute('disabled')).toBe(false)
     fireEvent.click(heading)
-    for (const toggle of getAllByRole('switch')) {
+    const switches = getAllByRole('switch')
+    expect(switches).toHaveLength(3)
+    for (const toggle of switches) {
       expect(toggle.hasAttribute('disabled')).toBe(true)
       fireEvent.click(toggle)
     }
     expect(onChange).not.toHaveBeenCalled()
+    expect(onPhoneChange).not.toHaveBeenCalled()
+  })
+
+  it('offers a phone switch per remote machine that stays independent of the banner switch', () => {
+    hostOptions.current = [host('local', 'Local Mac'), host('runtime:m4air', 'M4Air mac')]
+    const onChange = vi.fn()
+    const onPhoneChange = vi.fn()
+    const { getByRole, getAllByRole } = render(
+      <NotificationHostToggles
+        mutedNotificationSourceIds={[]}
+        phoneMutedNotificationSourceIds={['runtime:m4air']}
+        disabled={false}
+        onChange={onChange}
+        onPhoneChange={onPhoneChange}
+      />
+    )
+    fireEvent.click(getByRole('button', { name: /Machines/ }))
+    expect(getAllByRole('switch', { name: /^Push .* to phone$/ })).toHaveLength(1)
+    const phoneSwitch = getByRole('switch', { name: 'Push M4Air mac to phone' })
+    expect(phoneSwitch.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(phoneSwitch)
+    expect(onPhoneChange).toHaveBeenCalledWith(['runtime:m4air'], false)
+    expect(onChange).not.toHaveBeenCalled()
+    expect(getByRole('switch', { name: 'M4Air mac' }).getAttribute('aria-checked')).toBe('true')
   })
 })

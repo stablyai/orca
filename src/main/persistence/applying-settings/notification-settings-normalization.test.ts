@@ -32,6 +32,23 @@ describe('muted notification machines', () => {
     ).toEqual([])
   })
 
+  it('normalizes the phone mute list the same way, defaulting to none', () => {
+    expect(
+      normalizeNotificationSettings({
+        phoneMutedNotificationSourceIds: ['runtime:m4air', 'runtime:m4air', 'nope', 42]
+      }).phoneMutedNotificationSourceIds
+    ).toEqual(['runtime:m4air'])
+    expect(normalizeNotificationSettings({}).phoneMutedNotificationSourceIds).toEqual([])
+  })
+
+  it('counts a settings block saved before the phone mute list existed as a repair', () => {
+    const { phoneMutedNotificationSourceIds: _omitted, ...legacy } =
+      getDefaultNotificationSettings()
+    expect(
+      persistedNotificationSettingsRepaired(legacy, normalizeNotificationSettings(legacy))
+    ).toBe(true)
+  })
+
   it('does not count an unchanged list as a repair', () => {
     const persisted = {
       ...getDefaultNotificationSettings(),

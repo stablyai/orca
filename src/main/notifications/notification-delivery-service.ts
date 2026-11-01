@@ -77,6 +77,10 @@ export function createNotificationDeliveryService(
       const hostMuted =
         request.notificationSourceId !== undefined &&
         settings.mutedNotificationSourceIds.includes(request.notificationSourceId)
+      // Why: another desktop may be the one that pushes this machine's work to the phone.
+      const phoneMuted =
+        request.notificationSourceId !== undefined &&
+        settings.phoneMutedNotificationSourceIds.includes(request.notificationSourceId)
       // Machine mutes leave mobile eligibility and its cooldown unchanged.
       const desktopAllowed =
         settings.enabled &&
@@ -88,6 +92,7 @@ export function createNotificationDeliveryService(
       // Desktop focus need not silence phones; execution hosts retire their own delivered alerts.
       if (
         !request.mobileDeliveredByHost &&
+        !phoneMuted &&
         deps.dispatchMobileNotification &&
         request.source !== 'test'
       ) {

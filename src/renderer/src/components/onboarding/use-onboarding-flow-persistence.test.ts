@@ -99,6 +99,7 @@ describe('onboarding flow persistence', () => {
       customSoundPath: null,
       customSoundVolume: 60,
       mutedNotificationSourceIds: [],
+      phoneMutedNotificationSourceIds: [],
       notifyHiddenWorkspaces: false
     })
 
@@ -111,6 +112,7 @@ describe('onboarding flow persistence', () => {
       customSoundPath: null,
       customSoundVolume: 60,
       mutedNotificationSourceIds: [],
+      phoneMutedNotificationSourceIds: [],
       notifyHiddenWorkspaces: false
     })
   })

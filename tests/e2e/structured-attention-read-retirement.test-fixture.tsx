@@ -57,6 +57,7 @@ export const NOTIFICATION_SETTINGS: NotificationSettings = {
   customSoundPath: null,
   customSoundVolume: 1,
   mutedNotificationSourceIds: [],
+  phoneMutedNotificationSourceIds: [],
   notifyHiddenWorkspaces: false
 }
 export const SCOPE = {

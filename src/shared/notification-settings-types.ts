@@ -24,6 +24,8 @@ export type NotificationSettings = {
   customSoundVolume: number
   /** Desktop opt-outs stored only on this client, per configured source and work reached through it; new sources notify. */
   mutedNotificationSourceIds: NotificationSourceId[]
+  /** Sources this desktop must not push to paired phones, so another desktop can be the one that does. Banners are unaffected. */
+  phoneMutedNotificationSourceIds: NotificationSourceId[]
   /** Off silences every notification from a workspace the sidebar's Filters switches hide. Local only. */
   notifyHiddenWorkspaces: boolean
 }
