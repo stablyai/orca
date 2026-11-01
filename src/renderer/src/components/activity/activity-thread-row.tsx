@@ -36,7 +36,7 @@ function ActivityThreadRowAction({
           variant="ghost"
           size="icon-xs"
           className={cn(
-            'size-4.5 p-0 text-muted-foreground transition-opacity hover:text-foreground can-hover:pointer-events-none can-hover:opacity-0 can-hover:group-hover:pointer-events-auto can-hover:group-hover:opacity-100 focus-visible:opacity-100',
+            'size-4 p-0 text-muted-foreground transition-opacity hover:text-foreground can-hover:pointer-events-none can-hover:opacity-0 can-hover:group-hover:pointer-events-auto can-hover:group-hover:opacity-100 focus-visible:opacity-100',
             !keyboardReachable && 'can-hover:invisible can-hover:group-hover:visible'
           )}
           aria-label={label}
@@ -217,7 +217,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                           )}
                         >
                           <FilledBellIcon
-                            className="size-3.25 shrink-0 text-amber-500 drop-shadow-sm"
+                            className="size-3 shrink-0 text-amber-500 drop-shadow-sm"
                             aria-hidden="true"
                           />
                         </button>
