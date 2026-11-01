@@ -74,6 +74,18 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     const script = decodedScript(spawn.args)
     expect(script).toContain(encodedValue('C:\\Tools\\codex.exe'))
     expect(script).toContain(encodedValue('login'))
+    expect(script).toContain('if ($null -eq $LASTEXITCODE) { exit 1 }')
+    expect(script).toContain('try { & $Command @Arguments } catch { exit 1 }')
+    spawn.cleanup()
+  })
+
+  it('resolves extensionless command paths to .cmd when present on Windows', () => {
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex', ['login'])
+    )
+    const script = decodedScript(spawn.args)
+    expect(script).toContain(encodedValue('login'))
+    expect(script).toContain('if ($null -eq $LASTEXITCODE) { exit 1 }')
     spawn.cleanup()
   })
 
