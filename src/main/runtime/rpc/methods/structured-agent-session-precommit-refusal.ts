@@ -8,8 +8,8 @@ import {
   refuseUnclassified,
   type AgentSessionWireRefusal,
   type AgentSessionWireRefusalCode
-} from '../../../../shared/agent-session-wire'
-import { isAgentSessionCreateAdmissionRefusal } from '../../../../shared/agent-session-definitive-refusal'
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { isAgentSessionCreateAdmissionRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 
 export type StructuredCreateRefused = { refusal: AgentSessionWireRefusal }
 

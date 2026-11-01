@@ -5,7 +5,12 @@ import {
   createPanelMessageBudget,
   type PanelMessageBudget
 } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
-import { createPluginFrameMessageHandler, type PluginFrameHostOptions } from './plugin-frame-host'
+import {
+  createPluginFrameEnvelopeHandler,
+  createPluginFrameMessageHandler,
+  pluginWebviewFrameWindow,
+  type PluginFrameHostOptions
+} from './plugin-frame-host'
 
 vi.mock('./plugin-panel-design-token-css', () => ({
   currentPluginFrameTheme: () => ({ colorScheme: 'dark', tokens: '--orca-background:#000' })
@@ -93,12 +98,16 @@ describe('createPluginFrameMessageHandler', () => {
       payload: {
         protocol: 1,
         surface: 'editor',
-        api: { major: 1, minor: 0 },
+        // An iframe is offered no user-gesture methods, but 1.2 gave every frame storage.
+        api: { major: 1, minor: 2 },
         theme: { colorScheme: 'dark', tokens: '--orca-background:#000' }
       }
     })
     expect(hello.payload.methods).toContain('notifications.show')
-    expect(hello.payload.methods).not.toContain('storage.get')
+    expect(hello.payload.methods).toContain('storage.get')
+    expect(hello.payload.methods).toContain('plugin.request')
+    expect(hello.payload.methods).not.toContain('terminal.sendText')
+    expect(hello.payload.methods).not.toContain('files.saveAs')
     expect(onReady).toHaveBeenCalledOnce()
   })
 
@@ -332,7 +341,166 @@ describe('createPluginFrameMessageHandler', () => {
 
     expect(admit).toHaveBeenCalledTimes(2)
     expect(callHostMethod).not.toHaveBeenCalled()
-    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'editor.keydown' }))
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'editor.keydown' }), {
+      userActivation: false,
+      transport: 'iframe'
+    })
     expect(onResponse).toHaveBeenCalledWith(expect.objectContaining({ id: 0 }))
   })
 })
+
+describe('createPluginFrameEnvelopeHandler (guest transport)', () => {
+  function guest(overrides: Partial<PluginFrameHostOptions> = {}) {
+    const webview = { send: vi.fn() }
+    const callHostMethod = vi.fn().mockResolvedValue({ ok: true, value: { opened: true } })
+    const handle = createPluginFrameEnvelopeHandler({
+      surface: 'panel',
+      getFrameWindow: () => pluginWebviewFrameWindow(webview),
+      getSessionToken: () => SESSION_TOKEN,
+      callHostMethod,
+      ...overrides
+    })
+    const replies = () => webview.send.mock.calls.map(([, message]) => message)
+    return { webview, handle, callHostMethod, replies }
+  }
+
+  it('answers over the guest channel with one stable adapter per webview', () => {
+    const { webview, handle } = guest()
+    expect(pluginWebviewFrameWindow(webview)).toBe(pluginWebviewFrameWindow(webview))
+    handle(
+      { orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } },
+      { userActivation: false }
+    )
+    expect(webview.send).toHaveBeenCalledWith(
+      'orca-plugin-frame',
+      expect.objectContaining({ event: 'hello' })
+    )
+  })
+
+  it('admits one user-gesture call per real gesture, whatever the frame claims', async () => {
+    const { handle, callHostMethod, replies } = guest()
+    const open = (id: number) => req(id, 'shell.openExternal', { url: 'https://example.com' })
+    handle(open(1), { userActivation: false, transport: 'guest', gesture: 0 })
+    await flush()
+    expect(callHostMethod).not.toHaveBeenCalled()
+    expect(replies()).toEqual([
+      expect.objectContaining({ id: 1, error: expect.objectContaining({ code: 'not_permitted' }) })
+    ])
+    handle(open(2), { userActivation: true, transport: 'guest', gesture: 4 })
+    // The same click (or an older one) cannot open a second tab.
+    handle(open(3), { userActivation: true, transport: 'guest', gesture: 4 })
+    handle(open(4), { userActivation: true, transport: 'guest', gesture: 3 })
+    await flush()
+    expect(callHostMethod).toHaveBeenCalledTimes(1)
+    handle(open(5), { userActivation: true, transport: 'guest', gesture: 5 })
+    await flush()
+    expect(callHostMethod).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops page-posted editor chords from guests but passes trusted preload chords', () => {
+    const onEvent = vi.fn()
+    const { handle } = guest({
+      editor: { claim: () => false, onReady: vi.fn(), onEvent, onResponse: vi.fn() }
+    })
+    const chord = { orca: 1, kind: 'evt', event: 'editor.keydown', payload: { key: 's' } }
+    handle(chord, { userActivation: true, transport: 'guest', gesture: 9 })
+    expect(onEvent).not.toHaveBeenCalled()
+    handle(chord, { userActivation: true, transport: 'guest', trustedChord: true })
+    expect(onEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it('carries a save past the 64 KiB message budget on its own lane', async () => {
+    const { handle, callHostMethod, replies } = guest()
+    const data = new ArrayBuffer(1024 * 1024)
+    handle(req(1, 'files.saveAs', { data }), {
+      userActivation: true,
+      transport: 'guest',
+      gesture: 1
+    })
+    await flush()
+    expect(callHostMethod).toHaveBeenCalledWith(expect.objectContaining({ action: 'files.saveAs' }))
+    handle(req(2, 'notifications.show', { title: 'x'.repeat(70 * 1024) }), {
+      userActivation: true,
+      transport: 'guest'
+    })
+    await flush()
+    expect(replies().at(-1)).toMatchObject({ id: 2, error: { code: 'too_large' } })
+  })
+
+  it('swallows sends to a guest that is not ready', () => {
+    const webview = {
+      send: vi.fn(() => {
+        throw new Error('The WebView must be attached to the DOM')
+      })
+    }
+    expect(() => pluginWebviewFrameWindow(webview).postMessage({}, '*')).not.toThrow()
+  })
+
+  it('routes declarative trees on their own larger lane and errors to the panel', () => {
+    const onRender = vi.fn()
+    const onError = vi.fn()
+    const { handle, replies } = guest({ declarative: { onRender, onError } })
+    const tree = { type: 'Text', props: {}, children: ['x'.repeat(200 * 1024)] }
+    handle({ orca: 1, kind: 'evt', event: 'ui.render', payload: { revision: 1, tree } }, ctx)
+    handle(
+      { orca: 1, kind: 'evt', event: 'ui.error', payload: { revision: 1, message: 'boom' } },
+      ctx
+    )
+    expect(onRender).toHaveBeenCalledWith({ revision: 1, tree })
+    expect(onError).toHaveBeenCalledWith({ revision: 1, message: 'boom' })
+    expect(replies()).toEqual([])
+  })
+
+  it('never runs user-gesture methods for a srcdoc iframe, even with host activation', async () => {
+    const frame = createFakeFrameWindow()
+    const { handler, callHostMethod } = createHandler(frame)
+    Object.defineProperty(navigator, 'userActivation', {
+      value: { isActive: true },
+      configurable: true
+    })
+    try {
+      handler(messageEvent(req(1, 'shell.openExternal', { url: 'https://example.com' }), frame))
+      await flush()
+    } finally {
+      Object.defineProperty(navigator, 'userActivation', { value: undefined, configurable: true })
+    }
+    expect(callHostMethod).not.toHaveBeenCalled()
+    expect(frame.postMessage.mock.calls[0]?.[0]).toMatchObject({
+      id: 1,
+      error: { code: 'not_permitted' }
+    })
+  })
+
+  it('advertises user-gesture methods to guests only', () => {
+    const iframe = guest()
+    iframe.handle({ orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } }, ctx)
+    const guestHello = guest()
+    guestHello.handle(
+      { orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } },
+      { userActivation: false, transport: 'guest' }
+    )
+    const methods = (replies: unknown[]): unknown => {
+      const hello = replies[0]
+      return isPluginJsonObject(hello) && isPluginJsonObject(hello.payload)
+        ? hello.payload.methods
+        : null
+    }
+    expect(methods(iframe.replies())).not.toContain('shell.openExternal')
+    expect(methods(guestHello.replies())).toContain('shell.openExternal')
+  })
+
+  it("spends a one-shot host press grant for a components panel's guest", async () => {
+    let grants = 1
+    const { handle, callHostMethod } = guest({
+      declarative: { onRender: vi.fn(), onError: vi.fn() },
+      consumeHostActivation: () => grants-- > 0
+    })
+    const open = req(1, 'shell.openExternal', { url: 'https://example.com' })
+    handle(open, { userActivation: false, transport: 'guest' })
+    handle({ ...open, id: 2 }, { userActivation: false, transport: 'guest' })
+    await flush()
+    expect(callHostMethod).toHaveBeenCalledTimes(1)
+  })
+})
+
+const ctx = { userActivation: false }

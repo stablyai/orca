@@ -9,6 +9,7 @@ import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
+import { useRichMarkdownViewport } from './useRichMarkdownViewport'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { useRichMarkdownTableOfContents } from './use-rich-markdown-table-of-contents'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
@@ -147,21 +148,6 @@ export default function RichMarkdownEditor({
       reconcileRoundTripRef
     })
 
-  const { clearTransientReviewState } = review
-  const setRootElement = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (node === null) {
-        // Release root-owned transient resources on detach instead of waiting for passive cleanup.
-        clearTransientReviewState()
-        cancelAutoFocusRef.current?.()
-        cancelAutoFocusRef.current = null
-        window.api.ui.setMarkdownEditorFocused(false)
-      }
-      rootRef.current = node
-    },
-    [clearTransientReviewState]
-  )
-
   const editor = useRichMarkdownEditorInstance({
     codec,
     htmlSuperscriptLinkContext,
@@ -216,6 +202,27 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+
+  const { bindRoot, bindContainer } = useRichMarkdownViewport(
+    editor,
+    scrollCacheKey,
+    rootRef,
+    scrollContainerRef
+  )
+  const { clearTransientReviewState } = review
+  const setRootElement = useCallback(
+    (node: HTMLDivElement | null) => {
+      bindRoot(node)
+      if (node === null) {
+        // Release root-owned transient resources on detach instead of waiting for passive cleanup.
+        clearTransientReviewState()
+        cancelAutoFocusRef.current?.()
+        cancelAutoFocusRef.current = null
+        window.api.ui.setMarkdownEditorFocused(false)
+      }
+    },
+    [clearTransientReviewState, bindRoot]
+  )
 
   useRichMarkdownPendingFocus({
     editor,
@@ -324,6 +331,7 @@ export default function RichMarkdownEditor({
       rootRef={setRootElement}
       onFocusLeave={flushOnFocusLeave}
       scrollContainerRef={scrollContainerRef}
+      scrollContainerCallbackRef={bindContainer}
       headerSlot={headerSlot}
       reviewRailExpanded={review.reviewRailExpanded}
       reviewRailVisible={review.reviewRailVisible}

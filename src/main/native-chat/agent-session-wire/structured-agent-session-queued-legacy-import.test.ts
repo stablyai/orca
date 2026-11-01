@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId

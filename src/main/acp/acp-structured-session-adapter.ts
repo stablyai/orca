@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { withProviderDiagnostic } from '../../shared/agent-session-failure'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import { withProviderDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,

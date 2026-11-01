@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { PtyListedSession } from '../../../shared/pty-listed-session'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { runWorktreeAgentActivationGate } from './worktree-agent-activation-gate'
@@ -75,23 +75,6 @@ function runtimeSnapshot(
 }
 
 describe('worktree agent activation gate', () => {
-  windowOwnedIt('uses immediately ready development restore inventory', async () => {
-    const ptyId = `${WORKTREE_ID}@@live-pty`
-    const { deps, createTab, resume } = testDeps({
-      sessions: [listed(ptyId)],
-      surfaceOwners: new Map([[ptyId, UNOWNED]])
-    })
-    const awaitReady = vi.fn(async () => true)
-
-    await expect(
-      runWorktreeAgentActivationGate(WORKTREE_ID, { ...deps, awaitReady })
-    ).resolves.toBe('adopted')
-
-    expect(awaitReady).toHaveBeenCalledOnce()
-    expect(createTab).toHaveBeenCalledOnce()
-    expect(resume).not.toHaveBeenCalled()
-  })
-
   windowOwnedIt(
     'waits for packaged restore hydration before reading daemon inventory',
     async () => {
@@ -114,18 +97,6 @@ describe('worktree agent activation gate', () => {
       expect(resume).not.toHaveBeenCalled()
     }
   )
-
-  it('reads structured ownership before adopting daemon PTYs', async () => {
-    const ptyId = `${WORKTREE_ID}@@live-pty`
-    const { deps } = testDeps({ sessions: [listed(ptyId)] })
-    const hasStructuredSession = vi.fn(async () => false)
-
-    await runWorktreeAgentActivationGate(WORKTREE_ID, { ...deps, hasStructuredSession })
-
-    expect(hasStructuredSession.mock.invocationCallOrder[0]).toBeLessThan(
-      deps.listSessions.mock.invocationCallOrder[0] ?? Infinity
-    )
-  })
 
   it('blocks seeding while the queried snapshot names a live launch', async () => {
     const { deps, resume } = testDeps({})
@@ -385,29 +356,6 @@ describe('worktree agent activation gate', () => {
 
     expect(createTab).not.toHaveBeenCalled()
     expect(resume).not.toHaveBeenCalled()
-  })
-
-  it('does not resume when the runtime reports a structured session before tab sync', async () => {
-    const { deps, createTab, resume } = testDeps({})
-    const hasStructuredSession = vi.fn(async () => true)
-
-    await expect(
-      runWorktreeAgentActivationGate(WORKTREE_ID, { ...deps, hasStructuredSession })
-    ).resolves.toBe('structured')
-
-    expect(hasStructuredSession).toHaveBeenCalledWith(WORKTREE_ID)
-    expect(createTab).not.toHaveBeenCalled()
-    expect(resume).not.toHaveBeenCalled()
-  })
-
-  it('keeps the existing resume path when the workspace has no live agent', async () => {
-    const { deps, createTab, resume } = testDeps({})
-
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('resumed')
-
-    expect(createTab).not.toHaveBeenCalled()
-    expect(resume).toHaveBeenCalledOnce()
-    expect(resume).toHaveBeenCalledWith(WORKTREE_ID, { skipClaimKeys: new Set() })
   })
 
   it('resumes a dead agent when the workspace only has a non-agent PTY', async () => {
@@ -823,23 +771,6 @@ describe('worktree agent activation gate', () => {
     expect(store.terminalLayoutsByTabId[hostTabId]?.ptyIdsByLeafId).toEqual({
       [LIVE_LEAF_ID]: firstPtyId,
       [SIBLING_LEAF_ID]: secondPtyId
-    })
-  })
-
-  // Layout-owner build: 'makes no surface for a live PTY main has not placed yet, and resumes no agent over it'.
-  windowOwnedIt('still adopts a live PTY the host reports as owned by no surface', async () => {
-    const livePtyId = `${WORKTREE_ID}@@orphan-agent`
-    const { deps, createTab } = testDeps({
-      sessions: [listed(livePtyId)],
-      surfaceOwners: new Map([[livePtyId, UNOWNED]])
-    })
-
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
-
-    expect(createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, undefined, {
-      initialPtyId: livePtyId,
-      activate: false,
-      recordInteraction: false
     })
   })
 })

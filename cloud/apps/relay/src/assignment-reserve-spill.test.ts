@@ -1,6 +1,10 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore, type AssignOptions, type RelayAssignment } from './assignment-store.js'
+import {
+  RelayAssignmentStore,
+  type AssignOptions,
+  type RelayAssignment
+} from './assignment/assignment-store.js'
 import type { RelayCellConfig } from './config.js'
 import {
   openInMemoryRelayDatabase,

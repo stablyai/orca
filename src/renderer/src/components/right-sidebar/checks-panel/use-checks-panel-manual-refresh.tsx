@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { buildGitHubPRRefreshStateClearToken } from '@/store/github/pr-refresh-state'
@@ -72,6 +73,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     if (!repo || !branch) {
       return
     }
+    const repoOptions = { repoId: repo.id, repoOwnerExecutionHostId: getRepoExecutionHostId(repo) }
     if (refreshInFlightRef.current) {
       return
     }
@@ -192,9 +194,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         return
       }
       const refreshStoreState = useAppStore.getState()
-      const rawPRRefreshState = refreshStoreState.prRefreshStates[prCacheKey]
       const startedPRRefreshToken = buildGitHubPRRefreshStateClearToken(
-        rawPRRefreshState,
+        refreshStoreState.prRefreshStates[prCacheKey],
         refreshStoreState.prRefreshSequences,
         prCacheKey
       )
@@ -202,7 +203,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       try {
         refreshedPR = await fetchPRForBranch(repo.path, branch, {
           force: true,
-          repoId: repo.id,
+          ...repoOptions,
           worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber: linkedPR,
           fallbackPRNumber: fallbackGitHubPRNumber,
@@ -255,7 +256,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           branch,
           refreshedPR.headSha,
           refreshedPR.prRepo,
-          { force: true, repoId: repo.id, wakeWslDistro: true, userRefresh: true }
+          { force: true, ...repoOptions, wakeWslDistro: true, userRefresh: true }
         ).then(
           (result) => {
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
@@ -283,7 +284,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         setCommentsLoading(true)
         const refreshedComments = fetchPRComments(repo.path, refreshedPR.number, {
           force: true,
-          repoId: repo.id,
+          ...repoOptions,
           prRepo: refreshedPR.prRepo,
           userRefresh: true
         }).then(

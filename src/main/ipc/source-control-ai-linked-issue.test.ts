@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { resolveSourceControlAiLinkedIssue } from './source-control-ai-linked-issue'
 
 const LOCAL_PATH = path.resolve('/workspace/repo-feature')

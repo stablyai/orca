@@ -5,11 +5,11 @@ import {
 import { expect, vi } from 'vitest'
 import { getAppEnvironment, setAppEnvironment } from '../../../shared/app-environment'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { OrchestrationSessionCaller } from '../../runtime/orchestration/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../runtime/orchestration/orchestration-party'
 import { ReceivingRuntime } from './structured-agent-session-receiving-runtime.test-support'
@@ -131,7 +131,7 @@ export async function createReceivingCallerFixture(options: { reportsRecipe?: bo
     caller?: OrchestrationSessionCaller
   ) => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((m) => m.name === name)
-    if (!method?.params) {
+    if (!method?.params || isStreamingMethod(method)) {
       throw new Error(`registered method missing: ${name}`)
     }
     return method.handler(method.params.parse(values), {

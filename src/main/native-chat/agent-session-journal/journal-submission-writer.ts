@@ -1,7 +1,7 @@
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import { journalQueueReopenRowBuilder } from './journal-stop-and-resume-rows'
 import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'

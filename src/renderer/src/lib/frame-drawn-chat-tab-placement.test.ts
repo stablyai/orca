@@ -32,7 +32,7 @@ vi.mock('./desktop-created-server-tabs', () => ({
   noteDesktopCreatedServerTab: (...args: string[]) => mocks.noted.push(args)
 }))
 
-import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionCreateParams } from '../../../shared/agent-session/structured-agent-session-create'
 import { withFrameDrawnChatTabPlacement } from './frame-drawn-chat-tab-placement'
 
 const TAB = 'structured-agent-session-claude_1'

@@ -1,6 +1,6 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 
 const CELL = { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 }

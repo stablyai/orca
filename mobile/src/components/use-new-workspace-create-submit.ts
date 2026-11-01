@@ -3,6 +3,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc-client'
+import { triggerError, triggerSuccess } from '../platform/haptics'
 import { createBlankWorkspace } from '../tasks/blank-workspace-create'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import {
@@ -24,7 +25,7 @@ import {
   type NewWorktreeRuntimeSettings
 } from './new-worktree-agent-selection'
 import type { MobileWorkspaceRepo, SetupRunPolicy } from './new-worktree-modal-types'
-import type { SetupTrustPrompt } from './SetupHookTrustDrawer'
+import type { OrcaHookTrustPrompt } from './OrcaHookTrustDrawer'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 
@@ -66,7 +67,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   onClose: () => void
 }): {
   creating: boolean
-  setupTrustPrompt: SetupTrustPrompt | null
+  setupTrustPrompt: OrcaHookTrustPrompt | null
   create: () => Promise<void>
   approveSetupTrust: (alwaysTrust: boolean) => Promise<void>
   closeSetupTrust: () => void
@@ -75,7 +76,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   const createInFlightRef = useRef(false)
   const setupTrustActionInFlightRef = useRef(false)
   const [creating, setCreating] = useState(false)
-  const [setupTrustPrompt, setSetupTrustPrompt] = useState<SetupTrustPrompt | null>(null)
+  const [setupTrustPrompt, setSetupTrustPrompt] = useState<OrcaHookTrustPrompt | null>(null)
 
   async function create(options: CreateOptions = {}): Promise<void> {
     const { client, selectedRepo } = args
@@ -148,6 +149,7 @@ export function useNewWorkspaceCreateSubmit(args: {
         )
       ) {
         setSetupTrustPrompt({
+          kind: 'setup',
           repoId: selectedRepo.id,
           repoName: selectedRepo.displayName,
           scriptContent: args.setupTrust.scriptContent,
@@ -190,12 +192,15 @@ export function useNewWorkspaceCreateSubmit(args: {
             agentLaunchSupported: args.getAgentLaunchSupport()
           })
       if ('error' in result) {
+        triggerError()
         args.setError(result.error)
         return
       }
+      triggerSuccess()
       args.onClose()
       args.onCreated(result.worktreeId, result.name, result.warning)
     } catch (error) {
+      triggerError()
       args.setError(error instanceof Error ? error.message : 'Failed to create workspace')
     } finally {
       createInFlightRef.current = false

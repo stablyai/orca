@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { releaseAgentSessionOwnerAfterSurfaceClose } from './agent-session-surface-release-transition'
 
 describe('agent session surface release transition', () => {

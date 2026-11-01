@@ -1,4 +1,7 @@
-import type { AgentSessionLease, AgentSessionRecord } from './agent-session-record'
+import type {
+  AgentSessionLease,
+  AgentSessionRecord
+} from './agent-session/lifecycle/agent-session-record'
 
 export type AgentSessionConversationView = Readonly<ReturnType<typeof agentSessionConversationView>>
 export type AgentSessionOwnerObservation = AgentSessionConversationView['ownerObservation']

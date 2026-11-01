@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { toAgentLaunchPreferences } from './agent-launch-preferences'
-import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
+import { getAgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog'
+import { resolveAgentSessionOptionLaunch } from './agent-session/options/agent-session-option-launch'
 import {
   decodeCatalogOptionValue,
   encodeCatalogOptionValue
-} from './structured-agent-session-option-codec'
+} from './agent-session/options/structured-agent-session-option-codec'
 
 describe('toAgentLaunchPreferences', () => {
   it('keeps the strict preferences, with a mode only where the agent has a terminal flag', () => {

@@ -1,7 +1,7 @@
 import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'

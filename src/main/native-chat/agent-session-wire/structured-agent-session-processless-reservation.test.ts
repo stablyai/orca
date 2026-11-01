@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   AgentSessionPreSpawnError,
   type StructuredAgentSessionAdapter
@@ -19,7 +19,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const NOW = 1_800_000_000_000
