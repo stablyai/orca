@@ -391,6 +391,14 @@ describe('host-owned hook presence', () => {
 
   it('records the process from the first hook after the terminal reported the agent first', async () => {
     const server = await createServer()
+    // A forked resume launch seeds the source session; Claude then reports its own new one.
+    server.recordLaunchResumeIdentity({
+      paneKey: PANE,
+      worktreeId: 'wt-1',
+      agentType: 'claude',
+      providerSession: { key: 'session_id', id: 'source' },
+      launchedAt: Date.now() - 1
+    })
     server.ingestTerminalStatus({
       paneKey: PANE,
       tabId: 'tab-1',

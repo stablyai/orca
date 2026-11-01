@@ -83,7 +83,7 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
     ...context,
     owner,
     statusAdmissionSession,
-    transitioned: transitionHookPresence(context.event, previousBinding),
+    transitioned: transitionHookPresence(context.event, previousBinding, fromHook),
     returningProviderSession:
       matched && owner && scopedSource
         ? (extractAgentProviderSession(scopedSource, {
@@ -97,7 +97,8 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
 /** A pane has one owning agent; only the owner's own proven process can end it. */
 function transitionHookPresence(
   incoming: AgentHookEventPayload,
-  previous: AgentHookEventPayload | undefined
+  previous: AgentHookEventPayload | undefined,
+  fromHook: boolean
 ): AgentHookEventPayload | undefined {
   const recorded = previous?.agentPresence
   const sender = incoming.agentPresence?.process
@@ -160,7 +161,10 @@ function transitionHookPresence(
     ? agent === incoming.payload.agentType
       ? incoming.providerSession?.id
       : undefined
-    : (incoming.agentPresence?.session ?? incoming.providerSession?.id)
+    : fromHook
+      ? (incoming.agentPresence?.session ?? incoming.providerSession?.id)
+      : // A terminal observation carries the pane's previous session, not the agent's own.
+        undefined
   return {
     ...incoming,
     agentPresence: {
