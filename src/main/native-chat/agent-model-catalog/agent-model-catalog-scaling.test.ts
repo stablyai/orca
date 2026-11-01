@@ -6,11 +6,26 @@ import type { AgentModelCatalogReadParams } from './agent-model-catalog-service-
 import { createClaudeModelCatalogProbe } from '../../claude/claude-model-catalog-probe'
 import type { runAgentModelCatalogListing } from './agent-model-catalog-probe-runner'
 import claudeCapture from '../../claude/__fixtures__/catalog-signin.json'
+import { AGENT_MODEL_CATALOG_FAILURE_TTL_MS } from './agent-model-catalog-failures'
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 
-it('shares one bounded sign-in observation across N and 10N catalog demands', async () => {
-  for (const callers of [10, 100]) {
-    const runListing = vi.fn<typeof runAgentModelCatalogListing>(async () =>
-      [
+it('re-probes a signed-out Claude scope once per held-reason TTL for N and 10N chats', async () => {
+  const home = { variable: 'CLAUDE_CONFIG_DIR', path: '/account' }
+  // Distinct folders give distinct read claims; Claude's account-scoped catalog keeps one fingerprint.
+  const chat = (sessionId: string) =>
+    agentSessionRecordFixture({
+      sessionId,
+      provider: 'claude',
+      accountHome: home,
+      location: { workspaceId: `folder-${sessionId}`, workspaceKind: 'folder' }
+    })
+  for (const chats of [10, 100]) {
+    let now = 1_000
+    let listingGate: Promise<void> | undefined
+    const runListing = vi.fn<typeof runAgentModelCatalogListing>(async () => {
+      await listingGate
+      return [
         ['orca-model-discovery', claudeCapture.models],
         ['orca-model-settings', claudeCapture.settings],
         ['orca-signin-discovery', { account: claudeCapture.accounts.signedOut }]
@@ -22,33 +37,57 @@ it('shares one bounded sign-in observation across N and 10N catalog demands', as
           })
         )
         .join('\n')
-    )
-    const probe = createClaudeModelCatalogProbe({
-      resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
-      resolveEnv: () => ({}),
-      resolveCommand: () => ({
-        command: process.execPath,
-        prefixArgs: ['run', '--', 'claude']
-      }),
-      resolveAuthPolicy: () => ({ account: 'system' }),
-      runListing
     })
+    const store = new AgentModelCatalogStore({ now: () => now })
     const service = createAgentModelCatalogService({
-      store: new AgentModelCatalogStore(),
-      getConversation: () => undefined,
-      getRecord: () => undefined,
+      store,
+      getConversation: (id) => agentSessionConversationView(chat(id)),
+      getRecord: chat,
       drivesRecord: () => true,
-      resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: '/account' }),
-      probes: { claude: probe }
-    })
-    const request = { agent: 'claude', workspacePath: '/project' } as const
-    try {
-      await Promise.all(Array.from({ length: callers }, () => service.demand(request)))
-      for (let index = 0; index < callers; index++) {
-        service.snapshot(request)
+      resolveAccountHome: async () => home,
+      probes: {
+        claude: createClaudeModelCatalogProbe({
+          resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
+          resolveEnv: () => ({}),
+          resolveCommand: () => ({
+            command: process.execPath,
+            prefixArgs: ['run', '--', 'claude']
+          }),
+          resolveAuthPolicy: () => ({ account: 'system' }),
+          runListing
+        })
       }
+    })
+    const readAll = () =>
+      Promise.all(
+        Array.from({ length: chats }, (_, index) =>
+          service.read({ agent: 'claude', sessionId: `chat-${index}`, waitForListing: true })
+        )
+      )
+    try {
+      await readAll()
+      now += AGENT_MODEL_CATALOG_FAILURE_TTL_MS - 1
+      await readAll()
       expect(runListing).toHaveBeenCalledTimes(1)
-      expect(service.snapshot(request)).toMatchObject({ unavailable: { reason: 'notSignedIn' } })
+      now += 1
+      const opened = Promise.withResolvers<void>()
+      listingGate = opened.promise
+      const decided = vi.spyOn(store, 'pendingListing')
+      const reading = readAll()
+      // Hold the re-probe until every chat's read has decided whether to start one.
+      await vi.waitFor(() =>
+        expect(decided.mock.calls.filter(([, , terminal]) => terminal).length).toBe(chats)
+      )
+      opened.resolve()
+      const due = await reading
+      expect(runListing).toHaveBeenCalledTimes(2)
+      for (const result of due) {
+        expect(result.unavailable).toMatchObject({ reason: 'notSignedIn' })
+        expect(result.models?.length).toBeGreaterThan(0)
+      }
+      now += AGENT_MODEL_CATALOG_FAILURE_TTL_MS - 1
+      await readAll()
+      expect(runListing).toHaveBeenCalledTimes(2)
       expect(runListing.mock.calls[0]?.[0].stdin?.trim().split('\n')).toHaveLength(3)
     } finally {
       service.stop()
