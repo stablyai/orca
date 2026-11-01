@@ -2,11 +2,13 @@ import type { AgentJournalCursor } from '../../../shared/agent-session-journal-i
 import type { JournalSubmissionRow } from './journal-row-schema'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
+import { journalInputOrder } from './journal-input-order'
 import type { QueuedMessageRow } from './queued-message-table'
-import type { JournalInputPlace } from './journal-input-order'
+import type { JournalInputPlace } from './journal-input-order-state'
 import {
   queuePauseHolding,
   journalQueueStopHolds,
+  failedQueueTurnSequence,
   type DerivedQueuePause
 } from './queued-message-pause'
 import {
@@ -155,12 +157,17 @@ export class JournalInputCardIndex {
       marks.reopenedSequence,
       floor?.epoch === state.epoch ? floor.sequence : 0
     )
+    const failed = failedQueueTurnSequence(
+      journalInputOrder(state).newestTurn.failure(),
+      marks.resumedSequence
+    )
     const pauseInputs = [
       journalQueueStopHolds(marks, state.latestAcceptedTurnSequence) ? marks.latestStop : null,
       reopened > lifted ? reopened : 0,
       marks.cleared && !marks.cleared.lifted && marks.cleared.sequence > lifted
         ? marks.cleared
-        : null
+        : null,
+      failed
     ]
     if (!this.index || pauseInputs.some((value, i) => value !== this.pauseKey[i])) {
       this.pauseKey = pauseInputs
@@ -177,6 +184,9 @@ export class JournalInputCardIndex {
                 since: { epoch: state.epoch, sequence: marks.latestStop.sequence }
               }
             ]
+          : []),
+        ...(failed
+          ? [{ reason: 'failed' as const, since: { epoch: state.epoch, sequence: failed } }]
           : []),
         ...(pauseInputs[1]
           ? [

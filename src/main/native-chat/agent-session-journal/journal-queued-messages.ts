@@ -294,6 +294,7 @@ export class JournalQueuedMessages {
       epoch: state.epoch,
       marks: state.queuePauseMarks,
       latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      failedAt: journalInputOrder(state).newestTurn.failure(),
       cards,
       reopenFloor: this.deps.reopenFloor()
     })
