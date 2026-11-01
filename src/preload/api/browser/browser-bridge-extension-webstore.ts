@@ -1,12 +1,12 @@
 import { ipcRenderer } from 'electron'
-import type { PreloadApi } from '../api-types'
+import type { PreloadApi } from '../../api-types'
 import {
   BROWSER_EXTENSION_INSTALL_PROMPT_CLOSED_CHANNEL,
   BROWSER_EXTENSION_INSTALL_PROMPT_REQUESTED_CHANNEL,
   type BrowserExtensionInstallPromptRequest,
   type BrowserExtensionInstallPromptResponse,
   type BrowserExtensionWebStoreInstallResult
-} from '../../shared/browser-extension-webstore'
+} from '../../../shared/browser-extension-webstore'
 
 /** "Add from Chrome Web Store" and Orca's install/uninstall confirmation round trip. */
 export const browserExtensionWebStoreApi = {

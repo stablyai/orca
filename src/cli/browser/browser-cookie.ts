@@ -2,7 +2,7 @@ import type {
   BrowserCookieDeleteResult,
   BrowserCookieGetResult,
   BrowserCookieSetResult
-} from '../../shared/runtime-types'
+} from '../../shared/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import {
@@ -10,7 +10,7 @@ import {
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
 } from '../flags'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError } from '../runtime/types'
 import { getBrowserCommandTarget } from '../selectors'
 
 function getOptionalCookieExpiry(flags: Map<string, string | boolean>): number | undefined {
