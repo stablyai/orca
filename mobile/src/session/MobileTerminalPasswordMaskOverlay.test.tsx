@@ -39,6 +39,7 @@ describe('MobileTerminalPasswordMaskOverlay', () => {
     expect(texts[0]?.props.children).toBe('***')
 
     const button = tree.root.findByType('Pressable' as never)
+    expect(button.props.accessibilityLabel).toBe('Show input')
     expect(button.props.accessibilityState).toEqual({ selected: true })
     act(() => {
       button.props.onPress()
@@ -57,6 +58,7 @@ describe('MobileTerminalPasswordMaskOverlay', () => {
 
     expect(tree.root.findAllByType('Text' as never)).toHaveLength(0)
     const button = tree.root.findByType('Pressable' as never)
+    expect(button.props.accessibilityLabel).toBe('Hide input')
     expect(button.props.accessibilityState).toEqual({ selected: false })
   })
 })

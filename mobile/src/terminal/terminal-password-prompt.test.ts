@@ -4,6 +4,7 @@ import {
   extractTerminalPromptCandidateLine,
   isTerminalPasswordPromptText,
   maskTerminalLiveInputText,
+  reconcileTerminalManualMaskOverride,
   resolveTerminalInputMaskedState,
   stripTerminalPromptAnsi
 } from './terminal-password-prompt'
@@ -16,14 +17,20 @@ describe('terminal-password-prompt', () => {
     expect(extractTerminalPromptCandidateLine(raw)).toBe('   [confirm] sudo password for aleksei: ')
   })
 
-  it('detects sudo, ssh, passphrase, PIN, and verification code prompts', () => {
+  it('detects sudo, ssh, passphrase, URL/Windows targets with colons, PIN, and verification code prompts', () => {
     expect(isTerminalPasswordPromptText('   [confirm] sudo password for aleksei: ')).toBe(true)
     expect(isTerminalPasswordPromptText('[sudo] password for ubuntu: ')).toBe(true)
     expect(isTerminalPasswordPromptText('Password:')).toBe(true)
+    expect(isTerminalPasswordPromptText("Password for 'https://github.com': ")).toBe(true)
+    expect(isTerminalPasswordPromptText("Password for 'https://user@host:8443': ")).toBe(true)
     expect(
       isTerminalPasswordPromptText("Enter passphrase for key '/home/aleksei/.ssh/id_ed25519': ")
     ).toBe(true)
+    expect(
+      isTerminalPasswordPromptText("Enter passphrase for key 'C:\\Users\\me\\.ssh\\id_ed25519': ")
+    ).toBe(true)
     expect(isTerminalPasswordPromptText('Enter PIN for YubiKey: ')).toBe(true)
+    expect(isTerminalPasswordPromptText('PIN: ')).toBe(true)
     expect(isTerminalPasswordPromptText('Verification code: ')).toBe(true)
   })
 
@@ -48,7 +55,7 @@ describe('terminal-password-prompt', () => {
     expect(maskTerminalLiveInputText('päss')).toBe('****')
   })
 
-  it('resolves masked state with manual show/hide override taking precedence over auto detection', () => {
+  it('resolves masked state with manual show/hide override taking precedence over auto detection and expiring Show when prompt ends', () => {
     expect(
       resolveTerminalInputMaskedState({ autoDetectedPrompt: false, manualOverride: undefined })
     ).toBe(false)
@@ -58,6 +65,12 @@ describe('terminal-password-prompt', () => {
     expect(
       resolveTerminalInputMaskedState({ autoDetectedPrompt: true, manualOverride: false })
     ).toBe(false)
+    expect(
+      reconcileTerminalManualMaskOverride({ autoDetectedPrompt: false, manualOverride: false })
+    ).toBeUndefined()
+    expect(
+      reconcileTerminalManualMaskOverride({ autoDetectedPrompt: false, manualOverride: true })
+    ).toBe(true)
     expect(
       resolveTerminalInputMaskedState({ autoDetectedPrompt: false, manualOverride: true })
     ).toBe(true)
