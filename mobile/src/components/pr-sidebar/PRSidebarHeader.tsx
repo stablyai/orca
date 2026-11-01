@@ -9,7 +9,7 @@ import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-i
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
 import { prStateBadge } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
-import { canEditPRTitle } from '../../session/pr-title-edit'
+import { canEditPRTitle, createPrTitleEditOwnership } from '../../session/pr-title-edit'
 import { openMobilePrUrl } from '../mobile-pr-url'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { prTitleEditStyles as editStyles } from './pr-title-edit-styles'
@@ -135,8 +135,10 @@ function PRTitle({
   const t = useMobileTranslation()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
+  const [ownership] = useState(createPrTitleEditOwnership)
 
   const startEdit = () => {
+    ownership.touch()
     titleAction.clearError()
     setDraft(title)
     setEditing(true)
@@ -147,8 +149,7 @@ function PRTitle({
   }
   const save = async () => {
     // setTitle handles trim/empty/unchanged/refetch; collapse editor on successful result.
-    const ok = await titleAction.setTitle(draft, title)
-    if (ok) {
+    if (await ownership.save(() => titleAction.setTitle(draft, title))) {
       setEditing(false)
     }
   }
@@ -156,7 +157,15 @@ function PRTitle({
   if (editing) {
     return (
       <View style={editStyles.container}>
-        <TextField value={draft} onChangeText={setDraft} editable={!titleAction.saving} autoFocus />
+        <TextField
+          value={draft}
+          onChangeText={(value) => {
+            ownership.touch()
+            setDraft(value)
+          }}
+          editable={!titleAction.saving}
+          autoFocus
+        />
         {titleAction.error ? <Text style={editStyles.error}>{titleAction.error}</Text> : null}
         <View style={editStyles.actions}>
           <Pressable

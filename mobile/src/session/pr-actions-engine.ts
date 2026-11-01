@@ -34,7 +34,7 @@ export type PrActionsEngineConfig = {
   prNumber: number
   headSha?: string | null
   prRepo?: GitHubPrRepoSlug | null
-  refetch: () => void | Promise<void>
+  refetch: (options?: { reconcile?: boolean }) => void | Promise<void>
   onChange: () => void
 }
 
@@ -118,7 +118,7 @@ export class PrActionsEngine {
       this.setBusy(null)
     }
     try {
-      await this.cfg.refetch()
+      await this.cfg.refetch({ reconcile: true })
     } catch {
       // Contain refetch rejection for fire-and-forget action callers.
     }

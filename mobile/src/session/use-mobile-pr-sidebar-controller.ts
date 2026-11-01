@@ -35,6 +35,9 @@ type PrSidebarControllerInput = {
 // Load body/comments only when the PR segment opens; the hub chip needs just PR/checks.
 export type PrSidebarLoadOptions = {
   includeDetails?: boolean
+  // A write's follow-up read: on failure keep this branch's ready PR; the write's outcome is the feedback.
+  // Manual Recheck/Retry and HEAD refreshes still show a failed read.
+  reconcile?: boolean
 }
 
 // Keep HEAD out of identity: commits soft-refresh checks without clearing ready UI.
@@ -65,6 +68,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   // Detached HEAD still needs repo eligibility; branching the probe would strand its spinner.
   const probeReady = client !== null && connState === 'connected'
   const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
+  // Live identity, so a load closure captured for an earlier branch cannot claim the current one.
+  const identityRef = useRef(identity)
+  identityRef.current = identity
 
   const buildDeps = useCallback((): PrSidebarLoadDeps | null => {
     if (!client) {
@@ -133,7 +139,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       const includeDetails = options?.includeDetails ?? true
       const deps = buildDeps()
       const loadIdentity = identity
-      if (!deps || !branch || !loadIdentity) {
+      if (!deps || !branch || !loadIdentity || loadIdentity !== identityRef.current) {
         return
       }
       const seq = loadSeqRef.current + 1
@@ -153,7 +159,10 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
       if (
         !shouldApplyResult(seq, loadSeqRef.current) ||
-        stateIdentityRef.current !== loadIdentity
+        stateIdentityRef.current !== loadIdentity ||
+        (options?.reconcile &&
+          (next.kind === 'error' || next.kind === 'blocked') &&
+          stateRef.current.kind === 'ready')
       ) {
         return
       }

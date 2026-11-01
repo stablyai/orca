@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
@@ -22,7 +23,7 @@ export type PrTitleActionInput = {
   worktreeId: string
   prNumber: number
   prRepo?: GitHubPrRepoSlug | null
-  refetch: () => void | Promise<void>
+  refetch: (options?: { reconcile?: boolean }) => void | Promise<void>
   mutations?: PrTitleMutations
 }
 
@@ -40,6 +41,10 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
     null
   )
   const inFlightRef = useRef(false)
+  // Why: a write that settles after the view moved to another PR must not show its error there or reread for it.
+  const identity = `${prNumber}:${prRepo ? githubRepoIdentityKey(prRepo) : ''}`
+  const identityRef = useRef(identity)
+  identityRef.current = identity
 
   const mutations = useMemo(
     () => input.mutations ?? (client ? realMutations(client, worktreeId) : null),
@@ -64,6 +69,7 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
       inFlightRef.current = true
       setSaving(true)
       setError(null)
+      const isCurrent = (): boolean => identityRef.current === identity
       try {
         const outcome = await mutations.updateTitle({ ...params, prRepo })
         if (outcome.ok) {
@@ -71,26 +77,32 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
           return true
         }
         triggerError()
-        setError(outcome.error)
+        if (isCurrent()) {
+          setError(outcome.error)
+        }
         return false
       } catch (err) {
         // Contain fire-and-forget save rejection and return false with feedback.
         triggerError()
-        setError(err instanceof Error ? err.message : { kind: 'updateFailed' })
+        if (isCurrent()) {
+          setError(err instanceof Error ? err.message : { kind: 'updateFailed' })
+        }
         return false
       } finally {
         inFlightRef.current = false
         setSaving(false)
         // Why: a failed response doesn't prove the host kept the old title, so every attempted write rereads.
-        // The write decides Save's result; a failed reread is contained.
-        try {
-          await refetch()
-        } catch {
-          // Keep the write's outcome.
+        // The write decides Save's result; a failed reread is contained and keeps the shown PR.
+        if (isCurrent()) {
+          try {
+            await refetch({ reconcile: true })
+          } catch {
+            // Keep the write's outcome.
+          }
         }
       }
     },
-    [ready, mutations, prNumber, prRepo, refetch]
+    [ready, mutations, prNumber, prRepo, refetch, identity]
   )
 
   return {
