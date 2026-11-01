@@ -1,6 +1,14 @@
 import { captureNativeChatEditDraftDestination } from './native-chat-composer-draft-store'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
-import { useCallback, useLayoutEffect, useMemo, type RefObject } from 'react'
+import {
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  type ForwardedRef,
+  type RefObject
+} from 'react'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { prepareQueuedMessageEditText } from '../../../../shared/queued-message-edit-command'
@@ -19,6 +27,7 @@ export function useNativeChatComposerEditSession({
   editSession,
   root,
   handle,
+  ref,
   draftScopeKey,
   agent,
   structuredTransport,
@@ -33,6 +42,8 @@ export function useNativeChatComposerEditSession({
   editSession: NativeChatComposerProps['editSession']
   root: RefObject<HTMLDivElement | null>
   handle: RefObject<NativeChatComposerHandle | null>
+  /** The composer's own ref: its handle plus `submit`, which sends as Enter does. */
+  ref: ForwardedRef<NativeChatComposerHandle>
   draftScopeKey: string
   agent: AgentType
   structuredTransport: NativeChatStructuredComposerTransport | undefined
@@ -99,6 +110,9 @@ export function useNativeChatComposerEditSession({
     },
     [disabled, editSession, sendHeld, sendMessage]
   )
+  const submit = useLatestHandler(() => send())
+  // The pane's own handle object, so its identity changes only when that handle does.
+  useImperativeHandle(ref, () => Object.assign(handle.current!, { submit }))
   const chooseEditItem = useCallback(
     (item: Parameters<typeof completeItem>[0]) => {
       if (item.kind === 'command' && refuseEditCommand(`/${item.name}`)) {

@@ -22274,7 +22274,9 @@
     "toggleArguments": "인수 표시 전환",
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
-    "legacyModelCount": "모델 {{total}}개"
+    "legacyModelCount": "모델 {{total}}개",
+    "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",
+    "promptPlaceholderFilesOnly": "프롬프트 추가(선택사항): 파일은 @"
   },
   "wslMove": {
     "entry": {

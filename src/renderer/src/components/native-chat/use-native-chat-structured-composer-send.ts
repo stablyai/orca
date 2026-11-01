@@ -22,6 +22,8 @@ import { nativeChatNoticeFromError } from './native-chat-composer-notice'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { translate } from '@/i18n/i18n'
 import {
+  captureNativeChatComposerSubmission,
+  finishNativeChatComposerSubmission,
   readNativeChatComposerDraft,
   subscribeToNativeChatComposerDraftAppend,
   updateNativeChatComposerDraft
@@ -101,9 +103,10 @@ export function useNativeChatStructuredComposerSend({
         structuredTransport.onSubmitted?.()
       }
       const isCurrent = structuredTransport.capturePresentation()
-      const submitted = readNativeChatComposerDraft(draftScopeKey)
+      const submission = captureNativeChatComposerSubmission(draftScopeKey)
+      let consumed = false
       let completeAddition = false
-      const stopObservingAppend = subscribeToNativeChatComposerDraftAppend(
+      submission.stopObserving = subscribeToNativeChatComposerDraftAppend(
         draftScopeKey,
         (addition) => {
           if (typeof addition !== 'function' && addition.document !== undefined) {
@@ -111,18 +114,58 @@ export function useNativeChatStructuredComposerSend({
           }
         }
       )
+      const consume = () => {
+        // A round trip may outlast edits in any composer for this conversation; remove only the submitted content.
+        const submitted = submission.draft
+        if (!submitted || consumed) {
+          return
+        }
+        consumed = true
+        const left = nativeChatComposerDraftLeftAfterSend(
+          readNativeChatComposerDraft(draftScopeKey),
+          submitted
+        )
+        if (!left) {
+          return
+        }
+        if (completeAddition) {
+          updateNativeChatComposerDraft(
+            draftScopeKey,
+            { ...left, document: left.document },
+            'immediate'
+          )
+        }
+        if (hostCommand && !isCurrent()) {
+          if (!completeAddition) {
+            updateNativeChatComposerDraft(
+              draftScopeKey,
+              { text: left.text, document: undefined, images: left.images },
+              'immediate'
+            )
+          }
+          return
+        }
+        updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
+        // A live composition owns the field, which keeps only what it composed once cleared.
+        const composing = isComposing()
+        setDraft(composing ? '' : left.text)
+        setCaret(composing ? 0 : left.text.length)
+        clearSkillOrigin()
+      }
       await dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
         attachments,
-        promptSkillRefs(submitted.document),
-        intent
+        promptSkillRefs(submission.draft?.document),
+        intent,
+        consume
       )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
           if (!hostCommand || isCurrent()) {
             structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
           }
           if (!accepted) {
+            finishNativeChatComposerSubmission(draftScopeKey, submission, consumed)
             return
           }
           completeNativeChatStructuredUserAction(
@@ -130,39 +173,10 @@ export function useNativeChatStructuredComposerSend({
             structuredTransport,
             revealsTranscript && (!hostCommand || isCurrent())
           )
-          // A round trip may outlast edits in any composer for this conversation; remove only the submitted content.
-          const left = nativeChatComposerDraftLeftAfterSend(
-            readNativeChatComposerDraft(draftScopeKey),
-            submitted
-          )
-          if (!left) {
-            return
-          }
-          if (completeAddition) {
-            updateNativeChatComposerDraft(
-              draftScopeKey,
-              { ...left, document: left.document },
-              'immediate'
-            )
-          }
-          if (hostCommand && !isCurrent()) {
-            if (!completeAddition) {
-              updateNativeChatComposerDraft(
-                draftScopeKey,
-                { text: left.text, document: undefined, images: left.images },
-                'immediate'
-              )
-            }
-            return
-          }
-          updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
-          // A live composition owns the field, which keeps only what it composed once cleared.
-          const composing = isComposing()
-          setDraft(composing ? '' : left.text)
-          setCaret(composing ? 0 : left.text.length)
-          clearSkillOrigin()
+          consume()
         })
         .catch((error) => {
+          finishNativeChatComposerSubmission(draftScopeKey, submission, consumed)
           if (hostCommand && !isCurrent()) {
             return
           }
@@ -181,7 +195,7 @@ export function useNativeChatStructuredComposerSend({
           )
           structuredTransport.onError(notice.text, { errorText: notice.errorText })
         })
-        .finally(stopObservingAppend)
+        .finally(() => finishNativeChatComposerSubmission(draftScopeKey, submission))
     },
     [
       agent,

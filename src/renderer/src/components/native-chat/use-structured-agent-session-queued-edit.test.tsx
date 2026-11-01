@@ -20,6 +20,7 @@ import {
 } from './structured-queued-edit.test-fixture'
 import { act, render, renderHook, waitFor, within } from '@testing-library/react'
 import { createRef } from 'react'
+import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
@@ -569,6 +570,7 @@ it.each(['updated', 'not-editable', 'clean-gone', 'cancel'] as const)(
       })
       const editor = queued.editor
       useNativeChatComposerEditSession({
+        ref: createRef<NativeChatComposerHandle>(),
         editSession: editor
           ? { save: editor.save, cancel: editor.cancel, canSave: editor.canSave }
           : undefined,
@@ -739,5 +741,85 @@ it.each(['refused', 'unknown-committed', 'unknown-refused-unchanged'] as const)(
       expect(readNativeChatDraftCache(SCOPE)).toBe('occupied\n\noriginal')
       expect(toast.error).toHaveBeenCalledOnce()
     }
+  }
+)
+
+import * as pendingAttachments from './native-chat-pending-attachment-cache'
+it.each([10, 100])(
+  'released ordinary edit subscriptions do no later bottom work after %i real handbacks',
+  async (count) => {
+    const subscribe = pendingAttachments.subscribeToNativeChatPendingAttachments
+    let closedCallbacks = 0
+    vi.spyOn(pendingAttachments, 'subscribeToNativeChatPendingAttachments').mockImplementation(
+      (scope, listener) =>
+        subscribe(scope, () => {
+          if (scope.startsWith('queued-edit:')) {
+            closedCallbacks++
+          }
+          listener()
+        })
+    )
+    const live = renderHook(() => pendingAttachments.useNativeChatPendingAttachments(SCOPE))
+    const hook = harness()
+    const chips: { scope: string; id: string }[] = []
+    for (let index = 0; index < count; index++) {
+      hook.rerender({ messages: [message] })
+      await begin(hook)
+      const scope = hook.result.current.editor!.draftScopeKey
+      act(() => hook.result.current.editor!.change(`unsaved-${index}`))
+      if (index % 2 === 0) {
+        const id = `held-${index}`
+        chips.push({ scope, id })
+        act(() =>
+          pendingAttachments.addNativeChatPendingAttachment(scope, { id, path: '', pending: true })
+        )
+      }
+      hook.rerender({ messages: [] })
+      expect(hook.result.current.editor).toBeUndefined()
+      expect(readNativeChatDraftCache(SCOPE)).toContain(`unsaved-${index}`)
+    }
+    await act(async () => {})
+    closedCallbacks = 0
+    act(() =>
+      pendingAttachments.addNativeChatPendingAttachment(SCOPE, {
+        id: 'bottom',
+        path: '',
+        pending: true
+      })
+    )
+    expect(live.result.current.map(({ id }) => id)).toContain('bottom')
+    for (const chip of chips) {
+      act(() =>
+        expect(
+          pendingAttachments.settleNativeChatPendingAttachment(
+            chip.scope,
+            chip.id,
+            `/${chip.id}.png`
+          )
+        ).toBe(true)
+      )
+    }
+    act(() =>
+      expect(
+        pendingAttachments.settleNativeChatPendingAttachment(SCOPE, 'bottom', '/bottom.png')
+      ).toBe(true)
+    )
+    expect(live.result.current).toHaveLength(0)
+    expect(readNativeChatComposerDraft(SCOPE).images.map(({ id }) => id)).toEqual([
+      ...chips.map(({ id }) => id),
+      'bottom'
+    ])
+    expect(closedCallbacks).toBe(0)
+    console.log(
+      JSON.stringify({
+        metric: 'closed-ordinary-pending-members',
+        count,
+        laterCallbacks: closedCallbacks,
+        completedChips: chips.length + 1
+      })
+    )
+    hook.unmount()
+    live.unmount()
+    vi.restoreAllMocks()
   }
 )

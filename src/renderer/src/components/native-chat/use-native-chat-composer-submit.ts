@@ -43,6 +43,8 @@ export function useNativeChatComposerSubmit(args: {
   caret: number
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   disabled: boolean
+  /** An optional-prompt action still passes the shared paste and attachment admission. */
+  submitEmpty?: () => void
   sendPty: () => void
   sendStructured: (
     text: string,
@@ -60,7 +62,7 @@ export function useNativeChatComposerSubmit(args: {
   messageDelivery: boolean
 } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
-  const { consumeOrcaCommand, setCaret, setDraft, structuredTransport } = args
+  const { consumeOrcaCommand, setCaret, setDraft, structuredTransport, submitEmpty } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
   const active = entered && threadGoal !== undefined
@@ -143,7 +145,9 @@ export function useNativeChatComposerSubmit(args: {
         }
       } else if (!structuredTransport) {
         sendPty()
-      } else if ((draft.trim() !== '' || imageAttachments.length > 0) && !disabled) {
+      } else if (!disabled && draft.trim() === '' && imageAttachments.length === 0) {
+        submitEmpty?.()
+      } else if (!disabled) {
         if (intent) {
           sendStructured(draft, imageAttachments, intent)
         } else {
@@ -153,6 +157,7 @@ export function useNativeChatComposerSubmit(args: {
     },
     [
       active,
+      submitEmpty,
       consumeOrcaCommand,
       disabled,
       draft,

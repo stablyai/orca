@@ -23831,6 +23831,8 @@
     "arguments": "Аргументы",
     "argumentsHint": "Применяется только при запуске через CLI.",
     "launchChat": "Запустить чат",
-    "launchTerminal": "Запустить терминал"
+    "launchTerminal": "Запустить терминал",
+    "promptPlaceholder": "Добавить запрос (необязательно): / — навыки, @ — файлы",
+    "promptPlaceholderFilesOnly": "Добавить запрос (необязательно): @ — файлы"
   }
 }

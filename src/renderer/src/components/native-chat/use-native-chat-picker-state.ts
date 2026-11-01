@@ -56,6 +56,8 @@ export type NativeChatPickerState = {
 export function useNativeChatPickerState(args: {
   agent: AgentType
   terminalTabId: string
+  /** A launch panel's workspace, whose skills it lists before any tab exists. */
+  launchWorktreeId?: string
   draftScopeKey: string
   draft: string
   caret: number
@@ -78,6 +80,7 @@ export function useNativeChatPickerState(args: {
   const {
     agent,
     terminalTabId,
+    launchWorktreeId,
     draftScopeKey,
     draft,
     caret,
@@ -100,7 +103,12 @@ export function useNativeChatPickerState(args: {
     disabledRef.current = disabled
   }, [disabled])
   const skillPickerTriggered = !disabled && isSkillPickerTriggered(draft.slice(0, caret), profile)
-  const discovery = useNativeChatSkills(agent, terminalTabId, skillPickerTriggered)
+  const discovery = useNativeChatSkills(
+    agent,
+    terminalTabId,
+    skillPickerTriggered,
+    launchWorktreeId
+  )
   const pickerCommands = useMemo(
     () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
     [agent, agentCommands, discovery.skills]

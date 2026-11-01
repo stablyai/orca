@@ -22274,7 +22274,9 @@
     "toggleArguments": "引数の表示を切り替え",
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
-    "legacyModelCount": "{{total}} 個のモデル"
+    "legacyModelCount": "{{total}} 個のモデル",
+    "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
+    "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
   },
   "wslMove": {
     "entry": {

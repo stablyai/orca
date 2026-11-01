@@ -22275,7 +22275,9 @@
     "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 个模型"
+    "legacyModelCount": "{{total}} 个模型",
+    "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
+    "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"
   },
   "wslMove": {
     "entry": {

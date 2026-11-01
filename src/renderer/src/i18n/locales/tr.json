@@ -23061,6 +23061,8 @@
     "arguments": "Argümanlar",
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
-    "launchTerminal": "Terminal başlat"
+    "launchTerminal": "Terminal başlat",
+    "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
+    "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @"
   }
 }

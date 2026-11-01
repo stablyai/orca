@@ -582,9 +582,11 @@ describe('startStructuredAgentLaunch', () => {
     await expect(first.launchResult).rejects.toBeInstanceOf(
       StructuredAgentSessionCreateRefusalError
     )
+    // Neither caller delivered; the first's prompt was handed back into the failed chat's composer.
     await expect(first.promptDeliveryResult).resolves.toEqual({
       delivered: false,
-      failureNotified: true
+      failureNotified: true,
+      inComposer: true
     })
     await expect(second.promptDeliveryResult).resolves.toEqual({
       delivered: false,

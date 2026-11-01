@@ -62,15 +62,19 @@ const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
 export function useNativeChatSkills(
   agent: AgentType,
   terminalTabId: string,
-  enabled = false
+  enabled = false,
+  launchWorktreeId?: string
 ): NativeChatSkillDiscovery {
   // Closed is the common state, so the tab-map subscription only runs while the picker is open.
   const inputs = useAppStore(
     useShallow(enabled ? selectNativeChatSkillStateInputs : selectNoSkillStateInputs)
   )
   const context = useMemo(
-    () => (inputs ? resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId) : null),
-    [inputs, terminalTabId]
+    () =>
+      inputs
+        ? resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId, launchWorktreeId)
+        : null,
+    [inputs, terminalTabId, launchWorktreeId]
   )
   const awaitingContext = useMemo(
     () =>

@@ -686,3 +686,92 @@ function catalogOwner(store: {
 }): { runtimeEnvironmentId: string | null } {
   return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
 }
+
+import * as composerDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import { records } from '@/components/native-chat/native-chat-composer-draft-memory'
+import {
+  addNativeChatPendingAttachment,
+  nativeChatPendingAttachmentSnapshot,
+  settleNativeChatPendingAttachment,
+  clearNativeChatPendingAttachmentsForTests
+} from '@/components/native-chat/native-chat-pending-attachment-cache'
+
+it.each([10, 100])(
+  'retires launch submissions through %i real folder removals, including intermediate twins',
+  async (count) => {
+    composerDrafts.clearNativeChatComposerDraftsForTests()
+    clearNativeChatPendingAttachmentsForTests()
+    const store = createTestStore()
+    const folders = Array.from({ length: count }, (_, i) =>
+      makeFolderWorkspace({ id: `retired-${i}`, executionHostId: 'local' })
+    )
+    const twin = { ...folders[0], executionHostId: 'runtime:env-owner' as const }
+    const live = makeFolderWorkspace({ id: 'live', executionHostId: 'local' })
+    const shutdown = vi.fn(async () => {})
+    store.setState({
+      projectGroups: [projectGroup],
+      folderWorkspaces: [...folders, twin, live],
+      shutdownWorktreeBrowsers: shutdown,
+      deleteManagedBrowserSessionProfile: vi.fn(),
+      purgeWorktreeTerminalState: vi.fn()
+    })
+    const scope = (id: string, host = 'local') =>
+      composerDrafts.nativeChatLaunchPromptDraftScopeKey(folderWorkspaceKey(id), 'claude', host)
+    const liveScopes = [scope('live'), scope(twin.id, 'runtime:env-owner')]
+    for (const key of liveScopes) {
+      composerDrafts.updateNativeChatComposerDraft(key, { text: 'keep' }, 'immediate')
+    }
+    const attempts = folders.map((folder, i) => {
+      const key = scope(folder.id)
+      composerDrafts.updateNativeChatComposerDraft(key, { text: `task ${i}` }, 'immediate')
+      addNativeChatPendingAttachment(key, { id: key, path: '', pending: true })
+      const submission = composerDrafts.captureNativeChatComposerSubmission(key)
+      if (i % 2 === 0) {
+        composerDrafts.updateNativeChatComposerDraft(key, { text: '' }, 'immediate')
+      }
+      return submission
+    })
+    folderWorkspacesDelete.mockResolvedValue(false)
+    expect(
+      await store.getState().deleteFolderWorkspace(folders[0].id, { executionHostId: 'local' })
+    ).toBe(false)
+    expect(attempts[0].draft?.text).toBe('task 0')
+    expect(nativeChatPendingAttachmentSnapshot(scope(folders[0].id))).toHaveLength(1)
+    folderWorkspacesDelete.mockResolvedValue(true)
+    const reads = vi.spyOn(records, 'get')
+    for (const [i, folder] of folders.entries()) {
+      expect(
+        await store.getState().deleteFolderWorkspace(folder.id, { executionHostId: 'local' })
+      ).toBe(true)
+      expect(attempts[i].draft).toBeUndefined()
+      if (i === 0) {
+        expect(shutdown).not.toHaveBeenCalled()
+      }
+    }
+    const cleanupReads = reads.mock.calls.length
+    reads.mockRestore()
+    expect(cleanupReads).toBeGreaterThanOrEqual(count)
+    expect(cleanupReads).toBeLessThanOrEqual(count * (count + 2))
+    expect(records.size).toBe(2)
+    expect(shutdown).toHaveBeenCalledTimes(count - 1)
+    for (const key of liveScopes) {
+      expect(composerDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
+    }
+    store.setState((s) => ({ folderWorkspaces: [...s.folderWorkspaces, folders[0]] }))
+    const recreated = scope(folders[0].id)
+    composerDrafts.updateNativeChatComposerDraft(recreated, { text: 'new lifetime' }, 'immediate')
+    folders.forEach((folder, i) => {
+      const key = scope(folder.id)
+      // A same-ID survivor skips ordinary cleanup as on main, so only that folder's chip stays.
+      expect(nativeChatPendingAttachmentSnapshot(key)).toHaveLength(i === 0 ? 1 : 0)
+      if (i > 0) {
+        expect(settleNativeChatPendingAttachment(key, key, '/late.png')).toBe(false)
+      }
+      composerDrafts.finishNativeChatComposerSubmission(key, attempts[i], true)
+    })
+    expect(composerDrafts.readNativeChatComposerDraft(recreated).text).toBe('new lifetime')
+    expect(records.size).toBe(3)
+    composerDrafts.clearNativeChatComposerDraftsForTests()
+    clearNativeChatPendingAttachmentsForTests()
+  }
+)

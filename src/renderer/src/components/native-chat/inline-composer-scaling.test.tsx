@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useCallback, useSyncExternalStore } from 'react'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
 import {
   createNativeChatQueuedEditDraft,
@@ -12,7 +12,11 @@ import {
   openNativeChatEditDraft,
   appendToNativeChatComposerDraft,
   subscribeToNativeChatComposerDraft,
-  subscribeToNativeChatComposerDraftAppend
+  subscribeToNativeChatComposerDraftAppend,
+  nativeChatLaunchPromptDraftScopeKey,
+  readNativeChatComposerDraft,
+  hydrateNativeChatComposerDrafts,
+  nativeChatComposerDraftWritesSettled
 } from './native-chat-composer-draft-store'
 import {
   nativeChatPastedTextOperations,
@@ -46,6 +50,7 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   clearNativeChatPendingAttachmentsForTests()
   clearNativeChatComposerDraftsForTests()
 })
@@ -416,5 +421,157 @@ it.each([10, 100])(
     )
     expect(ids).toBe(3 * count)
     expect(bodies).toBe(1)
+  }
+)
+
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from './native-chat-composer-draft-storage'
+import {
+  useRestoredNativeChatComposerDraftImageCheck,
+  recheckNativeChatComposerDraftImagesIn
+} from './native-chat-composer-draft-image-check'
+import { readLaunchSetupOptions } from './native-chat-launch-draft-source'
+import { writeLaunchSetupOptions } from './native-chat-composer-draft-memory'
+it.each([10, 100])(
+  'isolates actual setup prompt/options/pending consumers across %s workspaces and another host',
+  async (count) => {
+    const storage = createMemoryNativeChatComposerDraftStorage()
+    storage.drafts.set('agent-setup:["ssh:new","repo::/own","codex"]', {
+      text: 'saved target',
+      images: [{ id: 'saved', path: '/saved.png' }],
+      savedAt: 1
+    })
+    const loaded = Promise.withResolvers<ReadonlyMap<string, unknown>>()
+    setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: () => loaded.promise })
+    const loading = hydrateNativeChatComposerDrafts()
+    const scopes = [
+      nativeChatLaunchPromptDraftScopeKey('repo::/own', 'codex', 'ssh:old'),
+      nativeChatLaunchPromptDraftScopeKey('repo::/own', 'codex', 'ssh:other'),
+      ...Array.from({ length: count }, (_, i) =>
+        nativeChatLaunchPromptDraftScopeKey(`repo::/other${i}`, 'codex', 'local')
+      )
+    ]
+    const renders = scopes.map(() => 0)
+    function Probe({ scope, index }: { scope: string; index: number }) {
+      const draft = useNativeChatDraft(scope, () => false)
+      const pending = useNativeChatPendingAttachments(scope)
+      const subscribe = useCallback(
+        (listener: () => void) => subscribeToNativeChatComposerDraft(scope, listener),
+        [scope]
+      )
+      const options = useSyncExternalStore(subscribe, () => readLaunchSetupOptions(scope))
+      const subscribeDraft = useCallback(
+        (listener: () => void) => subscribeToNativeChatComposerDraft(scope, listener),
+        [scope]
+      )
+      const images = useSyncExternalStore(
+        subscribeDraft,
+        () => readNativeChatComposerDraft(scope).images
+      )
+      const document = useSyncExternalStore(
+        subscribeDraft,
+        () => readNativeChatComposerDraft(scope).document
+      )
+      const checks = useRestoredNativeChatComposerDraftImageCheck(scope, subscribeDraft)
+      renders[index]++
+      return (
+        <output
+          data-probe={index}
+          data-images={images.length}
+          data-document={!!document}
+          data-checks={checks.size}
+        >
+          {draft.draft}|{options?.choices.model}|{pending.length}
+        </output>
+      )
+    }
+    const view = render(
+      <>
+        {scopes.map((scope, index) => (
+          <Probe key={scope} scope={scope} index={index} />
+        ))}
+      </>
+    )
+    await act(async () => {})
+    const initial = [...renders]
+    act(() =>
+      writeLaunchSetupOptions(scopes[0], {
+        agent: 'codex',
+        surface: 'terminal',
+        choices: { model: 'chosen' }
+      })
+    )
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    act(() => updateNativeChatComposerDraft(scopes[0], { text: 'own input' }, 'deferred'))
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    act(() =>
+      addNativeChatPendingAttachment(scopes[0], { id: 'own-chip', path: '', pending: true })
+    )
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    expect(view.container.querySelector('[data-probe="0"]')?.textContent).toBe('own input|chosen|1')
+    act(() =>
+      updateNativeChatComposerDraft(
+        scopes[0],
+        { document: { type: 'doc', content: [{ type: 'paragraph' }] } },
+        'deferred'
+      )
+    )
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-document')).toBe(
+      'true'
+    )
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    const paste = '/native-chat-pastes/orca-paste-1-ab.png'
+    act(() =>
+      updateNativeChatComposerDraft(
+        scopes[0],
+        { images: [{ id: 'live', path: paste }] },
+        'immediate'
+      )
+    )
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-images')).toBe('1')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    const checked = Promise.withResolvers<{ path: string; kept: boolean; exists: boolean }[]>()
+    vi.stubGlobal('api', { ui: { restoreNativeChatPastes: vi.fn(() => checked.promise) } })
+    act(() => recheckNativeChatComposerDraftImagesIn('/native-chat-pastes'))
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-checks')).toBe('1')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    const { createTestStore } = await import('@/store/slices/store-test-helpers')
+    act(() =>
+      createTestStore()
+        .getState()
+        .recordSshRepoReadoptions([{ oldTargetId: 'old', newTargetId: 'new', repoIds: ['repo'] }])
+    )
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    await act(async () => {
+      loaded.resolve(new Map(storage.drafts))
+      await loading
+      await nativeChatComposerDraftWritesSettled()
+    })
+    expect(view.container.querySelector('[data-probe="0"]')?.textContent).toBe('own input|chosen|1')
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-images')).toBe('1')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    expect(readNativeChatComposerDraft(scopes[0]).images).toEqual([{ id: 'live', path: paste }])
+    await act(async () => {
+      checked.resolve([{ path: paste, kept: true, exists: true }])
+      await checked.promise
+    })
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-checks')).toBe('0')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    act(() => settleNativeChatPendingAttachment(scopes[0], 'own-chip', '/chip.png'))
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-images')).toBe('2')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    const ownRenders = renders[0]
+    act(() =>
+      writeLaunchSetupOptions(scopes[1], {
+        agent: 'codex',
+        surface: 'chat',
+        choices: { model: 'other host' }
+      })
+    )
+    expect(renders[0]).toBe(ownRenders)
+    expect(renders.slice(2)).toEqual(initial.slice(2))
+    expect(view.container.querySelector('[data-probe="1"]')?.textContent).toBe('|other host|0')
   }
 )
