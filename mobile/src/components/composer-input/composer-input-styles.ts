@@ -1,4 +1,3 @@
-import { StyleSheet } from 'react-native'
 import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
@@ -35,22 +34,35 @@ const labelControl = {
   minHeight: COMPOSER_CONTROL_SIZE
 } as const
 
-const surface = () =>
-  ({
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
-    backgroundColor: colors.composerSurface
-  }) as const
+// A field with no controls of its own is told apart by its edge alone, so it draws inputBorder (3:1).
+const edge = (borderColor: string) =>
+  ({ borderWidth: 1, borderColor, backgroundColor: colors.composerSurface }) as const
 
-// The chat composer's look, shared by every text input so they cannot drift apart.
+// The box owns the focus ring, so the browser's own ring on the text inside is dropped.
+const noOwnRing = { outlineWidth: 0 } as const
+
+// The chat composer's look, shared by every text input so they cannot drift apart; plain fields add the edge.
 export const composerInputStyles = themedStyleSheet(() => ({
   box: {
-    ...surface(),
+    ...edge(colors.composerBorder),
     padding: spacing.md,
     borderRadius: radii.floating
   },
   formBox: {
+    borderColor: colors.inputBorder,
     borderRadius: radii.surface
+  },
+  // The edge thickens to a 2pt accent ring, drawn as an outline so nothing moves.
+  focused: {
+    borderColor: colors.accentBlue,
+    outlineColor: colors.accentBlue,
+    outlineStyle: 'solid',
+    outlineWidth: 1
+  },
+  fieldInput: {
+    ...edge(colors.inputBorder),
+    borderRadius: radii.control,
+    color: colors.textPrimary
   },
   inlineBox: {
     flexDirection: 'row',
@@ -69,15 +81,8 @@ export const composerInputStyles = themedStyleSheet(() => ({
     marginTop: 0
   },
   formText: {
+    ...noOwnRing,
     minHeight: FORM_MESSAGE_MIN_HEIGHT
-  },
-  // Only bars floating over content cast a shadow; an inline box would shade its own thread.
-  docked: {
-    shadowColor: '#000',
-    shadowOpacity: 0.45,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8
   },
   messageText: {
     width: '100%',
@@ -128,7 +133,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     opacity: feedback.pressedOpacity
   },
   field: {
-    ...surface(),
+    ...edge(colors.inputBorder),
     minHeight: FIELD_MIN_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
@@ -137,6 +142,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md
   },
   fieldText: {
+    ...noOwnRing,
     flex: 1,
     minWidth: 0,
     alignSelf: 'stretch',

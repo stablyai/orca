@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, Pressable, TextInput } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -18,6 +18,7 @@ import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSwitch } from './MobileSwitch'
 import { ListGroup, ListRow } from './list/ListGroup'
+import { FieldTextInput } from './composer-input/FieldTextInput'
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
@@ -289,12 +290,11 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
 
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t('components.customKeyModal.key', 'Key')}</Text>
-            <TextInput
+            <FieldTextInput
               style={styles.keyInput}
               value={shortcutKey.length === 1 ? shortcutKey.toUpperCase() : ''}
               onChangeText={handleShortcutKeyInput}
               placeholder={SPECIAL_KEY_BY_ID[shortcutKey]?.label ?? 'C'}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={1}

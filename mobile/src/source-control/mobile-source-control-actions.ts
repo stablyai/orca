@@ -145,17 +145,38 @@ export function buildMobileSourceControlActions(
       label: t('sourceControl.actions.switchBranch', 'Switch branch'),
       iconKey: 'branch',
       disabled: busy,
-      skipAutoClose: true,
+      closeBeforePress: true,
       onPress: handlers.checkout
     },
     {
       id: 'history',
-      label: t('sourceControl.actions.commits', 'Commits'),
+      label: t('sourceControl.actions.openCommits', 'Open commits'),
       iconKey: 'history',
       disabled: busy,
       onPress: handlers.history
     }
   ]
+}
+
+// The ⋯ menu's git actions, grouped; Create PR lives in the next-step bar and the PR tab.
+const MENU_GROUPS: readonly (readonly string[])[] = [
+  ['commit-push', 'commit-sync'],
+  // Push and Publish stay here too: the bar shows the commit box while anything is uncommitted.
+  ['push', 'publish', 'fetch', 'pull', 'fast-forward', 'sync', 'rebase'],
+  ['checkout', 'history']
+]
+
+export function groupMobileSourceControlMenu<T extends { id: string }>(
+  actions: readonly T[]
+): { groups: T[][]; forcePush: T | null } {
+  const byId = new Map(actions.map((action) => [action.id, action]))
+  const groups = MENU_GROUPS.map((ids) =>
+    ids.flatMap((id) => {
+      const action = byId.get(id)
+      return action ? [action] : []
+    })
+  ).filter((group) => group.length > 0)
+  return { groups, forcePush: byId.get('force-push') ?? null }
 }
 
 export function getMobilePrimaryActionHint(

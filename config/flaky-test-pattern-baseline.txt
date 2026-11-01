@@ -1189,7 +1189,7 @@
 2 test-timeout-needs-reason:src/main/antigravity/posix-hook-invocation.test.ts
 2 test-timeout-needs-reason:src/main/antigravity/windows-hook-json-post.test.ts
 3 test-timeout-needs-reason:src/main/antigravity/windows-hook-payload-delivery.test.ts
-1 test-timeout-needs-reason:src/main/browser/agent-browser-bridge-raw-process.test.ts
+1 test-timeout-needs-reason:src/main/browser/agent-browser/agent-browser-bridge-raw-process.test.ts
 1 test-timeout-needs-reason:src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/browser-find-frame-traversal.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/browser-route-webrtc-egress.electron.test.ts
