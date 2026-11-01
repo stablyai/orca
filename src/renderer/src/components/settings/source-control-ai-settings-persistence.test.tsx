@@ -66,8 +66,11 @@ it('consumes an actual Git toggle failure and lets the following Chat write succ
     expect(console.error).toHaveBeenCalledWith('Failed to update settings:', expect.any(Error))
   )
   expect(toggle.getAttribute('aria-checked')).toBe('false')
-  fireEvent.click(screen.getByRole('combobox'))
-  fireEvent.click(screen.getByRole('option', { name: 'Custom command' }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Custom command' }))
   await waitFor(() =>
     expect(
       useAppStore.getState().settings?.sourceControlAi?.actions?.conversationName?.agentId
@@ -103,17 +106,17 @@ it('does not let a failed actual Git agent selection roll back a queued Chat sel
     throw new Error('Chat naming section is missing')
   }
   fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
-  const agents = screen.getAllByRole('combobox')
+  const agents = screen.getAllByRole('button', { name: 'Select agent' })
   const gitAgent = agents[0]
   const chatAgent = agents.at(-1)
   if (!gitAgent || !chatAgent || agents.length < 2) {
     throw new Error('Git and Chat agent controls are missing')
   }
-  fireEvent.click(gitAgent)
-  fireEvent.click(screen.getByRole('option', { name: 'Custom command' }))
+  fireEvent.pointerDown(gitAgent, { button: 0, ctrlKey: false })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Custom command' }))
   await waitFor(() => expect(persist).toHaveBeenCalledTimes(1))
-  fireEvent.click(chatAgent)
-  fireEvent.click(screen.getByRole('option', { name: 'Custom command' }))
+  fireEvent.pointerDown(chatAgent, { button: 0, ctrlKey: false })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Custom command' }))
   await act(async () => rejectGit(new Error('Settings disk is unavailable')))
   await waitFor(() =>
     expect(

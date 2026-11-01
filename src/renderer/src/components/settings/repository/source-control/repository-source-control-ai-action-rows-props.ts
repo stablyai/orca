@@ -2,6 +2,7 @@ import type { ActionArgumentChoices } from '../../../../../../shared/source-cont
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type {
   RepoSourceControlAiOverrides,
+  SourceControlAiModelChoice,
   SourceControlAiSettings
 } from '../../../../../../shared/source-control-ai-types'
 import type {
@@ -15,6 +16,11 @@ export type RepositorySourceControlAiActionRowsProps = {
   repoAi: RepoSourceControlAiOverrides
   source: SourceControlAiSettings
   defaultTuiAgent: TuiAgent | 'blank' | null | undefined
+  onActionTextModelChoice?: (
+    actionId: SourceControlActionId,
+    choice: SourceControlAiModelChoice | undefined,
+    agentArgs: string
+  ) => void
   onActionModeChange: (actionId: SourceControlActionId, mode: string) => void
   onActionAgentChange: (
     actionId: SourceControlActionId,

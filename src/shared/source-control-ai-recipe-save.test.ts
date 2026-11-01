@@ -1,3 +1,4 @@
+import { saveSourceControlAiActionModelChoice } from './source-control-ai-action-model-choice'
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from './constants'
 import {
@@ -188,5 +189,127 @@ describe('source-control AI recipe saves', () => {
         }
       }
     })
+  })
+})
+
+describe('text action model and effort writes', () => {
+  it('updates both scopes and known host maps, stripping only the matching flags from that scope', () => {
+    const settings = getDefaultSettings('/tmp')
+    const source = settings.sourceControlAi!
+    source.discoveredModelsByAgentByHost = { 'ssh:discovered': {} }
+    source.selectedModelByAgentByHost = { 'ssh:global': { claude: 'opus' } }
+    source.actions = { ...source.actions, branchName: { agentArgs: '--model global --trace' } }
+    const repo = {
+      sourceControlAi: {
+        actionOverrides: {
+          branchName: {
+            agentArgs:
+              '--model repo --config model_reasoning_effort=low -c sandbox_mode="read-only"'
+          }
+        },
+        modelOverridesByOperation: {
+          branchName: { selectedModelByAgentByHost: { 'ssh:saved': { claude: 'sonnet' } } }
+        }
+      }
+    }
+    const before = structuredClone({ settings, repo })
+    const global = saveSourceControlAiActionModelChoice({
+      target: { type: 'global' },
+      settings,
+      repo,
+      actionId: 'branchName',
+      agentId: 'codex',
+      change: { field: 'model', value: 'gpt-5.5' }
+    })
+    expect(global.target.type).toBe('global')
+    if (!('sourceControlAi' in global)) {
+      throw new Error('Expected global save')
+    }
+    expect(global.sourceControlAi.actions?.branchName?.agentArgs).toBe('--trace')
+    expect(global.sourceControlAi.modelOverridesByOperation?.branchName).toEqual({
+      selectedModelByAgent: { codex: 'gpt-5.5' },
+      selectedModelByAgentByHost: {
+        'ssh:global': { codex: 'gpt-5.5' },
+        'ssh:discovered': { codex: 'gpt-5.5' }
+      }
+    })
+    const picked = saveSourceControlAiActionModelChoice({
+      target: { type: 'repo', repoId: 'repo' },
+      settings,
+      repo,
+      actionId: 'branchName',
+      agentId: 'codex',
+      change: { field: 'model', value: 'gpt-5.4' }
+    })
+    if (!('update' in picked) || !picked.update.sourceControlAi) {
+      throw new Error('Expected repo save')
+    }
+    expect(picked.update.sourceControlAi.actionOverrides?.branchName?.agentArgs).toBe(
+      '--config model_reasoning_effort=low -c sandbox_mode="read-only"'
+    )
+    expect(picked.update.sourceControlAi.modelOverridesByOperation?.branchName).toMatchObject({
+      selectedModelByAgent: { codex: 'gpt-5.4' },
+      selectedModelByAgentByHost: {
+        'ssh:saved': { claude: 'sonnet', codex: 'gpt-5.4' },
+        'ssh:discovered': { codex: 'gpt-5.4' }
+      }
+    })
+    const effort = saveSourceControlAiActionModelChoice({
+      target: { type: 'repo', repoId: 'repo' },
+      settings,
+      repo: { sourceControlAi: picked.update.sourceControlAi },
+      actionId: 'branchName',
+      agentId: 'codex',
+      change: { field: 'effort', modelId: 'gpt-5.4', value: 'high' }
+    })
+    if (!('update' in effort) || !effort.update.sourceControlAi) {
+      throw new Error('Expected repo effort save')
+    }
+    expect(effort.update.sourceControlAi.actionOverrides?.branchName?.agentArgs).toBe(
+      '-c sandbox_mode="read-only"'
+    )
+    expect(
+      effort.update.sourceControlAi.modelOverridesByOperation?.branchName?.selectedThinkingByModel
+    ).toEqual({ 'gpt-5.4': 'high' })
+    const cleared = saveSourceControlAiActionModelChoice({
+      target: { type: 'repo', repoId: 'repo' },
+      settings,
+      repo: { sourceControlAi: effort.update.sourceControlAi },
+      actionId: 'branchName',
+      agentId: 'codex',
+      change: { field: 'model', value: undefined }
+    })
+    if (!('update' in cleared) || !cleared.update.sourceControlAi) {
+      throw new Error('Expected repo clear')
+    }
+    expect(
+      cleared.update.sourceControlAi.modelOverridesByOperation?.branchName?.selectedModelByAgent
+    ).toBeUndefined()
+    expect(
+      cleared.update.sourceControlAi.modelOverridesByOperation?.branchName
+        ?.selectedModelByAgentByHost
+    ).toEqual({ 'ssh:saved': { claude: 'sonnet' } })
+    const variant = saveSourceControlAiActionModelChoice({
+      target: { type: 'global' },
+      settings: {
+        ...settings,
+        sourceControlAi: {
+          ...source,
+          actions: { branchName: { agentArgs: '--model provider/model#high --trace' } }
+        }
+      },
+      actionId: 'branchName',
+      agentId: 'opencode2',
+      change: { field: 'effort', modelId: 'provider/model', value: 'low' }
+    })
+    if (!('sourceControlAi' in variant)) {
+      throw new Error('Expected combined variant save')
+    }
+    expect(variant.sourceControlAi.actions?.branchName?.agentArgs).toBe('--trace')
+    expect(variant.sourceControlAi.modelOverridesByOperation?.branchName).toMatchObject({
+      selectedModelByAgent: { opencode2: 'provider/model' },
+      selectedThinkingByModel: { 'provider/model': 'low' }
+    })
+    expect({ settings, repo }).toEqual(before)
   })
 })

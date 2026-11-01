@@ -28,6 +28,8 @@ import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picke
 export const AgentLaunchPicker = memo(
   function AgentLaunchPicker({
     model,
+    entries: suppliedEntries,
+    triggerLabel,
     draftScope,
     worktreeId,
     value,
@@ -41,6 +43,8 @@ export const AgentLaunchPicker = memo(
     onPick
   }: {
     model: NewTabAgentMenuModel
+    entries?: AgentPickerEntry[]
+    triggerLabel?: string
     draftScope?: object
     worktreeId?: string
     value?: AgentPickerDraft
@@ -62,12 +66,13 @@ export const AgentLaunchPicker = memo(
     const ownDraftScope = useAgentPickerDraftScope()
     const [open, setOpen] = useState(false)
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
-    const entries = useAgentLaunchPickerInventory(
+    const observedEntries = useAgentLaunchPickerInventory(
       worktreeId,
       model,
-      open && !setupDisabled,
+      open && !setupDisabled && !suppliedEntries,
       selected ?? agent ?? undefined
     )
+    const entries = suppliedEntries ?? observedEntries
     const entry = entries.find((entry) => entry.agent === agent)
     const draft = entry ? (value ?? draftForEntry?.(entry)) : undefined
     const choices = entry
@@ -98,10 +103,11 @@ export const AgentLaunchPicker = memo(
             >
               {agent ? <AgentIcon agent={agent} size={14} /> : null}
               <span className="min-w-0 flex-1 truncate text-left">
-                {agent
-                  ? getAgentLabel(agent)
-                  : (emptyLabel ?? translate('agentPicker.select', 'Select agent'))}
-                {agent && summary ? (
+                {triggerLabel ??
+                  (agent
+                    ? getAgentLabel(agent)
+                    : (emptyLabel ?? translate('agentPicker.select', 'Select agent')))}
+                {!triggerLabel && agent && summary ? (
                   <span className="text-muted-foreground"> · {summary}</span>
                 ) : null}
               </span>

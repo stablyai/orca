@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import type { ComponentProps } from 'react'
+import { CommitMessageAiPane } from './CommitMessageAiPane'
+import { getDefaultSourceControlAiSettings } from '../../../../shared/source-control-ai'
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
@@ -146,8 +149,11 @@ it('configures the offered Chat custom command without enabling Git or writing o
     throw new Error('Chat naming section is missing')
   }
   fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
-  fireEvent.click(screen.getByRole('combobox'))
-  fireEvent.click(screen.getByRole('option', { name: 'Custom command' }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Custom command' }))
   const command = await screen.findByRole('textbox', { name: 'Custom command' })
   expect(persist).toHaveBeenCalledTimes(1)
   fireEvent.change(command, { target: { value: 'name-tool' } })
@@ -274,3 +280,171 @@ it('preserves a shared command changed elsewhere while a Chat recipe is being ed
     'changed-elsewhere'
   )
 })
+
+it.each(['global', 'repo'] as const)(
+  '%s text setup saves text-catalog choices and stripped Arguments together',
+  async (scope) => {
+    const settings = useAppStore.getState().settings
+    if (!settings) {
+      throw new Error('Missing settings')
+    }
+    const { TEST_REPO } = await import('@/store/slices/worktrees-slice-test-fixtures')
+    const { RepositorySourceControlAiSection } =
+      await import('./repository/source-control/RepositorySourceControlAiSection')
+    Object.assign(window.api.preflight, { detectRemoteAgents: vi.fn(async () => ['codex']) })
+    const repo = {
+      ...TEST_REPO,
+      executionHostId: 'ssh:target%20one',
+      connectionId: 'stale',
+      sourceControlAi: { actionOverrides: { commitMessage: { agentId: 'codex' as const } } }
+    }
+    const hostKey = scope === 'repo' ? 'ssh:target one' : 'local'
+    const updateRepo = vi.fn(async (id, patch) => {
+      useAppStore.setState((state) => ({
+        repos: state.repos.map((row) => (row.id === id ? { ...row, ...patch } : row))
+      }))
+      return true
+    }) satisfies ComponentProps<typeof RepositorySourceControlAiSection>['updateRepo']
+    useAppStore.setState({
+      repos: [repo],
+      settingsSearchQuery: '',
+      settings: {
+        ...settings,
+        defaultTuiAgent: 'codex',
+        sourceControlAi: normalizeSourceControlAiSettings({
+          ...getDefaultSourceControlAiSettings(),
+          enabled: true,
+          actions: {
+            commitMessage: {
+              agentId: 'codex',
+              agentArgs: '--model old -c model_reasoning_effort=low --verbose'
+            }
+          },
+          modelOverridesByOperation: {
+            commitMessage: { selectedModelByAgent: { codex: 'retired-model' } }
+          },
+          discoveredModelsByAgentByHost: {
+            [hostKey]: {
+              codex: [
+                {
+                  id: 'text-catalog-model',
+                  label: 'Text catalog model',
+                  thinkingLevels: [
+                    { id: 'low', label: 'Low' },
+                    { id: 'high', label: 'High' }
+                  ],
+                  defaultThinkingLevel: 'low'
+                },
+                {
+                  id: 'text-low-only',
+                  label: 'Low only model',
+                  thinkingLevels: [{ id: 'low', label: 'Low' }],
+                  defaultThinkingLevel: 'low'
+                }
+              ]
+            }
+          }
+        })
+      }
+    })
+    const model = settingsModel()
+    function Owner() {
+      const repo = useAppStore((state) => state.repos[0])
+      const settings = useAppStore((state) => state.settings)!
+      const controller = useSettingsInteractionController(model)
+      return scope === 'repo' ? (
+        <RepositorySourceControlAiSection repo={repo} updateRepo={updateRepo} />
+      ) : (
+        <CommitMessageAiPane
+          settings={settings}
+          updateSettings={model.updateSettings}
+          writeSourceControlAiSettings={controller.writeSourceControlAiSettingsOrThrow}
+        />
+      )
+    }
+    render(
+      <TooltipProvider>
+        <Owner />
+      </TooltipProvider>
+    )
+    const card = screen.getByText('Commit message').closest('.rounded-md')
+    if (!(card instanceof HTMLElement)) {
+      throw new Error('Missing commit card')
+    }
+    const row = within(card)
+    const open = () => {
+      fireEvent.pointerDown(row.getByRole('button', { name: 'Select agent' }), {
+        button: 0,
+        ctrlKey: false
+      })
+      expect(screen.getByRole('menuitem', { name: 'Use default agent' })).toBeDefined()
+      expect(screen.getByRole('menuitem', { name: 'Custom command' })).toBeDefined()
+      fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
+    }
+    open()
+    expect(screen.getByRole('option', { name: 'Text catalog model' })).toBeDefined()
+    expect(screen.queryByRole('option', { name: 'retired-model' })).toBeNull()
+    expect(screen.getByRole('option', { name: /^Same as default/ }).textContent).toContain(
+      'GPT-5.6 Terra'
+    )
+    expect(screen.queryByRole('button', { name: 'Codex permissions' })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Open in' })).toBeNull()
+    expect(screen.queryByText('Fast')).toBeNull()
+    fireEvent.click(screen.getByRole('option', { name: 'Text catalog model' }))
+    const effort = screen.getByRole('radiogroup', { name: 'Effort' })
+    expect(within(effort).getByRole('radio', { name: 'High' })).toHaveProperty('disabled', false)
+    fireEvent.click(within(effort).getByRole('radio', { name: 'High' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Low only model' }))
+    expect(screen.queryByRole('radio', { name: 'High' })).toBeNull()
+    expect(screen.getByRole('radio', { name: 'Low' })).toHaveProperty('disabled', false)
+    fireEvent.click(screen.getByRole('option', { name: 'Text catalog model' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'High' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    const save = scope === 'repo' ? updateRepo : persist
+    expect(save).not.toHaveBeenCalled()
+    expect(row.getByDisplayValue('--verbose')).toBeDefined()
+    fireEvent.click(row.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    const saved =
+      scope === 'repo'
+        ? updateRepo.mock.calls[0][1].sourceControlAi
+        : persist.mock.calls[0][0].sourceControlAi
+    expect(saved).toMatchObject({
+      [scope === 'repo' ? 'actionOverrides' : 'actions']: {
+        commitMessage: { agentArgs: '--verbose' }
+      },
+      modelOverridesByOperation: {
+        commitMessage: {
+          selectedModelByAgent: { codex: 'text-catalog-model' },
+          selectedThinkingByModel: { 'text-catalog-model': 'high' }
+        }
+      }
+    })
+    await waitFor(() =>
+      expect(row.getByRole('button', { name: 'Select agent' }).textContent).toContain(
+        'Text catalog model · Codex · High'
+      )
+    )
+    if (scope === 'repo') {
+      expect(persist).not.toHaveBeenCalled()
+      expect(
+        useAppStore.getState().settings?.sourceControlAi?.actions?.commitMessage?.agentArgs
+      ).toContain('--model old')
+    }
+    // A matching flag with no operand stays visible as Arguments-controlled after a pick.
+    fireEvent.change(row.getByDisplayValue('--verbose'), {
+      target: { value: '--model' }
+    })
+    open()
+    fireEvent.click(screen.getByRole('option', { name: 'Text catalog model' }))
+    expect(
+      screen.getByRole('option', { name: 'Text catalog model' }).getAttribute('data-current')
+    ).toBe('false')
+    expect(screen.getAllByText('Set by your Arguments').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    expect(row.getByDisplayValue('--model')).toBeDefined()
+    expect(row.getByRole('button', { name: 'Select agent' }).textContent).toContain(
+      'Set by your Arguments'
+    )
+  }
+)

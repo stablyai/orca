@@ -23,6 +23,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
   return {
     amp: {
       id: 'amp',
+      modelFlag: [{ aliases: ['--mode'] }],
+      effortFlag: [{ aliases: ['--effort'] }],
       label: 'Amp',
       binary: 'amp',
       promptDelivery: 'stdin',
@@ -58,6 +60,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
     },
     cursor: {
       id: 'cursor',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [],
       label: 'Cursor',
       binary: 'cursor-agent',
       promptDelivery: 'argv',
@@ -79,6 +83,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
     },
     kimi: {
       id: 'kimi',
+      modelFlag: [{ aliases: ['--model', '-m'] }],
+      effortFlag: [],
       label: 'Kimi',
       binary: 'kimi',
       // kimi-code requires --prompt/-p text on argv; Claude-style --print is rejected (#11669).
@@ -107,6 +113,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
     },
     muse: {
       id: 'muse',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [{ aliases: ['--reasoning-effort'] }],
       label: 'Muse',
       binary: 'muse',
       // Muse exec takes a positional prompt; keep generation one-shot and read-only.
@@ -132,6 +140,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
     },
     dsh: {
       id: 'dsh',
+      modelFlag: [],
+      effortFlag: [],
       label: 'DeepSeek Harness',
       binary: 'dsh',
       // DSH headless runs one persisted session, prints and exits. Use stdin to hide diffs from process listings and avoid argv limits. 0.1.5-rc.1 requires explicit - even with piped stdin.
@@ -146,6 +156,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
     },
     copilot: {
       id: 'copilot',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [{ aliases: ['--effort'] }],
       label: 'GitHub Copilot',
       binary: 'copilot',
       promptDelivery: 'argv',
@@ -243,6 +255,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
     },
     antigravity: {
       id: 'antigravity',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [{ aliases: ['--effort'] }],
       label: 'Antigravity',
       binary: 'agy',
       // Empty --print selects stream input without consuming the next flag (agy >= 1.1.15).
@@ -263,6 +277,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
     },
     jcode: {
       id: 'jcode',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [],
       label: 'Jcode',
       binary: 'jcode',
       // jcode run supports positional argv only; large diffs remain subject to Windows argv limits.

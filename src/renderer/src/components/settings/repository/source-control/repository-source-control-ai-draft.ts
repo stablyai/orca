@@ -1,7 +1,18 @@
+import {
+  readActionRecipeTextDraft,
+  sameDraftLaunchPreferences,
+  sameActionRecipeText,
+  type ActionRecipeTextDraft
+} from './repository-source-control-ai-recipe-text'
+export {
+  readActionRecipeTextDraft,
+  type ActionRecipeTextDraft
+} from './repository-source-control-ai-recipe-text'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-operation-policy'
 import {
   SOURCE_CONTROL_ACTION_IDS,
+  AI_TEXT_ACTION_IDS,
   type SourceControlActionId
 } from '../../../../../../shared/source-control-ai-actions'
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
@@ -135,12 +146,18 @@ export function withRepoAiActionMode(
   mode: 'inherit' | 'override'
 ): RepoSourceControlAiOverrides {
   const nextActionOverrides = { ...base.actionOverrides }
+  const modelOverridesByOperation = { ...base.modelOverridesByOperation }
+  const textAction = AI_TEXT_ACTION_IDS.find((id) => id === actionId)
+  if (mode === 'inherit' && textAction && textAction !== 'conversationName') {
+    delete modelOverridesByOperation[textAction]
+  }
   if (mode === 'inherit') {
     delete nextActionOverrides[actionId]
     return normalizeRepoAiDraft(
       dropRepoLegacyInstructionForAction(
         {
           ...base,
+          modelOverridesByOperation,
           actionOverrides:
             Object.keys(nextActionOverrides).length > 0 ? nextActionOverrides : undefined
         },
@@ -168,8 +185,19 @@ export function withRepoAiActionRecipeText(
   )
   const own = base.actionOverrides?.[actionId]
   const currentRecipe = own ?? {}
+  const textAction = AI_TEXT_ACTION_IDS.find((id) => id === actionId)
+  const next =
+    textAction && textAction !== 'conversationName'
+      ? {
+          ...base,
+          modelOverridesByOperation: {
+            ...base.modelOverridesByOperation,
+            [textAction]: text.modelChoice
+          }
+        }
+      : base
   return normalizeRepoAiDraft(
-    setActionOverride(base, actionId, {
+    setActionOverride(next, actionId, {
       ...currentRecipe,
       ...(typeof text.commandInputTemplate === 'string'
         ? { commandInputTemplate: text.commandInputTemplate }
@@ -179,43 +207,6 @@ export function withRepoAiActionRecipeText(
       ...(preferencesEdited ? { launchPreferences: text.launchPreferences } : {})
     })
   )
-}
-
-/** The action's text as stored: an unset or cleared value stays so until the user types; inputs
- *  show it as empty. */
-export type ActionRecipeTextDraft = Pick<
-  RepoActionRecipe,
-  'commandInputTemplate' | 'agentArgs' | 'launchPreferences' | 'argumentChoices'
->
-
-// An own undefined is a deliberate clear; an absent preference leaves inheritance untouched.
-function sameDraftLaunchPreferences(a: ActionRecipeTextDraft, b: ActionRecipeTextDraft): boolean {
-  return (
-    Object.hasOwn(a, 'launchPreferences') === Object.hasOwn(b, 'launchPreferences') &&
-    JSON.stringify(a.launchPreferences) === JSON.stringify(b.launchPreferences)
-  )
-}
-
-function sameActionRecipeText(a: ActionRecipeTextDraft, b: ActionRecipeTextDraft): boolean {
-  return (
-    a.commandInputTemplate === b.commandInputTemplate &&
-    a.agentArgs === b.agentArgs &&
-    JSON.stringify(a.argumentChoices) === JSON.stringify(b.argumentChoices) &&
-    sameDraftLaunchPreferences(a, b)
-  )
-}
-
-export function readActionRecipeTextDraft(
-  value: RepoSourceControlAiOverrides,
-  actionId: SourceControlActionId
-): ActionRecipeTextDraft {
-  const recipe = value.actionOverrides?.[actionId]
-  return {
-    commandInputTemplate: recipe?.commandInputTemplate,
-    agentArgs: recipe?.agentArgs,
-    argumentChoices: recipe?.argumentChoices,
-    ...(recipe?.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {})
-  }
 }
 
 export function composeDisplayRepoAi(
@@ -235,8 +226,17 @@ export function composeDisplayRepoAi(
     if (!draft || !hasOwnActionOverride(next.actionOverrides, actionId) || !currentRecipe) {
       continue
     }
+    const textAction = AI_TEXT_ACTION_IDS.find((id) => id === actionId)
     next = {
       ...next,
+      ...(textAction && textAction !== 'conversationName'
+        ? {
+            modelOverridesByOperation: {
+              ...next.modelOverridesByOperation,
+              [textAction]: draft.modelChoice
+            }
+          }
+        : {}),
       actionOverrides: {
         ...next.actionOverrides,
         [actionId]: {

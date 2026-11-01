@@ -1,3 +1,4 @@
+import { TEXT_ACTION_DEFAULT_MODEL } from '../../../../shared/agent-launch-picker'
 import { translate } from '@/i18n/i18n'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type {
@@ -32,6 +33,9 @@ export function agentLaunchSetupOptionRows({
   argumentsKnown
 }: AgentLaunchSetupOptionRowsInput): SessionOptionDescriptor[] {
   return options.map((option) => {
+    const effortInArguments =
+      entry.textGeneration?.effortInArguments &&
+      (!draft.textChanges?.includes('effort') || entry.textGeneration.effortArgumentsUnrecognized)
     const liveModel = models.find((model) => model.id === currentModel)
     const current =
       argumentsView.choices.options?.[option.id] ??
@@ -78,11 +82,23 @@ export function agentLaunchSetupOptionRows({
           ? { type: 'boolean', currentValue: current === 'true' }
           : {
               type: 'select',
-              choices:
-                current && !option.kind.choices.some((choice) => choice.value === current)
+              choices: entry.textGeneration
+                ? [
+                    ...(effortInArguments
+                      ? [
+                          {
+                            value: 'arguments',
+                            label: translate('agentPicker.setByArguments', 'Set by your Arguments')
+                          }
+                        ]
+                      : []),
+                    { value: TEXT_ACTION_DEFAULT_MODEL, label: entry.textGeneration.defaultLabel },
+                    ...option.kind.choices
+                  ]
+                : current && !option.kind.choices.some((choice) => choice.value === current)
                   ? [...option.kind.choices, { value: current, label: current }]
                   : option.kind.choices,
-              currentValue: current
+              currentValue: effortInArguments ? 'arguments' : current
             },
       valueSource: valueKnown ? 'default' : 'unknown',
       transport: 'agent-session',

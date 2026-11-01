@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
@@ -39,16 +39,17 @@ export function ChatNamingSetting({
   onDirtyChange,
   forceVisible = false
 }: ChatNamingSettingProps): React.JSX.Element {
-  const config = normalizeSourceControlAiSettings(
-    settings.sourceControlAi,
-    settings.commitMessageAi
+  const config = useMemo(
+    () => normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi),
+    [settings.sourceControlAi, settings.commitMessageAi]
   )
   const recipe = config.actions?.conversationName
   const persisted: ActionRecipeDraftValue = {
     commandInputTemplate:
       recipe?.commandInputTemplate ??
       DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.conversationName,
-    agentArgs: recipe?.agentArgs ?? ''
+    agentArgs: recipe?.agentArgs ?? '',
+    modelChoice: config.modelOverridesByOperation?.conversationName
   }
   const [draft, setDraft] = useState<ActionRecipeDraftValue | null>(null)
   const [customCommandDraft, setCustomCommandDraft] = useState<string | null>(null)
@@ -92,7 +93,14 @@ export function ChatNamingSetting({
     setIsSaving(true)
     try {
       await writeSourceControlAiSettings((current) => ({
-        actions: setSourceControlActionDefault(current.actions, 'conversationName', value),
+        actions: setSourceControlActionDefault(current.actions, 'conversationName', {
+          commandInputTemplate: value.commandInputTemplate,
+          agentArgs: value.agentArgs
+        }),
+        modelOverridesByOperation: {
+          ...current.modelOverridesByOperation,
+          conversationName: value.modelChoice
+        },
         ...(customCommandDirty ? { customAgentCommand: customCommand } : {})
       }))
       if (!isMountedRef.current) {
@@ -207,6 +215,10 @@ export function ChatNamingSetting({
                 ) : null}
                 <SourceControlActionRecipeRow
                   actionId="conversationName"
+                  source={config}
+                  onTextModelChoiceChange={(_id, modelChoice, agentArgs) =>
+                    updateDraft({ ...value, modelChoice, agentArgs })
+                  }
                   selectedAgent={recipe?.agentId ?? null}
                   defaultAgentLabel={defaultAgentLabel}
                   defaultAgentSupportText={

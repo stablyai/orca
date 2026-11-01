@@ -29,6 +29,11 @@ export function useRepositoryActionPickerInputs(props: RepositorySourceControlAi
   })
   const actions = useMemo(
     () => ({
+      onActionTextModelChoice: (
+        ...args: Parameters<
+          NonNullable<RepositorySourceControlAiActionRowsProps['onActionTextModelChoice']>
+        >
+      ) => current.current.props.onActionTextModelChoice?.(...args),
       onActionModeChange: (
         ...args: Parameters<RepositorySourceControlAiActionRowsProps['onActionModeChange']>
       ) => current.current.props.onActionModeChange(...args),

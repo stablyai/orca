@@ -1,4 +1,7 @@
-import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
+import type {
+  SourceControlAiSettings,
+  SourceControlAiModelChoice
+} from '../../../../shared/source-control-ai-types'
 import { readActionModelSelection } from '../../../../shared/source-control-action-model-selection'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
@@ -9,6 +12,7 @@ import {
 } from '../../../../shared/source-control-ai-actions'
 
 export type ActionRecipeDraftValue = {
+  modelChoice?: SourceControlAiModelChoice
   commandInputTemplate: string
   agentArgs?: string
   argumentChoices?: SourceControlActionRecipe['argumentChoices']
@@ -25,12 +29,15 @@ function readActionRecipeInputValue(
   actionId: SourceControlActionId
 ): ActionRecipeDraftValue {
   const recipe = config.actions?.[actionId]
+  const choices: Partial<Record<string, SourceControlAiModelChoice>> =
+    config.modelOverridesByOperation ?? {}
   const value = recipe?.commandInputTemplate
   // Execution trims templates; preserve trailing spaces while the user types the next word.
   return {
     commandInputTemplate:
       typeof value === 'string' ? value : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId],
     agentArgs: recipe?.agentArgs,
+    modelChoice: choices[actionId],
     argumentChoices: recipe?.argumentChoices,
     ...(recipe?.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {})
   }

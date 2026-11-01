@@ -24,6 +24,17 @@ export function readSourceControlAiModelChoiceForHost(
   )
 }
 
+export function readSourceControlAiActionModelChoice(
+  choice: SourceControlAiModelChoice | null | undefined,
+  hostKey: string,
+  agentId: TuiAgent
+): string | undefined {
+  return (
+    choice?.selectedModelByAgent?.[agentId] ??
+    choice?.selectedModelByAgentByHost?.[hostKey]?.[agentId]
+  )
+}
+
 export function selectSourceControlAiModelChoiceForHost(
   choice: SourceControlAiModelChoice | undefined,
   hostKey: string,
@@ -123,12 +134,12 @@ export function selectPersistedModelId(args: {
   return (
     (operation === 'conversationName'
       ? undefined
-      : readSourceControlAiModelChoiceForHost(
+      : readSourceControlAiActionModelChoice(
           repoOverrides?.modelOverridesByOperation?.[operation],
           hostKey,
           agentId
         )) ??
-    readSourceControlAiModelChoiceForHost(
+    readSourceControlAiActionModelChoice(
       source.modelOverridesByOperation?.[operation],
       hostKey,
       agentId

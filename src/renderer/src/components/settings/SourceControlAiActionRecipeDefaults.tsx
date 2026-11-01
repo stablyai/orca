@@ -124,6 +124,7 @@ export function SourceControlAiActionRecipeDefaults({
     onActionAgentArgsChange,
     onActionLaunchPreferencesChange,
     retireActionAgentDocument,
+    onTextModelChoiceChange,
     saveActionTemplateDraft,
     discardActionTemplateDraft,
     appendVariable
@@ -225,6 +226,8 @@ export function SourceControlAiActionRecipeDefaults({
           const overrideSummary = overrideSummaries[actionId]
           return (
             <SourceControlActionRecipeRow
+              source={config}
+              onTextModelChoiceChange={onTextModelChoiceChange}
               setupDiscardSignal={customPromptDiscardSignal}
               key={actionId}
               actionId={actionId}

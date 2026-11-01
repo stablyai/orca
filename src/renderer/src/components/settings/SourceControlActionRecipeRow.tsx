@@ -1,3 +1,8 @@
+import { SourceControlTextActionAgentPicker } from './SourceControlTextActionAgentPicker'
+import type {
+  SourceControlAiSettings,
+  SourceControlAiModelChoice
+} from '../../../../shared/source-control-ai-types'
 import {
   useAgentPickerDraftScope,
   invalidateAgentPickerDrafts
@@ -5,28 +10,24 @@ import {
 import { canonicalSourceControlActionSelection } from '../../../../shared/source-control-action-selection'
 import type { ActionArgumentChoices } from '../../../../shared/source-control-action-argument-choices'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
-import { Terminal } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { CustomAgentId } from '../../../../shared/commit-message-agent-spec'
-import { CUSTOM_AGENT_ID, isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
+import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import {
   SOURCE_CONTROL_ACTION_LABELS,
   type SourceControlActionRecipe,
   type AiActionId,
   type SourceControlActionLaunchPreferences
 } from '../../../../shared/source-control-ai-actions'
-import { AgentIcon } from '@/lib/agent-catalog'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import type { ActionRecipeDraftValue } from './source-control-ai-action-recipe-draft'
 import {
   getActionDescriptions,
   AI_TEXT_ACTION_ID_SET,
-  getAgentCatalogForAction,
   getSourceControlActionAgentSupportText,
   getSourceControlActionAgentWarningText,
   getSourceControlAgentArgsPlaceholder
@@ -38,6 +39,12 @@ const DEFAULT_AGENT_VALUE = '__default_agent__'
 
 type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   actionId: ActionId
+  source?: SourceControlAiSettings
+  onTextModelChoiceChange?: (
+    actionId: ActionId,
+    choice: SourceControlAiModelChoice | undefined,
+    agentArgs: string
+  ) => void
   setupDiscardSignal?: number
   selectedAgent: TuiAgent | CustomAgentId | null
   draftValue: ActionRecipeDraftValue
@@ -88,6 +95,8 @@ function getActionLabel(actionId: AiActionId): string {
 
 export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   actionId,
+  source,
+  onTextModelChoiceChange,
   setupDiscardSignal,
   selectedAgent,
   draftValue,
@@ -118,7 +127,6 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
     getSourceControlAgentArgsPlaceholder(
       resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
     )
-  const agentOptions = getAgentCatalogForAction(actionId, selectedAgent)
   const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent)
   const agentSupportText =
     (!selectedAgent && defaultAgentSupportText) || getSourceControlActionAgentSupportText(actionId)
@@ -160,45 +168,19 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
               }
             />
           ) : (
-            <Select
-              value={selectedAgent ?? DEFAULT_AGENT_VALUE}
-              onValueChange={(value) => onAgentChange(actionId, value)}
-            >
-              <SelectTrigger size="sm" density="compact" className="h-8 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={DEFAULT_AGENT_VALUE}>
-                  <span className="flex items-center gap-2">
-                    <Terminal className="size-3.5 text-muted-foreground" />
-                    {defaultAgentLabel ??
-                      translate(
-                        'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
-                        'Use default agent'
-                      )}
-                  </span>
-                </SelectItem>
-                {AI_TEXT_ACTION_ID_SET.has(actionId) ? (
-                  <SelectItem value={CUSTOM_AGENT_ID}>
-                    <span className="flex items-center gap-2">
-                      <Terminal className="size-3.5 text-muted-foreground" />
-                      {translate(
-                        'auto.components.settings.SourceControlAiActionRecipeDefaults.0740d30915',
-                        'Custom command'
-                      )}
-                    </span>
-                  </SelectItem>
-                ) : null}
-                {agentOptions.map((agent) => (
-                  <SelectItem key={agent.id} value={agent.id}>
-                    <span className="flex items-center gap-2">
-                      <AgentIcon agent={agent.id} size={14} />
-                      {agent.label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SourceControlTextActionAgentPicker
+              actionId={actionId}
+              agent={selectedAgent}
+              source={source}
+              draft={draftValue}
+              draftScope={draftScope}
+              disabled={isSavingTemplate}
+              defaultAgentLabel={defaultAgentLabel}
+              onAgentChange={(value) => onAgentChange(actionId, value)}
+              onChange={(choice, agentArgs) =>
+                onTextModelChoiceChange?.(actionId, choice, agentArgs)
+              }
+            />
           )}
           {agentWarningText ? (
             <p className="text-[11px] text-destructive">{agentWarningText}</p>

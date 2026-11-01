@@ -13,10 +13,8 @@ import {
 import { toast } from 'sonner'
 import { startTransition, StrictMode, Suspense } from 'react'
 
-const state = vi.hoisted(() => ({ settingsSearchQuery: '' }))
-vi.mock('../../store', () => ({
-  useAppStore: (selector: (value: typeof state) => unknown) => selector(state)
-}))
+import { useAppStore } from '@/store'
+import './__fixtures__/settings-persistence-test-fixture'
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 afterEach(() => {
@@ -24,12 +22,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 beforeEach(() => {
-  state.settingsSearchQuery = ''
+  useAppStore.setState({ settingsSearchQuery: '' })
   vi.clearAllMocks()
 })
 
 function renderSetting(overrides: Partial<GlobalSettings> = {}, expand = true) {
   const settings = { ...getDefaultSettings('/tmp'), ...overrides }
+  useAppStore.setState({ settings })
   const updateSettings = vi.fn()
   const onDirtyChange = vi.fn()
   const writeSourceControlAiSettings = vi.fn(async (patch: SourceControlAiSettingsPatch) => {
@@ -80,9 +79,9 @@ describe('Chat names setting', () => {
       const samples: Record<string, typeof work> = {}
       const check = (phase: string, passes: number, reads: number) => {
         expect(work.copiedRows).toBeLessThanOrEqual(passes * size)
-        expect(work.copiedRows).toBeGreaterThanOrEqual(size)
+        expect(work.copiedRows).toBeGreaterThanOrEqual(passes ? size : 0)
         expect(work.copiedBytes).toBeLessThanOrEqual(passes * 64 * size)
-        expect(work.copiedBytes).toBeGreaterThanOrEqual(32 * size)
+        expect(work.copiedBytes).toBeGreaterThanOrEqual(passes ? 32 * size : 0)
         expect(work.selectedRowReads).toBeLessThanOrEqual(reads)
         if (reads) {
           expect(work.selectedRowReads).toBeGreaterThanOrEqual(size)
@@ -94,12 +93,14 @@ describe('Chat names setting', () => {
       reset()
       changeAgentArgs('--model fast')
       check('edit', 2, size + 1)
-      expect(screen.getByRole('combobox').textContent).toContain(
+      expect(screen.getByRole('button', { name: 'Select agent' }).textContent).toContain(
         'Use configured CLI agent (Claude)'
       )
       changeAgentArgs('')
-      check('clear', 1, 0)
-      expect(screen.getByRole('combobox').textContent).toContain('Use chat agent')
+      check('clear', 0, 0)
+      expect(screen.getByRole('button', { name: 'Select agent' }).textContent).toContain(
+        'Use chat agent'
+      )
       view.unmount()
       source.actions = { conversationName: { agentId: null, agentArgs: '--model fast' } }
       for (const enabled of [true, false]) {
@@ -108,7 +109,7 @@ describe('Chat names setting', () => {
           { defaultTuiAgent: 'claude', nativeChatAutoName: enabled, sourceControlAi: source },
           false
         )
-        expect(screen.queryByRole('combobox')).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Select agent' })).toBeNull()
         if (enabled) {
           expect(
             screen.getByRole('button', { name: 'Advanced' }).getAttribute('aria-expanded')
@@ -128,13 +129,15 @@ describe('Chat names setting', () => {
 
   it('keeps alternate-agent setup in Advanced and opens it for search', () => {
     const { element, rerender } = renderSetting({}, false)
-    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Select agent' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Advanced' }).getAttribute('aria-expanded')).toBe(
       'false'
     )
-    state.settingsSearchQuery = 'naming agent'
+    useAppStore.setState({ settingsSearchQuery: 'naming agent' })
     rerender(element())
-    expect(screen.getByRole('combobox').textContent).toContain('Use chat agent')
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).toContain(
+      'Use chat agent'
+    )
     expect(screen.getByRole('button', { name: 'Advanced' }).hasAttribute('disabled')).toBe(true)
   })
 
@@ -155,9 +158,12 @@ describe('Chat names setting', () => {
         actions: { conversationName: { agentId: 'codex', agentArgs: '--model haiku' } }
       })
     })
-    expect(screen.getByRole('combobox').textContent).toContain('Codex')
-    fireEvent.click(screen.getByRole('combobox'))
-    fireEvent.click(screen.getByRole('option', { name: 'Use configured CLI agent (Claude)' }))
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).toContain('Codex')
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+      button: 0,
+      ctrlKey: false
+    })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Use configured CLI agent (Claude)' }))
     await waitFor(() =>
       expect(settings.sourceControlAi?.actions?.conversationName).toMatchObject({
         agentId: null,
@@ -165,10 +171,14 @@ describe('Chat names setting', () => {
       })
     )
     rerender(element())
-    expect(screen.getByRole('combobox').textContent).toContain('Use configured CLI agent (Claude)')
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).toContain(
+      'Use configured CLI agent (Claude)'
+    )
     expect(screen.getByText('Clear CLI arguments to use each chat’s agent.')).toBeTruthy()
     changeAgentArgs('')
-    expect(screen.getByRole('combobox').textContent).toContain('Use chat agent')
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).toContain(
+      'Use chat agent'
+    )
   })
 
   it('saves CLI arguments and a template through the shared writer', async () => {
@@ -202,8 +212,11 @@ describe('Chat names setting', () => {
         actions: { commitMessage: { commandInputTemplate: 'Keep this' } }
       })
     })
-    fireEvent.click(screen.getByRole('combobox'))
-    fireEvent.click(screen.getByRole('option', { name: 'Custom command' }))
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+      button: 0,
+      ctrlKey: false
+    })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Custom command' }))
     await waitFor(() => {
       expect(settings.sourceControlAi?.actions?.conversationName?.agentId).toBe('custom')
     })
@@ -227,7 +240,7 @@ describe('Chat names setting', () => {
     const { settings, element, rerender, onDirtyChange } = renderSetting()
     changeTemplate('Keep my edits')
     settings.nativeChatAutoName = false
-    state.settingsSearchQuery = 'unmatched search'
+    useAppStore.setState({ settingsSearchQuery: 'unmatched search' })
     rerender(element())
     expect(screen.getByDisplayValue('Keep my edits')).toBeTruthy()
     expect(onDirtyChange).toHaveBeenLastCalledWith(true)

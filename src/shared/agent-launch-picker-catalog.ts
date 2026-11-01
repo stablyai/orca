@@ -27,6 +27,20 @@ export function agentPickerEntryOptions(
   model: string | undefined,
   surface: AgentPickerSurface
 ): CatalogOption[] {
+  if (entry.textGeneration) {
+    const live = agentPickerModels(entry).find((row) => row.id === (model ?? entry.terminal.model))
+    return live?.efforts.length
+      ? [
+          {
+            id: 'effort',
+            label: 'Reasoning effort',
+            category: 'thought_level',
+            kind: { type: 'select', choices: live.efforts, defaultValue: live.defaultEffort ?? '' },
+            apply: {}
+          }
+        ]
+      : []
+  }
   let options = agentPickerOptions(entry.agent, model, surface)
   const live = agentPickerModels(entry).find(
     (row) => row.id === model || (model === undefined && row.isDefault)
