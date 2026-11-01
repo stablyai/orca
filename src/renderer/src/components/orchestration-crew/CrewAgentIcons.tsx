@@ -18,7 +18,7 @@ import type { AgentMessageSenderView } from '../../../../shared/agent-session/ag
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-export type CrewRowLook = { status: WorktreeStatus; agentType: string }
+export type CrewRowLook = { partyKey: string; status: WorktreeStatus; agentType: string }
 export type CrewStatusGroup = 'needsYou' | 'working' | 'idle' | 'failed'
 export const CREW_STATUS_GROUPS: readonly CrewStatusGroup[] = [
   'needsYou',
@@ -78,17 +78,19 @@ function dotStatus(dot: NonNullable<AgentMessageSenderView['dot']>): WorktreeSta
 /** The sidebar's status for a Crew row: live sender state first, then the Crew snapshot. */
 function crewRowLook(row: OrchestrationCrewRow, view: AgentMessageSenderView): CrewRowLook {
   const agentType = view.agentType ?? row.agentKind
+  const { partyKey } = row
   if (row.pendingQuestion) {
-    return { status: 'permission', agentType }
+    return { partyKey, status: 'permission', agentType }
   }
   if (view.dot) {
-    return { status: dotStatus(view.dot), agentType }
+    return { partyKey, status: dotStatus(view.dot), agentType }
   }
   const status = isAgentStatusState(row.status)
     ? mapAgentStatusStateToVisualStatus(row.status)
     : 'inactive'
   // A settled assignment whose task failed is a failure, not a quiet finish.
   return {
+    partyKey,
     status: status === 'done' && row.task?.state === 'failed' ? 'failed' : status,
     agentType
   }
@@ -193,7 +195,7 @@ export function CrewAgentStack({
     <span className="inline-flex items-center">
       {shown.map((look, index) => (
         <span
-          key={index}
+          key={look.partyKey}
           className={cn(
             'relative inline-flex size-4 items-center justify-center rounded-full bg-background',
             index > 0 && '-ml-1.5'

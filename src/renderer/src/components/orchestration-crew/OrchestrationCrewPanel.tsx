@@ -241,7 +241,7 @@ export function CrewPanelContent({
               ref={tab}
               variant="outline"
               size="xs"
-              className="pointer-events-auto absolute top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] right-0 h-auto max-w-full gap-1.5 py-1"
+              className="pointer-events-auto absolute top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] right-0 max-w-full"
               aria-label={translate(
                 'components.orchestrationCrew.show',
                 'Show orchestration: {{counts}}',
@@ -251,14 +251,14 @@ export function CrewPanelContent({
               onClick={() => changeOpen(true)}
             >
               <PanelRight />
-              <span aria-hidden className="h-3.5 w-px shrink-0 bg-border" />
+              <span aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
               <span aria-hidden className="inline-flex items-center gap-0.5 text-muted-foreground">
                 <Workflow className="size-3" />
                 {managing.length > 0 ? (
                   <span className="text-[11px] tabular-nums">{managing.length}</span>
                 ) : null}
               </span>
-              <span aria-hidden className="inline-flex min-w-0 items-center gap-1">
+              <span aria-hidden className="ml-0.5 inline-flex min-w-0 items-center gap-1">
                 {summary.groups.map(({ group, looks: members }) => (
                   <span
                     key={group}
