@@ -13,7 +13,7 @@ function textareaFrom(node: TextInput | null): HTMLTextAreaElement | HTMLInputEl
 export function useMobileTerminalComposerImagePaste(args: {
   readonly enabled: boolean
   readonly fieldRefs: readonly RefObject<TextInput | null>[]
-  readonly onImagePaste: () => void | Promise<void>
+  readonly onImagePaste: (mode?: 'image') => void | Promise<void>
   readonly readClipboardImage: () => Promise<{ base64: string } | null>
 }): boolean {
   const argsRef = useRef(args)
@@ -64,7 +64,7 @@ export function useMobileTerminalComposerImagePaste(args: {
       event.preventDefault()
       startPaste()
       if (claimed.kind === 'files') {
-        void Promise.resolve(argsRef.current.onImagePaste()).finally(finishPaste)
+        void Promise.resolve(argsRef.current.onImagePaste('image')).finally(finishPaste)
         return
       }
       // An empty textarea paste is how iOS hides a pasteboard image. No image means a no-op.
@@ -72,11 +72,13 @@ export function useMobileTerminalComposerImagePaste(args: {
         .readClipboardImage()
         .then((image) => {
           if (image) {
-            return argsRef.current.onImagePaste()
+            return argsRef.current.onImagePaste('image')
           }
           return undefined
         })
+        .catch(() => argsRef.current.onImagePaste('image'))
         .finally(finishPaste)
+        .catch(() => undefined)
     }
     document.addEventListener('paste', onPaste, true)
     return () => document.removeEventListener('paste', onPaste, true)

@@ -5,7 +5,7 @@ import type { TextInput } from 'react-native'
 export function useMobileTerminalComposerImagePaste(_args: {
   readonly enabled: boolean
   readonly fieldRefs: readonly RefObject<TextInput | null>[]
-  readonly onImagePaste: () => void | Promise<void>
+  readonly onImagePaste: (mode?: 'image') => void | Promise<void>
   readonly readClipboardImage: () => Promise<{ base64: string } | null>
 }): boolean {
   return false

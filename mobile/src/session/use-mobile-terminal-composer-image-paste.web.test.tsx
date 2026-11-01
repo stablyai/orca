@@ -7,7 +7,7 @@ import { useMobileTerminalComposerImagePaste } from './use-mobile-terminal-compo
 
 function Harness(props: {
   field: HTMLTextAreaElement
-  onImagePaste: () => Promise<void>
+  onImagePaste: (mode?: 'image') => Promise<void>
   readClipboardImage: () => Promise<{ base64: string } | null>
   onPending: (pending: boolean) => void
 }) {
@@ -31,12 +31,16 @@ describe('useMobileTerminalComposerImagePaste', () => {
       release = resolve
     })
     let pending = false
+    let mode: 'image' | undefined
     let renderer!: ReactTestRenderer
     await act(async () => {
       renderer = create(
         createElement(Harness, {
           field,
-          onImagePaste: () => paste,
+          onImagePaste: (next) => {
+            mode = next
+            return paste
+          },
           readClipboardImage: async () => null,
           onPending: (next) => {
             pending = next
@@ -50,11 +54,43 @@ describe('useMobileTerminalComposerImagePaste', () => {
       field.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, clipboardData: transfer }))
     })
     expect(pending).toBe(true)
+    expect(mode).toBe('image')
     await act(async () => {
       release()
       await paste
     })
     expect(pending).toBe(false)
+    renderer.unmount()
+    field.remove()
+  })
+
+  it('clears pending when the clipboard image read rejects', async () => {
+    const field = document.createElement('textarea')
+    document.body.append(field)
+    let pending = false
+    let mode: 'image' | undefined
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(
+        createElement(Harness, {
+          field,
+          onImagePaste: async (next) => {
+            mode = next
+          },
+          readClipboardImage: async () => {
+            throw new Error('clipboard read failed')
+          },
+          onPending: (next) => {
+            pending = next
+          }
+        })
+      )
+    })
+    await act(async () => {
+      field.dispatchEvent(new ClipboardEvent('paste', { bubbles: true }))
+    })
+    expect(pending).toBe(false)
+    expect(mode).toBe('image')
     renderer.unmount()
     field.remove()
   })
