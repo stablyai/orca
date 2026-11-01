@@ -325,6 +325,67 @@ describe('a new chat picker’s first frame', () => {
     view.unmount()
   })
 
+  it('codex: a refresh keeps the CLI-default effort a running chat shows', async () => {
+    mocks.coherent = true
+    const efforts = [
+      { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' },
+      { value: 'xhigh', label: 'Extra high' }
+    ]
+    const gpt = {
+      id: 'gpt-5.5',
+      label: 'GPT-5.5',
+      isDefault: true,
+      defaultEffort: 'medium',
+      efforts
+    }
+    let raw: AgentSessionModelCatalogResult = { origin: 'probe', models: [gpt], fetchedAt: 1_000 }
+    const next = deferred<AgentSessionModelCatalogResult>()
+    mocks.call.mockImplementation(
+      (_target: unknown, method: string, params: { waitForListing?: boolean }) =>
+        method === 'agentSession.options'
+          ? Promise.resolve({ models: [gpt], current: { model: 'gpt-5.5', defaulted: [] } })
+          : method === 'agentSession.modelCatalog'
+            ? params.waitForListing
+              ? next.promise
+              : Promise.resolve(raw)
+            : new Promise(() => {})
+    )
+    const view = renderHook(() =>
+      useStructuredAgentSessionOptions({
+        agent: 'codex',
+        sessionId: 'codex-default-effort',
+        target: LOCAL_TARGET,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence: 1,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate: vi.fn()
+      })
+    )
+    const effort = () => view.result.current.optionSnapshot.find((row) => row.id === 'effort')
+    const medium = {
+      settable: true,
+      valueSource: 'default',
+      kind: { currentValue: 'medium' }
+    }
+    await waitFor(() => expect(effort()).toMatchObject(medium))
+    // The refresh also lists a model no finished listing has verified for this chat.
+    const unverified = { ...gpt, id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', isDefault: false }
+    raw = { ...raw, models: [gpt, unverified], listingInProgress: true }
+    await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
+    expect(effort()).toMatchObject(medium)
+    expect(view.result.current.sendSource.optionStateRef.current.verifiedModelIds).toEqual([
+      'gpt-5.5'
+    ])
+    await act(async () => next.resolve({ origin: 'probe', models: [gpt], fetchedAt: 2_000 }))
+    await waitFor(() => expect(effort()).toMatchObject(medium))
+    view.unmount()
+  })
+
   it('grok: a running chat keeps its own effort menu while the picker rejoins a host listing', async () => {
     mocks.coherent = true
     const efforts = [

@@ -152,6 +152,10 @@ export function applyStructuredAgentSessionModelCatalog(
   const namesDefault =
     options.newLaunch &&
     (catalog.listingNamesConfiguredModel ?? seed.hostListingNamesConfiguredModel === true)
+  // A running listing keeps what a finished one verified and its rows still show.
+  const verifiedModelIds = catalog.listingInProgress
+    ? state.verifiedModelIds?.filter((id) => models.some((model) => model.id === id))
+    : finishedListingIds(catalog)
   return {
     ...state,
     // Real-listing defaults are nameable but provisional, never confirmed picks.
@@ -160,7 +164,7 @@ export function applyStructuredAgentSessionModelCatalog(
       models,
       ...(namesDefault ? { defaultModelIsCliDefault: true } : {})
     },
-    ...(installed ? { verifiedModelIds: finishedListingIds(catalog) } : {}),
+    ...(installed ? { verifiedModelIds } : {}),
     catalogSource: state.catalogSource === 'live' ? 'live' : 'host',
     acceptedInputSources: state.optionsAnswerPresent
       ? state.acceptedInputSources
