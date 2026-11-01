@@ -148,6 +148,7 @@ export function buildDefaultSettings(args: {
     // New chats of agents on their own settings; others start in their agent permission.
     nativeChatPermissionMode: 'full-access',
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
+    fileExplorerOpenInApplicationId: null,
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     followSymlinkedDirectories: false,

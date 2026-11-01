@@ -219,6 +219,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatPermissionMode?: AgentChatPermissionMode
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
+  /** Open In app that a File Explorer click opens files in; absent, null or an unknown id means the Orca editor. */
+  fileExplorerOpenInApplicationId?: string | null
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
   followSymlinkedDirectories?: boolean

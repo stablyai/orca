@@ -14,7 +14,10 @@ import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quic
 import { assertTerminalQuickCommandsStorable } from '../../../../shared/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
-import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
+import {
+  normalizeOpenInApplicationId,
+  normalizeOpenInApplications
+} from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { isRuntimeCatalogListingStale } from './runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
@@ -97,6 +100,11 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications, {
       createId: createBrowserUuid
     })
+  }
+  if ('fileExplorerOpenInApplicationId' in updates) {
+    sanitizedUpdates.fileExplorerOpenInApplicationId = normalizeOpenInApplicationId(
+      updates.fileExplorerOpenInApplicationId
+    )
   }
   if ('nativeChatAppearance' in updates) {
     sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
