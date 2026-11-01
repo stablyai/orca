@@ -13400,7 +13400,8 @@
           "worktreeCreated": "When a workspace is created",
           "worktreeRemoved": "When a workspace is removed",
           "agentStatusChanged": "When an agent’s status changes",
-          "detail": "Background code runs"
+          "detail": "Background code runs",
+          "workspaceChanged": "When you switch workspace or its terminals change"
         },
         "pluginInstallAction": {
           "installed": "{{value0}} installed",
