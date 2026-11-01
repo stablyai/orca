@@ -21,7 +21,7 @@ describe('workspace activity summary subscriptions', () => {
         const work: Work = { statuses: 0, tabs: 0 }
         let counting = false
         // Counts each read of a status entry or chat tab, whichever code scans it.
-        const countReads = (record: Record<string | number, unknown>, key: keyof Work) => {
+        const countReads = (record: object, key: keyof Work) => {
           for (const property of Object.keys(record)) {
             const descriptor = Object.getOwnPropertyDescriptor(record, property)
             let value = descriptor?.get ? descriptor.get.call(record) : descriptor?.value
@@ -46,7 +46,7 @@ describe('workspace activity summary subscriptions', () => {
           const state = useAppStore.getState()
           countReads(state.agentStatusByPaneKey, 'statuses')
           for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
-            countReads(tabs as unknown as Record<number, unknown>, 'tabs')
+            countReads(tabs, 'tabs')
           }
           counting = wasCounting
         }
