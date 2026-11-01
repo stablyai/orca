@@ -378,3 +378,46 @@ it('reuses per-host history fingerprints on automatic refresh while manual refre
   expect(requests().at(-1)?.[1]).toHaveProperty('force', true)
   expect(probe.read().history).toEqual([])
 })
+
+it('keeps informational record notices out of the loading-failure state', async () => {
+  const { client, sendRequest } = replies()
+  sendRequest.mockImplementation(async (method) => ({
+    id: 'notice',
+    ok: true,
+    result:
+      method === 'status.get'
+        ? { capabilities: ['aiVault.v1'] }
+        : method === 'aiVault.listSessions'
+          ? {
+              sessions: [conversationHistory()],
+              includesStructuredSessions: true,
+              issues: [{ kind: 'notice', message: 'Skipped 2 oversized transcript records.' }]
+            }
+          : { tabs: [] }
+  }))
+  const probe = await mount(source(client))
+  expect(probe.read().history).toHaveLength(1)
+  expect(probe.read().complete).toBe(true)
+  expect(probe.read().failed).toBe(false)
+})
+
+it.each(['host', 'scope', undefined])('keeps %s history failures actionable', async (kind) => {
+  const { client, sendRequest } = replies()
+  sendRequest.mockImplementation(async (method) => ({
+    id: 'failure',
+    ok: true,
+    result:
+      method === 'status.get'
+        ? { capabilities: ['aiVault.v1'] }
+        : method === 'aiVault.listSessions'
+          ? {
+              sessions: [conversationHistory()],
+              includesStructuredSessions: true,
+              issues: [{ kind, message: 'History source unavailable' }]
+            }
+          : { tabs: [] }
+  }))
+  const probe = await mount(source(client))
+  expect(probe.read().failed).toBe(true)
+  expect(probe.read().complete).toBe(false)
+})

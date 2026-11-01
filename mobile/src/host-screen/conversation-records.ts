@@ -70,3 +70,9 @@ export function readConversationTabs(value: unknown): ConversationTab[] {
       return parsed.success ? [parsed.data] : []
     })
 }
+
+const noticeSchema = z.object({ kind: z.literal('notice') })
+
+export function isConversationHistoryNotice(issue: unknown): boolean {
+  return noticeSchema.safeParse(issue).success
+}

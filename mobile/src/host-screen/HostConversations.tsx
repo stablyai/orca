@@ -10,6 +10,7 @@ import { StatusDot } from '../components/StatusDot'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { ConversationAgentSheet } from './conversation-agent-sheet'
 import { ConversationSidebarOptions } from './conversation-sidebar-options'
+import { ConversationHistoryLoadStatus } from './ConversationHistoryLoadStatus'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
 import type { HostScreenController } from './use-host-screen-controller'
@@ -198,16 +199,12 @@ export function HostConversations({
           {error || state.actionError || conversationPreferences.error}
         </Text>
       ) : null}
-      {data.failed || state.catalogError ? <Text style={styles.notice}>{copy.failed}</Text> : null}
-      {data.loading ? (
-        <ActivityIndicator
-          style={styles.spinner}
-          color={colors.textMuted}
-          accessibilityLabel={copy.loading}
-        />
-      ) : !data.complete && connected ? (
-        <Text style={styles.notice}>{copy.legacy}</Text>
-      ) : null}
+      <ConversationHistoryLoadStatus
+        loading={data.loading}
+        failed={data.failed || Boolean(state.catalogError)}
+        connected={connected}
+        onRefresh={data.onRefresh}
+      />
       <SectionList
         sections={sections}
         keyExtractor={(row) => row.key}

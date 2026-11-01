@@ -11,6 +11,7 @@ import {
 } from '../transport/execution-host-scoped-rpc-client'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
+import { isConversationHistoryNotice } from './conversation-records'
 import { sessionTabsListRead } from '../session/mobile-session-read-operations'
 import type { HostScreenController } from './use-host-screen-controller'
 import {
@@ -157,10 +158,13 @@ export function useProjectConversations(controller: ProjectConversationsSource) 
                 return
               }
               next.historyByHost.set(sourceHost, history)
-              if (!history.includesStructuredSessions || history.issues.length > 0) {
+              const historyFailed = history.issues.some(
+                (issue) => !isConversationHistoryNotice(issue)
+              )
+              if (!history.includesStructuredSessions || historyFailed) {
                 next.complete = false
               }
-              next.failed ||= history.issues.length > 0
+              next.failed ||= historyFailed
               next.history.push(
                 ...history.sessions.map((session) => ({
                   ...session,

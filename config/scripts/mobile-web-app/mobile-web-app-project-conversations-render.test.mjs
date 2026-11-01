@@ -169,8 +169,8 @@ afterAll(async () => {
   }
 })
 
-async function open(replies = REPLIES) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, locale: 'ru-RU' })
+async function open(replies = REPLIES, locale = 'ru-RU') {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, locale })
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.addInitScript(installShellDouble, {
@@ -333,7 +333,7 @@ describeRender('the actual mobile project conversation list', () => {
         includesStructuredSessions: undefined
       }
     })
-    await page.getByText('Этот хост показывает открытые чаты', { exact: false }).waitFor()
+    expect(await page.locator('body').innerText()).not.toMatch(/Обновите Orca|Этот хост показывает/)
     await page.getByRole('button', { name: 'Другие действия', exact: true }).click()
     await page.getByText('Дополнительно: рабочие каталоги', { exact: true }).click()
     await page.getByText('К проектам', { exact: true }).waitFor()
@@ -343,6 +343,56 @@ describeRender('the actual mobile project conversation list', () => {
     await page
       .getByRole('button', { name: 'Clearer conversation navigation', exact: true })
       .waitFor()
+    expect(errors).toEqual([])
+    await page.close()
+  }, 60_000)
+})
+
+describeRender('mobile history diagnostics', () => {
+  it('does not present informational record notices as missing chats or an upgrade requirement', async () => {
+    const { page, errors } = await open(
+      {
+        ...REPLIES,
+        'aiVault.listSessions': {
+          ...REPLIES['aiVault.listSessions'],
+          issues: [{ kind: 'notice', message: 'Skipped 2 oversized transcript records.' }]
+        }
+      },
+      'en-US'
+    )
+    await proof(page, 'history-notice')
+    const text = await page.locator('body').innerText()
+    expect(text).not.toMatch(/Some conversations|Could not refresh|Update Orca|This host lists/)
+    expect(await page.getByTestId('conversation-row').count()).toBe(5)
+    expect(errors).toEqual([])
+    await page.close()
+  }, 60_000)
+
+  it('keeps a real history failure visible with a working refresh button and no upgrade claim', async () => {
+    const { page, errors } = await open(
+      {
+        ...REPLIES,
+        'aiVault.listSessions': {
+          ...REPLIES['aiVault.listSessions'],
+          issues: [{ kind: 'host', message: 'History source unavailable' }]
+        }
+      },
+      'en-US'
+    )
+    await page.getByText('Could not refresh the full chat list.', { exact: true }).waitFor()
+    await proof(page, 'history-failure-retry')
+    expect(await page.locator('body').innerText()).not.toContain('Update Orca')
+    const before = (await requests(page)).filter(
+      (request) => request.method === 'aiVault.listSessions'
+    ).length
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await expect
+      .poll(
+        async () =>
+          (await requests(page)).filter((request) => request.method === 'aiVault.listSessions')
+            .length
+      )
+      .toBeGreaterThan(before)
     expect(errors).toEqual([])
     await page.close()
   }, 60_000)
