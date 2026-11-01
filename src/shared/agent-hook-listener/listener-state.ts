@@ -50,7 +50,7 @@ export type HookListenerState = {
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
   /** One-normalization provenance marker for a status backed only by restored child state. */
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
-  /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
+  /** Panes whose latest authoritative Claude task inventory, or a shell launched since, still has running non-agent work. */
   claudeRunningNonAgentTaskPaneKeys: Set<string>
   /** Running non-agent ids when the latest inventory listed them all (possibly none); notifications and launches keep it current. */
   claudeRunningNonAgentTaskIdsByPaneKey: Map<string, ReadonlySet<string>>

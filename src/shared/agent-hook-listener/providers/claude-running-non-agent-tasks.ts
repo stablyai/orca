@@ -49,7 +49,8 @@ export function retireClaudeNonAgentTask(
   if (!running?.has(taskId)) {
     return
   }
-  const rest = new Set([...running].filter((id) => id !== taskId))
+  const rest = new Set(running)
+  rest.delete(taskId)
   state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, rest)
   if (rest.size === 0) {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)

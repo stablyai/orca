@@ -7,13 +7,16 @@ import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
-import type {
-  ClaudeBackgroundEvidence,
-  EnrichedAgentHookEventPayload,
-  NormalizedLocalHook
-} from './server-types'
+import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
+
+/** A pane's Claude background-work gate, snapshotted so a rejected hook can be undone whole. */
+type ClaudeBackgroundEvidence = {
+  hasRunningTask: boolean
+  runningTaskIds: ReadonlySet<string> | undefined
+  hasActiveCron: boolean
+}
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
   protected override applyNormalizedStatus(
