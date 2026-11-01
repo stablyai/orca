@@ -157,7 +157,7 @@ describe('buildDashboardSnapshot rows cache', () => {
     ['unconfirmed', 'unconfirmed'],
     ['success', 'idle']
   ] as const)(
-    'preserves %s through snapshot admission without changing columns',
+    'preserves %s through snapshot admission and settles acknowledged turns in done',
     (outcome, mark) => {
       const state = baseState({
         agentStatusByPaneKey: {
@@ -173,8 +173,8 @@ describe('buildDashboardSnapshot rows cache', () => {
       expect(admitted?.droppedCardCount).toBe(0)
       const card = admitted!.snapshot.cards[0]
       expect(dashboardCardDisplayState(card)).toBe(mark)
-      expect(card.bucket).toBe('idle')
-      expect(buildDashboardBucketCounts(state, NOW).idle).toBe(1)
+      expect(card.bucket).toBe('done')
+      expect(buildDashboardBucketCounts(state, NOW).done).toBe(1)
       for (const acknowledgedAgentsByPaneKey of [{}, { [PANE_1]: NOW }]) {
         const aged = buildDashboardSnapshot(
           { ...state, acknowledgedAgentsByPaneKey },

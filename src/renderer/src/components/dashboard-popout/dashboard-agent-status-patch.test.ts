@@ -63,7 +63,7 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
             ? 'failed'
             : 'unconfirmed'
       )
-      expect(patched.cards[0].bucket).toBe('done')
+      expect(patched.cards[0].bucket).toBe('attention')
       for (const interrupted of [undefined, false]) {
         const cleared = patchDashboardSnapshotFromAgentStatus(
           patched,

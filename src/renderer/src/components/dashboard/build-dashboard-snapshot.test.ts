@@ -488,7 +488,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].ptyId).toBeNull()
   })
 
-  it('moves an acknowledged completion to idle while retaining its raw done state', () => {
+  it('keeps an acknowledged completion in done while retaining its raw done state', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
         agentStatusByPaneKey: { [PANE_KEY]: entry({ state: 'done' }) },
@@ -499,7 +499,7 @@ describe('buildDashboardSnapshot', () => {
     // ack (NOW-1000) is after stateStartedAt (NOW-5000) → seen.
     expect(snapshot.cards[0].unseen).toBe(false)
     expect(snapshot.cards[0].dotState).toBe('done')
-    expect(snapshot.cards[0].bucket).toBe('idle')
+    expect(snapshot.cards[0].bucket).toBe('done')
   })
 
   it('does not mark title-derived rows unseen from synthetic timestamps', () => {
@@ -551,7 +551,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].dotState).toBe('idle')
   })
 
-  it('routes retained done agents to the done bucket', () => {
+  it('routes unseen done agents to the attention bucket', () => {
     const donePaneKey = makePaneKey(TAB_ID, GONE_LEAF_ID)
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -569,7 +569,7 @@ describe('buildDashboardSnapshot', () => {
     )
     const done = snapshot.cards.find((c) => c.dotState === 'done')
     expect(done).toBeDefined()
-    expect(done?.bucket).toBe('done')
+    expect(done?.bucket).toBe('attention')
   })
 
   it('includes collapsed subagents and workspace status metadata on the parent card', () => {
