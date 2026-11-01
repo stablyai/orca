@@ -71,6 +71,8 @@ function makeInput(review: HostedReviewInfo): EntryRefreshInput {
     linkedGitLabMR: review.provider === 'gitlab' ? review.number : null,
     linkedPR: null,
     mountedRef: { current: true },
+    panelContextKey: 'context-a',
+    panelContextKeyRef: { current: 'context-a' },
     pollIntervalRef: { current: 30_000 },
     pr: null,
     prCacheKey: 'cache',
@@ -212,4 +214,20 @@ it('GitHub post-write refresh cannot reuse a pre-write PR read', async () => {
   expect(refreshPRNow).toHaveBeenCalledTimes(2)
   expect(refreshPRNow).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
   expect(useAppStore.getState().prCache[key]?.data).toEqual(afterWrite)
+})
+
+it('GitLab post-write details are not committed after the panel switched to another review', async () => {
+  const cardRead = Promise.withResolvers<HostedReviewInfo | null>()
+  const input = makeInput(gitLabReview)
+  input.fetchHostedReviewForBranch = vi.fn(() => cardRead.promise)
+  const { result } = renderHook(() => useChecksPanelEntryRefreshAndTitleActions(input))
+
+  const settle = result.current.refreshHostedReviewAfterMutation()
+  // The user moves to another repo/MR while the failed write's reread is in flight.
+  input.panelContextKeyRef.current = 'context-b'
+  cardRead.resolve(gitLabReview)
+  await act(async () => settle)
+
+  const [{ isRequestCurrent }] = vi.mocked(input.fetchGitLabDetails).mock.calls[0]!
+  expect(isRequestCurrent?.()).toBe(false)
 })

@@ -41,6 +41,8 @@ type ChecksPanelEntryRefreshAndTitleActionsInput = Pick<
     | 'fetchPRForBranch'
     | 'isPanelVisible'
     | 'mountedRef'
+    | 'panelContextKey'
+    | 'panelContextKeyRef'
     | 'pollIntervalRef'
     | 'prevChecksRef'
     | 'repo'
@@ -84,6 +86,8 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     linkedGitLabMR,
     linkedPR,
     mountedRef,
+    panelContextKey,
+    panelContextKeyRef,
     pollIntervalRef,
     pr,
     prCacheKey,
@@ -207,6 +211,9 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       return
     }
     // The read must start after the write rather than join an older poll; its failure is not the write's.
+    // Details read the panel's current MR, so a write that settles after a repo/MR switch must not commit them.
+    const requestContextKey = panelContextKey
+    const isRequestCurrent = (): boolean => panelContextKeyRef.current === requestContextKey
     if (activeReview?.provider === 'gitlab') {
       const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
@@ -227,7 +234,8 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         await fetchGitLabDetails({
           mrNumberOverride: refreshedGitLabReview.number,
           headShaOverride: refreshedGitLabReview.headSha,
-          commitAsCurrent: true
+          commitAsCurrent: true,
+          isRequestCurrent
         })
       }
       return
@@ -268,6 +276,8 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     linkedGiteaPR,
     linkedGitLabMR,
     linkedPR,
+    panelContextKey,
+    panelContextKeyRef,
     repo
   ])
 

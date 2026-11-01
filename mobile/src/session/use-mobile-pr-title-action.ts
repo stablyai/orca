@@ -68,20 +68,26 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
         const outcome = await mutations.updateTitle({ ...params, prRepo })
         if (outcome.ok) {
           triggerSuccess()
-          await refetch()
           return true
         }
         triggerError()
         setError(outcome.error)
         return false
       } catch (err) {
-        // Contain fire-and-forget save/refetch rejection and return false with feedback.
+        // Contain fire-and-forget save rejection and return false with feedback.
         triggerError()
         setError(err instanceof Error ? err.message : { kind: 'updateFailed' })
         return false
       } finally {
         inFlightRef.current = false
         setSaving(false)
+        // Why: a failed response doesn't prove the host kept the old title, so every attempted write rereads.
+        // The write decides Save's result; a failed reread is contained.
+        try {
+          await refetch()
+        } catch {
+          // Keep the write's outcome.
+        }
       }
     },
     [ready, mutations, prNumber, prRepo, refetch]

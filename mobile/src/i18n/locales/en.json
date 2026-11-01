@@ -2211,7 +2211,6 @@
       "notesSent": "Notes sent"
     },
     "prActionsEngine": {
-      "refreshFailed": "Failed to refresh pull request.",
       "mergeFailed": "Failed to merge pull request."
     },
     "prAiTriageLaunch": {

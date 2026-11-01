@@ -2199,8 +2199,7 @@
       "promptUnconfirmed": "El agente se inició, pero no se pudo confirmar el envío del prompt."
     },
     "prActionsEngine": {
-      "mergeFailed": "No se pudo hacer merge de la pull request.",
-      "refreshFailed": "No se pudo actualizar la pull request."
+      "mergeFailed": "No se pudo hacer merge de la pull request."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agente iniciado",
