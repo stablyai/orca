@@ -1,4 +1,4 @@
-import { AGENT_SESSION_DEFAULT_MODEL_CAPABILITY } from './agent-session-default-model'
+import { AGENT_SESSION_DEFAULT_MODEL_CAPABILITY } from '../agent-session-default-model'
 import { AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES } from './agent-session-attention-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from './agent-session-continue-interrupted-capability'

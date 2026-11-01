@@ -1,4 +1,4 @@
-export type { AgentSessionOptionResult } from './agent-session/options/agent-session-options-result'
+export type { AgentSessionOptionResult } from './options/agent-session-options-result'
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
 import type { AgentSessionCurrentWorkFields } from './requests/agent-session-current-work-wire'
