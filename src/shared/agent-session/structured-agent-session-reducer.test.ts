@@ -7,7 +7,8 @@ import type { AgentSessionHistoryPage, AgentSessionLatestTurn } from './agent-se
 import { runningStructuredAgentSessionTurnId } from './view/structured-agent-session-live-turn'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
-  reduceStructuredAgentSession
+  reduceStructuredAgentSession,
+  type StructuredAgentSessionState
 } from './structured-agent-session-reducer'
 
 function item(id: string, sequence: number): AgentJournalRenderItem {
@@ -577,6 +578,49 @@ describe('structured agent session reducer', () => {
 
     expect(cleared.activity).toBeNull()
     expect(cleared.items).toBe(active.items)
+  })
+
+  it('keeps a prompt suggestion until a frame clears or replaces it', () => {
+    const snapshot = (promptSuggestion?: string) =>
+      ({
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('message', 1)]),
+        ...(promptSuggestion ? { promptSuggestion } : {})
+      }) as const
+    const batch = (
+      state: StructuredAgentSessionState,
+      fields: { promptSuggestion?: string | null }
+    ) =>
+      reduceStructuredAgentSession(state, {
+        type: 'event',
+        event: {
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: { cursor: state.cursor!, items: [], removedItemIds: [], submissions: [] },
+          ...fields
+        }
+      })
+    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: snapshot()
+    })
+    const suggested = batch(initial, { promptSuggestion: 'add a test' })
+    expect(suggested.promptSuggestion).toBe('add a test')
+    expect(suggested.items).toBe(initial.items)
+    expect(batch(suggested, {})).toBe(suggested)
+    expect(batch(suggested, { promptSuggestion: null }).promptSuggestion).toBeNull()
+
+    const restated = reduceStructuredAgentSession(suggested, {
+      type: 'event',
+      event: snapshot('handle floats')
+    })
+    expect(restated.promptSuggestion).toBe('handle floats')
+    // A snapshot replaces the whole state, so one without a suggestion has none.
+    expect(
+      reduceStructuredAgentSession(restated, { type: 'event', event: snapshot() }).promptSuggestion
+    ).toBeUndefined()
   })
 
   describe("the host's newest turn record", () => {

@@ -27,7 +27,7 @@ import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { withPublishedWork } from './agent-session-published-work'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'
-import { rememberSessionActivity } from './structured-agent-session-activity-retention'
+import { AgentSessionActivityRetention } from './structured-agent-session-activity-retention'
 import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
 import { refreshPublishedWork } from './agent-session-work-refresh'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -61,12 +61,12 @@ export type AgentSessionSubscribersHooks = {
 
 export class AgentSessionSubscribers {
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
-  private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
+  private readonly retained = new AgentSessionActivityRetention()
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
   get retainedActivityCountForTests(): number {
-    return this.activityBySession.size
+    return this.retained.activityCount
   }
 
   subscriberCountForTests(sessionId: string): number {
@@ -123,7 +123,7 @@ export class AgentSessionSubscribers {
           page,
           fence: input.fence,
           hostNow,
-          ...this.activityField(input.sessionId)
+          ...this.retained.snapshotFields(input.sessionId)
         },
         { currentWork: work, historyView: view.normalizationKey }
       )
@@ -151,17 +151,12 @@ export class AgentSessionSubscribers {
   publish(
     sessionId: string,
     journal: AgentSessionJournal,
-    activity?: AgentSessionTurnActivity | null
+    activity?: AgentSessionTurnActivity | null,
+    promptSuggestion?: string | null
   ): void {
-    if (activity !== undefined) {
-      if (activity) {
-        rememberSessionActivity(this.activityBySession, sessionId, activity)
-      } else {
-        this.activityBySession.delete(sessionId)
-      }
-    }
-    this.deliverFrames(sessionId, journal, activity)
-    if (activity === undefined) {
+    this.retained.record(sessionId, activity, promptSuggestion)
+    this.deliverFrames(sessionId, journal, activity, promptSuggestion)
+    if (activity === undefined && promptSuggestion === undefined) {
       this.hooks.onJournalPublished?.(sessionId, journal)
     }
   }
@@ -173,11 +168,12 @@ export class AgentSessionSubscribers {
   deliverFrames(
     sessionId: string,
     journal: AgentSessionJournal,
-    activity?: AgentSessionTurnActivity | null
+    activity?: AgentSessionTurnActivity | null,
+    promptSuggestion?: string | null
   ): void {
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
-      this.deliver(subscriber, journal, hostNow, false, activity)
+      this.deliver(subscriber, journal, hostNow, false, activity, promptSuggestion)
     }
   }
 
@@ -212,7 +208,7 @@ export class AgentSessionSubscribers {
           page,
           fence,
           hostNow,
-          ...this.activityField(sessionId)
+          ...this.retained.snapshotFields(sessionId)
         },
         { currentWork: work, historyView: view.normalizationKey }
       )
@@ -274,14 +270,16 @@ export class AgentSessionSubscribers {
     journal: AgentSessionJournal,
     hostNow: number,
     emitCheckpoint = false,
-    activity?: AgentSessionTurnActivity | null
+    activity?: AgentSessionTurnActivity | null,
+    promptSuggestion?: string | null
   ): void {
     deliverToSubscriber(this.deliveryPort(), {
       subscriber,
       journal,
       hostNow,
       emitCheckpoint,
-      activity
+      activity,
+      promptSuggestion
     })
   }
 
@@ -292,7 +290,8 @@ export class AgentSessionSubscribers {
       hooks: this.hooks,
       emit: (target, event, options) => this.emit(target, event, options),
       isActive: this.isActive,
-      activity: (sessionId) => this.activityField(sessionId).activity
+      activity: (sessionId) => this.retained.activity(sessionId),
+      promptSuggestion: (sessionId) => this.retained.promptSuggestion(sessionId)
     }
   }
 
@@ -321,9 +320,5 @@ export class AgentSessionSubscribers {
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
     }
-  }
-
-  private activityField(sessionId: string): { activity: AgentSessionTurnActivity | null } {
-    return { activity: this.activityBySession.get(sessionId) ?? null }
   }
 }

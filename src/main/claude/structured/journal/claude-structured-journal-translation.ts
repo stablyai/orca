@@ -6,7 +6,6 @@ import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import { claudeProviderFrameActivity } from '../../../native-chat/agent-session-wire/provider-frame-activity'
 import {
   claudeProviderFrameKind,
   createClaudeProviderFrameFallback,
@@ -27,6 +26,7 @@ import {
   isRootClaudeFrame
 } from '../../claude-turn-opening'
 import { ClaudeOpenTurn } from '../../claude-open-turn'
+import { ClaudeTransientPublications } from '../../claude-transient-publications'
 import { claudeCommandCurrentTurn, observeClaudeCommandFrame } from '../../claude-command-turn'
 import { ClaudeContextFacts } from '../../claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../../claude-session-state-turn-over'
@@ -60,8 +60,12 @@ export function createClaudeJournalTranslator(
     // Keep existing stamps when superseding a turn ends pending attribution corrections.
     turnSuperseded: () => corrections.abandon(),
     endOpenWork: (completedAt) => streamedThinking.finishOpen(completedAt),
-    onOpen: () => context.markActivity()
+    onOpen: () => {
+      context.markActivity()
+      transient.turnOpened()
+    }
   })
+  const transient = new ClaudeTransientPublications(deps.sink, turn)
   const context = new ClaudeContextFacts(turn, deps.sink)
   const fallbackId = deps.fallbackIdPrefix ?? 'acquisition'
   const providerFallback = createClaudeProviderFrameFallback(deps.sink, fallbackId, turnScope)
@@ -121,17 +125,6 @@ export function createClaudeJournalTranslator(
   const flush = (): void => {
     streamedText.flush()
     streamedThinking.flush()
-  }
-
-  const publishActivity = (kind: string, payload: unknown): void => {
-    const turnId = turn.id
-    if (turnId === null) {
-      return
-    }
-    const text = claudeProviderFrameActivity(kind, payload)
-    if (text !== undefined) {
-      deps.sink.setActivity?.(text ? { turnId, text } : null)
-    }
   }
 
   const handleStream = (message: Record<string, unknown>, observedAt: number): boolean => {
@@ -251,7 +244,7 @@ export function createClaudeJournalTranslator(
           )
         }
         context.observeResponse(event.message, event.observedAt ?? Date.now())
-        publishActivity(kind, event.message)
+        transient.observe(kind, event.message)
         // Idle also closes faults without a result; the live cause decides failed reopening.
         if (claudeSessionStateEndsTurn(event.message)) {
           corrections.abandon()
@@ -260,7 +253,7 @@ export function createClaudeJournalTranslator(
         }
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)
-        publishActivity(event.kind, event.payload)
+        transient.observe(event.kind, event.payload)
       }
     },
     journalPrompts: prompts,
