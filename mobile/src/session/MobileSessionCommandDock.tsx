@@ -1,9 +1,11 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
+import { resolveTerminalInputMaskedState } from '../terminal/terminal-password-prompt'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
+import { MobileTerminalPasswordMaskOverlay } from './MobileTerminalPasswordMaskOverlay'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
 import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
@@ -24,6 +26,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const rail = useSessionTerminalKeyRail(controller)
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   const {
+    activeHandle,
     insets,
     dictationMode,
     dictationEnabled,
@@ -37,6 +40,20 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     isAttaching,
     attachImage
   } = controller
+  const [manualMaskByHandle, setManualMaskByHandle] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map()
+  )
+  const maskScopeKey = activeHandle ?? '__default__'
+  const autoDetectedPrompt = Boolean(
+    activeHandle && controller.terminalPasswordPromptHandles?.has(activeHandle)
+  )
+  const inputMasked = resolveTerminalInputMaskedState({
+    autoDetectedPrompt,
+    manualOverride: manualMaskByHandle.get(maskScopeKey)
+  })
+  const toggleInputMask = () => {
+    setManualMaskByHandle((prev) => new Map(prev).set(maskScopeKey, !inputMasked))
+  }
   if (!sessionCommandDockShown(controller)) {
     return null
   }
@@ -60,6 +77,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         <LiveInputField
           controller={controller}
           keysInRail={rail.keysInRail}
+          inputMasked={inputMasked}
+          onToggleMask={toggleInputMask}
           trailing={
             <MobileTerminalLiveInputStatus
               dictation={dictation}
@@ -94,10 +113,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
 function LiveInputField({
   controller,
   keysInRail,
+  inputMasked,
+  onToggleMask,
   trailing
 }: {
   controller: MobileSessionController
   keysInRail: boolean
+  inputMasked: boolean
+  onToggleMask: () => void
   trailing: ReactNode
 }) {
   const t = useMobileTranslation()
@@ -116,6 +139,14 @@ function LiveInputField({
     <TextField
       inputRef={bindLiveInputField}
       monospace
+      hiddenText={inputMasked && text.length > 0}
+      inputOverlay={
+        <MobileTerminalPasswordMaskOverlay
+          value={text}
+          masked={inputMasked}
+          onToggleMask={onToggleMask}
+        />
+      }
       style={dockStyles.liveField}
       leading={<KeyboardIcon size={17} color={colors.textSecondary} strokeWidth={2} />}
       label={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
