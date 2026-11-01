@@ -39,7 +39,10 @@ import { structuredWorkerOwned } from '../../structured-worker-custody'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 import type { WorkerTerminalReleaseState } from '../../orchestration/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
-import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
+import {
+  closeStructuredAgentSessionChild,
+  type StructuredSessionSurfaceRuntime
+} from '../../agent-session/structured-agent-session-close'
 import {
   chatAssigneeJournal,
   type StructuredJournalSource
@@ -69,10 +72,8 @@ export type StructuredWorkerStopOutcome = {
  * Re-resolve /clear successors after each close. Unverifiable sessions remain untouched and retained. */
 export async function stopStructuredWorker(
   identity: StructuredWorkerIdentity,
-  runtime?: Pick<
-    OrcaRuntimeService,
-    'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
-  >,
+  runtime?: StructuredSessionSurfaceRuntime &
+    Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>,
   admitClose?: () => boolean
 ): Promise<StructuredWorkerStopOutcome> {
   const closed = new Set<string>()

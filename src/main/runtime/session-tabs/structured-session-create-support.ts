@@ -257,7 +257,10 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       this.restoreStructuredAgentSessionTabsOnce().then(
         () => {
           // Only host answers finalize restoration; without one, retry so journals opened later can publish.
-          if (this.structuredAgentSessionInventoryUnverifiable) {
+          if (
+            this.structuredAgentSessionInventoryUnverifiable ||
+            !getStructuredAgentSessionHost()
+          ) {
             this.structuredAgentSessionTabRestorePromise = null
           }
         },

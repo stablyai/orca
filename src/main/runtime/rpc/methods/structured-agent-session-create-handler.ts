@@ -1,3 +1,4 @@
+import type { StructuredSessionSurface } from '../../agent-session/structured-agent-session-close'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import type { z } from 'zod'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
@@ -56,7 +57,8 @@ export async function attachClientSuppliedLocation(
 
 export async function handleStructuredAgentSessionCreate(
   params: z.infer<typeof CreateParams>,
-  ctx: RpcContext
+  ctx: RpcContext,
+  capture?: (surface: StructuredSessionSurface) => void
 ) {
   requireStructuredAgentAudience(ctx, params.agent)
   if (params.envelope.expectedRuntimeFence !== null) {
@@ -115,6 +117,7 @@ export async function handleStructuredAgentSessionCreate(
     prepared,
     activate: true,
     placedByWindow: ctx.caller?.kind === 'desktop',
+    ...(capture ? { capture } : {}),
     ...('tabPlacement' in params && params.tabPlacement
       ? { tabPlacement: params.tabPlacement }
       : {})

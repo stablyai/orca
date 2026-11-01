@@ -22,6 +22,7 @@ type WorkerHost = Pick<
   | 'observeJournalPublications'
 > & {
   deps: {
+    logger: Pick<StructuredAgentSessionHost['deps']['logger'], 'warn'>
     store: Pick<
       StructuredAgentSessionHost['deps']['store'],
       'requireWritableRecord' | 'getConversation' | 'getSessionTabId' | 'isSessionTabRetired'
@@ -71,6 +72,7 @@ function installHost(
     },
     close: async () => {},
     deps: {
+      logger: { warn: vi.fn() },
       store: {
         requireWritableRecord: record,
         getConversation: (id: string) => agentSessionConversationView(record(id)),

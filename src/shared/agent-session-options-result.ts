@@ -15,6 +15,10 @@ export type AgentSessionAcceptedInputSources = Partial<
 /** Provider-reported choices and effective next-turn values. Additive read-only
  *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
+  /** This host verified that account selection moves this chat with its history intact. */
+  canSwitchAccount?: boolean
+  /** Saved conversation on this execution host, resolved from the record's own account store. */
+  transcriptPath?: string
   rewind?: AgentSessionRewindSupport
   conversationCommands?: readonly AgentSessionConversationCommand[]
   /** Offer goal controls only with threadGoal support; current spans the whole journal, including unloaded pages. */

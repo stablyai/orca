@@ -1,4 +1,6 @@
 import type { HostFoundingAttempt } from '../../../agent-launch/host-founding-attempt'
+import type { StructuredSessionSurface } from '../../agent-session/structured-agent-session-close'
+import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { seededPermissionMode } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
@@ -174,6 +176,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   caller: StructuredAgentSessionCaller
   prepared: PreparedStructuredAgentSessionCreate
   activate: boolean
+  capture?: (surface: StructuredSessionSurface) => void
   /** This machine's window made the create and opens the chat's tab where it reserved it. */
   placedByWindow?: boolean
   hostFoundingAttempt?: HostFoundingAttempt
@@ -182,12 +185,23 @@ export async function commitStructuredAgentSessionCreate(args: {
   const { prepared } = args
   const tab = prepared.tab
   const tabPlace = {
+    ...(args.capture ? { capture: args.capture } : {}),
     ...(args.placedByWindow ? { placedByWindow: true } : {}),
     ...(args.tabPlacement ? { placement: args.tabPlacement } : {})
   }
   let adoptedTabPublicationFailed = false
   const publishTab = tab
     ? async () => {
+        const adopted = args.hostFoundingAttempt?.adopted
+        const sessionId = adopted?.sessionId ?? prepared.attachParams.envelope.sessionId
+        // Name the surface first, so a close that raced the create can still find its tab.
+        args.capture?.({
+          tableId:
+            adopted?.tabId ??
+            prepared.attachParams.surfaceTabId ??
+            structuredAgentSessionTabId(sessionId),
+          presentation: { raw: null, saved: [] }
+        })
         if (
           ORCA_LAYOUT_OWNER_IS_MAIN &&
           structuredAgentSessionClosedBeforeCreate(prepared.attachParams.envelope.sessionId)
@@ -195,10 +209,9 @@ export async function commitStructuredAgentSessionCreate(args: {
           return
         }
         try {
-          const adopted = args.hostFoundingAttempt?.adopted
           await args.runtime.publishStructuredAgentSessionTab({
             workspaceId: adopted?.workspaceId ?? tab.workspaceId,
-            sessionId: adopted?.sessionId ?? prepared.attachParams.envelope.sessionId,
+            sessionId,
             agent: adopted?.agent ?? tab.agent,
             activate: args.activate,
             ...(args.hostFoundingAttempt ? { foundingAttempt: args.hostFoundingAttempt } : {}),
@@ -244,6 +257,17 @@ export async function commitStructuredAgentSessionCreate(args: {
     ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {}),
     ...(publishTab ? { publishTab } : {})
   })
+  if (attached.ok && tab) {
+    // The host may report the session's existing tab; close-before-create closes that one.
+    args.capture?.({
+      tableId:
+        attached.value.tabId ??
+        args.hostFoundingAttempt?.adopted?.tabId ??
+        prepared.attachParams.surfaceTabId ??
+        structuredAgentSessionTabId(attached.value.sessionId),
+      presentation: { raw: null, saved: [] }
+    })
+  }
   return adoptedTabPublicationFailed && attached.ok
     ? {
         ok: false,

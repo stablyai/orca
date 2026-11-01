@@ -1,4 +1,6 @@
-import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
+import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
+import { mobileStructuredSessionOpenMessage } from '../session/mobile-structured-session-open-message'
+import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -18,7 +20,6 @@ import {
   createMobileAiVaultResumeMutationRegistry,
   readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
-  resolveMobileAiVaultResumePlatform,
   resumeAiVaultSessionInTerminal
 } from '../session/ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
@@ -29,7 +30,6 @@ import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
-import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 import { AgentHistoryStateView } from './AgentHistoryStateView'
@@ -177,52 +177,53 @@ function MobileAgentSessionHistoryPanelContent({
         triggerError()
         return
       }
-      if (!session.sessionId) {
-        setResumeMessage(
-          t('agentHistory.panel.missingResumeId', 'This session is missing a resume id.')
-        )
-        triggerError()
-        return
-      }
 
       const assertCurrentOwner = claimResumeOwnership()
       resumeLaunchInFlightRef.current = true
       setResumingSessionId(session.id)
       setResumeMessage(null)
       try {
-        const {
-          settings,
-          worktrees: freshWorktrees,
-          ...catalog
-        } = await loadMobileResumeMetadata(client)
-        assertCurrentOwner()
-        const target = resolveMobileAiVaultSessionResumeTarget({
-          session,
-          activeWorktreeId: worktreeId,
-          // Prefer live worktrees so deleted/archived workspace cannot be selected; fall back to mount list only on fetch failure.
-          worktrees: freshWorktrees ?? worktrees,
-          catalog,
-          hostPlatform: resumeHost.platform
-        })
-        if (target.status !== 'ready') {
-          setResumeMessage(target.message)
-          triggerError()
+        if (
+          await openMobileAgentHistoryChat({
+            client,
+            session,
+            hostId,
+            assertCurrentOwner,
+            opened: (href) => {
+              triggerSuccess()
+              router.replace(href)
+            },
+            failed: (reason) => {
+              triggerError()
+              setResumeMessage(mobileStructuredSessionOpenMessage(reason, session.agent))
+            }
+          })
+        ) {
           return
         }
-
-        const platform = resolveMobileAiVaultResumePlatform(
-          target.targetStatus,
-          resumeHost.platform,
-          target.workspacePath,
-          target.terminalPlatform
-        )
-        if (!platform) {
+        if (!session.sessionId) {
           setResumeMessage(
-            t('agentHistory.panel.unknownHostPlatform', 'Unable to determine host platform.')
+            t('agentHistory.panel.missingResumeId', 'This session is missing a resume id.')
           )
           triggerError()
           return
         }
+        const preparedTarget = await prepareMobileHistoryResumeTarget({
+          client,
+          session,
+          worktreeId,
+          worktrees,
+          hostPlatform: resumeHost.platform,
+          assertCurrentOwner,
+          unknownPlatformMessage: () =>
+            t('agentHistory.panel.unknownHostPlatform', 'Unable to determine host platform.')
+        })
+        if (preparedTarget.status !== 'ready') {
+          setResumeMessage(preparedTarget.message)
+          triggerError()
+          return
+        }
+        const { target, platform, settings } = preparedTarget
 
         const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
         assertCurrentOwner()

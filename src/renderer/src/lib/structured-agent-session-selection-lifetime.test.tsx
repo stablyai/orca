@@ -168,6 +168,7 @@ it.each([false, true])(
     )
     const readHook = renderHook(() =>
       useStructuredAgentSessionOptionState({
+        transportEnabled: true,
         agent: 'codex',
         optionCatalog: catalog,
         identity: `codex:${sessionId}`,
@@ -314,6 +315,7 @@ it.each(['present', 'initially-absent', 'already-hydrated'] as const)(
       const hook = renderHook(
         ({ visible }) =>
           useStructuredAgentSessionOptionState({
+            transportEnabled: true,
             agent: 'codex',
             optionCatalog: catalog,
             identity: `codex:${sessionId}`,

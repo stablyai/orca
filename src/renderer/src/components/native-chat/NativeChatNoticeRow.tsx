@@ -1,6 +1,8 @@
+import { NativeChatUsageLimitActions } from './NativeChatUsageLimitActions'
 import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSyncExternalStore } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
@@ -180,6 +182,9 @@ export function NativeChatNoticeRow({
     orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
   const antigravitySignInContent = nativeChatAntigravitySignInContent(failure?.kind, agentName)
+  const usageLimitContinue =
+    block.usageLimitTurnItemId !== undefined &&
+    block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
   // Only reword auth text fully described by its fact; host text may also carry command advice.
   const authSurface =
     failure?.kind === 'notSignedIn'
@@ -254,8 +259,15 @@ export function NativeChatNoticeRow({
         </p>
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
+        ) : usageLimitContinue ? (
+          <UsageLimitContinueNow
+            resetsAt={
+              failure?.kind === 'usageLimitReached' ? failure.usageLimit?.resetsAt : undefined
+            }
+          />
         ) : null}
       </div>
+      {usageLimitContinue ? <NativeChatUsageLimitActions /> : null}
       {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
         <Button
           type="button"
@@ -275,5 +287,51 @@ export function NativeChatNoticeRow({
         />
       ) : null}
     </div>
+  )
+}
+
+// The clock subscription only invalidates the view; fresh wall time owns reset eligibility.
+function UsageLimitContinueNow({
+  resetsAt
+}: {
+  resetsAt: number | undefined
+}): React.JSX.Element | null {
+  const orcaStopView = useNativeChatOrcaStopView()
+  const resetPassed = useSyncExternalStore(
+    (invalidate) => {
+      if (resetsAt === undefined) {
+        return () => {}
+      }
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const refresh = (): void => {
+        clearTimeout(timer)
+        const delay = resetsAt - Date.now()
+        timer = delay > 0 ? setTimeout(refresh, Math.min(delay, 2_147_483_647)) : undefined
+        invalidate()
+      }
+      refresh()
+      window.addEventListener('focus', refresh)
+      document.addEventListener('visibilitychange', refresh)
+      return () => {
+        clearTimeout(timer)
+        window.removeEventListener('focus', refresh)
+        document.removeEventListener('visibilitychange', refresh)
+      }
+    },
+    () => resetsAt !== undefined && Date.now() >= resetsAt
+  )
+  if (!resetPassed) {
+    return null
+  }
+  return (
+    <NativeChatInterruptedContinueButton
+      label={translate('components.native-chat.usageLimitActions.continueNow', 'Continue Now')}
+      onContinue={orcaStopView.continueUsageLimit}
+      disabled={orcaStopView.usageLimitContinueDisabled}
+      explanation={translate(
+        'components.native-chat.interruptedContinue.usageLimitExplanation',
+        'Asks the agent to continue where it left off. Use it once the limit resets.'
+      )}
+    />
   )
 }

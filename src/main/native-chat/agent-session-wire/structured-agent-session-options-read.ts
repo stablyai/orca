@@ -22,6 +22,7 @@ import {
 } from './structured-agent-session-option-models'
 import { structuredAgentSessionImmediatePermission } from './structured-agent-session-launch-permission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import { readStructuredSessionRecovery } from './structured-agent-session-recovery-read'
 import { structuredAgentSessionNeverSent } from './structured-agent-session-never-sent'
 
 export {
@@ -221,8 +222,10 @@ export async function readStructuredAgentSessionOptions(
       current.serviceTier = projected.options.serviceTier
     }
   }
+  const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   return {
     ...options,
+    ...recovery,
     ...(live?.effortFixed
       ? {
           models: options.models.map(({ effortsKnown: _unknown, ...row }) => ({

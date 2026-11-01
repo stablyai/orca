@@ -443,6 +443,20 @@ it('updates terminal availability when detection changes while the Chat rows sta
   expect(hook.result.current[0].surfaces).toEqual(['chat', 'terminal'])
 })
 
+it('reorders entries when the default agent changes while the rows stay the same', async () => {
+  const menu = model('default-order', ['codex', 'claude'])
+  const hook = renderHook(
+    ({ value }: { value: Extract<NewTabAgentMenuModel, { state: 'settled' }> }) =>
+      useAgentLaunchPickerInventory('wt', value, true),
+    { initialProps: { value: { ...menu, defaultTuiAgent: 'claude' } } }
+  )
+  await act(async () => {})
+  expect(hook.result.current[0].agent).toBe('claude')
+  hook.rerender({ value: { ...menu, defaultTuiAgent: 'codex' } })
+  await act(async () => {})
+  expect(hook.result.current[0].agent).toBe('codex')
+})
+
 it.each([3, 30])(
   'shares actual unresolved reads and current listeners across %i opens and matching controllers',
   async (count) => {
@@ -459,7 +473,7 @@ it.each([3, 30])(
       reads.push({ method, resolve: read.resolve, reject: read.reject })
       return read.promise
     })
-    const menu = model(`shared-${count}`, ['codex', 'claude', 'gemini'])
+    const menu = model(`shared-${count}`, ['claude', 'codex', 'gemini'])
     const mount = (open = true) =>
       renderHook(({ open }) => useAgentLaunchPickerInventory('wt', menu, open), {
         initialProps: { open }
@@ -497,7 +511,7 @@ it.each([3, 30])(
       settings.resolve(
         projectAgentLaunchSettings({
           agentPermissionDefault: 'ask',
-          agentDefaultArgs: { codex: '--add-dir docs' }
+          agentDefaultArgs: { claude: '--add-dir docs' }
         })
       )
     )
