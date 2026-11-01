@@ -118,9 +118,6 @@ test('manual drag survives activity and persisted-profile reload', async ({
       expectedOrder
     )
 
-    const sortOrdersBeforeActivity = new Map(
-      manualOrderAfterDrag.rows.map((row) => [row.id, row.sortOrder])
-    )
     await first.page.evaluate(async (activityId) => {
       const store = window.__store
       if (!store) {
@@ -135,17 +132,26 @@ test('manual drag survives activity and persisted-profile reload', async ({
       await window.api.worktrees.persistSortOrder({ orderedIds: [activityId, ...orderedIds] })
       await store.getState().fetchAllWorktrees()
     }, targetId)
+    // Why: a save re-ranks only the rows it moved, so check the saved ranks put the activity row first.
     await expect
       .poll(() =>
-        first.page.evaluate((activityId) => {
-          const row = window.__store
-            ?.getState()
-            .allWorktrees()
-            .find((worktree) => worktree.id === activityId)
-          return row?.sortOrder
-        }, targetId)
+        first.page.evaluate(
+          ({ activityId, ids }) => {
+            const rows = (window.__store?.getState().allWorktrees() ?? []).filter((worktree) =>
+              ids.includes(worktree.id)
+            )
+            const activityRank = rows.find((worktree) => worktree.id === activityId)?.sortOrder
+            return (
+              activityRank !== undefined &&
+              rows.every(
+                (worktree) => worktree.id === activityId || worktree.sortOrder < activityRank
+              )
+            )
+          },
+          { activityId: targetId, ids: createdIds }
+        )
       )
-      .not.toBe(sortOrdersBeforeActivity.get(targetId))
+      .toBe(true)
     await expect
       .poll(() =>
         visibleWorktreeIds(first.page).then((ids) => ids.filter((id) => createdIds.includes(id)))
