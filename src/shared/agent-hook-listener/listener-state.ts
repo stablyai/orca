@@ -15,7 +15,7 @@ import type { ClaudeLaunchedBackgroundTasks } from '../claude-owed-task-notifica
 import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
 import type { CodexSubagentRoster } from '../codex-subagent-roster'
 import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
-import type { MuseSessionLogState } from '../muse-session-log'
+import type { GrokActiveTurn, HermesPaneTurn, MusePaneState } from './provider-pane-state'
 import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
 import {
   deletePaneScopedCacheEntry,
@@ -50,8 +50,10 @@ export type HookListenerState = {
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
   /** One-normalization provenance marker for a status backed only by restored child state. */
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
-  /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
+  /** Panes whose latest authoritative Claude task inventory, or a shell launched since, still has running non-agent work. */
   claudeRunningNonAgentTaskPaneKeys: Set<string>
+  /** Per pane: running non-agent ids once an inventory listed them all, and ids already ended. */
+  claudeRunningNonAgentTaskIdsByPaneKey: Map<string, ClaudeNonAgentTaskIds>
   /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
   claudeActiveSessionCronPaneKeys: Set<string>
   /** Background tasks each pane's main agent launched, and which of them still owe it a notification. */
@@ -86,25 +88,11 @@ export type HookListenerState = {
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
 }
 
-export type HermesPaneTurn = {
-  ended: boolean
-  /** `delegate_task` children run their own turns, under their own session ids, inside the parent's. */
-  childSessionIds: Set<string>
-  /** The pane's own session, which its children's hooks must not replace. */
-  sessionId: string
-}
-
-export type MusePaneState = {
-  /** Internal reminder/subagent sessions; their hooks inherit the pane env and fire even after Stop. */
-  childSessionIds: Set<string>
-  log?: MuseSessionLogState
-  /** Muse emits PermissionRequest for auto-approved calls too; only Notification confirms a visible prompt. */
-  pendingApproval?: { toolName?: string; toolInput?: unknown }
-}
-
-export type GrokActiveTurn = {
-  promptId?: string
-  sessionId?: string
+/** Ended ids stay with the pane so a late-delivered launch cannot revive them. */
+export type ClaudeNonAgentTaskIds = {
+  /** Undefined until a complete inventory lists every running id. */
+  running: ReadonlySet<string> | undefined
+  ended: ReadonlySet<string>
 }
 
 const legacyStatusAdapterByState = new WeakMap<HookListenerState, AgentStatusLegacyAdapter>()
@@ -135,6 +123,7 @@ export function createHookListenerState(
     claudeLeadStateByPaneKey: new Map(),
     claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
     claudeRunningNonAgentTaskPaneKeys: new Set(),
+    claudeRunningNonAgentTaskIdsByPaneKey: new Map(),
     claudeActiveSessionCronPaneKeys: new Set(),
     claudeLaunchedBackgroundTasksByPaneKey: new Map(),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
@@ -233,6 +222,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  state.claudeRunningNonAgentTaskIdsByPaneKey.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
@@ -285,6 +275,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeRunningNonAgentTaskIdsByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLaunchedBackgroundTasksByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSessionOwnerByPaneKey, fromPaneKey, toPaneKey)
@@ -329,6 +320,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeLeadStateByPaneKey.clear()
   state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
   state.claudeRunningNonAgentTaskPaneKeys.clear()
+  state.claudeRunningNonAgentTaskIdsByPaneKey.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
   state.claudeLaunchedBackgroundTasksByPaneKey.clear()
   state.claudeSessionOwnerByPaneKey.clear()

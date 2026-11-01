@@ -258,6 +258,47 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('keeps the running shell ids a rejected local status would have narrowed', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<void> => {
+        const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+        expect(response.status).toBe(204)
+      }
+      const shell = (id: string) => ({ id, type: 'shell', status: 'running' })
+
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        prompt: 'approve shell',
+        tool_name: 'Bash',
+        background_tasks: [shell('b1'), shell('b2')]
+      })
+      // A nested CLI's sibling hook is rejected; its narrower inventory must not stick.
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        prompt: 'approve shell',
+        tool_name: 'OtherTool',
+        background_tasks: [shell('b1')]
+      })
+
+      expect([
+        ...(server._getStateForTests().claudeRunningNonAgentTaskIdsByPaneKey.get(PANE)?.running ??
+          [])
+      ]).toEqual(['b1', 'b2'])
+    } finally {
+      server.stop()
+    }
+  })
+
   it('maps registered legacy numeric HTTP pane keys to stable pane keys', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })

@@ -5,6 +5,7 @@ import {
 } from '../../agent-lead-status-fold'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
+import { updateClaudeRunningNonAgentTask } from './claude-running-non-agent-tasks'
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
@@ -25,7 +26,6 @@ import {
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus,
   setClaudeMainAgentTurnState,
-  updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
 import {
@@ -69,6 +69,7 @@ export function normalizeClaudeEvent(
     // New sessions must not inherit old child/task/cron gates.
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeRunningNonAgentTaskIdsByPaneKey.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
     // New sessions start a new main-agent clock.
@@ -145,7 +146,7 @@ export function normalizeClaudeEvent(
     return null
   }
   if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(state, paneKey, backgroundTasks.hasRunningNonAgentTask)
+    updateClaudeRunningNonAgentTask(state, paneKey, backgroundTasks)
   }
   if (sessionCronInventoryPresent && eventAgentId === undefined) {
     if (hasActiveSessionCron) {

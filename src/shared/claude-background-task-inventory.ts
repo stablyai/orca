@@ -24,6 +24,10 @@ const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'timed_out'
 ])
 
+export function isClaudeTerminalBackgroundTaskStatus(status: string): boolean {
+  return CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(status)
+}
+
 /** Agent entries from Stop/SubagentStop background_tasks; non-agent tasks do not become rows. */
 export type ClaudeBackgroundAgentTask = {
   id: string
@@ -42,6 +46,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   hasRunningNonAgentTask: boolean
   /** Ids of the running shell-like entries; one without an id is counted but not listed. */
   runningNonAgentTaskIds: string[]
+  /** No running shell-like entry went unlisted, so the ids account for all of them. */
+  allRunningNonAgentTasksListed: boolean
   /** Running shells blocked on `orca orchestration check --wait`, which recovers them after a listener restart. */
   runningAgentWaitIds: string[]
 } {
@@ -53,6 +59,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       truncated: false,
       hasRunningNonAgentTask: false,
       runningNonAgentTaskIds: [],
+      allRunningNonAgentTasksListed: false,
       runningAgentWaitIds: []
     }
   }
@@ -60,21 +67,23 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   let truncated = false
   let hasRunningNonAgentTask = false
   const runningNonAgentTaskIds: string[] = []
+  let allRunningNonAgentTasksListed = true
   const runningAgentWaitIds: string[] = []
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
       hasRunningNonAgentTask = true
+      allRunningNonAgentTasksListed = false
       continue
     }
     const obj = item as Record<string, unknown>
     const taskType = typeof obj.type === 'string' ? obj.type.trim().toLowerCase() : ''
     const taskStatus = typeof obj.status === 'string' ? obj.status.trim().toLowerCase() : ''
-    const isTerminal =
-      taskStatus.length > 0 && CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(taskStatus)
+    const isTerminal = taskStatus.length > 0 && isClaudeTerminalBackgroundTaskStatus(taskStatus)
     if (taskType.length === 0) {
       truncated = true
       hasRunningNonAgentTask ||= !isTerminal
+      allRunningNonAgentTasksListed &&= isTerminal
       continue
     }
     const isAgentTask = isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(taskType))
@@ -87,6 +96,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
         if (runsOrcaOrchestrationWait(obj.command)) {
           runningAgentWaitIds.push(id)
         }
+      } else {
+        allRunningNonAgentTasksListed = false
       }
     }
     if (!isAgentTask) {
@@ -110,6 +121,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     truncated,
     hasRunningNonAgentTask,
     runningNonAgentTaskIds,
+    allRunningNonAgentTasksListed,
     runningAgentWaitIds
   }
 }

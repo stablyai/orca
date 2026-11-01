@@ -271,11 +271,6 @@ export abstract class AgentHookServerState {
     source: AgentHookSource,
     body: unknown
   ): NormalizedLocalHook
-  protected abstract setClaudeBackgroundEvidence(
-    paneKey: string,
-    hasRunningTask: boolean,
-    hasActiveCron: boolean
-  ): void
   protected abstract toRetainedProviderSessionRow(
     entry: EnrichedAgentHookEventPayload | null | undefined
   ): EnrichedAgentHookEventPayload | null
