@@ -108,7 +108,9 @@ function selectToolEvidence(messages: readonly NativeChatMessage[]): {
     NativeChatToolCallBlock | NativeChatToolResultBlock,
     { messageIndex: number; blockIndex: number }
   >()
-  const pairsByMessage: NativeChatToolPair[][] = messages.map(() => [])
+  const pairsByMessage: { pair: NativeChatToolPair; blockIndex: number }[][] = messages.map(
+    () => []
+  )
   messages.forEach((message, messageIndex) => {
     if (message.agentStart || message.role === 'reasoning') {
       return
@@ -125,7 +127,7 @@ function selectToolEvidence(messages: readonly NativeChatMessage[]): {
     const position = block && positions.get(block)
     if (position) {
       // Prioritize a cross-message pair with its later result, keeping its call context together.
-      pairsByMessage[position.messageIndex].push(pair)
+      pairsByMessage[position.messageIndex].push({ pair, blockIndex: position.blockIndex })
     }
   }
   const entries: ContextEntry[] = []
@@ -139,11 +141,12 @@ function selectToolEvidence(messages: readonly NativeChatMessage[]): {
     if (remaining < MIN_ENTRY_CHARS) {
       return { entries, omitted: true }
     }
+    pairs.sort((left, right) => left.blockIndex - right.blockIndex)
     for (let index = pairs.length - 1; index >= 0; index--) {
       if (remaining < MIN_ENTRY_CHARS) {
         return { entries, omitted: true }
       }
-      const pair = pairs[index]
+      const { pair } = pairs[index]
       const formatted = formatToolPair(pair, remaining)
       omitted ||= formatted.shortened
       for (const { block, text } of formatted.parts) {

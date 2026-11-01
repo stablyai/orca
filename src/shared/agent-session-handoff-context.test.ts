@@ -140,6 +140,39 @@ it('pairs out-of-order tool results by call ID and labels standalone results wit
   expect(context).toContain('[tool result] call=unknown standalone result')
 })
 
+it.each([false, true])(
+  'prioritizes the latest out-of-order result under tool budget pressure (separate messages: %s)',
+  (separateMessages) => {
+    const calls: NativeChatMessage['blocks'] = Array.from({ length: 5 }, (_, index) => ({
+      type: 'tool-call',
+      name: 'shell',
+      input: `check-${index} ${'i'.repeat(1_000)}`,
+      callId: `check-${index}`
+    }))
+    const results: NativeChatMessage['blocks'] = Array.from({ length: 5 }, (_, index) => ({
+      type: 'tool-result',
+      callId: `check-${4 - index}`,
+      output:
+        index === 4
+          ? `LATEST FAILURE ${'f'.repeat(2_000)} FAILURE END`
+          : `OLDER SUCCESS ${4 - index} ${'o'.repeat(2_000)}`,
+      isError: index === 4
+    }))
+    const context = buildAgentSessionHandoffContext(
+      separateMessages
+        ? [message('assistant', calls), message('tool', results)]
+        : [message('assistant', [...calls, ...results])]
+    )
+
+    expect(context).toContain('[tool shell input preview] call=check-0 check-0')
+    expect(context).toContain('[tool result error] call=check-0 LATEST FAILURE')
+    expect(context).toContain('FAILURE END')
+    expect(context).not.toContain('call=check-4')
+    expect(context).toContain('messages or tool details omitted')
+    expect(context.length).toBeLessThanOrEqual(8_100)
+  }
+)
+
 it('respects the total bound with oversized metadata and a nearly exhausted tool budget', () => {
   const context = buildAgentSessionHandoffContext(
     Array.from({ length: 1_000 }, () =>
