@@ -16,6 +16,7 @@ import {
   type PluginRequest,
   type PluginResponse
 } from '../../../../shared/plugins/frames/plugin-protocol'
+import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../shared/plugins/declarative/plugin-declarative-message-names'
 import {
   createPanelControlMessageBudget,
   createPanelMessageBudget,
@@ -26,6 +27,7 @@ import { translate } from '@/i18n/i18n'
 import {
   createPluginFrameGestureGate,
   createPluginFrameLanes,
+  PLUGIN_FRAME_RENDER_WALK_LIMITS,
   pluginFrameHello,
   pluginFrameLaneFor,
   type PluginFrameMessageContext,
@@ -56,8 +58,19 @@ export type PluginFrameEditorChannel = {
   onResponse: (response: PluginResponse) => void
 }
 
+/** A declarative panel's tree traffic; payloads are unparsed, the panel validates them. */
+export type PluginFrameDeclarativeChannel = {
+  onRender: (payload: unknown) => void
+  onError: (payload: unknown) => void
+  /** Any other `ui.*` message from the guest (state requests and writes), unvalidated. */
+  onGuestEvent?: (event: string, payload: unknown) => void
+  /** A render refused by its lane budget; `retryAfterMs` is null when retrying cannot help. */
+  onRefused?: (message: unknown, retryAfterMs: number | null) => void
+}
+
 export type PluginFrameHostOptions = {
   surface: 'panel' | 'editor'
+  declarative?: PluginFrameDeclarativeChannel
   getFrameWindow: () => PluginFrameWindow | null
   /** Null until main issues one; host calls answer `unavailable` meanwhile. */
   getSessionToken: () => string | null
@@ -72,6 +85,10 @@ export type PluginFrameHostOptions = {
   controlBudget?: PanelMessageBudget
   /** `files.saveAs` lane; defaults to 64 MiB, a few per window. */
   saveBudget?: PanelMessageBudget
+  /** `ui.render` lane: trees up to the declarative cap, re-rendered as the person types. */
+  renderBudget?: PanelMessageBudget
+  /** One-shot activation from a press on Orca's own controls (declarative panels). */
+  consumeHostActivation?: () => boolean
   now?: () => number
 }
 
@@ -118,12 +135,15 @@ export function createPluginFrameEnvelopeHandler(
 ): (data: unknown, context: PluginFrameMessageContext) => void {
   const budget = options.budget ?? createPanelMessageBudget()
   const controlBudget = options.controlBudget ?? createPanelControlMessageBudget()
-  const lanes = createPluginFrameLanes({ save: options.saveBudget })
+  const lanes = createPluginFrameLanes({ save: options.saveBudget, render: options.renderBudget })
   const now = options.now ?? (() => Date.now())
   const callHostMethod = options.callHostMethod ?? callPanelActionViaPreload
   // Ids the frame cancelled while main was still running the call; their answers are dropped.
   const inFlight = new Set<number>()
-  const admitsGesture = createPluginFrameGestureGate()
+  // A components panel's hidden guest never has a real press of its own; only Orca's grant counts.
+  const admitsGesture = createPluginFrameGestureGate(
+    options.declarative ? (options.consumeHostActivation ?? (() => false)) : undefined
+  )
   return (data: unknown, context: PluginFrameMessageContext): void => {
     const frameWindow = options.getFrameWindow()
     if (!frameWindow) {
@@ -158,8 +178,15 @@ export function createPluginFrameEnvelopeHandler(
     // Budget before schema parsing so malformed floods cannot consume unmetered validation CPU.
     const timestamp = now()
     const lane = pluginFrameLaneFor(data, lanes, budget)
-    const refusal = lane.admit(timestamp, structuredCloneMessageBytes(data, lane.maxBytes))
+    const walk = lane === lanes.render ? PLUGIN_FRAME_RENDER_WALK_LIMITS : undefined
+    const refusal = lane.admit(timestamp, structuredCloneMessageBytes(data, lane.maxBytes, walk))
     if (refusal) {
+      if (lane === lanes.render) {
+        options.declarative?.onRefused?.(
+          data,
+          refusal === 'oversized' ? null : (lane.retryAfterMs?.(timestamp) ?? 0)
+        )
+      }
       const id = pluginRequestId(data)
       if (id !== null) {
         post(
@@ -201,6 +228,12 @@ export function createPluginFrameEnvelopeHandler(
             pluginEvent(FRAME_EVENTS.hello, pluginFrameHello(options.surface, context.transport))
           )
           options.editor?.onReady()
+        } else if (message.event === PLUGIN_DECLARATIVE_MESSAGES.render) {
+          options.declarative?.onRender(message.payload)
+        } else if (message.event === PLUGIN_DECLARATIVE_MESSAGES.error) {
+          options.declarative?.onError(message.payload)
+        } else if (options.declarative && message.event.startsWith('ui.')) {
+          options.declarative.onGuestEvent?.(message.event, message.payload)
         } else {
           // A guest's shell-posted chords are page-forgeable; only the preload's count there.
           if (context.transport !== 'guest' || context.trustedChord === true) {

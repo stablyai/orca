@@ -53,6 +53,17 @@ export function usablePluginFrameGuest(
   return guest && !isWebClientLocation() ? guest : null
 }
 
+const focusRefused = new WeakSet<HTMLElement>()
+
+/** Belt to `inert`: if anything focuses the hidden guest anyway, hand focus straight back. */
+function refuseFocus(element: HTMLElement | null): void {
+  if (!element || focusRefused.has(element)) {
+    return
+  }
+  focusRefused.add(element)
+  element.addEventListener('focus', () => element.blur())
+}
+
 type PluginFrameViewProps = {
   frameRef: React.RefObject<PluginFrameElement | null>
   guest: PluginFrameGuest | null
@@ -60,6 +71,8 @@ type PluginFrameViewProps = {
   name: string
   title: string
   onLoad: () => void
+  /** A declarative panel's module runner: present for IPC, never seen or focused. */
+  hidden?: boolean
 }
 
 export function PluginFrameView({
@@ -68,10 +81,32 @@ export function PluginFrameView({
   srcDoc,
   name,
   title,
-  onLoad
+  onLoad,
+  hidden = false
 }: PluginFrameViewProps): React.JSX.Element {
   const setFrame = (element: PluginFrameElement | null): void => {
     frameRef.current = element
+  }
+  if (guest && hidden) {
+    return (
+      // Inert: the runner must never take focus (keys would vanish into it), and its own
+      // activation never counts; only presses on Orca's controls do.
+      <div inert aria-hidden="true" className="pointer-events-none absolute size-0 overflow-hidden">
+        <webview
+          ref={(element: PluginFrameElement | null) => {
+            setFrame(element)
+            refuseFocus(element)
+          }}
+          partition={guest.partition}
+          // Why unthrottled: a zero-size guest still has to answer events and pings promptly.
+          webpreferences={`${ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE},backgroundThrottling=false`}
+          src={guest.url}
+          title={title}
+          tabIndex={-1}
+          className="size-0"
+        />
+      </div>
+    )
   }
   if (guest) {
     return (

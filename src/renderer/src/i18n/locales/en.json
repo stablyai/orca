@@ -14949,7 +14949,9 @@
             "unavailable": "This plugin panel is no longer available.",
             "loading": "Loading plugin panel...",
             "unresponsive": "This plugin panel stopped responding and was suspended.",
-            "loadFailed": "The plugin panel could not be loaded."
+            "loadFailed": "The plugin panel could not be loaded.",
+            "needsDesktop": "This panel runs only in the Orca desktop app.",
+            "needsIsolatedFrames": "This panel is not available: it needs isolated plugin frames, which are turned off."
           },
           "activityBar": {
             "error": "Error"
@@ -18367,6 +18369,10 @@
           "actionsUnavailable": "Plugin actions are not available in this client.",
           "messageTooLarge": "Message exceeds the size limit.",
           "tooManyRequests": "Too many requests."
+        },
+        "PluginDeclarativePanel": {
+          "invalidTree": "The panel sent a layout Orca cannot show.",
+          "pluginMessage": "Message from {{value0}}: {{value1}}"
         }
       },
       "link": {
@@ -19057,6 +19063,11 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} installs"
+        },
+        "declarative": {
+          "PluginDeclarativeView": {
+            "unsupported": "{{value0}} is not available in this version of Orca"
+          }
         }
       }
     },

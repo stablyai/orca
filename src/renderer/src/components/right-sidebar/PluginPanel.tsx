@@ -7,10 +7,12 @@ import {
   usablePluginFrameGuest,
   type PluginFrameElement
 } from './plugin-frame-element'
+import { PluginDeclarativePanel } from './PluginDeclarativePanel'
 import { usePluginFrameHost } from './use-plugin-frame-host'
 import { usePluginFrameEntry } from './use-plugin-frame-entry'
 import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
 import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 type PluginPanelProps = {
   tabKey: string
@@ -37,7 +39,8 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     panel?.id ?? null
   )
   const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
-  const panelShell = entry.status === 'ready' && !guest ? entry.html : null
+  const declarative = entry.status === 'ready' && entry.ui === 'components'
+  const panelShell = entry.status === 'ready' && !guest && !declarative ? entry.html : null
   // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
   const panelDocument = useMemo(
     () => (panelShell ? fillPluginPanelShell(panelShell) : null),
@@ -47,7 +50,8 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'panel',
     frameRef,
-    frameKey: panelFrameKey,
+    // Why null: a declarative panel's own host wires its hidden guest instead.
+    frameKey: declarative ? null : panelFrameKey,
     sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
     onUnresponsive: markUnresponsive,
     onGuestGone: remountGone
@@ -99,6 +103,32 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
           'auto.components.right.sidebar.PluginPanel.loadFailed',
           'The plugin panel could not be loaded.'
         )}
+      </PluginPanelMessage>
+    )
+  }
+
+  if (declarative) {
+    return guest && panelFrameKey ? (
+      <PluginDeclarativePanel
+        key={panelFrameKey}
+        panelId={panel.id}
+        title={panel.title}
+        guest={guest}
+        frameKey={panelFrameKey}
+        sessionToken={entry.sessionToken}
+        onUnresponsive={markUnresponsive}
+      />
+    ) : (
+      <PluginPanelMessage>
+        {isWebClientLocation()
+          ? translate(
+              'auto.components.right.sidebar.PluginPanel.needsDesktop',
+              'This panel runs only in the Orca desktop app.'
+            )
+          : translate(
+              'auto.components.right.sidebar.PluginPanel.needsIsolatedFrames',
+              'This panel is not available: it needs isolated plugin frames, which are turned off.'
+            )}
       </PluginPanelMessage>
     )
   }

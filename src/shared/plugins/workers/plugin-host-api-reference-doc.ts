@@ -43,11 +43,21 @@ function typeText(schema: JsonSchema): string {
   return schema.type ?? 'JSON'
 }
 
-function signature(params: z.ZodType, result: z.ZodType): string {
+/** A method's params (as passed) and result (as returned), as TypeScript-like type text. */
+export function pluginHostMethodTypeTexts(
+  params: z.ZodType,
+  result: z.ZodType
+): { params: string; result: string } {
   const options = { target: 'draft-2020-12', unrepresentable: 'any' } as const
-  const input = z.toJSONSchema(params, { ...options, io: 'input' })
-  const output = z.toJSONSchema(result, { ...options, io: 'output' })
-  return `(params: ${typeText(input)}) => ${typeText(output)}`
+  return {
+    params: typeText(z.toJSONSchema(params, { ...options, io: 'input' })),
+    result: typeText(z.toJSONSchema(result, { ...options, io: 'output' }))
+  }
+}
+
+function signature(params: z.ZodType, result: z.ZodType): string {
+  const types = pluginHostMethodTypeTexts(params, result)
+  return `(params: ${types.params}) => ${types.result}`
 }
 
 // Why a Record: a new error code fails typecheck until it is documented here.

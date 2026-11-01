@@ -4,10 +4,10 @@ import {
 } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { pluginEvent } from '../../../../shared/plugins/frames/plugin-protocol'
 import {
-  PANEL_DESIGN_TOKEN_ALLOWLIST,
   PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER,
   PANEL_SHELL_TOKENS_PLACEHOLDER
 } from '../../../../shared/plugins/frames/plugin-panel-shell'
+import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../../../../shared/plugins/frames/plugin-panel-design-tokens'
 import type { PluginFrameWindow } from './plugin-frame-host'
 
 /** Snapshot trusted computed tokens for isolated panels; strip structural CSS characters before inserting into the shell style block. */

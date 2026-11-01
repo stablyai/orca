@@ -133,6 +133,17 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugin-frame-guest|plugin-smoke'
   ),
   pluginRoute(
+    'plugins.declarative-panels',
+    ['plugin-declarative-panel'],
+    [
+      `${UI}declarative\\/`,
+      'src\\/shared\\/plugins\\/(?:declarative\\/|frames\\/plugin-declarative-)',
+      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
+      'resources\\/plugins\\/declarative\\/'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke'
+  ),
+  pluginRoute(
     'plugins.vm-recipes',
     ['plugin-marketplace-content'],
     [

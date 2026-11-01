@@ -19,6 +19,10 @@ import type {
   PluginFrameTheme
 } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
+import type {
+  PluginPanelStateRequest,
+  PluginPanelStateResult
+} from '../../shared/plugins/declarative/plugin-declarative-panel-state'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
@@ -175,6 +179,8 @@ export type PluginsApi = {
     action: string
     params?: unknown
   }) => Promise<PluginHostCallOutcome>
+  /** A components panel's persisted atoms (desktop only); see plugin-panel-state.ts. */
+  panelState?: (args: PluginPanelStateRequest) => Promise<PluginPanelStateResult>
   /** Pins a Git install input to an exact commit without downloading it. */
   resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>

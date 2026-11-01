@@ -42,7 +42,7 @@ type PluginPanelControllerOptions = {
 type FrameOpenOptions = { shell?: boolean }
 
 type LoadedPluginPanel = {
-  entry: { html: string }
+  entry: { html: string; ui?: 'components' }
   binding: PluginPanelSessionBinding
 }
 
@@ -79,6 +79,19 @@ export class PluginPanelController {
     options: FrameOpenOptions = {}
   ): Promise<PluginFrameEntry | null> {
     return this.openFrame(ownerKey, pluginKey, 'editor', editorId, isCurrent, options)
+  }
+
+  /** The plugin behind this owner's live components-panel session, for its persisted state. */
+  componentsPanelPlugin(ownerKey: string, sessionToken: string): string | null {
+    const binding = this.sessions.resolve(ownerKey, sessionToken)
+    if (!binding || binding.surface !== 'panel') {
+      return null
+    }
+    const plugin = this.options.resolveApprovedPlugin(binding.pluginKey)
+    const panel = plugin ? findFrameContribution(plugin, 'panel', binding.contributionId) : null
+    return plugin && plugin.rootDir === binding.rootDir && panel?.ui === 'components'
+      ? binding.pluginKey
+      : null
   }
 
   revokeSession(ownerKey: string, sessionToken: string): void {
@@ -216,12 +229,17 @@ export class PluginPanelController {
     if (!plugin || !contribution) {
       return null
     }
-    const html = withShell ? await this.readShell(plugin, contribution.entry, surface) : ''
+    const declarative = contribution.ui === 'components'
+    // Why no entry text: a declarative entry is a module the desktop guest imports; browser
+    // clients get an empty shell and show that the panel needs the desktop app.
+    const html = withShell
+      ? await this.readShell(plugin, declarative ? null : contribution.entry, surface)
+      : ''
     if (html === null) {
       return null
     }
     return {
-      entry: { html },
+      entry: declarative ? { html, ui: 'components' } : { html },
       binding: {
         pluginKey,
         surface,
@@ -234,7 +252,7 @@ export class PluginPanelController {
 
   private async readShell(
     plugin: ValidDiscoveredPlugin,
-    entryPath: string,
+    entryPath: string | null,
     surface: PluginFrameSurface
   ): Promise<string | null> {
     const { pluginKey } = plugin
@@ -242,11 +260,13 @@ export class PluginPanelController {
     try {
       await this.options.contentVerifier.verify(plugin)
       const html = buildPluginPanelShellHtml(
-        await readContainedPluginArtifactText(
-          plugin.rootDir,
-          entryPath,
-          PLUGIN_PANEL_ENTRY_MAX_BYTES
-        ),
+        entryPath === null
+          ? ''
+          : await readContainedPluginArtifactText(
+              plugin.rootDir,
+              entryPath,
+              PLUGIN_PANEL_ENTRY_MAX_BYTES
+            ),
         surface
       )
       const current = this.options.resolveApprovedPlugin(pluginKey)
@@ -267,7 +287,7 @@ function findFrameContribution(
   plugin: ValidDiscoveredPlugin,
   surface: PluginPanelSessionBinding['surface'],
   id: string
-): { entry: string; runtime?: string } | null {
+): { entry: string; ui?: string } | null {
   const list =
     surface === 'panel'
       ? plugin.manifest.contributes.panels

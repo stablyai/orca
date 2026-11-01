@@ -81,6 +81,8 @@ export type PluginFrameEntry = {
   sessionToken: string
   /** Desktop IPC only: browser clients never get one and keep the srcdoc iframe. */
   guest?: PluginFrameGuest
+  /** A declarative panel: the guest runs a module and Orca renders its tree; `html` is empty. */
+  ui?: 'components'
 }
 
 /** Pong fast path without parse-issue allocations (~90x accepted cost), bounding near-miss spam cost. */
