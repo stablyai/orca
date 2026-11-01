@@ -49,6 +49,7 @@ export function ReviewerPickerDrawer({
   const t = useMobileTranslation()
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
+  const [reload, setReload] = useState(0)
 
   const targetKey = prRepo ? githubRepoIdentityKey(prRepo) : null
   useEffect(() => {
@@ -57,13 +58,21 @@ export function ReviewerPickerDrawer({
     }
     let cancelled = false
     const generation = client.getGeneration?.()
+    // A connection change retires this load; the next connected session fetches the same repository again.
     const stop = client.onStateChange((state) => {
-      if (state !== 'connected' || client.getGeneration?.() !== generation) {
+      if (state !== 'connected') {
         cancelled = true
-        setLoad({ status: 'idle' })
+        setLoad({ status: 'loading' })
+      } else if (cancelled || client.getGeneration?.() !== generation) {
+        cancelled = true
+        setReload((count) => count + 1)
       }
     })
     setLoad({ status: 'loading' })
+    if (client.getState() !== 'connected') {
+      cancelled = true
+      return stop
+    }
     void fetchAssignableUsers(client, worktreeId, prRepo)
       .then((outcome) => {
         if (cancelled) {
@@ -84,7 +93,7 @@ export function ReviewerPickerDrawer({
       cancelled = true
       stop()
     }
-  }, [visible, client, worktreeId, targetKey])
+  }, [visible, client, worktreeId, targetKey, reload])
 
   const ordered = useMemo(() => {
     if (load.status !== 'loaded') {
