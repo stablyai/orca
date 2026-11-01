@@ -194,7 +194,10 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.keypress',
     permission: 'workspace',
     params: Keypress,
-    handler: async (params, { runtime }) => runtime.browserKeypress(params)
+    handler: async (params, { runtime, pairedDeviceId, clientKind }) => {
+      runtime.offscreenBrowserPageLinks.noteInput(params.page, { pairedDeviceId, clientKind })
+      return runtime.browserKeypress(params)
+    }
   }),
   defineMethod({
     name: 'browser.pdf',

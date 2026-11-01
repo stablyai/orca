@@ -27,6 +27,15 @@ import type { BrowserGrabCancelReason } from '../../shared/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './browser-manager-viewport-scroll-state'
 import { BrowserGuestDevToolsDock } from './browser-guest-devtools-dock'
 
+/** A link a headless serve page asked to open as an Orca tab beside it. */
+export type OffscreenBrowserTabOpenRequest = {
+  openerPageId: string
+  worktreeId: string | null
+  profileId: string | null
+  url: string
+  activate: boolean
+}
+
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
   protected abstract attachGuestPolicies(
     guest: Electron.WebContents,
@@ -161,6 +170,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   // Restore the optimistically hidden error if navigation aborts.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
+  protected offscreenTabOpener: ((request: OffscreenBrowserTabOpenRequest) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null
   protected siteDisplayController: BrowserSiteDisplayController | null = null
   protected shouldForwardDictationShortcut: (() => boolean) | null = null
@@ -180,6 +190,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   setBrowserGuestStateChangedListener(listener: ((worktreeId: string) => void) | null): void {
     this.browserGuestStateChangedListener = listener
+  }
+
+  setOffscreenTabOpener(opener: ((request: OffscreenBrowserTabOpenRequest) => void) | null): void {
+    this.offscreenTabOpener = opener
   }
 
   setCertificateTrustController(controller: BrowserCertificateTrustController): void {

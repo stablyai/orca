@@ -33,7 +33,7 @@ export type BrowserSessionTabSelectionOptions = {
   /** Required to force each caller to decide whether shared host selection moves. */
   focusesHost: boolean
   /** Paired origin and navigation audience travel together; absent for local creates. */
-  caller?: { clientNavigationId: string; navigation: RuntimeNavigationTarget }
+  caller?: { clientNavigationId: string; navigation: RuntimeNavigationTarget; follows?: boolean }
 }
 
 export type BrowserTabCreatePublication = {
@@ -42,6 +42,8 @@ export type BrowserTabCreatePublication = {
   worktreeId?: string
   focus: BrowserTabCreateFocusResolution
   clientNavigationId?: string
+  /** The client is named for input it sent, not a create it asked for, so it has no pending focus of its own. */
+  callerFollows?: boolean
   targetGroupId?: string
 }
 
@@ -201,7 +203,8 @@ export function publishCreatedBrowserSessionTab(
         ? {
             caller: {
               clientNavigationId: publication.clientNavigationId,
-              navigation: publication.focus.navigation
+              navigation: publication.focus.navigation,
+              ...(publication.callerFollows ? { follows: true } : {})
             }
           }
         : {})

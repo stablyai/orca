@@ -82,19 +82,28 @@ export const BROWSER_EXTRA_METHODS = [
     name: 'browser.mouseDown',
     permission: 'workspace',
     params: MouseButton,
-    handler: async (params, { runtime }) => runtime.browserMouseDown(params)
+    handler: async (params, { runtime, pairedDeviceId, clientKind }) => {
+      runtime.offscreenBrowserPageLinks.noteInput(params.page, { pairedDeviceId, clientKind })
+      return runtime.browserMouseDown(params)
+    }
   }),
   defineMethod({
     name: 'browser.mouseClick',
     permission: 'workspace',
     params: MouseClick,
-    handler: async (params, { runtime }) => runtime.browserMouseClick(params)
+    handler: async (params, { runtime, pairedDeviceId, clientKind }) => {
+      runtime.offscreenBrowserPageLinks.noteInput(params.page, { pairedDeviceId, clientKind })
+      return runtime.browserMouseClick(params)
+    }
   }),
   defineMethod({
     name: 'browser.mouseUp',
     permission: 'workspace',
     params: MouseButton,
-    handler: async (params, { runtime }) => runtime.browserMouseUp(params)
+    handler: async (params, { runtime, pairedDeviceId, clientKind }) => {
+      runtime.offscreenBrowserPageLinks.noteInput(params.page, { pairedDeviceId, clientKind })
+      return runtime.browserMouseUp(params)
+    }
   }),
   defineMethod({
     name: 'browser.mouseWheel',

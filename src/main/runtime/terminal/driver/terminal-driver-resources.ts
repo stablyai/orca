@@ -45,6 +45,7 @@ import { readBrowserTabBar } from '../../browser/browser-tab-listing'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { ServeBrowserPageState } from '../../serve-browser-tab-layout'
+import { OffscreenBrowserPageLinks } from '../../browser/offscreen-browser-page-links'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
@@ -174,6 +175,10 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   serveBrowserPageNavigated(page: ServeBrowserPageState): void {
     this.serveBrowserTabs.navigated(page)
   }
+
+  readonly offscreenBrowserPageLinks = new OffscreenBrowserPageLinks((params, caller) =>
+    this.browserCommands.browserTabCreate(params, caller)
+  )
 
   protected readonly edgeCommands = new RuntimeEdgeCommandController({
     jiraHost: {

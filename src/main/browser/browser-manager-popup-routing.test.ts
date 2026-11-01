@@ -328,6 +328,56 @@ describe('browserManager', () => {
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
   })
 
+  // #36804: headless serve pages have no renderer to own Orca's tab model.
+  it('opens a headless serve page new-tab link through the offscreen tab opener', () => {
+    const openTab = vi.fn()
+    browserManager.setOffscreenTabOpener(openTab)
+    const guest = {
+      id: 152,
+      isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      prependListener: vi.fn(),
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => (id === guest.id ? guest : null))
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'serve-page',
+      worktreeId: 'wt-1',
+      sessionProfileId: 'work',
+      webContentsId: guest.id
+    })
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+      frameName: string
+      features: string
+      disposition: string
+    }) => { action: 'allow' | 'deny' }
+    for (const disposition of ['foreground-tab', 'background-tab']) {
+      expect(
+        handler({ url: 'https://docs.example.com/guide', frameName: '', features: '', disposition })
+      ).toEqual({ action: 'deny' })
+    }
+
+    const request = {
+      openerPageId: 'serve-page',
+      worktreeId: 'wt-1',
+      profileId: 'work',
+      url: 'https://docs.example.com/guide'
+    }
+    expect(openTab.mock.calls).toEqual([
+      [{ ...request, activate: true }],
+      [{ ...request, activate: false }]
+    ])
+    expect(openPopupWithOriginBarMock).not.toHaveBeenCalled()
+    expect(shellOpenExternalMock).not.toHaveBeenCalled()
+  })
+
   it('opens unnamed window.open with only opener features as a tab, as Chrome does', () => {
     const rendererSendMock = vi.fn()
     const guest = {
