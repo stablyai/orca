@@ -14,6 +14,7 @@ import { useFileExplorerOpenInApp } from './use-file-explorer-open-in-app'
 
 const openInExternalEditor = vi.fn()
 const openInOrca = vi.fn()
+const makePreviewFilePermanent = vi.fn()
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
@@ -61,6 +62,8 @@ beforeEach(() => {
   openInExternalEditor.mockReset()
   openInExternalEditor.mockResolvedValue({ ok: true })
   openInOrca.mockReset()
+  makePreviewFilePermanent.mockReset()
+  useAppStore.setState({ makePreviewFilePermanent })
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: { shell: { openInExternalEditor } }
@@ -103,6 +106,49 @@ describe('useFileExplorerOpenInApp', () => {
     })
 
     expect(openInOrca).toHaveBeenCalledTimes(1)
+  })
+
+  it('pins the fallback tab when a double-click reached the file before the launch failed', async () => {
+    chooseApp('zed', 'app')
+    const settleLaunch: ((result: { ok: boolean; reason?: string }) => void)[] = []
+    openInExternalEditor.mockImplementation(
+      () => new Promise((resolve) => settleLaunch.push(resolve))
+    )
+    const open = renderHook(LOCAL_EXECUTION_HOST_ID)
+
+    open('/repo/a.ts', { repeated: false, openInOrca })
+    open('/repo/a.ts', { repeated: true, openInOrca })
+    await act(async () => settleLaunch[0]({ ok: false, reason: 'launch-failed' }))
+
+    expect(openInOrca).toHaveBeenCalledTimes(1)
+    expect(makePreviewFilePermanent).toHaveBeenCalledWith('/repo/a.ts')
+  })
+
+  it('leaves pinning to the double-click handler when the launch failed before the repeated click', async () => {
+    chooseApp('zed', 'app')
+    openInExternalEditor.mockResolvedValue({ ok: false, reason: 'launch-failed' })
+    const open = renderHook(LOCAL_EXECUTION_HOST_ID)
+
+    await act(async () => {
+      open('/repo/a.ts', { repeated: false, openInOrca })
+    })
+    expect(open('/repo/a.ts', { repeated: true, openInOrca })).toBe(true)
+
+    expect(openInOrca).toHaveBeenCalledTimes(1)
+    expect(makePreviewFilePermanent).not.toHaveBeenCalled()
+  })
+
+  it('does not pin anything when the launch succeeds', async () => {
+    chooseApp('zed', 'app')
+    const open = renderHook(LOCAL_EXECUTION_HOST_ID)
+
+    await act(async () => {
+      open('/repo/a.ts', { repeated: false, openInOrca })
+      open('/repo/a.ts', { repeated: true, openInOrca })
+    })
+
+    expect(openInOrca).not.toHaveBeenCalled()
+    expect(makePreviewFilePermanent).not.toHaveBeenCalled()
   })
 
   it('leaves the file to the Orca editor when no app is chosen', () => {
