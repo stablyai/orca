@@ -21479,6 +21479,22 @@
         "reviewBody_other": "{{count}} weitere Claude-Sitzungen wurden nicht zu {{next}} verschoben.",
         "body_one": "{{count}} Claude-Sitzung läuft noch auf {{previous}}. Ein Neustart setzt das Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind.",
         "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind."
+      },
+      "apiEndpoint": {
+        "add": "API-Endpunkt hinzufügen",
+        "addTitle": "API-Endpunkt hinzufügen",
+        "editTitle": "API-Endpunkt bearbeiten",
+        "description": "Claude Code sendet die Anfragen dieses Kontos mit deinem Token an einen Anthropic-kompatiblen Endpunkt.",
+        "name": "Name",
+        "baseUrl": "Basis-URL",
+        "token": "Token",
+        "tokenKeep": "Leer lassen, um ihn zu behalten",
+        "model": "Modell",
+        "smallFastModel": "Hintergrundmodell",
+        "sameAsModel": "Wie Modell",
+        "save": "Speichern",
+        "saveFailed": "Der Endpunkt konnte nicht gespeichert werden.",
+        "edit": "Bearbeiten"
       }
     },
     "managedData": {

@@ -1,9 +1,10 @@
-import { ChevronDown, Link } from 'lucide-react'
+import { ChevronDown, Link, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { canCopyClaudeSignInLink } from '../../../../shared/claude-sign-in-link'
 import { Button } from '../ui/button'
+import { ButtonGroup } from '../ui/button-group'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,5 +73,43 @@ export function ClaudeSignInLinkMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+/** A saved account's sign-in button, with the copy-link option where Claude supports it. */
+export function ClaudeSignInAgainButtons({
+  runtime,
+  disabled,
+  signingIn,
+  onSignIn
+}: {
+  runtime: 'host' | 'wsl' | undefined
+  disabled: boolean
+  signingIn: boolean
+  onSignIn: (copyLink: boolean) => void
+}): React.JSX.Element {
+  return (
+    <ButtonGroup>
+      <Button
+        variant="ghost"
+        size="xs"
+        onClick={(event) => {
+          event.stopPropagation()
+          onSignIn(false)
+        }}
+        disabled={disabled}
+        className="h-6 px-2 text-muted-foreground hover:text-foreground"
+      >
+        {signingIn ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+        {translate('accounts.claude.signInAgain', 'Sign in again')}
+      </Button>
+      {canOfferClaudeSignInLink(runtime) ? (
+        <ClaudeSignInLinkMenu
+          variant="ghost"
+          disabled={disabled}
+          onCopyLink={() => onSignIn(true)}
+        />
+      ) : null}
+    </ButtonGroup>
   )
 }

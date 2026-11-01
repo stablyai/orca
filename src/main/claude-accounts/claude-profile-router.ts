@@ -93,7 +93,9 @@ export class ClaudeProfileRouter {
   }
 
   private selectedProfile(): ClaudeProfileDescriptor | null {
-    const id = getSelectedClaudeAccountIdForTarget(this.args.getSettings(), { runtime: 'host' })
+    const id = getSelectedClaudeAccountIdForTarget(this.args.getSettings(), {
+      runtime: 'host'
+    })
     return id ? this.describe(id) : null
   }
 
@@ -116,8 +118,12 @@ export class ClaudeProfileRouter {
       return false
     }
     const saved = findClaudeAccount(this.args.getSettings(), accountId)
+    // An endpoint account's name is not an email, so it never matches a login.
+    if (!saved || saved.authMethod === 'api-endpoint') {
+      return false
+    }
     const systemDefault = this.systemDefaultLogin()
-    return Boolean(saved && systemDefault && isSameClaudeLogin(saved, systemDefault))
+    return Boolean(systemDefault && isSameClaudeLogin(saved, systemDefault))
   }
 
   systemDefaultHome(): string {
@@ -278,7 +284,9 @@ export class ClaudeProfileRouter {
   terminalEnv(target?: ClaudeAccountSelectionTarget): ClaudeEnvPatch {
     // Pass the pointer without waiting on the guest.
     if (target?.runtime === 'wsl') {
-      return { [CLAUDE_PROFILE_POINTER_ENV]: `~/${wslClaudeProfilePointer(this.args.dataRoot)}` }
+      return {
+        [CLAUDE_PROFILE_POINTER_ENV]: `~/${wslClaudeProfilePointer(this.args.dataRoot)}`
+      }
     }
     // Save the user's value so the shell function can restore it on System default.
     const userConfigDir = readUserClaudeConfigDirAsSet(this.env)

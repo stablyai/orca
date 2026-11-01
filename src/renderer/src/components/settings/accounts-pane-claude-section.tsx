@@ -1,5 +1,6 @@
-import { Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { Loader2, Plus, Trash2, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { selectClaudeProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -14,8 +15,14 @@ import {
 } from './provider-account-visibility'
 import { formatAccountTimestamp, getClaudeAccountRuntimeLabel } from './accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
+import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
+import {
+  AddClaudeApiEndpointButton,
+  EditClaudeApiEndpointButton
+} from './claude-api-endpoint-dialog'
 import {
   canOfferClaudeSignInLink,
+  ClaudeSignInAgainButtons,
   ClaudeSignInLinkMenu,
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
@@ -74,6 +81,9 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             )
       )
     )
+  // The dialog already saved; this refreshes the list and reports it like other account changes.
+  const saveApiEndpointResult = (state: ClaudeRateLimitAccountsState): void =>
+    void runClaudeAccountAction('adding', () => Promise.resolve(state))
   return (
     <section key="claude-accounts" id="accounts-claude" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">
@@ -141,6 +151,12 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 />
               ) : null}
             </ButtonGroup>
+            {/* The token is written into a folder on this computer, so remote, WSL and web views do not offer it. */}
+            {!isRemoteAccountScope &&
+            accountRuntime.runtime === 'host' &&
+            !isWebClientLocation() ? (
+              <AddClaudeApiEndpointButton disabled={addDisabled} onSaved={saveApiEndpointResult} />
+            ) : null}
             {/* Follow the running addition; hide Cancel only when its server prompt already offers it. */}
             {claudeAction === 'adding' && !accountAdditionShownInPrompt('claude', accountOwner) ? (
               <Button
@@ -233,7 +249,11 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => updateSettings({ claudeCopiedSystemDefaultNoticeDismissed: true })}
+                onClick={() =>
+                  updateSettings({
+                    claudeCopiedSystemDefaultNoticeDismissed: true
+                  })
+                }
               >
                 {translate('accounts.claude.systemDefaultIsSavedDismiss', 'Dismiss')}
               </Button>
@@ -270,7 +290,10 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                   () =>
                     withCopiedClaudeLink(
                       copyLink,
-                      window.api.claudeAccounts.reauthenticate({ accountId: account.id, copyLink })
+                      window.api.claudeAccounts.reauthenticate({
+                        accountId: account.id,
+                        copyLink
+                      })
                     ),
                   accountRuntimeView
                 )
@@ -327,38 +350,28 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                               'accounts.claude.signInRequired',
                               'Sign in again to use this account'
                             )
-                          : account.organizationName
-                            ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
-                            : formatAccountTimestamp(account.lastAuthenticatedAt)}
+                          : account.apiEndpoint
+                            ? `${account.apiEndpoint.baseUrl} · ${account.apiEndpoint.model}`
+                            : account.organizationName
+                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                              : formatAccountTimestamp(account.lastAuthenticatedAt)}
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
-                      <ButtonGroup>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            void reauthenticate(false)
-                          }}
+                      {account.authMethod === 'api-endpoint' ? (
+                        <EditClaudeApiEndpointButton
+                          account={account}
                           disabled={isRemoteAccountScope || isBusy}
-                          className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                        >
-                          {isReauthing ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <RefreshCw className="size-3" />
-                          )}
-                          {translate('accounts.claude.signInAgain', 'Sign in again')}
-                        </Button>
-                        {canOfferClaudeSignInLink(accountRuntimeView.runtime) ? (
-                          <ClaudeSignInLinkMenu
-                            variant="ghost"
-                            disabled={isRemoteAccountScope || isBusy}
-                            onCopyLink={() => void reauthenticate(true)}
-                          />
-                        ) : null}
-                      </ButtonGroup>
+                          onSaved={saveApiEndpointResult}
+                        />
+                      ) : (
+                        <ClaudeSignInAgainButtons
+                          runtime={accountRuntimeView.runtime}
+                          disabled={isRemoteAccountScope || isBusy}
+                          signingIn={isReauthing}
+                          onSignIn={(copyLink) => void reauthenticate(copyLink)}
+                        />
+                      )}
                       <Button
                         variant="ghost"
                         size="xs"

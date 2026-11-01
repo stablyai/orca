@@ -21842,6 +21842,22 @@
         "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
         "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
         "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar."
+      },
+      "apiEndpoint": {
+        "add": "Adicionar endpoint de API",
+        "addTitle": "Adicionar endpoint de API",
+        "editTitle": "Editar endpoint de API",
+        "description": "O Claude Code envia as solicitações desta conta a um endpoint compatível com a Anthropic usando seu token.",
+        "name": "Nome",
+        "baseUrl": "URL base",
+        "token": "Token",
+        "tokenKeep": "Deixe em branco para manter",
+        "model": "Modelo",
+        "smallFastModel": "Modelo em segundo plano",
+        "sameAsModel": "Igual ao Modelo",
+        "save": "Salvar",
+        "saveFailed": "Não foi possível salvar o endpoint.",
+        "edit": "Editar"
       }
     },
     "managedData": {

@@ -21042,6 +21042,22 @@
         "restartCount_other": "重启 {{count}} 个会话",
         "reviewBody_other": "其他 {{count}} 个 Claude 会话未移至 {{next}}。",
         "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会等待空闲后再重启。"
+      },
+      "apiEndpoint": {
+        "add": "添加 API 端点",
+        "addTitle": "添加 API 端点",
+        "editTitle": "编辑 API 端点",
+        "description": "此账户的 Claude Code 会使用你的令牌，将请求发送到兼容 Anthropic 的端点。",
+        "name": "名称",
+        "baseUrl": "基础 URL",
+        "token": "令牌",
+        "tokenKeep": "留空则保留当前令牌",
+        "model": "模型",
+        "smallFastModel": "后台模型",
+        "sameAsModel": "与模型相同",
+        "save": "保存",
+        "saveFailed": "无法保存该端点。",
+        "edit": "编辑"
       }
     },
     "hostSignIn": {

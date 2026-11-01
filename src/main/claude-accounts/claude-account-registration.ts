@@ -1,9 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import type {
   ClaudeAccountSignIn,
+  ClaudeApiEndpointAccountRequest,
+  ClaudeApiEndpointSummary,
+  ClaudeManagedAccount,
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
 } from '../../shared/managed-account-types'
+import {
+  normalizeClaudeApiEndpointRequest,
+  readClaudeApiEndpointToken,
+  writeClaudeApiEndpoint
+} from './claude-api-endpoint'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
 import type {
   ClaudeAccountRuntime,
@@ -79,6 +87,65 @@ export class ClaudeAccountRegistration {
     }
   }
 
+  /** Save an endpoint account, or replace a saved one's endpoint when `accountId` is given. */
+  async saveApiEndpoint(
+    request: ClaudeApiEndpointAccountRequest,
+    accountId?: string
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const { store, rateLimits, runtimeAuth, selection } = this.deps
+    const saved = accountId ? selection.requireAccount(accountId) : null
+    if (saved && saved.authMethod !== 'api-endpoint') {
+      throw new Error('That Claude account signs in with a subscription, not a token.')
+    }
+    const savedToken = saved
+      ? readClaudeApiEndpointToken(runtimeAuth.router.accountHome(saved.id))
+      : null
+    const endpoint = normalizeClaudeApiEndpointRequest(request, savedToken)
+    const accounts = store.getSettings().claudeManagedAccounts
+    if (
+      accounts.some((entry) => entry.id !== saved?.id && endpointAccountMatches(entry, endpoint))
+    ) {
+      throw new Error('This endpoint account is already added.')
+    }
+    const id = saved?.id ?? randomUUID()
+    // Endpoint accounts run on the host; a WSL guest cannot read the host folder's token.
+    const target = { runtime: 'host' } as const
+    const folder = await runtimeAuth.prepareAccountFolder(id, target)
+    let apiEndpoint: ClaudeApiEndpointSummary
+    try {
+      apiEndpoint = writeClaudeApiEndpoint(folder.readPath, endpoint)
+      // Set up again so the folder's settings carry the endpoint before any launch.
+      await runtimeAuth.prepareAccountFolder(id, target)
+    } catch (error) {
+      if (!saved) {
+        await runtimeAuth.removeAccountFolder(id, target).catch(() => {})
+      }
+      throw error
+    }
+    const now = Date.now()
+    selection.saveSettings({
+      claudeManagedAccounts: [
+        ...accounts.filter((entry) => entry.id !== id),
+        {
+          id,
+          email: endpoint.label,
+          managedAuthPath: folder.readPath,
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          wslLinuxAuthPath: null,
+          authMethod: 'api-endpoint',
+          apiEndpoint,
+          createdAt: saved?.createdAt ?? now,
+          updatedAt: now,
+          lastAuthenticatedAt: now
+        }
+      ]
+    })
+    rateLimits.evictInactiveClaudeCache(id)
+    await runtimeAuth.syncForCurrentSelection(target)
+    return selection.list()
+  }
+
   async finish(
     signIn: Omit<ClaudeAccountSignIn, 'configDir'>,
     notSignedInMessage = CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE
@@ -134,6 +201,17 @@ export class ClaudeAccountRegistration {
     selection.refreshUsage(undefined, target)
     return selection.list()
   }
+}
+
+function endpointAccountMatches(
+  account: ClaudeManagedAccount,
+  endpoint: ClaudeApiEndpointAccountRequest
+): boolean {
+  return (
+    account.authMethod === 'api-endpoint' &&
+    account.email.toLowerCase() === endpoint.label.toLowerCase() &&
+    account.apiEndpoint?.baseUrl === endpoint.baseUrl
+  )
 }
 
 function signInTarget(request: ClaudeAccountSelectionTarget): ClaudeAccountSelectionTarget {

@@ -21701,6 +21701,22 @@
         "body_one": "{{count}} session Claude est toujours active sur {{previous}}. Le redémarrage poursuit la conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
         "body_other": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
         "body_many": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer."
+      },
+      "apiEndpoint": {
+        "add": "Ajouter un endpoint d’API",
+        "addTitle": "Ajouter un endpoint d’API",
+        "editTitle": "Modifier l’endpoint d’API",
+        "description": "Claude Code envoie les requêtes de ce compte à un endpoint compatible Anthropic avec votre jeton.",
+        "name": "Nom",
+        "baseUrl": "URL de base",
+        "token": "Jeton",
+        "tokenKeep": "Laisser vide pour le conserver",
+        "model": "Modèle",
+        "smallFastModel": "Modèle d’arrière-plan",
+        "sameAsModel": "Identique au modèle",
+        "save": "Enregistrer",
+        "saveFailed": "Impossible d’enregistrer l’endpoint.",
+        "edit": "Modifier"
       }
     },
     "hostSignIn": {

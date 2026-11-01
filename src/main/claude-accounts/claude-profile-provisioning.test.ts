@@ -167,6 +167,40 @@ describe('Claude profile refresh from the default home', () => {
       expect(f.read(elsewhere)).toEqual({ mine: true })
     }
   )
+  it('adds an endpoint account’s env over the user’s settings and drops other credentials', async () => {
+    const f = fixture()
+    f.json(join(f.source, 'settings.json'), {
+      model: 'a',
+      apiKeyHelper: 'helper',
+      env: {
+        ANTHROPIC_BASE_URL: 'https://proxy.example.test',
+        ANTHROPIC_API_KEY: 'proxy-key',
+        CLAUDE_CODE_USE_BEDROCK: '1',
+        NORMAL: 'yes'
+      }
+    })
+    const endpointEnv = {
+      ANTHROPIC_BASE_URL: 'https://api.example.test',
+      ANTHROPIC_AUTH_TOKEN: 'endpoint-token'
+    }
+    const run = () =>
+      provisionClaudeProfile({
+        profileHome: f.profileHome,
+        userHome: f.userHome,
+        platform: 'linux',
+        endpointEnv
+      })
+    expect((await run()).surfaces['settings.json']).toBe('synced')
+    const target = join(f.profileHome, 'settings.json')
+    expect(f.read(target)).toEqual({ model: 'a', env: { NORMAL: 'yes', ...endpointEnv } })
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(target).mode & 0o777).toBe(0o600)
+    }
+    expect((await run()).surfaces['settings.json']).toBe('unchanged')
+    fs.rmSync(join(f.source, 'settings.json'))
+    expect((await run()).surfaces['settings.json']).toBe('synced')
+    expect(f.read(target)).toEqual({ env: endpointEnv })
+  })
   it('copies state except the login, caches and install ids, and never copies credentials', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.source, '.credentials.json'), 'SOURCE_CREDENTIAL_BYTES')

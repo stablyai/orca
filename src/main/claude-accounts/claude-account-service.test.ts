@@ -11,6 +11,7 @@ import {
   CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE
 } from './claude-account-selection'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
+import { readClaudeApiEndpointToken } from './claude-api-endpoint'
 import { describeClaudeProfile } from './claude-profile-paths'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 import { ClaudeAccountService } from './service'
@@ -105,6 +106,39 @@ function handOverClaudeSignInLink(windowsPath: string, link: string): void {
 }
 
 describe('ClaudeAccountService', () => {
+  it('adds an endpoint account that needs no sign-in and keeps its token on edit', async () => {
+    const f = fixture([account('a')])
+    const endpoint = {
+      label: 'Sakana AI',
+      baseUrl: 'https://api.sakana.ai',
+      authToken: 'test-token',
+      model: 'fugu',
+      smallFastModel: 'fugu'
+    }
+    const added = await f.service.saveApiEndpointAccount(endpoint)
+    const id = newId(f)
+    // Once to make the folder, again so its settings carry the endpoint.
+    expect(f.runtimeAuth.prepareAccountFolder).toHaveBeenCalledTimes(2)
+    const row = added.accounts.find((entry) => entry.id === id)
+    expect(row).toMatchObject({
+      email: 'Sakana AI',
+      authMethod: 'api-endpoint',
+      apiEndpoint: { baseUrl: 'https://api.sakana.ai', model: 'fugu', smallFastModel: 'fugu' }
+    })
+    expect(row?.needsSignIn).toBeUndefined()
+    expect(JSON.stringify(f.settings().claudeManagedAccounts)).not.toContain('test-token')
+    await expect(f.service.saveApiEndpointAccount(endpoint)).rejects.toThrow('already added')
+
+    const edited = await f.service.saveApiEndpointAccount(
+      { ...endpoint, authToken: '', model: 'fugu-ultra' },
+      id
+    )
+    expect(edited.accounts.find((entry) => entry.id === id)?.apiEndpoint?.model).toBe('fugu-ultra')
+    expect(readClaudeApiEndpointToken(f.home(id))).toBe('test-token')
+    await expect(f.service.selectAccount(id)).resolves.toMatchObject({ activeAccountId: id })
+    await expect(f.service.saveApiEndpointAccount(endpoint, 'a')).rejects.toThrow('subscription')
+  })
+
   it("labels each row with its folder's login and asks a folder without one to sign in", () => {
     const f = fixture([
       account('a'),

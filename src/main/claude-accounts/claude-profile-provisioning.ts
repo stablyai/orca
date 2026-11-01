@@ -20,6 +20,7 @@ import {
   type ClaudeProfileSurfaceOutcome
 } from './claude-profile-report'
 import { copyClaudeProfileFile, linkClaudeProfileDirectory } from './claude-profile-sharing'
+import { copySettingsWithEndpoint } from './claude-profile-endpoint-settings'
 
 const CLAUDE_PROFILE_MEMORY_IMPORT = '@~/.claude/CLAUDE.md\n'
 
@@ -258,6 +259,8 @@ export async function provisionClaudeProfile(args: {
   platform?: NodeJS.Platform
   /** Before the setup marker, a folder in the profile is one Claude made, not one the user owns. */
   firstSetup?: boolean
+  /** An endpoint account's env, merged into the copied settings. */
+  endpointEnv?: Record<string, string> | null
 }): Promise<ClaudeProfileReport> {
   const platform = args.platform ?? process.platform
   const defaultHome = resolveClaudeDefaultHome(args.userHome, args.userConfigDir)
@@ -293,9 +296,13 @@ export async function provisionClaudeProfile(args: {
         : copyClaudeProfileFile(source, target)
     })
   }
-  await runClaudeProfileSurface(report, 'settings.json', () =>
-    copySettings(join(defaultHome, 'settings.json'), join(args.profileHome, 'settings.json'))
-  )
+  await runClaudeProfileSurface(report, 'settings.json', () => {
+    const source = join(defaultHome, 'settings.json')
+    const target = join(args.profileHome, 'settings.json')
+    return args.endpointEnv
+      ? copySettingsWithEndpoint(source, target, args.endpointEnv)
+      : copySettings(source, target)
+  })
   const statePath = (configDir: string | undefined): string =>
     resolveClaudeGlobalConfigFile({
       env: { CLAUDE_CONFIG_DIR: configDir },
