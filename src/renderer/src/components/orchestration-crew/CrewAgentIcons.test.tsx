@@ -219,7 +219,7 @@ it.each([10, 100])(
     const listeners = readStoreListenerCount()
     const mounted = render(panel(Array.from({ length: n }, (_, i) => row(i))))
     await act(async () => {})
-    expect(readStoreListenerCount()).toBe(listeners + 1)
+    expect(readStoreListenerCount()).toBe((listeners ?? 0) + 1)
     fireEvent.click(screen.getByRole('button', { name: /^Show orchestration:/ }))
     expect(normalize).toHaveBeenCalledTimes(n)
     visits = 0

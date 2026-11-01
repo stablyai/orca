@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { openOrchestrationCrewAgent } from '@/lib/open-agent-message-sender'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { CrewRowDetails, CrewRowTime as Time } from './CrewRowDetails'
@@ -46,6 +47,8 @@ export const CrewRowView = memo(function CrewRowView({
   canMention: boolean
   mention: (rows: OrchestrationCrewRow[]) => void
 }) {
+  // memo blocks the parent re-render a language switch relies on.
+  useUiLanguageRevision()
   // A pending question already shows on the row's second line, so rows start collapsed.
   const [expanded, setExpanded] = useState(false)
   const open = () => {
