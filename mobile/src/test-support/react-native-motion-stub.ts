@@ -22,6 +22,11 @@ export function reactNativeMotionStub() {
     Animated: {
       Value,
       View: 'Animated.View',
+      multiply: (left: Value) => left,
+      spring: () => ({
+        start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }),
+        stop: () => {}
+      }),
       timing: () => ({
         start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }),
         stop: () => {}
@@ -34,6 +39,7 @@ export function reactNativeMotionStub() {
       in: shaped,
       inOut: shaped,
       out: shaped
-    }
+    },
+    useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 1 })
   }
 }
