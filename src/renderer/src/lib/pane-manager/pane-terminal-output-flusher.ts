@@ -81,6 +81,7 @@ export function flushTerminalOutputImpl(
               : queuedWrite.data,
             {
               forceViewportRefresh: queuedWrite.forceForegroundRefresh,
+              throttleForcedRefresh: true,
               followupViewportRefresh: queuedWrite.followupForegroundRefresh,
               shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
               onParsed: composeParsedCallback(
