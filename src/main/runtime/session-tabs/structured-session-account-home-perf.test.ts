@@ -136,10 +136,10 @@ it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (
       }
       const elapsedMs = performance.now() - started
       expect(answers).toEqual(
-        Array(deliveries).fill({
+        Array.from({ length: deliveries }, () => ({
           variable: 'CLAUDE_CONFIG_DIR',
           path: signedIn ? selectedHome : systemHome
-        })
+        }))
       )
       const stats = vi.mocked(fsp.stat).mock.calls.length
       const stateReads = vi.mocked(fsp.readFile).mock.calls.length

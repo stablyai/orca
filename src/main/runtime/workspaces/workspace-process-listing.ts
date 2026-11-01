@@ -1,4 +1,3 @@
-import { structuredWorkerOwesWork } from '../structured-worker-custody'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
@@ -44,7 +43,10 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { chatWorkerTurnStopReporter } from '../orchestration/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../worktree-listing-host-scope'
-import { structuredWorkerOpenTaskTitle } from '../structured-worker-custody'
+import {
+  structuredWorkerOpenTaskTitle,
+  structuredWorkerOwesWork
+} from '../structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
