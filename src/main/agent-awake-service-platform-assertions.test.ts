@@ -97,7 +97,7 @@ function createService(
 }
 
 describe('AgentAwakeService platform assertions', () => {
-  it('uses caffeinate without Electron display blocking on macOS', () => {
+  it('uses caffeinate without the Electron blocker on macOS', () => {
     const blocker = createBlocker()
     const macosAssertion = createPlatformAssertion()
     const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
@@ -122,14 +122,14 @@ describe('AgentAwakeService platform assertions', () => {
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.stop).toHaveBeenCalled()
   })
 
-  it('drops the display-blocking fallback after caffeinate recovers', () => {
+  it('drops the Electron blocker fallback after caffeinate recovers', () => {
     const blocker = createBlocker()
     const macosAssertion = createPlatformAssertion()
     macosAssertion.start.mockImplementationOnce(() => false).mockImplementation(() => true)
@@ -137,7 +137,7 @@ describe('AgentAwakeService platform assertions', () => {
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
 
     service.setStatuses([{ ...workingStatus(), receivedAt: 1_001 }])
     expect(blocker.stop).toHaveBeenCalledWith(1)
@@ -156,11 +156,25 @@ describe('AgentAwakeService platform assertions', () => {
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.stop).toHaveBeenCalled()
+  })
+
+  it('keeps the display hold on Windows, where it is the only system-sleep hold', () => {
+    const blocker = createBlocker()
+    const service = createService(
+      blocker,
+      createPlatformAssertion(),
+      createPlatformAssertion(),
+      'win32'
+    )
+
+    service.setMode('on')
+
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
   })
 
   it('starts platform assertions when Electron blocker start fails', () => {
