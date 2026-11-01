@@ -1,6 +1,7 @@
 import { attachAttemptObservationStore } from './attempt-observation-store'
 import { attachCoordinatorRunStore } from './coordinator-runs/coordinator-run-store'
 import { attachDecisionGateStore } from './decision-gates/decision-gate-store'
+import { attachResourceLockStore } from './locks/resource-lock-store'
 import { attachDispatchCompletion } from './dispatch-context/dispatch-completion'
 import { attachDispatchContextStore } from './dispatch-context/dispatch-context-store'
 import { attachDispatchLookup } from './dispatch-context/dispatch-lookup'
@@ -134,6 +135,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachDispatchCompletion(ctor)
   attachWorkerReportSettlement(ctor)
   attachDecisionGateStore(ctor)
+  attachResourceLockStore(ctor)
   attachCoordinatorRunStore(ctor)
   attachOrchestrationReset(ctor)
 }
