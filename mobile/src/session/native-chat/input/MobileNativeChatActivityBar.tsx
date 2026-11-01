@@ -153,6 +153,7 @@ export function MobileNativeChatActivityBar({
       >
         <MobileNativeChatSubagentSheet
           agents={visible}
+          completed={subagents.filter((agent) => agent.state === 'completed')}
           showBack={focused != null}
           focusedId={focused?.id ?? null}
           onChoose={(agentId) => {

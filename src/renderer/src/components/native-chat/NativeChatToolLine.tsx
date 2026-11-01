@@ -21,6 +21,11 @@ import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { nativeChatToolRowVerb } from './native-chat-tool-line-label'
 import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
 import { nativeChatToolLineView } from '../../../../shared/native-chat/tools/native-chat-tool-line-view'
+import {
+  nativeChatSpawnedSubagentId,
+  nativeChatSubagentCallTitle
+} from '../../../../shared/native-chat/input/native-chat-subagent-brief'
+import { useNativeChatOpenSubagent } from './native-chat-transcript-frame'
 import type { NativeChatWebSearchResult } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import {
   diffFromText,
@@ -92,6 +97,9 @@ export function NativeChatToolLine({
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
   const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(disclosureKey, false)
+  const onOpenSubagent = useNativeChatOpenSubagent()
+  const spawnId = isToolCallBlock(block) ? nativeChatSpawnedSubagentId(block.name, result) : null
+  const opensChild = spawnId != null && onOpenSubagent != null
 
   const view = useMemo(
     () =>
@@ -120,12 +128,28 @@ export function NativeChatToolLine({
     <div>
       <button
         type="button"
-        onClick={() => hasDetail && setExpanded(!expanded)}
+        data-testid={opensChild ? 'native-chat-open-subagent' : undefined}
+        onClick={() => {
+          if (opensChild && spawnId) {
+            onOpenSubagent?.(spawnId)
+            return
+          }
+          if (hasDetail) {
+            setExpanded(!expanded)
+          }
+        }}
         className={cn(
           'group/tool-line flex min-h-6.5 w-full items-center gap-2 rounded-md text-left font-sans text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-          hasDetail ? 'cursor-pointer' : 'cursor-default'
+          hasDetail || opensChild ? 'cursor-pointer' : 'cursor-default'
         )}
-        aria-expanded={hasDetail ? expanded : undefined}
+        aria-expanded={opensChild ? undefined : hasDetail ? expanded : undefined}
+        aria-label={
+          opensChild && isCall
+            ? translate('components.native-chat.activity.openSubagent', 'Open {{name}}', {
+                name: nativeChatSubagentCallTitle(block.input, name)
+              })
+            : undefined
+        }
       >
         {isCall ? (
           <NativeChatToolIcon
@@ -167,7 +191,7 @@ export function NativeChatToolLine({
         ) : null}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
           {isCall ? <NativeChatCommandMetadata block={block} /> : null}
-          {hasDetail ? (
+          {hasDetail && !opensChild ? (
             <ChevronRight
               className={cn(
                 'size-3.5 shrink-0 text-chat-foreground-faint transition-transform motion-reduce:transition-none',

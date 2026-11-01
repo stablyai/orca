@@ -250,6 +250,16 @@ describe('subagent child transcripts', () => {
     }
     expect(greeting.messages.flatMap(toolNames)).toEqual(['shell'])
     expect(greeting.messages.map(text).join('\n')).toContain('Hello from Orca')
+    const byThread = await readMessages({
+      agent: 'codex',
+      sessionId: 'session',
+      filePath: parentPath,
+      limit: 20,
+      subagentId: threadId
+    })
+    expect('messages' in byThread && byThread.messages.map(text).join('\n')).toContain(
+      'Hello from Orca'
+    )
     expect(checklist.messages.map(text).join('\n')).toContain('Checklist done')
     const projection = projectNativeChatTranscript([message('parent'), ...greeting.messages])
     expect(projection.conversation.some((entry) => entry.agentId)).toBe(false)

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Animated, PanResponder, Pressable, Text, View } from 'react-native'
 import { Ban, X } from 'lucide-react-native'
 import type { NativeChatSubagentState } from '../../../../../src/shared/native-chat/native-chat-types'
@@ -10,6 +10,7 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 const SWIPE_DISMISS_DISTANCE = 72
+const NO_COMPLETED: readonly NativeChatSubagentActivity[] = []
 
 export function subagentRowSwipeDismisses(dx: number, dy: number): boolean {
   return Math.abs(dx) >= SWIPE_DISMISS_DISTANCE && Math.abs(dx) > Math.abs(dy)
@@ -37,12 +38,14 @@ function stateLabel(
 
 export function MobileNativeChatSubagentSheet({
   agents,
+  completed = NO_COMPLETED,
   showBack,
   focusedId,
   onChoose,
   onDismiss
 }: {
   agents: readonly NativeChatSubagentActivity[]
+  completed?: readonly NativeChatSubagentActivity[]
   showBack: boolean
   focusedId: string | null
   onChoose: (agentId: string | null) => void
@@ -50,6 +53,7 @@ export function MobileNativeChatSubagentSheet({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const [completedOpen, setCompletedOpen] = useState(false)
   const dismissible = agents.filter((agent) => nativeChatSubagentDismissible(agent.state))
   const dismissAll = t('chat.activity.dismissAllFailed', 'Dismiss all failed')
   return (
@@ -102,6 +106,39 @@ export function MobileNativeChatSubagentSheet({
           </View>
         ))}
       </View>
+      {completed.length > 0 ? (
+        <View style={styles.group}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: completedOpen }}
+            testID="native-chat-completed-subagents"
+            onPress={() => setCompletedOpen((open) => !open)}
+            style={styles.choice}
+          >
+            <Text style={styles.completedLabel}>
+              {t('chat.activity.completedSubagents', 'Completed ({{count}})', {
+                count: completed.length
+              })}
+            </Text>
+          </Pressable>
+          {completedOpen
+            ? completed.map((agent) => (
+                <View key={agent.id}>
+                  <View style={styles.separator} />
+                  <Choice
+                    label={agent.label}
+                    detail={agent.activity ?? t('chat.activity.noActivity', 'No activity yet')}
+                    status={stateLabel(t, agent.state)}
+                    current={agent.id === focusedId}
+                    dismissLabel={null}
+                    testID="native-chat-open-completed"
+                    onPress={() => onChoose(agent.id)}
+                  />
+                </View>
+              ))
+            : null}
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -113,6 +150,7 @@ function Choice({
   failed = false,
   current,
   dismissLabel,
+  testID,
   onPress,
   onDismiss
 }: {
@@ -122,6 +160,7 @@ function Choice({
   failed?: boolean
   current: boolean
   dismissLabel: string | null
+  testID?: string
   onPress: () => void
   onDismiss?: () => void
 }): React.JSX.Element {
@@ -156,6 +195,7 @@ function Choice({
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: current }}
+          testID={testID}
           onPress={onPress}
           style={[styles.choice, dismissLabel ? styles.choiceWithDismiss : null]}
         >
@@ -212,6 +252,11 @@ const styles = themedStyleSheet(() => ({
     flexShrink: 1,
     color: colors.textMuted,
     fontSize: typography.metaSize
+  },
+  completedLabel: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   },
   group: {
     backgroundColor: colors.sheetGroup,

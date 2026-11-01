@@ -10,6 +10,7 @@ import {
   type NativeChatSubagentActivity
 } from '../../../../shared/native-chat/input/native-chat-activity'
 import { nativeChatSubagentDismissible } from '../../../../shared/native-chat/input/native-chat-subagent-dismissals'
+import { NativeChatCompletedSubagents } from './NativeChatCompletedSubagents'
 import { nativeChatCompletedTaskCount } from '../../../../shared/native-chat/input/native-chat-task-list'
 import type { NativeChatTaskSeedList } from '../../../../shared/native-chat/input/native-chat-claude-task-updates'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
@@ -285,6 +286,13 @@ export function NativeChatActivityBar({
                       </li>
                     )
                   })}
+                  <NativeChatCompletedSubagents
+                    agents={subagents.filter((agent) => agent.state === 'completed')}
+                    onOpen={(agentId) => {
+                      setSubagentsOpen(false)
+                      onFocusSubagent(agentId)
+                    }}
+                  />
                 </ul>
               </PopoverContent>
             </Popover>

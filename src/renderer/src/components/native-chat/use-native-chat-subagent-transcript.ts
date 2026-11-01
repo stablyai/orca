@@ -7,6 +7,8 @@ import type { NativeChatTaskSeedList } from '../../../../shared/native-chat/inpu
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import { frameNativeChatSubagentTranscript } from '../../../../shared/native-chat/input/native-chat-subagent-brief'
+import { linkUnrecordedSubagentSpawns } from '../../../../shared/native-chat/input/native-chat-unlinked-subagent-spawn'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import {
@@ -95,11 +97,26 @@ export function useNativeChatSubagentTranscript({
     if (!viewingSubagent || !requestedId) {
       return messages
     }
-    if (readSubagentPage) {
-      return page.messages ?? []
-    }
-    return subagentRows.get(requestedId)?.map((row) => row.message) ?? []
-  }, [messages, page.messages, readSubagentPage, requestedId, subagentRows, viewingSubagent])
+    const childPage = readSubagentPage
+      ? (page.messages ?? [])
+      : (subagentRows.get(requestedId)?.map((row) => row.message) ?? [])
+    const focusedAgent = activities.find((agent) => agent.id === requestedId)
+    return frameNativeChatSubagentTranscript(
+      requestedId,
+      childPage,
+      linkUnrecordedSubagentSpawns(messages),
+      focusedAgent ? { title: focusedAgent.label, prompt: focusedAgent.activity } : undefined,
+      !readSubagentPage || page.messages != null
+    )
+  }, [
+    activities,
+    messages,
+    page.messages,
+    readSubagentPage,
+    requestedId,
+    subagentRows,
+    viewingSubagent
+  ])
   const activityRows = useMemo(() => {
     if (!focusedSubagentId || !page.messages) {
       return subagentRows

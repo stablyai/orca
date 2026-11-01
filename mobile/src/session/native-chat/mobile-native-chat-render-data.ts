@@ -10,6 +10,7 @@ import {
   isUndrawnProviderFrameMessage
 } from '../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { projectNativeChatTaskListFrames } from '../../../../src/shared/native-chat/input/native-chat-task-list-frames'
+import { linkUnrecordedSubagentSpawns } from '../../../../src/shared/native-chat/input/native-chat-unlinked-subagent-spawn'
 import { foldSubagentItems } from '../../../../src/shared/native-chat/transcript/native-chat-subagent-items'
 import { prepareNativeChatMessages } from '../../../../src/shared/native-chat/transcript/native-chat-message-preparation'
 import {
@@ -98,13 +99,15 @@ function foldPreparedMobileNativeChatMessages(
   agent: AgentType
 ): NativeChatMessage[] {
   // Drop undrawn frames before folding so they cannot split a tool run. Project plan updates afterward so they cannot consume another call's result.
-  return projectNativeChatTaskListFrames(
-    stripNoiseMessages(
-      foldToolMessages(
-        foldSubagentItems(
-          prepareNativeChatMessages(
-            messages.filter((message) => !isUndrawnProviderFrameMessage(message)),
-            agent
+  return linkUnrecordedSubagentSpawns(
+    projectNativeChatTaskListFrames(
+      stripNoiseMessages(
+        foldToolMessages(
+          foldSubagentItems(
+            prepareNativeChatMessages(
+              messages.filter((message) => !isUndrawnProviderFrameMessage(message)),
+              agent
+            )
           )
         )
       )

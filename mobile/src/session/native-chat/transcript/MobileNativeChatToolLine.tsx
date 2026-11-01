@@ -14,6 +14,11 @@ import {
 import { nativeChatToolIconName } from '../../../../../src/shared/native-chat/tools/native-chat-tool-icon'
 import { nativeChatToolRowVerbCopy } from './native-chat-tool-row-verb-copy'
 import { nativeChatToolLineView } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-view'
+import {
+  nativeChatSpawnedSubagentId,
+  nativeChatSubagentCallTitle
+} from '../../../../../src/shared/native-chat/input/native-chat-subagent-brief'
+import { useMobileNativeChatOpenSubagent } from '../input/mobile-native-chat-open-subagent'
 import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
@@ -198,6 +203,9 @@ export function MobileNativeChatToolLine({
     () => nativeChatToolLineView(block, result),
     [block, result]
   )
+  const onOpenSubagent = useMobileNativeChatOpenSubagent()
+  const spawnId = call ? nativeChatSpawnedSubagentId(call.name, result) : null
+  const opensChild = spawnId != null && onOpenSubagent != null
   const commandDetail = label?.commandDetail ?? null
   const fullCommand = label?.fullCommand ?? null
   const verb = label?.verb ? nativeChatToolRowVerbCopy(t)[label.verb] : null
@@ -220,10 +228,26 @@ export function MobileNativeChatToolLine({
       <View style={styles.line}>
         <Pressable
           style={({ pressed }) => [styles.line, styles.cardToggle, pressed && pressedStyle]}
-          onPress={() => hasDetail && setExpanded(!expanded)}
-          disabled={!hasDetail}
+          testID={opensChild ? 'native-chat-open-subagent' : undefined}
+          onPress={() => {
+            if (opensChild && spawnId) {
+              onOpenSubagent?.(spawnId)
+              return
+            }
+            if (hasDetail) {
+              setExpanded(!expanded)
+            }
+          }}
+          disabled={!hasDetail && !opensChild}
           accessibilityRole="button"
-          accessibilityState={hasDetail ? { expanded } : undefined}
+          accessibilityState={opensChild ? undefined : hasDetail ? { expanded } : undefined}
+          accessibilityLabel={
+            opensChild && call
+              ? t('chat.activity.openSubagent', 'Open {{name}}', {
+                  name: nativeChatSubagentCallTitle(call.input, name)
+                })
+              : undefined
+          }
         >
           <View style={[styles.iconSlot, { width: iconSize }]}>
             {call ? (
@@ -258,7 +282,7 @@ export function MobileNativeChatToolLine({
               </Text>
             ) : null}
             {duration ? <Text style={[styles.lineMeta, type.meta]}>{duration}</Text> : null}
-            {hasDetail ? (
+            {hasDetail && !opensChild ? (
               <View style={expanded ? styles.caretOpen : undefined}>
                 <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
               </View>
