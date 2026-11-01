@@ -243,8 +243,10 @@ describe('publishCreatedBrowserSessionTab', () => {
     expect(setActiveTab).not.toHaveBeenCalled()
   })
 
-  it('leaves the agent on its page for a tab no one picked', () => {
-    const { host, setActiveTab } = createPublicationHost([['page-1', 101]])
+  it('announces a tab no one picked without moving the agent to it', () => {
+    const { host, setActiveTab, notifyHeadlessBrowserSessionTabsChanged } = createPublicationHost([
+      ['page-1', 101]
+    ])
 
     publishCreatedBrowserSessionTab(host, {
       placementKind: 'offscreen',
@@ -255,6 +257,7 @@ describe('publishCreatedBrowserSessionTab', () => {
     })
 
     expect(setActiveTab).not.toHaveBeenCalled()
+    expect(notifyHeadlessBrowserSessionTabsChanged).toHaveBeenCalledWith('wt-1')
   })
 
   it('skips the worktree-scoped announcement for an unscoped create', () => {

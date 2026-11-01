@@ -28,12 +28,14 @@ export type BrowserGuestInputGesture = {
 
 export function trackBrowserGuestInputGesture(
   guest: WebContents,
-  now: () => number = () => Date.now()
+  now: () => number = () => Date.now(),
+  onActivatingInput?: () => void
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
   const onInputEvent = (_event: Electron.Event, input: Electron.InputEvent): void => {
     if (isActivatingBrowserGuestInput(input)) {
       lastGestureAt = now()
+      onActivatingInput?.()
     }
   }
   let attached = false

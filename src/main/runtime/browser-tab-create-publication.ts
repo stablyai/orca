@@ -182,7 +182,10 @@ export function publishCreatedBrowserSessionTab(
   publication: BrowserTabCreatePublication
 ): void {
   const rules = BROWSER_TAB_CREATE_PUBLICATION_RULES[publication.placementKind]
-  if (rules.notifiesSessionTabsChanged && publication.worktreeId !== undefined) {
+  // Bridge selection announces the tab itself; a tab that leaves the agent where it is still must appear.
+  const announces =
+    rules.notifiesSessionTabsChanged || (rules.activatesBridgeTab && publication.leavesAgentTab)
+  if (announces && publication.worktreeId !== undefined) {
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
   if (rules.activatesBridgeTab && !publication.leavesAgentTab) {

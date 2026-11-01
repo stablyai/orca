@@ -1,50 +1,56 @@
 import { BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS } from './browser-guest-input-gesture'
 import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
 
-type PageCredit = { pairedDeviceId: string; settledAt: number | null }
+type Runner = { pairedDeviceId: string | null }
 
-/** The paired client whose command a page is running or just ran, so a tab the page opens follows that client. */
+/** The paired client whose click or key press reached a tab last, so a tab it opens follows that client. */
 export class BrowserPageInputCredit {
-  private readonly creditByPageId = new Map<string, PageCredit>()
+  // The command each page is running; queued commands run one at a time per page.
+  private readonly runnerByPageId = new Map<string, Runner>()
+  private readonly creditByTabId = new Map<string, { pairedDeviceId: string; at: number }>()
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  /** Runs one queued command on the page; an agent's or the CLI's command leaves no client credited. */
+  /** Runs one queued command on the page, so input it delivers is credited to its caller. */
   async during<T>(
     browserPageId: string,
     caller: RpcCallerIdentity | undefined,
     execute: () => Promise<T>
   ): Promise<T> {
-    const now = this.now()
-    for (const [pageId, credit] of this.creditByPageId) {
-      if (credit.settledAt !== null && !this.isRecent(credit.settledAt, now)) {
-        this.creditByPageId.delete(pageId)
-      }
+    const runner: Runner = {
+      pairedDeviceId: caller?.kind === 'paired-device' ? caller.deviceId : null
     }
-    if (caller?.kind !== 'paired-device') {
-      this.creditByPageId.delete(browserPageId)
-      return execute()
-    }
-    const credit: PageCredit = { pairedDeviceId: caller.deviceId, settledAt: null }
-    this.creditByPageId.set(browserPageId, credit)
+    this.runnerByPageId.set(browserPageId, runner)
     try {
       return await execute()
     } finally {
-      // The window starts once the input lands, like the guest's own gesture window.
-      credit.settledAt = this.now()
+      if (this.runnerByPageId.get(browserPageId) === runner) {
+        this.runnerByPageId.delete(browserPageId)
+      }
+    }
+  }
+
+  /** Activating input reached the page; the running command's paired client, if any, owns what it opens. */
+  creditInput(browserTabId: string, browserPageId: string): void {
+    const now = this.now()
+    for (const [tabId, credit] of this.creditByTabId) {
+      if (!this.isRecent(credit.at, now)) {
+        this.creditByTabId.delete(tabId)
+      }
+    }
+    const pairedDeviceId = this.runnerByPageId.get(browserPageId)?.pairedDeviceId ?? null
+    if (pairedDeviceId) {
+      this.creditByTabId.set(browserTabId, { pairedDeviceId, at: now })
+    } else {
+      this.creditByTabId.delete(browserTabId)
     }
   }
 
   /** Single-use, like the input gesture it accompanies: one click cannot steer a second tab. */
-  consume(browserPageId: string): string | null {
-    const credit = this.creditByPageId.get(browserPageId)
-    this.creditByPageId.delete(browserPageId)
-    if (!credit) {
-      return null
-    }
-    return credit.settledAt === null || this.isRecent(credit.settledAt, this.now())
-      ? credit.pairedDeviceId
-      : null
+  consume(browserTabId: string): string | null {
+    const credit = this.creditByTabId.get(browserTabId)
+    this.creditByTabId.delete(browserTabId)
+    return credit && this.isRecent(credit.at, this.now()) ? credit.pairedDeviceId : null
   }
 
   private isRecent(at: number, now: number): boolean {

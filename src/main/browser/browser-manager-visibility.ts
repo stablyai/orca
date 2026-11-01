@@ -9,6 +9,7 @@ import {
 } from './browser-agent-activity'
 import { BrowserPageEvents, type BrowserPageEvent } from './browser-page-events'
 import { BrowserPageInputCredit } from './browser-page-input-credit'
+import { browserPopupPageId } from './browser-popup-page-id'
 import { getActiveRpcCaller } from '../runtime/rpc/rpc-active-caller'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
@@ -31,7 +32,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return this.pageEvents.observe(browserPageId, listener)
   }
 
-  /** Holds the page's agent marking for one queued command, from queueing until it settles, and credits who ran it. */
+  /** Holds the page's agent marking for one queued command, from queueing until it settles; input it delivers is credited to its caller. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {
     // A queued command runs under the caller ahead of it, so its own caller is read at enqueue.
     const caller = getActiveRpcCaller()
@@ -39,6 +40,16 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return {
       ...lease,
       run: (execute) => lease.run(() => this.pageInputCredit.during(browserPageId, caller, execute))
+    }
+  }
+
+  /** Credits a guest's activating input to the command delivering it, under the tab a link it opens would join. */
+  protected creditPageInput(guestWebContentsId: number): void {
+    const ownerTabId = this.resolvePopupOwnerContext(guestWebContentsId)?.browserTabId
+    if (ownerTabId) {
+      const pageId =
+        this.tabIdByWebContentsId.get(guestWebContentsId) ?? browserPopupPageId(guestWebContentsId)
+      this.pageInputCredit.creditInput(ownerTabId, pageId)
     }
   }
 
