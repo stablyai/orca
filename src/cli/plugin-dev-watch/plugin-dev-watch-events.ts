@@ -1,7 +1,7 @@
 import type { PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
 import { formatPluginPanelCheck } from '../plugin-authoring/plugin-panel-check'
 import type { PluginDevWatchCheckResult } from './plugin-dev-watch-check'
-import type { PluginDevWatchShot } from './plugin-dev-watch-shot'
+import { PLUGIN_DEV_WATCH_SHOOTABLE, type PluginDevWatchShot } from './plugin-dev-watch-shot'
 
 /** `missing`: the host lists no plugin for the folder (for example, its id changed). */
 export type PluginDevWatchStatus = PluginHostStatus | 'missing'
@@ -36,8 +36,15 @@ export type PluginDevWatchEvent =
       error?: string
     }
   | ({ type: 'approval'; pluginKey: string } & PluginDevWatchApproval)
-  /** `--check`: `orca plugin check` after the load and after each reload. */
-  | ({ type: 'check'; pluginKey: string } & PluginDevWatchCheckResult)
+  /** `--check`: `orca plugin check` after the load and after each reload. `ok` also needs Orca to
+   *  run the plugin (`pluginStatus` running, idle or restarting); `checkOk` is the check alone. */
+  | ({
+      type: 'check'
+      pluginKey: string
+      checkOk: boolean
+      pluginStatus: PluginDevWatchStatus
+      pluginError?: string
+    } & PluginDevWatchCheckResult)
   /** `--shot`: a PNG of one panel after the load and after each reload that left it running. */
   | ({ type: 'shot'; pluginKey: string } & PluginDevWatchShot)
   /** `--shot`: the person switched away from the panel; once per time away, never switched back. */
@@ -54,6 +61,22 @@ function clockTime(ts: number): string {
   const date = new Date(ts)
   const pad = (value: number, width = 2) => String(value).padStart(width, '0')
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
+}
+
+function pluginStatusPhrase(status: PluginDevWatchStatus, error: string | undefined): string {
+  const phrase =
+    status === 'pending' ? 'pending approval' : status === 'missing' ? 'not loaded' : status
+  return error ? `${phrase}: ${error}` : phrase
+}
+
+function checkHeadline(event: Extract<PluginDevWatchEvent, { type: 'check' }>): string {
+  if (event.ok) {
+    return `✓ check passed for ${event.pluginKey}`
+  }
+  if (!event.checkOk) {
+    return `✗ check failed for ${event.pluginKey}`
+  }
+  return `✗ check passed, but in Orca ${event.pluginKey} is ${pluginStatusPhrase(event.pluginStatus, event.pluginError)}`
 }
 
 export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
@@ -76,9 +99,10 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
       return `${event.pluginKey} needs approval: ${event.message}\n  To approve, run: ${event.command}`
     case 'check':
       return [
-        event.ok
-          ? `✓ check passed for ${event.pluginKey}`
-          : `✗ check failed for ${event.pluginKey}`,
+        checkHeadline(event),
+        ...(!event.ok && !event.checkOk && !PLUGIN_DEV_WATCH_SHOOTABLE.has(event.pluginStatus)
+          ? [`  in Orca: ${pluginStatusPhrase(event.pluginStatus, event.pluginError)}`]
+          : []),
         ...event.invalid.map((error) => `  invalid: ${error}`),
         ...event.panels.flatMap(formatPluginPanelCheck).map((line) => `  ${line}`)
       ].join('\n')

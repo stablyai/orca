@@ -126,6 +126,17 @@ export function resolveHostPluginPath(ctx: HandlerContext, value: string): strin
   return resolve(ctx.cwd, value)
 }
 
+/** A `<dir|plugin-key>` argument as host params; a folder wins, since one may be named like a key. */
+export function devTargetParams(
+  ctx: HandlerContext,
+  target: string
+): { pluginKey: string } | { path: string } {
+  const localFolder = !ctx.client.isRemote && existsSync(resolve(ctx.cwd, target))
+  return !localFolder && !isAbsolute(target) && isQualifiedPluginKey(target)
+    ? { pluginKey: target }
+    : { path: resolveHostPluginPath(ctx, target) }
+}
+
 function formatPluginRow(plugin: PluginHostListEntry): string {
   const tags = [plugin.execution, plugin.isDev ? 'dev' : null, plugin.official ? 'official' : null]
   return `${plugin.pluginKey} ${plugin.version}  ${plugin.status}  ${tags.filter(Boolean).join(', ')}${plugin.error ? `\n  ${plugin.error}` : ''}`
@@ -283,13 +294,7 @@ export const PLUGIN_RUNTIME_HANDLERS: Record<string, CommandHandler> = {
     )
   },
   'plugin dev unload': async (ctx) => {
-    const target = requirePluginPathArg(ctx, 'target')
-    // Why the folder check first: a folder may be named like a plugin key.
-    const localFolder = !ctx.client.isRemote && existsSync(resolve(ctx.cwd, target))
-    const params =
-      !localFolder && !isAbsolute(target) && isQualifiedPluginKey(target)
-        ? { pluginKey: target }
-        : { path: resolveHostPluginPath(ctx, target) }
+    const params = devTargetParams(ctx, requirePluginPathArg(ctx, 'target'))
     const result = await callPlugins<{ path: string; pluginKey: string | null }>(
       ctx,
       'plugins.devUnload',

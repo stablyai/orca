@@ -155,6 +155,18 @@ describe('runPluginDevWatch', () => {
     })
   })
 
+  it('prints a reload before the lines its new code logged in the same poll', async () => {
+    const { run, events } = harness({
+      logs: [
+        { pluginKey: KEY, lines: [], cursor: 'n:0' },
+        { pluginKey: KEY, lines: [line(2, 'new code started')], cursor: 'n:1' }
+      ],
+      lists: [[entry({ devChangeCount: 1 })]]
+    })
+    await run
+    expect(events.map((event) => event.type)).toEqual(['loaded', 'reloaded', 'log', 'unloaded'])
+  })
+
   it('follows a manifest that stopped parsing to the one new invalid dev entry', async () => {
     const stray = entry({
       pluginKey: 'invalid-development-plugin-2',

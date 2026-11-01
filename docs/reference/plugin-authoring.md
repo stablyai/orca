@@ -160,6 +160,19 @@ capability kinds the user approved (such as `['storage:own']`), fixed when the w
 host still checks each call. In `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
 and `done`. Every event's payload is in the [host API reference](plugin-host-api.md#events).
 
+To test a handler without reproducing the real trigger, fire the event at a development plugin:
+
+```sh
+orca plugin dev emit . workspace.created --data '{"workspaceId":"wt-1","kind":"worktree","path":"/repo","branch":"main"}'
+```
+
+It follows the normal rules: the plugin must be approved and list the event in
+`contributes.events` (with its capability), the worker starts if it is not running, and `--data`
+is checked against the event's payload schema. Installed plugins are refused. `--json` prints
+`{ pluginKey, event, delivered: { worker, panels } }`; `panels` is 0, since panels only hear
+Orca's own frame events such as `theme`. A handler's errors land in `orca plugin logs` and
+`orca plugin dev watch`.
+
 A worker's `main` is an ES module: `.js`/`.mjs`, or `.ts`/`.mts` with no build step (needs
 `engines.orca` `>=1.4.246`). Orca transpiles TypeScript files in your plugin folder as Node loads
 them, keeping line numbers, so stack traces point at your `.ts` lines; enums and parameter
@@ -336,9 +349,12 @@ Ctrl-C unloads the folder (unless it was loaded before you started) and exits; p
 to exit at once. With `--json` it prints one JSON object per line, with a `type` of `loaded`,
 `log`, `reloaded`, `status`, `approval`, `check`, `shot`, `shot_skipped`, `warning`, `disconnected` or
 `unloaded`, for coding agents. `--check` also runs `orca plugin check` after the load and after each reload and
-prints what each components panel drew or threw, with `file:line:col`. Like `orca plugin check`,
+prints what each components panel drew or threw, with `file:line:col`; it reports a failure while
+Orca does not run the plugin (pending approval, errored, invalid), even when the panels render
+(`ok` false, `checkOk` true, and `pluginStatus`). Like `orca plugin check`,
 it runs your code on this machine outside Orca's sandbox, and it needs a local folder. The first load needs approval like `orca plugin dev load` (it exits with code 3 and
-prints the command to re-run with `--approve`).
+prints the command to re-run with `--approve`; with `--json`, as one line). The re-run owns the
+folder the refused attempt added, so its Ctrl-C unloads it.
 
 ### See the panel
 

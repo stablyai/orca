@@ -55,6 +55,18 @@ export const PluginDevUnloadParams = z
     message: 'pass exactly one of path or pluginKey'
   })
 
+/** `orca plugin dev emit`: the host checks `event` against its own event list so older names get a clear refusal. */
+export const PluginDevEmitParams = z
+  .object({
+    path: devFolderPathParam.optional(),
+    pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key').optional(),
+    event: z.string().min(1).max(128),
+    payload: z.unknown().optional()
+  })
+  .refine((params) => (params.path === undefined) !== (params.pluginKey === undefined), {
+    message: 'pass exactly one of path or pluginKey'
+  })
+
 export const PluginGetLogsParams = z.object({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
   /** `cursor` from an earlier reply; only later lines come back. Older hosts ignore it. */

@@ -83,6 +83,23 @@ function findEntry(
   return strays.length === 1 ? strays[0] : undefined
 }
 
+/** A check that renders still fails while Orca itself does not run the plugin. */
+function checkEvent(
+  pluginKey: string,
+  result: PluginDevWatchCheckResult,
+  snapshot: Snapshot
+): PluginDevWatchEvent {
+  return {
+    type: 'check',
+    pluginKey,
+    ...result,
+    ok: result.ok && PLUGIN_DEV_WATCH_SHOOTABLE.has(snapshot.status),
+    checkOk: result.ok,
+    pluginStatus: snapshot.status,
+    ...(snapshot.error ? { pluginError: snapshot.error } : {})
+  }
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -148,7 +165,7 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
       ? createPluginDevWatchCheckQueue(async () => {
           if (runCheck) {
             try {
-              emit({ type: 'check', pluginKey, ...(await runCheck()) })
+              emit(checkEvent(pluginKey, await runCheck(), snapshot))
             } catch (error) {
               emit({ type: 'warning', message: `check could not run: ${errorMessage(error)}` })
             }
@@ -210,10 +227,11 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
           // Baseline: only lines written from now on are streamed.
           follower.take(await host.logs(pluginKey, undefined))
         } else {
-          await pollLogs()
+          // Status first, so a reload's `reloaded` line precedes the lines its new code logs.
           if (polls % LIST_EVERY_POLLS === 0) {
             await pollStatus()
           }
+          await pollLogs()
         }
         lastWarning = null
       } catch (error) {

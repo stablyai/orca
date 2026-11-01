@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { COMMAND_SPECS } from '../specs'
 import { findCommandSpec, normalizeCommandPositionals, parseArgs, specPaths } from '../args'
 import type { HandlerContext } from '../dispatch'
+import { reportCliError } from '../cli-error'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 import {
@@ -48,6 +49,44 @@ describe('orca plugin dev watch', () => {
     ).toEqual(['--json', 'plugin', 'dev', 'reload', 'watch', '--environment', 'box'])
   })
 
+  it('suggests an approval command that dev reload accepts, without watch-only flags', async () => {
+    const rawArgs = [
+      'plugin',
+      'dev',
+      'watch',
+      '--check',
+      '/work/notes',
+      '--shot',
+      './shots',
+      '--shot-panel=stats',
+      '--approve',
+      'ap1-old',
+      '--json',
+      '--environment',
+      'box'
+    ]
+    const call = vi
+      .fn()
+      .mockRejectedValue(rpcFailure('approval_required', { approvalFingerprint: 'ap1-new' }))
+    const approval = await bindPluginDevWatchHost(
+      context(call, rawArgs),
+      '/work/notes'
+    ).approvalNeeded()
+    const argv = approval?.command.split(' ').slice(1) ?? []
+    const parsed = parse(argv)
+    expect(parsed.commandPath).toEqual(['plugin', 'dev', 'reload'])
+    const spec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
+    expect([...parsed.flags.keys()].filter((flag) => !spec?.allowedFlags.includes(flag))).toEqual(
+      []
+    )
+    expect(Object.fromEntries(parsed.flags)).toEqual({
+      dir: '/work/notes',
+      approve: 'ap1-new',
+      json: true,
+      environment: 'box'
+    })
+  })
+
   it('treats a transport failure as a lost host but a host error reply as a reply', async () => {
     const call = vi
       .fn()
@@ -87,6 +126,26 @@ describe('orca plugin dev watch', () => {
       fingerprint: 'ap1-abc',
       command: 'orca plugin dev reload /work/notes --approve ap1-abc'
     })
+  })
+})
+
+describe('plugin dev watch --json errors', () => {
+  it('prints a failed first load as one JSON line, unlike other commands', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const error = new RuntimeClientError('approval_required', 'acme.notes needs approval')
+      reportCliError(error, true, { commandPath: ['plugin', 'dev', 'watch'] })
+      reportCliError(error, true, { commandPath: ['plugin', 'dev', 'load'] })
+      const [watchLine, loadOutput] = log.mock.calls.map(([text]) => String(text))
+      expect(watchLine).not.toContain('\n')
+      expect(JSON.parse(watchLine)).toMatchObject({
+        ok: false,
+        error: { code: 'approval_required' }
+      })
+      expect(loadOutput).toContain('\n')
+    } finally {
+      log.mockRestore()
+    }
   })
 })
 

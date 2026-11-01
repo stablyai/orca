@@ -15,6 +15,7 @@ import {
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 import { writeStdoutLine } from '../stdout-line'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import { CLI_BOOLEAN_FLAGS } from '../../shared/cli-argument-boundary'
 import { checkPluginDevFolder } from '../plugin-dev-watch/plugin-dev-watch-check'
 import {
   pluginDevWatchShotPanel,
@@ -33,10 +34,32 @@ import {
 /** The host did not answer: Orca quit, or the network to a remote server dropped. */
 export class PluginHostUnreachableError extends Error {}
 
+// Why: `dev reload` rejects watch-only flags; the old `--approve` is replaced by the new one.
+const WATCH_ONLY_FLAGS = new Set(['check', 'shot', 'shot-panel', 'approve'])
+
 /** `orca … plugin dev watch <dir>` → `… plugin dev reload <dir>`, so approving keeps this session. */
 export function devReloadArgs(rawArgs: readonly string[]): string[] {
   const watch = rawArgs.findIndex((arg, index) => arg === 'watch' && rawArgs[index - 1] === 'dev')
-  return rawArgs.map((arg, index) => (index === watch ? 'reload' : arg))
+  const kept: string[] = []
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index]
+    const name = arg.startsWith('--') ? arg.slice(2).split('=')[0] : null
+    if (name === null || !WATCH_ONLY_FLAGS.has(name)) {
+      kept.push(index === watch ? 'reload' : arg)
+      continue
+    }
+    // Same value rule as parseArgs: a non-boolean flag takes the next token unless it is a flag.
+    const next = rawArgs[index + 1]
+    if (
+      !arg.includes('=') &&
+      !CLI_BOOLEAN_FLAGS.has(name) &&
+      next !== undefined &&
+      !next.startsWith('--')
+    ) {
+      index += 1
+    }
+  }
+  return kept
 }
 
 function approvalOf(error: unknown): PluginDevWatchApproval | null {

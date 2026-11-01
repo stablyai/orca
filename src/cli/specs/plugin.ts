@@ -205,9 +205,9 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
       'The inner loop: loads the folder like `orca plugin dev load` (refreshing its .orca/types), then prints each log line its panels, editors and worker write, every reload a save causes, and status changes such as errored or invalid with the error.',
       'When an edit asks for new access it prints the `orca plugin dev reload <dir> --approve <fingerprint>` command to run from another shell; this one keeps watching.',
       'Ctrl-C unloads the folder (unless it was loaded before this command) and exits 0; a second Ctrl-C exits at once. If the connection to Orca drops it says so and exits 1.',
-      "--check runs `orca plugin check` after the load and after each reload and prints the result inline (one `check` event with --json). Like `orca plugin check` it runs the plugin's code on this machine, unsandboxed, so use it on code you trust; it needs a local folder.",
+      "--check runs `orca plugin check` after the load and after each reload and prints the result inline (one `check` event with --json; it fails while Orca does not run the plugin, such as pending approval, even if the panels render). Like `orca plugin check` it runs the plugin's code on this machine, unsandboxed, so use it on code you trust; it needs a local folder.",
       '--shot <out-dir> opens one panel in the right sidebar once (the first, or --shot-panel <id>; an unknown id fails at start), then after the load and each reload that leaves the plugin running saves a PNG of it, like `orca plugin shot`, to <out-dir>/<plugin-key>-<panel>.png (overwritten; a `shot` event). It never switches the sidebar again: while you show another tab or close the sidebar it skips, with one `shot_skipped` event per time away, and resumes when the panel is back. With --check, the check runs first. Needs the Orca desktop app.',
-      '--json prints one JSON object per line: `loaded`, `log`, `reloaded`, `status`, `approval`, `check`, `shot`, `shot_skipped`, `warning`, `disconnected`, `unloaded` (field `type`). A failed first load prints the usual error instead.',
+      '--json prints one JSON object per line: `loaded`, `log`, `reloaded`, `status`, `approval`, `check`, `shot`, `shot_skipped`, `warning`, `disconnected`, `unloaded` (field `type`). A failed first load prints the usual error envelope instead, on one line.',
       APPROVE_NOTE,
       'With --environment the folder is a path on that Orca server; pass it absolute.',
       EXIT_CODES_NOTE
@@ -259,6 +259,23 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
       EXIT_CODES_NOTE
     ],
     examples: ['orca plugin dev inspect acme.notes']
+  },
+  {
+    path: ['plugin', 'dev', 'emit'],
+    summary: "Fire a test event at a development plugin's worker",
+    usage: 'orca plugin dev emit <dir|plugin-key> <event> [--data <json>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'target', 'event', 'data'],
+    positionalArgs: ['target', 'event'],
+    notes: [
+      "Runs the worker's `orca.events.on` handlers without the real trigger. The event goes through the normal delivery rules: the plugin must be an approved development plugin that lists the event in contributes.events, and the worker starts if it is not running.",
+      "--data is the payload as JSON, checked against the event's schema (the host API reference lists them). An unknown event is refused with the list of events.",
+      "Prints `{ pluginKey, event, delivered: { worker, panels } }`; `panels` is 0, since panels only hear Orca's own events such as `theme`. Handler errors go to `orca plugin logs` and `orca plugin dev watch`.",
+      'Installed plugins are refused; load the folder with `orca plugin dev load` first.'
+    ],
+    examples: [
+      'orca plugin dev emit . workspace.created --data \'{"workspaceId":"wt-1","kind":"worktree","path":"/repo","branch":"main"}\'',
+      'orca plugin dev emit acme.notes agent.status.changed --data \'{"workspaceId":null,"paneKey":"p1","state":"done","receivedAt":1}\' --json'
+    ]
   },
   {
     path: ['plugin', 'dev', 'unload'],

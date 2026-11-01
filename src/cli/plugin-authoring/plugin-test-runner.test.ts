@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
-import { checkPluginPanels, pluginStackLocation } from './plugin-panel-check'
+import {
+  checkPluginPanels,
+  pluginPanelCheckIssues,
+  pluginStackLocation
+} from './plugin-panel-check'
 import { findPluginTestFiles, runPluginTests } from './plugin-test-runner'
 
 const roots: string[] = []
@@ -166,10 +170,31 @@ describe('orca plugin check', () => {
         issues: [],
         warnings: ['Text: ignored unknown prop "color"']
       })
+      await writeFile(join(dir, 'src', 'panel.tsx'), "import { Text } from 'orca'\nconst = 1\n")
+      const [broken] = await checkPluginPanels(dir)
+      expect(broken.issues).toEqual([
+        { kind: 'plugin', message: 'Unexpected token', location: 'src/panel.tsx:2:7' }
+      ])
     },
     // Each run starts its own Node (or vitest) process and transpiles the plugin.
     60_000
   )
+
+  it('locates transpile errors from their message and lists a repeated error once', () => {
+    const stack = 'Error: kaboom\n    at Panel (file:///p/src/panel.tsx:4:41)'
+    expect(
+      pluginPanelCheckIssues('/p', [
+        { kind: 'plugin', message: 'kaboom', stack },
+        { kind: 'plugin', message: 'kaboom', stack },
+        { kind: 'plugin', message: 'src/lib/a.ts:3:9: Unexpected token', stack: 'SyntaxError' },
+        { kind: 'refused', message: 'kaboom' }
+      ])
+    ).toEqual([
+      { kind: 'plugin', message: 'kaboom', location: 'src/panel.tsx:4:41' },
+      { kind: 'plugin', message: 'Unexpected token', location: 'src/lib/a.ts:3:9' },
+      { kind: 'refused', message: 'kaboom' }
+    ])
+  })
 
   it('finds the first plugin frame in a stack', () => {
     const dir = '/p'

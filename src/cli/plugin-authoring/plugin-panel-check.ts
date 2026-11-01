@@ -80,6 +80,27 @@ export function pluginStackLocation(dir: string, stack: string | undefined): str
   return undefined
 }
 
+// `src/panel.tsx:4:7: Unexpected token`, as Orca's loaders word transpile and import errors.
+const LOCATED_MESSAGE = /^([^\n:]+\.[a-z]+:\d+:\d+): ([\s\S]*)$/i
+
+/** One issue per distinct problem, located from its message or else its first plugin frame. */
+export function pluginPanelCheckIssues(
+  dir: string,
+  reported: readonly { kind: PluginPanelCheckIssue['kind']; message: string; stack?: string }[]
+): PluginPanelCheckIssue[] {
+  const issues = new Map<string, PluginPanelCheckIssue>()
+  for (const { stack, ...issue } of reported) {
+    const located = LOCATED_MESSAGE.exec(issue.message)
+    const location = located?.[1] ?? pluginStackLocation(dir, stack)
+    const message = located?.[2] ?? issue.message
+    const key = JSON.stringify([issue.kind, location, message])
+    if (!issues.has(key)) {
+      issues.set(key, location ? { ...issue, message, location } : { ...issue, message })
+    }
+  }
+  return [...issues.values()]
+}
+
 /** Renders every components panel once against a stand-in host, in a Node process. */
 export async function checkPluginPanels(
   dir: string,
@@ -141,10 +162,7 @@ export async function checkPluginPanels(
   const realDir = realpathSync(dir)
   return reported.map((check) => ({
     ...check,
-    issues: check.issues.map(({ stack, ...issue }) => {
-      const location = pluginStackLocation(realDir, stack)
-      return location ? { ...issue, location } : issue
-    })
+    issues: pluginPanelCheckIssues(realDir, check.issues)
   }))
 }
 

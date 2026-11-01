@@ -38,6 +38,11 @@ export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/plugin-dev-watch.js')).PLUGIN_DEV_WATCH_HANDLERS
   },
   {
+    name: 'plugin-dev-emit',
+    keys: ['plugin dev emit'],
+    load: async () => (await import('./handlers/plugin-dev-emit.js')).PLUGIN_DEV_EMIT_HANDLERS
+  },
+  {
     name: 'plugin-view',
     keys: ['plugin open', 'plugin shot'],
     load: async () => (await import('./handlers/plugin-view.js')).PLUGIN_VIEW_HANDLERS

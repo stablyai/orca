@@ -139,9 +139,10 @@ Installed plugins remount from scratch on an update; only persisted atoms carry 
 Orca transpiles `.tsx`, `.ts`, `.jsx` and `.mts` files when the panel loads, so a plugin ships its
 source and no `dist/` folder: edit, save, and the panel [hot reloads](#hot-reload).
 
-- Types are stripped and JSX compiles for `orca` (automatic runtime). Lines are kept, so an error's
-  `file:line` in `orca plugin logs` is the line in your source; an inline source map covers columns
-  in DevTools (`orca plugin dev inspect`).
+- Types are stripped and JSX compiles for `orca` (automatic runtime). Lines are kept and an inline
+  source map covers columns, so an error's `file:line:column` in the panel, `orca plugin logs` and
+  `orca plugin check` is the same position in your source (`orca plugin logs` leaves out Orca's own
+  runtime frames). A file that does not transpile reports `src/panel.tsx:4:7: Unexpected token`.
 - Relative imports resolve to exact files: `./todos` finds `todos.tsx`, `todos.ts`, `todos.jsx`,
   `todos.js`, then `todos/index.*`, and `./todos.js` finds `todos.ts` as TypeScript expects.
 - Only `orca`, `orca/*` and relative files can be imported. A bare package such as `react` fails with

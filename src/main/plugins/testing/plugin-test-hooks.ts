@@ -9,6 +9,7 @@ import { readFile } from 'node:fs/promises'
 import { posix, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolvePluginModuleSpecifier } from '../panels/plugin-frame-module-resolution'
+import { formatPluginTranspileFailure } from '../panels/plugin-source-transpile-failure'
 import { transpilePluginSource } from '../panels/plugin-source-transpiler'
 
 type ResolveResult = { url: string; shortCircuit?: boolean; format?: string }
@@ -89,7 +90,7 @@ export async function load(url: string, context: unknown, nextLoad: NextLoad): P
   }
   const transpiled = transpilePluginSource(path, await readFile(fileURLToPath(url), 'utf8'))
   if (!transpiled.ok) {
-    throw new SyntaxError(`${path}: ${transpiled.message}`)
+    throw new SyntaxError(formatPluginTranspileFailure(path, transpiled.message))
   }
   return { format: 'module', source: transpiled.code, shortCircuit: true }
 }
@@ -98,7 +99,7 @@ export async function load(url: string, context: unknown, nextLoad: NextLoad): P
 export function transformPluginSourceForTest(path: string, source: string): string {
   const transpiled = transpilePluginSource(path, source)
   if (!transpiled.ok) {
-    throw new SyntaxError(`${path}: ${transpiled.message}`)
+    throw new SyntaxError(formatPluginTranspileFailure(path, transpiled.message))
   }
   return transpiled.code
 }

@@ -3,6 +3,7 @@
  * to resources/plugins/declarative/orca-runtime.mjs by config/scripts/build-plugin-declarative-runtime.mjs.
  * Orca's host page installs the runtime, imports the panel module and boots it.
  */
+import { installPluginSourceMapHook } from './declarative-source-maps'
 import { read, resetAtoms } from './declarative-atoms'
 import type { OrcaComponent } from './declarative-elements'
 import {
@@ -47,6 +48,8 @@ export function installOrcaDeclarativeRuntime(
 ): OrcaDeclarativeRuntime {
   runtime?.dispose()
   resetAtoms()
+  // Before the panel module loads, so its prelude registers its source map.
+  installPluginSourceMapHook()
   const installed = createOrcaDeclarativeRuntime({
     bridge: globalBridge(),
     colorScheme: documentColorScheme(),

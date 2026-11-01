@@ -1,3 +1,4 @@
+import { describePluginErrorForLog } from './declarative-error-location'
 import { PLUGIN_DECLARATIVE_MESSAGES } from '../plugin-declarative-message-names'
 import { hostAtom, read, subscribeAtom, trackAtomReads, type OrcaAtom } from './declarative-atoms'
 import type { OrcaComponent } from './declarative-elements'
@@ -85,8 +86,8 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
   }
 
   function report(error: unknown): void {
-    // Why the stack text: main routes guest console errors to `orca plugin logs`, file:line included.
-    console.error(error instanceof Error && error.stack ? error.stack : String(error))
+    // Main routes guest console errors to `orca plugin logs`; this text is located like the banner.
+    console.error(describePluginErrorForLog(error))
     const stack = error instanceof Error && error.stack ? error.stack.slice(0, 8192) : undefined
     post(PLUGIN_DECLARATIVE_MESSAGES.error, {
       document,

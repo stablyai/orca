@@ -43,7 +43,11 @@ import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
 import { invokePluginWorkerCommand } from './plugin-command-invocation'
-import { deliverPluginEvent, pluginWorkersWantEvent } from './plugin-event-delivery'
+import {
+  deliverPluginEvent,
+  pluginWorkersWantEvent,
+  type PluginEventDeliveryContext
+} from './plugin-event-delivery'
 import { PluginInstallationState } from './installation/plugin-installation-state'
 
 export class PluginService {
@@ -289,16 +293,17 @@ export class PluginService {
     if (!this.options.isPluginSystemEnabled() || this.disposed) {
       return
     }
-    deliverPluginEvent({
-      event,
-      payload,
-      plugins: this.installed.discovered,
-      workerController: this.workerController,
-      isRuntimeApproved: (plugin) => this.canStartPluginWork(plugin),
-      grantedCapabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
-      logWarning: (pluginKey) => this.installed.captureLog(pluginKey, 'warn')
-    })
+    deliverPluginEvent({ event, payload, ...this.eventDelivery })
     this.panelBridge.publishEvent(event, payload)
+  }
+
+  /** The real event path; `orca plugin dev emit` reuses it for one development plugin. */
+  readonly eventDelivery: PluginEventDeliveryContext = {
+    plugins: () => this.installed.discovered,
+    ensureWorker: (plugin) => this.workerController.ensure(plugin),
+    isRuntimeApproved: (plugin) => this.canStartPluginWork(plugin),
+    grantedCapabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
+    logWarning: (pluginKey) => this.installed.captureLog(pluginKey, 'warn')
   }
 
   removePlugin(pluginKey: string, remove: () => Promise<void>): Promise<void> {

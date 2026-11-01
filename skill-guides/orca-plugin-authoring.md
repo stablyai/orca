@@ -121,8 +121,9 @@ secrets or state the worker also uses; a panel alone needs none of it.
    background terminal and keep reading it. It loads the folder, refreshes `.orca/types`, then
    prints one JSON object per line: `loaded`, `log`, `reloaded`, `status` (with `errored` or
    `invalid` and the error), `approval`, `check` (with `--check`), `shot` and `shot_skipped`
-   (with `--shot`), `warning`, `disconnected`, `unloaded`. A first load that needs consent exits `3`; see
-   [Approval](#approval).
+   (with `--shot`), `warning`, `disconnected`, `unloaded`. A first load that needs consent prints
+   one error line and exits `3`; see [Approval](#approval). Re-run the watch with `--approve`:
+   Ctrl-C still unloads the folder the refused attempt added.
 3. Edit and save. Each save prints `reloaded`, then a `check` with what each panel drew or threw,
    then a `shot` of the panel it opened at start (the first, or `--shot-panel <id>`):
    `{ path, width, height, settled, errors }`. Read the PNG at `path` to
@@ -137,6 +138,8 @@ secrets or state the worker also uses; a panel alone needs none of it.
    minimized, else `themeApplied` is false with a `themeReason`), `ORCA plugin logs <plugin-key> --json` shows the same lines,
    `ORCA plugin restart <plugin-key>` reruns a worker's startup code, and
    `ORCA plugin dev reload <dir>` catches a missed save or re-checks changed commands and shortcuts.
+   For a worker, fire a test event with `ORCA plugin dev emit . <event> --data '{...}'` instead
+   of reproducing the trigger; its handler errors arrive as `log` lines in the watch.
 5. To show the user, `ORCA plugin open <plugin-key> [--panel <id>]` opens the panel in Orca's right
    sidebar, and `--editor <file>` opens a file in its custom editor. Neither raises the window.
 6. Stop the watch with Ctrl-C (it unloads the folder it loaded) or run `ORCA plugin dev unload <dir>`.
@@ -158,7 +161,8 @@ Both run the plugin's code on this machine, outside Orca's sandbox: only on code
   stand-in host with the manifest's capabilities: what it threw (with `file:line:col`), layouts
   Orca would refuse, props it would drop. Exit `0` ok, `1` `plugin_check_failed`, `2` invalid.
 - `ORCA plugin dev watch <dir> --check` runs the check after the load and each reload and
-  prints it inline (a `check` event with `--json`).
+  prints it inline (a `check` event with `--json`). Its `ok` is false unless Orca also runs the
+  plugin: `checkOk` is the check alone, `pluginStatus` (and `pluginError`) what Orca reports.
 
 Put tests next to the panel (`src/panel.test.tsx`; the components template writes one):
 

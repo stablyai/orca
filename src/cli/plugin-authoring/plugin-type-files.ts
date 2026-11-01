@@ -31,6 +31,9 @@ const TYPES_TSCONFIG = {
     jsx: 'react-jsx',
     jsxImportSource: 'orca',
     lib: ['ES2022', 'DOM'],
+    // tsc 7 reaches `orca` via the symlinked path and the typeRoots via the realpath, so a plugin
+    // under a symlink (macOS /tmp) loads the typings twice (TS2300 duplicate identifiers).
+    preserveSymlinks: true,
     typeRoots: ['.'],
     types: ['orca', ...PLUGIN_SURFACE_TYPINGS.map(({ dir }) => dir)]
   }

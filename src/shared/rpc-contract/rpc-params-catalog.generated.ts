@@ -498,6 +498,7 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  PluginDevEmitParams,
   PluginDevInspectParams,
   PluginDevLoadParams,
   PluginDevUnloadParams,
@@ -1313,6 +1314,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
   'plugins.consent': PluginRpcConsentParams,
+  'plugins.devEmit': PluginDevEmitParams,
   'plugins.devInspect': PluginDevInspectParams,
   'plugins.devLoad': PluginDevLoadParams,
   'plugins.devUnload': PluginDevUnloadParams,
