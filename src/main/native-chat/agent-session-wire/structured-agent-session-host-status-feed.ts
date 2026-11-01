@@ -13,7 +13,11 @@ import {
   type StructuredAgentSessionSubagentRowsDeps
 } from './structured-agent-session-subagent-rows'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import type { StructuredAgentSessionConversationNaming } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionConversationNaming,
+  StructuredAgentSessionHostDeps
+} from './structured-agent-session-host-types'
+import { structuredAgentSessionStartHeld } from './structured-agent-session-host-current-work'
 
 /** Resolve deps lazily because field initializers run before host constructor assignments. */
 export function createStructuredAgentSessionHostStatusFeed(args: {
@@ -30,6 +34,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
     conversationNaming?: StructuredAgentSessionConversationNaming
+    setupHold?: StructuredAgentSessionHostDeps['setupHold']
   }
   onPublished?: StructuredAgentSessionStatusFeedDeps['onPublished']
   onAgentStarted?: (sessionId: string) => void
@@ -62,6 +67,8 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: args.sessions,
     starting: args.starting,
+    startHeld: (sessionId) =>
+      structuredAgentSessionStartHeld(args.deps().setupHold, args.sessions.get(sessionId)),
     onPublished: args.onPublished,
     getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
     listConversations: () => args.deps().store.listConversations(),

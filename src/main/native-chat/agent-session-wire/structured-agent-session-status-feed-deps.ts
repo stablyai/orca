@@ -30,6 +30,8 @@ export type StatusFeedSession = {
 export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   starting?: (sessionId: string) => boolean
+  /** The workspace's setup holds this chat's agent start; its sent message is not yet work. */
+  startHeld?: (sessionId: string) => boolean
   getConversation: (sessionId: string) => AgentSessionConversationView | null
   listConversations?: () => AgentSessionConversationView[]
   /** Absent means no replaced runtime. */

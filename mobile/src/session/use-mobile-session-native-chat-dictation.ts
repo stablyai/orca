@@ -79,6 +79,7 @@ export function useMobileSessionNativeChatDictation(
   const nativeChatController = useMobileNativeChatController({
     client,
     readSetupAgentStartHeld: scope.readSetupAgentStartHeld,
+    setupAgentStartHeld: scope.setupAgentStartHeld,
     hostId,
     worktreeId,
     activeSessionTab,

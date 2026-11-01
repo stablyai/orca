@@ -4,6 +4,7 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { openSetupScriptSettings } from '../sidebar/open-setup-script-settings'
 import { Button } from '../ui/button'
+import { translate } from '@/i18n/i18n'
 
 export function NativeChatSetupNotice({
   worktreeId,
@@ -21,7 +22,12 @@ export function NativeChatSetupNotice({
       className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-chat-foreground-faint"
       role="status"
     >
-      <p className="text-sm text-chat-foreground">Waiting for setup script to complete</p>
+      <p className="text-sm text-chat-foreground">
+        {translate(
+          'components.native-chat.setupNotice.waiting',
+          'Waiting for setup script to complete'
+        )}
+      </p>
       <Button
         type="button"
         variant="ghost"
@@ -35,7 +41,7 @@ export function NativeChatSetupNotice({
           })
         }}
       >
-        Change in settings
+        {translate('components.native-chat.setupNotice.changeInSettings', 'Change in settings')}
       </Button>
     </div>
   )

@@ -43,6 +43,7 @@ import { MobileNativeChatRowList } from './native-chat/transcript/MobileNativeCh
 import { useMobileNativeChatRowRenderer } from './native-chat/transcript/use-mobile-native-chat-row-renderer'
 
 import type { Props } from './mobile-native-chat-view-props'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 export type { MobileNativeChatInputLockReason } from './mobile-native-chat-view-props'
 
 export function MobileNativeChatView({
@@ -121,6 +122,7 @@ export function MobileNativeChatView({
   keyboardInset = 0
 }: Props): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
@@ -234,7 +236,9 @@ export function MobileNativeChatView({
   )
   const setupNotice = (
     <View style={styles.center}>
-      <Text style={styles.emptyTitle}>Waiting for setup script to complete</Text>
+      <Text style={styles.emptyTitle}>
+        {t('session.nativeChatSetupNotice.waiting', 'Waiting for setup script to complete')}
+      </Text>
     </View>
   )
   const emptyStateView =

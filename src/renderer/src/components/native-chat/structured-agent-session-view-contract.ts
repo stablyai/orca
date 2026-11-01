@@ -13,6 +13,8 @@ export type StructuredAgentSessionViewArgs = {
   providerStarting?: boolean
   /** The host runs the session's provider and its start is proven. */
   providerRunning?: boolean
+  /** The workspace's setup holds this chat's agent start. */
+  setupHeld?: boolean
   /** This view started the session; only then does the stored selection name what it runs. */
   launch?: StructuredAgentSessionLaunchView
   /** Composer destination for preserved text from queued-card edits. */

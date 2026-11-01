@@ -170,7 +170,9 @@ export function useMobileStructuredAgentSession(
     sessionKey,
     turnId,
     isWorking,
-    stopsConversation: hostStopsConversation === true
+    stopsConversation: hostStopsConversation === true,
+    setupAgentStartHeld: args.setupAgentStartHeld === true,
+    state
   })
   const turnIndicator = useMobileStructuredTurnIndicator({
     state,

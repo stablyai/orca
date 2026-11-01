@@ -220,12 +220,14 @@ it.each([true, false])(
     project(true)
     act(() => frames.at(-1)?.({ type: 'end' }))
     expect(screen.queryByText('Waiting for setup script to complete')).toBeNull()
-    expect(editor.getAttribute('contenteditable')).toBe('false')
+    expect(editor.getAttribute('contenteditable')).toBe('true')
     await act(async () => {
       await vi.waitFor(() => expect(frames).toHaveLength(2))
     })
+    project(true)
+    expect(editor.getAttribute('contenteditable')).toBe('false')
     project(undefined)
-    expect(editor.getAttribute('contenteditable')).toBe('true')
+    expect(editor.getAttribute('contenteditable')).toBe('false')
   }
 )
 
@@ -266,7 +268,8 @@ it('fences a retired status source and reads a fresh old-host omission as not he
   const editor = screen.getByRole('textbox')
   const retired = frames[0]
   act(() => retired?.({ type: 'end' }))
-  expect(editor.getAttribute('contenteditable')).toBe('false')
+  // An ended stream can't hold input; the host still holds the agent's start.
+  expect(editor.getAttribute('contenteditable')).toBe('true')
   await act(async () => {
     await vi.waitFor(() => expect(frames).toHaveLength(2))
   })
@@ -328,6 +331,34 @@ it('keeps a structured tab on its stamped host even when the active same-id work
     expect.objectContaining({ repoId: 'repo-setup', hostId: 'runtime:server' })
   )
 })
+
+it.each([true, false])(
+  'leaves structured=%s input enabled when an old server refuses the status stream every time',
+  async (structured) => {
+    deactivate()
+    resetStructuredAgentSessionStatusFeedsForTests()
+    transport.subscribe.mockImplementation(
+      (_target: RuntimeClientTarget, _emit: unknown, onError: (error: unknown) => void) => {
+        queueMicrotask(() => onError(new Error('agent_session_unavailable')))
+        return Promise.resolve({ unsubscribe: () => {} })
+      }
+    )
+    transport.subscribe.mockClear()
+    deactivate = getStructuredAgentSessionStatusFeed({
+      kind: 'environment',
+      environmentId: 'server'
+    }).activate()
+    render(chat(structured))
+    // The refused stream is retried with backoff; each refusal still answers "not held".
+    await act(async () => {
+      await vi.waitFor(() => expect(transport.subscribe).toHaveBeenCalledTimes(2))
+    })
+    const editor = screen.getByRole('textbox')
+    expect(editor.getAttribute('contenteditable')).toBe('true')
+    expect(screen.getByRole('button', { name: /send/i }).hasAttribute('disabled')).toBe(false)
+    expect(screen.queryByText('Waiting for setup script to complete')).toBeNull()
+  }
+)
 
 it('disables actual editing before the first answer without inventing a notice, then accepts old-host absence', () => {
   render(chat(true))

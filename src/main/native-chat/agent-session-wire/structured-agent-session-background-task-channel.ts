@@ -54,7 +54,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
     const work = hostStructuredAgentSessionCurrentWork(
-      { store: this.deps.store, sessions: this.sessions },
+      { store: this.deps.store, sessions: this.sessions, setupHold: this.deps.setupHold },
       request.sessionId
     )
     const result = readStructuredAgentSessionHistoryResult({

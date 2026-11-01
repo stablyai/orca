@@ -42,6 +42,8 @@ export type StructuredAgentSessionWorkEvidence = {
   replaced?: StructuredAgentSessionReplacedEnd | undefined
   /** Absent means the host has no child observation. */
   child?: { fence: number; heldSends?: () => ReadonlySet<string> | undefined } | null
+  /** The host holds this chat's agent start for workspace setup; nothing runs yet. */
+  startHeld?: boolean
 }
 
 /** Replaced runtimes granted all fences through this boundary. */
@@ -134,7 +136,8 @@ export class StructuredAgentSessionCurrentWork {
     private readonly replaced?: StructuredAgentSessionReplacedEnd,
     private readonly ownerUnverifiable = false,
     /** Missing child evidence conservatively holds every unanswered send. */
-    private readonly heldSends?: () => ReadonlySet<string> | undefined
+    private readonly heldSends?: () => ReadonlySet<string> | undefined,
+    private readonly startHeld = false
   ) {}
 
   /** Compare effective generation/view, not repeated end-signal revisions that may change nothing. */
@@ -147,7 +150,7 @@ export class StructuredAgentSessionCurrentWork {
     const sends = this.unansweredSends().map(
       (submission) => `${submission.clientMessageId}:${this.holds(submission) ? 1 : 0}`
     )
-    return `${this.viewKey()}|${this.working() ? 1 : 0}|${sends.join(',')}`
+    return `${this.viewKey()}|${this.publishedWorking() ? 1 : 0}|${sends.join(',')}`
   }
 
   /** Unanswered sends the child no longer holds read uncertain until their later echo/refusal. */
@@ -292,6 +295,11 @@ export class StructuredAgentSessionCurrentWork {
     return this.activeTurnId() !== null || this.owesAnySend()
   }
 
+  /** What clients show: a send held for setup is still owed (Stop withdraws it), but not running. */
+  publishedWorking(): boolean {
+    return !this.startHeld && this.working()
+  }
+
   /** Project interrupted turns immediately from observed/replaced-runtime death, before settlement persists. */
   diedTurn(): { item: AgentJournalRenderItem; turnId: string } | null {
     const running = this.journal.runningTurn()
@@ -331,7 +339,8 @@ export function structuredAgentSessionCurrentWork(
     evidence.ended,
     evidence.replaced,
     structuredAgentSessionOwnerUnverifiable(evidence),
-    evidence.child?.heldSends
+    evidence.child?.heldSends,
+    evidence.startHeld === true
   )
 }
 

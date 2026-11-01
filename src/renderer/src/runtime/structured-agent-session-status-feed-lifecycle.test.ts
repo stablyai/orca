@@ -194,14 +194,23 @@ describe('structured status feed execution authority lifecycle', () => {
       setupHeldWorkspaceIds: ['repo::C:/Work']
     })
     subscription().emit({ type: 'end' })
-    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBeUndefined()
+    // An ended stream holds no input; the host still holds the agent's start.
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(false)
     expect(listener).toHaveBeenCalled()
     subscription().emit({
       type: 'snapshot',
       sessions: [],
       setupHeldWorkspaceIds: ['repo::C:/Work']
     })
-    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBeUndefined()
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(false)
+    // The reconnected stream re-derives the hold from its own first answer.
+    await vi.advanceTimersByTimeAsync(250)
+    subscription(1).emit({
+      type: 'snapshot',
+      sessions: [],
+      setupHeldWorkspaceIds: ['repo::C:/Work']
+    })
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(true)
     deactivate()
   })
 

@@ -7,10 +7,15 @@ import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/st
 
 export function mobileStructuredAgentSessionWorking(state: StructuredAgentSessionState): boolean {
   return structuredAgentSessionHostSaysWorking(state.working, () =>
-    isStructuredAgentSessionMainAgentWorking(
-      runningStructuredAgentSessionTurnId(state),
-      state.submissions,
-      state.fence
-    )
+    mobileStructuredAgentSessionOwesWork(state)
+  )
+}
+
+/** The journal's own rule: a running turn or an unanswered send, whatever the host shows. */
+export function mobileStructuredAgentSessionOwesWork(state: StructuredAgentSessionState): boolean {
+  return isStructuredAgentSessionMainAgentWorking(
+    runningStructuredAgentSessionTurnId(state),
+    state.submissions,
+    state.fence
   )
 }

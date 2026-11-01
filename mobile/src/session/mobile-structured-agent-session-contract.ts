@@ -69,6 +69,8 @@ export type MobileStructuredAgentSessionArgs = {
   /** Capability facts from the shared runtime status probe; null follows the legacy wire. */
   hostSupport: StructuredAgentSessionHostSupport | null
   agent: string | null
+  /** The workspace's setup holds this chat's agent start. */
+  setupAgentStartHeld?: boolean
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
   onCommandsChanged?: () => void
   sessionCommands?: readonly AgentSessionSlashCommand[]

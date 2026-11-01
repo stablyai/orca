@@ -281,7 +281,6 @@
       "compaction": "已壓縮上下文",
       "contextCleared": "上下文已清除",
       "plan": "計畫",
-      "stoppedManually": "已手動停止",
       "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
       "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
       "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。"

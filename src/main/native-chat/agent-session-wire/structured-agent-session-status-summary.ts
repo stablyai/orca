@@ -26,6 +26,7 @@ export function structuredAgentSessionStatusSummary({
   state,
   stopping,
   starting,
+  startHeld,
   childWork,
   namingFailure,
   now
@@ -43,12 +44,17 @@ export function structuredAgentSessionStatusSummary({
   record: AgentSessionConversationView | null
   state: StructuredAgentSessionStatusState
   starting?: boolean
+  startHeld?: boolean
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
   now: () => number
 }): AgentSessionStatusSummary {
-  const projected = state.summary
+  // A message waiting on setup is no turn yet: the agent hasn't started, so nothing is working.
+  const projected =
+    startHeld && state.summary.status === 'working'
+      ? { status: null, latestPrompt: '' }
+      : state.summary
   const providerSession = structuredAgentSessionProviderSessionMetadata(record)
   // Acknowledged record options remain authoritative across model switches.
   const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)

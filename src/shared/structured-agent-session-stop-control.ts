@@ -4,8 +4,13 @@ export function structuredAgentSessionCanStop(input: {
   isWorking: boolean
   sending: boolean
   stopsConversation: boolean
+  /** Setup holds the agent's start with a sent message owed: not working, but Stop withdraws it. */
+  heldForSetup?: boolean
 }): boolean {
-  return input.turnId !== null || (input.stopsConversation && (input.isWorking || input.sending))
+  return (
+    input.turnId !== null ||
+    (input.stopsConversation && (input.isWorking || input.sending || input.heldForSetup === true))
+  )
 }
 
 export function structuredAgentSessionStopControl(input: {
@@ -18,6 +23,7 @@ export function structuredAgentSessionStopControl(input: {
     stop: (turnId: string | null, stopSends: () => void) => Promise<unknown>
   }
   transportState: { turnId: string | null; isWorking: boolean }
+  heldForSetup?: boolean
   sends: {
     sending: boolean
     /** A Stop's part of that send: what has not gone out goes no further. */
@@ -33,7 +39,8 @@ export function structuredAgentSessionStopControl(input: {
           turnId,
           isWorking,
           sending,
-          stopsConversation: host.stopsConversation
+          stopsConversation: host.stopsConversation,
+          heldForSetup: input.heldForSetup === true
         })
       : legacyLaunch !== undefined && sending,
     stop: () => {

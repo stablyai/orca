@@ -281,7 +281,6 @@
       "compaction": "컨텍스트가 압축됨",
       "contextCleared": "컨텍스트 지워짐",
       "plan": "계획",
-      "stoppedManually": "수동으로 중지됨",
       "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
       "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
       "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."

@@ -156,7 +156,9 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     }
     generation += 1
     namingActiveSessionIds = null
-    setSetupHeld(null)
+    // An ended or refused stream can't hold input; the host still holds the agent's start, and
+    // the next snapshot re-derives the hold. Unknown is only the first answer's window.
+    setSetupHeld(new Set())
     confirmedSessions.clear()
     revokeSnapshotOwnership()
     emit()

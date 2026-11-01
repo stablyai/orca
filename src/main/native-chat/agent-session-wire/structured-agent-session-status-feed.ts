@@ -195,6 +195,7 @@ export class StructuredAgentSessionStatusFeed {
       sessionId,
       session,
       starting: this.deps.starting?.(sessionId),
+      startHeld: this.deps.startHeld?.(sessionId),
       journal: source,
       record,
       state: projection.state,

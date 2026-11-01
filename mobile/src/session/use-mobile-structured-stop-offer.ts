@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { structuredAgentSessionCanStop } from '../../../src/shared/structured-agent-session-stop-control'
+import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+import { mobileStructuredAgentSessionOwesWork } from './mobile-structured-agent-session-working'
 
 type Send<Args extends unknown[], Result> = (...args: Args) => Promise<Result>
 
@@ -14,6 +16,9 @@ export function useMobileStructuredStopOffer(input: {
   turnId: string | null
   isWorking: boolean
   stopsConversation: boolean
+  /** The workspace's setup holds this chat's agent start; `state` is the chat's journal. */
+  setupAgentStartHeld?: boolean
+  state?: StructuredAgentSessionState
 }): { canStop: boolean; sendsOut: MobileStructuredSendsOut } {
   const { sessionKey } = input
   const countsRef = useRef(new Map<string, number>())
@@ -59,7 +64,12 @@ export function useMobileStructuredStopOffer(input: {
       turnId: input.turnId,
       isWorking: input.isWorking,
       sending: sendingKeys.has(sessionKey),
-      stopsConversation: input.stopsConversation
+      stopsConversation: input.stopsConversation,
+      // The host shows a held send as not working; its journal still owes it, so Stop withdraws it.
+      heldForSetup:
+        input.setupAgentStartHeld === true &&
+        input.state !== undefined &&
+        mobileStructuredAgentSessionOwesWork(input.state)
     }),
     sendsOut
   }

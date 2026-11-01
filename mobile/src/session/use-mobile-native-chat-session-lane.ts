@@ -22,7 +22,8 @@ export function useMobileNativeChatSessionLane({
   connState,
   onSendError,
   onQueuedEditNotice,
-  onActionResolved
+  onActionResolved,
+  setupAgentStartHeld = false
 }: {
   client: RpcClient | null
   hostId: string
@@ -38,6 +39,7 @@ export function useMobileNativeChatSessionLane({
   onQueuedEditNotice?: (message: string) => void
   onSendError: MobileNativeChatSendErrorReporter
   onActionResolved?: () => void
+  setupAgentStartHeld?: boolean
 }): {
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
@@ -76,6 +78,7 @@ export function useMobileNativeChatSessionLane({
     // reacquire the provider without clearing the cached transcript.
     connected: connState === 'connected',
     agent: structured ? agent : null,
+    setupAgentStartHeld,
     sessionCommands: sessionCommands.commands,
     onCommandsChanged: sessionCommands.invalidate,
     onSendError,

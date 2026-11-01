@@ -18,6 +18,7 @@ import {
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../shared/structured-agent-session-stop-control'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
 import {
   respondToStructuredAgentSessionPrompt,
@@ -277,6 +278,14 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
       ...legacyLaunchStop,
       host: stopControl,
       transportState,
+      // The host shows a held send as not working; its journal still owes it, so Stop withdraws it.
+      heldForSetup:
+        args.setupHeld === true &&
+        isStructuredAgentSessionMainAgentWorking(
+          transportState.turnId,
+          transportState.submissions,
+          transportState.fence
+        ),
       sends: { sending, stopSends: sends.stopSends }
     }),
     stopPressed: stopControl.pressed,

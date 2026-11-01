@@ -87,7 +87,9 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
     }
   }
   const revokeLive = (): void => {
-    setupHeldWorkspaceIds = null
+    // An ended or refused stream can't hold input; the host still holds the agent's start, and
+    // the next stream's snapshot re-derives the hold. Unknown is only the first answer's window.
+    setupHeldWorkspaceIds = new Set()
     setSnapshot(revokeAgentSessionStatusLive(snapshot))
     notify()
   }
@@ -131,10 +133,6 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
         ? 'unavailable'
         : 'closed'
       revokeLive()
-      if (stream === 'unavailable') {
-        setupHeldWorkspaceIds = new Set()
-        notify()
-      }
     }
   }
   const open = (): void => {

@@ -281,7 +281,6 @@
       "compaction": "コンテキストを圧縮しました",
       "contextCleared": "コンテキストをクリアしました",
       "plan": "プラン",
-      "stoppedManually": "手動で停止しました",
       "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
       "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
       "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。"

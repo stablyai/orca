@@ -20158,6 +20158,10 @@
         "switchAccount": "Switch Account",
         "addAccount": "Add Account…",
         "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
+      },
+      "setupNotice": {
+        "waiting": "Waiting for setup script to complete",
+        "changeInSettings": "Change in settings"
       }
     },
     "tab": {

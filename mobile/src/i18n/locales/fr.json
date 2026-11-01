@@ -285,7 +285,6 @@
       "compaction": "Contexte compacté",
       "contextCleared": "Contexte effacé",
       "plan": "Plan",
-      "stoppedManually": "Arrêté manuellement",
       "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
       "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
       "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets)."

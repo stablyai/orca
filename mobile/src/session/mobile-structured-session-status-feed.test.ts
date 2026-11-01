@@ -149,10 +149,32 @@ describe("the phone's status stream", () => {
     expect(listener).toHaveBeenCalledTimes(2)
     expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(true)
     connection('reconnecting')
-    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBeUndefined()
+    // Lost contact holds no input; the host still holds the agent's start.
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(false)
     expect(listener).toHaveBeenCalledTimes(3)
     frames[0]?.({ type: 'snapshot', sessions: [] })
     expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(false)
+    // The host's next answer re-derives the hold.
+    frames[0]?.({ type: 'snapshot', sessions: [], setupHeldWorkspaceIds: ['repo::C:/Work'] })
+    expect(feed.isWorkspaceSetupHeld('repo::C:/Work')).toBe(true)
+  })
+  it('reads a refused or ended status stream as not held, so input stays enabled', () => {
+    const feed = mobileStructuredSessionStatusFeed(client)
+    feed.subscribe(() => {})
+    expect(feed.isWorkspaceSetupHeld('workspace')).toBeUndefined()
+    // An old server whose chat host failed to open refuses the method with an ordinary error.
+    frames[0]?.({
+      type: 'error',
+      message: 'Chat host could not open',
+      error: { code: 'agent_session_host_unavailable' }
+    })
+    expect(feed.isWorkspaceSetupHeld('workspace')).toBe(false)
+    feed.subscribe(() => {})
+    expect(client.subscribe).toHaveBeenCalledTimes(2)
+    frames[1]?.({ type: 'snapshot', sessions: [], setupHeldWorkspaceIds: ['workspace'] })
+    expect(feed.isWorkspaceSetupHeld('workspace')).toBe(true)
+    frames[1]?.({ type: 'end' })
+    expect(feed.isWorkspaceSetupHeld('workspace')).toBe(false)
   })
 
   it('bounds N/10N setup frame work independently of unrelated summary population', () => {

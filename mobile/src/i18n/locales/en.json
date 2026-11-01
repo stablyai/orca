@@ -2564,6 +2564,9 @@
       "unknown": "{{agent}}'s chat could not be found on this host. Reconnect to its computer and try again.",
       "unsupported": "{{agent}}'s chat can't be reopened until Orca is updated.",
       "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment."
+    },
+    "nativeChatSetupNotice": {
+      "waiting": "Waiting for setup script to complete"
     }
   },
   "chat": {
@@ -2732,7 +2735,6 @@
       "selectText": "Select text"
     },
     "notice": {
-      "stoppedManually": "Stopped manually",
       "compaction": "Context compacted",
       "contextCleared": "Context cleared",
       "plan": "Plan",

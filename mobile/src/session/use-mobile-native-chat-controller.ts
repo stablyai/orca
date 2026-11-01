@@ -22,6 +22,7 @@ type MobileNativeChatControllerArgs = Parameters<typeof useMobileNativeChatActiv
   client: RpcClient | null
   deviceTokenRef: MutableRefObject<string | null>
   readSetupAgentStartHeld?: () => boolean
+  setupAgentStartHeld?: boolean
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState

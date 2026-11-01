@@ -6,17 +6,22 @@ import {
   type StructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkJournal
 } from './structured-agent-session-current-work'
-import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionHostDeps,
+  StructuredAgentSessionHostSession
+} from './structured-agent-session-host-types'
 
 export type StructuredAgentSessionCurrentWorkHost = {
   store: Pick<AgentSessionRecordStore, 'getConversation' | 'replacedRuntime'>
+  /** Given where the work is published to clients, which show a start held for setup as not working. */
+  setupHold?: StructuredAgentSessionHostDeps['setupHold']
   sessions: {
     get(
       sessionId: string
     ):
       | Pick<
           StructuredAgentSessionHostSession,
-          'journal' | 'lastEndedChild' | 'operationalRevision' | 'child'
+          'journal' | 'lastEndedChild' | 'operationalRevision' | 'child' | 'params'
         >
       | undefined
   }
@@ -28,7 +33,13 @@ export function hostStructuredAgentSessionCurrentWork(
 ): StructuredAgentSessionCurrentWork | null {
   const session = host.sessions.get(sessionId)
   return session
-    ? heldStructuredAgentSessionCurrentWork(host.store, sessionId, session.journal, session)
+    ? heldStructuredAgentSessionCurrentWork(
+        host.store,
+        sessionId,
+        session.journal,
+        session,
+        structuredAgentSessionStartHeld(host.setupHold, session)
+      )
     : null
 }
 
@@ -39,7 +50,8 @@ export function heldStructuredAgentSessionCurrentWork(
   journal: StructuredAgentSessionCurrentWorkJournal,
   session:
     | Pick<StructuredAgentSessionHostSession, 'lastEndedChild' | 'operationalRevision' | 'child'>
-    | undefined
+    | undefined,
+  startHeld = false
 ): StructuredAgentSessionCurrentWork {
   const ended = session?.lastEndedChild
   return structuredAgentSessionCurrentWork(journal, {
@@ -47,6 +59,19 @@ export function heldStructuredAgentSessionCurrentWork(
     replaced: store.replacedRuntime(sessionId),
     child: session?.child ?? null,
     ...(ended ? { ended } : {}),
-    revision: session?.operationalRevision ?? 0
+    revision: session?.operationalRevision ?? 0,
+    ...(startHeld ? { startHeld } : {})
   })
+}
+
+/** Re-read per publication: the workspace's setup holds this chat's agent start and none runs. */
+export function structuredAgentSessionStartHeld(
+  setupHold: StructuredAgentSessionHostDeps['setupHold'],
+  session: { params: { location: { workspaceId: string } }; child?: unknown } | undefined
+): boolean {
+  return (
+    session !== undefined &&
+    !session.child &&
+    setupHold?.(session.params.location.workspaceId) != null
+  )
 }
