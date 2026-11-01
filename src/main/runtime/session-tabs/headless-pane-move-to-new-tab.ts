@@ -20,7 +20,7 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
   ): ReturnType<HeadlessTabGroupsMethods['persistHeadlessTabGroups']>
 
   // Why: a client's pane-to-new-tab move must reach the host session or the next snapshot rebuilds
-  // the old tab. A window-owned host keeps its layout in the renderer, so only headless hosts commit.
+  // the old tab. Commit durable topology so both headless and window-backed hosts commit the move.
   async moveMobileSessionLeafToNewTab(
     worktreeSelector: string,
     args: { sourceTabId: string; targetTabId: string; leafId: string },
@@ -30,9 +30,6 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
-    if (this.getAvailableAuthoritativeWindow()) {
-      return { status: 'not_held' }
-    }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     // Why: the client's pty id mirrors a host handle, so the host names its own live pty; an SSH
     // respawn can leave an old id in one session copy. Headless cleanup can't retire an emptied source.
