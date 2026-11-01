@@ -83,8 +83,12 @@ export function agentPickerSpeedFlag(
   value: string,
   model?: string
 ) {
+  const terminalModel =
+    draft.choices.model ??
+    entry.terminal.model ??
+    (draft.surface === 'terminal' ? model : undefined)
   const option =
-    agentPickerEntryOptions(entry, model, 'terminal').find((option) => option.id === key) ??
+    agentPickerEntryOptions(entry, terminalModel, 'terminal').find((option) => option.id === key) ??
     getAgentSessionOptionLaunchCatalog(entry.agent)?.unknownModelOptions?.find(
       (option) => option.id === key
     )
@@ -98,10 +102,7 @@ export function agentPickerSpeedFlag(
       permissionMode: 'own',
       ...(option.apply.composedIntoModel
         ? {
-            model:
-              draft.choices.model ??
-              entry.terminal.model ??
-              (draft.surface === 'terminal' ? model : undefined)
+            model: terminalModel
           }
         : {}),
       options: option.apply.composedIntoModel
@@ -155,7 +156,11 @@ export function editAgentPickerSpeed(
   const analysis = analyzeAgentChoiceArgs(entry.agent, source)
   const selected = analysis.occurrences.filter((item) => item.key === key)
   let remaining = analysis.cut(selected) ?? source
-  const option = agentPickerEntryOptions(entry, model, 'terminal').find(
+  const terminalModel =
+    draft.choices.model ??
+    entry.terminal.model ??
+    (draft.surface === 'terminal' ? model : undefined)
+  const option = agentPickerEntryOptions(entry, terminalModel, 'terminal').find(
     (option) => option.id === key
   )
   if (option?.apply.composedIntoModel) {
@@ -172,4 +177,22 @@ export function editAgentPickerSpeed(
         }
       : {})
   }
+}
+
+export function removeAgentPickerSpeed(
+  entry: AgentPickerEntry,
+  draft: AgentPickerDraft,
+  key: string,
+  value: string,
+  model?: string
+): AgentPickerDraft {
+  const next = editAgentPickerSpeed(entry, draft, key, value, model)
+  const permission = agentPickerArgumentPermission(entry, next)
+  const prefix = permission && !permission.opaque ? permission.flag : ''
+  const source = prefix ? permission!.remainingArguments : (textOf(entry, next) ?? '')
+  const analysis = analyzeAgentChoiceArgs(entry.agent, source)
+  const remaining = analysis.cut(analysis.occurrences.filter((item) => item.key === key))
+  return remaining === null
+    ? next
+    : { ...next, arguments: [prefix, remaining].filter(Boolean).join(' ') || null }
 }

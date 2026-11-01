@@ -112,3 +112,37 @@ it('never runs the desktop plan when the host that planned the launch did not st
     "Couldn't confirm Claude started. Check its terminal before trying again."
   )
 })
+
+it('delivers configured setup through the existing startup payload instead of replacing it with host defaults', async () => {
+  store.createWorktree.mockResolvedValueOnce({
+    worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
+    startupTerminal: { spawned: true }
+  })
+  const request = promptedClaudeRequest()
+  request.launchInputs = {
+    sessionOptions: { model: 'team-model', effort: 'high' },
+    agentArgs: '--add-dir docs'
+  }
+  request.startup = {
+    command: 'claude --model team-model --effort high --add-dir docs',
+    launchAgent: 'claude',
+    launchConfig: {
+      agentCommand: 'claude',
+      agentArgs: '--model team-model --effort high --add-dir docs',
+      agentEnv: {}
+    }
+  }
+  pendingWorktreeCreations['configured-creation'] = {
+    creationId: 'configured-creation',
+    phase: 'fetching',
+    status: 'creating',
+    startedAt: 1,
+    indeterminate: true,
+    loaderVisible: true,
+    request
+  }
+  continueBackgroundWorktreeCreation('configured-creation', request)
+  await vi.waitFor(() => expect(store.removePendingWorktreeCreation).toHaveBeenCalled())
+  expect(store.createWorktree.mock.calls[0]?.[25]).not.toHaveProperty('hostAgentLaunch')
+  expect(store.createWorktree.mock.calls[0]?.[16]).toEqual(request.startup)
+})

@@ -81,9 +81,13 @@ export function useSourceControlActionAgentChoice(args: {
             observation.model.state === 'settled' &&
             observation.model.rows.some((row) => row.kind === 'chat' && row.agent === agent)
         })
-  // A saved chat stays implicit so a host that stops running chats falls back to a terminal.
-  const liveSurface = args.livePick ?? (recipe.surface === 'terminal' ? 'terminal' : undefined)
-  const selection = observation.selectionFor(selectedAgent, liveSurface)
+  const savedSurface = recipe.agentId === selectedAgent ? recipe.surface : undefined
+  const liveSurface = args.livePick ?? savedSurface
+  const selection = observation.selectionFor(
+    selectedAgent,
+    args.livePick ?? (savedSurface === 'terminal' ? 'terminal' : undefined),
+    savedSurface === 'chat' ? 'chat' : undefined
+  )
   const enabledDetectedAgents = detectedAgents.filter((agent) =>
     isTuiAgentEnabled(agent, disabledAgents)
   )

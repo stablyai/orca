@@ -1,3 +1,5 @@
+import { editActionArgumentChoicePreferences } from './source-control-action-choice-preferences'
+export { editActionArgumentChoicePreferences } from './source-control-action-choice-preferences'
 import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
 import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
 import {
@@ -77,7 +79,8 @@ export function reconcileActionArgumentDocumentTransaction<T extends SourceContr
     choices: AgentDedicatedChoices
     permissionEligible: boolean
     literalKeys: readonly string[]
-  }
+  },
+  accepted?: ReturnType<typeof reconcileAgentChoiceArgsDetailed>
 ) {
   if (!isTuiAgent(recipe.agentId) || typeof recipe.agentArgs !== 'string') {
     return { recipe }
@@ -93,19 +96,21 @@ export function reconcileActionArgumentDocumentTransaction<T extends SourceContr
     options: { ...literal.options, ...eligible.options },
     ...(authored?.agentId === agent ? { permissionMode: authored.permissionMode } : {})
   }
-  const result = reconcileAgentChoiceArgsDetailed({
-    agent,
-    userArgs: recipe.agentArgs,
-    choices: input?.choices ?? effective,
-    mode,
-    keys: new Set([
-      'model',
-      'effort',
-      ...((input ? !input.permissionEligible : authored && authored.agentId !== agent)
-        ? []
-        : ['permissionMode'])
-    ])
-  })
+  const result =
+    accepted ??
+    reconcileAgentChoiceArgsDetailed({
+      agent,
+      userArgs: recipe.agentArgs,
+      choices: input?.choices ?? effective,
+      mode,
+      keys: new Set([
+        'model',
+        'effort',
+        ...((input ? !input.permissionEligible : authored && authored.agentId !== agent)
+          ? []
+          : ['permissionMode'])
+      ])
+    })
   if (!result.selected.length) {
     return { recipe, result }
   }
@@ -132,7 +137,7 @@ export function reconcileActionArgumentDocumentTransaction<T extends SourceContr
   const nodes = [
     ...retained,
     ...ranges
-      .filter((entry) => entry.key !== 'permissionMode')
+      .filter((entry) => entry.key === 'model' || entry.key === 'effort')
       .map((entry) => ({
         at: map(entry.start),
         text: recipe.agentArgs!.slice(entry.start, entry.end)
@@ -220,36 +225,24 @@ export function editActionArgumentChoices(
   selected: AgentDedicatedChoices,
   patch: AgentChoicePatch,
   text: string,
-  base: ActionModelSelection['base'] = 'default'
+  base: ActionModelSelection['base'] = 'default',
+  accepted?: ReturnType<typeof reconcileAgentChoiceArgsDetailed>
 ) {
-  const result = reconcileAgentChoiceArgsDetailed({
-    agent,
-    userArgs: text,
-    choices: selected,
-    mode: 'choice-edit',
-    keys: new Set(['model', 'effort', 'permissionMode']),
-    patch
-  })
-  const previous = recipe.launchPreferences
-  const authored = readActionModelSelection(previous)
+  const result =
+    accepted ??
+    reconcileAgentChoiceArgsDetailed({
+      agent,
+      userArgs: text,
+      choices: selected,
+      mode: 'choice-edit',
+      keys: new Set(['model', 'effort', 'permissionMode', ...Object.keys(patch.options ?? {})]),
+      patch
+    })
+  const authored = readActionModelSelection(recipe.launchPreferences)
   const selection: ActionModelSelection = {
     ...authored,
     base: authored?.base ?? base,
     options: { ...authored?.options }
-  }
-  if (patch.model !== undefined) {
-    selection.model = { agentId: agent, value: result.choices.model ?? null }
-    for (const key of Object.keys(selected.options ?? {})) {
-      if (
-        result.choices.options?.[key] === undefined &&
-        (!selection.options![key] || selection.options![key].agentId === agent)
-      ) {
-        selection.options![key] = { agentId: agent, value: null }
-      }
-    }
-  }
-  for (const key of Object.keys(patch.options ?? {})) {
-    selection.options![key] = { agentId: agent, value: result.choices.options?.[key] ?? null }
   }
   const lifted = result.selected.filter(
     (entry) =>
@@ -278,22 +271,28 @@ export function editActionArgumentChoices(
     ...nodes.map((node) => ({ ...node, at: map(node.at) })),
     ...lifted.map((entry) => ({ at: map(entry.start), text: text.slice(entry.start, entry.end) }))
   ].sort((a, b) => a.at - b.at)
-  const modelTouched = patch.model !== undefined || Object.keys(patch.options ?? {}).length > 0
-  const preferences =
-    authored || modelTouched ? normalizeActionModelSelection(selection) : undefined
-  const permissionMode =
-    patch.permissionMode !== undefined ? result.choices.permissionMode : previous?.permissionMode
+  const remainingSelection = normalizeActionModelSelection(selection)
+  const preferencesAfterLift =
+    remainingSelection || recipe.launchPreferences?.permissionMode
+      ? {
+          agentId: recipe.launchPreferences?.agentId ?? agent,
+          ...(remainingSelection ? { modelSelection: remainingSelection } : {}),
+          ...(recipe.launchPreferences?.permissionMode
+            ? { permissionMode: recipe.launchPreferences.permissionMode }
+            : {})
+        }
+      : undefined
   const next = {
     ...recipe,
     agentArgs: result.userArgs,
-    launchPreferences:
-      preferences || permissionMode
-        ? {
-            agentId: patch.permissionMode !== undefined ? agent : (previous?.agentId ?? agent),
-            ...(preferences ? { modelSelection: preferences } : {}),
-            ...(permissionMode ? { permissionMode } : {})
-          }
-        : undefined,
+    launchPreferences: editActionArgumentChoicePreferences(
+      { ...recipe, launchPreferences: preferencesAfterLift },
+      agent,
+      selected,
+      patch,
+      result.choices,
+      base
+    ),
     argumentChoices: updatedNodes.length ? { syntaxAgent: agent, nodes: updatedNodes } : undefined
   }
   return updatedNodes.length && recipe.agentId !== agent ? demoteActionArgumentChoices(next) : next

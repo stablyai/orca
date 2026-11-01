@@ -1,3 +1,9 @@
+import {
+  SESSION,
+  FINGERPRINT,
+  OPERATION,
+  request
+} from './structured-agent-session-rpc-client.test-fixture'
 import { availableRevealWorkspace } from '../../session-tabs/structured-workspace-authority.test-fixture'
 // Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 
@@ -5,62 +11,21 @@ import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-cha
 import { vi } from 'vitest'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  getStructuredAgentSessionHost,
+  setStructuredAgentSessionHost
+} from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   StructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusSubscriber
 } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { RpcAnyMethodDeclaration, RpcRequest, RpcResponse } from '../core'
+import type { RpcAnyMethodDeclaration, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { resetStructuredAgentSessionClosesBeforeCreateForTests } from './structured-agent-session-close-before-create'
-
-export const SESSION = 'session-alpha'
-export const FINGERPRINT = 'f'.repeat(64)
-export const OPERATION = '1800000000000-00000000000000000000000000000001'
-
-export function envelope(overrides: Record<string, unknown> = {}) {
-  return {
-    sessionId: SESSION,
-    clientOperationId: OPERATION,
-    expectedRuntimeFence: 1,
-    payloadFingerprint: FINGERPRINT,
-    ...overrides
-  }
-}
-
-export function sendParams(overrides: Record<string, unknown> = {}) {
-  return {
-    envelope: envelope(),
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
-    ...overrides
-  }
-}
-
-export function attachParams(overrides: Record<string, unknown> = {}) {
-  return {
-    envelope: envelope({ expectedRuntimeFence: null }),
-    location: {
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: 'workspace-1',
-      workspaceKind: 'git-worktree'
-    },
-    provider: 'codex',
-    agent: 'codex',
-    accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    runtimeKind: 'native',
-    providerHandle: { kind: 'codex', threadId: 'thread-1' },
-    ...overrides
-  }
-}
-
-function request(method: string, params: unknown): RpcRequest {
-  return { id: 'request-1', authToken: 'token', method, params }
-}
 
 export const hostCalls: Record<string, ReturnType<typeof vi.fn>> = {}
 export const runtimeCalls: Record<string, ReturnType<typeof vi.fn>> = {}
@@ -260,6 +225,7 @@ export function dispatcher(
     )
   })
   const runtime = {
+    structuredAgentModelCatalog: async () => getStructuredAgentSessionHost()?.deps.modelCatalog,
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     // The host reads saved settings privately; follow the client settings each test chose.
@@ -313,6 +279,12 @@ export async function openStream(
 }
 
 export {
+  SESSION,
+  FINGERPRINT,
+  OPERATION,
+  envelope,
+  sendParams,
+  attachParams,
   STRUCTURED_CLIENT,
   STRUCTURED_MOBILE_CLIENT
 } from './structured-agent-session-rpc-client.test-fixture'

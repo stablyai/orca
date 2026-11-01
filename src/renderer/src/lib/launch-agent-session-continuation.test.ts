@@ -61,6 +61,35 @@ describe('launchAgentSessionContinuation', () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
+  it.each(['terminal-tui', 'structured-native-chat'] as const)(
+    'forwards configured setup through the existing %s route',
+    async (route) => {
+      const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+      const sessionOptions = { model: 'team-model', effort: 'high', permissionMode: 'full-access' }
+      const terminalInputs = route === 'terminal-tui' ? { agentArgs: '--add-dir docs' } : {}
+      await launchAgentSessionContinuation({
+        agent: 'codex',
+        prompt: 'continue',
+        worktreeId: 'wt-1',
+        launchSource: 'sidebar',
+        launchChoice: { agent: 'codex', route },
+        sessionOptions,
+        ...terminalInputs
+      })
+      expect(launchAgentInNewTab).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: 'continue',
+          sessionOptions,
+          ...terminalInputs,
+          agentSessionLaunchPlan: expect.objectContaining({ route, launchOptions: sessionOptions })
+        })
+      )
+      if (route === 'structured-native-chat') {
+        expect(launchAgentInNewTab.mock.calls[0]?.[0]).not.toHaveProperty('agentArgs')
+      }
+    }
+  )
+
   it('distinguishes prompt delivery failure from terminal launch failure', async () => {
     launchAgentInNewTab.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'tab-new' },

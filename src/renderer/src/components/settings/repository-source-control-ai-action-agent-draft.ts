@@ -17,7 +17,7 @@ type RepoActionRecipe = NonNullable<
 
 export function withRepoAiActionAgent(
   base: RepoSourceControlAiOverrides,
-  _settings: GlobalSettings | null,
+  _settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
   actionId: SourceControlActionId,
   agentId: RepoActionRecipe['agentId'],
   choice?: Pick<SourceControlActionRecipe, 'surface'>
@@ -50,7 +50,7 @@ export function withRepoAiActionAgent(
 
 export function withRepoAiActionLaunchPreferences(
   base: RepoSourceControlAiOverrides,
-  _settings: GlobalSettings | null,
+  _settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
   actionId: SourceControlActionId,
   launchPreferences: SourceControlActionLaunchPreferences | undefined
 ): RepoSourceControlAiOverrides {

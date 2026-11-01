@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { lockedVersion, lockfileRootImporter } from './pnpm-lockfile-root-importer.mjs'
 
 // Shared tsconfig remaps to mobile copies; mismatched versions prevent TS merging Zod schemas, inferring {} (phone-feed-list.ts).
-export const SHARED_DEPENDENCIES = ['zod', 'tweetnacl', '@noble/hashes', '@types/ws']
+export const SHARED_DEPENDENCIES = ['zod', 'smol-toml', 'tweetnacl', '@noble/hashes', '@types/ws']
 
 // Mobile typechecks through the root runner, whose Bun path accepts one TypeScript version, and
 // mobile CI runs its tests with the root's Vitest CLI against mobile's `vitest` imports.

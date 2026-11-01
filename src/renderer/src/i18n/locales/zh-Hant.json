@@ -20129,7 +20129,8 @@
     },
     "newWorkspace": {
       "agentOptional": "代理程式 [選填]",
-      "createDescription": "選擇專案和工作區名稱。如果想啟動代理程式，請選擇一個。"
+      "createDescription": "選擇專案和工作區名稱。如果想啟動代理程式，請選擇一個。",
+      "setupOnly": "僅設定"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一個議題更改正在進行中。"
@@ -22738,6 +22739,12 @@
     "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
   },
   "agentPicker": {
+    "catalogUnsupported": "此主機上無法使用 {{agent}} 模型。你可以保留目前的選擇或使用引數。",
+    "catalogFailed": "無法載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
+    "catalogSignIn": "請登入 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
+    "catalogInstall": "請在此主機上安裝 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
+    "catalogUnresolved": "尚未載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
+    "catalogEmpty": "{{agent}} 沒有可用模型。",
     "setByArguments": "由引數設定",
     "searchModels": "搜尋模型",
     "noModels": "沒有符合搜尋條件的模型。",
@@ -22751,6 +22758,11 @@
     "arguments": "引數",
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
-    "launchTerminal": "啟動終端機"
+    "launchTerminal": "啟動終端機",
+    "use": "使用",
+    "select": "選擇代理程式",
+    "openIn": "開啟方式",
+    "chat": "聊天",
+    "terminal": "終端機"
   }
 }

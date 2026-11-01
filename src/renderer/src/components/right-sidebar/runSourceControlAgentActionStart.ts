@@ -31,7 +31,7 @@ import { admitSourceControlRecovery } from './source-control-recovery-admission'
 export type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
   trimmedCommandInput: string
-  /** The picker's choice: a deliberate surface stays explicit, a saved replay requests terminal only. */
+  /** Deliberate surface operations remain distinct from saved route preferences. */
   launchChoice?: AgentLaunchChoice
   recipe: SelectedSourceControlActionRecipe
   saveTargetValue: string
@@ -55,6 +55,8 @@ export type RunSourceControlAgentActionStartArgs = {
     agentArgs?: string
     /** The action's saved choice, on either route. */
     sessionOptions?: Readonly<Record<string, string>>
+    chatSessionOptions?: Readonly<Record<string, string>>
+    preferredSurface?: 'chat'
     launchChoice?: AgentLaunchChoice
     sessionOptionsYieldToAgentArgs?: true
   }) => boolean | Promise<boolean>
@@ -75,7 +77,7 @@ export async function runSourceControlAgentActionStart({
   selectedAgent,
   trimmedCommandInput,
   launchChoice,
-  recipe,
+  recipe: submittedRecipe,
   saveTargetValue,
   actionId,
   repoId,
@@ -96,6 +98,7 @@ export async function runSourceControlAgentActionStart({
   onLaunched,
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
+  const recipe = structuredClone(submittedRecipe)
   // Detection and delivery planning can outlive the state that opened the composer.
   if (signal?.aborted) {
     return false

@@ -105,7 +105,11 @@ describe('shared agent launch picker', () => {
       '--model astra --add-dir docs'
     )
     expect(draft.choices.model).toBeUndefined()
-    expect(agentPickerLaunchInputs(draft, entry).sessionOptions?.model).toBe('astra')
+    expect(agentPickerLaunchInputs(draft, entry).chatSessionOptions?.model).toBe('astra')
+    expect(agentPickerLaunchInputs(draft, entry).sessionOptions?.model).toBeUndefined()
+    expect(agentPickerLaunchInputs(draft, entry).agentArgs).toBe(
+      '-a on-request -s read-only -c approvals_reviewer=user --model astra --add-dir docs'
+    )
     expect(draft.arguments).toBe('--model astra --add-dir docs')
     expect(editAgentPickerArguments(draft, '').arguments).toBeNull()
     expect(agentPickerDraft(entry).arguments).toBeUndefined()
@@ -205,7 +209,8 @@ it.each(['chat', 'terminal'] as const)(
       '--model haiku --dangerously-skip-permissions --add-dir docs'
     )
     expect(agentPickerLaunchInputs({ ...edited, surface: 'chat' }, own)).toEqual({
-      sessionOptions: { model: 'my-private-alias', permissionMode: 'ask' }
+      sessionOptions: { model: 'my-private-alias', permissionMode: 'ask' },
+      agentArgs: '--model haiku --dangerously-skip-permissions --add-dir docs'
     })
     expect(agentPickerLaunchInputs({ ...edited, surface: 'terminal' }, own).agentArgs).toContain(
       '--model haiku'
@@ -319,7 +324,8 @@ it('clears an Arguments-owned model/effort through deliberate controls without c
   expect(cleared.arguments).toBe('--dangerously-skip-permissions --add-dir docs')
   expect(cleared.choices).toEqual({ permissionMode: 'ask' })
   expect(agentPickerLaunchInputs({ ...cleared, surface: 'chat' }, own)).toEqual({
-    sessionOptions: { permissionMode: 'ask' }
+    sessionOptions: { permissionMode: 'ask' },
+    agentArgs: '--dangerously-skip-permissions --add-dir docs'
   })
   const next = editAgentPickerDraft(edited, { model: 'sonnet' })
   expect(agentPickerLaunchInputs({ ...next, surface: 'chat' }, own).sessionOptions).toEqual({
@@ -332,8 +338,9 @@ it('clears an Arguments-owned model/effort through deliberate controls without c
 })
 
 it('uses the common Cursor composed model carrier for both Fast directions without duplicate model flags', async () => {
-  const { editAgentPickerSpeed, agentPickerPanelArguments, editAgentPickerPanelText } =
-    await import('./agent-launch-picker-arguments')
+  const { agentPickerPanelArguments } = await import('./agent-launch-picker-arguments')
+  const { applyAgentPickerEdit, acceptAgentPickerArguments } =
+    await import('./agent-launch-picker-edits')
   const own: AgentPickerEntry = {
     ...entry,
     agent: 'cursor',
@@ -343,23 +350,40 @@ it('uses the common Cursor composed model carrier for both Fast directions witho
     arguments: '--add-dir docs',
     catalog: { origin: 'unknown' }
   }
-  const fast = editAgentPickerSpeed(own, agentPickerDraft(own), 'fastMode', 'true', 'gpt-5.3-codex')
+  const fast = applyAgentPickerEdit(own, agentPickerDraft(own), {
+    kind: 'speed',
+    key: 'fastMode',
+    value: 'true',
+    model: 'gpt-5.3-codex'
+  })
   expect(agentPickerLaunchInputs(fast, own).agentArgs).toBe(
     '--model gpt-5.3-codex-low-fast --add-dir docs'
   )
-  const view = agentPickerPanelArguments(own, fast, 'gpt-5.3-codex')
+  const view = agentPickerPanelArguments(own, fast)
   expect(view.text).toBe('--add-dir docs')
-  expect(view.chips.filter((chip) => chip.key === 'fastMode')).toHaveLength(1)
-  const edited = editAgentPickerPanelText(own, fast, '--add-dir src', 'gpt-5.3-codex')
+  const edited = acceptAgentPickerArguments(
+    own,
+    applyAgentPickerEdit(own, fast, {
+      kind: 'arguments',
+      text: '--add-dir src'
+    })
+  )
   expect(agentPickerLaunchInputs(edited, own).agentArgs).toBe(
     '--model gpt-5.3-codex-low-fast --add-dir src'
   )
-  const normal = editAgentPickerSpeed(own, fast, 'fastMode', 'false', 'gpt-5.3-codex')
+  const normal = applyAgentPickerEdit(own, fast, {
+    kind: 'speed',
+    key: 'fastMode',
+    value: 'false',
+    model: 'gpt-5.3-codex'
+  })
   expect(agentPickerLaunchInputs(normal, own).agentArgs).toBe(
     '--model gpt-5.3-codex-low --add-dir docs'
   )
   expect(agentPickerLaunchInputs({ ...normal, surface: 'chat' }, own)).toEqual({
-    sessionOptions: { fastMode: 'false' }
+    sessionOptions: { fastMode: 'false', model: 'gpt-5.3-codex-low' },
+    chatSessionOptions: { fastMode: 'false' },
+    agentArgs: '--model gpt-5.3-codex-low --add-dir docs'
   })
 })
 
@@ -376,10 +400,11 @@ it('reports opaque permission literally when the actual compiler ignores a diffe
   }
   const next = editAgentPickerPermission(own, agentPickerDraft(own), 'full-access')
   expect(agentPickerPermissionValue(own, next)).toBe('plan')
-  expect(agentPickerPanelArguments(own, next).chips).toEqual([])
+  expect(agentPickerPanelArguments(own, next).text).toBe(raw)
   expect(agentPickerLaunchInputs(next, own).agentArgs).toBe(raw)
   expect(agentPickerLaunchInputs({ ...next, surface: 'chat' }, own)).toEqual({
-    sessionOptions: { permissionMode: 'full-access' }
+    sessionOptions: { permissionMode: 'full-access' },
+    agentArgs: raw
   })
 })
 
@@ -394,7 +419,6 @@ it('retains a raw permission spelling even when its literal value happens to nam
   const view = agentPickerPanelArguments(own, agentPickerDraft(own))
   expect(view.permission).toBe('ask')
   expect(view.selectedPermission).toBeUndefined()
-  expect(view.chips[0].flag).toBe('--permission-mode ask')
 })
 
 it('keeps offered host Chat independent of preference through the actual row builder and adapter', () => {

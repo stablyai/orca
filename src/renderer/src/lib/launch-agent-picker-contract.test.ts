@@ -1,3 +1,7 @@
+import {
+  useAgentPickerSetup,
+  useAgentPickerDraftScope
+} from '../components/agent/agent-launch-picker-drafts'
 // @vitest-environment happy-dom
 import type * as SettingsTransport from '../components/settings/agent-launch-settings-transport'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -16,13 +20,11 @@ import {
   agentPickerLaunchInputs,
   agentPickerEntriesFromRows
 } from '../../../shared/agent-launch-picker'
-import { editAgentPickerPermission } from '../../../shared/agent-launch-picker-permission'
 import {
-  editAgentPickerPanelArguments,
-  editAgentPickerPanelText,
-  editAgentPickerSpeed,
-  agentPickerPanelArguments
-} from '../../../shared/agent-launch-picker-arguments'
+  acceptAgentPickerArguments,
+  applyAgentPickerEdit
+} from '../../../shared/agent-launch-picker-edits'
+import { agentPickerPanelArguments } from '../../../shared/agent-launch-picker-arguments'
 import {
   mockCreateTab,
   queuedStartups,
@@ -59,12 +61,8 @@ describe('picker window launch contract', () => {
     'preserves %s permission and model intent through the actual picker-to-terminal compiler',
     async (agent) => {
       const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-      const {
-        agentPickerChoiceSeeds,
-        agentPickerDraft,
-        editAgentPickerArguments,
-        agentPickerLaunchInputs
-      } = await import('../../../shared/agent-launch-picker')
+      const { agentPickerChoiceSeeds, agentPickerDraft, agentPickerLaunchInputs } =
+        await import('../../../shared/agent-launch-picker')
       const settings = {
         agentPermissionDefault: 'ask' as const,
         agentDefaultArgs: { [agent]: '--add-dir docs' },
@@ -95,7 +93,13 @@ describe('picker window launch contract', () => {
       expect(launch(agentPickerLaunchInputs(agentPickerDraft(entry), entry))).toBe(ordinary)
       for (const text of ['--add-dir src', '', '--unknown opaque --add-dir src']) {
         const command = launch(
-          agentPickerLaunchInputs(editAgentPickerArguments(agentPickerDraft(entry), text), entry)
+          agentPickerLaunchInputs(
+            acceptAgentPickerArguments(
+              entry,
+              applyAgentPickerEdit(entry, agentPickerDraft(entry), { kind: 'arguments', text })
+            ),
+            entry
+          )
         )
         expect(command).toContain(
           agent === 'claude'
@@ -110,7 +114,13 @@ describe('picker window launch contract', () => {
           ? '--permission-mode plan --add-dir src'
           : '-a never -s danger-full-access --add-dir src'
       const command = launch(
-        agentPickerLaunchInputs(editAgentPickerArguments(agentPickerDraft(entry), raw), entry)
+        agentPickerLaunchInputs(
+          acceptAgentPickerArguments(
+            entry,
+            applyAgentPickerEdit(entry, agentPickerDraft(entry), { kind: 'arguments', text: raw })
+          ),
+          entry
+        )
       )
       expect(command).toContain(agent === 'claude' ? "'--permission-mode' 'plan'" : "'-a' 'never'")
       expect(command).not.toContain(
@@ -272,13 +282,121 @@ describe('picker window launch contract', () => {
       const expectedSearch = await perform(
         agentPickerLaunchInputs({ ...option.setup!, surface: 'terminal' }, entry)
       )
-      expect(await perform({}, 'searched')).toEqual(expectedSearch)
-      expect(await perform({}, 'omnibox')).toEqual(expectedSearch)
+      const searched = await perform({}, 'searched')
+      const omnibox = await perform({}, 'omnibox')
+      expect(searched).toEqual(expectedSearch)
+      expect(omnibox).toEqual(expectedSearch)
       expect(expectedSearch.command ?? expectedSearch.remote?.command ?? '').toContain('opus')
+      const explicit = {
+        ...option.setup!,
+        surface: 'terminal' as const,
+        arguments: '--add-dir src'
+      }
+      let accepted = acceptAgentPickerArguments(
+        entry,
+        applyAgentPickerEdit(entry, agentPickerDraft(entry), {
+          kind: 'arguments',
+          text: '--add-dir src'
+        })
+      )
+      accepted = applyAgentPickerEdit(entry, accepted, {
+        kind: 'choice',
+        patch: option.setup!.choices
+      })
+      expect(await perform(agentPickerLaunchInputs(accepted, entry))).toEqual(
+        await perform(agentPickerLaunchInputs(explicit, entry))
+      )
       dispatch.mockRestore()
     }
   )
 })
+
+it.each(['claude', 'codex'] as const)(
+  'passes %s speed through the real picker-to-terminal compiler',
+  async (agent) => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const { agentPickerDraft, agentPickerLaunchInputs } =
+      await import('../../../shared/agent-launch-picker')
+    const options: Record<string, string> =
+      agent === 'claude' ? { fastMode: 'false' } : { serviceTier: 'default' }
+    const entry = {
+      agent,
+      label: agent,
+      rows: [{ agent, kind: 'terminal' as const }],
+      surfaces: ['chat' as const, 'terminal' as const],
+      defaultSurface: 'chat' as const,
+      terminal: { permissionMode: 'ask' as const },
+      structured: {
+        model: agent === 'claude' ? 'opus' : 'account-model',
+        permissionMode: 'ask' as const,
+        options
+      },
+      arguments:
+        agent === 'claude'
+          ? '--settings ./team.json --settings \'{"language":"french"}\''
+          : '--add-dir docs',
+      catalog: {
+        origin: 'probe' as const,
+        fetchedAt: 1,
+        models: [
+          {
+            id: agent === 'claude' ? 'opus' : 'account-model',
+            label: 'Model',
+            isDefault: true,
+            efforts: [],
+            supportsFastMode: true,
+            ...(agent === 'codex'
+              ? { serviceTiers: [{ value: 'account_fast_v9', label: 'Fast' }] }
+              : {})
+          }
+        ]
+      }
+    }
+    Object.assign(store.settings, { agentPermissionDefault: 'ask' })
+    const draft = applyAgentPickerEdit(entry, agentPickerDraft(entry), {
+      kind: 'speed',
+      key: agent === 'claude' ? 'fastMode' : 'serviceTier',
+      value: agent === 'claude' ? 'true' : 'account_fast_v9',
+      model: entry.structured.model
+    })
+    const launch = {
+      ...draft,
+      surface: 'terminal' as const
+    }
+    mockCreateTab.mockClear()
+    launchAgentInNewTab({
+      requestId: 'picker-fast-contract',
+      agent,
+      worktreeId: 'wt-1',
+      requestedSurface: 'terminal',
+      ...agentPickerLaunchInputs(launch, entry)
+    })
+    const command = queuedStartups()[0]?.command ?? ''
+    expect(command).toContain(
+      agent === 'claude' ? '"fastMode":true' : 'service_tier=account_fast_v9'
+    )
+    if (agent === 'claude') {
+      expect(command).toContain('"language":"french"')
+      expect(command).toContain('./team.json')
+    }
+    expect(command).not.toContain('account-model')
+    if (agent === 'codex') {
+      const explicit = applyAgentPickerEdit(entry, draft, {
+        kind: 'choice',
+        patch: { model: 'account-model' }
+      })
+      mockCreateTab.mockClear()
+      launchAgentInNewTab({
+        requestId: 'picker-explicit-equal-model',
+        agent,
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal',
+        ...agentPickerLaunchInputs({ ...explicit, surface: 'terminal' }, entry)
+      })
+      expect(queuedStartups()[0]?.command).toContain("'-m' 'account-model'")
+    }
+  }
+)
 
 it.each(['claude', 'codex'] as const)(
   'keeps failed %s defaults unknown through acquisition, controls, projection and actual dispatch, then wakes to a permission-preserving edit',
@@ -324,14 +442,23 @@ it.each(['claude', 'codex'] as const)(
         useAgentLaunchPickerInventorySource('wt-1', menu, open)
       )
       current = entries[0]
-      return open
+      const draftScope = useAgentPickerDraftScope()
+      const setup = useAgentPickerSetup({ entry: current, draftScope, open })
+      return open && setup.ready
         ? createElement(
             TooltipProvider,
             null,
             createElement(AgentLaunchSetupPanel, {
               key: current.ownerKey,
               entry: current,
-              onUse: (draft) => launches.push(draft)
+              draft: setup.draft,
+              getDraft: setup.getDraft,
+              onDraftChange: setup.change,
+              onUse: (draft) => {
+                if (setup.accept({ ...draft, surface: setup.draft.surface })) {
+                  launches.push(draft)
+                }
+              }
             })
           )
         : null
@@ -351,15 +478,13 @@ it.each(['claude', 'codex'] as const)(
       for (const next of [
         draft,
         { ...draft, arguments: '--add-dir src' },
-        editAgentPickerPanelArguments(entry, draft, '--add-dir src'),
-        editAgentPickerPanelText(entry, draft, '--add-dir src'),
-        editAgentPickerPermission(entry, draft, 'full-access'),
-        editAgentPickerSpeed(
-          entry,
-          draft,
-          agent === 'claude' ? 'fastMode' : 'serviceTier',
-          agent === 'claude' ? 'true' : 'priority'
-        )
+        applyAgentPickerEdit(entry, draft, { kind: 'arguments', text: '--add-dir src' }),
+        applyAgentPickerEdit(entry, draft, { kind: 'permission', value: 'full-access' }),
+        applyAgentPickerEdit(entry, draft, {
+          kind: 'speed',
+          key: agent === 'claude' ? 'fastMode' : 'serviceTier',
+          value: agent === 'claude' ? 'true' : 'priority'
+        })
       ]) {
         for (const surface of ['chat', 'terminal'] as const) {
           expect(agentPickerLaunchInputs({ ...next, surface }, entry)).not.toHaveProperty(
@@ -420,10 +545,10 @@ it.each(['claude', 'codex'] as const)(
         expect(command).not.toContain('docs')
       }
       const knownDraft = agentPickerDraft(current!)
-      const badge = agentPickerPanelArguments(current!, knownDraft).chips.find(
-        (c) => c.key === 'permissionMode'
-      )!
-      const removed = badge.remove()
+      const removed = applyAgentPickerEdit(current!, knownDraft, {
+        kind: 'remove-chip',
+        key: 'permissionMode'
+      })
       expect(
         agentPickerLaunchInputs({ ...removed, surface: 'terminal' }, current!).agentArgs
       ).not.toContain(agent === 'claude' ? '--permission-mode' : '-a on-request')
@@ -455,16 +580,21 @@ it('passes the recorded Codex catalog tier and approval/sandbox policy through t
     arguments: `${raw} --add-dir docs`,
     catalog: { origin: 'probe', fetchedAt: 1, models: listing.models }
   }
-  const selected = editAgentPickerSpeed(
+  const selected = applyAgentPickerEdit(entry, agentPickerDraft(entry), {
+    kind: 'speed',
+    key: 'serviceTier',
+    value: tier,
+    model: model.id
+  })
+  const view = agentPickerPanelArguments(entry, selected)
+  expect(view.permission).toBeDefined()
+  const edited = acceptAgentPickerArguments(
     entry,
-    agentPickerDraft(entry),
-    'serviceTier',
-    tier,
-    model.id
+    applyAgentPickerEdit(entry, selected, {
+      kind: 'arguments',
+      text: '--add-dir src'
+    })
   )
-  const view = agentPickerPanelArguments(entry, selected, model.id)
-  expect(view.chips.map((chip) => chip.key)).toContain('permissionMode')
-  const edited = editAgentPickerPanelText(entry, selected, '--add-dir src', model.id)
   for (const next of [selected, edited]) {
     mockCreateTab.mockClear()
     const inputs = agentPickerLaunchInputs({ ...next, surface: 'terminal' }, entry)
@@ -481,23 +611,80 @@ it('passes the recorded Codex catalog tier and approval/sandbox policy through t
       agentPickerLaunchInputs({ ...next, surface: 'chat' }, entry).sessionOptions?.serviceTier
     ).toBe(tier)
   }
-  const standard = editAgentPickerPanelText(
+  const standard = acceptAgentPickerArguments(
     entry,
-    selected,
-    '-c service_tier=default --add-dir src',
-    model.id
+    applyAgentPickerEdit(entry, selected, {
+      kind: 'arguments',
+      text: '-c service_tier=default --add-dir src'
+    })
   )
+  expect(standard).toMatchObject({ choices: { options: { serviceTier: 'default' } } })
   expect(
     agentPickerLaunchInputs({ ...standard, surface: 'chat' }, entry).sessionOptions?.serviceTier
   ).toBe('default')
   expect(agentPickerLaunchInputs({ ...standard, surface: 'terminal' }, entry).agentArgs).toContain(
     'service_tier=default'
   )
-  expect(view.chips.some((chip) => chip.key === 'serviceTier')).toBe(true)
-  const removed = view.chips.find((chip) => chip.key === 'serviceTier')!.remove()
-  expect(
-    agentPickerPanelArguments(entry, removed, model.id).chips.some(
-      (chip) => chip.key === 'serviceTier'
+  expect(view.choices.options?.serviceTier).toBe(tier)
+  const removed = applyAgentPickerEdit(entry, selected, { kind: 'remove-chip', key: 'serviceTier' })
+  expect(agentPickerPanelArguments(entry, removed).choices.options?.serviceTier).toBe('default')
+})
+
+it('conserves quoted Codex string sources through common acceptance and the terminal compiler', async () => {
+  const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+  const { tokenizeStartupCommand } = await import('../../../shared/tui-agent-startup-shell')
+  const { agentChoiceConfigString } = await import('../../../shared/agent-choice-cli-apply')
+  const own: AgentPickerEntry = {
+    agent: 'codex',
+    label: 'Codex',
+    rows: [{ agent: 'codex', kind: 'cli' }],
+    surfaces: ['chat', 'terminal'],
+    defaultSurface: 'terminal',
+    terminal: { permissionMode: 'own' },
+    structured: {},
+    arguments: '',
+    catalog: { origin: 'unknown' }
+  }
+  for (const [key, scalar] of [
+    ['model', 'some-model'],
+    ['model', 'true'],
+    ['model', '42'],
+    ['model', 'a"b'],
+    ['model_reasoning_effort', 'high'],
+    ['model_reasoning_effort', 'future_effort']
+  ]) {
+    const operand = `${key}=${JSON.stringify(scalar)}`
+    const raw = `-c '${operand}' --search`
+    const draft = acceptAgentPickerArguments(
+      own,
+      applyAgentPickerEdit(own, agentPickerDraft(own), { kind: 'arguments', text: raw })
     )
-  ).toBe(false)
+    const semanticKey = key === 'model' ? 'model' : 'effort'
+    expect(agentPickerPanelArguments(own, draft).text).toBe('--search')
+    expect(
+      agentPickerLaunchInputs({ ...draft, surface: 'chat' }, own).chatSessionOptions?.[semanticKey]
+    ).toBe(scalar)
+    for (const command of ['codex', 'cx']) {
+      store.settings.agentCmdOverrides = { codex: command }
+      mockCreateTab.mockClear()
+      launchAgentInNewTab({
+        requestId: 'quoted-string-source',
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal',
+        ...agentPickerLaunchInputs(draft, own)
+      })
+      const startup = queuedStartups()[0]
+      expect(startup?.launchConfig?.agentArgs).toContain(raw)
+      const compiled = tokenizeStartupCommand(startup?.command ?? '', 'posix')
+      expect(compiled.ok).toBe(true)
+      if (!compiled.ok) {
+        throw new Error('Expected valid terminal startup')
+      }
+      expect(compiled.tokens[0]).toBe(command)
+      const operands = compiled.tokens.filter((token) => token.startsWith(`${key}=`))
+      expect(operands).toEqual([operand])
+      expect(agentChoiceConfigString(operands[0].slice(key.length + 1))).toBe(scalar)
+    }
+  }
 })

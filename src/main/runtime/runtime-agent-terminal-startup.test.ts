@@ -3,6 +3,12 @@ import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
 import { resolveAgentTerminalCreateOptions } from './runtime-agent-terminal-startup'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { MIXED_FOLDER, MIXED_GROUP } from '../../shared/folder-workspace-host-routing.test-fixture'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 vi.mock('../preflight/agent-detection', () => ({
@@ -167,3 +173,142 @@ describe('host agent planner', () => {
     expect(launch.launchRuntime?.pty.shellOverride).toBe('wsl.exe')
   })
 })
+
+type HostStartupFixture = {
+  name: string
+  agent: TuiAgent
+  args?: string | null
+  options: Record<string, SessionOptionValue>
+  expected: string[]
+}
+
+const fixtures: HostStartupFixture[] = [
+  {
+    name: 'absent Args',
+    agent: 'claude',
+    options: {
+      model: 'private/sonnet',
+      effort: 'high',
+      fastMode: 'true',
+      permissionMode: 'accept-edits'
+    },
+    expected: [
+      '--verbose',
+      '--model',
+      'private/sonnet',
+      '--effort',
+      'high',
+      '--settings',
+      '{"fastMode":true}',
+      '--permission-mode',
+      'acceptEdits'
+    ]
+  },
+  {
+    name: 'null Args',
+    agent: 'claude',
+    args: null,
+    options: { model: 'private/sonnet', fastMode: 'true' },
+    expected: ['--model', 'private/sonnet', '--settings', '{"fastMode":true}']
+  },
+  {
+    name: 'empty Args and explicit off',
+    agent: 'claude',
+    args: '',
+    options: { model: 'private/sonnet', fastMode: 'false' },
+    expected: ['--model', 'private/sonnet', '--settings', '{"fastMode":false}']
+  },
+  {
+    name: 'original bytes and Settings siblings',
+    agent: 'claude',
+    args: `  --settings '{"theme":"dark","sibling":7}'  --debug  `,
+    options: { model: 'private/sonnet', fastMode: 'true' },
+    expected: [
+      '--settings',
+      '{"theme":"dark","sibling":7,"fastMode":true}',
+      '--debug',
+      '--model',
+      'private/sonnet'
+    ]
+  },
+  {
+    name: 'declared independent Codex Speed',
+    agent: 'codex',
+    args: '--verbose',
+    options: { model: 'gpt-5.5', effort: 'high', serviceTier: 'priority', permissionMode: 'ask' },
+    expected: [
+      '-c',
+      'disable_paste_burst=true',
+      '--verbose',
+      '-m',
+      'gpt-5.5',
+      '-c',
+      'model_reasoning_effort=high',
+      '-c',
+      'service_tier=priority',
+      '-a',
+      'on-request',
+      '-s',
+      'read-only',
+      '-c',
+      'approvals_reviewer=user'
+    ]
+  },
+  {
+    name: 'composed Cursor domain',
+    agent: 'cursor',
+    args: '--verbose',
+    options: { model: 'claude-opus-4-8', thinking: 'true', effort: 'high' },
+    expected: ['--verbose', '--model', 'claude-opus-4-8-thinking-high']
+  }
+]
+
+it.each(fixtures)(
+  'delivers $name through the existing host planner and final compiler',
+  async (fixture) => {
+    setPlatform('linux')
+    const settings = {
+      agentDefaultArgs: { claude: '--verbose' },
+      agentDefaultEnv: { claude: { CUSTOM_ENV: 'kept' } },
+      agentLaunchChoices: {
+        claude: { model: 'opus', options: { effort: 'low', fastMode: 'true' } }
+      },
+      agentPermissionDefault: 'own' as const
+    }
+    const fullHost = { ...host, store: partialRuntimeStore({ getSettings: () => settings }) }
+    const opts = {
+      startupAgent: fixture.agent,
+      ...('args' in fixture ? { agentArgs: fixture.args } : {})
+    }
+    const result = await resolveAgentTerminalCreateOptions(
+      workspace,
+      opts,
+      fullHost,
+      fixture.options
+    )
+    const parsed = tokenizeStartupCommand(result.command ?? '', 'posix')
+    expect(parsed.ok && parsed.tokens).toEqual([
+      fixture.agent === 'cursor' ? 'cursor-agent' : fixture.agent,
+      ...fixture.expected
+    ])
+    const oracle = buildAgentStartupPlan({
+      ...resolveAgentStartupPlanInputs({
+        agent: fixture.agent,
+        settings,
+        platform: 'linux',
+        isRemote: false,
+        shell: 'posix',
+        ...('args' in fixture ? { agentArgs: fixture.args } : {}),
+        sessionOptions: fixture.options
+      }),
+      prompt: '',
+      allowEmptyPromptLaunch: true
+    })
+    expect(result.command).toBe(oracle?.launchCommand)
+    expect(result.launchConfig).toEqual(oracle?.launchConfig)
+    expect(result.launchConfig?.agentArgs).toBe(oracle?.launchConfig.agentArgs)
+    if (fixture.agent === 'claude') {
+      expect(result.env).toMatchObject({ CUSTOM_ENV: 'kept' })
+    }
+  }
+)

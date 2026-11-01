@@ -1,4 +1,4 @@
-import { applyRemoteViewerLaunchEnv } from '../remote-viewer-launch-env'
+import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
 import type {
@@ -45,7 +45,7 @@ import { retryFailedRemovalUnlessRegistered } from '../../worktree-removal-lefto
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import {
   resolveAgentTerminalCreateOptions,
-  withHostAccountLaunchEnv
+  prepareHostAgentTerminalLaunch
 } from '../runtime-agent-terminal-startup'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
 
@@ -307,22 +307,19 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
 
   async resolveAgentTerminalCreateOptions(
     workspace: TerminalWorkspaceLaunchScope,
-    opts: TerminalCreateOptions
+    opts: TerminalCreateOptions,
+    sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   ): Promise<TerminalCreateOptions> {
-    const resolvedLaunch = await resolveAgentTerminalCreateOptions(workspace, opts, {
-      store: this.store,
-      hostIdentity: this.runtimeId,
-      toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
-    })
-    const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
-    // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
-    if (workspace.connectionId) {
-      return launch
-    }
-    if (launch.launchAgent) {
-      await this.accounts.prepareHostAgentLaunch(launch.launchAgent)
-    }
-    const hostLaunchEnv = this.accounts.hostLaunchEnvFor(launch.launchAgent)
-    return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
+    const resolvedLaunch = await resolveAgentTerminalCreateOptions(
+      workspace,
+      opts,
+      {
+        store: this.store,
+        hostIdentity: this.runtimeId,
+        toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
+      },
+      sessionOptions
+    )
+    return prepareHostAgentTerminalLaunch(workspace, opts, resolvedLaunch, this.accounts)
   }
 }

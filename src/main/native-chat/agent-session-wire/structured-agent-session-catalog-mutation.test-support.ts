@@ -104,13 +104,10 @@ export async function createCatalogMutationFixture(
       host: () => rig.host,
       deps: {
         stateDirectory,
-        hostId: 'local',
-        claimKeyId: 'key-1',
         resolveWorkspacePath: async () => rig.root,
         resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ account: 'system' }),
-        resolveAgentAccountHome: async () => home,
-        logger: rig.host.deps.logger
+        resolveAgentAccountHome: async () => home
       },
       environment: {
         resolveBaseEnvironment: async () => ({}),

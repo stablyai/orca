@@ -42,7 +42,7 @@ type HostedReviewDefaultKey = keyof NonNullable<RepoSourceControlAiOverrides['pr
 type UseRepositorySourceControlAiGlobalUxArgs = {
   repoId: string
   persistedRepoAi: RepoSourceControlAiOverrides
-  settings: GlobalSettings | null
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null
   source: SourceControlAiSettings
   updateRepo: (repoId: string, updates: SourceControlAiRepoUpdate) => void | Promise<boolean>
 }

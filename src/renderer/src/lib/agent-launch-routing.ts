@@ -13,6 +13,7 @@ export type AgentLaunchRoute = 'structured-native-chat' | 'terminal-tui'
 
 export type AgentLaunchRoutingInput = {
   agent: TuiAgent
+  preferredSurface?: 'chat'
   settings: NativeChatDefaultSettings | null | undefined
   executionHostId: string
   /** Capabilities of the target host; `null` = not yet established. */
@@ -31,7 +32,8 @@ export type AgentLaunchRoutingInput = {
 }
 
 export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLaunchRoute {
-  return nativeChatPreferenceFor(input.settings, input.agent) &&
+  return (input.preferredSurface === 'chat' ||
+    nativeChatPreferenceFor(input.settings, input.agent)) &&
     structuredAgentLaunchSupported(input)
     ? 'structured-native-chat'
     : 'terminal-tui'
@@ -63,7 +65,10 @@ export function structuredAgentLaunchDowngrade(
   input: AgentLaunchRoutingInput,
   route: AgentLaunchRoute
 ): StructuredNativeChatBlocker | null {
-  if (route === 'structured-native-chat' || !nativeChatPreferenceFor(input.settings, input.agent)) {
+  if (
+    route === 'structured-native-chat' ||
+    !(input.preferredSurface === 'chat' || nativeChatPreferenceFor(input.settings, input.agent))
+  ) {
     return null
   }
   const support = structuredAgentLaunchSupport(input)

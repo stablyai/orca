@@ -67,12 +67,15 @@ it('projects the whole selection once and removes actual independent or composed
         ],
         appliedValues: { model: 'sonnet', fastMode: fastMode === 'true' }
       })
+      chips.find((chip) => chip.key === 'fastMode')!.onRemove('--search')
+      expect(remove).toHaveBeenLastCalledWith({ options: { fastMode: null } }, '--search')
     }
-    expect(
-      agentModelChoiceChips('codex', 'Codex', { options: { serviceTier: 'default' } }, remove).map(
-        (chip) => chip.flag
-      )
-    ).toEqual(['-c service_tier=default'])
+    for (const serviceTier of ['fast', 'default']) {
+      const chips = agentModelChoiceChips('codex', 'Codex', { options: { serviceTier } }, remove)
+      expect(chips.map((chip) => chip.flag)).toEqual([`-c service_tier=${serviceTier}`])
+      chips[0].onRemove('--search')
+      expect(remove).toHaveBeenLastCalledWith({ options: { serviceTier: null } }, '--search')
+    }
   } finally {
     project.mockRestore()
     analyze.mockRestore()

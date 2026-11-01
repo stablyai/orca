@@ -81,7 +81,7 @@ describe('packaged CLI assets', () => {
       )
       await mkdir(dirname(archive), { recursive: true })
       await writeFile(join(source, 'out', 'package.json'), JSON.stringify({ type: 'commonjs' }))
-      for (const name of ['zod', 'tweetnacl']) {
+      for (const name of ['zod', 'tweetnacl', 'smol-toml']) {
         await cp(
           join(projectDir, 'node_modules', name),
           join(root, 'resources', 'node_modules', name),

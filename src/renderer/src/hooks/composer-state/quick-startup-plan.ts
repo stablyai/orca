@@ -11,6 +11,8 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { getAgentLabel } from '@/lib/agent-catalog'
+import { translate } from '@/i18n/i18n'
 import {
   requireExecutionHostPlatform,
   type ExecutionHostPlatformFact
@@ -26,6 +28,8 @@ export type QuickComposerStartupInput = {
   shell: AgentStartupShell | null | undefined
   isRemote: boolean
   telemetrySource: WorktreeCreationRequest['telemetrySource']
+  launchInputs?: WorktreeCreationRequest['launchInputs']
+  route?: WorktreeCreationRequest['agentLaunchRoute']
 }
 
 export type QuickComposerStartup = {
@@ -42,6 +46,8 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
       : resolveAgentStartupPlanInputs({
           agent,
           settings: settings ?? {},
+          agentArgs: input.launchInputs?.agentArgs,
+          sessionOptions: input.launchInputs?.sessionOptions,
           platform: requireExecutionHostPlatform(input.launchHost),
           shell: input.shell ?? undefined,
           isRemote: input.isRemote
@@ -76,6 +82,15 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
     if (startupPlan && draftPrompt) {
       startupPlan.draftPrompt = draftPrompt
     }
+  }
+  if (agent && input.route !== 'structured-native-chat' && !startupPlan) {
+    throw new Error(
+      translate(
+        'agentPicker.workspaceStartupFailed',
+        'Could not start {{agent}}. Check Arguments in this setup and try again.',
+        { agent: getAgentLabel(agent) }
+      )
+    )
   }
   const telemetry: AgentStartedTelemetry | null =
     agent === null

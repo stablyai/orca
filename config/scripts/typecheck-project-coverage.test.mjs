@@ -40,6 +40,7 @@ describe('typecheck project coverage', () => {
   it('assigns cross-process integrations and their producer fixture to the mixed project', () => {
     const files = [
       'src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts',
+      'src/renderer/src/components/right-sidebar/SourceControlAgentActionDialog.picker.test.tsx',
       'src/renderer/src/runtime/observed-provider-accounts.test.tsx',
       'src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx',
       'src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx',

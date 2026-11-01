@@ -19741,7 +19741,8 @@
     },
     "newWorkspace": {
       "agentOptional": "智能体 [可选]",
-      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。"
+      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。",
+      "setupOnly": "仅设置"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一个议题更改正在进行中。"
@@ -22271,6 +22272,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "此主机上无法使用 {{agent}} 模型。你可以保留当前选择或使用参数。",
+    "catalogFailed": "无法加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
+    "catalogSignIn": "请登录 {{agent}} 以加载模型，然后重新打开智能体选择器。",
+    "catalogInstall": "请在此主机上安装 {{agent}} 以加载模型，然后重新打开智能体选择器。",
+    "catalogUnresolved": "尚未加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
+    "catalogEmpty": "{{agent}} 没有可用模型。",
     "search": "搜索智能体和配置…",
     "configure": "配置 {{agent}}",
     "arguments": "参数",
@@ -22284,7 +22291,12 @@
     "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 个模型"
+    "legacyModelCount": "{{total}} 个模型",
+    "use": "使用",
+    "select": "选择智能体",
+    "openIn": "打开方式",
+    "chat": "聊天",
+    "terminal": "终端"
   },
   "wslMove": {
     "entry": {

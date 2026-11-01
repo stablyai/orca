@@ -181,6 +181,33 @@ describe('runSourceControlAgentActionStart', () => {
     expect(mocks.onClose).not.toHaveBeenCalled()
   })
 
+  it('keeps injected onStart successes immediate', async () => {
+    const onStart = vi.fn().mockResolvedValue(true)
+
+    await expect(
+      runSourceControlAgentActionStart(
+        buildArgs({
+          onStart,
+          worktreeId: undefined,
+          groupId: undefined
+        })
+      )
+    ).resolves.toBe(true)
+
+    expect(onStart).toHaveBeenCalledWith({
+      agent: 'codex',
+      commandInput: 'Fix the bug',
+      agentArgs: '--model gpt-5',
+      agentLaunchPreferences: undefined,
+      chatSessionOptions: { model: 'gpt-5' }
+    })
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
+    expect(mocks.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  // onStart awaits no delivery result, so acceptance is terminal for that route.
+
   // Recipe persistence can fail while prompt delivery succeeds; report each outcome independently.
   it('completes the launch and reports a failed repository recipe write', async () => {
     const onLaunchAborted = vi.fn()
@@ -306,7 +333,7 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
     })
     const next = resolveSourceControlActionRecipe({ settings, repo, actionId: 'fixCommitFailure' })
     const nextOptions = sourceControlActionLaunchOptions(next, 'codex')
-    expect(nextOptions).toEqual({})
+    expect(nextOptions).toEqual({ chatSessionOptions: { model: agentArgs.split(' ')[1] } })
     const command = resolveAgentLaunchCommand({
       agent: 'codex',
       cmdOverrides: {},

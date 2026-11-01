@@ -16,6 +16,7 @@ export type AgentLaunchChoice = {
 export function resolveAgentMenuSelection(input: {
   agent: TuiAgent | null
   surface?: AgentLaunchSurface
+  preferredSurface?: 'chat'
   settings: NewTabAgentMenuSettings | null | undefined
   executionHostId?: ExecutionHostId
   inventoryReady: boolean
@@ -30,7 +31,9 @@ export function resolveAgentMenuSelection(input: {
     return { ready: true, cli: false }
   }
   const wantsChat =
-    surface === 'chat' || (surface !== 'terminal' && nativeChatPreferenceFor(input.settings, agent))
+    surface === 'chat' ||
+    (surface !== 'terminal' &&
+      (input.preferredSurface === 'chat' || nativeChatPreferenceFor(input.settings, agent)))
   const canBeChat = ['yes', 'not-yet-known', 'not-on-host'].includes(answer)
   const pending =
     (surface !== 'terminal' && input.settings == null) ||

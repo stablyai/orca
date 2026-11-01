@@ -19740,7 +19740,8 @@
     },
     "newWorkspace": {
       "agentOptional": "에이전트 [선택 사항]",
-      "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요."
+      "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요.",
+      "setupOnly": "설정만"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "다른 이슈 변경이 진행 중입니다."
@@ -22270,6 +22271,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택을 유지하거나 인수를 사용할 수 있습니다.",
+    "catalogFailed": "{{agent}} 모델을 불러오지 못했습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogSignIn": "{{agent}}에 로그인하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogInstall": "이 호스트에 {{agent}}를 설치하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogUnresolved": "{{agent}} 모델이 로드되지 않았습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogEmpty": "{{agent}}에 사용 가능한 모델이 없습니다.",
     "search": "에이전트 및 설정 검색…",
     "configure": "{{agent}} 설정",
     "arguments": "인수",
@@ -22283,7 +22290,12 @@
     "toggleArguments": "인수 표시 전환",
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
-    "legacyModelCount": "모델 {{total}}개"
+    "legacyModelCount": "모델 {{total}}개",
+    "use": "사용",
+    "select": "에이전트 선택",
+    "openIn": "열기 위치",
+    "chat": "채팅",
+    "terminal": "터미널"
   },
   "wslMove": {
     "entry": {

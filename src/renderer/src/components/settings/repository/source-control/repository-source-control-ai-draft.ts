@@ -56,7 +56,7 @@ export function dropRepoLegacyInstructionForAction(
  *  saved explicit args clear and never the agent only detected to run a default selection. */
 export function readCompleteRecipeForDraft(
   current: RepoSourceControlAiOverrides,
-  settings: GlobalSettings | null,
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
   actionId: SourceControlActionId
 ): RepoActionRecipe {
   const recipe = resolveSourceControlActionRecipe({
@@ -130,7 +130,7 @@ export function withRepoAiHostedReviewDefault(
 
 export function withRepoAiActionMode(
   base: RepoSourceControlAiOverrides,
-  settings: GlobalSettings | null,
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
   actionId: SourceControlActionId,
   mode: 'inherit' | 'override'
 ): RepoSourceControlAiOverrides {
@@ -158,7 +158,7 @@ export function withRepoAiActionMode(
 
 export function withRepoAiActionRecipeText(
   base: RepoSourceControlAiOverrides,
-  _settings: GlobalSettings | null,
+  _settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
   actionId: SourceControlActionId,
   text: ActionRecipeTextDraft
 ): RepoSourceControlAiOverrides {
@@ -222,7 +222,10 @@ export function composeDisplayRepoAi(
   immediate: RepoSourceControlAiOverrides,
   customCommandDraft: string | null,
   actionTextDrafts: Partial<Record<SourceControlActionId, ActionRecipeTextDraft>>,
-  _settings: GlobalSettings | null = null
+  _settings: Pick<
+    GlobalSettings,
+    'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'
+  > | null = null
 ): RepoSourceControlAiOverrides {
   let next =
     customCommandDraft === null ? immediate : withRepoAiCustomCommand(immediate, customCommandDraft)

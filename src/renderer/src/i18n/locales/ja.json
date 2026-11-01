@@ -19740,7 +19740,8 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [オプション]",
-      "createDescription": "プロジェクトとワークスペース名を選択します。開始する場合は Agent を選択してください。"
+      "createDescription": "プロジェクトとワークスペース名を選択します。開始する場合は Agent を選択してください。",
+      "setupOnly": "セットアップのみ"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "別の Issue の変更が進行中です。"
@@ -22270,6 +22271,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "このホストでは{{agent}}のモデルを利用できません。現在の選択を保持するか、引数を使用できます。",
+    "catalogFailed": "{{agent}}のモデルを読み込めませんでした。Agent 選択を閉じて開き直してください。",
+    "catalogSignIn": "{{agent}}にサインインしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogInstall": "このホストに{{agent}}をインストールしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogUnresolved": "{{agent}}のモデルは読み込まれていません。Agent 選択を閉じて開き直してください。",
+    "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
     "search": "Agent と設定を検索…",
     "configure": "{{agent}} を設定",
     "arguments": "引数",
@@ -22283,7 +22290,12 @@
     "toggleArguments": "引数の表示を切り替え",
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
-    "legacyModelCount": "{{total}} 個のモデル"
+    "legacyModelCount": "{{total}} 個のモデル",
+    "use": "使用",
+    "select": "Agent を選択",
+    "openIn": "起動先",
+    "chat": "チャット",
+    "terminal": "ターミナル"
   },
   "wslMove": {
     "entry": {

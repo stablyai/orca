@@ -20546,7 +20546,8 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent (facultatif)",
-      "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un."
+      "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un.",
+      "setupOnly": "Configuration uniquement"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Une autre modification d'issue est en cours."
@@ -22960,6 +22961,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vous pouvez conserver vos choix ou utiliser les arguments.",
+    "catalogFailed": "Impossible de charger les modèles de {{agent}}. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
+    "catalogSignIn": "Connectez-vous à {{agent}} pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
+    "catalogInstall": "Installez {{agent}} sur cet hôte pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
+    "catalogUnresolved": "Les modèles de {{agent}} ne sont pas chargés. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
+    "catalogEmpty": "{{agent}} n’a aucun modèle disponible.",
     "search": "Rechercher des agents et des configurations…",
     "configure": "Configurer {{agent}}",
     "arguments": "Arguments",
@@ -22973,7 +22980,12 @@
     "toggleArguments": "Afficher ou masquer les arguments",
     "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
-    "legacyModelCount": "{{total}} modèles"
+    "legacyModelCount": "{{total}} modèles",
+    "use": "Utiliser",
+    "select": "Choisir un agent",
+    "openIn": "Ouvrir dans",
+    "chat": "Chat",
+    "terminal": "Terminal"
   },
   "wslMove": {
     "entry": {

@@ -22,20 +22,26 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
   expect(mocks.launch).not.toHaveBeenCalled()
   mocks.detection.mockReturnValue(detection)
   view.rerender(<AgentSessionContinuationDialog {...props} />)
-  fireEvent.click(screen.getAllByRole('combobox')[0])
-  fireEvent.click(screen.getByRole('option', { name: /Codex/ }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls[0][0]).toMatchObject({
     initialCwd: '/repo/.',
     groupId: 'group-1',
-    launchChoice: { route: 'structured-native-chat', requestedSurface: 'chat' }
+    launchChoice: { route: 'structured-native-chat' }
   })
-  fireEvent.click(screen.getAllByRole('combobox')[0])
-  fireEvent.click(screen.getByRole('button', { name: 'Start Codex in a terminal' }))
-  expect(screen.getAllByRole('combobox')[0].textContent).toContain('Codex (CLI)')
+  expect(mocks.launch.mock.calls[0][0].launchChoice.requestedSurface).toBeUndefined()
+  fireEvent.click(screen.getByRole('radio', { name: 'Terminal' }))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch.mock.calls.at(-1)?.[0].launchChoice).toMatchObject({
+    route: 'terminal-tui',
+    requestedSurface: 'terminal'
+  })
   view.rerender(<AgentSessionContinuationDialog {...props} open={false} />)
   view.rerender(<AgentSessionContinuationDialog {...props} />)
-  expect(screen.getAllByRole('combobox')[0].textContent).not.toContain('(CLI)')
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls.at(-1)?.[0].launchChoice.requestedSurface).toBeUndefined()
   view.rerender(
@@ -44,14 +50,16 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
       request={{ ...request, initialCwd: '/repo/packages/app' }}
     />
   )
-  expect(screen.getAllByRole('combobox')[0].textContent).toContain('Codex (CLI)')
-  fireEvent.click(screen.getAllByRole('combobox')[0])
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
   expect(screen.getAllByText('No chat in a subfolder').length).toBeGreaterThan(0)
-  fireEvent.click(screen.getByRole('option', { name: 'Codex (CLI)' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls.at(-1)?.[0]).toMatchObject({
     initialCwd: '/repo/packages/app',
-    launchChoice: { route: 'terminal-tui', requestedSurface: 'terminal' }
+    launchChoice: { route: 'terminal-tui' }
   })
 })
 
@@ -173,26 +181,34 @@ it.each([
     ).toBe(true)
     mocks.detection.mockReturnValue({ ...detection, detectedIds: available })
     view.rerender(<AgentSessionContinuationDialog {...props} />)
-    fireEvent.click(screen.getAllByRole('combobox')[0])
-    expect(screen.queryAllByRole('option', { name: /Claude/ }).length === 0).toBe(avoidSourceAgent)
-    expect(screen.queryByRole('button', { name: 'Start Claude in a terminal' }) === null).toBe(
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+      button: 0,
+      ctrlKey: false
+    })
+    expect(screen.queryAllByRole('menuitem', { name: /Claude/ }).length === 0).toBe(
       avoidSourceAgent
     )
-    const search = screen.getByPlaceholderText('Search agents...')
+    expect(screen.queryByRole('button', { name: 'Configure Claude' }) === null).toBe(
+      avoidSourceAgent
+    )
+    const search = screen.getByPlaceholderText('Search agents and setups…')
     fireEvent.change(search, { target: { value: 'Claude' } })
     fireEvent.keyDown(search, { key: 'ArrowRight' })
-    expect(screen.queryAllByRole('option', { name: /Claude/ }).length === 0).toBe(avoidSourceAgent)
+    expect(screen.queryAllByRole('menuitem', { name: /Claude/ }).length === 0).toBe(
+      avoidSourceAgent
+    )
     fireEvent.change(search, { target: { value: '' } })
-    fireEvent.click(screen.getByRole('option', { name: 'Gemini (CLI)' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Gemini/ }))
     await act(async () =>
       fireEvent.click(screen.getByRole('button', { name: 'Start New Session' }))
     )
     expect(mocks.launch).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         agent: 'gemini',
-        launchChoice: expect.objectContaining({ requestedSurface: 'terminal' })
+        launchChoice: expect.objectContaining({ route: 'terminal-tui' })
       })
     )
+    expect(mocks.launch.mock.calls[0][0].launchChoice.requestedSurface).toBeUndefined()
   }
 )
 
@@ -231,13 +247,13 @@ it.each([
     const selected = avoidSourceAgent ? (hasAlternative ? 'codex' : null) : sourceAgent
     const start = screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' })
     expect(start.disabled).toBe(selected === null)
-    const picker = screen.getAllByRole('combobox')[0]
-    fireEvent.click(picker)
-    const familyRows = screen.queryAllByRole('option', {
+    const picker = screen.getByRole('button', { name: 'Select agent' })
+    fireEvent.pointerDown(picker, { button: 0, ctrlKey: false })
+    const familyRows = screen.queryAllByRole('menuitem', {
       name: sourceAgent === 'codex' ? /Codex/ : /Claude/
     })
     expect(familyRows.length === 0).toBe(avoidSourceAgent)
-    fireEvent.click(picker)
+    fireEvent.pointerDown(picker, { button: 0, ctrlKey: false })
     await act(async () => fireEvent.click(start))
     if (selected) {
       expect(mocks.launch).toHaveBeenCalledWith(expect.objectContaining({ agent: selected }))
@@ -262,8 +278,11 @@ it('retires the old pick when source and launch context change before Start', as
     onOpenChange: vi.fn()
   }
   const view = render(<AgentSessionContinuationDialog {...props} />, { wrapper: TooltipProvider })
-  fireEvent.click(screen.getAllByRole('combobox')[0])
-  fireEvent.click(screen.getByRole('option', { name: 'Gemini (CLI)' }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: /Gemini/ }))
   view.rerender(
     <AgentSessionContinuationDialog
       {...props}
@@ -276,18 +295,22 @@ it('retires the old pick when source and launch context change before Start', as
       }}
     />
   )
-  fireEvent.click(screen.getAllByRole('combobox')[0])
-  expect(screen.queryAllByRole('option', { name: /Gemini/ })).toHaveLength(0)
-  fireEvent.click(screen.getByRole('option', { name: 'Claude (CLI)' }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  expect(screen.queryAllByRole('menuitem', { name: /Gemini/ })).toHaveLength(0)
+  fireEvent.click(screen.getByRole('menuitem', { name: /^Claude / }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
       agent: 'claude',
       initialCwd: '/repo/subfolder',
       groupId: 'replacement-group',
-      launchChoice: expect.objectContaining({ requestedSurface: 'terminal' })
+      launchChoice: expect.objectContaining({ route: 'terminal-tui' })
     })
   )
+  expect(mocks.launch.mock.calls[0][0].launchChoice.requestedSurface).toBeUndefined()
 })
 
 it('explains an empty host inventory when the enabled agent has no chat preference', async () => {

@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -32,7 +33,11 @@ class AgentPickerAcquisition {
     private initial: AgentPickerEntry[],
     private reads: Reads
   ) {
-    this.entries = initial
+    this.entries = initial.map((entry) => ({
+      ...entry,
+      catalogRead:
+        entry.surfaces.length && entry.catalogRead !== 'unsupported' ? 'pending' : 'unsupported'
+    }))
     this.defaults = initial
     for (const [i, entry] of initial.entries()) {
       if (entry.structuredDefaultsPending) {
@@ -40,7 +45,9 @@ class AgentPickerAcquisition {
       }
     }
     this.queued = {
-      catalog: new Set(initial.flatMap((e, i) => (e.surfaces.length ? [i] : []))),
+      catalog: new Set(
+        this.entries.flatMap((entry, i) => (entry.catalogRead === 'pending' ? [i] : []))
+      ),
       support: new Set(this.supports.keys())
     }
   }
@@ -49,6 +56,21 @@ class AgentPickerAcquisition {
     const first = this.observers.size === 0
     this.observers.add(observer)
     if (first) {
+      for (const [i, entry] of this.entries.entries()) {
+        if (
+          this.initial[i].catalogRead !== 'unsupported' &&
+          entry.surfaces.length &&
+          entry.catalogRead !== 'pending' &&
+          (entry.catalog.origin === 'unknown' ||
+            entry.catalogRead === 'failed' ||
+            entry.catalogRead === 'unsupported' ||
+            entry.catalog.unavailable !== undefined ||
+            entry.catalog.listingInProgress)
+        ) {
+          this.queued.catalog.add(i)
+          this.entries[i] = { ...entry, catalogRead: 'pending' }
+        }
+      }
       for (const [i, read] of this.supports) {
         if (read.state === 'settled') {
           this.supports.set(i, { state: 'queued' })
@@ -85,6 +107,7 @@ class AgentPickerAcquisition {
       const next = {
         ...entry,
         catalog: this.entries[i].catalog,
+        catalogRead: this.entries[i].catalogRead,
         ...(read
           ? {
               structured: (current && read.value) || entry.structured,
@@ -137,11 +160,36 @@ class AgentPickerAcquisition {
       }
       const read =
         kind === 'catalog'
-          ? this.reads.catalog(entry).then((catalog) => {
-              if (catalog) {
-                this.entries = this.entries.map((e, i) => (i === index ? { ...e, catalog } : e))
-              }
-            })
+          ? this.reads
+              .catalog(entry)
+              .then((catalog) => {
+                this.entries = this.entries.map((e, i) =>
+                  i === index
+                    ? {
+                        ...e,
+                        ...(catalog ? { catalog } : {}),
+                        catalogRead: 'settled'
+                      }
+                    : e
+                )
+              })
+              .catch((error: unknown) => {
+                const unsupported =
+                  typeof error === 'object' &&
+                  error !== null &&
+                  'code' in error &&
+                  (error.code === 'method_not_found' ||
+                    error.code === 'structured_agent_session_unsupported' ||
+                    error.code === 'forbidden')
+                this.entries = this.entries.map((e, i) =>
+                  i === index
+                    ? {
+                        ...e,
+                        catalogRead: unsupported ? 'unsupported' : 'failed'
+                      }
+                    : e
+                )
+              })
           : this.reads
               .support(entry)
               .catch(() => undefined)
@@ -201,4 +249,48 @@ export function currentAgentPickerAcquisition(key: string) {
 
 export function agentPickerAcquisitionDiagnostics() {
   return [...pending.values()].map((resource) => ({ key: resource.key, ...resource.diagnostics() }))
+}
+
+/**
+ * Live picker entries for one (inventory key, open) generation. Catalog and seed reads land one
+ * at a time for several seconds after the menu opens; holding them here instead of in the
+ * owner's React state lets only the components that render entries re-render as they land.
+ */
+export type AgentPickerInventorySource = {
+  getSnapshot: () => AgentPickerEntry[]
+  subscribe: (listener: () => void) => () => void
+}
+
+type WritableAgentPickerInventorySource = AgentPickerInventorySource & {
+  publish: (entries: readonly AgentPickerEntry[]) => void
+}
+
+export function createAgentPickerInventorySource(
+  initial: AgentPickerEntry[]
+): WritableAgentPickerInventorySource {
+  let entries = initial
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => entries,
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    publish: (next) => {
+      // Why: a read that changed nothing (e.g. an unavailable catalog) must not re-render the menu.
+      if (next.length === entries.length && next.every((entry, i) => entry === entries[i])) {
+        return
+      }
+      entries = [...next]
+      for (const listener of listeners) {
+        listener()
+      }
+    }
+  }
+}
+
+export function useAgentPickerInventoryEntries(
+  source: AgentPickerInventorySource
+): AgentPickerEntry[] {
+  return useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
 }

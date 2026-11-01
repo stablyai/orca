@@ -15,7 +15,10 @@ import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 import { describe, expect, it, vi } from 'vitest'
 import * as choiceArgs from './agent-choice-args'
 import { normalizeAgentModelOptionChoices } from './agent-launch-choices'
-import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
+import {
+  reconcileAgentChoiceArgs,
+  reconcileAgentChoiceArgsDetailed
+} from './agent-choice-reconciliation'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
 import { agentLaunchNeedsPreparedCommand } from './agent-launch-preferences'
@@ -214,6 +217,13 @@ describe('dedicated agent choices', () => {
       userArgs: '--model sonnet',
       choices: input.choices
     })
+    const source = reconcileAgentChoiceArgsDetailed({ ...input, mode: 'load' })
+    expect(source.sourceChoices.model).toBe('sonnet')
+    expect(source.effects).toEqual({})
+    expect(source.recognized).toMatchObject([
+      { key: 'model', value: 'sonnet' },
+      { key: 'effort', value: 'high' }
+    ])
     expect(reconcileAgentChoiceArgs({ ...input, mode: 'arguments-edit' }).choices.model).toBe(
       'sonnet'
     )
