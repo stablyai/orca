@@ -3,7 +3,12 @@ import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
 } from '../../ansi-escape-sequences'
-import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from '../native-chat-types'
+import {
+  isImageRefBlock,
+  isTextBlock,
+  type NativeChatBlock,
+  type NativeChatMessage
+} from '../native-chat-types'
 import { imageReferenceToken, replaceImageReferences } from '../native-chat-image-reference'
 import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../../agent-image-paste'
 
@@ -164,8 +169,42 @@ export function hasImagePromptMarker(message: NativeChatMessage): boolean {
   return message.blocks.some((block) => isTextBlock(block) && IMAGE_PROMPT_MARKER.test(block.text))
 }
 
-/** Claude records image paths as source turns followed by a prompt carrying
- *  image markers. Merge the whole run back into one native user turn. */
+function imageRefPaths(blocks: readonly NativeChatBlock[]): Set<string> {
+  const paths = new Set<string>()
+  for (const block of blocks) {
+    if (isImageRefBlock(block) && block.path) {
+      paths.add(block.path)
+    }
+  }
+  return paths
+}
+
+/** Companions Claude writes after the prompt share its clock. A later image does not. */
+function equalTimestampImageSourceRun(
+  messages: readonly NativeChatMessage[],
+  start: number,
+  prompt: NativeChatMessage
+): { end: number; paths: string[] } | null {
+  const paths: string[] = []
+  let end = start
+  while (end < messages.length) {
+    const candidate = messages[end]!
+    const candidatePaths = imageSourcePathsFromMessage(candidate)
+    if (
+      candidate.source !== prompt.source ||
+      candidate.timestamp !== prompt.timestamp ||
+      candidatePaths.length === 0
+    ) {
+      break
+    }
+    paths.push(...candidatePaths)
+    end += 1
+  }
+  return end === start ? null : { end, paths }
+}
+
+/** Claude records image paths as source turns around a prompt carrying image
+ * markers. Merge that run into the prompt so one paste renders once. */
 export function normalizeImageTranscriptMessages(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
@@ -219,6 +258,27 @@ export function normalizeImageTranscriptMessages(
         })
       }
       index = nextIndex - 1
+      continue
+    }
+    const following = hasImagePromptMarker(message)
+      ? equalTimestampImageSourceRun(messages, index + 1, message)
+      : null
+    if (following) {
+      normalized ??= messages.slice(0, index)
+      const present = imageRefPaths(message.blocks)
+      const refs: NativeChatBlock[] = []
+      for (const path of following.paths) {
+        if (present.has(path)) {
+          continue
+        }
+        present.add(path)
+        refs.push({ type: 'image-ref', path })
+      }
+      normalized.push({
+        ...message,
+        blocks: [...refs, ...stripImagePromptMarkersFromTextBlocks(message.blocks)]
+      })
+      index = following.end - 1
       continue
     }
     const blocks = stripImagePromptMarkersFromTextBlocks(message.blocks)

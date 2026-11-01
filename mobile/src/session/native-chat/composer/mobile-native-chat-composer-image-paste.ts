@@ -79,6 +79,57 @@ export function mobileComposerImagePastePromptText(
   return onlyLabels ? '' : text
 }
 
+/** A second path for the same paste can still be reading after the first one attaches. */
+export const MOBILE_COMPOSER_PASTE_IMAGE_DEDUPE_MS = 2_000
+
+export function selectMobileComposerPasteImages(
+  images: readonly MobileComposerPastedImage[],
+  seenAt: ReadonlyMap<string, number>,
+  now: number
+): { images: readonly MobileComposerPastedImage[]; seenAt: Map<string, number> } {
+  const seen = new Map<string, number>()
+  for (const [key, at] of seenAt) {
+    if (now - at < MOBILE_COMPOSER_PASTE_IMAGE_DEDUPE_MS) {
+      seen.set(key, at)
+    }
+  }
+  const accepted: MobileComposerPastedImage[] = []
+  for (const image of images) {
+    const at = seen.get(image.base64)
+    if (at !== undefined && now - at < MOBILE_COMPOSER_PASTE_IMAGE_DEDUPE_MS) {
+      continue
+    }
+    seen.set(image.base64, now)
+    accepted.push(image)
+  }
+  return { images: accepted, seenAt: seen }
+}
+
+/** File bytes and a clipboard read of the same paste can resolve in either order. */
+export function createMobileComposerPasteImageDelivery(now: () => number = Date.now): {
+  take(
+    incoming: Promise<readonly MobileComposerPastedImage[]> | readonly MobileComposerPastedImage[]
+  ): Promise<readonly MobileComposerPastedImage[]>
+} {
+  let seenAt = new Map<string, number>()
+  let chain: Promise<void> = Promise.resolve()
+  return {
+    take(incoming) {
+      const run = chain.then(async () => {
+        const images = await incoming
+        const selected = selectMobileComposerPasteImages(images, seenAt, now())
+        seenAt = selected.seenAt
+        return selected.images
+      })
+      chain = run.then(
+        () => undefined,
+        () => undefined
+      )
+      return run
+    }
+  }
+}
+
 export function spliceMobileComposerPasteText(
   value: string,
   insert: string,

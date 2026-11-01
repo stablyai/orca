@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
 import {
   MOBILE_COMPOSER_IMAGE_PASTE_EVENT,
-  spliceMobileComposerPasteText
+  createMobileComposerPasteImageDelivery,
+  spliceMobileComposerPasteText,
+  type MobileComposerPastedImage
 } from './mobile-native-chat-composer-image-paste'
 import {
   claimMobileComposerImagePaste,
@@ -68,6 +70,7 @@ export function MobileNativeChatComposerField({
   readClipboardImageRef.current = readClipboardImage
   const valueRef = useRef(value)
   valueRef.current = value
+  const pasteDeliveryRef = useRef(createMobileComposerPasteImageDelivery())
   useEffect(() => {
     const node = composerTextarea(input.current)
     if (!node) {
@@ -81,22 +84,29 @@ export function MobileNativeChatComposerField({
       onChangeTextRef.current?.(next.text)
       queueMicrotask(() => node.setSelectionRange(next.caret, next.caret))
     }
-    const attachNativeImage = (): void => {
-      const handler = onPasteImagesRef.current
-      const read = readClipboardImageRef.current
-      if (!handler || !read) {
+    const deliverPasted = (incoming: Promise<readonly MobileComposerPastedImage[]>): void => {
+      if (!onPasteImagesRef.current) {
         return
       }
-      void read().then(
-        (image) => {
-          if (image) {
-            void handler([image])
+      void pasteDeliveryRef.current.take(incoming).then(
+        (images) => {
+          if (images.length > 0) {
+            void onPasteImagesRef.current?.(images)
           }
         },
         (error: unknown) => {
-          void handler(Promise.reject(error instanceof Error ? error : new Error(String(error))))
+          void onPasteImagesRef.current?.(
+            Promise.reject(error instanceof Error ? error : new Error(String(error)))
+          )
         }
       )
+    }
+    const attachNativeImage = (): void => {
+      const read = readClipboardImageRef.current
+      if (!onPasteImagesRef.current || !read) {
+        return
+      }
+      deliverPasted(read().then((image) => (image ? [image] : [])))
     }
     const onPaste = (event: ClipboardEvent): void => {
       if (event.target !== node || event.defaultPrevented || !onPasteImagesRef.current) {
@@ -113,9 +123,7 @@ export function MobileNativeChatComposerField({
           node.selectionStart ?? valueRef.current.length,
           node.selectionEnd ?? node.selectionStart ?? valueRef.current.length
         )
-        void onPasteImagesRef.current(
-          Promise.all(claimed.files.map((file) => readMobileComposerImageFile(file)))
-        )
+        deliverPasted(Promise.all(claimed.files.map((file) => readMobileComposerImageFile(file))))
         return
       }
       // iOS WKWebView omits image items from a textarea paste, so an empty paste asks the pasteboard.
