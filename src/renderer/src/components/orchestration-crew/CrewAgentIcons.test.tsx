@@ -85,7 +85,7 @@ it('groups the closed tab and shows the row by the live terminal state, with a q
   const mounted = render(panel([row()]))
   const tab = screen.getByRole('button', { name: 'Show orchestration: 1 worker, 1 working' })
   fireEvent.click(tab)
-  const body = screen.getByRole('button', { name: 'Mention Worker 0' })
+  const body = screen.getByRole('button', { name: /^Mention Worker 0:/ })
   expect(within(body).getByRole('img', { name: 'Working' })).toBeInTheDocument()
   expect(within(body).queryByRole('img', { name: 'Done' })).toBeNull()
   expect(within(body).getByRole('img', { name: 'Claude' })).toBeInTheDocument()

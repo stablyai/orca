@@ -198,7 +198,7 @@ it.each(['row', 'all', 'menu'] as const)(
       })
       const button =
         route === 'row'
-          ? pane.getByRole('button', { name: 'Mention Worker' })
+          ? pane.getByRole('button', { name: /^Mention Worker:/ })
           : route === 'all'
             ? pane.getByRole('button', { name: 'Mention all' })
             : test.more
