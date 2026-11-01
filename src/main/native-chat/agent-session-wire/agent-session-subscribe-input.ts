@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import type { SubscriberFieldState } from './agent-session-subscriber-frame-fields'
 

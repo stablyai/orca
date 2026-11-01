@@ -1,9 +1,9 @@
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
-import { isAdmissibleAgentJournalRenderItem } from './agent-session-journal-schemas'
-import { readAgentSessionErrorRefusal } from './agent-session-write-failure'
-import { isFinalAgentSessionReadRefusal } from './structured-agent-session-read-refusal'
-import { createReconnectScheduler } from './agent-session/structured-agent-session-reconnect'
+import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalRenderItem } from '../journal/agent-session-journal-schemas'
+import { readAgentSessionErrorRefusal } from '../../agent-session-write-failure'
+import { isFinalAgentSessionReadRefusal } from '../../structured-agent-session-read-refusal'
+import { createReconnectScheduler } from '../structured-agent-session-reconnect'
 import type {
   AgentSessionCurrentRequestsMarker,
   AgentSessionCurrentRequestsPiece,

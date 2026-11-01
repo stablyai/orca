@@ -5,8 +5,8 @@ import {
   isSubmissionRejectionKind,
   readAgentSessionFailureFact,
   type SubmissionRejectionKind
-} from './agent-session-failure'
-import type { AgentJournalSubmission } from './agent-session-journal-types'
+} from '../../agent-session-failure'
+import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
 
 /** Bare marker is hidden by released clients; log the error separately. Older hosts append : <error>. */
 export const DISPATCH_REJECTED_WRITE_FAILED = 'provider_write_failed'

@@ -1,4 +1,4 @@
-import type { AgentJournalSubmission } from './agent-session-journal-types'
+import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
 
 export function isUnansweredStructuredAgentSessionDispatch(

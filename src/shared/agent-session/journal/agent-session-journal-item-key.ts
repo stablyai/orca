@@ -1,6 +1,6 @@
 // Share stable upsert/optimistic-send keys; percent-encode components before joining to prevent delimiter collisions.
 
-import type { AgentJournalItemIdentity } from './agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../agent-session-journal-identity'
 
 const KEY_DELIMITER = ':'
 const VERBATIM_BOUNDED_COMPONENT_TAG = '%FF'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { CodexUsageLimits } from './codex-usage-limits'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 

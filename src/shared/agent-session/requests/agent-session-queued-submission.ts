@@ -1,5 +1,5 @@
-import { readAgentSessionFailureFact } from './agent-session-failure'
-import type { AgentJournalSubmission } from './agent-session-journal-types'
+import { readAgentSessionFailureFact } from '../../agent-session-failure'
+import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
 
 /** Accepted but not handed over proves unwritten; only delivery/rejection can follow, never doubt. */
 export function isQueuedAgentJournalSubmission(

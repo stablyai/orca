@@ -3,9 +3,9 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
-} from './agent-session-journal-types'
-import { AGENT_SESSION_FAILURE_KINDS, isSubmissionRejectionKind } from './agent-session-failure'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+} from '../journal/agent-session-journal-types'
+import { AGENT_SESSION_FAILURE_KINDS, isSubmissionRejectionKind } from '../../agent-session-failure'
+import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
@@ -19,9 +19,9 @@ import {
   hasStructuredAgentSessionRequest,
   latestStructuredAgentSessionRequest
 } from './structured-agent-session-latest-request'
-import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
-import { latestNativeChatTurnSinceRequest } from './native-chat/native-chat-orca-stop-cut'
-import { selectStructuredAgentTurnTimings } from './structured-agent-session-turn-timing'
+import { projectStructuredAgentSessionStatusSummary } from '../../structured-agent-session-projection'
+import { latestNativeChatTurnSinceRequest } from '../../native-chat/native-chat-orca-stop-cut'
+import { selectStructuredAgentTurnTimings } from '../../structured-agent-session-turn-timing'
 
 const START_FAILURE = 'Claude is not signed in.'
 

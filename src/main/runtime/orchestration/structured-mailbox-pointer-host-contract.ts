@@ -1,6 +1,6 @@
 /** What the structured mailbox lane needs from a chat host: session reads and admission-checked sends. */
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredPointerSubmission } from './structured-pointer-operation-id'
 import type { StructuredDispatchState } from './structured-session-pointer-delivery'
 

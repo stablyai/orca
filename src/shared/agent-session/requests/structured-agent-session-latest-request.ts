@@ -4,21 +4,21 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle,
-  AgentJournalTurnLifecycleState,
-  AgentJournalTurnOutcome
-} from './agent-session-journal-types'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
-import { isRootAgentJournalItem } from './agent-session-journal-producer'
-import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
+  AgentJournalTurnLifecycleState
+} from '../journal/agent-session-journal-types'
+import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
+import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
+import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../../agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
-import { withoutNativeChatVisualDirectiveLines } from './native-chat/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandRow,
   structuredAgentSessionCommandTurnItemIds
-} from './agent-session/structured-agent-session-command-entry'
-import type { NativeChatBlock } from './native-chat/native-chat-types'
+} from '../structured-agent-session-command-entry'
+import type { NativeChatBlock } from '../../native-chat/native-chat-types'
 
 export type StructuredAgentSessionLatestRequest = {
   kind: 'turn' | 'refused-send'

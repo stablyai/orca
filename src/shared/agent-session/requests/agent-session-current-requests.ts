@@ -1,6 +1,6 @@
-import { agentSessionCurrentContextRows } from './agent-session-context-clear'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from './agent-session-wire'
+import { agentSessionCurrentContextRows } from '../../agent-session-context-clear'
+import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import type { AgentSessionCurrentRequestsMarker } from './agent-session-current-requests-wire'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
 

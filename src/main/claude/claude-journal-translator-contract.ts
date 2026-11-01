@@ -1,5 +1,5 @@
 import type { AgentSessionContextReport } from '../../shared/agent-session-context-usage'
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission

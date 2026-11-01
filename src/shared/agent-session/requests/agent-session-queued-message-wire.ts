@@ -1,7 +1,7 @@
 // Publish queued cards, queue pause and draft mutation results together.
 
-import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
-import type { AgentJournalMessageItem } from './agent-session-journal-types'
+import type { UnreadAgentSessionFailureFact } from '../../agent-session-failure'
+import type { AgentJournalMessageItem } from '../journal/agent-session-journal-types'
 
 /** The draft could not be converted into a send; an explicit Send retries it. */
 export const QUEUED_MESSAGE_PAUSED_SEND_FAILED = 'send_failed' as const

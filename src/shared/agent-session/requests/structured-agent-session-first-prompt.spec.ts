@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import {
   firstStructuredAgentSessionPrompt,
   STRUCTURED_CHAT_NAME_PROMPT_LIMIT

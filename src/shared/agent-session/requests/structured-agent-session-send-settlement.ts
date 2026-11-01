@@ -1,5 +1,6 @@
-import type { AgentJournalCursor, AgentJournalSubmission } from './agent-session-journal-types'
-import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
+import type { AgentJournalCursor } from '../../agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import { handedOffQueuedMessageIds } from '../../structured-agent-session-draft-hand-off'
 
 /** A bounded read supersedes acknowledged sends even when their rows are outside its page. */
 export function structuredAgentSessionReadCoversSend(

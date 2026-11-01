@@ -3,7 +3,7 @@ import { projectStructuredAgentStartItem } from '../../../shared/structured-agen
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS,
   parseJournalRow,

@@ -1,31 +1,21 @@
-import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
-export type {
+import type {
   AgentJournalCursor,
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity,
-  AgentSessionJournalProviderHandle
-} from './agent-session-journal-identity'
-import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
-export type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
-import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
+  AgentJournalItemIdentity
+} from '../../agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+import type { AgentSessionProviderContextBoundary } from '../../agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
 
-import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
-import type { AgentSessionFailureRowWords } from './agent-session-failure-words'
-import type { AgentType } from './agent-status-types'
-import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
-import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
-import type { NativeChatToolMetadata } from './native-chat/tools/native-chat-tool-identity'
-import type { AgentSessionContextUsage } from './agent-session-context-usage'
-import type { NativeChatBlock, NativeChatRole } from './native-chat/native-chat-types'
-import type {
-  AgentMessageSender,
-  AgentMessageSource
-} from './agent-session/agent-session-message-source'
-import type { AgentSessionExecutionOptions } from './agent-session/options/agent-session-execution-options'
-
-export { type AgentType }
+import type { UnreadAgentSessionFailureFact } from '../../agent-session-failure'
+import type { AgentSessionFailureRowWords } from '../../agent-session-failure-words'
+import type { AgentSessionQuestionAnswer } from '../../agent-session-question-answer'
+import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
+import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
+import type { AgentSessionContextUsage } from '../../agent-session-context-usage'
+import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
+import type { AgentMessageSender, AgentMessageSource } from '../agent-session-message-source'
+import type { AgentSessionExecutionOptions } from '../options/agent-session-execution-options'
 
 /** Bump only alongside a read-time upcaster in `journal-row-schema.ts`. */
 /** v3 introduced turn items; other rows stay v2. The first v3 row stops older hosts writing (read-only on released builds, failed load here) rather than allowing truncation. */
@@ -216,10 +206,6 @@ export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
   'unverifiable'
 ] as const
 export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
-
-// The turn verdict vocabulary lives in agent-turn-outcome.ts so the agent-status
-// row can share it without importing the journal; re-exported to keep one import site.
-export { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from './agent-turn-outcome'
 
 export type AgentJournalTurnLifecycle = {
   turnId: string

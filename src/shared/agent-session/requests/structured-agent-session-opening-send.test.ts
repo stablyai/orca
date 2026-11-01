@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import {
   structuredAgentSessionSendOpeningTurn,
   type StructuredAgentSessionOpeningSendItem

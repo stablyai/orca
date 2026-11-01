@@ -1,14 +1,14 @@
 // Hold subsequent sends while one opens a turn; clients draw held sends after live work.
 
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
-import { isRootAgentJournalItem } from './agent-session-journal-producer'
+import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from './agent-session-journal-types'
-import { readAgentJournalTurn } from './agent-session-turn-record'
+  AgentJournalSubmission
+} from '../journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+import { readAgentJournalTurn } from '../../agent-session-turn-record'
 
 /** Minimal fold shape lets the host read without rendering a snapshot. */
 export type StructuredAgentSessionOpeningSendItem = {
