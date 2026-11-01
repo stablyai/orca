@@ -60,6 +60,8 @@ export function installPtyLeafMoveIpcHandler(deps: {
     }
     return commitLeafMoveAndRekey(deps, args)
   })
+  // macOS window reactivation re-registers; drop the old handler first.
+  getPtyIpc().removeHandler('pty:moveLeafIntoTab')
   getPtyIpc().handle('pty:moveLeafIntoTab', async (_event, args: unknown) => {
     if (!isTerminalLeafIntoTabRequest(args)) {
       return { status: 'refused', reason: 'invalid_request' } satisfies TerminalLeafIntoTabResult
