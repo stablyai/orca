@@ -49,7 +49,12 @@ export class RuntimeBrowserTabCreation {
       split?: BrowserTabSplitDirection
       splitFromTabId?: string
     },
-    caller?: { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime'; follows?: boolean }
+    caller?: {
+      pairedDeviceId?: string
+      clientKind?: 'mobile' | 'runtime'
+      follows?: boolean
+      leavesAgentTab?: boolean
+    }
   ): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const focus = resolveBrowserTabCreateFocus({
@@ -119,6 +124,7 @@ export class RuntimeBrowserTabCreation {
         focus,
         ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
         ...(caller?.follows ? { callerFollows: true } : {}),
+        ...(caller?.leavesAgentTab ? { leavesAgentTab: true } : {}),
         targetGroupId: params.targetGroupId
       })
       return { browserPageId: created.browserPageId }

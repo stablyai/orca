@@ -176,6 +176,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     this.serveBrowserTabs.navigated(page)
   }
 
+  /** Headless page links become tabs; input RPCs name the client each one belongs to. */
   readonly offscreenBrowserPageLinks = new OffscreenBrowserPageLinks((params, caller) =>
     this.browserCommands.browserTabCreate(params, caller)
   )

@@ -3,6 +3,7 @@ import { BROWSER_CORE_METHODS } from '../runtime/rpc/methods/browser-core'
 import { BROWSER_EXTRA_METHODS } from '../runtime/rpc/methods/browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from '../runtime/rpc/methods/browser-screencast'
 import { electronSidecarRuntimeMethodName } from './electron-sidecar-method-routing'
+import { OffscreenBrowserPageLinks } from '../runtime/browser/offscreen-browser-page-links'
 
 // Exercise real RPC registration: names that diverge from runtime camel-casing can become unreachable.
 const BROWSER_RPC_METHODS = [
@@ -20,16 +21,19 @@ async function runtimeCommandFor(
   method: (typeof BROWSER_RPC_METHODS)[number]
 ): Promise<string | null> {
   let recorded: string | null = null
-  // Handlers may read other runtime members first, such as an input recorder; only browser* names the command.
-  const member: unknown = new Proxy(() => ({}), {
-    get: (_target, property) => (property === 'then' ? undefined : member)
-  })
+  // Input handlers deliver through the real link recorder, which passes the command through.
+  const offscreenBrowserPageLinks = new OffscreenBrowserPageLinks(async () => ({
+    browserPageId: ''
+  }))
   const runtime = new Proxy({} as Record<string, unknown>, {
     get: (_target, property) => {
+      if (property === 'offscreenBrowserPageLinks') {
+        return offscreenBrowserPageLinks
+      }
       if (typeof property === 'string' && recorded === null && property.startsWith('browser')) {
         recorded = property
       }
-      return member
+      return () => ({})
     }
   })
   try {

@@ -33,6 +33,7 @@ import {
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
 import { CertificateProceed } from '../../../../shared/rpc-contract/browser-core-params'
+import { browserPageInputHandler } from './browser-page-input-handler'
 
 export const BROWSER_CORE_METHODS = [
   defineMethod({
@@ -45,7 +46,7 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.click',
     permission: 'workspace',
     params: Element,
-    handler: async (params, { runtime }) => runtime.browserClick(params)
+    handler: browserPageInputHandler((runtime, params) => runtime.browserClick(params))
   }),
   defineMethod({
     name: 'browser.goto',
@@ -194,10 +195,7 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.keypress',
     permission: 'workspace',
     params: Keypress,
-    handler: async (params, { runtime, pairedDeviceId, clientKind }) => {
-      runtime.offscreenBrowserPageLinks.noteInput(params.page, { pairedDeviceId, clientKind })
-      return runtime.browserKeypress(params)
-    }
+    handler: browserPageInputHandler((runtime, params) => runtime.browserKeypress(params))
   }),
   defineMethod({
     name: 'browser.pdf',
@@ -215,7 +213,7 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.dblclick',
     permission: 'workspace',
     params: Element,
-    handler: async (params, { runtime }) => runtime.browserDblclick(params)
+    handler: browserPageInputHandler((runtime, params) => runtime.browserDblclick(params))
   }),
   defineMethod({
     name: 'browser.forward',

@@ -22,6 +22,7 @@ import {
   Viewport
 } from '../../../../shared/rpc-contract/browser-params'
 import { MouseClick } from '../../../../shared/rpc-contract/browser-extras-params'
+import { browserPageInputHandler } from './browser-page-input-handler'
 
 export const BROWSER_EXTRA_METHODS = [
   defineMethod({
@@ -82,28 +83,19 @@ export const BROWSER_EXTRA_METHODS = [
     name: 'browser.mouseDown',
     permission: 'workspace',
     params: MouseButton,
-    handler: async (params, { runtime, pairedDeviceId, clientKind }) => {
-      runtime.offscreenBrowserPageLinks.noteInput(params.page, { pairedDeviceId, clientKind })
-      return runtime.browserMouseDown(params)
-    }
+    handler: browserPageInputHandler((runtime, params) => runtime.browserMouseDown(params))
   }),
   defineMethod({
     name: 'browser.mouseClick',
     permission: 'workspace',
     params: MouseClick,
-    handler: async (params, { runtime, pairedDeviceId, clientKind }) => {
-      runtime.offscreenBrowserPageLinks.noteInput(params.page, { pairedDeviceId, clientKind })
-      return runtime.browserMouseClick(params)
-    }
+    handler: browserPageInputHandler((runtime, params) => runtime.browserMouseClick(params))
   }),
   defineMethod({
     name: 'browser.mouseUp',
     permission: 'workspace',
     params: MouseButton,
-    handler: async (params, { runtime, pairedDeviceId, clientKind }) => {
-      runtime.offscreenBrowserPageLinks.noteInput(params.page, { pairedDeviceId, clientKind })
-      return runtime.browserMouseUp(params)
-    }
+    handler: browserPageInputHandler((runtime, params) => runtime.browserMouseUp(params))
   }),
   defineMethod({
     name: 'browser.mouseWheel',

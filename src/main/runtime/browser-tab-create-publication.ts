@@ -44,6 +44,8 @@ export type BrowserTabCreatePublication = {
   clientNavigationId?: string
   /** The client is named for input it sent, not a create it asked for, so it has no pending focus of its own. */
   callerFollows?: boolean
+  /** A tab no one picked, such as a link an agent's click opened, must not take over the agent's routing. */
+  leavesAgentTab?: boolean
   targetGroupId?: string
 }
 
@@ -183,7 +185,7 @@ export function publishCreatedBrowserSessionTab(
   if (rules.notifiesSessionTabsChanged && publication.worktreeId !== undefined) {
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
-  if (rules.activatesBridgeTab) {
+  if (rules.activatesBridgeTab && !publication.leavesAgentTab) {
     const bridge = host.getAgentBrowserBridge()
     const webContentsId = bridge
       ?.getRegisteredTabs(publication.worktreeId)

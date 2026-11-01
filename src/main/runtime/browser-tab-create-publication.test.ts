@@ -243,6 +243,20 @@ describe('publishCreatedBrowserSessionTab', () => {
     expect(setActiveTab).not.toHaveBeenCalled()
   })
 
+  it('leaves the agent on its page for a tab no one picked', () => {
+    const { host, setActiveTab } = createPublicationHost([['page-1', 101]])
+
+    publishCreatedBrowserSessionTab(host, {
+      placementKind: 'offscreen',
+      browserPageId: 'page-1',
+      worktreeId: 'wt-1',
+      focus: resolveBrowserTabCreateFocus({ activate: false }),
+      leavesAgentTab: true
+    })
+
+    expect(setActiveTab).not.toHaveBeenCalled()
+  })
+
   it('skips the worktree-scoped announcement for an unscoped create', () => {
     const { host, notifyHeadlessBrowserSessionTabsChanged } = createPublicationHost()
 
