@@ -594,7 +594,7 @@ module.exports = {
       '/Contents/Resources/agent-browser-darwin-[^/]+$',
       ...macTerminalHostSignIgnore
     ],
-    extendInfo: macUsageDescriptions,
+    extendInfo: { ...macUsageDescriptions, CFBundleIconName: 'icon' },
     // Local macOS builds need no release credentials; hardening/notarization stay on explicit release paths.
     hardenedRuntime: isMacRelease,
     // Dev notarization preserves TCC identifier/team identity across cdhash changes; unticketed hourly updates otherwise lose folder grants with EPERM and no prompt.
@@ -603,6 +603,10 @@ module.exports = {
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
       macSpeechNativeResource,
+      {
+        from: 'resources/build/Assets.car',
+        to: 'Assets.car'
+      },
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
