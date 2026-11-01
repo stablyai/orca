@@ -196,15 +196,6 @@ it('composes actual local and paired RPC claims in either order and preserves de
         h.db.db.prepare("SELECT sequence FROM messages WHERE subject = 'Detached parent'").all()
       ).toEqual([])
       expect(effects()).toEqual(beforeDetached)
-      console.info('Crew paired parent command controls', {
-        order,
-        parents,
-        beforeWrongLocal,
-        beforeHome,
-        afterHome,
-        afterDetached: effects(),
-        receipts
-      })
     } finally {
       h.close()
     }

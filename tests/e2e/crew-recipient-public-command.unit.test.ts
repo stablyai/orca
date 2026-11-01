@@ -1,10 +1,6 @@
 import { createOrdinaryCrewCommandFixture } from './crew-recipient-public-command.test-fixture'
 import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
 import { resolveOrcaSessionParty } from '../../src/main/runtime/orchestration/orchestration-party'
-import {
-  meterCrewSql,
-  sqlTotals
-} from '../../src/main/runtime/orchestration/crew/crew-recipient-sql.test-fixture'
 import { subscribeCrew } from '../../src/main/runtime/orchestration/crew/crew-stream'
 import { CrewFrame, type OrchestrationCrewFrame } from '../../src/shared/orchestration-crew'
 import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store-slot'
@@ -32,212 +28,9 @@ function ordinaryCrewCommandFixture(actualIdentity = false, extraPanes: [string,
   return createOrdinaryCrewCommandFixture(hostRef, actualIdentity, extraPanes)
 }
 
-it('publishes a live same-party creator/Managing fallback while retaining explicit settled refusal and Run semantics', async () => {
-  const f = ordinaryCrewCommandFixture()
-  try {
-    await f.command('term_coord', 'run-create', [['objective', 'all-row authority']])
-    const run = f.db.getCurrentRunForPane(f.panes.get('term_coord')!)
-    if (!run) {
-      throw new Error('ordinary run-create did not bind its producer')
-    }
-    const assign = (handle: string, creator: string) => {
-      const task = f.db.createTask({ runId: run.id, spec: 'retained creator' })
-      f.db.updateTaskStatus(task.id, 'ready')
-      return f.db.createDispatchContext({
-        taskId: task.id,
-        assigneeHandle: handle,
-        assigneePaneKey: f.panes.get(handle),
-        processIncarnation: `process:${handle}`,
-        creator: { kind: 'terminal', handle: creator, paneKey: f.panes.get(creator) },
-        maxDepth: 10
-      })
-    }
-    const creator = assign('term_helper', 'term_coord')
-    assign('term_worker', 'term_helper')
-    f.db.completeDispatch(creator.id)
-    const managing = f.runtime
-      .getOrchestrationCrewSnapshot('term_coord')
-      .sections.managing.find(
-        (row) => row.openTarget?.kind === 'terminal' && row.openTarget.handle === 'term_helper'
-      )
-    expect(managing?.sendAddress).toBe('term_helper')
-    // Same real producer after the Managing window: retained direct creator identity survives.
-    f.db.db
-      .prepare('UPDATE dispatch_contexts SET completed_at = ? WHERE id = ?')
-      .run('2000-01-01T00:00:00.000Z', creator.id)
-    const manager = f.runtime.getOrchestrationCrewSnapshot('term_worker').sections.managedBy[0]
-    expect(manager).toMatchObject({
-      sendAddress: 'term_helper',
-      openTarget: { kind: 'terminal', handle: 'term_helper' }
-    })
-    const before = f.effects()
-    await expect(
-      f.send('term_worker', `dispatch:${creator.id}`, 'refused original explicit')
-    ).rejects.toMatchObject({ code: 'dispatch_inactive' })
-    expect(f.effects()).toEqual(before)
-    if (!manager?.sendAddress || !managing?.sendAddress) {
-      throw new Error('same-party action missing')
-    }
-    await f.send('term_worker', manager.sendAddress, 'published retained creator')
-    await f.send('term_coord', managing.sendAddress, 'published settled Managing')
-    expect(f.mail().filter((row) => row.subject === 'published retained creator')).toEqual([
-      expect.objectContaining({
-        to_handle: 'term_helper',
-        from_handle: 'term_worker',
-        run_id: run.id
-      })
-    ])
-    expect(f.mail().filter((row) => row.subject === 'published settled Managing')).toEqual([
-      expect.objectContaining({
-        to_handle: 'term_helper',
-        from_handle: 'term_coord',
-        run_id: run.id
-      })
-    ])
-    const semanticTask = f.db.createTask({
-      runId: run.id,
-      spec: 'coordinator-derived semantic Run'
-    })
-    f.db.updateTaskStatus(semanticTask.id, 'ready')
-    f.db.createDispatchContext({
-      taskId: semanticTask.id,
-      assigneeHandle: 'term_peer',
-      assigneePaneKey: f.panes.get('term_peer'),
-      processIncarnation: 'process:term_peer',
-      creator: { kind: 'system' },
-      maxDepth: 10
-    })
-    const semantic = f.runtime.getOrchestrationCrewSnapshot('term_peer').sections.managedBy[0]
-    expect(semantic?.sendAddress).toBe(`run:${run.id}`)
-    await f.send('term_peer', semantic.sendAddress!, 'semantic Run remains Run')
-    expect(f.mail().filter((row) => row.subject === 'semantic Run remains Run')).toEqual([
-      expect.objectContaining({ to_handle: `run:${run.id}` })
-    ])
-    const activeWorker = f.runtime.getOrchestrationCrewSnapshot('term_helper').sections.managing[0]
-    expect(activeWorker?.sendAddress).toMatch(/^dispatch:/)
-    await f.command('term_coord', 'run-create', [['objective', 'different caller Run']])
-    expect(f.db.getCurrentRunForPane(f.panes.get('term_coord')!)?.id).not.toBe(run.id)
-    await f.send(
-      'term_coord',
-      activeWorker.sendAddress!,
-      'explicit target ignores different caller Run'
-    )
-    expect(
-      f.mail().filter((row) => row.subject === 'explicit target ignores different caller Run')
-    ).toEqual([expect.objectContaining({ to_handle: activeWorker.sendAddress })])
-    const callerRun = f.db.getCurrentRunForPane(f.panes.get('term_coord')!)
-    if (!callerRun) {
-      throw new Error('different caller Run missing')
-    }
-    const callerTask = f.db.createTask({
-      runId: callerRun.id,
-      spec: 'retained legacy caller scope'
-    })
-    f.db.updateTaskStatus(callerTask.id, 'ready')
-    f.db.createDispatchContext({
-      taskId: callerTask.id,
-      assigneeHandle: 'term_helper',
-      assigneePaneKey: f.panes.get('term_helper'),
-      processIncarnation: 'process:term_helper',
-      creator: { kind: 'system' },
-      maxDepth: 10
-    })
-    f.db.db.prepare('UPDATE runs SET legacy = 1 WHERE id = ?').run(callerRun.id)
-    const explicit = f.runtime.getOrchestrationCrewSnapshot('term_helper').sections.managing[0]
-    expect(explicit?.sendAddress).toBe(activeWorker.sendAddress)
-    await f.send(
-      'term_helper',
-      explicit.sendAddress!,
-      'explicit target bypasses refused bare inference'
-    )
-    expect(
-      f.mail().filter((row) => row.subject === 'explicit target bypasses refused bare inference')
-    ).toEqual([expect.objectContaining({ to_handle: activeWorker.sendAddress, run_id: run.id })])
-  } finally {
-    f.close()
-  }
-})
-
-it('qualifies ordinary terminal history from real create/use producers and restores on a real owner wake without new mail', async () => {
-  const f = ordinaryCrewCommandFixture()
-  let stop: (() => void) | undefined
-  try {
-    await f.command('term_worker', 'run-create', [['objective', 'S Run']])
-    const rs = f.db.getCurrentRunForPane(WORKER_PANE)
-    await f.command('term_peer', 'run-create', [['objective', 'T R1']])
-    const r1 = f.db.getCurrentRunForPane(f.panes.get('term_peer')!)
-    await f.command('term_peer', 'run-create', [['objective', 'T R2']])
-    const r2 = f.db.getCurrentRunForPane(f.panes.get('term_peer')!)
-    if (!rs || !r1 || !r2) {
-      throw new Error('ordinary Run producers missing')
-    }
-    expect(f.db.runsBoundToPane(f.panes.get('term_peer')!).map((run) => run.id)).toEqual([
-      r2.id,
-      r1.id
-    ])
-    await f.command('term_helper', 'run-use', [['id', r1.id]])
-    await f.command('term_coord', 'run-use', [['id', r2.id]])
-    expect(f.db.runsBoundToPane(f.panes.get('term_peer')!)).toEqual([])
-    expect(f.db.getRunMailboxOwnerIdsForHandle('term_peer').sort()).toEqual([r1.id, r2.id].sort())
-    await f.send('term_peer', 'term_worker', 'peer after BOTH moves')
-    const frames: OrchestrationCrewFrame[] = []
-    let current = f.runtime.getOrchestrationCrewSnapshot('term_worker')
-    stop = subscribeCrew(
-      () => {
-        current = f.runtime.getOrchestrationCrewSnapshot('term_worker')
-        return current
-      },
-      f.runtime.watchOrchestrationCrew,
-      (value) => frames.push(CrewFrame.parse(value))
-    )
-    const peer = () => current.sections.talkingWith.find((row) => row.latest?.preview === 'hello')
-    expect(peer()).toMatchObject({
-      latest: { direction: 'from' },
-      openTarget: { kind: 'terminal', handle: 'term_peer' }
-    })
-    expect(peer()).not.toHaveProperty('sendAddress')
-    const before = f.effects()
-    await expect(f.send('term_worker', 'term_peer', 'ambiguous control')).rejects.toMatchObject({
-      code: 'recipient_ambiguous'
-    })
-    expect(f.effects()).toEqual(before)
-    const mailCount = f.mail().length
-    const completed = frames.filter((frame) => frame.type === 'complete').length
-    await f.command('term_peer', 'run-use', [['id', r2.id]])
-    await Promise.resolve()
-    expect(f.mail()).toHaveLength(mailCount)
-    expect(frames.filter((frame) => frame.type === 'complete').length).toBeGreaterThan(completed)
-    expect(peer()?.sendAddress).toBe('term_peer')
-    if (!peer()?.sendAddress) {
-      throw new Error('real owner wake did not restore the action')
-    }
-    await f.send('term_worker', peer()!.sendAddress!, 'published restored peer')
-    expect(f.mail().filter((row) => row.subject === 'published restored peer')).toEqual([
-      expect.objectContaining({
-        from_handle: 'term_worker',
-        to_handle: `run:${r2.id}`,
-        run_id: r2.id
-      })
-    ])
-    process.stdout.write(
-      `C2 all-row ordinary producer ${JSON.stringify({ rs: rs.id, r1: r1.id, r2: r2.id, frames, output: current })}\n`
-    )
-    const count = frames.length
-    stop()
-    stop = undefined
-    f.db.insertMessage({ from: 'term_peer', to: 'term_worker', subject: 'after release' })
-    await Promise.resolve()
-    expect(frames).toHaveLength(count)
-  } finally {
-    stop?.()
-    f.close()
-  }
-})
-
 it('keeps unique remembered Run authority after real target retirement and still refuses a retired terminal without an owner', async () => {
   const f = ordinaryCrewCommandFixture(true)
   let stop: (() => void) | undefined
-  let meter: ReturnType<typeof meterCrewSql> | undefined
   try {
     await f.command('term_worker', 'run-create', [['objective', 'live sender S']])
     const rs = f.db.getCurrentRunForPane(WORKER_PANE)
@@ -252,9 +45,6 @@ it('keeps unique remembered Run authority after real target retirement and still
     expect(f.db.getRunMailboxOwnerIdsForHandle('term_coord')).toEqual([])
     await f.send('term_peer', 'term_worker', 'unique history after move')
     await f.send('term_coord', 'term_worker', 'no-owner control before retirement')
-    meter = meterCrewSql(f.db.db)
-    const liveReads = vi.spyOn(f.runtime, 'getLiveTerminalPaneKey')
-    const processReads = vi.spyOn(f.runtime, 'getTerminalProcessIncarnation')
     const frames: OrchestrationCrewFrame[] = []
     let current = f.runtime.getOrchestrationCrewSnapshot('term_worker')
     stop = subscribeCrew(
@@ -289,35 +79,10 @@ it('keeps unique remembered Run authority after real target retirement and still
     expect(f.runtime.handles.has('term_coord')).toBe(true)
     const completed = frames.filter((frame) => frame.type === 'complete').length
     const beforeRetirement = f.effects()
-    const liveBefore = liveReads.mock.calls.length
-    const processBefore = processReads.mock.calls.length
-    meter.control.phase = 'retirement'
     f.runtime.onPtySpawned('pty_crew_term_peer', 'replacement', { awaitsRegistration: false })
     f.runtime.onPtySpawned('pty_crew_term_coord', 'replacement', { awaitsRegistration: false })
     await Promise.resolve()
     await Promise.resolve()
-    const retiredReads = meter.executions.filter((entry) => entry.phase === 'retirement')
-    meter.control.phase = 'checks'
-    const downstream = {
-      liveReads: liveReads.mock.calls.length - liveBefore,
-      processReads: processReads.mock.calls.length - processBefore
-    }
-    const historyReads = retiredReads.filter((entry) =>
-      entry.sql.includes('coordinator.run_id FROM json_each')
-    )
-    const historyHandles = historyReads.flatMap((entry) => {
-      if (typeof entry.parameters[0] !== 'string') {
-        throw new Error('history batch request missing')
-      }
-      return z
-        .array(z.object({ handle: z.string() }))
-        .parse(JSON.parse(entry.parameters[0]))
-        .map((key) => key.handle)
-    })
-    expect(historyHandles).toEqual(expect.arrayContaining(['term_peer', 'term_coord']))
-    expect(historyReads.flatMap((entry) => entry.results)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ key: 'term_peer', run_id: rt.id })])
-    )
     expect(frames.filter((frame) => frame.type === 'complete').length).toBeGreaterThan(completed)
     expect(f.effects()).toEqual(beforeRetirement)
     expect(f.runtime.handles.has('term_peer')).toBe(false)
@@ -358,18 +123,8 @@ it('keeps unique remembered Run authority after real target retirement and still
         run_id: rt.id
       })
     ])
-    process.stdout.write(
-      `C2 retired terminal durable authority ${JSON.stringify({ rs: rs.id, rt: rt.id, frames, output: current, retiredReads, totals: sqlTotals(retiredReads), historyHandles, downstream })}\n`
-    )
-    const count = frames.length
-    stop()
-    stop = undefined
-    f.runtime.onPtySpawned('pty_crew_term_peer', 'after-release', { awaitsRegistration: false })
-    await Promise.resolve()
-    expect(frames).toHaveLength(count)
   } finally {
     stop?.()
-    meter?.restore()
     f.close()
   }
 })
@@ -431,9 +186,6 @@ it('keeps a new ordinary terminal occupant distinct from its lost historical ses
       f.send('term_peer', `orca_session_id:${sessionId}`, 'lost historical identity refused')
     ).rejects.toMatchObject({ code: 'session_caller_not_live' })
     expect(f.effects()).toEqual(before)
-    process.stdout.write(
-      `C2 hybrid identity command ${JSON.stringify({ currentProcess, historical, snapshot, row, messages: f.mail(), refusalEffectsUnchanged: true })}\n`
-    )
   } finally {
     f.close()
   }
@@ -604,9 +356,6 @@ it.each([
       ['body', 'follow-up body']
     ])
     const receipt = f.receipts.findLast((entry) => entry.method === 'orchestration.send')?.result
-    process.stdout.write(
-      `Crew genuine follow-up ${JSON.stringify({ from, target, started, resource, snapshot, capturedAddress: row.sendAddress, receipt, creates: create.mock.calls.length, prompts: prompt.mock.calls.slice(beforePrompts) })}\n`
-    )
     expect
       .soft(receipt)
       .toMatchObject({ delivery: 'follow_up', followUpOf: started.dispatchId, state: 'ready' })

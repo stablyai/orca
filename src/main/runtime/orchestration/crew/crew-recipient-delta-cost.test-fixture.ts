@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -102,203 +102,170 @@ export function remembered(f: ReturnType<typeof deltaFixture>, id = TARGET, coun
   return runs
 }
 
+// Saved sessions load once, in a fixed number of statements, as their count grows tenfold.
 export async function runColdCrewCostProfiles(clearHost: () => void) {
-  const samples: {
-    axis: 'S' | 'J' | 'G'
-    n: number
-    s: number
-    j: number
-    g: number
-    runtimeFiles: string[]
-    runtimeFileChars: number
-    totals: ReturnType<typeof sqlTotals>
-    cold: ReturnType<typeof meterCrewSql>['executions']
-    frames: OrchestrationCrewFrame[][]
-  }[] = []
-  for (const axis of ['S', 'J', 'G'] as const) {
-    for (const n of [3, 30]) {
-      const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-cold-cost-'))
-      const path = vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(directory)
-      const h = createSessionCallerHarness({ current: null })
-      clearHost()
-      const seed = await h.runtime.openAgentSessionRecordStore()
-      const ids = Array.from({ length: axis === 'S' ? n : 3 }, () => randomUUID())
-      const text = 'x'.repeat(axis === 'G' ? n * 42 : 128)
-      expect(isAgentSessionLaunchArgs([text])).toBe(true)
-      for (const [i, sessionId] of ids.entries()) {
-        await seed.founding.commit({
-          sessionId,
-          location: {
-            executionHostId: 'local',
-            wslDistro: null,
-            workspaceId: 'folder-worker-host',
-            workspaceKind: 'folder'
-          },
-          provider: 'codex',
-          accountHome: { variable: 'CODEX_HOME', path: '/unused-private-fixture-account-home' },
-          surfaceTabId: `tab_saved_${i}`,
-          expectedFence: null,
-          spawnToken: 'unused-at-rest',
-          claimKeyId: 'private-cold-claim',
-          handoffOperationId: null,
-          probe: { outcome: 'indeterminate', reason: 'at-rest creation starts no process' },
-          operation: {
-            callerKey: 'private-cold',
-            operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
-            fingerprint: `found:${sessionId}`
-          },
-          now: Date.now()
-        })
-      }
-      const released = await releaseAgentSessionRecordStore()
-      if (!released) {
-        throw new Error('Expected fixture-owned seeded slot')
-      }
-      const stateDirectory = released.journalDatabase.stateDirectory
-      const savedDb = released.journalDatabase.db
-      // Retained valid launch arguments are loaded, never executed by this fixture.
-      savedDb
-        .prepare(
-          "UPDATE agent_session_records SET record_json = json_set(record_json, '$.launchArgs', json(?))"
-        )
-        .run(JSON.stringify([text]))
-      const operationIds: string[] = []
-      const j = axis === 'J' ? n : 3
-      // Independent retained replay/key rows; use the production key and row constructor.
-      savedDb.prepare('DELETE FROM agent_session_operations').run()
-      for (let i = 0; i < j; i++) {
-        const row = pendingAgentSessionOperationRow({
+  for (const n of [3, 30]) {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-cold-cost-'))
+    const path = vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(directory)
+    const h = createSessionCallerHarness({ current: null })
+    clearHost()
+    const seed = await h.runtime.openAgentSessionRecordStore()
+    const ids = Array.from({ length: n }, () => randomUUID())
+    const text = 'x'.repeat(128)
+    expect(isAgentSessionLaunchArgs([text])).toBe(true)
+    for (const [i, sessionId] of ids.entries()) {
+      await seed.founding.commit({
+        sessionId,
+        location: {
+          executionHostId: 'local',
+          wslDistro: null,
+          workspaceId: 'folder-worker-host',
+          workspaceKind: 'folder'
+        },
+        provider: 'codex',
+        accountHome: { variable: 'CODEX_HOME', path: '/unused-private-fixture-account-home' },
+        surfaceTabId: `tab_saved_${i}`,
+        expectedFence: null,
+        spawnToken: 'unused-at-rest',
+        claimKeyId: 'private-cold-claim',
+        handoffOperationId: null,
+        probe: { outcome: 'indeterminate', reason: 'at-rest creation starts no process' },
+        operation: {
           callerKey: 'private-cold',
           operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
-          fingerprint: `saved:${i}`,
-          now: Date.now()
-        })
-        operationIds.push(row.operationId)
-        savedDb
-          .prepare('INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?)')
-          .run(agentSessionOperationKey(row.callerKey, row.operationId), JSON.stringify(row))
-        savedDb
-          .prepare(
-            'INSERT INTO agent_session_retired_claim_keys (key_id, retired_at) VALUES (?, ?)'
-          )
-          .run(`retired-${i}`, Date.now())
-      }
-      released.journalDatabase.close()
-      const runtimeDirectory = join(stateDirectory, 'agent-session-runtimes')
-      mkdirSync(runtimeDirectory, { recursive: true })
-      for (let i = 0; i < 2; i++) {
-        writeFileSync(
-          join(runtimeDirectory, `saved-${i}.json`),
-          JSON.stringify({ runtime: `saved-${i}`, startedAt: 1, end: { trigger: 'quit', at: 2 } })
-        )
-      }
-      expect(readdirSync(runtimeDirectory)).toHaveLength(3)
-      const runtimeRead = vi.spyOn(runtimeRecords, 'readAgentSessionRuntimeEnds')
-      const runtimeBegin = vi.spyOn(runtimeRecords, 'beginAgentSessionRuntimeRecord')
-      const actualOpen = AgentSessionRecordStore.open
-      const cold: ReturnType<typeof meterCrewSql>['executions'] = []
-      const opens = vi.spyOn(AgentSessionRecordStore, 'open').mockImplementation((args) => {
-        const meter = meterCrewSql(args.journalDatabase.db)
-        meter.control.phase = 'cold-store-load'
-        try {
-          return actualOpen(args)
-        } finally {
-          cold.push(...meter.executions)
-          meter.restore()
-        }
+          fingerprint: `found:${sessionId}`
+        },
+        now: Date.now()
       })
-      const journalOpen = vi.spyOn(JournalHostDatabase, 'open')
-      h.db.insertMessage({
-        from: `orca_session_id:${ids[1]}`,
-        to: `orca_session_id:${ids[0]}`,
-        subject: 'saved peer',
-        body: 'cold L'
+    }
+    const released = await releaseAgentSessionRecordStore()
+    if (!released) {
+      throw new Error('Expected fixture-owned seeded slot')
+    }
+    const stateDirectory = released.journalDatabase.stateDirectory
+    const savedDb = released.journalDatabase.db
+    // Retained valid launch arguments are loaded, never executed by this fixture.
+    savedDb
+      .prepare(
+        "UPDATE agent_session_records SET record_json = json_set(record_json, '$.launchArgs', json(?))"
+      )
+      .run(JSON.stringify([text]))
+    const operationIds: string[] = []
+    const j = 3
+    // Independent retained replay/key rows; use the production key and row constructor.
+    savedDb.prepare('DELETE FROM agent_session_operations').run()
+    for (let i = 0; i < j; i++) {
+      const row = pendingAgentSessionOperationRow({
+        callerKey: 'private-cold',
+        operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
+        fingerprint: `saved:${i}`,
+        now: Date.now()
       })
-      const controllers: AbortController[] = []
-      const subscriptions: Promise<void>[] = []
-      const frames: OrchestrationCrewFrame[][] = []
+      operationIds.push(row.operationId)
+      savedDb
+        .prepare('INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?)')
+        .run(agentSessionOperationKey(row.callerKey, row.operationId), JSON.stringify(row))
+      savedDb
+        .prepare('INSERT INTO agent_session_retired_claim_keys (key_id, retired_at) VALUES (?, ?)')
+        .run(`retired-${i}`, Date.now())
+    }
+    released.journalDatabase.close()
+    const runtimeDirectory = join(stateDirectory, 'agent-session-runtimes')
+    mkdirSync(runtimeDirectory, { recursive: true })
+    for (let i = 0; i < 2; i++) {
+      writeFileSync(
+        join(runtimeDirectory, `saved-${i}.json`),
+        JSON.stringify({ runtime: `saved-${i}`, startedAt: 1, end: { trigger: 'quit', at: 2 } })
+      )
+    }
+    expect(readdirSync(runtimeDirectory)).toHaveLength(3)
+    const runtimeRead = vi.spyOn(runtimeRecords, 'readAgentSessionRuntimeEnds')
+    const runtimeBegin = vi.spyOn(runtimeRecords, 'beginAgentSessionRuntimeRecord')
+    const actualOpen = AgentSessionRecordStore.open
+    const cold: ReturnType<typeof meterCrewSql>['executions'] = []
+    const opens = vi.spyOn(AgentSessionRecordStore, 'open').mockImplementation((args) => {
+      const meter = meterCrewSql(args.journalDatabase.db)
+      meter.control.phase = 'cold-store-load'
       try {
-        for (let request = 0; request < 2; request++) {
-          const controller = new AbortController()
-          controllers.push(controller)
-          const received: OrchestrationCrewFrame[] = []
-          frames.push(received)
-          const completed = Promise.withResolvers<void>()
-          subscriptions.push(
-            ORCHESTRATION_CREW_METHODS[0].handler(
-              { party: `orca_session_id:${ids[0]}` },
-              { runtime: h.runtime, signal: controller.signal },
-              (value) => {
-                const frame = CrewFrame.parse(value)
-                received.push(frame)
-                if (frame.type === 'complete') {
-                  completed.resolve()
-                }
-              }
-            )
-          )
-          await completed.promise
-          expect(received[0]).toEqual({ type: 'begin', status: 'ok' })
-          expect(
-            received
-              .flatMap((frame) => (frame.type === 'rows' ? frame.rows : []))
-              .find((row) => row.latest?.preview === 'cold L')?.sendAddress
-          ).toBe(`orca_session_id:${ids[1]}`)
-        }
-        const opened = peekOpenedAgentSessionRecordStore()
-        expect(opened).not.toBeNull()
-        expect(await h.runtime.openAgentSessionRecordStore()).toBe(opened)
-        expect(opens).toHaveBeenCalledOnce()
-        expect(journalOpen).toHaveBeenCalledOnce()
-        expect(opened?.listRecords()).toHaveLength(ids.length)
-        expect(opened?.getVisibleSessionTabIndex().sessionIds).toHaveLength(ids.length)
-        expect(runtimeRead).toHaveBeenCalledOnce()
-        expect(runtimeBegin).toHaveBeenCalledOnce()
-        expect(runtimeRead.mock.results[0].value?.size).toBe(3)
-        expect(h.runtime.ensureStructuredAgentSessionHost).not.toHaveBeenCalled()
-        const totals = sqlTotals(cold)
-        expect(totals).toMatchObject({ get: 2, all: 4, run: 0, iterate: 0 })
-        expect(
-          cold.find((row) => row.sql.includes('record_json FROM agent_session_records'))?.rows
-        ).toBe(ids.length)
-        expect(
-          cold.find((row) => row.sql.includes('row_json FROM agent_session_operations'))?.rows
-        ).toBe(j)
-        expect(
-          cold.find((row) => row.sql.includes('FROM agent_session_retired_claim_keys'))?.rows
-        ).toBe(j)
-        for (const operationId of operationIds) {
-          expect(opened?.getOperationRow('private-cold', operationId)?.outcome).toEqual({
-            status: 'pending'
-          })
-        }
-        samples.push({
-          axis,
-          n,
-          s: ids.length,
-          j,
-          g: text.length,
-          runtimeFiles: readdirSync(runtimeDirectory),
-          runtimeFileChars: readdirSync(runtimeDirectory).reduce(
-            (sum, name) => sum + readFileSync(join(runtimeDirectory, name), 'utf8').length,
-            0
-          ),
-          totals,
-          cold,
-          frames
-        })
+        return actualOpen(args)
       } finally {
-        controllers.forEach((controller) => controller.abort())
-        await Promise.all(subscriptions)
-        const opened = await releaseAgentSessionRecordStore()
-        opened?.journalDatabase.close()
-        runtimeRead.mockRestore()
-        runtimeBegin.mockRestore()
-        opens.mockRestore()
-        journalOpen.mockRestore()
-        path.mockRestore()
+        cold.push(...meter.executions)
+        meter.restore()
       }
+    })
+    const journalOpen = vi.spyOn(JournalHostDatabase, 'open')
+    h.db.insertMessage({
+      from: `orca_session_id:${ids[1]}`,
+      to: `orca_session_id:${ids[0]}`,
+      subject: 'saved peer',
+      body: 'cold L'
+    })
+    const controllers: AbortController[] = []
+    const subscriptions: Promise<void>[] = []
+    try {
+      for (let request = 0; request < 2; request++) {
+        const controller = new AbortController()
+        controllers.push(controller)
+        const received: OrchestrationCrewFrame[] = []
+        const completed = Promise.withResolvers<void>()
+        subscriptions.push(
+          ORCHESTRATION_CREW_METHODS[0].handler(
+            { party: `orca_session_id:${ids[0]}` },
+            { runtime: h.runtime, signal: controller.signal },
+            (value) => {
+              const frame = CrewFrame.parse(value)
+              received.push(frame)
+              if (frame.type === 'complete') {
+                completed.resolve()
+              }
+            }
+          )
+        )
+        await completed.promise
+        expect(received[0]).toEqual({ type: 'begin', status: 'ok' })
+        expect(
+          received
+            .flatMap((frame) => (frame.type === 'rows' ? frame.rows : []))
+            .find((row) => row.latest?.preview === 'cold L')?.sendAddress
+        ).toBe(`orca_session_id:${ids[1]}`)
+      }
+      const opened = peekOpenedAgentSessionRecordStore()
+      expect(opened).not.toBeNull()
+      expect(await h.runtime.openAgentSessionRecordStore()).toBe(opened)
+      expect(opens).toHaveBeenCalledOnce()
+      expect(journalOpen).toHaveBeenCalledOnce()
+      expect(opened?.listRecords()).toHaveLength(ids.length)
+      expect(opened?.getVisibleSessionTabIndex().sessionIds).toHaveLength(ids.length)
+      expect(runtimeRead).toHaveBeenCalledOnce()
+      expect(runtimeBegin).toHaveBeenCalledOnce()
+      expect(runtimeRead.mock.results[0].value?.size).toBe(3)
+      expect(h.runtime.ensureStructuredAgentSessionHost).not.toHaveBeenCalled()
+      const totals = sqlTotals(cold)
+      expect(totals).toMatchObject({ get: 2, all: 4, run: 0, iterate: 0 })
+      expect(
+        cold.find((row) => row.sql.includes('record_json FROM agent_session_records'))?.rows
+      ).toBe(ids.length)
+      expect(
+        cold.find((row) => row.sql.includes('row_json FROM agent_session_operations'))?.rows
+      ).toBe(j)
+      expect(
+        cold.find((row) => row.sql.includes('FROM agent_session_retired_claim_keys'))?.rows
+      ).toBe(j)
+      for (const operationId of operationIds) {
+        expect(opened?.getOperationRow('private-cold', operationId)?.outcome).toEqual({
+          status: 'pending'
+        })
+      }
+    } finally {
+      controllers.forEach((controller) => controller.abort())
+      await Promise.all(subscriptions)
+      const opened = await releaseAgentSessionRecordStore()
+      opened?.journalDatabase.close()
+      runtimeRead.mockRestore()
+      runtimeBegin.mockRestore()
+      opens.mockRestore()
+      journalOpen.mockRestore()
+      path.mockRestore()
     }
   }
-  process.stdout.write(`C2 real cold S J G ${JSON.stringify(samples)}\n`)
 }

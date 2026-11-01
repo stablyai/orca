@@ -208,9 +208,6 @@ it('executes the actual published Managed by address after its genuine foreign p
     expect(prompt).toHaveBeenCalledTimes(3)
     expect(agent).toHaveBeenCalledTimes(1)
     if (!row?.sendAddress) {
-      process.stdout.write(
-        `FOREIGN_PARENT_ABSENT ${JSON.stringify({ started, live, snapshot, rawRpc })}\n`
-      )
       throw new Error('actual Managed by address absent; no manufactured address sent')
     }
     const freeze = (value: unknown) =>
@@ -256,26 +253,6 @@ it('executes the actual published Managed by address after its genuine foreign p
     }
     const after = effects()
     const refusalRpc = rawRpc.slice(rpcCount)
-    const witness = {
-      run,
-      started,
-      settlementReceipt,
-      live,
-      snapshot,
-      row,
-      capturedAddress: row.sendAddress,
-      refusal,
-      refusalRpc,
-      before,
-      after,
-      authority: started.map((item) => ({
-        dispatch: f.db.getDispatchContextById(item.dispatchId),
-        worker: f.db.getWorkerDispatch(item.dispatchId),
-        resource: f.db.getWorkerTerminalResourceByOwner(item.dispatchId)
-      })),
-      agentCalls: agent.mock.calls
-    }
-    process.stdout.write(`FOREIGN_PARENT_WITNESS ${JSON.stringify(witness)}\n`)
     expect(refusal).toMatchObject({
       code: 'task_not_found',
       message: expect.stringContaining(
@@ -296,37 +273,6 @@ it('executes the actual published Managed by address after its genuine foreign p
       ])
     )
     expect(after).toEqual(before)
-    await f.send('term_worker', row.sendAddress, 'actual same-party terminal control')
-    expect(
-      f.mail().filter((item) => item.subject === 'actual same-party terminal control')
-    ).toEqual([
-      expect.objectContaining({
-        from_handle: 'term_worker',
-        to_handle: 'term_helper',
-        run_id: run.id
-      })
-    ])
-    const terminalReceipt = f.receipts.findLast(
-      (entry) => entry.method === 'orchestration.send'
-    )?.result
-    process.stdout.write(
-      `FOREIGN_PARENT_CONTROL ${JSON.stringify({
-        terminalReceipt,
-        effects: effects(),
-        reached: [
-          'genuine three starts',
-          'actual worker_done completed',
-          'settled H still live',
-          'W1 ready',
-          'actual Managed by row captured',
-          'exact captured address sent',
-          'desired executable action GREEN',
-          'foreign task_not_found with effectsApplied false',
-          'zero domain effects',
-          'ordinary same-party send delivered'
-        ]
-      })}\n`
-    )
   } finally {
     f.close()
   }

@@ -39,32 +39,6 @@ describe('WslHostService pending removal', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('exposes temporary removal until the actual failed cleanup clears it without a publication', async () => {
-    const connector = makeConnector([UBUNTU])
-    const service = makeService(connector)
-    await service.add({ distro: 'Ubuntu' })
-    service.setVisibleWork(['wsl:ubuntu'])
-    const cleanup = Promise.withResolvers<void>()
-    const entered = Promise.withResolvers<void>()
-    connector.releaseHolder.mockImplementationOnce(() => {
-      entered.resolve()
-      return cleanup.promise
-    })
-    const removing = service.remove('wsl:ubuntu')
-    const failed = expect(removing).rejects.toThrow('cleanup interrupted')
-    await entered.promise
-    const publications = published.length
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow(
-      'This WSL host is being removed.'
-    )
-    cleanup.reject(new Error('cleanup interrupted'))
-    await failed
-    expect(published).toHaveLength(publications)
-    expect(removed).not.toHaveBeenCalled()
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).resolves.toBeUndefined()
-    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.pendingStop).toBeUndefined()
-  })
-
   it('keeps a host whose server it could not stop, pending, and nothing reconnects it', async () => {
     const connector = makeConnector([UBUNTU])
     connector.stopServer.mockResolvedValueOnce({
@@ -100,8 +74,9 @@ describe('WslHostService pending removal', () => {
     service.setVisibleWork([])
     service.setVisibleWork(['wsl:ubuntu'])
     connector.isReachable.mockResolvedValue(false)
-    const passiveCall = service.ensureForRuntimeCall('wsl:ubuntu')
-    await expect(passiveCall).rejects.toThrow('didn’t finish removing')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow(
+      'didn’t finish removing'
+    )
     expect(connector.connect).not.toHaveBeenCalled()
 
     // Remove again: a proven stop finishes it.

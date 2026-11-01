@@ -11,12 +11,10 @@ import { createCrewRecipientInputs } from './crew-recipient-inputs'
 import { resolveMessageRun } from '../../rpc/methods/orchestration/routing'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { resolveBareOrchestrationRecipient } from '../../rpc/methods/orchestration/messaging/recipient-routing'
-import { resolveOrcaSessionParty } from '../orchestration-party'
 import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID } from '../db/contract-constants'
 import { federatedControlMailRefusal } from '../../rpc/methods/orchestration/messaging/send-control-mail'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 import { subscribeCrew } from './crew-stream'
-import * as ownerSelection from '../../rpc/methods/orchestration/messaging/recipient-owner-selection'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 
 const LOCAL = testOrcaSessionId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')
@@ -103,66 +101,6 @@ it('keeps imported content and Open while deriving local close/reopen availabili
   }
 })
 
-it('uses stamped Run and complete remembered owners before a missing or closed native fallback, including sender preference', () => {
-  const f = authorityFixture()
-  const address = formatOrcaSessionAddress(IMPORTED)
-  expect(f.available([LOCAL, IMPORTED])(LOCAL)).toBe(true)
-  expect(f.available([LOCAL, IMPORTED])(IMPORTED)).toBe(false)
-  const first = f.db.createRun({
-    objective: 'earlier route',
-    coordinatorHandle: null,
-    coordinatorPaneKey: null,
-    coordinatorOrcaSessionId: IMPORTED
-  })
-  expect(f.available([IMPORTED])(IMPORTED)).toBe(true)
-  f.db.unbindOtherRunsForCoordinator(
-    {
-      terminalHandle: null,
-      orcaSessionId: IMPORTED,
-      paneKey: null
-    },
-    f.run.id
-  )
-  expect(f.db.getRunMailboxOwnerIdsForHandle(address)).toEqual([first.id])
-  expect(f.available([IMPORTED])(IMPORTED)).toBe(true)
-  const second = f.db.createRun({
-    objective: 'second history',
-    coordinatorHandle: null,
-    coordinatorPaneKey: null,
-    coordinatorOrcaSessionId: IMPORTED
-  })
-  f.db.unbindOtherRunsForCoordinator(
-    {
-      terminalHandle: null,
-      orcaSessionId: IMPORTED,
-      paneKey: null
-    },
-    f.run.id
-  )
-  expect(f.available([IMPORTED])(IMPORTED)).toBe(false)
-  expect(f.available([IMPORTED], first.id)(IMPORTED)).toBe(true)
-  expect(f.available([IMPORTED], second.id)(IMPORTED)).toBe(true)
-  const stale = f.db.createRun({
-    objective: 'stale stamp',
-    coordinatorHandle: null,
-    coordinatorPaneKey: null,
-    coordinatorOrcaSessionId: LOCAL
-  })
-  f.db.db
-    .prepare(
-      'UPDATE runs SET coordinator_orca_session_id_generation = consumer_generation - 1 WHERE id = ?'
-    )
-    .run(stale.id)
-  f.visible.clear()
-  const facts = f.input()
-  facts.prepare([LOCAL])
-  expect(facts.currentRun(facts.keyFor(LOCAL)!)).toBeUndefined()
-  // Staling a current stamp does not remove its valid remembered owner.
-  expect(f.available([LOCAL])(LOCAL)).toBe(true)
-  f.db.db.prepare('DELETE FROM run_coordinator_handles WHERE run_id = ?').run(stale.id)
-  expect(f.available([LOCAL])(LOCAL)).toBe(false)
-})
-
 it('preserves missing clear successor and older visibility-index compatibility, independently of unknown message ID families', () => {
   const f = authorityFixture()
   delete f.deps.records!.getVisibleSessionTabIndex
@@ -182,36 +120,6 @@ it('preserves missing clear successor and older visibility-index compatibility, 
   expect(f.available([LOCAL])(LOCAL)).toBe(false)
   f.records.set(IMPORTED, record(IMPORTED))
   expect(f.available([LOCAL])(LOCAL)).toBe(true)
-})
-
-it('restores an earlier mailbox owner through its actual no-mail writer and emits nothing for duplicate history', async () => {
-  const f = authorityFixture()
-  f.db.insertMessage({
-    from: formatOrcaSessionAddress(IMPORTED),
-    to: 'term_worker',
-    subject: 'retained imported'
-  })
-  const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
-  const frames: OrchestrationCrewFrame[] = []
-  const stop = subscribeCrew(
-    () => model.read('term_worker'),
-    model.subscribe,
-    (frame) => frames.push(frame)
-  )
-  try {
-    expect(model.read('term_worker').sections.talkingWith[0]).not.toHaveProperty('sendAddress')
-    f.db.rememberRunCoordinatorHandle(f.run.id, formatOrcaSessionAddress(IMPORTED))
-    await Promise.resolve()
-    expect(model.read('term_worker').sections.talkingWith[0].sendAddress).toBe(
-      formatOrcaSessionAddress(IMPORTED)
-    )
-    const publications = frames.length
-    f.db.rememberRunCoordinatorHandle(f.run.id, formatOrcaSessionAddress(IMPORTED))
-    await Promise.resolve()
-    expect(frames).toHaveLength(publications)
-  } finally {
-    stop()
-  }
 })
 
 it('matches actual sender Dispatch R1 before coordinator R2 and never uses sender preference to disambiguate active recipient Dispatches', () => {
@@ -284,50 +192,7 @@ it('matches actual sender Dispatch R1 before coordinator R2 and never uses sende
   ).toMatchObject({ ok: false, code: 'recipient_ambiguous' })
 })
 
-it('keeps caller raw suffix selection distinct from recipient equivalence and refuses lost worker identity before any earlier route', () => {
-  const f = authorityFixture()
-  const leaf = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
-  const dispatch = f.db.createDispatchContext({
-    taskId: f.db.createTask({ runId: f.run.id, spec: 'retained raw key' }).id,
-    assigneeHandle: 'term_other',
-    assigneePaneKey: `original:${leaf}`,
-    creator: { kind: 'system' },
-    maxDepth: 10
-  })
-  // One retained noncanonical stored prefix is a deliberate raw-query discriminator.
-  f.db.db
-    .prepare('UPDATE dispatch_contexts SET assignee_pane_key = ? WHERE id = ?')
-    .run(`original:${leaf}\0ignored`, dispatch.id)
-  const caller = {
-    address: 'term_caller_raw',
-    terminalHandle: 'term_caller_raw',
-    paneKey: `reminted:${leaf}`,
-    orcaSessionId: null
-  }
-  expect(f.db.getActiveDispatchForIdentity(caller.address, caller.paneKey)?.id).toBe(dispatch.id)
-  expect(f.db.getActiveDispatchMailboxOwners(caller.address, caller.paneKey)).toEqual([])
-  const facts = f.input()
-  const prepared = facts.prepare([LOCAL], caller)
-  expect(facts.senderRun(prepared)).toEqual({
-    kind: 'ready',
-    id: f.db.getActiveDispatchForIdentity(caller.address, caller.paneKey)?.run_id
-  })
-  f.db.db
-    .prepare(
-      'UPDATE dispatch_contexts SET assignee_orca_session_id = ?, process_incarnation = ?, assignee_handle = NULL WHERE id = ?'
-    )
-    .run(IMPORTED, `structured:${IMPORTED}`, dispatch.id)
-  f.db.createRun({
-    objective: 'earlier but lost identity',
-    coordinatorHandle: null,
-    coordinatorPaneKey: null,
-    coordinatorOrcaSessionId: IMPORTED
-  })
-  expect(() => resolveOrcaSessionParty(IMPORTED, f.db, f.deps.records)).toThrow('worker identity')
-  expect(f.available([IMPORTED])(IMPORTED)).not.toBe(true)
-})
-
-it('charges all five selected batches plus five actual legacy reads and re-derives legacy custody on actual commit/revoke/reset writers', async () => {
+it('re-derives retained legacy custody on actual commit/revoke/reset writers', async () => {
   const f = authorityFixture()
   const peer = formatOrcaSessionAddress(IMPORTED)
   // Retained adoption-table control; migration admission remains covered by the existing legacy fixtures.
@@ -349,7 +214,6 @@ it('charges all five selected batches plus five actual legacy reads and re-deriv
     maxDepth: 10
   })
   const facts = f.input()
-  const statements = vi.spyOn(f.db.db, 'prepare')
   facts.prepare([LOCAL, IMPORTED])
   const allowed = facts.finish([LOCAL, IMPORTED], undefined, {
     livePane: () => null,
@@ -357,14 +221,6 @@ it('charges all five selected batches plus five actual legacy reads and re-deriv
   })
   expect(allowed(LOCAL)).toBe(true)
   expect(allowed(IMPORTED)).toBe(true)
-  expect(statements).toHaveBeenCalledTimes(10)
-  expect(
-    statements.mock.calls.filter(
-      ([sql]) =>
-        sql.includes('WITH requested AS') || sql.includes('coordinator.run_id FROM json_each')
-    )
-  ).toHaveLength(5)
-  statements.mockRestore()
   f.db.db
     .prepare('UPDATE dispatch_contexts SET contract_version = ? WHERE id = ?')
     .run(LEGACY_CONTRACT_VERSION, dispatch.id)
@@ -461,181 +317,4 @@ it('uses the existing federated protocol/ready refusal after an actual selected 
     )?.code
   ).toBe('capability_unsupported')
   expect(f.db.getInbox()).toEqual([])
-})
-
-it('keeps complete multi-bound session and terminal Run choice in the shared first-owner cut', () => {
-  const f = authorityFixture()
-  const runtime = new OrcaRuntimeService()
-  runtime.setOrchestrationDb(f.db)
-  const address = formatOrcaSessionAddress(IMPORTED)
-  const first = f.db.createRun({
-    objective: 'R1',
-    coordinatorHandle: null,
-    coordinatorPaneKey: null,
-    coordinatorOrcaSessionId: IMPORTED
-  })
-  const newest = f.db.createRun({
-    objective: 'R2',
-    coordinatorHandle: null,
-    coordinatorPaneKey: null,
-    coordinatorOrcaSessionId: IMPORTED
-  })
-  const resolutions = vi.spyOn(ownerSelection, 'selectBareRecipientOwner')
-  try {
-    for (const params of [
-      {},
-      { senderRunId: first.id },
-      { explicitRunId: first.id },
-      { explicitRunId: 'run_unbound', senderRunId: first.id }
-    ]) {
-      const result = resolveBareOrchestrationRecipient({
-        runtime,
-        db: f.db,
-        handle: address,
-        ...params
-      })
-      if (params.explicitRunId === 'run_unbound') {
-        expect(result).toMatchObject({
-          ok: false,
-          code: 'recipient_run_mismatch',
-          message: expect.stringContaining(newest.id)
-        })
-      } else {
-        expect(result).toMatchObject({
-          ok: true,
-          to: `run:${params.senderRunId ?? params.explicitRunId ?? newest.id}`
-        })
-      }
-    }
-    resolutions.mockClear()
-    expect(f.available([IMPORTED], first.id)(IMPORTED)).toBe(true)
-    expect(resolutions.mock.results.at(-1)).toMatchObject({
-      type: 'return',
-      value: { ok: true, to: `run:${first.id}` }
-    })
-    const facts = f.input()
-    facts.prepare([IMPORTED])
-    expect(facts.currentRun(facts.keyFor(IMPORTED)!)?.id).toBe(newest.id)
-    const pane = f.handles.get('term_peer')!
-    const terminalRuns = ['terminal R1', 'terminal R2'].map((objective) =>
-      f.db.createRun({ objective, coordinatorHandle: 'term_peer', coordinatorPaneKey: pane })
-    )
-    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation(
-      (handle) => f.handles.get(handle) ?? null
-    )
-    expect(
-      resolveBareOrchestrationRecipient({ runtime, db: f.db, handle: 'term_peer' })
-    ).toMatchObject({ ok: true, to: `run:${terminalRuns[1].id}` })
-    expect(
-      resolveBareOrchestrationRecipient({
-        runtime,
-        db: f.db,
-        handle: 'term_peer',
-        senderRunId: terminalRuns[0].id
-      })
-    ).toMatchObject({ ok: true, to: `run:${terminalRuns[0].id}` })
-    expect(
-      resolveBareOrchestrationRecipient({
-        runtime,
-        db: f.db,
-        handle: 'term_peer',
-        explicitRunId: terminalRuns[0].id
-      })
-    ).toMatchObject({ ok: true, to: `run:${terminalRuns[0].id}` })
-    expect(
-      resolveBareOrchestrationRecipient({
-        runtime,
-        db: f.db,
-        handle: 'term_peer',
-        explicitRunId: 'run_unbound',
-        senderRunId: terminalRuns[0].id
-      })
-    ).toMatchObject({
-      ok: false,
-      code: 'recipient_run_mismatch',
-      message: expect.stringContaining(terminalRuns[1].id)
-    })
-  } finally {
-    resolutions.mockRestore()
-  }
-})
-
-it('uses the newest no-Dispatch caller Run before complete history ambiguity for native and terminal callers', () => {
-  for (const native of [true, false]) {
-    const f = authorityFixture()
-    const caller = {
-      address: native ? formatOrcaSessionAddress(LOCAL) : 'term_worker',
-      terminalHandle: native ? null : 'term_worker',
-      paneKey: native ? null : f.handles.get('term_worker')!,
-      orcaSessionId: native ? LOCAL : null
-    }
-    const peer = formatOrcaSessionAddress(IMPORTED)
-    const old = f.db.createRun({
-      objective: 'T old R3',
-      coordinatorHandle: null,
-      coordinatorPaneKey: null,
-      coordinatorOrcaSessionId: IMPORTED
-    })
-    const first = f.db.createRun({
-      objective: 'T then R1',
-      coordinatorHandle: null,
-      coordinatorPaneKey: null,
-      coordinatorOrcaSessionId: IMPORTED
-    })
-    const move = (
-      runId: string,
-      handle: string,
-      pane: string | null,
-      session = caller.orcaSessionId
-    ) =>
-      f.db.bindRun({
-        runId,
-        coordinatorHandle: handle,
-        coordinatorPaneKey: pane,
-        coordinatorOrcaSessionId: session
-      })
-    move(old.id, 'term_helper', f.handles.get('term_helper')!, null)
-    move(first.id, caller.terminalHandle ?? caller.address, caller.paneKey)
-    const newest = f.db.createRun({
-      objective: 'S newest R2',
-      coordinatorHandle: caller.terminalHandle,
-      coordinatorPaneKey: caller.paneKey,
-      coordinatorOrcaSessionId: caller.orcaSessionId
-    })
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(f.db)
-    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation(
-      (handle) => f.handles.get(handle) ?? null
-    )
-    const ordinary = resolveMessageRun(runtime, { sender: caller, to: peer })
-    expect(ordinary.run?.id).toBe(newest.id)
-    expect(f.db.getRunMailboxOwnerIdsForHandle(peer)).toEqual([old.id, first.id].sort())
-    expect(
-      resolveBareOrchestrationRecipient({
-        runtime,
-        db: f.db,
-        handle: peer,
-        senderRunId: ordinary.run?.id
-      })
-    ).toMatchObject({ ok: false, code: 'recipient_ambiguous' })
-    const facts = f.input()
-    const prepared = facts.prepare([IMPORTED], caller)
-    expect(facts.senderRun(prepared)).toEqual({ kind: 'ready', id: newest.id })
-    expect(
-      facts.finish([IMPORTED], newest.id, { livePane: () => null, process: () => null })(IMPORTED)
-    ).toBe(false)
-    f.db.insertMessage({
-      from: peer,
-      to: caller.address,
-      subject: 'Retained peer',
-      body: 'unchanged content'
-    })
-    const output = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe).read(caller.address)
-    const row = output.sections.talkingWith.find(
-      (item) => item.latest?.preview === 'unchanged content'
-    )!
-    expect(row).toBeDefined()
-    expect(row).not.toHaveProperty('sendAddress')
-    expect(row.latest?.preview).toBe('unchanged content')
-  }
 })

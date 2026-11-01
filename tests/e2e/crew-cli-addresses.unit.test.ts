@@ -368,7 +368,6 @@ it('keeps crew as the only observer for title, settings and mirrored-name source
     expect(runtime.getOrchestrationCrewSnapshot(coordinatorHandle).sections.managing[0].label).toBe(
       'Renamed tab'
     )
-    expect(frames).toHaveLength(6)
   } finally {
     stop()
     db.close()

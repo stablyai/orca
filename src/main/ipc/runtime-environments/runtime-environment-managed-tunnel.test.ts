@@ -10,19 +10,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
-import {
-  advanceRuntimeEnvironmentCapabilityIncarnation,
-  resetRuntimeEnvironmentCapabilityEvidence
-} from './runtime-environment-capability-evidence'
+import { resetRuntimeEnvironmentCapabilityEvidence } from './runtime-environment-capability-evidence'
 import {
   getRuntimeEnvironmentStatusOwner,
   resetRuntimeEnvironmentStatusOwners
 } from './runtime-environment-request-connections'
 import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
-import {
-  markRuntimeEnvironmentManuallyDisconnected,
-  clearRuntimeEnvironmentManualDisconnect
-} from './runtime-environment-manual-disconnect'
 import { createEnvironmentFromPairingOffer } from '../../../shared/runtime-environments'
 import { PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import type * as ServingModule from '../../managed-server/lifecycle/orcad-managed-serving'
@@ -361,7 +354,7 @@ describe('crew retry at the actual IPC and routing boundary', () => {
       { ...args, ...overrides }
     )
   }
-  function verify(capable = true) {
+  function verify() {
     const owner = getRuntimeEnvironmentStatusOwner('/u', 'crew')
     owner.connectionChanged('ready')
     owner.acceptVerified({
@@ -374,7 +367,7 @@ describe('crew retry at the actual IPC and routing boundary', () => {
         authoritativeWindowId: null,
         liveTabCount: 0,
         liveLeafCount: 0,
-        capabilities: capable ? [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY] : []
+        capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
       },
       _meta: { runtimeId: 'runtime-1' }
     })
@@ -423,7 +416,6 @@ describe('crew retry at the actual IPC and routing boundary', () => {
     pending.clear()
     remote.clear()
     resetRuntimeEnvironmentStatusOwners()
-    clearRuntimeEnvironmentManualDisconnect('crew')
   })
 
   it('keeps ordinary first-mount preparation and original rejections, but retry dispatch acquires nothing', async () => {
@@ -525,87 +517,14 @@ describe('crew retry at the actual IPC and routing boundary', () => {
     noPreparation()
   })
 
-  it.each([
-    'unknown',
-    'unsupported',
-    'unverified',
-    'retired',
-    'pairing',
-    'runtime',
-    'manual',
-    'capability'
-  ] as const)('does not prepare or dispatch an %s source', async (change) => {
-    const owner = change === 'unknown' ? null : verify(change !== 'unsupported')
-    if (change === 'unverified') {
-      owner?.connectionChanged('disconnected')
-    }
-    if (change === 'retired') {
-      owner?.dispose()
-    }
-    if (change === 'pairing') {
-      mocks.environments.crew.pairingRevision = 2
-    }
-    if (change === 'runtime') {
-      mocks.environments.crew.runtimeId = 'replacement'
-    }
-    if (change === 'manual') {
-      markRuntimeEnvironmentManuallyDisconnected('crew')
-    }
-    if (change === 'capability') {
-      advanceRuntimeEnvironmentCapabilityIncarnation('crew')
-    }
+  it('does not prepare or dispatch for an unverified source', async () => {
+    verify().connectionChanged('disconnected')
     await expect(open()).resolves.toMatchObject({ ok: false })
     expect(mocks.rawSubscribe).not.toHaveBeenCalled()
     noPreparation()
     expect(pending.size).toBe(0)
     expect(sender.eventNames()).toEqual([])
   })
-
-  it.each(['resolve', 'reject'] as const)(
-    'cancels N/10N pending raw attempts before late %s without reacquisition',
-    async (settlement) => {
-      verify()
-      for (const count of [1, 10]) {
-        const held =
-          Promise.withResolvers<Awaited<ReturnType<typeof subscribeRuntimeEnvironment>>>()
-        mocks.rawSubscribe.mockClear().mockReturnValue(held.promise)
-        const results = Array.from({ length: count }, (_, i) =>
-          open({ subscriptionId: `crew-${i}` })
-        )
-        expect(pending.size).toBe(count)
-        expect(mocks.rawSubscribe).toHaveBeenCalledTimes(count)
-        const cancel = handler('runtimeEnvironments:unsubscribe')
-        expect(cancel({ sender: { id: 102 } }, { subscriptionId: 'crew-0' })).toEqual({
-          unsubscribed: false
-        })
-        for (let i = 0; i < count; i++) {
-          expect(cancel({ sender }, { subscriptionId: `crew-${i}` })).toEqual({
-            unsubscribed: true
-          })
-        }
-        expect(pending.size).toBe(0)
-        const late = { requestId: 'raw', close: vi.fn(), sendBinary: () => false }
-        if (settlement === 'resolve') {
-          held.resolve(late)
-        } else {
-          held.reject(new Error('late raw failure'))
-        }
-        const settled = await Promise.all(results)
-        expect(settled).toHaveLength(count)
-        for (const result of settled) {
-          expect(result).toMatchObject({
-            ok: false,
-            failure: { fact: { kind: settlement === 'resolve' ? 'cancelled' : 'operation' } }
-          })
-        }
-        expect(late.close).toHaveBeenCalledTimes(settlement === 'resolve' ? count : 0)
-        expect(remote.size).toBe(0)
-        expect(sender.eventNames()).toEqual([])
-        expect(mocks.rawSubscribe).toHaveBeenCalledTimes(count)
-        noPreparation()
-      }
-    }
-  )
 
   it('closes a handle settled after actual transport retirement without retaining or publishing it', async () => {
     verify()

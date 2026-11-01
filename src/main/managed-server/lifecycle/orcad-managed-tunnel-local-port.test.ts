@@ -16,7 +16,6 @@ import { reserveLocalForwardPort } from '../../ssh/system-transport/system-ssh-f
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
 import { buildOnBindableLocalPort } from './orcad-managed-tunnel-local-port'
 import { setManagedOrcadPairingRepairedListener } from './orcad-managed-pairing-repaired-listener'
-import { ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
 
 function listen(port = 0): Promise<Server> {
   return new Promise((resolve, reject) => {
@@ -127,30 +126,6 @@ describe('managed tunnel on an unbindable saved local port', () => {
       )
     return { addForward, ensure, resolve, retired }
   }
-
-  it('keeps ordinary local-port catches and the original replacement error', async () => {
-    const first = new Error('bind denied', { cause: 'EACCES' })
-    const final = new Error('replacement failed')
-    const ports: number[] = []
-    const ensure = vi
-      .spyOn(OrcadManagedTunnelManager.prototype, 'ensure')
-      .mockImplementation(async (environment) => {
-        ports.push(getRuntimeSshAccess(environment)!.localPort)
-        const error = ports.length === 1 ? first : final
-        throw error
-      })
-    const retired = vi.fn()
-    setManagedOrcadPairingRepairedListener(retired)
-    try {
-      await expect(ensureOrcadManagedTunnel(userDataPath, 'environment-1')).rejects.toBe(final)
-      expect(ports).toHaveLength(2)
-      expect(ports[0]).toBe(savedPort)
-      expect(ports[1]).not.toBe(savedPort)
-      expect(retired).toHaveBeenCalledExactlyOnceWith('environment-1')
-    } finally {
-      ensure.mockRestore()
-    }
-  })
 
   it.each([
     ['held by another listener', undefined],

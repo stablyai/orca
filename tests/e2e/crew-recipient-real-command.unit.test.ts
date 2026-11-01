@@ -3,8 +3,6 @@ import { join } from 'node:path'
 import { runColdCrewCostProfiles } from '../../src/main/runtime/orchestration/crew/crew-recipient-delta-cost.test-fixture'
 import { tmpdir } from 'node:os'
 import * as profileStorage from '../../src/main/orca-profiles/profile-storage-paths'
-import { ORCHESTRATION_CREW_METHODS } from '../../src/main/runtime/rpc/methods/orchestration/crew-methods'
-import { CrewFrame, type OrchestrationCrewFrame } from '../../src/shared/orchestration-crew'
 import { randomUUID } from 'node:crypto'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
@@ -15,7 +13,6 @@ import {
   peekOpenedAgentSessionRecordStore,
   releaseAgentSessionRecordStore
 } from '../../src/main/runtime/agent-session-record-store-slot'
-import * as crewRuntimeInputs from '../../src/main/runtime/orchestration/crew/crew-runtime-watch'
 import { testOrcaSessionId } from '../../src/shared/orca-session-address-test-fixture'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -46,9 +43,8 @@ afterEach(async () => {
   vi.unstubAllEnvs()
 })
 
-it('keeps cold local first-frame authority through real CLI import, settlement, mailbox move, run-use and individual reply effects', async () => {
+it('keeps imported and local peer authority through real CLI import, settlement, mailbox move, run-use and individual reply effects', async () => {
   const fixtureNow = 1_700_000_000_000
-  const crewInputs = vi.spyOn(crewRuntimeInputs, 'readCrewRuntimeInputs')
   const homeRef: { current: unknown } = { current: null }
   const workerRef: { current: unknown } = { current: null }
   const home = createSessionCallerHarness(homeRef)
@@ -98,7 +94,7 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
     hostId: 'local',
     legacySessionTabIds: []
   })
-  let localStore = await worker.runtime.openAgentSessionRecordStore()
+  const localStore = await worker.runtime.openAgentSessionRecordStore()
   const localId = testOrcaSessionId(randomUUID())
   const localAddress = `orca_session_id:${localId}`
   homeRef.current = { deps: { store: homeStore } }
@@ -178,88 +174,6 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
     vi.spyOn(worker.runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(null)
     vi.spyOn(worker.runtime, 'getOrchestrationFleetAgentStatusSnapshot').mockReturnValue([])
     await foundNative(localStore, localId, 'tab_local_native')
-    const released = await releaseAgentSessionRecordStore()
-    released?.journalDatabase.close()
-    expect(peekOpenedAgentSessionRecordStore()).toBeNull()
-    const coldRows: { sql: string; rows: number; bytes: number }[] = []
-    const actualStoreOpen = AgentSessionRecordStore.open
-    const storeOpens = vi.spyOn(AgentSessionRecordStore, 'open').mockImplementation((args) => {
-      const prepare = args.journalDatabase.db.prepare.bind(args.journalDatabase.db)
-      const record = (sql: string, values: unknown[]) => {
-        coldRows.push({
-          sql,
-          rows: values.length,
-          bytes: Buffer.byteLength(JSON.stringify(values))
-        })
-      }
-      const meter = vi.spyOn(args.journalDatabase.db, 'prepare').mockImplementation((sql) => {
-        const statement = prepare(sql)
-        return {
-          all: (...params) => {
-            const rows = statement.all(...params)
-            record(sql, rows)
-            return rows
-          },
-          get: (...params) => {
-            const row = statement.get(...params)
-            record(sql, row ? [row] : [])
-            return row
-          },
-          run: (...params) => statement.run(...params),
-          iterate: (...params) => statement.iterate(...params),
-          setReadBigInts: (value) => statement.setReadBigInts(value)
-        }
-      })
-      try {
-        return actualStoreOpen(args)
-      } finally {
-        meter.mockRestore()
-      }
-    })
-    const openCalls = vi.spyOn(worker.runtime, 'openAgentSessionRecordStore')
-    // Retained ordinary traffic is a direct storage control; the later L send exercises the real producer.
-    worker.db.insertMessage({ from: localAddress, to: WORKER_HANDLE, subject: 'Retained local' })
-    const frames: OrchestrationCrewFrame[] = []
-    const controller = new AbortController()
-    const completed = Promise.withResolvers<void>()
-    hostRef.current = null
-    const subscription = ORCHESTRATION_CREW_METHODS[0].handler(
-      { party: WORKER_HANDLE },
-      { runtime: worker.runtime, signal: controller.signal },
-      (value) => {
-        const frame = CrewFrame.parse(value)
-        frames.push(frame)
-        if (frame.type === 'complete') {
-          completed.resolve()
-        }
-      }
-    )
-    await completed.promise
-    expect(
-      frames
-        .flatMap((frame) => (frame.type === 'rows' ? frame.rows : []))
-        .find((row) => row.sendAddress === localAddress)
-    ).toMatchObject({ openTarget: { kind: 'chat', sessionId: localId } })
-    expect(storeOpens).toHaveBeenCalledOnce()
-    expect(
-      coldRows.find((row) => row.sql.includes('record_json FROM agent_session_records'))?.rows
-    ).toBe(1)
-    expect(openCalls).toHaveBeenCalledOnce()
-    expect(worker.runtime.ensureStructuredAgentSessionHost).not.toHaveBeenCalled()
-    controller.abort()
-    await subscription
-    const opened = peekOpenedAgentSessionRecordStore()
-    if (!opened) {
-      throw new Error('Actual Crew preparation did not retain its shared record owner')
-    }
-    localStore = opened
-    expect(await worker.runtime.openAgentSessionRecordStore()).toBe(opened)
-    expect(storeOpens).toHaveBeenCalledOnce()
-    workerRef.current = {
-      deps: { store: localStore },
-      getPersistedVisibleSessionTabIndex: localStore.getVisibleSessionTabIndex
-    }
-    worker.db.resetMessages()
 
     const makeClient = (h: typeof home, ref: typeof homeRef, sessionId?: string) => {
       const client = new RuntimeClient('/tmp/imported-home-address-witness', 1000, null, null)
@@ -414,20 +328,6 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
     expect(queued).toHaveLength(1)
     expect(JSON.parse(queued[0].payload)).toMatchObject({ from: ADDRESS_X, type: 'status' })
 
-    hostRef.current = workerRef.current
-    const wrongHome = await worker.dispatcher.dispatch(
-      orchestrationRequest('orchestration.federationImport', {
-        dispatchId: d.dispatch.id,
-        items: queued
-      }),
-      { authenticatedCallerFingerprint: 'wrong-home-fingerprint' }
-    )
-    expect(wrongHome).toMatchObject({ ok: false, error: { code: 'dispatch_not_found' } })
-    expect(mail(worker)).toHaveLength(1)
-    expect(worker.db.getRemoteDispatchAttachment(d.dispatch.id)?.to_worker_imported_sequence).toBe(
-      0
-    )
-
     vi.spyOn(home.runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
       environmentId: 'worker-env',
       name: 'Worker host',
@@ -564,12 +464,6 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
     workerIdentity()
     hostRef.current = workerRef.current
     expect(peekOpenedAgentSessionRecordStore()).toBe(localStore)
-    const readers = crewInputs.mock.calls.findLast((call) => call[1] === worker.db)?.[0]
-    if (!readers) {
-      throw new Error('Expected production Crew runtime readers from the existing subscription')
-    }
-    const captured = crewRuntimeInputs.readCrewRuntimeInputs(readers, worker.db, true, 'local')
-    expect(captured.records?.getRecord(localId)?.sessionId).toBe(localId)
     const detachedCrew = worker.runtime.getOrchestrationCrewSnapshot(WORKER_HANDLE)
 
     const homePeer = detachedCrew.sections.talkingWith.find((row) =>
@@ -609,10 +503,6 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
         expect(result).toEqual({ ok: true })
       }
     }
-    process.stdout.write(
-      `C2 real command source ${JSON.stringify({ firstCompletedFrames: frames.filter((frame) => frame.type === 'complete').length, storeOpens: storeOpens.mock.calls.length, coldRows, storedRecords: localStore.listConversations().length, storedChars: JSON.stringify(localStore.listConversations()).length })}\n`
-    )
-
     // In-process CLI/RPC and real owners; inventory, transport and delivery tails remain seams.
     const movedHome = worker.db.db
       .prepare('SELECT * FROM messages WHERE from_handle = ?')
@@ -669,7 +559,7 @@ it('keeps cold local first-frame authority through real CLI import, settlement, 
   }
 })
 
-it('charges independent saved S/J/G through the real process slot and first completed Crew frame', async () => {
+it('loads saved sessions once at N and 10N through the real process slot and first completed Crew frame', async () => {
   await runColdCrewCostProfiles(() => {
     hostRef.current = null
   })

@@ -73,18 +73,5 @@ it('captures actual raw naming reads once at N/10N and preserves naming preceden
     session.tabsByWorktree = { workspace: [{ id: 'tab_term_0', customTitle: 'Changed' }] }
     expect(captured(parties[0], 'Task', null)).toBe(expected[0])
     expect(names.captureCrewInputs()(parties[0], 'Task', null)).toBe('Changed')
-    console.log(
-      'crew raw naming operations',
-      JSON.stringify({
-        population,
-        consumers: population,
-        workspace: 1,
-        hookSnapshots: 1,
-        handles: population,
-        ptys: population,
-        panes: population,
-        titles: population
-      })
-    )
   }
 })
