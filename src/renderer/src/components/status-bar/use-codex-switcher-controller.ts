@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { useAppStore } from '../../store'
-import { defaultScopeHost } from '@/lib/default-creation-host'
-import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
+import type { AccountOwner } from '@/lib/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import {
-  fetchProviderAccountsSnapshot,
+  emptyCodexAccountsState,
   selectCodexProviderAccount
 } from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
@@ -34,19 +32,15 @@ import {
   resolveCodexStatusAccountState
 } from './status-bar-codex-accounts'
 import { signInCodexAccount } from './codex-sign-in-action'
+import { useProviderAccountList } from './use-provider-account-list'
 
-export function useCodexSwitcherController(codex: ProviderRateLimits) {
+export function useCodexSwitcherController(codex: ProviderRateLimits, owner: AccountOwner) {
   const [open, setOpen] = useState(false)
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
   const [skipFutureResetConfirm, setSkipFutureResetConfirm] = useState(false)
-  const [accounts, setAccounts] = useState<CodexRateLimitAccountsState>({
-    accounts: [],
-    activeAccountId: null
-  })
   const [isSwitching, setIsSwitching] = useState(false)
   const [isRedeemingReset, setIsRedeemingReset] = useState(false)
   const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
-  const mountedRef = useRef(true)
   const menuOpenRef = useRef(open)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -60,7 +54,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const { target: runtimeTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
+  const { target: runtimeTarget, wslHostDistro } = owner
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
@@ -75,42 +69,21 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     runtimeTarget
   )
   const codexAccountSyncKey = useAppStore((s) => getCodexAccountSyncKey(s.settings))
+  const { accounts, setAccounts, mountedRef } = useProviderAccountList(
+    'codex',
+    runtimeTarget,
+    codexAccountSyncKey,
+    emptyCodexAccountsState()
+  )
   const accountState = resolveCodexStatusAccountState(
     settings,
     accounts,
     activeRuntimeEnvironmentId
   )
 
-  // Why: keyed on owner id, not settings identity, so routine settings mutations don't re-run the remote snapshot fetch.
-  const loadAccounts = useCallback(async () => {
-    const snapshot = await fetchProviderAccountsSnapshot(runtimeTarget)
-    // Why: a failed Codex half is a substituted empty roster; keep prior state.
-    if (snapshot.failedProviders?.includes('codex')) {
-      console.error('Codex account list failed; keeping previous status bar state.')
-      return
-    }
-    if (mountedRef.current) {
-      setAccounts(snapshot.codex)
-    }
-  }, [runtimeTarget])
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
-
   useEffect(() => {
     menuOpenRef.current = open
   }, [open])
-
-  useEffect(() => {
-    // Load on demand at mount and resync account mutations without fetching again on submenu expansion.
-    void loadAccounts().catch((error) => {
-      console.error('Failed to load Codex accounts for status bar:', error)
-    })
-  }, [loadAccounts, codexAccountSyncKey])
 
   const handleSelectAccount = async (
     accountId: string | null,

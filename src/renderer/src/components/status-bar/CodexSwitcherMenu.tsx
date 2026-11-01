@@ -13,6 +13,11 @@ import {
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '../../store'
+import { defaultScopeHost } from '@/lib/default-creation-host'
+import type { AccountOwner } from '@/lib/wsl-host-account-owner'
+import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
+import { getProviderAccountsOwnerKey } from '@/runtime/runtime-provider-accounts-client'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { AccountRuntimeToggle, CodexRestartStatusPrompt } from './StatusBarAccountControls'
 import {
@@ -26,19 +31,34 @@ import { AccountSwitchList } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 
-export function CodexSwitcherMenu({
-  codex,
-  compact,
-  iconOnly,
-  asSubmenu = false,
-  triggerContent
-}: {
+type CodexSwitcherMenuProps = {
   codex: ProviderRateLimits
   compact: boolean
   iconOnly: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
-}): React.JSX.Element {
+}
+
+export function CodexSwitcherMenu(props: CodexSwitcherMenuProps): React.JSX.Element {
+  const settings = useAppStore((state) => state.settings)
+  const owner = useActiveAccountOwner(defaultScopeHost(settings))
+  return (
+    <CodexSwitcherForOwner
+      {...props}
+      key={`${getProviderAccountsOwnerKey(owner.target)}:${owner.wslHostDistro ?? ''}`}
+      owner={owner}
+    />
+  )
+}
+
+function CodexSwitcherForOwner({
+  codex,
+  compact,
+  iconOnly,
+  asSubmenu = false,
+  triggerContent,
+  owner
+}: CodexSwitcherMenuProps & { owner: AccountOwner }): React.JSX.Element {
   const {
     activeTarget,
     canRedeemReset,
@@ -65,7 +85,7 @@ export function CodexSwitcherMenu({
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
     switchGroups
-  } = useCodexSwitcherController(codex)
+  } = useCodexSwitcherController(codex, owner)
 
   return (
     <ProviderDetailsMenu
