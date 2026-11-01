@@ -6691,6 +6691,7 @@
       },
       "settings": {
         "AccountsPane": {
+          "locationSaveFailed": "アカウントの場所を保存できませんでした。もう一度お試しください。",
           "c2d2751587": "アカウントの削除",
           "dbb9626ed1": "キャンセル",
           "63843e37e2": "Claude アカウントを削除しますか?",
@@ -22688,6 +22689,7 @@
       "serveSimUnavailable": "serve-sim を利用できません。",
       "serveSimNoEndpoints": "serve-sim からストリームのエンドポイントが返されませんでした。",
       "serveSimEndpointUnreachable": "serve-sim は起動しましたが、ストリームのエンドポイントにアクセスできません。",
+      "deviceHubInputBlocked": "Xcode の Device Hub がこのシミュレータの入力を占有しているため、タップや文字入力が届きません。Device Hub を終了してから、シミュレータを再接続してください。",
       "androidSdkMissing": "Android SDK が見つかりません。Android Studio をインストールし、ANDROID_HOME を設定してください。",
       "adbUnavailable": "adb を利用できません。",
       "noAndroidDevices": "Android デバイスも AVD も見つかりません。Android Studio で作成してください。",

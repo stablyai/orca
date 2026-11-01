@@ -1,3 +1,4 @@
+import type { TerminalForegroundObservation } from './terminal-foreground-observation'
 import type { RemoteForegroundEvidence } from './foreground-process-evidence'
 
 /** Keep unverifiable distinct from no-children; legacy booleans collapsed failed inspection and Windows relay defaults into false, bypassing close guards. */
@@ -16,6 +17,7 @@ export type ClientOnlyUnverifiableInspection = {
   hasChildProcesses: false
   verdict: 'unverifiable'
   reason: string
+  foregroundObservation?: never
   foregroundProcessEvidence?: never
   childProcessEvidence?: never
   authorityGeneration?: never
@@ -27,6 +29,7 @@ export type ClientOnlyUnverifiableInspection = {
 
 /** Compatibility-shaped host/local inspection returned by the inspect RPC. */
 export type HostProcessInspection = {
+  foregroundObservation?: TerminalForegroundObservation
   foregroundProcess: string | null
   hasChildProcesses: boolean
   /** Optional on old hosts; the renderer treats an omitted field as old-host unverifiable. */

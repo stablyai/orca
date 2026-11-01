@@ -1,3 +1,9 @@
+import {
+  readPtyForegroundGroup,
+  resolvePtyForegroundMembers
+} from '../../pty/pty-master-foreground-observation'
+import { readPtsName } from '../../pty/node-pty-pts-name'
+import { getSnapshotRowsOnTty, normalizePtyTty } from '../../pty/terminal-process-rows'
 import type { IPty } from 'node-pty'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import {
@@ -36,9 +42,58 @@ export function ptyProcessNameIsSpawnFile(proc: IPty): boolean {
 export function createPtyForegroundResolver(
   proc: IPty
 ): typeof resolveAgentForegroundProcessWithAvailability {
-  return ptyProcessNameIsSpawnFile(proc)
-    ? (_pid, fallback, options) => resolveSpawnFileForegroundProcess(proc, fallback, options)
+  const resolveFromRoot = ptyProcessNameIsSpawnFile(proc)
+    ? (_pid: number | null | undefined, fallback: string | null, options = {}) =>
+        resolveSpawnFileForegroundProcess(proc, fallback, options)
     : resolveAgentForegroundProcessWithAvailability
+  if (process.platform === 'win32') {
+    return resolveFromRoot
+  }
+  return (pid, fallback, options = {}) => {
+    // Undefined: the native image cannot report the group, so the root-pid reader decides as before.
+    const group = readPtyForegroundGroup(proc)
+    return group === undefined
+      ? resolveFromRoot(pid, fallback, options)
+      : resolveMasterGroupForegroundProcess(proc, group, fallback, options)
+  }
+}
+
+/** Display reads name the master's foreground group from the shared snapshot; only decisions take a fresh
+ * terminal capture. */
+export async function resolveMasterGroupForegroundProcess(
+  proc: IPty,
+  group: number | null,
+  fallbackProcess: string | null,
+  options: AgentForegroundResolutionOptions = {}
+): Promise<AgentForegroundProcessResolution> {
+  const tty = normalizePtyTty(readPtsName(proc) ?? '')
+  if (group === null || !tty) {
+    return { available: false, processName: fallbackProcess }
+  }
+  try {
+    const rows = getSnapshotRowsOnTty(
+      options.fresh ? await getFreshProcessTableSnapshot() : await getProcessTableSnapshot(),
+      tty
+    )
+    const sample = resolvePtyForegroundMembers(rows, group)
+    // A foreground member whose argv ps withheld could be the agent, so its absence is not proof.
+    if (
+      sample.verdict !== 'observed' ||
+      rows.some((row) => row.pgid === group && unreadableArgvName(row.command) !== null)
+    ) {
+      return { available: false, processName: fallbackProcess }
+    }
+    return {
+      available: true,
+      // A spawn-file name is static, so the member names the program; otherwise node-pty's name stays the fallback.
+      processName:
+        ptyProcessNameIsSpawnFile(proc) || recognizeAgentProcess(sample.processName)
+          ? sample.processName
+          : fallbackProcess
+    }
+  } catch {
+    return { available: false, processName: fallbackProcess }
+  }
 }
 
 export function shouldCachePtyForeground(name: string | null, staticName: boolean): name is string {

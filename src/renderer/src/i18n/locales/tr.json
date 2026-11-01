@@ -7320,6 +7320,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "c2d2751587": "Hesabı Kaldır",
           "dbb9626ed1": "İptal",
           "63843e37e2": "Claude Hesabı Kaldırılsın mı?",
@@ -22949,6 +22950,7 @@
       "serveSimUnavailable": "serve-sim kullanılamıyor.",
       "serveSimNoEndpoints": "serve-sim, akış uç noktalarını döndürmedi.",
       "serveSimEndpointUnreachable": "serve-sim başladı ancak akış uç noktasına erişilemiyor.",
+      "deviceHubInputBlocked": "Xcode'un Device Hub uygulaması bu simülatörün girişini devraldığı için dokunmalar ve yazılanlar ona ulaşmıyor. Device Hub'dan çıkın, ardından simülatörü yeniden bağlayın.",
       "androidSdkMissing": "Android SDK bulunamadı. Android Studio'yu yükleyin ve ANDROID_HOME değişkenini ayarlayın.",
       "adbUnavailable": "adb kullanılamıyor.",
       "noAndroidDevices": "Android cihazı veya AVD bulunamadı. Android Studio'da bir tane oluşturun.",

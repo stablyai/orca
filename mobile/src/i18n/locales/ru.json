@@ -1611,23 +1611,6 @@
       "showMore": "Показать ещё {{count}}",
       "title": "Комментарии"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_few": "Отставание на {{count}} коммита (базовый коммит: {{baseCommit}})",
-      "commitsBehind_many": "Отставание на {{count}} коммитов (базовый коммит: {{baseCommit}})",
-      "commitsBehind_one": "Отставание на {{count}} коммит (базовый коммит: {{baseCommit}})",
-      "commitsBehind_other": "Отставание на {{count}} коммита (базовый коммит: {{baseCommit}})",
-      "copyCommands": "Скопировать команды",
-      "copyFailed": "Не удалось скопировать текст",
-      "copyRefreshCommands": "Скопировать команды для повторной проверки возможности слияния",
-      "detailsUnavailable": "Сведения о конфликтующих файлах недоступны",
-      "filesHeading": "Конфликтующие файлы",
-      "localMergeClean": "GitHub сообщает о конфликтах, но локальный Git их не воспроизвёл. Обновите PR или отправьте ветку, чтобы повторно проверить возможность слияния.",
-      "mustResolve": "В этой ветке есть конфликты, которые нужно разрешить",
-      "refreshing": "Обновление сведений о конфликтах…",
-      "resolveWithAi": "Разрешить конфликты с помощью ИИ",
-      "runFromWorktree": "Выполните в этом рабочем дереве",
-      "title": "Конфликты"
-    },
     "linkPrForm": {
       "linkButton": "Привязать пул-реквест",
       "linkNumber": "Привязать #{{number}}",
@@ -2814,7 +2797,6 @@
       "checkingReviewStatus": "Получение статуса PR/MR.",
       "checkoutBeforePublish": "Переключитесь на ветку перед публикацией коммитов.",
       "commitStagedChanges": "Создать коммит с изменениями в индексе.",
-      "commits": "Коммиты",
       "committing": "Создаётся коммит.",
       "createPr": "Создать PR",
       "enterCommitMessage": "Введите сообщение, чтобы создать коммит.",
@@ -2846,27 +2828,11 @@
       "resolveFailed": "Не удалось определить базовую ветку"
     },
     "branchCard": {
-      "branchCount": "В ветке: {{count}}",
-      "changedCount": "Изменено: {{count}}",
-      "cherryPickState": "cherry-pick",
-      "mergeState": "слияние",
-      "rebaseState": "перебазирование",
-      "stagedCount": "В индексе: {{count}}",
       "completingMerge": "Завершение…",
       "completeMerge": "Завершить слияние"
     },
     "branchCompare": {
-      "commits_few": "{{count}} коммита",
-      "commits_many": "{{count}} коммитов",
-      "commits_one": "{{count}} коммит",
-      "commits_other": "{{count}} коммита",
-      "files_few": "{{count}} файла",
-      "files_many": "{{count}} файлов",
-      "files_one": "{{count}} файл",
-      "files_other": "{{count}} файла",
-      "sectionTitle": "Закоммичено в ветке",
-      "summary": "{{files}} — по сравнению с {{baseRef}}",
-      "summaryWithCommits": "{{files}} — {{commits}} — по сравнению с {{baseRef}}"
+      "sectionTitle": "Закоммичено в ветке"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "Не удалось определить базовую ветку для сравнения.",
@@ -2925,11 +2891,8 @@
       "emptyMessage": "В рабочем дереве нет изменений.",
       "emptyTitle": "Нет локальных изменений",
       "generateMessage": "Создать сообщение коммита с помощью ИИ",
-      "openActions": "Открыть меню управления версиями",
       "reconnecting": "Переподключение к компьютеру…",
-      "regenerateHint": "Очистите сообщение для повторного создания.",
-      "stageAll": "Добавить всё в индекс",
-      "unstageAll": "Убрать всё из индекса"
+      "regenerateHint": "Очистите сообщение для повторного создания."
     },
     "createPrAction": {
       "checkingStatus": "Получение статуса PR/MR…",
@@ -2972,20 +2935,15 @@
       "titleUnpublishedForcePushCount_one": "Принудительно отправьте {{count}} коммит этой ветки с проверкой состояния удалённой ветки и при необходимости настройте отслеживаемую удалённую ветку.",
       "titleUnpublishedForcePushCount_other": "Принудительно отправьте {{count}} коммита этой ветки с проверкой состояния удалённой ветки и при необходимости настройте отслеживаемую удалённую ветку."
     },
-    "fileList": {
-      "committedSection": "Закоммичено в ветке"
-    },
     "fileRows": {
       "addedByThem": "Добавлен ими",
       "addedByUs": "Добавлен нами",
       "bothAdded": "Добавлен с обеих сторон",
       "bothDeleted": "Удалён с обеих сторон",
       "bothModified": "Изменён с обеих сторон",
-      "committedSection": "Закоммичено в ветке",
       "committedUnavailable": "Закоммиченные изменения недоступны.",
       "deletedByThem": "Удалён ими",
       "deletedByUs": "Удалён нами",
-      "discardFile": "Отменить изменения в «{{path}}»",
       "loadingCommitted": "Загрузка закоммиченных изменений…",
       "openChangedFile": "Открыть изменённый файл {{path}}",
       "openCommittedChange": "Открыть закоммиченные изменения в «{{path}}»",
@@ -3028,9 +2986,7 @@
       "waitingForDesktop": "Ожидание ответа от компьютера…"
     },
     "gitStatus": {
-      "changes": "Изменения",
-      "conflicts": "Конфликты",
-      "stagedChanges": "Изменения в индексе"
+      "conflicts": "Конфликты"
     },
     "header": {
       "backToSession": "Вернуться к сессии",
@@ -3098,7 +3054,6 @@
       "waitingForDesktop": "Ожидание подключения к компьютеру…"
     },
     "modals": {
-      "actionsTitle": "Управление версиями",
       "currentBranch": "текущая",
       "discardButton": "Отменить изменения",
       "discardConfirmMessage": "Отменить изменения в «{{path}}»? Это действие необратимо.",
@@ -3110,17 +3065,6 @@
     },
     "panel": {
       "unavailableTitle": "Управление версиями недоступно"
-    },
-    "prChip": {
-      "createPr": "Создать пул-реквест",
-      "loading": "Загрузка пул-реквеста…",
-      "loadingLabel": "Загрузка пул-реквеста",
-      "openLabel": "Пул-реквест #{{number}}, {{state}}, {{checks}}. Открыть пул-реквест.",
-      "openWithComments_few": "Пул-реквест #{{number}}, {{state}}, {{checks}}, {{count}} неразрешённых комментария. Открыть пул-реквест.",
-      "openWithComments_many": "Пул-реквест #{{number}}, {{state}}, {{checks}}, {{count}} неразрешённых комментариев. Открыть пул-реквест.",
-      "openWithComments_one": "Пул-реквест #{{number}}, {{state}}, {{checks}}, {{count}} неразрешённый комментарий. Открыть пул-реквест.",
-      "openWithComments_other": "Пул-реквест #{{number}}, {{state}}, {{checks}}, {{count}} неразрешённого комментария. Открыть пул-реквест.",
-      "unavailableLabel": "Пул-реквест недоступен: {{message}}"
     },
     "prCreate": {
       "authRequired": "Прежде чем создать {{reviewLabel}}, пройдите аутентификацию.",
@@ -3209,7 +3153,6 @@
       "noBranch": "Нет ветки"
     },
     "state": {
-      "noUpstream": "Нет отслеживаемой ветки",
       "syncStatus": "Опережает на {{ahead}}, отстаёт на {{behind}}"
     },
     "textGenerationFailure": {

@@ -179,6 +179,10 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     this.setRoute(sessionId, provider, incarnationId)
   }
 
+  getRouteIncarnation(sessionId: string): string | undefined {
+    return this.routeIncarnations.get(sessionId)
+  }
+
   getVerifiedRoute(sessionId: string): IPtyProvider | undefined {
     return this.routeIncarnations.has(sessionId) ? this.routes.get(sessionId) : undefined
   }
