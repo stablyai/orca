@@ -1893,6 +1893,12 @@
         }
       }
     },
+    "orchestrationCrew": {
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you",
+      "workers_one": "{{count}} worker",
+      "workers_other": "{{count}} workers"
+    },
     "tab": {
       "bar": {
         "bulkClose": {
