@@ -5,7 +5,10 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import type { TerminalPasteSource, TerminalPasteTextOptions } from './terminal-paste-model'
-import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import {
+  formatTerminalPasteExecutionError,
+  formatTerminalTextPasteError
+} from './terminal-paste-errors'
 import {
   resolveTerminalPasteRuntime,
   resolveTerminalPasteRuntimeEnvironmentId
@@ -123,8 +126,7 @@ export const pasteTerminalPaneMenuClipboard = async (
     }),
     pasteText: (text, options) =>
       executeTerminalPaneMenuPasteText(context, pane, source, text, options),
-    onTextPasteError: () =>
-      onPasteError('Paste failed: clipboard text is too large for a safe terminal paste.'),
+    onTextPasteError: (error) => onPasteError(formatTerminalTextPasteError(error)),
     onImagePasteError: (error) => {
       const detail = error instanceof Error ? error.message : String(error)
       onPasteError(`Image paste failed: ${detail}`)
