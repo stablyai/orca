@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   canUseSkillFreshness: true,
   freshnessEnabled: true,
   plan: ((): BundledSkillPlan | null => null)(),
-  error: null as string | null,
+  error: ((): string | null => null)(),
   execute: vi.fn(),
   notifyChanged: vi.fn()
 }))
