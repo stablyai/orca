@@ -17091,7 +17091,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Configurações do agente…",
             "ec2adf093e": "Iniciar {{value0}} em um novo terminal",
-            "465e432ef1": "Não foi possível construir o comando de inicialização para {{value0}}.",
             "e518f544b1": "Nenhum agente detectado",
             "8dea9b5cdf": "Nenhum agente habilitado",
             "chatNotInstalled": "Não instalado",

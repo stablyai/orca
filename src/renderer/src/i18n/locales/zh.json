@@ -3696,7 +3696,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "智能体设置...",
             "ec2adf093e": "在新终端中启动 {{value0}}",
-            "465e432ef1": "无法为 {{value0}} 构建启动命令。",
             "e518f544b1": "未检测到智能体",
             "8dea9b5cdf": "没有启用智能体",
             "terminalListNeedsServerUpdate": "更新此服务器上的 Orca 以列出终端智能体",

@@ -1,5 +1,4 @@
-import { readAgentMenuLaunchFacts } from './agent-menu-launch-facts'
-import { translate } from '@/i18n/i18n'
+import { readAgentMenuLaunchFacts, readAgentMenuTerminalPending } from './agent-menu-launch-facts'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
@@ -90,9 +89,8 @@ export function useAgentMenuObservation(
     typeof target === 'string'
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
       : (target?.workspace ?? { kind: 'floating' as const })
-  const facts = useAppStore(
-    useShallow((state) => readAgentMenuLaunchFacts(state, workspace, worktreeId))
-  )
+  const facts = useAppStore(useShallow((state) => readAgentMenuLaunchFacts(state, workspace)))
+  const terminalPending = useAppStore((state) => readAgentMenuTerminalPending(state, workspace))
   const state = useAppStore.getState()
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
@@ -211,9 +209,6 @@ export function useAgentMenuObservation(
   const executionHostId = unresolvedTarget
     ? undefined
     : parseExecutionHostId(facts.executionHostId)?.id
-  const terminalUnavailable = facts.terminalPending
-    ? translate('auto.components.tab.bar.QuickLaunchButton.agentsLoading', 'Loading agents')
-    : undefined
   const rows = buildNewTabAgentMenuRows({
     settings,
     detectedOnHost: detection.detectedIds,
@@ -221,33 +216,27 @@ export function useAgentMenuObservation(
     chatProgram: (agent) =>
       unresolvedTarget ? 'unlearned' : readChatProgram(state, agent, input, detection.detectedIds),
     hostChatAnswer: answerFor
-  }).map((row) => ({
-    ...row,
-    executionHostId,
-    ...(terminalUnavailable ? { terminalUnavailable } : {})
-  }))
-  const model: NewTabAgentMenuModel =
-    loading ||
-    (facts.terminalPending &&
-      !rows.some((row) => row.kind === 'chat' || (row.kind === 'cli' && row.chat)))
-      ? {
-          state: 'loading',
-          placeholderCount: Math.max(chatAgents.length, detection.detectedIds?.length ?? 0, 2)
+  }).map((row) => ({ ...row, executionHostId }))
+  const model: NewTabAgentMenuModel = loading
+    ? {
+        state: 'loading',
+        placeholderCount: Math.max(chatAgents.length, detection.detectedIds?.length ?? 0, 2)
+      }
+    : {
+        state: 'settled',
+        rows,
+        detection,
+        defaultTuiAgent: settings?.defaultTuiAgent,
+        terminalPending,
+        pickerContext: {
+          workspace,
+          executionHostId: facts.executionHostId,
+          pairingRevision: facts.pairingRevision,
+          runtimeId: facts.runtimeId,
+          settings,
+          key: JSON.stringify([workspace, launchCwd, facts])
         }
-      : {
-          state: 'settled',
-          rows,
-          detection,
-          defaultTuiAgent: settings?.defaultTuiAgent,
-          pickerContext: {
-            workspace,
-            executionHostId: facts.executionHostId,
-            pairingRevision: facts.pairingRevision,
-            runtimeId: facts.runtimeId,
-            settings,
-            key: JSON.stringify([workspace, launchCwd, facts])
-          }
-        }
+      }
   const { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices } = settings ?? {}
   return {
     model,
@@ -287,8 +276,7 @@ export function useAgentMenuObservation(
       })
       return {
         ...selection,
-        ready:
-          selection.ready && !(terminalUnavailable && selection.choice?.route === 'terminal-tui')
+        ready: selection.ready && !(terminalPending && selection.choice?.route === 'terminal-tui')
       }
     }
   }

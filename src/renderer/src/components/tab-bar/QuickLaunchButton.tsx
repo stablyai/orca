@@ -1,5 +1,7 @@
 import { SurfaceChoiceRow } from './tab-agent-surface-choice-row'
-import { agentMenuRowUnavailable } from '../../../../shared/agent-launch-picker-rows'
+import { readAgentMenuTerminalPending } from './agent-menu-launch-facts'
+import { terminalPendingReason } from './new-tab-agent-menu-model'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import {
   agentPickerLaunchInputs,
@@ -78,7 +80,16 @@ export function useTabAgentMenuLaunch({
 }) {
   const runLaunch = useCallback(
     (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, pickerEntry?: AgentPickerEntry) => {
-      if (disabled || row.kind === 'chat-unavailable' || agentMenuRowUnavailable(row)) {
+      // Rechecked against the live host here, so a terminal row rendered before a reconnect waits too.
+      const terminalPending = readAgentMenuTerminalPending(
+        useAppStore.getState(),
+        worktreeLaunchWorkspace(worktreeId)
+      )
+      if (
+        disabled ||
+        row.kind === 'chat-unavailable' ||
+        terminalPendingReason(terminalPending, row)
+      ) {
         return
       }
       const { agent } = row
@@ -212,6 +223,7 @@ export function ProjectedAgentMenuItems({
   }
   const {
     rows,
+    terminalPending,
     detection: { detectedIds, detectionFailed, needsServerUpdate }
   } = model
   const defaultAgent = 'defaultTuiAgent' in model ? model.defaultTuiAgent : desktopDefaultAgent
@@ -247,6 +259,7 @@ export function ProjectedAgentMenuItems({
         <SubscribedAgentLaunchPickerMenu
           shortcutLabels={shortcutLabels}
           inventory={pickerInventory}
+          terminalPending={terminalPending}
           runLaunch={runLaunch}
           onSelectAgent={onSelectPickerAgent}
           hideSearch={hidePickerSearch}
@@ -280,6 +293,7 @@ export function ProjectedAgentMenuItems({
             </>
           )
           const other = otherSurfaceRow(row, detectedIds)
+          const pendingReason = terminalPendingReason(terminalPending, row)
           return (
             <React.Fragment key={rowId(row)}>
               {startsCliGroup ? <DropdownMenuSeparator /> : null}
@@ -289,6 +303,7 @@ export function ProjectedAgentMenuItems({
                   other={other}
                   label={label}
                   disabled={disabled}
+                  terminalPending={terminalPending}
                   runLaunch={runLaunch}
                 >
                   {rowContent}
@@ -296,15 +311,13 @@ export function ProjectedAgentMenuItems({
               ) : (
                 <DropdownMenuItem
                   variant="launch"
-                  disabled={disabled || !!agentMenuRowUnavailable(row)}
+                  disabled={disabled || !!pendingReason}
                   onSelect={() => runLaunch(row)}
                   title={rowTitle(row, label)}
                 >
                   {rowContent}
-                  {agentMenuRowUnavailable(row) ? (
-                    <span className="font-normal text-muted-foreground">
-                      {agentMenuRowUnavailable(row)}
-                    </span>
+                  {pendingReason ? (
+                    <span className="font-normal text-muted-foreground">{pendingReason}</span>
                   ) : null}
                 </DropdownMenuItem>
               )}
@@ -322,11 +335,9 @@ function otherSurfaceRow(
   row: Exclude<NewTabAgentMenuRow, { kind: 'chat-unavailable' }>,
   detectedIds: readonly TuiAgent[] | null
 ): NewTabAgentMenuRow | null {
-  const { agent, executionHostId, terminalUnavailable } = row
+  const { agent, executionHostId } = row
   if (row.kind === 'chat') {
-    return detectedIds?.includes(agent)
-      ? { kind: 'cli', agent, executionHostId, terminalUnavailable }
-      : null
+    return detectedIds?.includes(agent) ? { kind: 'cli', agent, executionHostId } : null
   }
   return row.kind === 'cli' && row.chat ? { kind: 'chat', agent, executionHostId } : null
 }

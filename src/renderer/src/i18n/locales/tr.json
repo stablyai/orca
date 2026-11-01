@@ -4203,7 +4203,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Ajan ayarları…",
             "ec2adf093e": "{{value0}} öğesini yeni bir terminalde başlat",
-            "465e432ef1": "{{value0}} için başlatma komutu oluşturulamadı.",
             "e518f544b1": "Ajan bulunamadı",
             "8dea9b5cdf": "Etkinleştirilmiş ajan yok",
             "terminalListNeedsServerUpdate": "Terminal ajanlarını listelemek için bu sunucudaki Orca'yı güncelleyin",

@@ -4337,7 +4337,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
             "ec2adf093e": "Launch {{value0}} in a new terminal",
-            "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
             "8dea9b5cdf": "No enabled agents",
             "terminalListNeedsServerUpdate": "Update Orca on this server to list terminal agents",

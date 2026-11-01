@@ -3696,7 +3696,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Agent 設定…",
             "ec2adf093e": "新規ターミナルで {{value0}} を起動",
-            "465e432ef1": "{{value0}} の起動コマンドを作成できませんでした。",
             "e518f544b1": "Agent が検出されませんでした",
             "8dea9b5cdf": "有効な Agent がありません",
             "chatNotInstalled": "未インストール",

@@ -42,20 +42,17 @@ export const agentLaunchCommandErrorMessage = (): string =>
 export function validateActionTerminalArgs(
   agent: TuiAgent,
   args: string | null | undefined,
-  shell: AgentStartupShell,
-  notify = true
+  shell: AgentStartupShell
 ): boolean {
   if (planAgentCliArgsSuffix(args, shell).ok) {
     return true
   }
-  if (notify) {
-    toast.error(
-      translate(
-        'settings.sourceControl.actionModel.invalidArgs',
-        'The CLI arguments for {{value0}} are invalid. Fix them in Settings → Source Control AI.',
-        { value0: getAgentLabel(agent) }
-      )
+  toast.error(
+    translate(
+      'settings.sourceControl.actionModel.invalidArgs',
+      'The CLI arguments for {{value0}} are invalid. Fix them in Settings → Source Control AI.',
+      { value0: getAgentLabel(agent) }
     )
-  }
+  )
   return false
 }

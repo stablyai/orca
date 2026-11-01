@@ -1,4 +1,3 @@
-import { agentMenuRowUnavailable } from '../../../../shared/agent-launch-picker-rows'
 import {
   searchAgentPickerSetups,
   type AgentPickerDraft,
@@ -10,6 +9,7 @@ import { orderAgentLaunchPickerAgents } from '../../../../shared/agent-launch-pi
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import { terminalPendingReason } from './new-tab-agent-menu-model'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
@@ -84,11 +84,8 @@ export function buildTabAgentLaunchOptionsFromRows(
       agent: row.agent,
       aliases: base?.aliases ?? [],
       label: rowLabel(row),
-      disabled: row.kind === 'chat-unavailable' || !!agentMenuRowUnavailable(row),
-      reason:
-        row.kind === 'chat-unavailable'
-          ? chatUnavailableLabel(row.reason)
-          : agentMenuRowUnavailable(row),
+      disabled: row.kind === 'chat-unavailable',
+      reason: row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason) : undefined,
       row,
       id: row.kind === 'terminal' ? `agent:${row.agent}` : rowId(row)
     }
@@ -190,11 +187,8 @@ export function matchingAgentPickerLaunchOptions(
       row: {
         agent: setup.entry.agent,
         kind: surface === 'chat' ? 'chat' : 'cli',
-        executionHostId: setup.entry.rows[0]?.executionHostId,
-        terminalUnavailable: setup.entry.rows[0]?.terminalUnavailable
+        executionHostId: setup.entry.rows[0]?.executionHostId
       },
-      disabled: surface === 'terminal' && !setup.entry.surfaces.includes('terminal'),
-      reason: surface === 'terminal' ? setup.entry.rows[0]?.terminalUnavailable : undefined,
       setup: { agent: setup.entry.agent, surface, choices: setup.choices },
       pickerEntry: setup.entry
     }
@@ -210,11 +204,31 @@ export function configuredAgentPickerLaunchOption(
     row: {
       agent: draft.agent,
       kind: draft.surface === 'chat' ? 'chat' : 'cli',
-      executionHostId: option.row?.executionHostId,
-      terminalUnavailable: option.row?.terminalUnavailable
+      executionHostId: option.row?.executionHostId
     },
-    disabled: draft.surface === 'terminal' && !!option.row?.terminalUnavailable,
-    reason: draft.surface === 'terminal' ? option.row?.terminalUnavailable : undefined,
     setup: draft
   }
+}
+
+function terminalReadyOption(
+  option: TabAgentLaunchOption,
+  terminalPending: boolean | undefined
+): TabAgentLaunchOption {
+  const reason = terminalPendingReason(terminalPending, option.row)
+  return reason ? { ...option, disabled: true, reason } : option
+}
+
+/** The agent options a query lists; each one's surface waits the same way while the host connects. */
+export function matchingAgentLaunchOptions(
+  entries: readonly AgentPickerEntry[],
+  options: readonly TabAgentLaunchOption[],
+  query: string,
+  terminalPending: boolean | undefined
+): TabAgentLaunchOption[] {
+  const ready = (option: TabAgentLaunchOption) => terminalReadyOption(option, terminalPending)
+  // Readiness applies before ranking, so a waiting terminal never outranks a usable chat.
+  return [
+    ...matchingAgentPickerLaunchOptions(entries, query).map(ready),
+    ...findMatchingTabAgentLaunchOptions(query, options.map(ready))
+  ]
 }

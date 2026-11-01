@@ -51,7 +51,8 @@ export function EntryActionRow({
   onClick,
   onUseAgent,
   option,
-  selected
+  selected,
+  terminalPending
 }: {
   disabled?: boolean
   id: string
@@ -61,6 +62,7 @@ export function EntryActionRow({
   onClick: () => void
   option: ActiveOption
   selected: boolean
+  terminalPending?: boolean
 }): React.JSX.Element {
   const presentation = getActionPresentation(option, labelOverride)
   const launchDisabled = disabled || (option.kind === 'agent' && option.option.disabled === true)
@@ -109,7 +111,8 @@ export function EntryActionRow({
         <AgentLaunchSetupButton
           entry={option.option.pickerEntry}
           initial={option.option.setup}
-          disabled={disabled || !option.option.pickerEntry.surfaces.length}
+          disabled={disabled}
+          terminalBlocked={terminalPending}
           onUse={onUseAgent}
         />
       ) : null}

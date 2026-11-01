@@ -19,6 +19,8 @@ const {
       disabledTuiAgents: [] as string[]
     },
     runtimeStatusByEnvironmentId: new Map(),
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
     detectedAgentIds: null,
     localDetectedAgentIdsByContext: {},
     remoteDetectedAgentIds: {},

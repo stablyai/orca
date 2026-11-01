@@ -59,8 +59,13 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? mockCreateSupport() : new Promise(() => undefined)
 }))
-const { mockToastInfo } = vi.hoisted(() => ({ mockToastInfo: vi.fn() }))
-vi.mock('sonner', () => ({ toast: { info: mockToastInfo, error: vi.fn(), success: vi.fn() } }))
+const { mockToastInfo, mockToastError } = vi.hoisted(() => ({
+  mockToastInfo: vi.fn(),
+  mockToastError: vi.fn()
+}))
+vi.mock('sonner', () => ({
+  toast: { info: mockToastInfo, error: mockToastError, success: vi.fn() }
+}))
 vi.mock(
   '@/lib/agent-session/launch/structured-agent-session-launch-admission',
   async (importOriginal) => ({
@@ -431,10 +436,9 @@ describe('agent launch caller routing', () => {
     expect(store.createTab).toHaveBeenCalledTimes(1)
   })
 
-  it('returns null without opening any surface when no startup plan can be built', async () => {
+  it('refuses invalid arguments once, saying where to fix them, before any surface opens', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    // Unbalanced argument quoting must abort before any surface opens.
     const result = launchAgentInNewTab({
       requestId: 'request-9',
       agent: 'codex',
@@ -442,7 +446,10 @@ describe('agent launch caller routing', () => {
       agentArgs: "--model 'gpt-5.5"
     })
 
-    expect(result).toBeNull()
+    expect(result).toEqual({ refused: { delivered: false, failureNotified: true } })
+    expect(mockToastError).toHaveBeenCalledExactlyOnceWith(
+      'The CLI arguments for Codex are invalid. Fix them in Settings → Source Control AI.'
+    )
     expect(store.createTab).not.toHaveBeenCalled()
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
   })

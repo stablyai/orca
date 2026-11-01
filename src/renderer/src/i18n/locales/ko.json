@@ -3696,7 +3696,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Agent 설정…",
             "ec2adf093e": "새 terminal에서 {{value0}} 실행",
-            "465e432ef1": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다.",
             "e518f544b1": "감지된 agents가 없습니다.",
             "8dea9b5cdf": "활성화된 agents가 없습니다.",
             "chatNotInstalled": "설치되지 않음",

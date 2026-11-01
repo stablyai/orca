@@ -1,11 +1,9 @@
 import React, { useRef } from 'react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { AgentSurfaceLaunchButton } from '@/components/agent/AgentSurfaceLaunchButton'
-import {
-  agentMenuRowUnavailable,
-  type NewTabAgentMenuRow
-} from '../../../../shared/agent-launch-picker-rows'
+import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
 import { rowTitle } from './tab-agent-row-presentation'
+import { terminalPendingReason } from './new-tab-agent-menu-model'
 
 const ROW_NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'])
 
@@ -15,6 +13,7 @@ export function SurfaceChoiceRow({
   other,
   label,
   disabled,
+  terminalPending,
   runLaunch,
   children
 }: {
@@ -22,6 +21,7 @@ export function SurfaceChoiceRow({
   other: NewTabAgentMenuRow
   label: string
   disabled: boolean
+  terminalPending?: boolean
   runLaunch: (row: NewTabAgentMenuRow) => void
   children: React.ReactNode
 }): React.JSX.Element {
@@ -29,8 +29,8 @@ export function SurfaceChoiceRow({
   const releaseTarget = useRef<{ event: PointerEvent; target: EventTarget } | null>(null)
   const title = rowTitle(row, label)
   const selectedOther = useRef(false)
-  const unavailable = agentMenuRowUnavailable(row)
-  const otherUnavailable = agentMenuRowUnavailable(other)
+  const unavailable = terminalPendingReason(terminalPending, row)
+  const otherUnavailable = terminalPendingReason(terminalPending, other)
   return (
     <DropdownMenuItem
       variant="launch"

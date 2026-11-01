@@ -237,9 +237,7 @@ export function agentPickerEntriesFromRows(
         rows: own,
         surfaces: [
           ...(chat ? ['chat' as const] : []),
-          ...(detected.includes(agent) && !own.some((row) => row.terminalUnavailable)
-            ? ['terminal' as const]
-            : [])
+          ...(detected.includes(agent) ? ['terminal' as const] : [])
         ],
         defaultSurface: chatDefault ? 'chat' : 'terminal',
         ...seed(agent),

@@ -1,4 +1,4 @@
-import { agentMenuRowUnavailable } from '../../../../shared/agent-launch-picker-rows'
+import { terminalPendingReason } from '../tab-bar/new-tab-agent-menu-model'
 import React, { useState } from 'react'
 import { CommandItem, CommandSeparator } from '@/components/ui/command'
 import { AgentIcon, getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
@@ -66,7 +66,10 @@ export function surfaceCommandValues(
   const rows = visibleSurfaceRows(model, getAgentCatalog(), picker.query)
   const selected =
     surfaceRowValue(visibleSurfaceRows(model, getAgentCatalog(), ''), picker.value) ?? null
-  const first = rows.find((row) => row.kind !== 'chat-unavailable' && !agentMenuRowUnavailable(row))
+  const pending = model.state === 'settled' && model.terminalPending
+  const first = rows.find(
+    (row) => row.kind !== 'chat-unavailable' && !terminalPendingReason(pending, row)
+  )
   const highlighted = !picker.query.trim()
     ? (selected ?? picker.blankValue)
     : picker.blankMatchesQuery
@@ -90,7 +93,6 @@ export function surfaceRowValue(
 /** A chat row's terminal button runs the agent's CLI, so only a detected CLI gets one. */
 const rowOffersTerminal = (model?: NewTabAgentMenuModel, row?: NewTabAgentMenuRow): boolean =>
   row?.kind === 'chat' &&
-  !row.terminalUnavailable &&
   model?.state === 'settled' &&
   model.detection.detectedIds?.includes(row.agent) === true
 
@@ -113,7 +115,10 @@ export function useSurfaceRowArming(
     const row = rows.find((candidate) => rowId(candidate) === commandValue)
     const input = event.target instanceof HTMLInputElement ? event.target : null
     const caretAtEnd = !input || input.selectionStart === input.value.length
-    if (event.key === 'ArrowRight' && rowOffersTerminal(interaction.model, row) && caretAtEnd) {
+    const terminalReady =
+      rowOffersTerminal(interaction.model, row) &&
+      !(interaction.model?.state === 'settled' && interaction.model.terminalPending)
+    if (event.key === 'ArrowRight' && terminalReady && caretAtEnd) {
       event.preventDefault()
       setArmed(commandValue)
     } else if (event.key === 'Enter' && armedValue !== null && row) {
@@ -170,7 +175,8 @@ export function SurfaceAgentItems({
     const id = rowId(row)
     const label = rowLabel(row)
     const startsCliGroup = row.kind === 'cli' && index > 0 && rows[index - 1]?.kind !== 'cli'
-    const unavailable = row.kind === 'chat-unavailable' || !!agentMenuRowUnavailable(row)
+    const pendingReason = terminalPendingReason(model.terminalPending, row)
+    const unavailable = row.kind === 'chat-unavailable' || !!pendingReason
     const pressed = row.kind === 'chat' && id === pickedValue && terminalPicked
     const agentLabel = rowLabel({ ...row, kind: 'chat' })
     return (
@@ -193,13 +199,12 @@ export function SurfaceAgentItems({
               : terminalPickTitle(agentLabel),
           trailing: unavailable ? (
             <span className="shrink-0 text-muted-foreground">
-              {row.kind === 'chat-unavailable'
-                ? chatUnavailableLabel(row.reason)
-                : agentMenuRowUnavailable(row)}
+              {row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason) : pendingReason}
             </span>
           ) : rowOffersTerminal(model, row) ? (
             <AgentSurfaceLaunchButton
               surface="terminal"
+              disabled={model.terminalPending}
               title={terminalPickTitle(agentLabel)}
               aria-pressed={pressed}
               className={cn(

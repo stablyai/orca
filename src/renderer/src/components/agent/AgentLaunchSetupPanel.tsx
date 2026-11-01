@@ -42,12 +42,14 @@ export function AgentLaunchSetupPanel({
   entry,
   initial,
   disabled,
+  terminalBlocked,
   onDraftChange,
   onUse
 }: {
   entry: AgentPickerEntry
   initial?: AgentPickerDraft
   disabled?: boolean
+  terminalBlocked?: boolean
   onDraftChange?: (draft: AgentPickerDraft) => void
   onUse: (draft: AgentPickerDraft) => void
 }) {
@@ -161,8 +163,10 @@ export function AgentLaunchSetupPanel({
       onAction={() => {}}
     />
   )
+  const surfaceDisabled = (surface: AgentPickerSurface) =>
+    disabled || (surface === 'terminal' && terminalBlocked)
   const use = (surface: AgentPickerSurface) => {
-    if (entry.surfaces.includes(surface)) {
+    if (!surfaceDisabled(surface)) {
       onUse({ ...draft, surface })
     }
   }
@@ -370,7 +374,7 @@ export function AgentLaunchSetupPanel({
             key={surface}
             type="button"
             size="xs"
-            disabled={disabled}
+            disabled={surfaceDisabled(surface)}
             variant={surface === entry.defaultSurface ? 'default' : 'outline'}
             onClick={() => use(surface)}
           >

@@ -5,6 +5,7 @@ import {
 } from '../../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
+import { runtimeHostContactForEntry } from '../../../shared/runtime-host-contact'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { isWslUncPath } from '../../../shared/wsl-paths'
@@ -79,6 +80,17 @@ function resolveLocalPlatform(
   return workspacePath && isWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
 }
 
+/** A paired server still being reached may yet report the facts a launch needs. */
+function runtimeContactPending(state: HostFactsState, environmentId: string | null): boolean {
+  const contact = environmentId
+    ? runtimeHostContactForEntry(state.runtimeStatusByEnvironmentId.get(environmentId))
+    : null
+  return (
+    contact?.verdict === 'unverifiable' &&
+    ['checking', 'transport-connecting'].includes(contact.reason)
+  )
+}
+
 function resolveHostPlatform(
   state: HostFactsState,
   args: {
@@ -114,7 +126,8 @@ function resolveHostPlatform(
           recovery: sshState?.status === 'connected' ? 'sshUnavailable' : 'connectSsh',
           pending:
             ['connecting', 'reconnecting', 'deploying-relay'].includes(sshState?.status ?? '') ||
-            sshState?.managedServer?.kind === 'setting-up'
+            sshState?.managedServer?.kind === 'setting-up' ||
+            runtimeContactPending(state, ownerEnvironmentId)
         }
   }
   if (host.kind !== 'runtime') {
@@ -126,7 +139,12 @@ function resolveHostPlatform(
   const hostPlatform = status?.hostPlatform
   if (!hostPlatform) {
     const reason = status ? RUNTIME_PLATFORM_UPDATE : RUNTIME_PLATFORM_WITHHELD
-    return { kind: 'withheld', reason, recovery: status ? 'updateServer' : 'reconnectServer' }
+    return {
+      kind: 'withheld',
+      reason,
+      recovery: status ? 'updateServer' : 'reconnectServer',
+      pending: runtimeContactPending(state, host.environmentId)
+    }
   }
   // Why: a WSL UNC workspace on a Windows server runs its agents inside that distro.
   const platform =

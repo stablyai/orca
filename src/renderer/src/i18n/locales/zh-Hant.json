@@ -4147,7 +4147,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "代理程式設定…",
             "ec2adf093e": "在新終端機中啟動 {{value0}}",
-            "465e432ef1": "無法為 {{value0}} 建置啟動命令。",
             "e518f544b1": "未偵測到代理程式",
             "8dea9b5cdf": "沒有啟用代理程式",
             "terminalListNeedsServerUpdate": "更新此伺服器上的 Orca，以列出終端機代理程式",

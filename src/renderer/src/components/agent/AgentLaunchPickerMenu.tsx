@@ -1,4 +1,4 @@
-import { agentMenuRowUnavailable } from '../../../../shared/agent-launch-picker-rows'
+import { terminalPendingReason } from '../tab-bar/new-tab-agent-menu-model'
 import { memo, useId, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
 import { Input } from '@/components/ui/input'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
@@ -26,8 +26,7 @@ export function pickerLaunchRow(
   return {
     agent: entry.agent,
     kind: surface === 'chat' ? 'chat' : 'cli',
-    executionHostId: entry.rows[0]?.executionHostId,
-    terminalUnavailable: entry.rows[0]?.terminalUnavailable
+    executionHostId: entry.rows[0]?.executionHostId
   }
 }
 
@@ -46,10 +45,13 @@ export function AgentLaunchPickerMenu({
   entries,
   hideSearch,
   onSelectAgent,
-  shortcutLabels
+  shortcutLabels,
+  terminalPending
 }: {
   shortcutLabels?: ReadonlyMap<AgentPickerEntry['agent'], string>
   disabled?: boolean
+  /** The host is still connecting, so terminal launches wait; chat launches do not. */
+  terminalPending?: boolean
   runLaunch: Launch
   entries: AgentPickerEntry[]
   hideSearch?: boolean
@@ -103,6 +105,7 @@ export function AgentLaunchPickerMenu({
           initialEffort={setup.choices.options?.effort}
           onSelectAgent={onSelectAgent}
           disabled={disabled}
+          terminalPending={terminalPending}
           runLaunch={runLaunch}
         />
       ))}
@@ -113,6 +116,7 @@ export function AgentLaunchPickerMenu({
           openSetup={openSetup}
           onSetupOpenChange={setOpenSetup}
           disabled={disabled}
+          terminalPending={terminalPending}
           runLaunch={runLaunch}
           onSelectAgent={onSelectAgent}
           shortcut={shortcutLabels?.get(entry.agent)}
@@ -150,6 +154,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   initialModel,
   initialEffort,
   disabled,
+  terminalPending,
   runLaunch,
   shortcut,
   onSelectAgent
@@ -161,6 +166,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   initialModel?: string
   initialEffort?: string
   disabled?: boolean
+  terminalPending?: boolean
   runLaunch: Launch
   shortcut?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
@@ -180,7 +186,9 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   const item = useRef<HTMLDivElement>(null)
   const configured = useRef<AgentPickerDraft | undefined>(undefined)
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
-  const defaultUnavailable = agentMenuRowUnavailable(pickerLaunchRow(entry, entry.defaultSurface))
+  const pendingReason = (surface: AgentPickerSurface) =>
+    terminalPendingReason(terminalPending, pickerLaunchRow(entry, surface))
+  const defaultUnavailable = pendingReason(entry.defaultSurface)
   return (
     <AgentLaunchSetupButton
       entry={entry}
@@ -188,6 +196,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       open={openSetup === setupId}
       replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}
       disabled={disabled}
+      terminalBlocked={terminalPending}
       onOpenChange={(next) => {
         onSetupOpenChange(next ? setupId : null)
         if (next) {
@@ -203,12 +212,12 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           ref={item}
           variant="launch"
           disabled={disabled || !entry.surfaces.length}
-          aria-disabled={disabled || !entry.surfaces.includes(entry.defaultSurface)}
+          aria-disabled={disabled || !!defaultUnavailable}
           onSelect={(event) => {
             const draft = configured.current ?? initial
             configured.current = undefined
             const surface = draft?.surface ?? entry.defaultSurface
-            if (!entry.surfaces.includes(surface)) {
+            if (pendingReason(surface)) {
               event.preventDefault()
               return
             }

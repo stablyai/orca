@@ -19,6 +19,7 @@ import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
 } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { useAgentMenuObservation, useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
+import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
 const initial = useAppStore.getState()
 afterEach(() => {
   cleanup()
@@ -122,7 +123,7 @@ it('settles ownerless continuation and plus inventory without borrowing agents, 
   }
 })
 
-it('keeps terminal choices quiet while SSH connects, then settles and recovers from published launch facts', async () => {
+it('holds only terminal choices while SSH connects, for a workspace and a repo target, then settles', async () => {
   const worktreeId = 'r1::/remote'
   const sshState = {
     targetId: 'box',
@@ -130,12 +131,13 @@ it('keeps terminal choices quiet while SSH connects, then settles and recovers f
     error: null,
     reconnectAttempt: 0
   }
+  const repo = { ...TEST_REPO, id: 'r1', connectionId: 'box', executionHostId: 'ssh:box' }
   setLocalRuntimeCapabilitiesForTests([])
   useAppStore.setState({
     ...initial,
     settings: { ...getDefaultSettings('/home/me'), agentDefaultSurface: 'terminal' },
     activeWorktreeId: worktreeId,
-    repos: [{ ...TEST_REPO, id: 'r1', connectionId: 'box' }],
+    repos: [repo],
     worktreesByRepo: {
       r1: [makeWorktree({ id: worktreeId, repoId: 'r1', hostId: 'ssh:box', path: '/remote' })]
     },
@@ -145,18 +147,30 @@ it('keeps terminal choices quiet while SSH connects, then settles and recovers f
   })
   const hook = renderHook(() => {
     const target = useAgentDetectionTargetForWorktree(worktreeId)
-    return useAgentMenuObservation(worktreeId, true, target)
+    // Source Control's launch into a workspace the repo does not have yet.
+    const prospective = sourceControlRepoAgentRows(repo)
+    return {
+      workspace: useAgentMenuObservation(worktreeId, true, target),
+      repo: useAgentMenuObservation(prospective.target, true, prospective.detectionTarget)
+    }
   })
-  expect(hook.result.current.model.state).toBe('loading')
-  expect(hook.result.current.selectionFor('codex', 'terminal').ready).toBe(false)
+  const pendingKey = hook.result.current.workspace.contextKey
+  for (const observation of [hook.result.current.workspace, hook.result.current.repo]) {
+    expect(observation.model).toMatchObject({ state: 'settled', terminalPending: true })
+    expect(observation.selectionFor('codex', 'terminal').ready).toBe(false)
+  }
   await act(async () => {
     useAppStore.setState({
       sshConnectionStates: new Map([['box', { ...sshState, status: 'connected' }]])
     })
   })
-  expect(hook.result.current.model.state).toBe('settled')
-  // A settled missing fact is owned by the launcher; it must not leave a permanent spinner.
-  expect(hook.result.current.selectionFor('codex', 'terminal').ready).toBe(true)
+  // Readiness is not identity: the picker's owner and acquisition keep their key.
+  expect(hook.result.current.workspace.contextKey).toBe(pendingKey)
+  for (const observation of [hook.result.current.workspace, hook.result.current.repo]) {
+    expect(observation.model).toMatchObject({ state: 'settled', terminalPending: false })
+    // A settled missing fact is owned by the launcher; it must not leave a permanent wait.
+    expect(observation.selectionFor('codex', 'terminal').ready).toBe(true)
+  }
   await act(async () => {
     useAppStore.setState({
       sshConnectionStates: new Map([
@@ -164,11 +178,12 @@ it('keeps terminal choices quiet while SSH connects, then settles and recovers f
       ])
     })
   })
-  expect(hook.result.current.model).toMatchObject({
+  expect(hook.result.current.workspace.model).toMatchObject({
     state: 'settled',
+    terminalPending: false,
     rows: expect.arrayContaining([
       expect.objectContaining({ agent: 'codex', executionHostId: 'ssh:box' })
     ])
   })
-  expect(hook.result.current.selectionFor('codex', 'terminal').ready).toBe(true)
+  expect(hook.result.current.workspace.selectionFor('codex', 'terminal').ready).toBe(true)
 })

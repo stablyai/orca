@@ -4,7 +4,7 @@ import {
 } from '@/lib/launch-agent-new-tab-host-route'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
 import { useAppStore } from '@/store'
-import { planAgentCliArgsSuffix } from './tui-agent-startup'
+import { validateActionTerminalArgs } from './launch-work-item-direct-messages'
 import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from './agent-launch-failure'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
@@ -121,9 +121,8 @@ export function launchAgentInNewTabWithOutcome(
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const terminalShell = queuedShell ?? (resolvedLaunchPlatform === 'win32' ? 'powershell' : 'posix')
-  if (!planAgentCliArgsSuffix(agentArgs, terminalShell).ok) {
+  if (!validateActionTerminalArgs(agent, agentArgs, terminalShell)) {
     args.focusIntent?.cancel()
-    notifyAgentLaunchFailure(agent)
     return { refused: { delivered: false, failureNotified: true } }
   }
   const buildStartup = (
