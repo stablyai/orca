@@ -141,7 +141,7 @@ describe('a send while the selected account folder is not set up yet', () => {
       launchAccountHome: async (_record, purpose) =>
         agentSessionAccountHome(
           CLAUDE_STRUCTURED_AGENT,
-          resolveStructuredClaudeAccountHomePath({
+          await resolveStructuredClaudeAccountHomePath({
             launchEnv: {},
             wslDistro: null,
             ...(purpose === 'identity' ? { purpose } : {}),

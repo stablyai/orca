@@ -14,6 +14,7 @@ import {
 } from '../../shared/claude-profile-routing'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { probeRecentClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveClaudeCommand } from '../codex-cli/command'
@@ -88,11 +89,11 @@ export class ClaudeProfileRouter {
         })
   }
 
-  private get userHome(): string {
+  get userHome(): string {
     return this.args.userHome ?? homedir()
   }
 
-  private selectedProfile(): ClaudeProfileDescriptor | null {
+  selectedProfile(): ClaudeProfileDescriptor | null {
     const id = getSelectedClaudeAccountIdForTarget(this.args.getSettings(), { runtime: 'host' })
     return id ? this.describe(id) : null
   }
@@ -115,9 +116,13 @@ export class ClaudeProfileRouter {
     if (this.accountLogin(accountId)) {
       return false
     }
-    const saved = findClaudeAccount(this.args.getSettings(), accountId)
+    const saved = this.savedAccount(accountId)
     const systemDefault = this.systemDefaultLogin()
     return Boolean(saved && systemDefault && isSameClaudeLogin(saved, systemDefault))
+  }
+
+  savedAccount(accountId: string): ClaudeManagedAccount | undefined {
+    return findClaudeAccount(this.args.getSettings(), accountId)
   }
 
   systemDefaultHome(): string {

@@ -12,7 +12,8 @@ export async function prepareClaudeReceivingAccount(
   recordHome: string,
   receiving?: ClaudeAccountRecipe
 ): Promise<ClaudeAccountRecipe> {
-  if (receiving?.route === 'managed') {
+  // A removed account receives nothing: preparing it would recreate its folder.
+  if (receiving?.route === 'managed' && (!router || router.savedAccount(receiving.accountId))) {
     if (!router) {
       throw claudeProfileMissing()
     }
@@ -20,7 +21,7 @@ export async function prepareClaudeReceivingAccount(
     applyClaudeEnvPatch(env, { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home })
     return { ...receiving, home }
   }
-  if (receiving) {
+  if (receiving?.route === 'system') {
     if (receiving.configDir === null) {
       delete env.CLAUDE_CONFIG_DIR
     } else {
@@ -34,7 +35,7 @@ export async function prepareClaudeReceivingAccount(
   const preparation = await router.prepareLaunch()
   const home =
     preparation.provenance === 'system'
-      ? resolveStructuredClaudeAccountHomePath({
+      ? await resolveStructuredClaudeAccountHomePath({
           launchEnv: env,
           wslDistro: null,
           getClaudeConfigDirectory: () => router.systemDefaultHome()

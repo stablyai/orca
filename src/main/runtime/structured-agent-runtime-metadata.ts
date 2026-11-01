@@ -139,7 +139,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       resolveAccountHome: async ({ launchEnv, location, purpose }, services) =>
         agentSessionAccountHome(
           CLAUDE_STRUCTURED_AGENT,
-          resolveStructuredClaudeAccountHomePath({
+          await resolveStructuredClaudeAccountHomePath({
             launchEnv,
             wslDistro: location?.wslDistro ?? null,
             ...(purpose === 'identity' ? { purpose } : {}),

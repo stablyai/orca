@@ -1,5 +1,5 @@
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -28,7 +28,17 @@ it('launches each acquisition under the current selection, not the account it wa
   const root = mkdtempSync(join(tmpdir(), 'claude-launch-routing-'))
   roots.push(root)
   const settings: ClaudeProfileRouterSettings = {
-    claudeManagedAccounts: [],
+    claudeManagedAccounts: [
+      {
+        id: 'a',
+        email: 'a@example.test',
+        authMethod: 'subscription-oauth',
+        managedAuthPath: '/unused',
+        createdAt: 0,
+        updatedAt: 0,
+        lastAuthenticatedAt: 0
+      }
+    ],
     activeClaudeManagedAccountId: 'a',
     activeClaudeManagedAccountIdsByRuntime: undefined,
     agentStatusHooksEnabled: false,
@@ -60,8 +70,8 @@ it('launches each acquisition under the current selection, not the account it wa
     })
   const home = join(root, 'claude-profiles', 'a', 'home')
   // Dispatch identity names the selected account before its folder exists; availability reads refuse.
-  expect(read('identity')).toBe(home)
-  expect(() => read()).toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
+  await expect(read('identity')).resolves.toBe(home)
+  await expect(read()).rejects.toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
   expect(runSetup).not.toHaveBeenCalled()
   const record = {
     ...agentSessionRecordFixture(),
@@ -95,8 +105,8 @@ it('launches each acquisition under the current selection, not the account it wa
   writeFileSync(join(root, 'claude-profiles', 'a', 'profile.json'), '{}')
   const routed = await resolve({ identity })
   expect(routed.claudeConfigDir).toBe(home)
-  expect(read()).toBe(home)
-  expect(read('identity')).toBe(home)
+  await expect(read()).resolves.toBe(home)
+  await expect(read('identity')).resolves.toBe(home)
   expect(routed.env).toMatchObject({
     CLAUDE_CONFIG_DIR: home,
     ORCA_CLAUDE_INJECTED_CONFIG_DIR: home
@@ -111,7 +121,15 @@ it('launches each acquisition under the current selection, not the account it wa
   expect(prepareAccount).toHaveBeenCalledWith('a')
   expect(settings.activeClaudeManagedAccountId).toBeNull()
   prepareAccount.mockRestore()
-  expect(read()).toBe(resolvePath('/user/own'))
+  await expect(read()).resolves.toBe(resolvePath('/user/own'))
+
+  // A removed account receives nothing: its relaunch takes the selection instead of recreating it.
+  rmSync(join(root, 'claude-profiles', 'a'), { recursive: true, force: true })
+  settings.claudeManagedAccounts = []
+  expect((await resolve({ identity, accountRecipe: receipt })).claudeConfigDir).toBe(
+    resolvePath('/user/own')
+  )
+  expect(existsSync(join(root, 'claude-profiles', 'a'))).toBe(false)
 })
 
 function routedResumeFixture(rewind?: AgentSessionRewindRecord, transcriptFiles = false) {

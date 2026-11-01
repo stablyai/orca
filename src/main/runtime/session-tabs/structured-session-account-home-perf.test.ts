@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -20,6 +21,10 @@ vi.mock('node:fs', async (original) => {
     readFileSync: vi.fn(actual.readFileSync),
     readdirSync: vi.fn(actual.readdirSync)
   }
+})
+vi.mock('node:fs/promises', async (original) => {
+  const actual = await original<typeof fsp>()
+  return { ...actual, stat: vi.fn(actual.stat), readFile: vi.fn(actual.readFile) }
 })
 vi.mock('../../orca-profiles/profile-storage-paths', async () => {
   const { tmpdir } = await import('node:os')
@@ -98,13 +103,15 @@ it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (
           structuredAgentLaunchEnv: () => ({})
         }
       )
-      const reads = vi.spyOn(router, 'routedHome')
+      const reads = vi.spyOn(router, 'selectedProfile')
       for (const spy of [
         fs.statSync,
         fs.lstatSync,
         fs.existsSync,
         fs.readFileSync,
-        fs.readdirSync
+        fs.readdirSync,
+        fsp.stat,
+        fsp.readFile
       ]) {
         vi.mocked(spy).mockClear()
       }
@@ -121,18 +128,23 @@ it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (
         variable: 'CLAUDE_CONFIG_DIR',
         path: signedIn ? selectedHome : systemHome
       })
-      const stats = vi.mocked(fs.statSync).mock.calls.length
-      const directoryStats = vi.mocked(fs.lstatSync).mock.calls.length
-      const stateReads = vi.mocked(fs.readFileSync).mock.calls.length
+      const stats = vi.mocked(fsp.stat).mock.calls.length
+      const stateReads = vi.mocked(fsp.readFile).mock.calls.length
       expect(reads).toHaveBeenCalledTimes(deliveries)
       expect(selectionReads).toBe(deliveries)
       expect(accountVisits).toBe(signedIn ? 0 : accounts * deliveries)
-      expect(stats).toBe(signedIn ? deliveries : 2 * deliveries)
-      expect(directoryStats).toBe(signedIn ? deliveries : 0)
-      expect(vi.mocked(fs.existsSync).mock.calls.length).toBeLessThanOrEqual(2 * deliveries)
+      // Chat reads run on main once per options read and send: nothing here may block it.
+      for (const spy of [
+        fs.statSync,
+        fs.lstatSync,
+        fs.existsSync,
+        fs.readFileSync,
+        fs.readdirSync
+      ]) {
+        expect(spy).not.toHaveBeenCalled()
+      }
       expect(stateReads).toBe(1) // Cold first read, then metadata-validated login cache.
-      expect(vi.mocked(fs.readFileSync).mock.calls[0][0]).toBe(stateFile)
-      expect(fs.readdirSync).not.toHaveBeenCalled()
+      expect(vi.mocked(fsp.readFile).mock.calls[0][0]).toBe(stateFile)
       console.info('account-home-perf', {
         accounts,
         deliveries,
@@ -140,7 +152,6 @@ it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (
         selectionReads,
         accountVisits,
         stats,
-        directoryStats,
         stateReads,
         stateBytes: Buffer.byteLength(state),
         elapsedMs

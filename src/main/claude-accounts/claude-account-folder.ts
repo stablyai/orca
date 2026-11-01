@@ -33,13 +33,28 @@ const oauthAccount = z.object({
   organizationName: text
 })
 
-export function claudeStateFile(configDir: string | undefined, userHome = homedir()): string {
+export function claudeStateFile(
+  configDir: string | undefined,
+  userHome = homedir(),
+  exists: (path: string) => boolean = existsSync
+): string {
   return resolveClaudeGlobalConfigFile({
     env: { CLAUDE_CONFIG_DIR: configDir },
     homeDir: userHome,
     style: process.platform === 'win32' ? 'win32' : 'posix',
-    exists: existsSync
+    exists
   })
+}
+
+/** Same file as claudeStateFile, without blocking main on the legacy-file check. */
+export async function claudeStateFileAsync(
+  configDir: string | undefined,
+  userHome = homedir()
+): Promise<string> {
+  const legacy = claudeStateFile(configDir, userHome, () => true)
+  return (await stat(legacy).catch(() => null))
+    ? legacy
+    : claudeStateFile(configDir, userHome, () => false)
 }
 
 // Cache large, frequently rewritten state files across account-list refreshes.
