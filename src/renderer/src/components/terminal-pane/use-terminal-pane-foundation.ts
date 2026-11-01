@@ -23,6 +23,7 @@ import type { PaneProcessExit } from './pty-connection-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalErrorsByPaneId } from './terminal-error-accumulation'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
+import type { TerminalContextMenuFileLinkResolver } from './terminal-context-menu-file-link-resolver'
 
 export function useTerminalPaneFoundation(props: TerminalPaneProps) {
   const {
@@ -50,6 +51,7 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
   const paneCwdRef = useRef<PaneCwdMap>(new Map())
+  const resolveContextMenuFileLinkRef = useRef<TerminalContextMenuFileLinkResolver | null>(null)
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
   const paneKittyKeyboardModesRef = useRef<Map<number, TerminalKittyKeyboardModeTracker>>(new Map())
   const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
@@ -175,6 +177,7 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
     activityIsolationSnapshotRef,
     paneTransportsRef,
     paneCwdRef,
+    resolveContextMenuFileLinkRef,
     paneMode2031Ref,
     paneKittyKeyboardModesRef,
     paneLastThemeModeRef,
