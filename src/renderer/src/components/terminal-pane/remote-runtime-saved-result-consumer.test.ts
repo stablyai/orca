@@ -114,7 +114,9 @@ it.each([
         tabId: record.tabId,
         isVisibleRef: { current: true },
         onShowSessionRestoredBanner: note,
-        paneTransportsRef: { current: new Map([[1, transport]]) }
+        paneTransportsRef: { current: new Map([[1, transport]]) },
+        paneMode2031Ref: { current: new Map() },
+        paneLastThemeModeRef: { current: new Map() }
       },
       cacheKey: record.paneKey,
       paneStartup: kind === 'observer-only' ? null : startup,

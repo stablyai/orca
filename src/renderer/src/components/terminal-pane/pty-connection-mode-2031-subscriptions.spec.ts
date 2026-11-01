@@ -107,7 +107,7 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         dispose()
       })
 
-      it('reports a flip missed while disconnected exactly once on reconnect', async () => {
+      it('catches a subscribed pane up to the current mode once per (re)connect', async () => {
         const { transport, emit, reconnect, dispose } = await connectVisiblePane()
         emit('\x1b[?2031h')
         mockStoreState = {
