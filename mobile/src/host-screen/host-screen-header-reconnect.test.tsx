@@ -17,6 +17,7 @@ vi.mock('lucide-react-native', () => ({
   List: 'Icon',
   MoreHorizontal: 'Icon',
   PanelLeftClose: 'Icon',
+  Gauge: 'Icon',
   SquareTerminal: 'Icon',
   UserCircle: 'Icon'
 }))
@@ -122,6 +123,36 @@ describe("the host header's ⋯ menu", () => {
     expect(controls(tree, 'Workspace options')).toHaveLength(0)
     expect(controls(tree, 'Search workspaces')).toHaveLength(0)
     expect(controls(tree, 'New workspace')).toHaveLength(0)
+  })
+})
+
+describe('host Resources entry', () => {
+  let tree: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => tree?.unmount())
+    tree = null
+  })
+
+  it('sits beside Accounts and opens the resources page', () => {
+    const navigate = vi.fn()
+    const controller = {
+      ...controllerWith(null),
+      hostId: 'host/with space',
+      connState: 'connected' as const,
+      actions: { ...controllerWith(null).actions, navigateFromHostList: navigate }
+    }
+    act(() => {
+      tree = create(createElement(HostScreenHeader, { controller }))
+    })
+    act(() => controls(tree!, 'More actions')[0]?.props.onPress())
+    const menuItems = tree!.root.findAll((node) => String(node.type) === 'MenuItem')
+    const resources = controls(tree!, 'Resources')
+    expect(resources).toHaveLength(1)
+    const entryIndex = menuItems.indexOf(resources[0]!)
+    expect(menuItems[entryIndex - 1]?.props.accessibilityLabel).toBe('Accounts')
+    expect(resources[0]?.props.disabled).toBe(false)
+    act(() => resources[0]?.props.onPress())
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/h/host%2Fwith%20space/resources')
   })
 })
 
