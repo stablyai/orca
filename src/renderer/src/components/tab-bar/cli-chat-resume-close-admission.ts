@@ -161,7 +161,9 @@ export async function admitCliChatResumeClose(
     toast.error(structuredChatUnavailableText(support.reason))
     return null
   }
-  if (support.kind !== 'admitted') {
+  // Closing is irreversible: a host that could not say whether it checked the other writers has
+  // not admitted it.
+  if (support.kind !== 'admitted' || support.writers === 'unknown') {
     throw new Error('chat unavailable')
   }
   const permission = await readStructuredChatHostPermissionVerdict(target, agent)

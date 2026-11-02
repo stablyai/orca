@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
   toastInfo: vi.fn(),
   toastError: vi.fn(),
   launchAgentInNewTab: vi.fn(),
-  hostPermission: vi.fn()
+  hostPermission: vi.fn(),
+  writerCapability: vi.fn(async () => 'supported')
 }))
 
 vi.mock('sonner', () => ({ toast: { info: mocks.toastInfo, error: mocks.toastError } }))
@@ -35,7 +36,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     return new Promise(() => undefined)
   }),
   structuredAgentSessionHostSupports: async () => true,
-  structuredAgentSessionHostCapabilityState: async () => 'supported'
+  structuredAgentSessionHostCapabilityState: mocks.writerCapability
 }))
 
 vi.mock('@/runtime/structured-chat-host-permission', async (importOriginal) => ({
@@ -508,6 +509,33 @@ describe('a structured chat launch on a paired server', () => {
         })
       ])
     )
+    launch?.cancel()
+  })
+
+  // An unread capability is neither an older server nor an unreachable one: the resume asks the
+  // plain question and create decides, as before the early writer question existed.
+  it('opens a resumed chat when the server could not say what it supports', async () => {
+    mocks.writerCapability.mockResolvedValueOnce('unknown')
+    mocks.createSupport.mockResolvedValue({ supported: true })
+
+    const launch = beginStructuredAgentSessionProvisionalLaunch({
+      plan: pairedPlan({ resumeFrom: { providerSessionId: 'provider-1' } }),
+      hooks: {},
+      onHostDeclined: vi.fn()
+    })
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
+        expect.objectContaining({
+          contentType: 'agent-session',
+          executionHostId: 'runtime:server-1'
+        })
+      ])
+    )
+    // Admission's question is the plain one; create asks it again on its own.
+    expect(mocks.createSupport.mock.calls[0]).toEqual([
+      { worktree: `id:${WORKTREE}`, agent: 'claude' }
+    ])
+    expect(mocks.toastError).not.toHaveBeenCalled()
     launch?.cancel()
   })
 })

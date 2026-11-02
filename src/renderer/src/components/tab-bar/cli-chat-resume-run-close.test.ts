@@ -290,11 +290,13 @@ describe('close terminal then continue on capable hosts', () => {
   })
 
   // A failed read is no proof of an older host: asked without the conversation, it would admit
-  // the resume its create then refuses, after the terminal closed.
+  // the resume its create then refuses, after the terminal closed. The verdict is that one read's:
+  // read again here, the capability would say supported.
   it('keeps the terminal when the host cannot say whether it checks other terminals', async () => {
     mocks.capabilityState.mockResolvedValueOnce('unknown')
     await runCliChatResume(SOURCE)
-    expect(mocks.createSupport).not.toHaveBeenCalled()
+    expect(mocks.capabilityState).toHaveBeenCalledOnce()
+    expect(mocks.createSupport.mock.calls).toEqual([[{ worktree: 'id:wt-1', agent: 'claude' }]])
     expect(mocks.closeTerminal).not.toHaveBeenCalled()
     expect(tabs()).toEqual([])
     expect(creates()).toEqual([])
