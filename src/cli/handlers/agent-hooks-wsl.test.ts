@@ -169,7 +169,7 @@ describe.skipIf(process.platform === 'win32')(
       rmSync(root, { recursive: true, force: true })
     })
 
-    function captureWrapperContext(): string {
+    function captureWrapperContext(args = ['agent', 'hooks', 'on']): string[] {
       const bin = join(root, 'interop')
       const wrapper = join(bin, 'orca-ide')
       const powershell = join(bin, 'powershell.exe')
@@ -178,13 +178,14 @@ describe.skipIf(process.platform === 'win32')(
       writeFileSync(powershell, '#!/bin/bash\nprintf "%s\\0" "$@"\n', { mode: 0o700 })
       const result = runProcessSync({
         program: '/bin/bash',
-        args: [wrapper, 'agent', 'hooks', 'on'],
+        args: [wrapper, ...args],
         cwd: work,
         env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, WSL_DISTRO_NAME: 'ProofDistro' }
       })
       expect(result.code, result.stderr).toBe(0)
       const argv = result.stdout.split('\0')
-      expect(argv.slice(-4, -1)).toEqual(['agent', 'hooks', 'on'])
+      expect(argv.slice(-args.length - 1, -1)).toEqual(args)
+      expect(argv).toContain('-WslContext')
       const raw = argv[argv.indexOf('-WslContext') + 1]
       expect(readWslCliContext(raw)).toEqual({
         user: userInfo().username,
@@ -199,19 +200,22 @@ describe.skipIf(process.platform === 'win32')(
         }
       })
       vi.stubEnv('ORCA_CLI_WSL_CONTEXT', raw)
-      return raw
+      return argv.slice(-args.length - 1, -1)
     }
 
-    async function command(action: string): Promise<Record<string, unknown>> {
+    async function command(
+      action: string,
+      argv = ['agent', 'hooks', action, '--json']
+    ): Promise<Record<string, unknown>> {
       vi.mocked(console.log).mockClear()
-      await main(['agent', 'hooks', action, '--json'], work)
+      await main(argv, work)
       expect(process.exitCode, JSON.stringify(vi.mocked(console.log).mock.calls)).not.toBe(1)
       const text = vi.mocked(console.log).mock.calls.at(-1)?.[0]
       return JSON.parse(String(text)).result
     }
 
     it('carries original wrapper context through CLI, mux, guest authority and a linked event-only lifecycle', async () => {
-      captureWrapperContext()
+      const forwarded = captureWrapperContext(['agent', '--json', 'hooks', 'status'])
       const physical = join(root, 'physical.json')
       const user = {
         model: 'user-model',
@@ -222,7 +226,7 @@ describe.skipIf(process.platform === 'win32')(
       }
       writeFileSync(physical, JSON.stringify(user), { mode: 0o640 })
       symlinkSync(physical, settings)
-      expect((await command('status')).statuses).toEqual([
+      expect((await command('status', forwarded)).statuses).toEqual([
         expect.objectContaining({ state: 'not_installed', configPath: settings })
       ])
       expect(existsSync(join(home, '.orca'))).toBe(false)
@@ -271,14 +275,9 @@ describe.skipIf(process.platform === 'win32')(
       ])
       expect(readFileSync(settings, 'utf8')).toBe('{invalid')
       expect(closes).toBe(1)
-      // An actual admitted open is held; command EOF must wait, then fence rename and clean its temporary.
-      const { openWslHookCommandSession } =
-        await import('../../main/agent-hooks/wsl-hook-command-session')
-      const { WSL_HOOK_FS_METHODS } = await import('../../shared/wsl-hook-relay-contract')
-      const session = await openWslHookCommandSession(
-        'ProofDistro',
-        process.env.ORCA_CLI_WSL_CONTEXT ?? ''
-      )
+      // The parent interrupt must join the service's admitted publication before CLI settlement.
+      const original = JSON.stringify({ model: 'keep' })
+      writeFileSync(settings, original)
       let admitted!: () => void
       const entered = new Promise<void>((resolve) => {
         admitted = resolve
@@ -291,36 +290,49 @@ describe.skipIf(process.platform === 'win32')(
       const open = fs.open.bind(fs)
       vi.spyOn(fs, 'open').mockImplementation(async (...args) => {
         const file = await open(...args)
-        admitted()
-        await held
+        if (String(args[0]).startsWith(`${target}/`)) {
+          admitted()
+          await held
+        }
         return file
       })
-      const abort = new AbortController()
-      const publishing = session.mux.request(
-        WSL_HOOK_FS_METHODS.writeFile,
-        {
-          path: settings,
-          content: '{}',
-          physicalAtomic: true
-        },
-        { signal: abort.signal }
-      )
-      void publishing.catch(() => {})
-      await entered
-      abort.abort()
-      await expect(publishing).rejects.toMatchObject({ name: 'AbortError' })
+      const rename = vi.spyOn(fs, 'rename')
+      const listenersBefore = process.listeners('SIGINT')
       let settled = false
-      const closing = session.close().then(() => {
+      const publishing = command('on').then((result) => {
         settled = true
+        return result
       })
-      await new Promise((resolve) => setImmediate(resolve))
-      expect(settled).toBe(false)
-      release()
-      await closing
-      await publishing.catch(() => {})
-      expect(readFileSync(settings, 'utf8')).toBe('{invalid')
-      expect(await fs.readdir(target)).toEqual(['settings.json'])
-      expect(closes).toBe(2)
+      void publishing.catch(() => {})
+      try {
+        await entered
+        const interrupt = process
+          .listeners('SIGINT')
+          .find((listener) => !listenersBefore.includes(listener))
+        expect(interrupt).toBeDefined()
+        interrupt?.('SIGINT')
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(settled).toBe(false)
+        expect(closes).toBe(1)
+        release()
+        expect((await publishing).statuses).toEqual([
+          expect.objectContaining({
+            state: 'error',
+            configPath: settings,
+            detail: expect.stringContaining('WSL hooks command was canceled')
+          })
+        ])
+        expect(readFileSync(settings, 'utf8')).toBe(original)
+        expect(await fs.readdir(target)).toEqual(['settings.json'])
+        expect(rename.mock.calls.some(([, destination]) => destination === settings)).toBe(false)
+        expect(closes).toBe(2)
+        expect(harness.spawn).toHaveBeenCalledTimes(2)
+        expect(harness.apply).not.toHaveBeenCalled()
+        expect(process.listeners('SIGINT')).toEqual(listenersBefore)
+      } finally {
+        release()
+        await publishing.catch(() => {})
+      }
     })
   }
 )

@@ -1,5 +1,6 @@
 import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 import { WSL_CLI_ROOT_ENV_KEYS } from '../../shared/wsl-cli-context'
+import { CLI_BOOLEAN_FLAGS, CLI_GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 
 const MANAGED_MARKER = '# Orca managed WSL CLI launcher'
@@ -47,6 +48,12 @@ function buildLauncher(
   resolvePowerShell: string
 ): string {
   const encodedTarget = Buffer.from(windowsLauncherPath, 'utf8').toString('base64')
+  const booleanFlags = CLI_GLOBAL_FLAGS.filter((flag) => CLI_BOOLEAN_FLAGS.has(flag))
+    .map((flag) => `--${flag}`)
+    .join('|')
+  const valueFlags = CLI_GLOBAL_FLAGS.filter((flag) => !CLI_BOOLEAN_FLAGS.has(flag))
+    .map((flag) => `--${flag}`)
+    .join('|')
   const contextFields = WSL_CLI_ROOT_ENV_KEYS.map((key) => `"\${${key}+1}" "\${${key}:-}"`).join(
     ' '
   )
@@ -65,7 +72,22 @@ ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
   cd /
 }
 ORCA_WSL_CONTEXT=''
-if [ "\${1:-}" = agent ] && [ "\${2:-}" = hooks ]; then
+# Why: the CLI accepts global flags between command words; inspect without changing forwarded argv.
+orca_is_hook_command() {
+  local -a ORCA_WSL_PARTS=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --*=*|${booleanFlags}) shift ;;
+      ${valueFlags})
+        shift
+        if [ "$#" -gt 0 ] && [[ "$1" != --* ]]; then shift; fi
+        ;;
+      *) ORCA_WSL_PARTS+=("$1"); shift ;;
+    esac
+  done
+  [ "\${ORCA_WSL_PARTS[0]:-}" = agent ] && [ "\${ORCA_WSL_PARTS[1]:-}" = hooks ]
+}
+if orca_is_hook_command "$@"; then
   ORCA_WSL_CONTEXT=$(printf '%s\\0' 1 "$(id -un)" "$HOME" "$ORCA_WSL_CWD" ${contextFields} | base64 | tr -d '\\n')
 fi
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
