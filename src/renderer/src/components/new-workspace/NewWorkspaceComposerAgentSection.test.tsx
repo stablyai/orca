@@ -51,7 +51,9 @@ describe('NewWorkspaceComposerAgentSection agent picker', () => {
       button: 0,
       ctrlKey: false
     })
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Blank Terminal' }))
+    const blankTerminal = screen.getByRole('menuitem', { name: 'Blank Terminal' })
+    expect(blankTerminal.querySelector('svg')).not.toBeNull()
+    fireEvent.click(blankTerminal)
 
     expect(onQuickAgentChange).toHaveBeenCalledWith(null)
   })
