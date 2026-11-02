@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SendParams } from '../../shared/rpc-contract/structured-agent-session-params'
+import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import { parseChatSessionSelector } from '../chat-sessions'
 import { RuntimeClientError } from '../runtime-client'
 import { CHAT_HANDLERS } from './chat'
@@ -56,7 +57,7 @@ function item(body: unknown) {
 
 function fakeClient(
   responses: unknown[],
-  capabilities: string[] = ['agent-session.queued-messages.v1']
+  capabilities: string[] = [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY]
 ) {
   const call = vi.fn()
   for (const response of responses) {
