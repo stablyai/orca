@@ -44,31 +44,42 @@ export function editor(input: PluginTemplateInput): PluginTemplate {
       textarea {
         box-sizing: border-box;
         width: 100%;
-        height: calc(100vh - 24px);
+        height: calc(100vh - 48px);
         color: inherit;
         background: transparent;
         border: 1px solid var(--orca-border);
         font: 13px ui-monospace, monospace;
       }
+      #notice {
+        margin: 4px 0 0;
+        min-height: 16px;
+        color: var(--orca-destructive);
+      }
     </style>
   </head>
   <body>
     <textarea id="text" spellcheck="false"></textarea>
+    <p id="notice" role="status"></p>
     <script>
       const text = document.getElementById('text')
-      let version = 0
-      // Orca sends the document now and again whenever the file changes outside the editor.
-      orca.document.onDidChange((doc) => {
-        version = doc.version
+      const notice = document.getElementById('notice')
+      // The session sends edits, keeps unaccepted typing, and answers Orca's save.
+      orca.document.session().then((doc) => {
+        text.value = doc.value
         text.readOnly = doc.readOnly
-        if (doc.content.kind === 'text' && text.value !== doc.content.text) {
-          text.value = doc.content.text
-        }
-      })
-      text.addEventListener('input', () => {
-        void orca.document
-          .applyEdit({ baseVersion: version, content: { kind: 'text', text: text.value } })
-          .catch((error) => console.warn(error.code, error.message))
+        doc.onReplace((value) => (text.value = value))
+        let check = 0
+        text.addEventListener('input', () => {
+          doc.change(text.value)
+          clearTimeout(check)
+          // Once typing pauses, show a refused edit; on a conflict the outside change replaces it.
+          check = setTimeout(() => {
+            doc.flush().then(
+              () => (notice.textContent = ''),
+              (error) => (notice.textContent = 'Not saved: ' + error.message)
+            )
+          }, 500)
+        })
       })
     </script>
   </body>

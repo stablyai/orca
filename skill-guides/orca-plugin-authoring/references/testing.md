@@ -8,6 +8,7 @@
 
 - `function mockHost(options?: MockHostOptions): MockHost`: A stand-in Orca host that refuses what Orca refuses, with the same codes: a missing capability, bad params, a method panels cannot call, and a user-gesture method (`shell.openExternal`, `files.saveAs`) without a press first.
 - `function hostError(code: string, message?: string, retryAfterMs?: number): HostError`
+- `function mockEditorHost(file: MockEditorFile, options?: MockEditorHostOptions): MockEditorHost`: A stand-in for Orca's custom editor host, backed by an in-memory file: installs `globalThis.orca` with the real frame shell's document API and `session()`, so sync logic tests in Node. Answers only document calls. One at a time: a new one disposes the last.
 - `function stored(value: unknown, version: number): unknown`: A persisted value an older version wrote, to test an atom's `migrate`.
 - `function mount(target: PanelModule | (() => OrcaNode), options?: MountOptions): Promise<TestPanel>`: Mounts a panel module (`import * as panel from './panel'`) or its component, with the real runtime and Orca's own checks, and resolves once it has drawn. Mounting again starts over: every atom goes back to its initial value.
 - `function mountWorker(module: WorkerModule, options?: MountWorkerOptions): Promise<TestWorker>`: Calls the worker's default-exported `activate(orca)` with the `orca` object Orca passes, backed by `mockHost` (worker methods, the manifest's capabilities). `.ts` mains load as Orca loads them.
@@ -74,9 +75,23 @@
 - `respond(method: string, result: unknown)`
 - `data()`: The plugin's storage, settings and secrets as they are now.
 
+## `MockEditorHost` (from `mockEditorHost`)
+
+- `orca: OrcaFrameApi`: The frame API, also installed as `globalThis.orca`.
+- `text: string | undefined`: The file as Orca holds it now; undefined for a bytes file.
+- `bytes: Uint8Array | undefined`
+- `version: number`: Rises with each document sent to the editor.
+- `edits: readonly MockEditorEdit[]`: Every `applyEdit`, in order, refused ones included.
+- `replace(next: string | ArrayBuffer | Uint8Array)`: An outside change, such as an agent writing the file.
+- `conflictNext(outside?: string | ArrayBuffer | Uint8Array)`: Refuses the next edit with `conflict`, after landing `outside` first when given.
+- `flush()`: As a save does: asks the editor for pending edits and waits for its answer (1 s).
+- `setTheme(colorScheme: 'light' | 'dark')`
+- `dispose()`: Removes `globalThis.orca`.
+
 ## Options
 
 - `MountOptions = { host?: MockHost; theme?: 'light' | 'dark'; locale?: string; visible?: boolean; panelId?: string; persisted?: { plugin?: Record<string, unknown>; workspace?: Record<string, unknown> } }`
 - `MountWorkerOptions = { host?: MockHost; events?: readonly string[]; commands?: readonly string[] }`
 - `MockHostOptions = { capabilities?: readonly string[]; results?: Record<string, unknown>; requests?: MockRequests; storage?: Record<string, JsonValue>; settings?: Record<string, JsonValue>; secrets?: Record<string, string> }`
+- `MockEditorHostOptions = { readOnly?: boolean; colorScheme?: 'light' | 'dark'; locale?: string; fileType?: string }`
 - `CheckScenario = MockHostOptions & { persisted?: MountOptions['persisted']; theme?: 'light' | 'dark'; events?: readonly { [E in keyof OrcaEvents]: { event: E; payload: OrcaEvents[E] } }[keyof OrcaEvents][] }`

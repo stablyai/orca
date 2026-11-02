@@ -22,6 +22,10 @@ import {
 import { writePluginTypeFiles } from '../plugin-authoring/plugin-type-files'
 import { findPluginTestFiles, runPluginTests } from '../plugin-authoring/plugin-test-runner'
 import { checkPluginPanels, formatPluginPanelCheck } from '../plugin-authoring/plugin-panel-check'
+import {
+  checkPluginEditors,
+  formatPluginEditorCheck
+} from '../plugin-authoring/plugin-editor-check'
 import { RuntimeClientError } from '../runtime/types'
 import { PLUGIN_INVALID_CODE } from '../../shared/plugins/approval/plugin-cli-approval'
 import { formatPluginGrantLines } from '../plugin-authoring/plugin-grant-lines'
@@ -189,17 +193,23 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
     if (!report.valid) {
       throw invalidError(report)
     }
-    const panels = await checkPluginPanels(report.path)
-    const failed = panels.filter((panel) => panel.issues.length > 0)
+    const [panels, editors] = await Promise.all([
+      checkPluginPanels(report.path),
+      checkPluginEditors(report.path)
+    ])
+    const failed = [...panels, ...editors].some((check) => check.issues.length > 0)
     const text = [
       `${report.file}: ok`,
       ...panels.flatMap(formatPluginPanelCheck),
-      ...(panels.length === 0 ? ['No components panels to render.'] : [])
+      ...editors.flatMap(formatPluginEditorCheck),
+      ...(panels.length === 0 && editors.length === 0
+        ? ['No components panels or custom editors to check.']
+        : [])
     ].join('\n')
-    if (failed.length > 0) {
-      throw new RuntimeClientError('plugin_check_failed', text, { ...report, panels })
+    if (failed) {
+      throw new RuntimeClientError('plugin_check_failed', text, { ...report, panels, editors })
     }
-    printPluginResult(ctx, { ...report, panels }, text)
+    printPluginResult(ctx, { ...report, panels, editors }, text)
   },
   'plugin validate': async (ctx) => {
     const path = resolveLocalPluginPath(ctx, requirePluginPathArg(ctx, 'path'), 'validate')

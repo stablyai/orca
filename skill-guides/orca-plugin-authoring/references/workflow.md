@@ -17,7 +17,8 @@ loads the folder (refreshing `.orca/types`) and prints one JSON object per line:
 - `reloaded` (before that reload's logs) and `status` (`errored`/`invalid` with the error).
 - `approval`: an edit asked for new access; it carries the `dev reload … --approve` command to
   show the user. The watch keeps running and never approves.
-- `check` (with `--check`): `orca plugin check` after the load and each reload. `ok` is false
+- `check` (with `--check`): `orca plugin check` after the load and each reload, with `panels`
+  and `editors` (each custom editor checked without running it). `ok` is false
   unless Orca also runs the plugin; `checkOk` is the check alone, `pluginStatus`/`pluginError`
   what Orca reports.
 - `shot` (with `--shot`): `{ path, width, height, settled, errors }` for the panel opened once at

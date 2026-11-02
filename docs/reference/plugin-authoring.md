@@ -302,7 +302,36 @@ the buffer, dirty state, saving, the external-change banner, read-only tabs and 
 paired host) files; the frame only gets the document, never a path. Editor and panel plugins are
 trusted code, and an editor can read every file it opens, so install ones you trust.
 
-An editor's `window.orca` adds `document`:
+An editor's `window.orca` adds `document`. Most editors need only `session()`, which does the
+document sync for you:
+
+```js
+const doc = await orca.document.session({
+  decode: (content) => parseScene(content.text), // default: the text itself
+  encode: (scene) => ({ kind: 'text', text: serializeScene(scene) }), // default: plain text
+  merge: (base, outside, mine) => mergeScenes(base, outside, mine), // optional
+  debounceMs: 250 // optional, the default
+})
+render(doc.value) // the latest value, including changes Orca has not accepted yet
+doc.onReplace((scene) => render(scene)) // the file changed outside, or a conflict merged
+onUserEdit((scene) => doc.change(scene)) // a no-op while doc.readOnly
+await doc.flush() // send now; rejects with the refusal's code
+```
+
+`session()` resolves once Orca has sent the theme, locale and first document, so start the editor
+from it. It keeps one edit in flight and coalesces later changes, moves its baseline only when Orca
+accepts an edit, and never hands your own accepted edits back through `onReplace`. A refused edit
+keeps your draft and rejects `flush()`. On `conflict` it calls `merge(base, outside, mine)` once,
+where `base` is the last accepted value, and sends the result. Without `merge` the outside
+document wins, since an agent may have written the file: the draft is dropped, `onReplace` gets
+the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. It answers Orca's `editor.flush`
+itself before a save. Bytes editors pass both `decode` and `encode`. Check `'session' in
+orca.document` to support older Orca.
+
+Orca keeps no undo history for a custom editor: Cmd/Ctrl+Z reaches the frame, and the editor owns
+undo.
+
+The lower-level calls, for an editor that does its own sync:
 
 ```js
 const doc = await orca.document.get() // { version, readOnly, content, fileType? }
@@ -337,6 +366,31 @@ inside the frame, never on a call alone.
 Theme changes do not reload the frame: the shell updates the `--orca-*` variables and the
 `light`/`dark` class on `<html>` in place and emits `theme`. Restyle from the variables, or
 listen with `orca.on('theme', …)`, to follow it.
+
+`orca plugin check` (and `dev watch --check`) checks each custom editor without running it or
+Orca: from the `entry` it follows local `<script src>` files, inline module scripts and relative
+imports, and fails at `file:line:column` on a syntax error (`editor_syntax`), a missing file
+(`editor_missing_file`), an import Orca refuses (`editor_import`) and a file over its limit
+(`editor_too_large`). String `eval` or `Function`, which the frame refuses, is a warning
+(`editor_eval`): the scan can misread rare code. `--json` lists them under `editors`.
+
+To test an editor's sync logic in Node, `mockEditorHost` from `orca/testing` installs
+`globalThis.orca` with the real document API and `session()` over an in-memory file:
+
+```ts
+import { assert, mockEditorHost, test } from 'orca/testing'
+
+test('keeps an agent write', async () => {
+  const host = mockEditorHost({ text: '{"elements":[]}' }) // or { bytes }, plus { readOnly, colorScheme }
+  await import('./sync.ts') // your code calls orca.document.session()
+  host.replace('{"elements":[1]}') // an outside change
+  host.conflictNext() // the next edit is refused with `conflict`
+  await host.flush() // as a save does
+  assert.equal(host.edits.length, 1) // every applyEdit, refused ones with `refused: code`
+  host.setTheme('light')
+  host.dispose()
+})
+```
 
 ## 2. Load it while you work
 

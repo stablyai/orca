@@ -64,7 +64,7 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['plugin', 'check'],
     summary:
-      'Validate a plugin and render each components panel once on this machine, unsandboxed: only for code you trust',
+      'Validate a plugin, render each components panel once on this machine (unsandboxed: only for code you trust), and statically check each custom editor',
     usage: 'orca plugin check [dir] [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'dir'],
     positionalArgs: ['dir'],

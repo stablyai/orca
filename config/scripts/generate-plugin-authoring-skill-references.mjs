@@ -162,12 +162,17 @@ function renderTesting({ testing }) {
       ['## `TestPanel` (from `mount`)', '', ...members('TestPanel'), ''],
       ['## `TestWorker` (from `mountWorker`)', '', ...members('TestWorker'), ''],
       ['## `MockHost` (from `mockHost`)', '', ...members('MockHost'), ''],
+      ['## `MockEditorHost` (from `mockEditorHost`)', '', ...members('MockEditorHost'), ''],
       [
         '## Options',
         '',
-        ...['MountOptions', 'MountWorkerOptions', 'MockHostOptions', 'CheckScenario'].map(
-          (name) => `- ${code(testing.typeDeclaration(name))}`
-        )
+        ...[
+          'MountOptions',
+          'MountWorkerOptions',
+          'MockHostOptions',
+          'MockEditorHostOptions',
+          'CheckScenario'
+        ].map((name) => `- ${code(testing.typeDeclaration(name))}`)
       ]
     ]
   )
