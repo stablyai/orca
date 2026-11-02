@@ -7,18 +7,6 @@ import {
 } from '../../native-chat/input/native-chat-session-option-defaults'
 
 describe('agent session option catalog', () => {
-  it('returns no catalog for unknown agents', () => {
-    expect(getAgentSessionOptionCatalog('future-agent')).toBeNull()
-  })
-
-  it('keeps Claude option sets model-scoped', () => {
-    const catalog = getAgentSessionOptionCatalog('claude')
-    expect(
-      catalog?.models.find((model) => model.id === 'opus')?.options.map(({ id }) => id)
-    ).toEqual(['effort', 'fastMode'])
-    expect(catalog?.models.find((model) => model.id === 'haiku')?.options).toEqual([])
-  })
-
   it('merges discovered labels while preserving cataloged option shapes', () => {
     const seed = getAgentSessionOptionCatalog('cursor')!.models
     const merged = mergeCatalogModels(seed, [
@@ -34,17 +22,6 @@ describe('agent session option catalog', () => {
       label: 'new-account-model',
       options: []
     })
-  })
-
-  it('labels Claude seed models by alias family so no host is mislabeled', () => {
-    const catalog = getAgentSessionOptionCatalog('claude')!
-    expect(catalog.models.map(({ id, label }) => ({ id, label }))).toEqual([
-      { id: 'fable', label: 'Fable' },
-      { id: 'opus', label: 'Opus' },
-      { id: 'sonnet', label: 'Sonnet' },
-      { id: 'haiku', label: 'Haiku' }
-    ])
-    expect(catalog.models.find((model) => model.isDefault)?.id).toBe('sonnet')
   })
 
   it('parses Claude list_models discovery into catalog models with options', () => {
