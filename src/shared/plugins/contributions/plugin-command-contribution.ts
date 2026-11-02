@@ -13,6 +13,8 @@ import {
 } from '../manifest/plugin-schema-field-docs'
 
 export const PLUGIN_COMMAND_LIMIT = 256
+/** First release that reads `commands[].replaces`. */
+export const PLUGIN_COMMAND_REPLACES_SINCE = '1.4.248'
 
 // Why `workspace`: folder workspaces exist too; format 1's `worktree` is rewritten on parse.
 // Why `when`: it is meant to grow into an expression (`workspaceKind == folder`, `remote`) in
@@ -57,6 +59,14 @@ export const pluginCommandContributionSchema = z
       // Why: the runtime refinement accepts exactly this set, so editors can complete it.
       enum: [...PLUGIN_COMMAND_ALIAS_ACTION_IDS],
       [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_COMMAND_ACTION_SINCE
+    }),
+    replaces: pluginCommandIdSchema.optional().meta({
+      ...pluginFieldDoc(
+        "Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. The command can still run Orca's own with `commands.run`. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does.",
+        PLUGIN_COMMAND_REPLACES_SINCE,
+        ['view.tasks']
+      ),
+      enum: [...PLUGIN_COMMAND_ALIAS_ACTION_IDS]
     })
   })
   .strict()

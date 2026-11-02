@@ -13352,7 +13352,8 @@
           "replacesShortcut": "{{value0}} ({{value1}}) replaces your shortcut for {{value2}}.",
           "updatesKeepApproval": "Updates ask again only for new access",
           "fullAccessUpdates": "Updates can change its code without asking",
-          "editsFileTypes": "Opens and edits {{value0}} files in Orca. It can read the files it opens."
+          "editsFileTypes": "Opens and edits {{value0}} files in Orca. It can read the files it opens.",
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}. You can switch it back in its plugin page."
         },
         "PluginPageAction": {
           "failedTitle": "Couldn’t install {{value0}}",
@@ -19142,6 +19143,12 @@
           "Tree": {
             "loading": "Loading…"
           }
+        },
+        "PluginCommandReplacementRow": {
+          "title": "{{value0}} runs instead of Orca’s {{value1}}",
+          "conflict": "Not used: {{value0}}, installed first, replaces it",
+          "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
+          "switch": "Use {{value0}} instead of Orca’s {{value1}}"
         }
       }
     },

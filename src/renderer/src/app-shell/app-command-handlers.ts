@@ -1,4 +1,5 @@
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
@@ -104,7 +105,8 @@ export function createAppCommandHandlers(
         keybindings
       })
     }
-    run()
+    // A plugin command may replace the action; it falls back to `run`.
+    runBuiltInOrReplacement(actionId, run)
     return true
   }
   const revealRightSidebarTab = (
