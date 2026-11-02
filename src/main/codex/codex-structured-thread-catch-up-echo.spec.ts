@@ -270,7 +270,7 @@ export function registerCodexCatchUpEchoTests(input: {
     await c.journal.replaceEpochItems('handle_forked', 1, [])
     const hidden = c.journal.cursor()
     const { readCodexHistoryJournalView } = await import('./codex-history-journal-view')
-    expect(readCodexHistoryJournalView(c.journal, THREAD).latest).toBeNull()
+    expect(readCodexHistoryJournalView(c.journal, THREAD, AbortSignal.abort()).latest).toBeNull()
     await c.open([native], {
       onReceipt: (id, providerIdentity) =>
         c.journal.acceptLate({ clientMessageId: id, providerIdentity, state: 'accepted', fence: 1 })
@@ -278,7 +278,7 @@ export function registerCodexCatchUpEchoTests(input: {
     expect(c.journal.submission(clientMessageId)?.dispatchState).toBe('accepted')
     expect(c.journal.item(key)).toBeNull()
     expect(c.journal.snapshot().items).toEqual([])
-    expect(readCodexHistoryJournalView(c.journal, THREAD).latest).toBeNull()
+    expect(readCodexHistoryJournalView(c.journal, THREAD, AbortSignal.abort()).latest).toBeNull()
     expect(c.journal.cursor().epoch).toBe(hidden.epoch)
     await c.reopen()
     await c.open([native])

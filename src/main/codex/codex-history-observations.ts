@@ -34,7 +34,7 @@ export function createCodexHistoryObservations(input: {
   sessionId: string
   threadId: string
   journal: StructuredAgentSessionTransitionJournal
-  nativePromptKeys: ReadonlySet<string>
+  nativePromptKeys: Pick<ReadonlySet<string>, 'has'>
   check: () => void
   retainedHelperBytes: () => number
 }) {

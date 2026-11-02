@@ -1,3 +1,4 @@
+import { getJournalInputOrder } from './journal-input-order-registry'
 import type { JournalReducerState } from './journal-reducer'
 import {
   agentJournalSubmissionKey,
@@ -77,7 +78,18 @@ export function journalEchoClaimant(
   const fingerprint = agentSessionSendBodyFingerprint(state.sessionId, body)
   const contextSequence = latestAgentSessionContextClearSequence(state.items.values())
   // Match equal payloads in send order; proven-undelivered legacy rows cannot claim later resend echoes.
-  const submission = [...state.submissions.values()]
+  const owner = getJournalInputOrder(state)
+  const eligible = owner
+    ? [...state.items.keys()]
+        .flatMap((id) => {
+          const input = owner.inputForItem(id)
+          return input ? [input] : []
+        })
+        .sort(
+          (a, b) => owner.inputOrdinal(a.clientMessageId) - owner.inputOrdinal(b.clientMessageId)
+        )
+    : [...state.submissions.values()]
+  const submission = eligible
     .sort((left, right) => left.submittedAt - right.submittedAt)
     .find(
       (candidate) =>

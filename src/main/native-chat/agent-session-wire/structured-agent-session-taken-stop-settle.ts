@@ -16,7 +16,7 @@ export async function settleTakenStop(
   let opened = false
   try {
     const records = ctx.journal
-      .snapshot()
+      .itemsRead()
       .items.filter((item) => readAgentJournalTurn(item.body)?.turnId === turnId)
     opened = records.length > 0
     if (!opened) {

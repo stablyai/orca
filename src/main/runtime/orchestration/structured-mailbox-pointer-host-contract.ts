@@ -14,13 +14,16 @@ export type StructuredPointerSendOutcome =
   | { kind: 'obsolete' }
 
 export type StructuredPointerSessionFacts = {
-  /** Current-context sends, oldest first: what the lane's own sends settled as. */
+  /** Named attempt plus submitted/accepted extrema in the current record context. */
   submissions: readonly StructuredPointerSubmission[]
 }
 
 export type StructuredMailboxPointerHost = {
   /** `null` when the session cannot be read. */
-  readSessionFacts: (sessionId: string) => Promise<StructuredPointerSessionFacts | null>
+  readSessionFacts: (
+    sessionId: string,
+    inputId?: string
+  ) => Promise<StructuredPointerSessionFacts | null>
   hasActionablePromptNow: (sessionId: string) => boolean | null
   /** False for a conversation the idle sweep closed: it runs no turn. */
   isWorkingNow: (sessionId: string) => boolean

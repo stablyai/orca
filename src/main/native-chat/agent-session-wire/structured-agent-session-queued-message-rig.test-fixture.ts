@@ -54,6 +54,7 @@ export async function createQueuedMessageTestRig(
     /** Defaults to indeterminate. */
     probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
     onRequestFailure?: StructuredAgentSessionHostDeps['onRequestFailure']
+    usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
   } = {}
 ) {
   const SESSION = options.sessionId ?? DEFAULT_SESSION
@@ -73,6 +74,7 @@ export async function createQueuedMessageTestRig(
       mintSpawnToken: () => 'spawn-1',
       now: options.now ?? (() => NOW),
       onRequestFailure: options.onRequestFailure,
+      usageLimitAutoContinue: options.usageLimitAutoContinue,
       ...(options.probeOwner ? { probeOwner: options.probeOwner } : {}),
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})

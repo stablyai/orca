@@ -172,7 +172,7 @@ async function measureCatchUp(
     )
     const visit = history.visitItems
     const item = history.item
-    const sends = history.submissions
+    const sends = history.currentRead
     const canonical = journal.canonicalItemId
     const spies = [
       vi.spyOn(historyBatch, 'continuedOutsideRecordId').mockImplementation((anchor) => {
@@ -212,15 +212,15 @@ async function measureCatchUp(
         }
         return item.call(history, key)
       }),
-      vi.spyOn(history, 'submissions').mockImplementation(() => {
+      vi.spyOn(history, 'currentRead').mockImplementation(() => {
         const result = sends.call(history)
         if (operationStack().includes('journalView')) {
           const view = count.views.at(-1)!
           view.submissionReturns++
-          view.submissionCopies += result.length
+          view.submissionCopies += result.submissions.length
         } else {
           count.otherSubmissionReturns++
-          count.otherSubmissionCopies += result.length
+          count.otherSubmissionCopies += result.submissions.length
         }
         return result
       }),

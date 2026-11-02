@@ -10,7 +10,6 @@ import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalRenderItem,
-  AgentJournalSnapshot,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -190,7 +189,11 @@ export class AgentSessionJournal {
 
   cursor = (): AgentJournalCursor => journalContext.journalContextCursor(this.state)
 
-  snapshot = (): AgentJournalSnapshot => this.publicRead().snapshot
+  snapshot = () => this.publicRead().snapshot
+
+  itemsRead = () => this.publicRead().snapshotForItems(new Set())
+
+  currentRead = (inputIds?: readonly string[]) => this.publicRead().currentSnapshot(inputIds)
 
   statusRead = () => renderJournalStatus(this.queuedMessages.displayState(), this.inputOrder)
 
@@ -260,7 +263,8 @@ export class AgentSessionJournal {
 
   submission = (clientMessageId: string) => this.state.submissions.get(clientMessageId)
 
-  pendingSubmissions = () => this.submissions().filter((entry) => entry.dispatchState === 'pending')
+  pendingSubmissions = () =>
+    this.inputOrder.unsettledSubmissions().filter((entry) => entry.dispatchState === 'pending')
 
   /** Reconnecting clients read durable acceptance instead of resending. */
   receiptFor = (clientMessageId: string): AgentJournalAcceptanceReceipt | null =>

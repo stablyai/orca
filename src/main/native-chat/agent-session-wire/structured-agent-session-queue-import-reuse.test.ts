@@ -133,7 +133,8 @@ it('public metadata follows legacy-only commits, item recreation and epoch repla
   expect(legacyIds()).toEqual([])
   expect(journal.snapshot()).not.toBe(snapshot)
   expect(catchUp(request)).toEqual(beforeImport)
-  expect(ids).toHaveBeenCalledTimes(1)
+  // The refreshed catch-up resolves the one selected original; normalization reuses it.
+  expect(ids).toHaveBeenCalledTimes(2)
   expect(journal.publicRead().normalizationKey).toBe(key)
   expect(ids).toHaveBeenCalledTimes(2)
   ids.mockRestore()

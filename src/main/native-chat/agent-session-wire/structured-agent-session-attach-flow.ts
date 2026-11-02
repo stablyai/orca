@@ -299,7 +299,7 @@ export async function performAttach(
       fence,
       get page() {
         return (page ??= withPublishedWork(
-          readAgentSessionHydrationPage(attached.journal, fence, undefined, view.snapshot),
+          readAgentSessionHydrationPage(attached.journal, fence, undefined, view.currentSnapshot()),
           work
         ))
       },

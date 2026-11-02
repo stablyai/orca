@@ -38,9 +38,10 @@ export async function readStructuredSessionGateFacts(
 
 /** What each recorded send settled as. */
 async function readPointerSessionFacts(
-  sessionId: string
+  sessionId: string,
+  inputId?: string
 ): Promise<StructuredPointerSessionFacts | null> {
-  const snapshot = await readSessionJournal(sessionId)
+  const snapshot = await readSessionJournal(sessionId, inputId, true)
   if (!snapshot) {
     return null
   }
@@ -53,14 +54,20 @@ async function readPointerSessionFacts(
   }
 }
 
-async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
+async function readSessionJournal(
+  sessionId: string,
+  inputId?: string,
+  pointer = false
+): Promise<Pick<AgentJournalSnapshot, 'items' | 'submissions'> | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
   try {
     // Opens a conversation the idle sweep closed; that starts no agent.
-    return await host.journalSnapshot(sessionId)
+    return pointer
+      ? { items: [], ...(await host.pointerInputs(sessionId, inputId)) }
+      : await host.journalCurrentRead(sessionId)
   } catch (error) {
     // Not attached is a retain reason, not a failure; anything else is still unreadable.
     if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
@@ -72,8 +79,8 @@ async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapsh
 
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
-    readSessionFacts(sessionId) {
-      return readPointerSessionFacts(sessionId)
+    readSessionFacts(sessionId, inputId) {
+      return readPointerSessionFacts(sessionId, inputId)
     },
 
     hasActionablePromptNow(sessionId) {

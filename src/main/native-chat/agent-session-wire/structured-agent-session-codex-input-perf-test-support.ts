@@ -114,7 +114,7 @@ export function measureCodexInputWork(
         publicationBytes: Buffer.byteLength(JSON.stringify(events.slice(firstEvent)))
       }
       process.stdout.write(`CODEX_INPUT_WORK ${JSON.stringify({ kind, population, work })}\n`)
-      expect(work.submissions).toBeGreaterThanOrEqual(population)
+      expect(copies).not.toHaveBeenCalled()
       expect(work.bodies).toBeGreaterThan(0)
       expect(work.transactions).toBeGreaterThan(0)
       expect(work.rows).toBeGreaterThan(0)

@@ -307,6 +307,8 @@ export class StructuredAgentSessionHost {
     ...args
   ) => this.sessions.observeConversationPublications(...args)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
+  journalCurrentRead = this.reads.journalCurrentRead
+  pointerInputs = this.reads.pointerInputs
   queuedSendAnswer = (sessionId: string, messageId: string) =>
     this.backgroundTasks.queuedSendAnswer(sessionId, messageId)
 

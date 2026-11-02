@@ -7,6 +7,7 @@ export type InputPlaceQuery = {
   waiting?: QueuedMessageRow
   handoff?: QueuedMessageRow
   position: number
+  maximum?: { id: string; value: number; tie: number }
 }
 type Entry = InputPlaceQuery & {
   id: string
@@ -30,7 +31,14 @@ export function mergeInputPlaces(a: InputPlaceQuery, b: InputPlaceQuery): InputP
     command: first(a.command, b.command),
     waiting: first(a.waiting, b.waiting),
     handoff: first(a.handoff, b.handoff),
-    position: Math.max(a.position, b.position)
+    position: Math.max(a.position, b.position),
+    maximum:
+      !a.maximum ||
+      (b.maximum &&
+        (b.maximum.value > a.maximum.value ||
+          (b.maximum.value === a.maximum.value && b.maximum.tie > a.maximum.tie)))
+        ? b.maximum
+        : a.maximum
   }
 }
 const height = (node?: Node) => node?.height ?? 0
@@ -143,6 +151,40 @@ export class JournalInputPlaceIndex {
     const entry: Entry = { id, sequence: position, domain: undefined, position, tie }
     this.entries.set(id, entry)
     this.change(entry, false)
+  }
+
+  setSummary(id: string, sequence: number, value: number, tie: number): void {
+    const prior = this.entries.get(id)
+    if (prior?.sequence === sequence && prior.maximum?.value === value && prior.tie === tie) {
+      return
+    }
+    this.delete(id)
+    const entry: Entry = {
+      id,
+      sequence,
+      domain: undefined,
+      position: value,
+      tie,
+      maximum: { id, value, tie }
+    }
+    this.entries.set(id, entry)
+    this.change(entry, false)
+  }
+
+  maximumAfter(sequence: number): string | undefined {
+    const after = (node?: Node): InputPlaceQuery => {
+      if (!node) {
+        return empty()
+      }
+      if (node.entry.sequence <= sequence) {
+        return after(node.right)
+      }
+      return mergeInputPlaces(
+        mergeInputPlaces(after(node.left), node.entry),
+        node.right?.result ?? empty()
+      )
+    }
+    return after(this.all).maximum?.id
   }
 
   delete(id: string): void {

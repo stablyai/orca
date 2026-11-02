@@ -51,7 +51,7 @@ describe('the stop-note refresh frame', () => {
     const journal = {
       visitItems: (visit: (itemId: string, sequence: number, body: unknown) => void) =>
         visit(noteId, 3, unconfirmed),
-      snapshot: () => ({
+      itemsRead: () => ({
         sessionId: 's',
         cursor: { epoch: 'e', sequence: 3 },
         items,

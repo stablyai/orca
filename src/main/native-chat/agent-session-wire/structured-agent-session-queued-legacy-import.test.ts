@@ -639,7 +639,9 @@ it.each([false, true])(
       options
     })
     expect(journal.submission('U-proof')?.dispatchState).toBe('unknown')
-    expect(readCodexHistoryJournalView(journal, 'thread').unresolvedIds).toContain('U-proof')
+    expect(
+      readCodexHistoryJournalView(journal, 'thread', AbortSignal.abort()).unresolvedIds
+    ).toContain('U-proof')
     expect(journal.item(agentJournalSubmissionKey('U-proof'))).toBeNull()
     expect(journal.presentationRemoved(agentJournalSubmissionKey('U-proof'))).toBe(true)
     expect(
@@ -681,7 +683,7 @@ it.each([false, true])(
         providerIdentity: { provider: 'codex', threadId: 'thread', turnId: id, ordinal: 0 }
       })
     const beforeProof = journal.cursor()
-    const frontier = readCodexHistoryJournalView(journal, 'thread').latest
+    const frontier = readCodexHistoryJournalView(journal, 'thread', AbortSignal.abort()).latest
     const sink = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     sink.bind({ journal, fence: 0, publish: () => {} })
     await catchUpCodexThread({
@@ -715,7 +717,9 @@ it.each([false, true])(
     })
     await sink.drained()
     sink.close()
-    expect(readCodexHistoryJournalView(journal, 'thread').latest).toBe(frontier)
+    expect(readCodexHistoryJournalView(journal, 'thread', AbortSignal.abort()).latest).toBe(
+      frontier
+    )
     const forward = readAgentSessionHistory(journal, {
       sessionId: session,
       direction: 'after',
@@ -751,7 +755,9 @@ it.each([false, true])(
     await open()
     await proof('U-sent')
     expect(journal.item(agentJournalSubmissionKey('U-sent'))).toBeNull()
-    expect(readCodexHistoryJournalView(journal, 'thread').latest).toBe(frontier)
+    expect(readCodexHistoryJournalView(journal, 'thread', AbortSignal.abort()).latest).toBe(
+      frontier
+    )
     await journal.close()
     await open()
     expect(

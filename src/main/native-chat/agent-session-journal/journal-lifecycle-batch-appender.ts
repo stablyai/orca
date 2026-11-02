@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { journalItemEchoFields } from './journal-item-echo'
 import { isDeepStrictEqual } from 'node:util'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
@@ -44,7 +45,8 @@ export class JournalLifecycleBatchAppender {
           const rejection = input.rejectsQueued
           const rejections = this.planDispatches(
             input,
-            [...this.deps.state().submissions.values()]
+            journalInputOrder(this.deps.state())
+              .unsettledSubmissions()
               .filter(isQueuedAgentJournalSubmission)
               .map((send) => ({
                 clientMessageId: send.clientMessageId,

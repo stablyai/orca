@@ -56,7 +56,7 @@ export async function catchUpCodexThread(input: {
     ...(input.assertCurrent ? { assertCurrent: input.assertCurrent } : {}),
     timeoutMs: input.timeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
     ...(input.logger ? { logger: input.logger } : {}),
-    readView: (history) => readCodexHistoryJournalView(history, input.threadId),
+    readView: (history, signal) => readCodexHistoryJournalView(history, input.threadId, signal),
     sameView: sameCodexHistoryJournalView,
     prepare: async ({ view: readView, history, journal, signal, deadline, check, yieldTurn }) => {
       const view = readView()
@@ -139,7 +139,7 @@ export async function catchUpCodexThread(input: {
           break
         }
       }
-      Object.assign(view, readCodexHistoryJournalView(history, input.threadId))
+      Object.assign(view, readCodexHistoryJournalView(history, input.threadId, signal))
       const missing = paginate
         ? await discoverCodexHistory(read, view)
         : { pages: [], order: [...seen], rewound: view.latest !== null && !seen.has(view.latest) }
@@ -191,7 +191,7 @@ export async function catchUpCodexThread(input: {
         }
         const plan = staging.finish()
         restoreHelpers = staging.restoreHelpers
-        Object.assign(view, readCodexHistoryJournalView(history, input.threadId))
+        Object.assign(view, readCodexHistoryJournalView(history, input.threadId, signal))
         return plan
       } finally {
         staging.dispose()

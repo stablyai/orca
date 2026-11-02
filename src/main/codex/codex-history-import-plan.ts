@@ -40,7 +40,7 @@ export function createCodexHistoryImportPlan(input: {
   threadId: string
   journal: StructuredAgentSessionTransitionJournal
   subagentExecutions?: CodexSubagentExecutions
-  nativePromptKeys: ReadonlySet<string>
+  nativePromptKeys: Pick<ReadonlySet<string>, 'has'>
   outsideNotice?: AgentJournalItemBody
   check: () => void
 }) {

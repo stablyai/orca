@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   generate: vi.fn(async () => ({ success: true as const, name: 'Login repair' })),
   target: vi.fn(async (cwd: string) => ({ kind: 'local' as const, cwd })),
   publishConversationName: vi.fn<(sessionId: string) => void>(),
-  journalSnapshot: vi.fn<(sessionId: string) => Promise<AgentJournalSnapshot>>()
+  journalCurrentRead: vi.fn<(sessionId: string) => Promise<AgentJournalSnapshot>>()
 }))
 
 vi.mock('../text-generation/commit-message-text-generation', async (importOriginal) => {
@@ -41,7 +41,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
   getStructuredAgentSessionHost: () => ({
     deps: { adapter: { generateText: mocks.native } },
     publishConversationName: mocks.publishConversationName,
-    journalSnapshot: mocks.journalSnapshot
+    journalCurrentRead: mocks.journalCurrentRead
   })
 }))
 
@@ -155,7 +155,7 @@ describe('structured chat naming runtime', () => {
           }
         })
       )
-      mocks.journalSnapshot.mockResolvedValue({
+      mocks.journalCurrentRead.mockResolvedValue({
         sessionId: 'chat',
         cursor: { epoch: 'epoch', sequence: count + 2 },
         items,

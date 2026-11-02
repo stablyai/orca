@@ -158,6 +158,11 @@ it.each(['resume', 'accepted'] as const)(
       const floor = journal.reopenFloor()!
       const before = journal.cursor()
       let committed = 0
+      const captureLifetime = new AbortController()
+      const capturedKeys = journal.inputOrder.captureKeys(new Set(), captureLifetime.signal)
+      const mKey = agentJournalSubmissionKey('M')
+      expect(capturedKeys.has(mKey)).toBe(false)
+      expect(capturedKeys.has(agentJournalSubmissionKey('forced'))).toBe(true)
       await expect(
         append('M', {
           write: () => {
@@ -170,6 +175,8 @@ it.each(['resume', 'accepted'] as const)(
       ).rejects.toThrow('receipt transaction fails')
       expect(journal.cursor()).toEqual(before)
       expect(journal.submission('M')).toBeUndefined()
+      expect(capturedKeys.changes.size).toBe(0)
+      expect(capturedKeys.has(mKey)).toBe(false)
       expect(journal.reopenFloor()).toEqual(floor)
       expect(
         loadTestJournal(root, identity.sessionId)!.state.queuePauseMarks.reopenedSequence
@@ -202,6 +209,12 @@ it.each(['resume', 'accepted'] as const)(
         }
       })
       expect(target).toEqual(cursor)
+      const committedKeys = journal.inputOrder.captureKeys(new Set(), captureLifetime.signal)
+      expect(capturedKeys.has(mKey)).toBe(false)
+      expect(committedKeys.has(mKey)).toBe(true)
+      expect(capturedKeys.same(committedKeys)).toBe(false)
+      expect([...capturedKeys.changes]).toEqual([[mKey, false]])
+      captureLifetime.abort()
       expect(committed).toBe(1)
       expect(journal.reopenFloor()).toBeNull()
       const marks = readTestJournalOutcomes(
@@ -228,6 +241,8 @@ it.each(['resume', 'accepted'] as const)(
       } else {
         expect(journal.queuedMessages.pauses()).toEqual([])
       }
+      expect([...capturedKeys.changes]).toEqual([[mKey, false]])
+      expect(committedKeys.changes.size).toBe(0)
       const beforePrefixes = ['forced', 'M', 'ordinary-held'].map((id) =>
         knownPredecessors(journal, id)
       )

@@ -76,7 +76,7 @@ describe('structured mailbox pointer host', () => {
     // Read the full timeline: a busy turn's lifecycle item may be far from the tail, and false idle can interrupt it.
     const items = [runningTurn(), ...transcript(500)]
     hostRef.current = {
-      journalSnapshot: () => ({ items, submissions: [] }),
+      journalCurrentRead: () => ({ items, submissions: [] }),
       currentWork: () => null
     }
     expect(await readStructuredSessionGateFacts('s1')).toEqual({
@@ -89,7 +89,7 @@ describe('structured mailbox pointer host', () => {
     const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
     hostRef.current = {
       deps: { store: { getConversation: () => null } },
-      journalSnapshot: () => ({ items: [], submissions }),
+      pointerInputs: () => ({ submissions }),
       currentWork: () => null
     }
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
@@ -122,7 +122,7 @@ describe('structured mailbox pointer host', () => {
             })
         }
       },
-      journalSnapshot: () => ({
+      pointerInputs: () => ({
         items,
         submissions: [pointerSubmission('earlier', 2, 6), current]
       }),
@@ -147,7 +147,7 @@ describe('structured mailbox pointer host', () => {
             })
         }
       },
-      journalSnapshot: () => ({
+      pointerInputs: () => ({
         items: [],
         submissions: [pointerSubmission('earlier', 2, 2), current]
       }),
@@ -164,7 +164,7 @@ describe('structured mailbox pointer host', () => {
     // Unreadable sessions retain pointers; treating them as empty would authorize an unseen send.
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
     hostRef.current = {
-      journalSnapshot: () => {
+      pointerInputs: () => {
         throw new Error('agent_session_ownership_unknown')
       }
     }

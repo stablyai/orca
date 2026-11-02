@@ -135,7 +135,10 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           sessionId: current.sessionId,
           reservedTypes: currentReservedTypes
         })
-        const session = await this.deps.host.readSessionFacts(current.sessionId)
+        const session = await this.deps.host.readSessionFacts(
+          current.sessionId,
+          db.getStructuredPointerOperation(mailboxHandle)?.operation_id
+        )
         const contextClearOperationId = this.deps.host.currentContextClearOperationId(
           current.sessionId
         )

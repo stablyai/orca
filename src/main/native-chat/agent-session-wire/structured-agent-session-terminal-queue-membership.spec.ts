@@ -1,4 +1,7 @@
-import * as reducer from '../agent-session-journal/journal-reducer'
+import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../shared/native-chat/native-chat-usage-limit-cut'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { createRetainedReadCounters } from './structured-agent-session-retained-read-counters.test-fixture'
 import { newestAcceptedSendKey } from './structured-agent-session-status-child-work'
 import { withStoppedHistory } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import { carriedStoppedHistory } from './structured-agent-session-stopped-history-selection'
@@ -13,13 +16,8 @@ import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-ho
 import { JournalOutcomeCompaction } from '../agent-session-journal/journal-outcome-compaction'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import * as transitions from '../agent-session-journal/journal-reducer-transition'
-import { JournalInputOrder } from '../agent-session-journal/journal-input-order'
-import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { expect, it, vi } from 'vitest'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
-import { JournalInputCardIndex } from '../agent-session-journal/journal-input-card-index'
-import { JournalInputPlaceIndex } from '../agent-session-journal/journal-input-place-index'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { selectStructuredAgentSessionInput } from './structured-agent-session-input-selection'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
@@ -28,292 +26,33 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW,
   HOST_TEST_THREAD,
-  hostTestMessage
+  hostTestMessage,
+  hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 
 it.each([10, 100])(
   'bounds current queue work independently of retained terminal cards H=%i',
   async (h) => {
+    let clock = HOST_TEST_NOW
     const failures = vi.fn()
     const rig = await createQueuedMessageTestRig({
       restartable: true,
       onRequestFailure: failures,
-      now: (() => {
-        let t = HOST_TEST_NOW
-        return () => ++t
-      })()
-    })
-    type Counts = {
-      archived: number
-      records: number
-      indexed: number
-      restores: number
-      nodes: number
-      drafts: number
-      points: number
-      paths: number
-      endpoints: number
-      statusRecords: number
-      statusItems: number
-    }
-    const phases: Record<string, Counts> = {}
-    let phase = 'setup'
-    const count = () =>
-      (phases[phase] ??= {
-        archived: 0,
-        records: 0,
-        indexed: 0,
-        restores: 0,
-        nodes: 0,
-        drafts: 0,
-        points: 0,
-        paths: 0,
-        endpoints: 0,
-        statusRecords: 0,
-        statusItems: 0
-      })
-    const archived = (id: unknown) =>
-      typeof id === 'string' && /^archive-(withdrawn|sent|input|stopped)-/.test(id)
-    const visit = (value: unknown): void => {
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          visit(item)
-        }
-        return
-      }
-      if (typeof value === 'string') {
-        if (archived(value)) {
-          count().archived++
-        }
-        return
-      }
-      if (!value || typeof value !== 'object') {
-        return
-      }
-      const id =
-        'messageId' in value
-          ? value.messageId
-          : 'clientMessageId' in value
-            ? value.clientMessageId
-            : 'card' in value &&
-                value.card &&
-                typeof value.card === 'object' &&
-                'messageId' in value.card
-              ? value.card.messageId
-              : undefined
-      if (typeof id === 'string') {
-        count().records++
-        if (archived(id)) {
-          count().archived++
-        }
-      }
-    }
-    const values = Map.prototype.values,
-      keys = Map.prototype.keys,
-      entries = Map.prototype.entries
-    const mv = vi.spyOn(Map.prototype, 'values').mockImplementation(function* () {
-      for (const value of values.call(this)) {
-        visit(value)
-        yield value
-      }
-      return undefined
-    })
-    const mk = vi.spyOn(Map.prototype, 'keys').mockImplementation(function* () {
-      for (const key of keys.call(this)) {
-        visit(key)
-        yield key
-      }
-      return undefined
-    })
-    const me = vi.spyOn(Map.prototype, 'entries').mockImplementation(function* () {
-      for (const entry of entries.call(this)) {
-        visit(entry)
-        yield entry
-      }
-      return undefined
-    })
-    const mi = vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function* () {
-      for (const entry of entries.call(this)) {
-        visit(entry)
-        yield entry
-      }
-      return undefined
-    })
-    const mf = vi.spyOn(Map.prototype, 'forEach').mockImplementation(function (callback, receiver) {
-      for (const [key, value] of entries.call(this)) {
-        visit([key, value])
-        callback.call(receiver, value, key, this)
+      now: () => ++clock,
+      usageLimitAutoContinue: {
+        isEnabled: () => true,
+        isWorkspaceAsleep: () => false,
+        subscribe: () => () => {}
       }
     })
-    type Tree = NonNullable<JournalInputPlaceIndex['all']>
-    let querying = 0
-    const observeNode = (node: Tree | undefined): Tree | undefined =>
-      node &&
-      new Proxy(node, {
-        get(target, key: keyof typeof target) {
-          count().paths++
-          return key === 'left' || key === 'right' ? observeNode(target[key]) : target[key]
-        }
-      })
-    const atPath = <T>(index: JournalInputPlaceIndex, run: () => T): T => {
-      const root = index['all']
-      index['all'] = observeNode(root)
-      try {
-        return run()
-      } finally {
-        index['all'] = root
-      }
-    }
-    const firstPosition = JournalInputPlaceIndex.prototype.firstPosition
-    const lastId = JournalInputPlaceIndex.prototype.lastId
-    const successorId = JournalInputPlaceIndex.prototype.successorId
-    const idsAfter = JournalInputPlaceIndex.prototype.idsAfter
-    const pathSpies = [
-      vi.spyOn(JournalInputPlaceIndex.prototype, 'idsAfter').mockImplementation(function (
-        this: JournalInputPlaceIndex,
-        sequence
-      ) {
-        return atPath(this, () => idsAfter.call(this, sequence))
-      }),
-      vi.spyOn(JournalInputPlaceIndex.prototype, 'firstPosition').mockImplementation(function (
-        this: JournalInputPlaceIndex
-      ) {
-        return atPath(this, () => firstPosition.call(this))
-      }),
-      vi.spyOn(JournalInputPlaceIndex.prototype, 'lastId').mockImplementation(function (
-        this: JournalInputPlaceIndex
-      ) {
-        return atPath(this, () => lastId.call(this))
-      }),
-      vi.spyOn(JournalInputPlaceIndex.prototype, 'successorId').mockImplementation(function (
-        this: JournalInputPlaceIndex,
-        sequence
-      ) {
-        return atPath(this, () => successorId.call(this, sequence))
-      })
-    ]
-    const query = JournalInputPlaceIndex.prototype.query
-    const queries = vi
-      .spyOn(JournalInputPlaceIndex.prototype, 'query')
-      .mockImplementation(function (this: JournalInputPlaceIndex, ...args) {
-        querying++
-        try {
-          return query.apply(this, args)
-        } finally {
-          querying--
-        }
-      })
-    const status = JournalInputOrder.prototype.statusInputs
-    const stoppedInputs = JournalInputOrder.prototype.stoppedHistoryInputs
-    const stoppedReads = vi
-      .spyOn(JournalInputOrder.prototype, 'stoppedHistoryInputs')
-      .mockImplementation(function (this: JournalInputOrder, ...args) {
-        return new Proxy(stoppedInputs.apply(this, args), {
-          get(target, key: keyof typeof target) {
-            const value = target[key]
-            if (typeof key === 'string' && /^\d+$/.test(key)) {
-              visit(value)
-            }
-            return value
-          }
-        })
-      })
-    const statuses = vi
-      .spyOn(JournalInputOrder.prototype, 'statusInputs')
-      .mockImplementation(function (this: JournalInputOrder, ...args) {
-        const result = status.apply(this, args)
-        return new Proxy(result, {
-          get(target, key: keyof typeof target) {
-            const value = target[key]
-            if (typeof key === 'string' && /^\d+$/.test(key)) {
-              count().statusRecords++
-              const input = target[Number(key)]
-              if (input && archived(input.clientMessageId)) {
-                count().endpoints++
-              }
-            }
-            return value
-          }
-        })
-      })
-    const renderItems = reducer.renderJournalItems
-    const rendered = vi.spyOn(reducer, 'renderJournalItems').mockImplementation(
-      (...args) =>
-        new Proxy(renderItems(...args), {
-          get(target, key: keyof typeof target) {
-            if (typeof key === 'string' && /^\d+$/.test(key)) {
-              count().statusItems++
-            }
-            return target[key]
-          }
-        })
-    )
-    const get = Map.prototype.get
-    const mg = vi.spyOn(Map.prototype, 'get').mockImplementation(function (key) {
-      if (archived(key)) {
-        count().points++
-      }
-      const value = get.call(this, key)
-      return querying && value && typeof value === 'object' && 'height' in value && 'entry' in value
-        ? observeNode(value)
-        : value
-    })
-    const list = JournalQueuedMessages.prototype.list
-    const lists = vi.spyOn(JournalQueuedMessages.prototype, 'list').mockImplementation(function (
-      this: JournalQueuedMessages
-    ) {
-      return new Proxy(list.call(this), {
-        get(target, key: keyof typeof target) {
-          const value: unknown = target[key]
-          if (typeof key === 'string' && /^\d+$/.test(key)) {
-            visit(value)
-          }
-          return value
-        }
-      })
-    })
-    const index = JournalInputCardIndex.prototype.indexCard
-    const indexed = vi
-      .spyOn(JournalInputCardIndex.prototype, 'indexCard')
-      .mockImplementation(function (this: JournalInputCardIndex, ...args) {
-        count().indexed++
-        visit(args[1])
-        return index.apply(this, args)
-      })
-    const restore = JournalInputOrder.prototype.restore
-    const restores = vi.spyOn(JournalInputOrder.prototype, 'restore').mockImplementation(function (
-      this: JournalInputOrder,
-      ...args
-    ) {
-      count().restores++
-      return restore.apply(this, args)
-    })
-    const reflect = Reflect.get
-    const nodes = vi.spyOn(Reflect, 'get').mockImplementation((...args) => {
-      if ('height' in args[0] && 'entry' in args[0]) {
-        count().nodes++
-      }
-      return reflect(...args)
-    })
-    const isolate = transitions.isolateJournalTransition
-    const drafts = vi
-      .spyOn(transitions, 'isolateJournalTransition')
-      .mockImplementation((...args) => {
-        const draft = isolate(...args)
-        return {
-          ...draft,
-          adopt: () => {
-            const result = draft.adopt()
-            count().drafts += draft.trackedDerived()
-            return result
-          }
-        }
-      })
+    const counters = createRetainedReadCounters()
+    const { phases, archived, count } = counters
     try {
       const original = await rig.workingSend()
       rig.host.stopDelivery() // Freeze provider/drain scheduling; all following queue triggers are real writes.
       let journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      counters.watchJournal(journal)
       const physical = journal.physicalCursor().epoch
       const fence = () => rig.store.getRecord(SESSION)!.lease.runtimeFence
       const gate = () =>
@@ -403,7 +142,7 @@ it.each([10, 100])(
       let stopped: { clientMessageId: string; words: string }[] = []
       let acceptedKey = `archive-input-${h - 1}`
       const run = async (name: string, action: () => Promise<void>) => {
-        phase = name
+        counters.setPhase(name)
         count()
         await action()
         publication()
@@ -422,10 +161,10 @@ it.each([10, 100])(
             ? { messages: stopped, covers: stopped.map((s) => s.clientMessageId) }
             : null
         )
-        phase = 'between'
+        counters.setPhase('between')
       }
       for (const l of [0, 1]) {
-        phase = 'baseline'
+        counters.setPhase('baseline')
         let received: AgentSessionSubscribeEvent[] | undefined
         const baseline = l ? [`baseline-${l}`] : []
         if (l) {
@@ -505,9 +244,9 @@ it.each([10, 100])(
             expect(frames.every((event) => event.type === 'batch')).toBe(true)
             expect(frames.length).toBeGreaterThanOrEqual(20)
           })
-        } finally {
+        } catch (error) {
           close()
-          received = undefined
+          throw error
         }
         await run(`stop-${l}`, async () => {
           const pending = rig.send(`stop pending ${l}`)
@@ -615,12 +354,14 @@ it.each([10, 100])(
           expect(await rig.deleteQueued(direct)).toMatchObject({ ok: true })
           check(baseline)
         })
-        phase = 'baseline'
+        close()
+        received = undefined
+        counters.setPhase('baseline')
         if (l) {
           expect(await rig.deleteQueued(baseline[0])).toMatchObject({ ok: true })
         }
       }
-      phase = 'compaction'
+      counters.setPhase('compaction')
       const db = openTestJournalHostDatabase(rig.root),
         compactor = new JournalOutcomeCompaction()
       let pages = 0
@@ -629,13 +370,14 @@ it.each([10, 100])(
           throw new Error('compaction did not finish')
         }
       }
-      phase = 'cold-reopen'
+      counters.setPhase('cold-reopen')
       await rig.restartHostProcess()
       await rig.host.history({ sessionId: SESSION, direction: 'tail' })
       journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      counters.watchJournal(journal)
       publication()
       expect(journal.physicalCursor().epoch).toBe(physical)
-      phase = 'raw-proof'
+      counters.setPhase('raw-proof')
       for (let i = 0; i < h; i++) {
         expect(journal.queuedMessages.get(`archive-withdrawn-${i}`)?.state).toBe('withdrawn')
         expect(journal.queuedMessages.get(`archive-sent-${i}`)?.state).toBe('dispatched')
@@ -646,6 +388,10 @@ it.each([10, 100])(
         expect(publication().queuedMessages.map((card) => card.messageId)).toEqual(['after-reopen'])
         expect(await rig.deleteQueued('after-reopen')).toMatchObject({ ok: true })
         expect(publication().queuedMessages).toEqual([])
+      })
+      const afterReopenReader = await subscribeQueuedHistory(rig.host, journal, {
+        sessionId: SESSION,
+        id: 'after-reopen-reader'
       })
       await run('delivery', async () => {
         const before = rig.dispatch.mock.calls.length
@@ -671,7 +417,7 @@ it.each([10, 100])(
         acceptedKey = next.id
         stopped = []
       })
-      phase = 'stopped-setup'
+      counters.setPhase('stopped-setup')
       const seedStopped = async (id: string) => {
         await lane(() =>
           journal.appendSubmission({
@@ -743,15 +489,99 @@ it.each([10, 100])(
           acceptedKey = next.id
         }
       })
+      await rig.host.showSessionTabs([SESSION])
+      const continueLimited = async (automatic: boolean) => {
+        const kind = automatic ? 'auto' : 'manual'
+        const key = { provider: 'orca', clientMessageId: `usage-${kind}` } as const
+        const turnItemId = agentJournalItemKey(key)
+        const resetsAt = clock + 100
+        await lane(() =>
+          journal.appendItem(
+            key,
+            {
+              kind: 'turn',
+              turnId: `usage-${kind}`,
+              state: 'completed',
+              outcome: 'failure',
+              startedAt: clock,
+              completedAt: clock
+            },
+            { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+          )
+        )
+        await lane(() =>
+          journal.appendItem(
+            { provider: 'orca', clientMessageId: `limit-${kind}` },
+            {
+              kind: 'status',
+              ...agentSessionFailureWords(
+                { kind: 'usageLimitReached', usageLimit: { resetsAt } },
+                { surface: 'row' }
+              )
+            },
+            { fence: fence(), turnScope: { kind: 'turn', turnItemId } }
+          )
+        )
+        const before = rig.dispatch.mock.calls.length
+        if (automatic) {
+          expect(rig.host.usageLimitContinue.readState(SESSION)?.state).toBe('scheduled')
+          clock = resetsAt + 15_000
+          await rig.host.usageLimitContinue.tick()
+        } else {
+          expect(
+            await rig.host.send(
+              { callerKey: 'client-1' },
+              structuredAgentSessionMessageSendMutation({
+                sessionId: SESSION,
+                clientOperationId: hostTestOperationId(),
+                expectedRuntimeFence: fence(),
+                body: hostTestMessage(NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE),
+                usageLimitContinuationOfTurnItemId: turnItemId
+              })
+            )
+          ).toMatchObject({ ok: true })
+        }
+        await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(before + 1))
+        const send = rig.dispatch.mock.calls.at(-1)![0]
+        expect(send.body).toEqual(hostTestMessage(NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE))
+        await rig.host.settleLateDispatch({
+          sessionId: SESSION,
+          clientMessageId: send.clientMessageId,
+          providerIdentity: {
+            provider: 'codex',
+            threadId: HOST_TEST_THREAD,
+            turnId: `continued-${kind}`,
+            ordinal: 0
+          }
+        })
+        acceptedKey = send.clientMessageId
+        expect(journal.submission(acceptedKey)?.dispatchState).toBe('accepted')
+      }
+      await run('continue-manual', () => continueLimited(false))
+      await run('continue-auto', () => continueLimited(true))
+      await run('sleep', async () => {
+        const result = await rig.host.sleepWorkspace('workspace-1')
+        expect(result.failures).toBeUndefined()
+        expect(result.stoppedSessionIds).toContain(SESSION)
+      })
+      await run('eviction', async () => {
+        await rig.host.close(SESSION, 'evict')
+        expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(false)
+      })
+      afterReopenReader.close()
       console.info('terminal-queue-membership-counts', JSON.stringify({ h, phases }))
       for (const [name, c] of Object.entries(phases)) {
         if (
-          !/^(cycles|stop|resume|rewind|recovery|subscriber)-|^(after-reopen|delivery|stopped-send)$/.test(
+          !/^(cycles|stop|resume|rewind|recovery|subscriber)-|^(after-reopen|delivery|stopped-send|continue-manual|continue-auto|sleep|eviction)$/.test(
             name
           )
         ) {
           continue
         }
+        expect(c.fullRenders, name).toBe(0)
+        expect(c.fullViews, name).toBe(0)
+        expect(c.fullInputs, name).toBe(0)
+        expect(c.fullIterations, name).toBe(0)
         expect(c.archived, name).toBe(0)
         expect(c.restores, name).toBe(0)
         expect(c.indexed, name).toBeLessThanOrEqual(200)
@@ -770,27 +600,8 @@ it.each([10, 100])(
       expect(phases['cold-reopen'].restores).toBeGreaterThan(0)
       expect(phases['cold-reopen'].archived).toBeGreaterThanOrEqual(2 * h)
     } finally {
-      phase = 'cleanup'
-      for (const spy of [
-        mv,
-        mk,
-        me,
-        mi,
-        mf,
-        mg,
-        lists,
-        indexed,
-        restores,
-        nodes,
-        drafts,
-        statuses,
-        stoppedReads,
-        rendered,
-        queries,
-        ...pathSpies
-      ]) {
-        spy.mockRestore()
-      }
+      counters.setPhase('cleanup')
+      counters.dispose()
       await rig.dispose()
     }
   },

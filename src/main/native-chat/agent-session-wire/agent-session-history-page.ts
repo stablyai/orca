@@ -93,7 +93,7 @@ export function readAgentSessionHistory(
     }
     return readForward(journal, snapshot, request.cursor, limit, reader, readSnapshot)
   }
-  snapshot ??= view.snapshot
+  snapshot ??= view.currentSnapshot()
   const cursor = request.direction === 'before' ? request.cursor : undefined
   if (cursor) {
     if (cursor.epoch !== snapshot.cursor.epoch) {
@@ -152,7 +152,7 @@ export function readAgentSessionHydrationPage(
   journal: AgentSessionJournal,
   fence?: number,
   reader: HistoryReader = CLIENT_HISTORY_READER,
-  snapshot: AgentJournalSnapshot = journal.snapshot()
+  snapshot: AgentJournalSnapshot = journal.currentRead()
 ): AgentSessionHistoryPage {
   return buildHydrationPage(reader.snapshot?.(journal, snapshot) ?? snapshot, fence, reader)
 }

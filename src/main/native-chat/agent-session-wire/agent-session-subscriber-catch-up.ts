@@ -82,7 +82,7 @@ export function deliverToSubscriber(
         journal,
         subscriber.fence,
         subscriberHistoryReader(subscriber),
-        view.snapshot
+        view.currentSnapshot()
       ),
       work
     )

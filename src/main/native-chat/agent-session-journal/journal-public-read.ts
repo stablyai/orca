@@ -12,7 +12,6 @@ export function createJournalPublicReader(inputOrder: () => JournalInputOrder) {
         epoch: string
         sequence: number
         revision: string
-        normalizationKey?: string
         view?: ReturnType<typeof readJournalPublicView>
       }
     | undefined
@@ -28,62 +27,98 @@ export function createJournalPublicReader(inputOrder: () => JournalInputOrder) {
     }
     const source = current
     const owner = inputOrder()
-    return (source.view ??= readJournalPublicView(
-      display,
-      owner,
-      () => (source.normalizationKey ??= journalNormalizationKey(display, owner))
-    ))
+    return (source.view ??= readJournalPublicView(display, owner))
   }
 }
 
 /** Row progress cannot certify a historical display that the queue fold corrected. */
 export function readJournalPublicView(
   state: JournalReducerState,
-  owner: JournalInputOrder,
-  normalizationKey = () => journalNormalizationKey(state, owner)
+  owner: JournalInputOrder
 ): {
   snapshot: AgentJournalSnapshot
   snapshotForItems: (ids: ReadonlySet<string>) => AgentJournalSnapshot
+  currentSnapshot: (inputIds?: readonly string[]) => AgentJournalSnapshot
   normalizationKey: string
 } {
   let snapshot: AgentJournalSnapshot | undefined
   let items: AgentJournalSnapshot['items'] | undefined
+  let current: AgentJournalSnapshot | undefined
+  let normalization: string | undefined
+  const inputs = new Map<string, AgentJournalSnapshot['submissions'][number] | undefined>()
+  const inputForItem = (id: string) => {
+    if (!inputs.has(id)) {
+      const input = owner.inputForItem(id) ?? owner.firstInputForProviderItem(id)
+      inputs.set(id, input && state.submissions.get(input.clientMessageId))
+    }
+    return inputs.get(id)
+  }
   return {
     get snapshot() {
       return (snapshot ??= renderJournalState(state))
     },
+    currentSnapshot(inputIds = []) {
+      current ??= this.snapshotForItems(
+        new Set((items ??= snapshot?.items ?? renderJournalItems(state)).map((item) => item.itemId))
+      )
+      const selected = new Map(current.submissions.map((input) => [input.clientMessageId, input]))
+      for (const id of inputIds) {
+        const input = inputForItem(agentJournalSubmissionKey(id))
+        if (input) {
+          selected.set(input.clientMessageId, input)
+        }
+      }
+      return selected.size === current.submissions.length
+        ? current
+        : {
+            ...current,
+            submissions: [...selected.values()].sort(
+              (a, b) =>
+                a.submittedAt - b.submittedAt ||
+                owner.inputOrdinal(a.clientMessageId) - owner.inputOrdinal(b.clientMessageId)
+            )
+          }
+    },
     get normalizationKey() {
-      return normalizationKey()
+      return (normalization ??= journalNormalizationKey(state, inputForItem))
     },
     snapshotForItems(ids) {
+      const submissions = new Map<string, AgentJournalSnapshot['submissions'][number]>()
+      for (const id of ids) {
+        const input = inputForItem(id)
+        if (input) {
+          submissions.set(input.clientMessageId, input)
+        }
+      }
       return {
         sessionId: state.sessionId,
         cursor: journalContextCursor(state),
         items: (items ??= snapshot?.items ?? renderJournalItems(state)),
-        submissions: [...ids]
-          .flatMap((id) => {
-            const input = owner.inputForItem(id)
-            const displayed = input && state.submissions.get(input.clientMessageId)
-            return displayed ? [displayed] : []
-          })
-          .sort(
-            (a, b) =>
-              a.submittedAt - b.submittedAt ||
-              owner.inputOrdinal(a.clientMessageId) - owner.inputOrdinal(b.clientMessageId)
-          )
+        submissions: [...submissions.values()].sort(
+          (a, b) =>
+            a.submittedAt - b.submittedAt ||
+            owner.inputOrdinal(a.clientMessageId) - owner.inputOrdinal(b.clientMessageId)
+        )
       }
     }
   }
 }
 
-function journalNormalizationKey(state: JournalReducerState, owner: JournalInputOrder): string {
+function journalNormalizationKey(
+  state: JournalReducerState,
+  inputForItem: (id: string) => AgentJournalSnapshot['submissions'][number] | undefined
+): string {
   const ids = [...state.items.keys()].flatMap((itemId) => {
-    const id = owner.inputForItem(itemId)?.clientMessageId
-    return id !== undefined && state.normalizedHandOffs.has(id) ? [id] : []
+    const id = inputForItem(itemId)?.clientMessageId
+    return id !== undefined &&
+      itemId === agentJournalSubmissionKey(id) &&
+      state.normalizedHandOffs.has(id)
+      ? [id]
+      : []
   })
   const corrections = ids.sort().flatMap((id) => {
     const item = state.items.get(agentJournalSubmissionKey(id))
-    const submission = state.submissions.get(id)
+    const submission = inputForItem(agentJournalSubmissionKey(id))
     return item && submission
       ? [[id, item.sequence, item.observedAt, item.turnScope, submission.queuedMessageId ?? null]]
       : []

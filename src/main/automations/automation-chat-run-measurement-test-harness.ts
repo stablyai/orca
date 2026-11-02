@@ -7,7 +7,7 @@ export type AutomationChatRunMeasurement = {
   measure: () => number[]
   full: MockInstance<AgentSessionJournal['snapshot']>
   status: MockInstance<AgentSessionJournal['statusRead']>
-  observerReads: MockInstance<StructuredAgentSessionHost['journalSnapshot']>
+  observerReads: MockInstance<StructuredAgentSessionHost['journalCurrentRead']>
   registration: MockInstance<StructuredAgentSessionHost['observeConversationPublications']>
   releases: Mock<() => void>[]
   keys: [
@@ -107,6 +107,15 @@ export function measureAutomationChatRun(
   const publicReads = vi.spyOn(journal, 'publicRead').mockImplementation(() => {
     const view = realPublicRead()
     return {
+      currentSnapshot(ids) {
+        const result = output(() => view.currentSnapshot(ids))
+        if (!materialized.has(result)) {
+          materialized.add(result)
+          projections++
+          projectedRows += result.items.length + result.submissions.length
+        }
+        return wrapSnapshot(result)
+      },
       snapshotForItems(ids) {
         return output(() => wrapSnapshot(view.snapshotForItems(ids)))
       },
@@ -115,8 +124,8 @@ export function measureAutomationChatRun(
       },
       get snapshot() {
         const result = output(() => view.snapshot)
-        if (!materialized.has(view)) {
-          materialized.add(view)
+        if (!materialized.has(result)) {
+          materialized.add(result)
           projections++
           projectedRows += result.items.length + result.submissions.length
         }
@@ -196,7 +205,7 @@ export function measureAutomationChatRun(
     vi.spyOn(journal.queuedMessages, 'get'),
     vi.spyOn(journal, 'canonicalItemId')
   ]
-  const observerReads = vi.spyOn(host, 'journalSnapshot')
+  const observerReads = vi.spyOn(host, 'journalCurrentRead')
   const realObserve = host.observeConversationPublications.bind(host)
   const registration = vi
     .spyOn(host, 'observeConversationPublications')

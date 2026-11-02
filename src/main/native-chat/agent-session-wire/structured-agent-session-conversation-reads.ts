@@ -49,6 +49,26 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     }
   }))
   return {
+    journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) =>
+      (await context().conversation(sessionId)).journal.currentRead(inputIds),
+
+    pointerInputs: async (sessionId: string, inputId?: string) => {
+      const journal = (await context().conversation(sessionId)).journal
+      const afterFence =
+        context().deps.store.getConversation(sessionId)?.providerContextBoundary?.afterFence ??
+        -Infinity
+      const named = inputId === undefined ? undefined : journal.submission(inputId)
+      return {
+        submissions: [
+          ...new Map(
+            [
+              ...journal.inputOrder.submissionExtremaAfterFence(afterFence),
+              ...(named && named.fence > afterFence ? [named] : [])
+            ].map((send) => [send.clientMessageId, send])
+          ).values()
+        ]
+      }
+    },
     readModelCatalog,
     readCommands: (id: string, commandsOnRequest = false) =>
       context().readCommands(id, commandsOnRequest),

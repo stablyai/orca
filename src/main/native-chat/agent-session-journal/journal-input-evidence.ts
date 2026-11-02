@@ -1,9 +1,9 @@
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   refusedBeforeWrite,
   stoppedHistoryCandidate
 } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -22,7 +22,6 @@ export class JournalInputEvidence extends JournalInputObservations {
   private readonly rowsBySubmission = new Map<string, number>()
   private readonly keptCards = new Map<string, Set<string>>()
   private readonly keptBySubmission = new Map<string, string>()
-  protected readonly inputIds = new Map<string, string>()
   private readonly ordinals = new Map<string, number>()
   private nextOrdinal = 0
   private readonly acceptedByTime = new JournalInputPlaceIndex('')

@@ -110,7 +110,7 @@ export class AgentSessionSubscribers {
           input.journal,
           input.fence,
           subscriberHistoryReader(subscriber),
-          view.snapshot
+          view.currentSnapshot()
         ),
         work
       )
@@ -192,7 +192,7 @@ export class AgentSessionSubscribers {
           journal,
           fence,
           subscriberHistoryReader(subscriber),
-          view.snapshot
+          view.currentSnapshot()
         ),
         work
       )

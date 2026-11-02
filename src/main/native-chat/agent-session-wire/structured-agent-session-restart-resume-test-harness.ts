@@ -145,7 +145,9 @@ export function journal(
   items: AgentJournalRenderItem[],
   submissions: AgentJournalSubmission[] = []
 ) {
-  const currentWork: StructuredAgentSessionCurrentWorkJournal = {
+  const currentWork: StructuredAgentSessionCurrentWorkJournal & {
+    inputOrder: { inputOrdinal: (id: string) => number }
+  } = {
     item: (itemId) => items.find((item) => item.itemId === itemId) ?? null,
     cursor: () => ({ epoch: EPOCH, sequence: items.length }),
     visitItems: (visit) => {
@@ -156,6 +158,7 @@ export function journal(
     runningTurn: () => runningStructuredAgentSessionTurnItemBySequence(items),
     submissions: () => submissions,
     inputOrder: {
+      inputOrdinal: (id: string) => submissions.findIndex((input) => input.clientMessageId === id),
       recoverableSubmissions: () =>
         submissions.filter((s) => s.dispatchState === 'pending' || s.dispatchState === 'unknown')
     },
@@ -166,6 +169,7 @@ export function journal(
   return {
     ...currentWork,
     snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
+    statusRead: () => ({ items, submissions }),
     appendItem: async () => undefined
   } as never
 }

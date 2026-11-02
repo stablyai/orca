@@ -33,7 +33,7 @@ export function refreshDerivedStopNotes(
   if (!hasUnconfirmedStop) {
     return
   }
-  const snapshot = journal.snapshot()
+  const snapshot = journal.itemsRead()
   const { form, budgetBytes } = subscriberHistoryReader(subscriber)
   let pending: AgentJournalRenderItem[] = []
   let bytes = 0

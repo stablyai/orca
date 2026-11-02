@@ -112,12 +112,12 @@ export function isStructuredAgentSessionStopNote(itemId: string): boolean {
 
 /** Read Stop from the journal so cached state cannot outlive the command. */
 export function structuredAgentSessionCommandWasStopped(
-  journal: Pick<AgentSessionJournal, 'snapshot'>,
+  journal: Pick<AgentSessionJournal, 'itemsRead'>,
   turnId: string
 ): boolean {
   const { itemId } = structuredAgentSessionCommandTurn(turnId.slice('compact:'.length))
   return journal
-    .snapshot()
+    .itemsRead()
     .items.some(
       (item) =>
         item.turnScope?.kind === 'turn' &&
