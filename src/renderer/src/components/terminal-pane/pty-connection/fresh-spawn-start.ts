@@ -54,6 +54,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     session.authoritativeReattachGeneration += 1
     // Every connect creates/rebinds ownership; legacy replies lacking incarnationId cannot inherit the old fence.
     session.remotePtyIncarnationId = null
+    session.settleSavedRestoreFreshNotice?.(null)
     session.clearPaneMode2031State()
     session.clearHiddenOutputRestoreState()
     // Cancelled replay can retain isUserScrolling; replacement shells must start following output.
@@ -157,6 +158,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         // Legacy replies may omit incarnationId; remote evidence remains unverifiable until a stamped attach result.
         session.remotePtyIncarnationId = connectResult?.incarnationId ?? null
         session.noteBoundProcessIncarnation(connectResult?.incarnationId)
+        session.settleSavedRestoreFreshNotice?.(connectResult?.isReattach ? null : resolvedPtyId)
         if (connectResult?.isReattach) {
           if (
             session.pendingStartupCommand?.resumeSource === effectiveStartup?.resumeSource &&

@@ -26,6 +26,7 @@ import {
 } from './agent-task-complete-settings'
 
 import { installRunDeferredConnect } from './run-deferred-connect'
+import { installSavedRestoreFreshNotice } from './saved-restore-fresh-notice'
 
 import { installSleepingRecordAccess } from './sleeping-record-access'
 import { installShellCommandInference } from './shell-command-inference'
@@ -216,6 +217,8 @@ export function connectPanePty(
     session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, exitedPtyId)
   }
   installPtyKittyFileReader(session)
+  // Before any spawn: a fresh-start notice can arrive ahead of its create reply.
+  installSavedRestoreFreshNotice(session)
   installPtyInputForward(session)
   installPtyResizeGeometry(session)
   installRunDeferredConnect(session)

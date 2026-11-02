@@ -1,6 +1,7 @@
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
+import { dispatchSavedRestoreFreshNotice } from '@/components/terminal-pane/pty-connection/saved-restore-fresh-notice'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -106,6 +107,13 @@ export function registerRuntimeClientIpcBridge(
       dispatchTerminalSideEffectBatch({
         ...event.batch,
         ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId)
+      })
+      return
+    }
+    if (event.type === 'terminalSavedRestoreFresh') {
+      dispatchSavedRestoreFreshNotice({
+        ...event,
+        ptyId: toRemoteRuntimePtyId(event.ptyId, environmentId)
       })
       return
     }

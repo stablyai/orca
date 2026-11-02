@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
+import type { TerminalSavedRestoreFreshEvent } from '../../shared/runtime-client-events'
 import type {
   RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
@@ -148,5 +149,13 @@ export const runtimeApi = {
       callback(data)
     ipcRenderer.on('runtime:sidebarInputsChanged', listener)
     return () => ipcRenderer.removeListener('runtime:sidebarInputsChanged', listener)
+  },
+  onTerminalSavedRestoreFresh: (
+    callback: (event: TerminalSavedRestoreFreshEvent) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: TerminalSavedRestoreFreshEvent) =>
+      callback(data)
+    ipcRenderer.on('runtime:terminalSavedRestoreFresh', listener)
+    return () => ipcRenderer.removeListener('runtime:terminalSavedRestoreFresh', listener)
   }
 } satisfies PreloadApi['runtime']

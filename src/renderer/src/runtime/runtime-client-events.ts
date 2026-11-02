@@ -73,9 +73,32 @@ function handleRuntimeClientEventResponse(
     }
     return
   }
+  if (message.type === 'terminalSavedRestoreFresh') {
+    if (isTerminalSavedRestoreFresh(message)) {
+      onEvent(message)
+    }
+    return
+  }
   if (isRuntimeClientEvent(message)) {
     onEvent(message)
   }
+}
+
+const isId = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 512
+const isOptionalId = (value: unknown): boolean => value === undefined || isId(value)
+
+/** A host's fresh-start notice reaches a pane only with every identity field it is matched on. */
+function isTerminalSavedRestoreFresh(
+  message: Extract<RuntimeClientEvent, { type: 'terminalSavedRestoreFresh' }>
+): boolean {
+  return (
+    isId(message.paneKey) &&
+    isId(message.ptyId) &&
+    isId(message.dispatchId) &&
+    isOptionalId(message.incarnationId) &&
+    isOptionalId(message.launchToken)
+  )
 }
 
 function isRuntimeClientEvent(

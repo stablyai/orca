@@ -19,9 +19,15 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
+import type { TerminalSavedRestoreFreshEvent } from '../../../../shared/runtime-client-events'
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string): void
+
+  /** One committed fresh start of a saved restore, for the panes that show it live; never retained. */
+  publishTerminalSavedRestoreFresh(event: Omit<TerminalSavedRestoreFreshEvent, 'type'>): void {
+    this.emitClientEvent({ type: 'terminalSavedRestoreFresh', ...event })
+  }
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives

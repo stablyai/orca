@@ -231,17 +231,17 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:clientHostedBrowserRowsChanged', event),
     claudeAccountSelected: (change) => send('claudeAccounts:selectedElsewhere', change)
   })
-  // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
-  const detachSidebarInputsNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? runtime.onClientEvent(
-        (event) => {
-          if (event.type === 'sidebarInputsChanged') {
-            send('runtime:sidebarInputsChanged', event)
-          }
-        },
-        { consumesTerminalSideEffects: false }
-      )
-    : null
+  const detachClientNotices = runtime.onClientEvent(
+    (event) => {
+      if (event.type === 'terminalSavedRestoreFresh') {
+        send('runtime:terminalSavedRestoreFresh', event)
+      } else if (ORCA_SIDEBAR_INPUTS_IS_MAIN && event.type === 'sidebarInputsChanged') {
+        // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
+        send('runtime:sidebarInputsChanged', event)
+      }
+    },
+    { consumesTerminalSideEffects: false }
+  )
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const fence = runtime.markRendererReloading(mainWindow.id)
@@ -258,7 +258,7 @@ export function registerRuntimeWindowLifecycle(
     rendererNotifications.onRendererProcessGone()
   })
   mainWindow.on('closed', () => {
-    detachSidebarInputsNotices?.()
+    detachClientNotices()
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {

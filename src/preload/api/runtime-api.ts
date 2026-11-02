@@ -11,6 +11,7 @@ import type {
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
+import type { TerminalSavedRestoreFreshEvent } from '../../shared/runtime-client-events'
 import type {
   PublicKnownRuntimeEnvironment,
   RuntimeEnvironmentRemoval
@@ -83,6 +84,10 @@ export type RuntimeApi = {
       callback: (event: ClientHostedBrowserRowsEvent) => void
     ) => () => void
     onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
+    // Older preloads lack this signal; their panes keep the create-result notice only.
+    onTerminalSavedRestoreFresh?: (
+      callback: (event: TerminalSavedRestoreFreshEvent) => void
+    ) => () => void
   }
   runtimeEnvironments: {
     desktopCreatedChatIds?: () => Promise<string[]>

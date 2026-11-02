@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
+import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 
 const { ipcMain } = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')
@@ -14,6 +15,7 @@ vi.mock('./renderer-document-navigation', () => ({ registerRendererDocumentNavig
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
 
 function attachWindow(id: number): {
+  clientEvent: (event: RuntimeClientEvent) => void
   destroy: () => void
   notifier: RuntimeNotifier
   send: ReturnType<typeof vi.fn>
@@ -22,7 +24,10 @@ function attachWindow(id: number): {
   let destroyed = false
   const send = vi.fn()
   const webContents = { isDestroyed: () => false, send, on: vi.fn() }
-  const attached: { notifier: RuntimeNotifier | null } = { notifier: null }
+  const attached: {
+    notifier: RuntimeNotifier | null
+    clientEvent?: (event: RuntimeClientEvent) => void
+  } = { notifier: null }
   const mainWindow = {
     id,
     isDestroyed: () => destroyed,
@@ -38,6 +43,10 @@ function attachWindow(id: number): {
   const runtime = {
     attachWindow: vi.fn(),
     markGraphReloadFailed: vi.fn(),
+    onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
+      attached.clientEvent = listener
+      return () => {}
+    },
     setNotifier: (next: RuntimeNotifier | null) => {
       attached.notifier = next
     }
@@ -48,14 +57,16 @@ function attachWindow(id: number): {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only calls the stubbed runtime members.
     runtime as unknown as OrcaRuntimeService
   )
-  if (!attached.notifier) {
+  const { notifier, clientEvent } = attached
+  if (!notifier || !clientEvent) {
     throw new Error('runtime notifier was not attached')
   }
   return {
+    clientEvent,
     destroy: () => {
       destroyed = true
     },
-    notifier: attached.notifier,
+    notifier,
     send,
     webContents
   }
@@ -91,5 +102,21 @@ describe('runtime window terminal reveal', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('runtime window saved-restore fresh notice', () => {
+  it('forwards only the live fresh-start event to the window', () => {
+    const window = attachWindow(3)
+    const event = {
+      type: 'terminalSavedRestoreFresh' as const,
+      paneKey: 'tab-1:leaf-1',
+      ptyId: 'pty-1',
+      incarnationId: 'inc-1',
+      dispatchId: 'dispatch-1'
+    }
+    window.clientEvent(event)
+    window.clientEvent({ type: 'reposChanged' })
+    expect(window.send.mock.calls).toEqual([['runtime:terminalSavedRestoreFresh', event]])
   })
 })

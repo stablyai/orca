@@ -25,6 +25,15 @@ export type RuntimeClientEvent =
     }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
+  /** One committed fresh start of a saved restore; live only, never retained or replayed. */
+  | {
+      type: 'terminalSavedRestoreFresh'
+      paneKey: string
+      ptyId: string
+      incarnationId?: string
+      launchToken?: string
+      dispatchId: string
+    }
   /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */
   | SidebarInputsChangedEvent
   // Paired clients lack ssh:state-changed IPC; publish host SSH transitions so their reconnect overlays update (STA-1468).
@@ -103,3 +112,8 @@ export function toRuntimeActivateWorktreeEvent(
     ...(providesInitialSurface ? { providesInitialSurface } : {})
   }
 }
+
+export type TerminalSavedRestoreFreshEvent = Extract<
+  RuntimeClientEvent,
+  { type: 'terminalSavedRestoreFresh' }
+>
