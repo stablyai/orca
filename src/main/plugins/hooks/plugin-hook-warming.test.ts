@@ -5,6 +5,7 @@ import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginWorkerHandle } from '../workers/plugin-host-process'
 import { PluginWorkerManager, type PluginWorkerFactory } from '../workers/plugin-worker-manager'
 import { buildPluginWorkerSpawnSpec } from '../workers/plugin-worker-spawn-spec'
+import { PluginWorkerSlots } from '../workers/plugin-worker-slot-pool'
 import { createPluginHookWarmer } from './plugin-hook-participants'
 
 function plugin(
@@ -106,6 +107,48 @@ describe('hook plugin warming', () => {
     await vi.advanceTimersByTimeAsync(500)
     expect(manager.runningHandle('acme.guard')).toBe(second)
     await manager.disposeAll()
+  })
+
+  it('runs hook workers outside the active-worker cap, so they never starve other plugins', async () => {
+    const factory = vi.fn<PluginWorkerFactory>(async () => worker())
+    const manager = new PluginWorkerManager({
+      entryPath: '/host.js',
+      workerFactory: factory,
+      maxActive: 1,
+      executeHostCall: async () => ({ ok: true, value: null }),
+      log: () => vi.fn(),
+      onWorkerStateChange: vi.fn()
+    })
+    const hooked = [plugin('acme.a', ['terminal.send']), plugin('acme.b', ['terminal.send'])]
+    for (const each of hooked) {
+      await manager.ensureActive(buildPluginWorkerSpawnSpec(each, []))
+    }
+    await manager.ensureActive(buildPluginWorkerSpawnSpec(plugin('acme.plain', []), []))
+    expect(factory).toHaveBeenCalledTimes(3)
+    await manager.disposeAll()
+  })
+
+  it('makes hook workers past their soft cap wait, and says so once', async () => {
+    const slots = new PluginWorkerSlots(5, 1)
+    const log = vi.fn()
+    const signal = new AbortController().signal
+    const first = await slots.for({ keepWarm: true }, log).acquire(signal)
+    let secondStarted = false
+    const second = slots
+      .for({ keepWarm: true }, log)
+      .acquire(signal)
+      .then((lease) => ((secondStarted = true), lease))
+    void slots
+      .for({ keepWarm: true }, log)
+      .acquire(signal)
+      .catch(() => undefined)
+    await Promise.resolve()
+    expect(secondStarted).toBe(false)
+    expect(log).toHaveBeenCalledOnce()
+    first.release()
+    await second
+    expect(secondStarted).toBe(true)
+    slots.dispose()
   })
 
   it('bounds worker start by its own timeout, then gives the handler the full deadline', async () => {

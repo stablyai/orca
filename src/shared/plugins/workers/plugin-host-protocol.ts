@@ -100,3 +100,5 @@ export const PLUGIN_WORKER_INVOKE_TIMEOUT_MS = 30_000
 export const PLUGIN_WORKER_IDLE_REAP_MS = 5 * 60_000
 /** Default cap on concurrently-active workers; excess activations queue. */
 export const PLUGIN_WORKER_MAX_ACTIVE_DEFAULT = 5
+/** Soft cap on always-running hook workers, which hold no slot of the cap above. */
+export const PLUGIN_WORKER_MAX_KEEP_WARM_DEFAULT = 16
