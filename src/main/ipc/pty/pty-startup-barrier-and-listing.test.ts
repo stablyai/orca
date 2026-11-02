@@ -219,6 +219,36 @@ describe('registerPtyHandlers', () => {
       { id: 'unobserved-pty', authoritative: false }
     ])
   })
+  it('starts every liveness probe before any resolves so a slow daemon cannot outlast the batch deadline', async () => {
+    const started: string[] = []
+    const releases: (() => void)[] = []
+    const probePtyLiveness = vi.fn(
+      (id: string) =>
+        new Promise<boolean>((resolve) => {
+          started.push(id)
+          releases.push(() => resolve(false))
+        })
+    )
+    registerPtyHandlers(mainWindow as never)
+    installDaemonTestProvider({
+      canProvideAuthoritativeBufferSnapshot: () => false,
+      probePtyLiveness
+    })
+
+    const pending = Promise.resolve(
+      handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
+        ids: ['dead-1', 'dead-2', 'dead-3']
+      })
+    )
+    await vi.waitFor(() => expect(started).toEqual(['dead-1', 'dead-2', 'dead-3']))
+    releases.forEach((release) => release())
+
+    await expect(pending).resolves.toEqual([
+      { id: 'dead-1', authoritative: false, gone: true },
+      { id: 'dead-2', authoritative: false, gone: true },
+      { id: 'dead-3', authoritative: false, gone: true }
+    ])
+  })
   it('checks single-PTY liveness without listing every session', async () => {
     const hasPty = vi.fn((id: string) => id === 'live-pty')
     // A session that survived a restart is live on the host before this run attaches it.

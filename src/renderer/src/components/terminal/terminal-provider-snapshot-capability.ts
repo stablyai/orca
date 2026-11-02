@@ -279,6 +279,16 @@ export function terminalProviderSessionIsGone(ptyId: string): boolean {
   return goneSessionPtyIds.has(ptyId)
 }
 
+export function terminalProviderAllowsParking(ptyId: string): boolean {
+  return authoritativeSnapshotByPtyId.get(ptyId) === true || goneSessionPtyIds.has(ptyId)
+}
+
+/** A live sibling's exit would close a parked tab whose gone panes carry no watcher, so mixed splits stay mounted. */
+export function mixesLiveAndGoneSessions(ptyIds: readonly (string | null)[]): boolean {
+  const goneCount = ptyIds.filter((ptyId) => ptyId !== null && goneSessionPtyIds.has(ptyId)).length
+  return goneCount > 0 && goneCount < ptyIds.length
+}
+
 export function clearTerminalProviderSnapshotCapabilities(): void {
   const capabilityChanged =
     [...authoritativeSnapshotByPtyId.values()].some((authoritative) => authoritative) ||
