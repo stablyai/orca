@@ -9,9 +9,9 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   cancelledDispatch,
-  dispatchStructuredInputSafely,
   StructuredAgentSessionInputNotAdmitted
 } from './structured-agent-session-input-admission'
+import { dispatchStructuredInputSafely } from './structured-agent-session-input-dispatch'
 import type { AgentSessionHandoverContext } from './structured-agent-session-host-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 
