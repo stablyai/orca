@@ -6,6 +6,7 @@ import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-s
 // Host scoping belongs to the scope strip; this menu manages lifecycle and section collapse.
 export type HostHeaderMenuAction =
   | 'runtime-repair'
+  | 'wsl-start'
   | 'rename'
   | 'manage'
   | 'ssh-reconnect'
@@ -29,6 +30,8 @@ export type HostHeaderMenuInput = {
   blockedReason?: RuntimeHostBlockedReason
   /** False for a server Orca pairs itself (over SSH), whose repair is Connect, not an access link. */
   repairableWithAccessLink?: boolean
+  /** A WSL host whose distro is stopped; Start is the one act that boots it (E9). */
+  wslDistroStopped?: boolean
 }
 
 function sshActions(connected: boolean): HostHeaderMenuAction[] {
@@ -45,6 +48,9 @@ export function buildHostHeaderMenuModel(input: HostHeaderMenuInput): HostHeader
     input.repairableWithAccessLink !== false
   ) {
     actions.push('runtime-repair')
+  }
+  if (input.kind === 'runtime' && input.wslDistroStopped === true) {
+    actions.push('wsl-start')
   }
   actions.push('rename')
 

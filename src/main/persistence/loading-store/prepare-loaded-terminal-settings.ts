@@ -16,6 +16,7 @@ import {
   normalizeOsc52ClipboardDefaultOn,
   osc52ClipboardDefaultOnOverridesPersistedOff
 } from '../../../shared/osc52-clipboard-settings'
+import { splitLegacyTerminalColorOverrides } from '../../../shared/terminal-color-overrides'
 import {
   migrateTerminalScrollbackRows,
   migrateTerminalTuiScrollSensitivityDefault
@@ -47,6 +48,7 @@ export type PreparedLoadedTerminalSettings = {
     GlobalSettings,
     'terminalAllowOsc52Clipboard' | 'terminalAllowOsc52ClipboardDefaultedOnForAllUsers'
   >
+  migratedTerminalColorOverrides: ReturnType<typeof splitLegacyTerminalColorOverrides>
   migratedFloatingTerminalCwd: GlobalSettings['floatingTerminalCwd']
   migratedFloatingTerminalTrustedCwds: GlobalSettings['floatingTerminalTrustedCwds']
   osc52ClipboardNoticePending: boolean
@@ -135,6 +137,10 @@ export function prepareLoadedTerminalSettings(
   if (parsed.settings?.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !== true) {
     markNeedsSave()
   }
+  const migratedTerminalColorOverrides = splitLegacyTerminalColorOverrides(parsed.settings)
+  if (parsed.settings?.terminalColorOverridesSplit !== true) {
+    markNeedsSave()
+  }
   const floatingTerminalCwdMigrated =
     parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
   // Repair the old empty notes-directory migration; terminal cwd and notes now resolve separately.
@@ -182,6 +188,7 @@ export function prepareLoadedTerminalSettings(
     migratedOptionAsAlt,
     migratedFloatingTerminalEnabled,
     migratedOsc52Clipboard,
+    migratedTerminalColorOverrides,
     migratedFloatingTerminalCwd,
     migratedFloatingTerminalTrustedCwds,
     osc52ClipboardNoticePending

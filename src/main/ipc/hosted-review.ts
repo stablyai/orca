@@ -7,14 +7,15 @@ import type {
   HostedReviewForBranchArgs
 } from '../../shared/hosted-review'
 import type { Repo } from '../../shared/repo-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import {
   createHostedReview,
   getHostedReviewCreationEligibility
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
-import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { hostedReviewForBranchReply } from '../../shared/hosted-review'
+import { readHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 import {
@@ -42,7 +43,10 @@ function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): 
   return repo
 }
 
-function assertRegisteredRepoForBranch(args: HostedReviewForBranchArgs, store: Store): Repo {
+function assertRegisteredRepoForBranch(
+  args: Pick<HostedReviewForBranchArgs, 'repoPath' | 'repoId' | 'repoOwnerExecutionHostId'>,
+  store: Store
+): Repo {
   if (!args.repoOwnerExecutionHostId) {
     return assertRegisteredRepo(args.repoPath, store, args.repoId)
   }
@@ -115,10 +119,10 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     // Sidebar cards and the checks panel poll this for every provider; gh/glab in WSL boot it (E9).
     // Only an explicit Refresh may start a stopped distro; admissionTier is priority only, and
     // the visible scheduler sends 'interactive' for the selected card on a timer.
-    const review = await guardWslUncPathAccess(
+    const read = await guardWslUncPathAccess(
       repo.path,
       () =>
-        getHostedReviewForBranch({
+        readHostedReviewForBranch({
           repoPath: repo.path,
           executionHostId: getStoredRepoExecutionHostId(repo),
           branch: args.branch,
@@ -131,10 +135,12 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
           currentHeadOid: args.currentHeadOid ?? null,
           ...(args.active === true ? { active: true } : {}),
           ...(args.force === true ? { force: true } : {}),
+          ...(args.userRefresh === true ? { userRefresh: true } : {}),
           localGitExecOptions: localGitOptions
         }),
       { wake: args.wakeWslDistro === true, wslDistro: localGitOptions.wslDistro }
     )
+    const review = read.review
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
       stats.record({
         type: 'pr_created',
@@ -143,13 +149,13 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
         meta: { prNumber: review.number, prUrl: review.url }
       })
     }
-    return review
+    return hostedReviewForBranchReply(read, args.reportReadOutcome)
   })
 
   ipcMain.handle(
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
-      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+      const repo = assertRegisteredRepoForBranch(args, store)
       const localGitOptions = getLocalProjectGhExecOptions(store, repo)
       // Source Control asks on mount; only the user's Create PR may start a stopped distro (E9).
       return guardWslUncPathAccess(

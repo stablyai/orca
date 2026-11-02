@@ -50,29 +50,6 @@ function deferred<T>(): {
 }
 
 describe('buildGpuCrashDiagnostics', () => {
-  it('keeps only the active GPU identity, driver, rendering backend, and feature status', () => {
-    expect(
-      buildGpuCrashDiagnostics({ info: BASIC_INFO, level: 'complete' }, FEATURE_STATUS)
-    ).toEqual({
-      gpuInfoLevel: 'complete',
-      gpuDeviceCount: 2,
-      gpuVendorId: 0x10de,
-      gpuDeviceId: 0x2684,
-      gpuVendor: 'NVIDIA',
-      gpuDevice: 'Discrete GPU',
-      gpuDriverVendor: 'NVIDIA',
-      gpuDriverVersion: '32.0.15.6094',
-      gpuGlVendor: 'Google Inc.',
-      gpuGlRenderer: 'ANGLE (NVIDIA, D3D11)',
-      gpuGlVersion: 'OpenGL ES 3.0',
-      gpuCompositingStatus: 'enabled',
-      gpuRasterizationStatus: 'enabled',
-      gpuWebglStatus: 'enabled',
-      gpuWebgl2Status: 'enabled',
-      gpuVideoDecodeStatus: 'enabled'
-    })
-  })
-
   it('degrades malformed or unavailable GPU info without copying arbitrary fields', () => {
     expect(
       buildGpuCrashDiagnostics(

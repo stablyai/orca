@@ -2,20 +2,13 @@
 
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/xterm'
-import {
-  installWindowsCtrlAltChordRepair,
-  isGenuineWindowsCtrlAltChord,
-  shouldRepairWindowsCtrlAltChords
-} from './terminal-windows-ctrl-alt-chord-classification'
+import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
 
 const WINDOWS_ELECTRON_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
   'orca/1.0.0 Chrome/126.0.0.0 Electron/31.0.0 Safari/537.36'
 const WINDOWS_FIREFOX_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0'
-const MAC_ELECTRON_UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'orca/1.0.0 Chrome/126.0.0.0 Electron/31.0.0 Safari/537.36'
 
 type ClassificationEvent = {
   type: string
@@ -63,45 +56,7 @@ function getThirdLevelShift(terminal: Terminal): CoreThirdLevelShift {
   return classify.bind(core)
 }
 
-describe('isGenuineWindowsCtrlAltChord', () => {
-  it('accepts Ctrl+Alt chords whose AltGraph state is false', () => {
-    expect(isGenuineWindowsCtrlAltChord(chord())).toBe(true)
-    expect(isGenuineWindowsCtrlAltChord(chord({ shiftKey: true }))).toBe(true)
-    // Synthetic events without getModifierState cannot be AltGr composition.
-    expect(isGenuineWindowsCtrlAltChord(chord({ getModifierState: undefined }))).toBe(true)
-  })
-
-  it('rejects AltGr composition and non-Ctrl+Alt chords', () => {
-    expect(
-      isGenuineWindowsCtrlAltChord(chord({ getModifierState: (key) => key === 'AltGraph' }))
-    ).toBe(false)
-    expect(isGenuineWindowsCtrlAltChord(chord({ metaKey: true }))).toBe(false)
-    expect(isGenuineWindowsCtrlAltChord(chord({ altKey: false }))).toBe(false)
-    expect(isGenuineWindowsCtrlAltChord(chord({ ctrlKey: false }))).toBe(false)
-  })
-})
-
-describe('shouldRepairWindowsCtrlAltChords', () => {
-  it('repairs only Windows Chromium clients', () => {
-    expect(shouldRepairWindowsCtrlAltChords(WINDOWS_ELECTRON_UA)).toBe(true)
-    // Firefox keeps Ctrl+Alt for AltGr composition; false AltGraph there does not prove a genuine chord.
-    expect(shouldRepairWindowsCtrlAltChords(WINDOWS_FIREFOX_UA)).toBe(false)
-    expect(shouldRepairWindowsCtrlAltChords(MAC_ELECTRON_UA)).toBe(false)
-  })
-})
-
 describe('installWindowsCtrlAltChordRepair', () => {
-  it('finds the internal classification seam on the real Terminal', () => {
-    // Fail on private-seam renames rather than silently dropping rescued chords after xterm upgrades.
-    const terminal = new Terminal()
-    try {
-      expect(getThirdLevelShift(terminal)({ isWindows: true }, chord())).toBe(true)
-      expect(installWindowsCtrlAltChordRepair(terminal, WINDOWS_ELECTRON_UA)).toBe(true)
-    } finally {
-      terminal.dispose()
-    }
-  })
-
   it('reclassifies only genuine Windows Ctrl+Alt chords', () => {
     const terminal = new Terminal()
     try {

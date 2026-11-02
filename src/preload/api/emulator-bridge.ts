@@ -52,6 +52,15 @@ export const emulatorApi = {
     ipcRenderer.on('emulator:videoStreamMeta', listener)
     return () => ipcRenderer.removeListener('emulator:videoStreamMeta', listener)
   },
+  sendScrcpyTouch: (touch: {
+    deviceId: string
+    type: 'begin' | 'move' | 'end'
+    x: number
+    y: number
+  }): void => ipcRenderer.send('emulator:scrcpyTouch', touch),
+  sendScrcpyKeyboard: (
+    input: { deviceId: string; text: string } | { deviceId: string; key: string; shift: boolean }
+  ): Promise<boolean> => ipcRenderer.invoke('emulator:scrcpyKeyboard', input),
   onVideoStreamFrame: (
     callback: (data: {
       streamId: string

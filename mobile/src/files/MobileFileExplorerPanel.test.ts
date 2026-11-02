@@ -22,10 +22,20 @@ const mockTransport = vi.hoisted(
   })
 )
 
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
+
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
     ActivityIndicator: 'ActivityIndicator',
+    Animated: { View: 'View' },
     FlatList: (props: {
       data: unknown[]
       keyExtractor: (item: unknown, index: number) => string
@@ -46,18 +56,32 @@ vi.mock('react-native', async () => {
           )
         )
       ),
+    Dimensions: { get: () => ({ width: 390, height: 844 }) },
+    Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => {} },
+    Platform: { OS: 'web', select: (choices: Record<string, unknown>) => choices.web },
     Pressable: 'Pressable',
     StyleSheet: {
+      absoluteFill: {},
       create: (styles: unknown) => styles,
       hairlineWidth: 1
     },
     Text: 'Text',
+    TextInput: 'TextInput',
     View: 'View'
   }
 })
 
 vi.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: 'SafeAreaView'
+  SafeAreaView: 'SafeAreaView',
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
+
+vi.mock('react-native-svg', () => ({
+  default: 'Svg',
+  Defs: 'Defs',
+  LinearGradient: 'LinearGradient',
+  Rect: 'Rect',
+  Stop: 'Stop'
 }))
 
 vi.mock('expo-router', () => ({
@@ -71,10 +95,15 @@ vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
   ChevronRight: 'ChevronRight',
+  CircleAlert: 'CircleAlert',
   File: 'File',
   FileText: 'FileText',
   Folder: 'Folder',
+  FolderOpen: 'FolderOpen',
   Image: 'Image',
+  Search: 'Search',
+  SearchX: 'SearchX',
+  WifiOff: 'WifiOff',
   X: 'X'
 }))
 
@@ -153,6 +182,15 @@ async function pressByLabel(
   })
 }
 
+async function typeFilter(renderer: ReactTestRenderer, text: string): Promise<void> {
+  const field = renderer.root.find(
+    (node) => String(node.type) === 'TextInput' && node.props.placeholder === 'Filter files'
+  )
+  await act(async () => {
+    field.props.onChangeText(text)
+  })
+}
+
 function renderedText(renderer: ReactTestRenderer): string {
   return renderer.root
     .findAll((node) => String(node.type) === 'Text')
@@ -200,6 +238,38 @@ describe('MobileFileExplorerPanel', () => {
     expect(client.sendRequest).toHaveBeenCalledTimes(2)
   })
 
+  it('filters opened folders, reveals a matched folder in the tree, and clears from no matches', async () => {
+    const client = createMockClient({
+      '': [entry('src', true), entry('README.md')],
+      src: [entry('app.ts'), entry('components', true)]
+    })
+    mockTransport.client = client
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder src')
+    await pressByLabel(renderer, 'Open folder src')
+
+    await typeFilter(renderer, 'APP')
+    expect(renderedText(renderer)).toContain('app.ts')
+    expect(renderedText(renderer)).not.toContain('README.md')
+
+    await pressByLabel(renderer, 'Open folder src')
+    expect(renderedText(renderer)).toContain('README.md')
+    expect(renderedText(renderer)).toContain('components')
+
+    await typeFilter(renderer, 'nothing-here')
+    expect(renderedText(renderer)).toContain('No matches')
+    const clear = renderer.root.find(
+      (node) =>
+        String(node.type) === 'Pressable' &&
+        node.findAll((child) => child.props.children === 'Clear filter').length > 0
+    )
+    await act(async () => {
+      clear.props.onPress()
+    })
+    expect(renderedText(renderer)).toContain('README.md')
+    expect(client.sendRequest).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps the loaded tree visible during a transient disconnect', async () => {
     const client = createMockClient({
       '': [entry('src', true), entry('README.md')]
@@ -216,7 +286,7 @@ describe('MobileFileExplorerPanel', () => {
     expect(client.sendRequest).toHaveBeenCalledTimes(1)
     expect(renderedText(renderer)).toContain('src')
     expect(renderedText(renderer)).toContain('README.md')
-    expect(renderedText(renderer)).not.toContain('Waiting for desktop...')
+    expect(renderedText(renderer)).not.toContain('Waiting for desktop')
   })
 
   it('refreshes the root in the background after reconnect without blanking the tree', async () => {
@@ -506,14 +576,14 @@ describe('MobileFileExplorerPanel', () => {
         .filter((node) =>
           node
             .findAll((node) => String(node.type) === 'Text')
-            .some((text) => text.props.children === 'Retry')
+            .some((text) => text.props.children === 'Reconnect')
         )
     }
 
     it('offers no root Retry on the page, where nothing can re-dial', async () => {
       mockTransport.forceReconnect = null
       const renderer = await unreachableAfterRootFailure()
-      expect(renderedText(renderer)).toContain('Waiting for desktop...')
+      expect(renderedText(renderer)).toContain('Waiting for desktop')
       expect(retryButtons(renderer)).toHaveLength(0)
     })
 

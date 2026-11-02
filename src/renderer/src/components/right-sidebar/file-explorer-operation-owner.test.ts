@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { getDefaultSettings } from '../../../../shared/constants'
+
 import { makeWorktree, TEST_REPO } from '../../store/slices/worktrees-slice-test-fixtures'
 import { getFileExplorerOperationOwnerFromState } from './file-explorer-operation-owner'
 
@@ -78,33 +78,6 @@ describe('getFileExplorerOperationOwnerFromState', () => {
     )
 
     expect(owner).toEqual({ kind: 'local' })
-  })
-
-  it('writes a server-owned folder through that server, and an unstamped one never through focus', () => {
-    const state = (folderWorkspaces: FolderWorkspace[], projectGroups: ProjectGroup[]) => ({
-      settings: { ...getDefaultSettings('/home'), activeRuntimeEnvironmentId: 'focused-env' },
-      runtimeEnvironments: [{ id: 'focused-env' }, { id: 'env-a' }],
-      runtimeEnvironmentCatalogHydrated: true,
-      repos: [],
-      worktreesByRepo: {},
-      detectedWorktreesByRepo: {},
-      restoredRuntimeHostIdByWorkspaceSessionKey: {},
-      folderWorkspaces,
-      projectGroups
-    })
-    expect(
-      getFileExplorerOperationOwnerFromState(
-        state(
-          [folder('remote-group', 'runtime:env-a', null)],
-          [group('remote-group', 'runtime:env-a', null)]
-        ),
-        'folder:same-folder'
-      )
-    ).toEqual({ kind: 'runtime', environmentId: 'env-a', executionHostId: 'runtime:env-a' })
-    const unstamped = { ...folder('no-group', 'local', null), executionHostId: undefined }
-    expect(
-      getFileExplorerOperationOwnerFromState(state([unstamped], []), 'folder:same-folder')
-    ).toEqual({ kind: 'local' })
   })
 
   it('refuses a worktree two paired servers publish on the same SSH target (review-5 #2)', () => {

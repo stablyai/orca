@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import type { AppState } from '../types'
 import { createUIStore } from './ui-slice-test-harness'
@@ -45,7 +45,7 @@ vi.mock('@/runtime/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForTab: () => ({ kind: 'local' })
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-message', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-message', () => ({
   relaunchFailedStructuredAgentSessionWithMessage:
     mocks.relaunchFailedStructuredAgentSessionWithMessage
 }))

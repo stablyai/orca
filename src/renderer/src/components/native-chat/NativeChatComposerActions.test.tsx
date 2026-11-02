@@ -128,6 +128,33 @@ describe('NativeChatComposerActions', () => {
     ).toBe('stop')
   })
 
+  it('offers Attach and dictation, but no Send, in a launch prompt', () => {
+    const onDictationToggle = vi.fn()
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        isWorking={false}
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={onDictationToggle}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={vi.fn()}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+        launchPrompt
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Attach file' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Start dictation' }))
+    expect(onDictationToggle).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores the second click of a double-click after send becomes Stop', () => {
     const onSend = vi.fn()
     const onStop = vi.fn()
@@ -191,7 +218,9 @@ describe('NativeChatComposerActions', () => {
         dictationDisabled={false}
         sendDisabled
         sendBlockedReason="An image couldn't be brought back. Remove it to send."
-        isWorking={false}
+        hasDraft
+        alternateSend="steer"
+        isWorking
         isDictating={false}
         isDictationHoldMode={false}
         onAttach={vi.fn()}
@@ -208,6 +237,7 @@ describe('NativeChatComposerActions', () => {
       name: "An image couldn't be brought back. Remove it to send."
     })
     expect(send.hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByText('⌘ Enter to steer')).toBeNull()
   })
 
   it('marks a draft that could not be saved only after storage refused it', () => {

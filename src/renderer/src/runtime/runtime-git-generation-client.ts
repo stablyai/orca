@@ -1,4 +1,5 @@
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../shared/text-generation-client-timeout'
 import { localizeTextGenerationResult } from '@/lib/text-generation-error-copy'
 import { antigravityGenerationCompatibilityError } from './antigravity-generation-compatibility'
 import {
@@ -56,7 +57,7 @@ export async function generateRuntimeCommitMessage(
       ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     },
-    { timeoutMs: 75_000 }
+    { timeoutMs: TEXT_GENERATION_CLIENT_TIMEOUT_MS }
   )
   return localizeTextGenerationResult(result)
 }
@@ -83,7 +84,7 @@ export async function discoverRuntimeCommitMessageModels(
         ? { agentCmdOverrides: context.prefs.agentCmdOverrides }
         : {})
     },
-    { timeoutMs: 75_000 }
+    { timeoutMs: TEXT_GENERATION_CLIENT_TIMEOUT_MS }
   )
 }
 
@@ -150,7 +151,7 @@ export async function generateRuntimePullRequestFields(
       ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     },
-    { timeoutMs: 75_000 }
+    { timeoutMs: TEXT_GENERATION_CLIENT_TIMEOUT_MS }
   )
   return localizeTextGenerationResult(result)
 }

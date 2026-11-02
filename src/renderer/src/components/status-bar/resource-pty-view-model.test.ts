@@ -7,7 +7,7 @@ import {
   makeRepo,
   makeTerminalTab,
   makeWorktree
-} from '../worktree-jump-palette-test-fixtures'
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { makeProjectGroup } from '../sidebar/folder-workspace-composer-submit-fixtures'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 

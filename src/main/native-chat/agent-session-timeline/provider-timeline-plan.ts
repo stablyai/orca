@@ -1,6 +1,6 @@
 // Resolve rows on the write lane; advance state/text bookkeeping only after admission so refusal is retryable.
 
-import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission

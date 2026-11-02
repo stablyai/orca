@@ -1,4 +1,4 @@
-import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
 import {
   richMarkdownContextMenuCommandChannel,

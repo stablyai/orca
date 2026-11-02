@@ -1,9 +1,9 @@
 import type { MobileNativeChatRowKeys } from './native-chat/transcript/mobile-native-chat-row-keys'
 import {
   mobileNativeChatReadingParts,
-  mobileNativeChatScrollRootKey,
-  type MobileNativeChatScrollRoots
-} from './mobile-native-chat-scroll-roots'
+  mobileNativeChatScrollRootKey
+} from './native-chat/transcript/mobile-native-chat-scroll-root-handle'
+import type { MobileNativeChatScrollRoots } from './native-chat/transcript/mobile-native-chat-scroll-roots'
 
 type Box = { top: number; bottom: number }
 

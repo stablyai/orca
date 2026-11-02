@@ -222,7 +222,7 @@ describe('web rate limits and accounts preload API', () => {
     await expect(api.claudeAccounts.select({ accountId: 'account-b' })).resolves.toEqual(selected)
     expect(calls).toContainEqual({
       method: 'accounts.selectClaude',
-      params: { accountId: 'account-b' }
+      params: { accountId: 'account-b', movesRunningSessions: true }
     })
   })
 

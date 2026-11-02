@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
+
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
 
 const TAB_WIDTH = 100
 const VIEWPORT_WIDTH = 300
@@ -96,6 +99,7 @@ function Strip({
   activeHostedRow?: string | null
 }): React.JSX.Element {
   stripRenderCount++
+  const activation = useTabStripPointerActivation({ onActivate: () => {} })
   const navigation = useTabStripOverflowNavigation({
     activeVisibleTabId: active,
     activeDockSlotId: activeHostedRow ?? active,
@@ -113,6 +117,7 @@ function Strip({
         <div
           key={id}
           data-tab-id={id}
+          onPointerDown={(event) => activation.onPointerDown(event)}
           data-tab-strip-slot={id}
           data-active-tab-dock={id === active && !activeHostedRow ? '' : undefined}
         />
@@ -216,6 +221,24 @@ describe('tab strip scroll when tabs are added', () => {
     act(() => {
       strip.dispatchEvent(new Event('pointerleave'))
     })
+    expect(tabX(strip, 'J')).toBe(100)
+    expect(tabX(strip, 'N')).toBe(200)
+  })
+
+  it('reveals deferred overflow after contextmenu retires the interrupted strip gesture', () => {
+    const { strip, rerender } = mountScrolled('J', 700)
+    const matches = Element.prototype.matches.bind(strip)
+    Object.defineProperty(strip, 'matches', {
+      value: (selector: string) => selector === ':hover' || matches(selector)
+    })
+    const tab = strip.querySelector<HTMLElement>('[data-tab-id="J"]')!
+    fireEvent.pointerDown(tab, { button: 0, ctrlKey: true, clientX: 250, clientY: 10 })
+    expect(isTabStripPointerGestureActive()).toBe(true)
+    fireEvent.contextMenu(tab, { button: 0, ctrlKey: true })
+    expect(isTabStripPointerGestureActive()).toBe(false)
+    rerender(<Strip tabs={[...TABS, 'N']} active="J" />)
+    expect(tabX(strip, 'J')).toBe(200)
+    fireEvent.pointerLeave(strip)
     expect(tabX(strip, 'J')).toBe(100)
     expect(tabX(strip, 'N')).toBe(200)
   })

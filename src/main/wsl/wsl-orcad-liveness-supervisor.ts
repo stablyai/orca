@@ -1,7 +1,7 @@
 /** D2c/C6 classify watch exits against fresh running lists and guest incarnation, publishing through onChange. Boot only for visible demand; background work waits for running evidence. Use monotonic timers and reverify after resume. */
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import { settleExitedDistroRunning } from './wsl-orcad-liveness-stopping-poll'
-import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
+import { isNoBootRefusal } from './wsl-orcad-connection-errors'
 import type { WslOrcadConnectIntent, WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { recoverWslOrcad, type WslOrcadRecoveryReason } from './wsl-orcad-liveness-recovery'
@@ -72,7 +72,7 @@ export class WslOrcadLivenessSupervisor {
     } catch (error) {
       // Rejected updates may leave the incumbent serving; keep it watched.
       const incumbent = this.deps.manager.get(entry.distro)
-      if (error instanceof WslDistroNotRunningError && entry.generation === generation) {
+      if (isNoBootRefusal(error) && entry.generation === generation) {
         // Arming would dial into the distro; liveness, not the refused poll, gives the verdict.
         this.trigger(entry, { source: 'verify' })
       } else if (incumbent && entry.generation === generation) {

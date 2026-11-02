@@ -6,7 +6,7 @@ import type { CodexAppServerConnection } from './app-server/codex-app-server-con
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError
-} from './codex-app-server-session'
+} from './app-server/codex-app-server-session'
 import {
   probeCodexBackgroundTerminals,
   terminateCodexBackgroundTerminals

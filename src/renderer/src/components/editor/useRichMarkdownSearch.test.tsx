@@ -10,8 +10,8 @@ function createEditor(): { editor: Editor; emitUpdate: () => void } {
   const transaction = {
     setMeta: vi.fn().mockReturnThis()
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these editor members.
   const editor = {
-    commands: { focus: vi.fn() },
     off: vi.fn((event: string, listener: () => void) => {
       if (event === 'update') {
         updateListeners.delete(listener)
@@ -25,7 +25,7 @@ function createEditor(): { editor: Editor; emitUpdate: () => void } {
     registerPlugin: vi.fn(),
     state: { doc: {}, tr: transaction },
     unregisterPlugin: vi.fn(),
-    view: { dispatch: vi.fn() }
+    view: { dispatch: vi.fn(), focus: vi.fn() }
   } as unknown as Editor
   return {
     editor,

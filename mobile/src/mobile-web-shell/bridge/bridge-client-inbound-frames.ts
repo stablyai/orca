@@ -18,6 +18,7 @@ export type BridgeInboundFramePort = {
   report: (diagnostic: BridgeRpcClientDiagnostic) => void
   acceptInit: (message: Extract<BridgeHostMessage, { type: 'init' }>) => void
   acceptState: (connection: BridgeConnectionSnapshot) => void
+  acceptConnectionPath: (connection: BridgeConnectionSnapshot) => void
   acceptBack: () => void
   acceptTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => void
 }
@@ -58,6 +59,9 @@ export function createBridgeInboundFrameReader(
         return
       case 'state':
         port.acceptState(message.connection)
+        return
+      case 'connectionPath':
+        port.acceptConnectionPath(message.connection)
         return
       case 'back':
         port.acceptBack()

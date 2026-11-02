@@ -219,12 +219,19 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   readOptions: NonNullable<StructuredAgentSessionAdapter['readOptions']> = async (input) =>
     this.session(input.sessionId, input.fence).readOptions()
   readCommands = (id: string) => this.sessions.get(id)?.startup.commands
-  holdsDispatch(id: string): boolean {
-    return this.sessions.get(id)?.turns.holdsDispatch ?? false
-  }
-  heldSends(id: string): ReadonlySet<string> | undefined {
-    return this.sessions.get(id)?.heldSends
-  }
+  /** Pi's /name uses the owned running session; at-rest startup/teardown is not implemented. */
+  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> =
+    async ({ record, providerSessionId, name }) => {
+      const session = this.sessions.get(record.sessionId)
+      if (session?.connection.closed !== false) {
+        return
+      }
+      if (session.openedLink?.handle.nativeId === providerSessionId) {
+        await session.connection.request('set_session_name', { name }, { timeoutMs: 5_000 })
+      }
+    }
+  holdsDispatch = (id: string): boolean => this.sessions.get(id)?.turns.holdsDispatch ?? false
+  heldSends = (id: string): ReadonlySet<string> | undefined => this.sessions.get(id)?.heldSends
   holdsLiveProviderProcess(id: string, generation: string): boolean {
     const session = this.sessions.get(id)
     return session?.generation === generation && !session.connection.closed
@@ -260,9 +267,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     this.sessions.get(id)?.fail(new Error('Pi event sink failed'))
     return this.close(id, false)
   }
-  disposeSession(id: string): Promise<boolean> {
-    return this.closeSession(id)
-  }
+  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = this.closeSession
   acknowledgeSessionRelease(id: string): void {
     const session = this.sessions.get(id)
     if (

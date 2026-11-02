@@ -247,7 +247,7 @@ yay -S stably-orca-bin
 - **Twitter / X:** Подпишитесь на **[@orca_build](https://x.com/orca_build)**, чтобы узнавать об обновлениях и анонсах.
 - **WeChat:** Отсканируйте QR-код, чтобы присоединиться к группе сообщества Orca в WeChat.
 
-  <img src="../assets/wechat-qr.jpg" alt="QR-код группы сообщества Orca в WeChat" width="160" />
+  <img src="../assets/wechat-qr-group14.jpg" alt="QR-код группы сообщества Orca в WeChat" width="160" />
 
 - **Отзывы и идеи:** Мы быстро выпускаем обновления. Чего-то не хватает? [Предложите новую возможность](https://github.com/stablyai/orca/issues).
 - **Конфиденциальность:** В [документации о конфиденциальности и телеметрии](https://www.onorca.dev/docs/telemetry) описано, какие анонимные данные об использовании собирает Orca и как отказаться от их сбора.

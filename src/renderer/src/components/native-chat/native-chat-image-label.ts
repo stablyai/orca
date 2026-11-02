@@ -1,9 +1,9 @@
 import { translate } from '@/i18n/i18n'
-import type { NativeChatImageRefBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatImageRefBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   nativeChatImageLabel as sharedNativeChatImageLabel,
   type NativeChatImageLabelCopy
-} from '../../../../shared/native-chat-image-label'
+} from '../../../../shared/native-chat/native-chat-image-label'
 
 export function nativeChatImageLabelCopy(): NativeChatImageLabelCopy {
   return {

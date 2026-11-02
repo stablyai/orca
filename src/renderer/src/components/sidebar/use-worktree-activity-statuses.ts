@@ -5,30 +5,14 @@ import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './WorktreeCardHelpers'
 import {
-  selectLivePtyIdsForWorktree,
   selectTerminalLayoutRootsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
-
-type WorktreeActivityStatusState = Pick<
-  AppState,
-  | 'tabsByWorktree'
-  | 'browserTabsByWorktree'
-  | 'unifiedTabsByWorktree'
-  | 'structuredChatSleptAtByPaneKey'
-  | 'runtimePaneTitlesByTabId'
-  | 'ptyIdsByTabId'
-  | 'terminalLayoutsByTabId'
-  | 'agentStatusEpoch'
-  | 'agentStatusByPaneKey'
-  | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
-  | 'runtimeAgentOrchestrationByPaneKey'
->
+import { selectWorktreeActivityPtyIds } from './use-worktree-activity-status'
 
 export function selectWorktreeActivityStatuses(
-  statusInputs: WorktreeActivityStatusState,
+  statusInputs: AppState,
   worktreeIds: readonly string[]
 ): Map<string, WorktreeStatus> {
   const statuses = new Map<string, WorktreeStatus>()
@@ -55,7 +39,7 @@ export function selectWorktreeActivityStatuses(
           statusInputs.unifiedTabsByWorktree[worktreeId],
           statusInputs.structuredChatSleptAtByPaneKey
         ),
-        ptyIdsByTabId: selectLivePtyIdsForWorktree(statusInputs, worktreeId),
+        ptyIdsByTabId: selectWorktreeActivityPtyIds(statusInputs, worktreeId),
         runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(statusInputs, worktreeId),
         agentStatusPaneIdsByTabId,
         stalePaneIdsByTabId,
@@ -80,7 +64,7 @@ export function useWorktreeActivityStatuses(
   worktreeIds: readonly string[]
 ): Map<string, WorktreeStatus> {
   const selectStatuses = useCallback(
-    (state: WorktreeActivityStatusState) => selectWorktreeActivityStatuses(state, worktreeIds),
+    (state: AppState) => selectWorktreeActivityStatuses(state, worktreeIds),
     [worktreeIds]
   )
   return useAppStore(useShallow(selectStatuses))
