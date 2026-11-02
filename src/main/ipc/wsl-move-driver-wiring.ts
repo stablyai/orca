@@ -86,7 +86,7 @@ import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-envi
 export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
   setWslMoveReloadableWindow(() => {
     const contents = getTrustedUIRendererWebContents()
-    return contents && wslMoveReloadableWindow(contents)
+    return contents && wslMoveReloadableWindow(contents, store)
   })
   registerWslMoveHandlers(
     () => app.getPath('userData'),
