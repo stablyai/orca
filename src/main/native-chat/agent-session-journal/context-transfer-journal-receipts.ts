@@ -1,10 +1,6 @@
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { deriveContextTransferState } from './context-transfer-state'
-import type {
-  ContextTransferDelivery,
-  ContextTransferRecord,
-  ContextTransferTarget
-} from './context-transfer-record'
+import { contextTransferLookup, deriveContextTransferState } from './context-transfer-state'
+import type { ContextTransferDelivery, ContextTransferRecord } from './context-transfer-record'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { matchesContextTransferTarget } from './context-transfer-echo'
 import type Database from '../../sqlite/sync-database'
@@ -44,17 +40,18 @@ export function writeContextTransferJournalReceipts(
       )
     }
   }
-  const records = [
-    ...(rows.some(
-      (row) =>
-        row.kind === 'item' &&
-        row.body.kind === 'status' &&
-        isAgentSessionProviderContextBoundary(row.body.contextClear)
-    )
-      ? readContextTransfers(db, next.sessionId)
-      : indexed)
-  ]
+  const base = rows.some(
+    (row) =>
+      row.kind === 'item' &&
+      row.body.kind === 'status' &&
+      isAgentSessionProviderContextBoundary(row.body.contextClear)
+  )
+    ? readContextTransfers(db, next.sessionId)
+    : indexed
+  // Copy the retained facts only when this batch actually writes one.
+  let records: ContextTransferRecord[] | undefined
   const write = (record: ContextTransferRecord) => {
+    records ??= [...base]
     writeContextTransfer(db, record, records)
     const index = records.findIndex((row) => row.id === record.id)
     if (index !== -1) {
@@ -80,25 +77,13 @@ export function writeContextTransferJournalReceipts(
     }
   }
   const owner = contextTransferOwner(db, next.sessionId)
-  const state = deriveContextTransferState(records, owner?.providerHandleChain ?? [])
+  const state = deriveContextTransferState(base, owner?.providerHandleChain ?? [])
   const target = state.kind !== 'none' && state.kind !== 'unpublished' ? state.target : undefined
   if (!target) {
     return
   }
-  const targets = new Map<string, ContextTransferTarget>()
-  const carriers = new Map<string, ContextTransferDelivery[]>()
-  for (const record of records) {
-    if (record.kind === 'target') {
-      targets.set(record.id, record)
-    } else if (
-      record.kind === 'delivery' &&
-      record.mode === 'inline' &&
-      record.carrierInputId &&
-      (record.outcome === null || record.outcome.kind === 'unknown')
-    ) {
-      carriers.set(record.carrierInputId, [...(carriers.get(record.carrierInputId) ?? []), record])
-    }
-  }
+  const lookup = contextTransferLookup(base)
+  const carriers = new Map(lookup.carriers)
   for (const row of rows) {
     if (
       row.kind === 'dispatch' &&
@@ -109,12 +94,19 @@ export function writeContextTransferJournalReceipts(
         write({ ...target, firstInputId: row.clientMessageId })
       }
       const deliveries = carriers.get(row.clientMessageId) ?? []
-      deliveries.forEach((delivery, index) => {
-        if (delivery.targetId === target.id && !delivery.writeStartedAt && !delivery.outcome) {
-          deliveries[index] = { ...delivery, writeStartedAt: row.ts }
-          write(deliveries[index])
+      const started = deliveries.map((delivery) =>
+        delivery.targetId === target.id && !delivery.writeStartedAt && !delivery.outcome
+          ? { ...delivery, writeStartedAt: row.ts }
+          : delivery
+      )
+      started.forEach((delivery, index) => {
+        if (delivery !== deliveries[index]) {
+          write(delivery)
         }
       })
+      if (started.length) {
+        carriers.set(row.clientMessageId, started)
+      }
     }
   }
   for (const [carrierInputId, deliveries] of carriers) {
@@ -132,7 +124,7 @@ export function writeContextTransferJournalReceipts(
       if (!delivery.writeStartedAt) {
         continue
       }
-      const recipient = targets.get(delivery.targetId)
+      const recipient = lookup.targets.get(delivery.targetId)
       const identity = accepted ? parseAgentJournalItemKey(receipt.providerItemId) : null
       const directCarrier =
         identity?.provider === 'orca' &&

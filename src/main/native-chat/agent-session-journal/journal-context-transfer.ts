@@ -17,7 +17,8 @@ import { writeContextTransferJournalReceipts } from './context-transfer-journal-
 
 const indexes = new WeakMap<Database.Database, Map<string, readonly ContextTransferRecord[]>>()
 const owners = new WeakMap<Database.Database, Map<string, AgentSessionRecord | null>>()
-const dirty = new WeakMap<Database.Database, Set<string>>()
+const dirtyFacts = new WeakMap<Database.Database, Set<string>>()
+const dirtyOwners = new WeakMap<Database.Database, Set<string>>()
 
 export function contextTransferIndex(
   db: Database.Database,
@@ -31,34 +32,38 @@ export function contextTransferIndex(
   }
   let records = index.get(sessionId)
   if (!records) {
-    records = load()
+    // Frozen so derived lookups can be memoized by array identity.
+    records = Object.freeze(load())
     index.set(sessionId, records)
   }
   return records
 }
 
-export function invalidateContextTransferIndex(db: Database.Database, sessionId: string): void {
-  indexes.get(db)?.delete(sessionId)
-  if (db.isTransaction) {
-    let changed = dirty.get(db)
-    if (!changed) {
-      changed = new Set()
-      dirty.set(db, changed)
-    }
-    changed.add(sessionId)
+function markDirty(
+  sets: WeakMap<Database.Database, Set<string>>,
+  db: Database.Database,
+  id: string
+) {
+  if (!db.isTransaction) {
+    return
   }
+  let changed = sets.get(db)
+  if (!changed) {
+    changed = new Set()
+    sets.set(db, changed)
+  }
+  changed.add(id)
 }
 
+export function invalidateContextTransferIndex(db: Database.Database, sessionId: string): void {
+  indexes.get(db)?.delete(sessionId)
+  markDirty(dirtyFacts, db, sessionId)
+}
+
+/** Owner changes leave unchanged transfer facts decoded. */
 export function invalidateContextTransferOwner(db: Database.Database, sessionId: string): void {
   owners.get(db)?.delete(sessionId)
-  if (db.isTransaction) {
-    let changed = dirty.get(db)
-    if (!changed) {
-      changed = new Set()
-      dirty.set(db, changed)
-    }
-    changed.add(sessionId)
-  }
+  markDirty(dirtyOwners, db, sessionId)
 }
 
 function indexedOwner(db: Database.Database, sessionId: string) {
@@ -75,11 +80,14 @@ function indexedOwner(db: Database.Database, sessionId: string) {
 
 /** Transaction-local derivations are never retained after commit or rollback. */
 export function finishContextTransferTransaction(db: Database.Database): void {
-  for (const sessionId of dirty.get(db) ?? []) {
+  for (const sessionId of dirtyFacts.get(db) ?? []) {
     indexes.get(db)?.delete(sessionId)
+  }
+  for (const sessionId of dirtyOwners.get(db) ?? []) {
     owners.get(db)?.delete(sessionId)
   }
-  dirty.delete(db)
+  dirtyFacts.delete(db)
+  dirtyOwners.delete(db)
 }
 
 export function normalizeContextTransferItem(input: {

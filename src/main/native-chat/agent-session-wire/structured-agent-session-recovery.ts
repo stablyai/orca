@@ -37,7 +37,6 @@ export function prepareNativeRecovery(input: {
   ) {
     throw new Error('Recovery source changed')
   }
-  const frozen = captureRecoveryContext(journal.snapshot(), journal.canonicalItemId)
   let permit: RecoveryConstructionPermit | undefined
   journal.contextTransfers.commit((db) => {
     const records = readContextTransfers(db, record.sessionId)
@@ -45,10 +44,11 @@ export function prepareNativeRecovery(input: {
     const current = state.kind === 'none' ? undefined : state.target
     const prior = current
     let handoff =
-      prior && !contextTransferDelivered(records, prior.id)
-        ? records.find((row) => row.kind === 'handoff' && row.id === prior.handoffId)
+      state.kind !== 'none' && !contextTransferDelivered(records, state.target.id)
+        ? state.handoff
         : undefined
-    if (!handoff || handoff.kind !== 'handoff') {
+    if (!handoff) {
+      const frozen = captureRecoveryContext(journal.snapshot(), journal.canonicalItemId)
       const id = randomUUID()
       handoff = {
         kind: 'handoff',

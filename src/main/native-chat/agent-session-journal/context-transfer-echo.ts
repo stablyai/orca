@@ -16,7 +16,11 @@ import {
   withRecoveryContext
 } from '../agent-session-context-transfer-text'
 import type { ContextTransferRecord } from './context-transfer-record'
+import { contextTransferLookup } from './context-transfer-state'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+
+// Every rendered history block and carrier starts with its saved delivery ID.
+const MARKER_ID = /<orca_context_handoff id="([^"]+)">/g
 
 export type ContextTransferEcho =
   | { kind: 'history' }
@@ -44,66 +48,65 @@ export function matchContextTransferEcho(input: {
   const text = body.blocks
     .flatMap((block) => (block.type === 'text' ? [block.text] : []))
     .join('\n')
-  for (const target of records) {
-    if (target.kind !== 'target' || !target.targetLink) {
+  const lookup = contextTransferLookup(records)
+  const ids = new Set(Array.from(text.matchAll(MARKER_ID), (match) => match[1]))
+  for (const id of ids) {
+    const delivery = id === undefined ? undefined : lookup.deliveries.get(id)
+    const target = delivery && lookup.targets.get(delivery.targetId)
+    if (
+      !delivery ||
+      !target?.targetLink ||
+      !matchesContextTransferTarget({ ...input, handle: target.targetLink.handle })
+    ) {
       continue
     }
-    if (!matchesContextTransferTarget({ ...input, handle: target.targetLink.handle })) {
+    const handoff = lookup.handoffs.get(target.handoffId)
+    if (
+      !handoff ||
+      delivery.writeStartedAt === undefined ||
+      delivery.selection.digest !== contextTransferDigest(delivery.selection.encodedContext)
+    ) {
       continue
     }
-    const handoff = records.find((row) => row.kind === 'handoff' && row.id === target.handoffId)
-    if (handoff?.kind !== 'handoff') {
-      continue
+    if (
+      delivery.mode === 'inject' &&
+      (text === renderRecoveryCoverage(delivery.id, delivery.selection.coverageText) ||
+        handoff.capture.messages.some(
+          (message) =>
+            delivery.selection.itemIds.includes(message.itemId) &&
+            message.role === body.role &&
+            text === renderRecoveryItem(delivery.id, message)
+        ))
+    ) {
+      return { kind: 'history' }
     }
-    for (const delivery of records) {
-      if (
-        delivery.kind !== 'delivery' ||
-        delivery.targetId !== target.id ||
-        delivery.writeStartedAt === undefined ||
-        delivery.selection.digest !== contextTransferDigest(delivery.selection.encodedContext)
-      ) {
+    if (delivery.mode === 'inline' && delivery.carrierInputId && body.role === 'user') {
+      const original = input.itemBody(agentJournalSubmissionKey(delivery.carrierInputId))
+      if (original?.kind !== 'message') {
         continue
       }
-      if (
-        delivery.mode === 'inject' &&
-        (text === renderRecoveryCoverage(delivery.id, delivery.selection.coverageText) ||
-          handoff.capture.messages.some(
-            (message) =>
-              delivery.selection.itemIds.includes(message.itemId) &&
-              message.role === body.role &&
-              text === renderRecoveryItem(delivery.id, message)
-          ))
-      ) {
-        return { kind: 'history' }
-      }
-      if (delivery.mode === 'inline' && delivery.carrierInputId && body.role === 'user') {
-        const original = input.itemBody(agentJournalSubmissionKey(delivery.carrierInputId))
-        if (original?.kind !== 'message') {
-          continue
-        }
-        const carried = selectStoppedHistory(
-          input.carries(delivery.carrierInputId).flatMap((clientMessageId) => {
-            const saved = input.itemBody(agentJournalSubmissionKey(clientMessageId))
-            return saved?.kind === 'message'
-              ? [
-                  {
-                    clientMessageId,
-                    words: saved.blocks
-                      .flatMap((block) => (block.type === 'text' && block.text ? [block.text] : []))
-                      .join('\n')
-                  }
-                ]
-              : []
-          }),
-          original
-        )
-        const carrier = carried ? withStoppedHistory(original, carried.messages) : original
-        const encoded = withRecoveryContext(carrier, delivery.selection.encodedContext)
-          .blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
-          .join('\n')
-        if (text === encoded) {
-          return { kind: 'carrier', clientMessageId: delivery.carrierInputId, body: original }
-        }
+      const carried = selectStoppedHistory(
+        input.carries(delivery.carrierInputId).flatMap((clientMessageId) => {
+          const saved = input.itemBody(agentJournalSubmissionKey(clientMessageId))
+          return saved?.kind === 'message'
+            ? [
+                {
+                  clientMessageId,
+                  words: saved.blocks
+                    .flatMap((block) => (block.type === 'text' && block.text ? [block.text] : []))
+                    .join('\n')
+                }
+              ]
+            : []
+        }),
+        original
+      )
+      const carrier = carried ? withStoppedHistory(original, carried.messages) : original
+      const encoded = withRecoveryContext(carrier, delivery.selection.encodedContext)
+        .blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        .join('\n')
+      if (text === encoded) {
+        return { kind: 'carrier', clientMessageId: delivery.carrierInputId, body: original }
       }
     }
   }

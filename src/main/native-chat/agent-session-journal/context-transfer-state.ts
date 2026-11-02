@@ -8,6 +8,7 @@ import {
   agentSessionProviderHandleRoot
 } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type {
+  ContextTransferDelivery,
   ContextTransferRecord,
   ContextTransferHandoff,
   ContextTransferTarget
@@ -21,31 +22,89 @@ export type ContextTransferState =
       target: ContextTransferTarget
     }
 
+/** One pass over the facts; reused while the cached frozen array is unchanged. */
+export type ContextTransferLookup = {
+  handoffs: ReadonlyMap<string, ContextTransferHandoff>
+  targets: ReadonlyMap<string, ContextTransferTarget>
+  deliveries: ReadonlyMap<string, ContextTransferDelivery>
+  deliveriesByTarget: ReadonlyMap<string, readonly ContextTransferDelivery[]>
+  /** Inline deliveries still awaiting a final outcome, by the input that carried them. */
+  carriers: ReadonlyMap<string, readonly ContextTransferDelivery[]>
+  current: ContextTransferTarget | undefined
+}
+
+const lookups = new WeakMap<readonly ContextTransferRecord[], ContextTransferLookup>()
+
+export function contextTransferLookup(
+  records: readonly ContextTransferRecord[]
+): ContextTransferLookup {
+  const cached = lookups.get(records)
+  if (cached) {
+    return cached
+  }
+  const handoffs = new Map<string, ContextTransferHandoff>()
+  const targets = new Map<string, ContextTransferTarget>()
+  const deliveries = new Map<string, ContextTransferDelivery>()
+  const deliveriesByTarget = new Map<string, ContextTransferDelivery[]>()
+  const carriers = new Map<string, ContextTransferDelivery[]>()
+  const closed = new Set<string>()
+  for (const row of records) {
+    if (row.kind === 'handoff') {
+      handoffs.set(row.id, row)
+    } else if (row.kind === 'target') {
+      targets.set(row.id, row)
+    } else if (row.kind === 'delivery') {
+      deliveries.set(row.id, row)
+      const list = deliveriesByTarget.get(row.targetId)
+      if (list) {
+        list.push(row)
+      } else {
+        deliveriesByTarget.set(row.targetId, [row])
+      }
+      if (
+        row.mode === 'inline' &&
+        row.carrierInputId &&
+        (row.outcome === null || row.outcome.kind === 'unknown')
+      ) {
+        carriers.set(row.carrierInputId, [...(carriers.get(row.carrierInputId) ?? []), row])
+      }
+    } else {
+      closed.add(row.handoffId)
+    }
+  }
+  const open = [...targets.values()].filter((row) => !closed.has(row.handoffId))
+  const replaced = new Set(open.map((row) => row.predecessorTargetId))
+  const lookup = {
+    handoffs,
+    targets,
+    deliveries,
+    deliveriesByTarget,
+    carriers,
+    current: open.findLast((row) => !replaced.has(row.id))
+  }
+  // Only the cached facts are frozen; callers' working copies change in place.
+  if (Object.isFrozen(records)) {
+    lookups.set(records, lookup)
+  }
+  return lookup
+}
+
 export function contextTransferDelivered(
   records: readonly ContextTransferRecord[],
   targetId: string
 ): boolean {
-  return records.some(
+  return (contextTransferLookup(records).deliveriesByTarget.get(targetId) ?? []).some(
     (row) =>
-      row.kind === 'delivery' &&
-      row.targetId === targetId &&
-      (row.outcome?.kind === 'injected' ||
-        row.outcome?.kind === 'inline-accepted' ||
-        row.outcome?.kind === 'not-required')
+      row.outcome?.kind === 'injected' ||
+      row.outcome?.kind === 'inline-accepted' ||
+      row.outcome?.kind === 'not-required'
   )
 }
 
 export function currentContextTransferTarget(
   records: readonly ContextTransferRecord[]
 ): ContextTransferTarget | undefined {
-  const closed = new Set(
-    records.filter((row) => row.kind === 'closure').map((row) => row.handoffId)
-  )
-  const targets = records.filter(
-    (row): row is ContextTransferTarget => row.kind === 'target' && !closed.has(row.handoffId)
-  )
-  const replaced = new Set(targets.map((row) => row.predecessorTargetId))
-  return targets.findLast((row) => !replaced.has(row.id))
+  return contextTransferLookup(records).current
 }
 
 function inheritsTarget(
@@ -72,8 +131,9 @@ export function deriveContextTransferState(
   if (!head || !target) {
     return { kind: 'none' }
   }
-  const handoff = records.find((row) => row.kind === 'handoff' && row.id === target.handoffId)
-  if (handoff?.kind !== 'handoff') {
+  const lookup = contextTransferLookup(records)
+  const handoff = lookup.handoffs.get(target.handoffId)
+  if (!handoff) {
     throw new Error('Context target lost its source')
   }
   if (!target.targetLink) {
@@ -93,12 +153,8 @@ export function deriveContextTransferState(
   if (delivered) {
     return { kind: 'settled', handoff, target }
   }
-  const uncertain = records.some(
-    (row) =>
-      row.kind === 'delivery' &&
-      row.targetId === target.id &&
-      row.writeStartedAt !== undefined &&
-      (!row.outcome || row.outcome.kind === 'unknown')
+  const uncertain = (lookup.deliveriesByTarget.get(target.id) ?? []).some(
+    (row) => row.writeStartedAt !== undefined && (!row.outcome || row.outcome.kind === 'unknown')
   )
   return { kind: uncertain ? 'uncertain' : 'owed', handoff, target }
 }
