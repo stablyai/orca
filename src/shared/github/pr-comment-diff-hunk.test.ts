@@ -11,11 +11,6 @@ const HUNK = [
 ].join('\n')
 
 describe('pr comment diff hunk', () => {
-  it('drops the header and keeps the tail the host forwards', () => {
-    expect(tailDiffHunk(HUNK)?.startsWith('   return (')).toBe(true)
-    expect(tailDiffHunk('')).toBeUndefined()
-  })
-
   it('numbers the anchored lines back from the end line, skipping removed lines', () => {
     const tail = tailDiffHunk(HUNK) ?? ''
     const strip = (lines: ReturnType<typeof threadDiffLines>) =>

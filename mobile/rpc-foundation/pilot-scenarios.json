@@ -20348,8 +20348,7 @@
         {
           "complete": "git.status#1",
           "params": {
-            "worktree": "id:repo42::/p",
-            "includeLineStats": false
+            "worktree": "id:repo42::/p"
           },
           "reply": {
             "ok": true,

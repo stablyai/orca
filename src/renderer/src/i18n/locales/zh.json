@@ -1312,7 +1312,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "结构化智能体会话尚不可用。稍后重试。",
         "gone": "此聊天不再在此主机上，因此无法在此处重新打开。",
-        "hostCannotOpen": "在 Orca 更新之前，无法重新打开此聊天。"
+        "hostCannotOpen": "在 Orca 更新之前，无法重新打开此聊天。",
+        "worktreeDeleted": "工作树已删除。",
+        "folderWorkspaceRemoved": "文件夹工作区已移除。"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "预配置根配方不支持稀疏结帐。"
@@ -4017,7 +4019,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "没有其他账户",
-            "9332ba8684": "切换到",
             "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
@@ -5751,11 +5752,7 @@
           "93cbea12c2": "笔记",
           "dbe2d18972": "更多 {{value0}} 操作",
           "2c67730e07": "在 Orca 中打开",
-          "e42941631a": "Linear 视图",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "编辑议题",
-          "b22f058067": "在 GitHub 上查看",
-          "e97d8f2876": "议题 #{{value0}}",
           "3ea2702e62": "已链接 {{value0}} #{{value1}}",
           "b105fd3057": "链接 Linear {{value0}}",
           "3f2649eeb8": "链接议题#{{value0}}",
@@ -5778,8 +5775,6 @@
           "cliCreatedFromShell": "通过 `orca worktree create` 创建",
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "由 Orca CLI 创建",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "在 Jira 中查看",
           "linkedJira": "已关联 Jira {{value0}}",
           "openInOrcaBrowser": "在 Orca 浏览器中打开"
         },
@@ -6691,6 +6686,7 @@
       },
       "settings": {
         "AccountsPane": {
+          "locationSaveFailed": "无法保存账户位置。请重试。",
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
           "63843e37e2": "删除 Claude 账户？",
@@ -19582,6 +19578,7 @@
       "detectingAgents": "正在此工作区主机上检测智能体…",
       "detectionFailed": "无法检测此工作区主机上的智能体。",
       "noAgents": "未在此工作区主机上检测到已启用的智能体。",
+      "onlySourceFamilyDetected": "此工作区主机上可用的智能体均与 {{agent}} 共享使用限额。请启用或安装其他智能体。",
       "context": "上下文",
       "modeFocused": "聚焦交接（推荐）",
       "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
@@ -21437,7 +21434,8 @@
       "checksNeutral": "中性",
       "allReviewChecks": "评审：{{count}} · 检查：{{status}}",
       "showLinked_other": "显示 {{count}} 个关联的审查和任务",
-      "linkedCount_other": "已关联 {{count}} 项"
+      "linkedCount_other": "已关联 {{count}} 项",
+      "labels": "标签：{{labels}}"
     },
     "attachments": {
       "updateRuntime": "更新远程运行时以更改工作区链接",

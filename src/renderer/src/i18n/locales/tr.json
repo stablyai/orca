@@ -1742,7 +1742,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Yapılandırılmış ajan oturumu henüz kullanılamıyor. Bir süre sonra tekrar deneyin.",
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
-        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz."
+        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
+        "worktreeDeleted": "Çalışma ağacı silindi.",
+        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Sağlanmış kök tarifleri sparse checkout'u desteklemez."
@@ -4521,7 +4523,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Başka hesap yok",
-            "9332ba8684": "Şuna geç",
             "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
@@ -6387,11 +6388,7 @@
           "dbe2d18972": "Daha fazla {{value0}} işlemi",
           "openInOrcaBrowser": "Orca tarayıcısında aç",
           "2c67730e07": "Orca'da aç",
-          "e42941631a": "Linear'da görüntüle",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Sorunu düzenle",
-          "b22f058067": "GitHub'da görüntüle",
-          "e97d8f2876": "Sorun #{{value0}}",
           "moreIssueActions": "Daha fazla sorun işlemi",
           "copyLink": "Bağlantıyı kopyala",
           "copyLinkSuccess": "{{value0}} kopyalandı",
@@ -6414,8 +6411,6 @@
           "cliCreatedFromShell": "`orca worktree create` ile oluşturuldu",
           "cliStartupAgent": "{{value0}} ile başlatıldı",
           "cliCreated": "Orca CLI tarafından oluşturuldu",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Jira'da görüntüle",
           "linkedJira": "Bağlı Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -7320,6 +7315,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "c2d2751587": "Hesabı Kaldır",
           "dbb9626ed1": "İptal",
           "63843e37e2": "Claude Hesabı Kaldırılsın mı?",
@@ -20314,6 +20310,7 @@
       "detectingAgents": "Bu çalışma alanı ana makinesindeki Ajanlar tespit ediliyor…",
       "detectionFailed": "Bu çalışma alanı ana makinesinde Ajanlar tespit edilemedi.",
       "noAgents": "Bu çalışma alanı ana makinesinde etkin Ajan tespit edilmedi.",
+      "onlySourceFamilyDetected": "Bu çalışma alanı ana makinesinde yalnızca {{agent}} ile kullanım sınırını paylaşan Ajanlar kullanılabilir. Farklı bir Ajanı etkinleştirin veya yükleyin.",
       "context": "Bağlam",
       "modeFocused": "Odaklı devir (Önerilen)",
       "modeFocusedDescription": "En son durumu ve mevcut çalışma alanını kullanır, eski döküm ayrıntılarını yalnızca gerektiğinde okur.",
@@ -21708,7 +21705,8 @@
       "showLinked_other": "Bağlantılı {{count}} inceleme ve görevi göster",
       "showLinked_one": "Bağlantılı {{count}} inceleme ve görevi göster",
       "linkedCount_other": "{{count}} bağlantılı",
-      "linkedCount_one": "{{count}} bağlantılı"
+      "linkedCount_one": "{{count}} bağlantılı",
+      "labels": "Etiketler: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Çalışma alanı bağlantılarını değiştirmek için uzak çalışma zamanını güncelleyin",

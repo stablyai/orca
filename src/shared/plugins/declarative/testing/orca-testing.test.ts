@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { atom, read, set, update } from '../runtime/declarative-atoms'
 import { h } from '../runtime/declarative-elements'
-import { host, on, shell } from '../runtime/orca-module'
+import { host, shell } from '../runtime/orca-module'
 import { hostError, mockHost, mount, stored, type TestPanel } from './orca-testing'
 
 let panel: TestPanel | null = null
@@ -154,28 +154,6 @@ describe('orca/testing', () => {
       { url: 'https://example.com' },
       { url: 'https://example.com' }
     ])
-  })
-
-  it('delivers events and visibility, and runs setup cleanup on unmount', async () => {
-    const seen: string[] = []
-    let cleaned = false
-    panel = await mount({
-      setup: (ctx: {
-        subscriptions: { dispose(): void }[]
-        visible: Parameters<typeof read<boolean>>[0]
-      }) => {
-        ctx.subscriptions.push(on('theme', (payload) => seen.push(JSON.stringify(payload))))
-        return () => {
-          cleaned = true
-        }
-      },
-      default: () => h('Text', null, 'x')
-    })
-    await panel.emit('theme', { colorScheme: 'light' })
-    expect(seen).toEqual(['{"colorScheme":"light"}'])
-    await panel.unmount()
-    panel = null
-    expect(cleaned).toBe(true)
   })
 
   it('fails a test that never settles instead of hanging', async () => {

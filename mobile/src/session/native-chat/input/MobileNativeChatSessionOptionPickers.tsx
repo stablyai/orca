@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   type LucideIcon
 } from 'lucide-react-native'
-import { BottomDrawer } from '../../../components/BottomDrawer'
+import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../components/list/ListGroup'
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
