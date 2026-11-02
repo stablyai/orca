@@ -4,8 +4,13 @@ import {
 } from '@/lib/launch-agent-new-tab-host-route'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
 import { useAppStore } from '@/store'
-import { validateActionTerminalArgs } from './launch-work-item-direct-messages'
-import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from './agent-launch-failure'
+import { toast } from 'sonner'
+import { invalidTerminalArgsMessage } from './launch-work-item-direct-messages'
+import {
+  agentLaunchCheckSettingsMessage,
+  agentLaunchRecoveryMessage,
+  notifyAgentLaunchFailure
+} from './agent-launch-failure'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -98,7 +103,10 @@ export function launchAgentInNewTabWithOutcome(
         launchAgentInNewTabWithOutcome({
           ...args,
           beforeSurfaceOpen: undefined,
-          ...(terminalActivate === false ? { prompt: undefined, activate: false } : {}),
+          // A terminal opened behind the visible chat leaves its refusal to that chat's notice.
+          ...(terminalActivate === false
+            ? { prompt: undefined, activate: false, presentsRefusal: true as const }
+            : {}),
           requestId: undefined,
           agentSessionLaunchPlan: terminalPlan
         })
@@ -110,20 +118,33 @@ export function launchAgentInNewTabWithOutcome(
     return structured
   }
 
+  // One owner presents a preparation refusal: a visible surface given its text, else this toast.
+  const refuse = (recovery: string, notify: () => void): AgentTabLaunchOutcome => {
+    args.focusIntent?.cancel()
+    if (!args.presentsRefusal) {
+      notify()
+    }
+    return {
+      refused: { delivered: false, failureNotified: true },
+      ...(args.presentsRefusal ? { recovery } : {})
+    }
+  }
   const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
   if ('unavailable' in executionContext) {
-    args.focusIntent?.cancel()
-    notifyAgentLaunchFailure(
-      agent,
-      agentLaunchRecoveryMessage(executionContext.unavailable.recovery)
-    )
-    return { refused: { delivered: false, failureNotified: true } }
+    // A host still connecting is a wait, not a failure: decline like a disabled control, without a
+    // message; the caller keeps its prompt and treats the outcome as handled.
+    if (executionContext.unavailable.pending) {
+      args.focusIntent?.cancel()
+      return { refused: { delivered: false, failureNotified: true } }
+    }
+    const recovery = agentLaunchRecoveryMessage(executionContext.unavailable.recovery)
+    return refuse(recovery, () => notifyAgentLaunchFailure(agent, recovery))
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const terminalShell = queuedShell ?? (resolvedLaunchPlatform === 'win32' ? 'powershell' : 'posix')
-  if (!validateActionTerminalArgs(agent, agentArgs, terminalShell)) {
-    args.focusIntent?.cancel()
-    return { refused: { delivered: false, failureNotified: true } }
+  const argsProblem = invalidTerminalArgsMessage(agent, agentArgs, terminalShell)
+  if (argsProblem) {
+    return refuse(argsProblem, () => toast.error(argsProblem))
   }
   const buildStartup = (
     agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
@@ -175,8 +196,7 @@ export function launchAgentInNewTabWithOutcome(
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = buildStartup()
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
   if (!startupPlan) {
-    notifyAgentLaunchFailure(agent)
-    return { refused: { delivered: false, failureNotified: true } }
+    return refuse(agentLaunchCheckSettingsMessage(), () => notifyAgentLaunchFailure(agent))
   }
 
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {

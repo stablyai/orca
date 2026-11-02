@@ -5,6 +5,7 @@
     "reconnectServer": "Verbinde dich erneut mit dem Orca-Server dieses Arbeitsbereichs und versuche es erneut.",
     "updateServer": "Aktualisiere Orca auf dem Server dieses Arbeitsbereichs und versuche es erneut.",
     "checkSettings": "Prüfe die Starteinstellungen des Agenten und versuche es erneut.",
+    "invalidArgs": "Die CLI-Argumente für {{value0}} enthalten ein nicht geschlossenes Anführungszeichen. Korrigiere sie und versuche es erneut.",
     "opencode": {
       "updateRequired": "OpenCode kann in dieser Version nicht sicher mit einem ausgewählten Modell starten. OpenCode auf eine unterstützte Version aktualisieren oder die Modellauswahl weglassen.",
       "invalidConfig": "Diese Modellauswahl konnte nicht auf die Startkonfiguration von OpenCode angewendet werden. Die OpenCode-Startkonfiguration prüfen und erneut versuchen oder die Modellauswahl weglassen.",
@@ -854,7 +855,6 @@
       "actionModel": {
         "on": "Ein",
         "off": "Aus",
-        "invalidArgs": "Die CLI-Argumente für {{value0}} sind ungültig. Unter Einstellungen → KI für die Quellcodeverwaltung korrigieren.",
         "model": "Modell",
         "agentDefault": "Standard des Agenten",
         "effortDefault": "Standard",
@@ -1449,9 +1449,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Für diese Checks konnte kein Arbeitsbereich gefunden werden.",
-              "fb6c294e85": "Der Startbefehl für den Agenten konnte nicht erstellt werden.",
               "03c1d61f83": "Der mit diesen Checks verknüpfte Arbeitsbereich konnte nicht geöffnet werden.",
-              "822bf52295": "Die Startplattform des Arbeitsbereichs konnte nicht ermittelt werden.",
               "dfb4dd7c00": "Der mit diesen Checks verknüpfte Arbeitsbereich konnte nicht gefunden werden.",
               "9f00d7df0c": "Der Prompt zum Beheben von Check-Fehlern ist leer. Die KI-Einstellungen der Quellcodeverwaltung aktualisieren.",
               "2ebf794906": "Auf dem Host dieses Arbeitsbereichs wurde kein aktivierter KI-Agent erkannt.",
@@ -3138,7 +3136,6 @@
         "a2a279b32a": "Zeitüberschreitung oder Fehler beim Speichern. Vor dem Schließen die Fehler beheben.",
         "46e08bc5c8": "Diese Datei enthält ungespeicherte Änderungen.",
         "61ed600d29": "„{{value0}}“ enthält ungespeicherte Änderungen. Vor dem Schließen speichern?",
-        "e57db40c11": "Startbefehl für {{value0}} konnte nicht erstellt werden.",
         "5b2c1a9e44": "Keine Agenten-CLI erkannt — eine installieren oder in den Einstellungen einen Standardagenten auswählen.",
         "quitSnapshotSaveFailed": "Beenden abgebrochen: Das Sitzungsabbild konnte nicht gespeichert werden ({{value0}}).",
         "reloadSnapshotSaveFailed": "Neuladen abgebrochen: Das Sitzungsabbild konnte nicht gespeichert werden ({{value0}})."
@@ -14246,7 +14243,6 @@
                     },
                     "d481ab22f9": "Der gespeicherte KI-Agent ist nicht verfügbar. Unter „Start anpassen“ einen anderen Agenten auswählen.",
                     "9bbd9077a2": "Keine aktivierten KI-Agenten. Agenten in den Einstellungen konfigurieren.",
-                    "5540ff50cc": "Der Startbefehl für den Agenten konnte nicht erstellt werden.",
                     "216f762bd7": "Die Verbindung zum Arbeitsbereich konnte nicht ermittelt werden.",
                     "success": "Ein KI-Agent wurde für den Fehler bei {{value0}} gestartet."
                   }
@@ -15464,7 +15460,6 @@
             "3f4ca29961": "Schwebenden Arbeitsbereich maximieren",
             "1c79cba25d": "Schwebenden Arbeitsbereich wiederherstellen",
             "648352c51f": "{{value0}} im schwebenden Arbeitsbereich öffnen",
-            "82da3701e7": "Startbefehl für {{value0}} konnte nicht erstellt werden.",
             "109870e023": "Maximieren",
             "b5686fee1e": "Wiederherstellen"
           }

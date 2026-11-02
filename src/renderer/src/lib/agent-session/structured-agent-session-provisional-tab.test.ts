@@ -767,6 +767,18 @@ describe('a provisional structured chat tab', () => {
     expect(useAppStore.getState().getTab(chat.id)).toBeNull()
     expect(order()?.filter((id) => id !== slot)).toEqual([terminal.id, sibling.id])
   })
+
+  it("puts a refused terminal fallback's advice on the failed chat, with no message of its own", async () => {
+    const { launch, chat, fallback } = openChat(undefined, undefined, '')
+    fallback.mockReturnValueOnce({ opened: false, refusal: 'Reconnect it.' } as never)
+    await main.settle()
+    refuse()
+    expect((await launch?.settlement)?.kind).toBe('failed')
+    expect(getStructuredAgentSessionLaunchFailure('wt-1', chat.entityId)?.causeText).toBe(
+      "This workspace can't run a Claude chat. Reconnect it."
+    )
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
 })
 
 afterEach(() => vi.useRealTimers())

@@ -5,6 +5,7 @@
     "reconnectServer": "Reconecte-se ao servidor Orca deste espaço de trabalho e tente novamente.",
     "updateServer": "Atualize o Orca no servidor deste espaço de trabalho e tente novamente.",
     "checkSettings": "Verifique as configurações de inicialização do agente e tente novamente.",
+    "invalidArgs": "Os argumentos da CLI de {{value0}} têm uma aspa não fechada. Corrija-os e tente novamente.",
     "opencode": {
       "updateRequired": "Esta versão do OpenCode não pode iniciar com segurança com o modelo escolhido. Atualize o OpenCode para uma versão compatível ou omita a escolha do modelo.",
       "invalidConfig": "O OpenCode não conseguiu aplicar este modelo à configuração de inicialização. Verifique a configuração de inicialização do OpenCode e tente novamente, ou omita a escolha do modelo.",
@@ -1606,7 +1607,6 @@
       "actionModel": {
         "on": "Ativado",
         "off": "Desativado",
-        "invalidArgs": "Os argumentos de CLI de {{value0}} são inválidos. Corrija-os em Configurações → IA de Controle de Versão.",
         "model": "Modelo",
         "agentDefault": "Padrão do agente",
         "effortDefault": "Padrão",
@@ -2362,9 +2362,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Não foi possível encontrar um espaço de trabalho para estas verificações.",
-              "fb6c294e85": "Não foi possível montar o comando de inicialização do agente.",
               "03c1d61f83": "Não foi possível abrir o espaço de trabalho vinculado a estas verificações.",
-              "822bf52295": "Não foi possível determinar a plataforma de inicialização do espaço de trabalho.",
               "dfb4dd7c00": "Não foi possível encontrar o espaço de trabalho vinculado a estas verificações.",
               "9f00d7df0c": "O prompt de correção de verificações está vazio. Atualize as configurações de IA do Controle de Versão.",
               "2ebf794906": "Nenhum agente de IA ativado foi detectado neste host do espaço de trabalho.",
@@ -10146,7 +10144,6 @@
                     },
                     "d481ab22f9": "O agente de IA salvo não está disponível. Use Personalizar inicialização para escolher outro agente.",
                     "9bbd9077a2": "Nenhum agente de IA habilitado. Configure agentes em Configurações.",
-                    "5540ff50cc": "Não foi possível construir o comando de inicialização do agente.",
                     "216f762bd7": "Não foi possível resolver a conexão do espaço de trabalho.",
                     "success": "Foi iniciado um agente de IA para a falha de {{value0}}."
                   }
@@ -18502,7 +18499,6 @@
             "3f4ca29961": "Maximizar espaço de trabalho flutuante",
             "1c79cba25d": "Restaurar espaço de trabalho flutuante",
             "648352c51f": "Abrir {{value0}} no espaço de trabalho flutuante",
-            "82da3701e7": "Não foi possível construir o comando de inicialização para {{value0}}.",
             "109870e023": "Maximizar",
             "b5686fee1e": "Restaurar"
           }
@@ -18972,7 +18968,6 @@
         "a2a279b32a": "O salvamento expirou ou falhou. Corrija os erros antes de fechar.",
         "46e08bc5c8": "Este arquivo tem alterações não salvas.",
         "61ed600d29": "\"{{value0}}\" tem alterações não salvas. Você quer salvar antes de fechar?",
-        "e57db40c11": "Não foi possível construir o comando de inicialização para {{value0}}.",
         "5b2c1a9e44": "Nenhuma CLI de agente detectada — instale uma ou escolha um agente padrão em Configurações.",
         "quitSnapshotSaveFailed": "Saída cancelada: o snapshot da sessão não pôde ser salvo ({{value0}}).",
         "reloadSnapshotSaveFailed": "Recarregamento cancelado: não foi possível salvar o snapshot da sessão ({{value0}})."

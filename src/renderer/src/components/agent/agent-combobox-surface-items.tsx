@@ -1,4 +1,4 @@
-import { terminalPendingReason } from '../tab-bar/new-tab-agent-menu-model'
+import { terminalPendingLabel, terminalPendingReason } from '../tab-bar/new-tab-agent-menu-model'
 import React, { useState } from 'react'
 import { CommandItem, CommandSeparator } from '@/components/ui/command'
 import { AgentIcon, getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
@@ -27,6 +27,12 @@ export type AgentComboboxSurfaceRows = {
   selection: ReturnType<typeof resolveAgentMenuSelection>
   contextKey?: string
   onPick: (agent: TuiAgent, surface: AgentLaunchSurface) => void
+}
+
+/** The host has not answered what the choices are; a terminal only waiting on its host does not
+ *  stop the user choosing another surface, it only blocks submitting. */
+export function surfaceAnswerPending(rows: AgentComboboxSurfaceRows | undefined): boolean {
+  return rows?.selection.ready === false && !rows.selection.terminalWaiting
 }
 
 // Nothing launches until the form is submitted, so the picker says "start", not "launch".
@@ -124,7 +130,12 @@ export function useSurfaceRowArming(
     } else if (event.key === 'Enter' && armedValue !== null && row) {
       // Stopped so cmdk does not also select the row and start a chat.
       event.preventDefault()
-      pick(row.agent, 'terminal')
+      // A host that started connecting after the arm leaves the current choice as it was.
+      if (terminalReady) {
+        pick(row.agent, 'terminal')
+      } else {
+        setArmed(null)
+      }
     } else if (armedValue !== null && !['Shift', 'Meta', 'Control', 'Alt'].includes(event.key)) {
       if (event.key === 'ArrowLeft') {
         event.preventDefault()
@@ -204,7 +215,7 @@ export function SurfaceAgentItems({
           ) : rowOffersTerminal(model, row) ? (
             <AgentSurfaceLaunchButton
               surface="terminal"
-              disabled={model.terminalPending}
+              reason={model.terminalPending ? terminalPendingLabel() : undefined}
               title={terminalPickTitle(agentLabel)}
               aria-pressed={pressed}
               className={cn(

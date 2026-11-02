@@ -1,5 +1,6 @@
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
+import { joinSentences } from '../../../../../shared/sentence-joining'
 import { readStructuredChatTabSavedName } from '@/runtime/structured-chat-tab-name'
 import {
   getStructuredLaunchStateBySessionId,
@@ -95,7 +96,37 @@ export async function openTerminalForDeclinedChat(
         outcome: { status: terminal.opened ? 'created' : 'failed' },
         tabId: terminal.tabId
       }
+  const ownsFailure = () =>
+    launchState &&
+    getStructuredLaunchStateBySessionId(tab.entityId) === launchState &&
+    launchState.callers === attempt &&
+    attempt?.outcome === 'failed' &&
+    !launchState.cancelled
+  const declined = () =>
+    translate(
+      'components.native-chat.structuredSessionHostDeclinedDescription',
+      "This workspace can't run a {{value0}} chat.",
+      { value0: structuredAgentLabel(args.plan.agent) }
+    )
+  // The visible chat is this launch's one failure surface, so its notice says what to do next.
+  const recordCause = (causeText: string): void => {
+    if (!source() || !launchState || !ownsFailure()) {
+      return
+    }
+    launchState.failure = {
+      ...(launchState.failure?.code === 'structured_agent_session_unsupported'
+        ? launchState.failure
+        : {}),
+      kind: 'refused',
+      code: 'structured_agent_session_unsupported',
+      causeText
+    }
+    notifyStructuredLaunchListeners()
+  }
   if (completed.outcome.status !== 'created') {
+    if (terminal.refusal) {
+      recordCause(joinSentences([declined(), terminal.refusal]))
+    }
     return settlement
   }
   const state = useAppStore.getState()
@@ -103,33 +134,15 @@ export async function openTerminalForDeclinedChat(
   let replacement = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
     (candidate) => candidate.id === completed.tabId
   )
-  const ownsFailure = () =>
-    launchState &&
-    getStructuredLaunchStateBySessionId(tab.entityId) === launchState &&
-    launchState.callers === attempt &&
-    attempt?.outcome === 'failed' &&
-    !launchState.cancelled
-  if (current && launchState && ownsFailure()) {
-    launchState.failure = {
-      ...(launchState.failure?.code === 'structured_agent_session_unsupported'
-        ? launchState.failure
-        : {}),
-      kind: 'refused',
-      code: 'structured_agent_session_unsupported',
-      causeText: replacement
-        ? translate(
-            'components.native-chat.structuredSessionHostDeclinedDescription',
-            "This workspace can't run a {{value0}} chat.",
-            { value0: structuredAgentLabel(args.plan.agent) }
-          )
-        : translate(
-            'components.native-chat.structuredSessionTerminalNotVisible',
-            "Orca opened {{value0}} in a terminal, but couldn't show it here when the launch finished. Your chat draft was kept.",
-            { value0: structuredAgentLabel(args.plan.agent) }
-          )
-    }
-    notifyStructuredLaunchListeners()
-  }
+  recordCause(
+    replacement
+      ? declined()
+      : translate(
+          'components.native-chat.structuredSessionTerminalNotVisible',
+          "Orca opened {{value0}} in a terminal, but couldn't show it here when the launch finished. Your chat draft was kept.",
+          { value0: structuredAgentLabel(args.plan.agent) }
+        )
+  )
   if (!replacement) {
     return settlement
   }

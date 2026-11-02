@@ -5,6 +5,7 @@
     "reconnectServer": "Bu çalışma alanının Orca sunucusuna yeniden bağlanıp tekrar deneyin.",
     "updateServer": "Bu çalışma alanının sunucusunda Orca’yı güncelleyip tekrar deneyin.",
     "checkSettings": "Aracının başlatma ayarlarını kontrol edip tekrar deneyin.",
+    "invalidArgs": "{{value0}} için CLI bağımsız değişkenlerinde kapatılmamış bir tırnak var. Düzeltip yeniden deneyin.",
     "opencode": {
       "updateRequired": "OpenCode bu sürümde seçilen modelle güvenli biçimde başlatılamıyor. OpenCode'u desteklenen bir sürüme güncelleyin veya model seçimini kaldırın.",
       "invalidConfig": "Bu model seçimi OpenCode başlatma yapılandırmasına uygulanamadı. OpenCode başlatma yapılandırmasını kontrol edip yeniden deneyin veya model seçimini kaldırın.",
@@ -846,7 +847,6 @@
       "actionModel": {
         "on": "Açık",
         "off": "Kapalı",
-        "invalidArgs": "{{value0}} için CLI argümanları geçersiz. Bunları Ayarlar → Kaynak kontrolü yapay zekâsı bölümünde düzeltin.",
         "model": "Model",
         "agentDefault": "Ajan varsayılanı",
         "effortDefault": "Varsayılan",
@@ -1427,9 +1427,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Bu kontroller için bir çalışma alanı bulunamadı.",
-              "fb6c294e85": "Ajan başlatma komutu oluşturulamadı.",
               "03c1d61f83": "Bu kontrollere bağlı çalışma alanı açılamadı.",
-              "822bf52295": "Çalışma alanı başlatma platformu belirlenemedi.",
               "dfb4dd7c00": "Bu kontrollere bağlı çalışma alanı bulunamadı.",
               "9f00d7df0c": "Kontrolleri düzeltme istemi boş. Kaynak Kontrolü AI ayarlarını güncelleyin.",
               "2ebf794906": "Bu çalışma alanı sunucusunda etkin bir AI ajanı algılanmadı.",
@@ -3116,7 +3114,6 @@
         "a2a279b32a": "Kaydetme zaman aşımına uğradı veya başarısız oldu. Kapatmadan önce hataları düzeltin.",
         "46e08bc5c8": "Bu dosyada kaydedilmemiş değişiklikler var.",
         "61ed600d29": "\"{{value0}}\" dosyasında kaydedilmemiş değişiklikler var. Kapatmadan önce kaydetmek ister misiniz?",
-        "e57db40c11": "{{value0}} için başlatma komutu oluşturulamadı.",
         "5b2c1a9e44": "Ajan CLI'sı tespit edilemedi, birini yükleyin veya Ayarlar'dan varsayılan bir ajan seçin.",
         "quitSnapshotSaveFailed": "Çıkış iptal edildi: oturum anlık görüntüsü kaydedilemedi ({{value0}}).",
         "reloadSnapshotSaveFailed": "Yeniden yükleme iptal edildi: oturumun anlık görüntüsü kaydedilemedi ({{value0}})."
@@ -14232,7 +14229,6 @@
                     },
                     "d481ab22f9": "Kaydedilmiş AI ajanı kullanılamıyor. Başka bir ajan seçmek için Başlatmayı Özelleştir'i kullanın.",
                     "9bbd9077a2": "Etkin AI ajanı yok. Ajanları Ayarlar'dan yapılandırın.",
-                    "5540ff50cc": "Ajan başlatma komutu oluşturulamadı.",
                     "216f762bd7": "Çalışma alanı bağlantısı çözülemedi.",
                     "success": "{{value0}} hatası için bir AI ajanı başlatıldı."
                   }
@@ -15450,7 +15446,6 @@
             "3f4ca29961": "Yüzen çalışma alanını büyüt",
             "1c79cba25d": "Yüzen çalışma alanını geri yükle",
             "648352c51f": "{{value0}} öğesini yüzen çalışma alanında aç",
-            "82da3701e7": "{{value0}} için başlatma komutu oluşturulamadı.",
             "109870e023": "Büyüt",
             "b5686fee1e": "Geri Yükle"
           }

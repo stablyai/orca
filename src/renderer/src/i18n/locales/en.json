@@ -5,6 +5,7 @@
     "reconnectServer": "Reconnect to this workspace’s Orca server, then try again.",
     "updateServer": "Update Orca on this workspace’s server, then try again.",
     "checkSettings": "Check the agent’s launch settings, then try again.",
+    "invalidArgs": "The CLI arguments for {{value0}} have an unclosed quote. Fix them, then try again.",
     "terminalPreparationFailed": "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
     "terminalPromptFailed": "Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.",
     "opencode": {
@@ -926,7 +927,6 @@
       "actionModel": {
         "on": "On",
         "off": "Off",
-        "invalidArgs": "The CLI arguments for {{value0}} are invalid. Fix them in Settings → Source Control AI.",
         "model": "Model",
         "effort": "Effort",
         "agentDefault": "Agent default",
@@ -1539,9 +1539,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Unable to find a workspace for these checks.",
-              "fb6c294e85": "Could not build the agent launch command.",
               "03c1d61f83": "Unable to open the workspace attached to these checks.",
-              "822bf52295": "Unable to resolve the workspace launch platform.",
               "dfb4dd7c00": "Unable to find the workspace attached to these checks.",
               "9f00d7df0c": "Fix checks prompt is empty. Update Source Control AI settings.",
               "2ebf794906": "No enabled AI agent was detected on this workspace host.",
@@ -3233,7 +3231,6 @@
         "a2a279b32a": "Save timed out or failed. Fix errors before closing.",
         "46e08bc5c8": "This file has unsaved changes.",
         "61ed600d29": "\"{{value0}}\" has unsaved changes. Do you want to save before closing?",
-        "e57db40c11": "Could not build launch command for {{value0}}.",
         "5b2c1a9e44": "No agent CLI detected — install one or pick a default agent in Settings.",
         "quitSnapshotSaveFailed": "Quit canceled: the session snapshot could not be saved ({{value0}}).",
         "reloadSnapshotSaveFailed": "Reload canceled: the session snapshot could not be saved ({{value0}})."
@@ -14432,7 +14429,6 @@
                     },
                     "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
                     "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
-                    "5540ff50cc": "Could not build the agent launch command.",
                     "216f762bd7": "Unable to resolve the workspace connection.",
                     "success": "Started an AI agent for the {{value0}} failure."
                   }
@@ -15665,7 +15661,6 @@
             "3f4ca29961": "Maximize floating workspace",
             "1c79cba25d": "Restore floating workspace",
             "648352c51f": "Open {{value0}} in floating workspace",
-            "82da3701e7": "Could not build launch command for {{value0}}.",
             "109870e023": "Maximize",
             "b5686fee1e": "Restore"
           }

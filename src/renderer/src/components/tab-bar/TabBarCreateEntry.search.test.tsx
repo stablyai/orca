@@ -600,6 +600,35 @@ it('launches searched defaults on Enter and reaches the alternate only through C
   )
   expect(launched).toHaveBeenCalledOnce()
   expect(launched.mock.calls[0][0].setup.surface).toBe('terminal')
+
+  // A terminal default waits while its host connects; its chat stays usable through Configure.
+  launched.mockClear()
+  const terminalDefault = {
+    ...entry,
+    rows: [{ agent: 'codex' as const, kind: 'cli' as const, chat: true as const }],
+    defaultSurface: 'terminal' as const
+  }
+  renderEntry({
+    agentPickerEntries: [terminalDefault],
+    onLaunchAgentOption: launched,
+    terminalPending: true
+  })
+  setQuery('astra low')
+  submit()
+  expect(launched).not.toHaveBeenCalled()
+  act(() =>
+    container.querySelector<HTMLButtonElement>('button[aria-label="Configure Codex"]')!.click()
+  )
+  const launchButton = (name: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === name
+    )!
+  expect(launchButton('Launch terminal').disabled).toBe(true)
+  expect(launchButton('Launch terminal').getAttribute('aria-description')).toBe('Connecting…')
+  act(() => launchButton('Launch chat').click())
+  expect(launched).toHaveBeenCalledOnce()
+  expect(launched.mock.calls[0][0]).toMatchObject({ disabled: undefined, row: { kind: 'chat' } })
+  expect(launched.mock.calls[0][0].setup.surface).toBe('chat')
 })
 
 it.each(['g', 'low', 'high'])(

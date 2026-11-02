@@ -36,7 +36,6 @@ export type SourceControlRecoveryLaunchCopy = {
   emptyPrompt: string
   savedAgentUnavailable: string
   noEnabledAgent: string
-  launchCommandUnavailable: string
   connectionUnavailable: string
   success: string
 }
@@ -67,10 +66,6 @@ export function getDefaultSourceControlRecoveryLaunchCopy(
     noEnabledAgent: translate(
       'auto.components.right.sidebar.source.control.ai.recovery.launch.9bbd9077a2',
       'No enabled AI agents. Configure agents in Settings.'
-    ),
-    launchCommandUnavailable: translate(
-      'auto.components.right.sidebar.source.control.ai.recovery.launch.5540ff50cc',
-      'Could not build the agent launch command.'
     ),
     connectionUnavailable: translate(
       'auto.components.right.sidebar.source.control.ai.recovery.launch.216f762bd7',

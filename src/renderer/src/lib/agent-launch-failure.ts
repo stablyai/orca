@@ -36,6 +36,13 @@ export function agentLaunchRecoveryMessage(recovery: Recovery): string {
   }
 }
 
+export function agentLaunchCheckSettingsMessage(): string {
+  return translate(
+    'agentLaunch.checkSettings',
+    'Check the agent’s launch settings, then try again.'
+  )
+}
+
 export function notifyAgentLaunchFailure(agent: TuiAgent, description?: string): void {
   toast.error(
     translate(
@@ -43,10 +50,6 @@ export function notifyAgentLaunchFailure(agent: TuiAgent, description?: string):
       'Could not start a new {{agent}} session.',
       { agent: getAgentLabel(agent) }
     ),
-    {
-      description:
-        description ??
-        translate('agentLaunch.checkSettings', 'Check the agent’s launch settings, then try again.')
-    }
+    { description: description ?? agentLaunchCheckSettingsMessage() }
   )
 }

@@ -153,12 +153,7 @@ function TabBarCreateEntrySession({
     () =>
       terminalQueryMode
         ? EMPTY_AGENT_OPTIONS
-        : matchingAgentLaunchOptions(
-            agentPickerEntries ?? [],
-            agentOptions,
-            query,
-            terminalPending
-          ),
+        : matchingAgentLaunchOptions(agentPickerEntries, agentOptions, query, terminalPending),
     [agentOptions, agentPickerEntries, query, terminalPending, terminalQueryMode]
   )
 
@@ -392,7 +387,11 @@ function TabBarCreateEntrySession({
                     ? (draft) =>
                         submitOption({
                           kind: 'agent',
-                          option: configuredAgentPickerLaunchOption(option.option, draft)
+                          option: configuredAgentPickerLaunchOption(
+                            option.option,
+                            draft,
+                            terminalPending
+                          )
                         })
                     : undefined
                 }

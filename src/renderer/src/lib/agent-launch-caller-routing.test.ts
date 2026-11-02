@@ -436,7 +436,7 @@ describe('agent launch caller routing', () => {
     expect(store.createTab).toHaveBeenCalledTimes(1)
   })
 
-  it('refuses invalid arguments once, saying where to fix them, before any surface opens', async () => {
+  it('refuses invalid arguments once, saying what to fix, before any surface opens', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -448,7 +448,7 @@ describe('agent launch caller routing', () => {
 
     expect(result).toEqual({ refused: { delivered: false, failureNotified: true } })
     expect(mockToastError).toHaveBeenCalledExactlyOnceWith(
-      'The CLI arguments for Codex are invalid. Fix them in Settings → Source Control AI.'
+      'The CLI arguments for Codex have an unclosed quote. Fix them, then try again.'
     )
     expect(store.createTab).not.toHaveBeenCalled()
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()

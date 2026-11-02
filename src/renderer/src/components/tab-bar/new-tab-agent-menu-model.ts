@@ -32,12 +32,17 @@ export type AgentMenuRowsTarget = {
   launchCwd?: string | null
 }
 
+/** Why a terminal choice waits: its host has not finished connecting. */
+export function terminalPendingLabel(): string {
+  return translate('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')
+}
+
 /** A chat uses host admission; only a terminal needs the host's shell before it can start. */
 export function terminalPendingReason(
   terminalPending: boolean | undefined,
   row: NewTabAgentMenuRow | undefined
 ): string | undefined {
   return terminalPending && (row?.kind === 'cli' || row?.kind === 'terminal')
-    ? translate('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')
+    ? terminalPendingLabel()
     : undefined
 }

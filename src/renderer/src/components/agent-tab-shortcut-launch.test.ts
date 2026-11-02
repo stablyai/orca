@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { toast } from 'sonner'
 import { launchFloatingWorkspaceAgentShortcut } from './agent-tab-shortcut-launch'
 
 const mocks = vi.hoisted(() => {
@@ -77,5 +78,19 @@ describe('launchFloatingWorkspaceAgentShortcut while detection is pending', () =
 
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
     expect(mocks.cancelFocusIntent).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains once, without launching, when detection settles with no agent', async () => {
+    const detection = pendingDetection()
+    launchFloatingWorkspaceAgentShortcut({ agent: null, pendingAgent: detection.pendingAgent })
+
+    await detection.settle(null)
+
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(mocks.cancelFocusIntent).toHaveBeenCalledTimes(1)
+    expect(toast.message).toHaveBeenCalledExactlyOnceWith(
+      'No agent CLI detected — install one or pick a default agent in Settings.'
+    )
+    expect(toast.error).not.toHaveBeenCalled()
   })
 })

@@ -274,10 +274,9 @@ export function useAgentMenuObservation(
           (capabilityPending || availability?.state === 'pending' || hostCatalogPending),
         plain
       })
-      return {
-        ...selection,
-        ready: selection.ready && !(terminalPending && selection.choice?.route === 'terminal-tui')
-      }
+      const terminalWaiting =
+        selection.ready && terminalPending && selection.choice?.route === 'terminal-tui'
+      return { ...selection, ready: selection.ready && !terminalWaiting, terminalWaiting }
     }
   }
 }

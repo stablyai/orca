@@ -22,6 +22,7 @@ import {
   editAgentPickerSpeed,
   editAgentPickerPanelText
 } from '../../../../shared/agent-launch-picker-arguments'
+import { terminalPendingLabel } from '../tab-bar/new-tab-agent-menu-model'
 import { agentPickerSpeedIsOpaque } from '../../../../shared/agent-launch-picker-speed'
 import { editAgentPickerPermission } from '../../../../shared/agent-launch-picker-permission'
 import {
@@ -163,8 +164,9 @@ export function AgentLaunchSetupPanel({
       onAction={() => {}}
     />
   )
-  const surfaceDisabled = (surface: AgentPickerSurface) =>
-    disabled || (surface === 'terminal' && terminalBlocked)
+  const waitReason = (surface: AgentPickerSurface) =>
+    surface === 'terminal' && terminalBlocked ? terminalPendingLabel() : undefined
+  const surfaceDisabled = (surface: AgentPickerSurface) => disabled || !!waitReason(surface)
   const use = (surface: AgentPickerSurface) => {
     if (!surfaceDisabled(surface)) {
       onUse({ ...draft, surface })
@@ -375,6 +377,8 @@ export function AgentLaunchSetupPanel({
             type="button"
             size="xs"
             disabled={surfaceDisabled(surface)}
+            title={waitReason(surface)}
+            aria-description={waitReason(surface)}
             variant={surface === entry.defaultSurface ? 'default' : 'outline'}
             onClick={() => use(surface)}
           >

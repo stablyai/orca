@@ -82,8 +82,9 @@ export function SurfaceChoiceRow({
       <AgentSurfaceLaunchButton
         ref={otherButton}
         surface={other.kind === 'chat' ? 'chat' : 'terminal'}
-        disabled={disabled || !!otherUnavailable}
-        title={otherUnavailable ?? rowTitle(other, label)}
+        disabled={disabled}
+        reason={otherUnavailable}
+        title={rowTitle(other, label)}
         className="hover:bg-accent focus-visible:bg-accent [[data-highlighted]_&]:opacity-100"
         onKeyDown={(event) => {
           // Stopped so the row's own Enter handling does not start the row's surface instead.

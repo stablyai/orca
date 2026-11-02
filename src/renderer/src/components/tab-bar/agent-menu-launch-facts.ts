@@ -6,6 +6,7 @@ import {
   resolveWorktreeExecutionHostPlatform
 } from '@/lib/execution-host-facts'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import type { Repo } from '../../../../shared/repo-types'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -39,6 +40,26 @@ export function readAgentMenuLaunchFacts(
   }
 }
 
+// Why: this selector reruns on every store write, so a target's repo resolves once per repos list.
+const prospectiveRepoCache = new WeakMap<AppState['repos'], Map<string, Repo | null>>()
+
+function prospectiveRepo(
+  repos: AppState['repos'],
+  repoId: string,
+  hostId: string | undefined
+): Repo | null {
+  let byTarget = prospectiveRepoCache.get(repos)
+  if (!byTarget) {
+    byTarget = new Map()
+    prospectiveRepoCache.set(repos, byTarget)
+  }
+  const key = JSON.stringify([repoId, hostId])
+  if (!byTarget.has(key)) {
+    byTarget.set(key, findRepoForHost(repos, repoId, { hostId }))
+  }
+  return byTarget.get(key) ?? null
+}
+
 /**
  * Terminal choices wait only while the host that will report its OS is still connecting or
  * setting up. Settled missing facts stay launchable, so the launcher gives its one refusal.
@@ -50,9 +71,7 @@ export function readAgentMenuTerminalPending(
   const { worktreeId, repoId } = workspace
   // A workspace not created yet launches on its repo's host, so read that host's facts.
   const repo =
-    !worktreeId && repoId
-      ? findRepoForHost(state.repos, repoId, { hostId: workspace.executionHostId })
-      : null
+    !worktreeId && repoId ? prospectiveRepo(state.repos, repoId, workspace.executionHostId) : null
   // The workspace path only refines a known OS (WSL), so readiness does not need it.
   const platform = worktreeId
     ? resolveWorktreeExecutionHostPlatform(state, worktreeId, undefined)

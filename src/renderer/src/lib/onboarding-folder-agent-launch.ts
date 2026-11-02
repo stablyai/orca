@@ -59,7 +59,10 @@ export async function resolveDismissedOnboardingFolderAgentLaunch(args: {
   }
   const context = resolveAgentLaunchExecutionContext(args.store, { worktreeId: args.worktreeId })
   if ('unavailable' in context) {
-    notifyAgentLaunchFailure(agent, agentLaunchRecoveryMessage(context.unavailable.recovery))
+    // A host still connecting is a wait, not a failure, so it gets no message.
+    if (!context.unavailable.pending) {
+      notifyAgentLaunchFailure(agent, agentLaunchRecoveryMessage(context.unavailable.recovery))
+    }
     return { agent, plan }
   }
   let preferences: AgentLaunchPreferences
