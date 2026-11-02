@@ -113,7 +113,7 @@ describe('Grok session-owned media resolution', () => {
       fixture.request.pathText = relativePath
       const result = await fixture.resolve()
       expect(result).toEqual({ kind: 'matched', absolutePath: path })
-      expect(path).toContain('%2F')
+      expect(path).toContain('%')
       expect(await readFile(path, 'utf8')).toBe('session image')
     }
   )

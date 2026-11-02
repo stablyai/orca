@@ -44,7 +44,6 @@ export function useNativeChatMediaHref({
       : ''
   const [resolved, setResolved] = useState<{
     identity: string
-    retryKey: number
     href?: string
     expectedEnvironmentPairingRevision?: number
   }>()
@@ -80,7 +79,6 @@ export function useNativeChatMediaHref({
         if (!controller.signal.aborted) {
           setResolved({
             identity,
-            retryKey,
             expectedEnvironmentPairingRevision,
             href:
               result.exists && !result.isDirectory && result.absolutePath
@@ -91,14 +89,10 @@ export function useNativeChatMediaHref({
       })
       .catch(() => {
         if (!controller.signal.aborted) {
-          setResolved({ identity, retryKey })
+          setResolved({ identity })
         }
       })
     return () => controller.abort()
   }, [identity, active, runtimeContext, tabId, sessionId, pathText, retryKey])
-  return !resolve
-    ? { href }
-    : resolved?.identity === identity && resolved.retryKey === retryKey
-      ? resolved
-      : {}
+  return !resolve ? { href } : resolved?.identity === identity ? resolved : {}
 }
