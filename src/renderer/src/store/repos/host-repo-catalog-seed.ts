@@ -8,17 +8,20 @@ import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { getRepoRowIdentity } from '../slices/repo-host-identity'
 import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { hasLiveRepoCatalogApplied, markSavedHostCatalogRow } from './saved-host-catalog-rows'
 
 /** Adds saved rows the store lacks; the host's next live list replaces them like any other row. */
 export function withHostCatalogSnapshotRepos(
   repos: readonly Repo[],
   snapshots: Readonly<Record<string, HostRepoCatalogSnapshot>>,
-  removedEnvironmentIds: ReadonlySet<string>
+  removedEnvironmentIds: ReadonlySet<string>,
+  hasLiveList: (hostId: string) => boolean = () => false
 ): readonly Repo[] {
   const present = new Set(repos.map(getRepoRowIdentity))
   const added: Repo[] = []
   for (const [environmentId, snapshot] of Object.entries(snapshots)) {
-    if (isRemovedRuntimeHostId(toRuntimeExecutionHostId(environmentId), removedEnvironmentIds)) {
+    const hostId = toRuntimeExecutionHostId(environmentId)
+    if (isRemovedRuntimeHostId(hostId, removedEnvironmentIds) || hasLiveList(hostId)) {
       continue
     }
     const target = { kind: 'environment' as const, environmentId }
@@ -27,6 +30,7 @@ export function withHostCatalogSnapshotRepos(
       const identity = getRepoRowIdentity(repo)
       if (!present.has(identity)) {
         present.add(identity)
+        markSavedHostCatalogRow(repo)
         added.push(repo)
       }
     }
@@ -36,7 +40,8 @@ export function withHostCatalogSnapshotRepos(
 
 /** Run before any live host catalog request, so that answer can drop a project deleted on the host. */
 export async function seedReposFromHostCatalogSnapshots(
-  set: Parameters<StateCreator<AppState>>[0]
+  set: Parameters<StateCreator<AppState>>[0],
+  get: Parameters<StateCreator<AppState>>[1]
 ): Promise<void> {
   const list = window.api?.repos?.listHostCatalogSnapshots
   if (typeof list !== 'function') {
@@ -51,7 +56,12 @@ export async function seedReposFromHostCatalogSnapshots(
     return
   }
   set((s) => {
-    const repos = withHostCatalogSnapshotRepos(s.repos, snapshots, s.removedRuntimeEnvironmentIds)
+    const repos = withHostCatalogSnapshotRepos(
+      s.repos,
+      snapshots,
+      s.removedRuntimeEnvironmentIds,
+      (hostId) => hasLiveRepoCatalogApplied(get, hostId)
+    )
     return repos === s.repos ? s : { repos: applyManualRepoOrder(repos, s.manualRepoOrder) }
   })
 }

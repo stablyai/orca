@@ -9,9 +9,9 @@ import {
   listHostRepoCatalogSnapshots,
   recordHostRepoCatalogAnswer
 } from './host-repo-catalog-snapshot-recorder'
-import { openProfileStateDatabaseReadOnly } from '../persistence/profile-state/profile-state-database'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { Store } from '../persistence/loading-store/store'
+import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
 
 vi.mock('electron', () => ({
   app: {
@@ -71,18 +71,7 @@ function profile() {
     stores.push(store)
     return store
   }
-  const revision = (domain: string) => {
-    const opened = openProfileStateDatabaseReadOnly(databasePath, profileId)
-    try {
-      const row = opened.db
-        .prepare('SELECT revision FROM profile_state_documents WHERE domain = ?')
-        .get(domain)
-      return row ? Number(row.revision) : undefined
-    } finally {
-      opened.db.close()
-    }
-  }
-  return { open, revision }
+  return { open }
 }
 
 const wslHost = {
@@ -120,8 +109,9 @@ const notes = {
   id: 'notes',
   path: '/home/me/notes',
   displayName: 'notes',
+  badgeColor: '#737373',
   addedAt: 3,
-  kind: 'folder'
+  kind: 'folder' as const
 }
 
 it("keeps a WSL host's projects across a restart, with only the row fields", () => {
@@ -161,19 +151,25 @@ it("keeps a WSL host's projects across a restart, with only the row fields", () 
   })
 })
 
-it('replaces the saved list with each answer and saves nothing when it is unchanged', () => {
-  const { open, revision } = profile()
+it('replaces the saved list with each answer and saves only when it changed', () => {
+  const { open } = profile()
   const store = open()
+  let writes = 0
+  store.onStateWritten((domains) => {
+    if (domains?.includes('hostRepoCatalogSnapshots')) {
+      writes++
+    }
+  })
   recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld, django]))
-  store.flushOrThrow()
-  const afterFirst = revision('hostRepoCatalogSnapshots')
+  expect(writes).toBe(1)
 
+  // Every catalog refresh lands here; an identical answer must not schedule a save.
   recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld, django]))
-  store.flushOrThrow()
-  expect(revision('hostRepoCatalogSnapshots')).toBe(afterFirst)
+  expect(writes).toBe(1)
 
   // django was deleted on the host.
   recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld]))
+  expect(writes).toBe(2)
   store.flushOrThrow()
   expect(
     listHostRepoCatalogSnapshots(open(), [wslHost])['env-wsl']?.repos.map((repo) => repo.id)
@@ -201,22 +197,39 @@ it('keeps each distro separately and ignores failures, other methods and paired 
   recordHostRepoCatalogAnswer(store, pairedServer, 'repo.list', repoListAnswer([notes]))
   store.flushOrThrow()
 
-  const saved = listHostRepoCatalogSnapshots(open(), [wslHost, otherWslHost, pairedServer])
-  expect(Object.keys(saved).sort()).toEqual(['env-wsl', 'env-wsl-2'])
-  expect(saved['env-wsl']?.repos.map((repo) => repo.id)).toEqual(['hello'])
-  expect(saved['env-wsl-2']?.repos.map((repo) => repo.id)).toEqual(['django'])
+  // Checked in storage, not through the listing, which filters paired servers on its own.
+  const stored = open().getHostRepoCatalogSnapshots()
+  expect(Object.keys(stored).sort()).toEqual(['env-wsl', 'env-wsl-2'])
+  expect(stored['env-wsl']?.repos.map((repo) => repo.id)).toEqual(['hello'])
+  expect(stored['env-wsl-2']?.repos.map((repo) => repo.id)).toEqual(['django'])
 })
 
-it('forgets a removed host, and never lists one no longer saved', () => {
+it('lists only WSL hosts, even when a paired server has a saved entry', () => {
+  const { open } = profile()
+  const store = open()
+  store.setHostRepoCatalogSnapshot('env-paired', { repos: [notes] })
+  store.setHostRepoCatalogSnapshot('env-wsl', { repos: [django] })
+  expect(Object.keys(listHostRepoCatalogSnapshots(store, [wslHost, pairedServer]))).toEqual([
+    'env-wsl'
+  ])
+})
+
+it('never lists a host no longer saved (removed outside Settings)', () => {
   const { open } = profile()
   const store = open()
   recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld]))
   recordHostRepoCatalogAnswer(store, otherWslHost, 'repo.list', repoListAnswer([django]))
-  // Removed outside Settings (CLI): the registry no longer has it.
   expect(Object.keys(listHostRepoCatalogSnapshots(store, [wslHost]))).toEqual(['env-wsl'])
+})
 
-  // What Settings removal runs (retireRemovedRuntimeEnvironment).
-  store.setHostRepoCatalogSnapshot('env-wsl', null)
+it('does not seed stale projects when a removed WSL host is added back under the same id', async () => {
+  const { open } = profile()
+  const store = open()
+  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld, django]))
+
+  await retireRemovedRuntimeEnvironment(wslHost.id, () => undefined, store)
   store.flushOrThrow()
-  expect(open().getHostRepoCatalogSnapshots()).not.toHaveProperty('env-wsl')
+
+  // WSL host ids are deterministic per distro, so re-adding it saves the same id again.
+  expect(listHostRepoCatalogSnapshots(open(), [wslHost])).toEqual({})
 })

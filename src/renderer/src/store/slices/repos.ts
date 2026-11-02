@@ -43,7 +43,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     folderWorkspaces: [],
     wslMovedProjects: [],
     fetchWslMovedProjects: () => fetchWslMovedProjects(set),
-    seedReposFromHostCatalogSnapshots: () => seedReposFromHostCatalogSnapshots(set),
+    seedReposFromHostCatalogSnapshots: () => seedReposFromHostCatalogSnapshots(set, get),
     folderWorkspacePathStatuses: {},
     floatingWorkspacePath: null,
     setFloatingWorkspacePath: (path) =>

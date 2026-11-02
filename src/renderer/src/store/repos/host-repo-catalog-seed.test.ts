@@ -158,6 +158,49 @@ describe('saved WSL host project lists', () => {
     ])
   })
 
+  it('skips a host whose live list already applied, so a late seed cannot restore a deleted project', async () => {
+    const store = createTestStore()
+    hostRepos = [helloWorld]
+    await store.getState().fetchReposForAllHosts()
+    await store.getState().seedReposFromHostCatalogSnapshots()
+
+    expect(hostRows(store.getState().repos).map((row) => row.id)).toEqual(['hello'])
+  })
+
+  it('lets a live list requested before the seed landed still drop a deleted project', async () => {
+    const store = createTestStore()
+    hostRepos = [helloWorld]
+    let markRequested: () => void = () => undefined
+    const requested = new Promise<void>((resolve) => {
+      markRequested = resolve
+    })
+    let releaseAnswer: () => void = () => undefined
+    const answerReleased = new Promise<void>((resolve) => {
+      releaseAnswer = resolve
+    })
+    const answerLive = runtimeCall.getMockImplementation()
+    runtimeCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        markRequested()
+        await answerReleased
+      }
+      return answerLive?.(args)
+    })
+
+    const fetching = store.getState().fetchReposForAllHosts()
+    await requested
+    await store.getState().seedReposFromHostCatalogSnapshots()
+    expect(hostRows(store.getState().repos).map((row) => row.id)).toEqual([
+      'hello',
+      'django',
+      'notes'
+    ])
+
+    releaseAnswer()
+    await fetching
+    expect(hostRows(store.getState().repos).map((row) => row.id)).toEqual(['hello'])
+  })
+
   it('keeps startup going when the saved list cannot be read', async () => {
     listHostCatalogSnapshots.mockRejectedValue(new Error('ipc down'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
