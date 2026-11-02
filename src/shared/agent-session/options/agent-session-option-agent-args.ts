@@ -124,6 +124,14 @@ export function removeAgentArgOption(
   return kept
 }
 
+/** Pi's built-in options use separate values, not equals syntax. */
+export function normalizePiExtraAgentArgs(tokens: readonly string[]): string[] {
+  return tokens.flatMap((token) => {
+    const match = /^(--model|--thinking)=(.+)$/.exec(token)
+    return match ? [match[1], match[2]] : [token]
+  })
+}
+
 /** Pi provider-qualified models override a different default provider. */
 export function removePiProviderForModel(
   tokens: readonly string[],

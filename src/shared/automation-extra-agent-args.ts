@@ -1,5 +1,6 @@
 import {
   agentArgTerminatorIndex,
+  normalizePiExtraAgentArgs,
   removeAgentArgOption,
   removePiProviderForModel
 } from './agent-session/options/agent-session-option-agent-args'
@@ -12,6 +13,7 @@ import {
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
+import { PI_THINKING_LEVELS } from './structured-agent-session-effective-effort'
 
 export const EXTRA_AGENT_ARGS_MAX_BYTES = 4096
 export const EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED =
@@ -213,6 +215,11 @@ export function parseExtraAgentArgs(args: {
       return extraAgentArgsFailure('missingValue', { option: name })
     }
     const { kind, valuePrefix } = match.option
+    if (args.agent === 'pi' && kind === 'effort' && !PI_THINKING_LEVELS.includes(value)) {
+      return extraAgentArgsFailure('invalid', {
+        detail: `--thinking: ${PI_THINKING_LEVELS.join(', ')}`
+      })
+    }
     if (valuePrefix && (!value.startsWith(valuePrefix) || value.length === valuePrefix.length)) {
       return extraAgentArgsFailure('valueNotAllowed', {
         option: name,
@@ -227,16 +234,9 @@ export function parseExtraAgentArgs(args: {
     kinds.add(kind)
     index += match.consumed - 1
   }
-  // Pi treats --option=value as an extension flag, not a built-in option.
   return {
     ok: true,
-    tokens:
-      args.agent === 'pi'
-        ? tokens.flatMap((token) => {
-            const match = /^(--model|--thinking)=(.+)$/.exec(token)
-            return match ? [match[1], match[2]] : [token]
-          })
-        : tokens,
+    tokens: args.agent === 'pi' ? normalizePiExtraAgentArgs(tokens) : tokens,
     kinds
   }
 }

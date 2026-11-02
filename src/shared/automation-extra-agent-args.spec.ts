@@ -255,11 +255,33 @@ describe('parseExtraAgentArgs rejections', () => {
     ['grok', '--permission-mode bypassPermissions', '"--permission-mode"'],
     ['omp', '--effort high', '"--effort"'],
     ['pi', '--thinking low --thinking high', 'effort more than once'],
+    ['pi', '--thinking bogus', '--thinking: off, minimal, low, medium, high, xhigh, max'],
+    ['pi', '--thinking=HIGH', '--thinking: off, minimal, low, medium, high, xhigh, max'],
+    ['pi', '--thinking none', '--thinking: off, minimal, low, medium, high, xhigh, max'],
     ['pi', '--extension path', '"--extension"'],
     ['pi', '--model x --resume', '"--resume"'],
     ['codebuddy', '--add-dir x', '"--add-dir"']
   ] as const)('%s rejects %j', (agent, extras, message) => {
     expect(rejection(agent, extras)).toContain(message)
+  })
+
+  it.each(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])(
+    'accepts Pi thinking level %s in both forms',
+    (level) => {
+      expect(rejection('pi', `--thinking ${level}`)).toBeNull()
+      expect(rejection('pi', `--thinking=${level}`)).toBeNull()
+    }
+  )
+
+  it('refuses an invalid Pi thinking override instead of dropping the host default', () => {
+    expect(
+      mergeExtraAgentArgs({
+        agent: 'pi',
+        defaultArgs: '--thinking high',
+        extraAgentArgs: '--thinking=bogus',
+        shell: 'posix'
+      })
+    ).toMatchObject({ ok: false, error: expect.stringContaining('--thinking: off, minimal') })
   })
 
   it('limits extras to 4 KiB', () => {

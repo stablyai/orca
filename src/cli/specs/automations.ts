@@ -67,7 +67,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Run now in Orca and orca automations run intentionally bypass the precheck so you can test or override the scheduled condition.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
       'Use --extra-agent-args="--model opus --effort high" to add arguments after the host\'s default agent Arguments on each fresh run. Only model, effort, and a few safe options are accepted (Claude, Codex, CodeBuddy, Cursor, Grok, OMP, Pi); extras cannot be combined with --reuse-session. On edit, --extra-agent-args= clears them.',
-      'For Pi, provider/model overrides a different default --provider. Prefix gateway model IDs containing / with the gateway provider, for example openrouter/anthropic/model.'
+      'For Pi, --thinking accepts off, minimal, low, medium, high, xhigh, or max. provider/model overrides a different default --provider; prefix gateway model IDs containing / with the gateway provider, for example openrouter/anthropic/model.'
     ],
     examples: [
       'orca automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',
