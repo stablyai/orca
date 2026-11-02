@@ -596,7 +596,6 @@
 1 test-no-real-time-wait:tests/e2e/large-file-count-fixtures.ts
 1 test-no-real-time-wait:tests/e2e/large-markdown-preview.spec.ts
 1 test-no-real-time-wait:tests/e2e/layout-stream-loss-reopen.spec.ts
-1 test-no-real-time-wait:tests/e2e/main-thread-git-cost.spec.ts
 1 test-no-real-time-wait:tests/e2e/markdown-table-row-backspace.spec.ts
 1 test-no-real-time-wait:tests/e2e/native-chat-history-prepend-anchor.spec.ts
 3 test-no-real-time-wait:tests/e2e/notification-sound-replay.spec.ts
@@ -1386,7 +1385,6 @@
 1 test-timeout-needs-reason:tests/e2e/layout-compat-serve-restart-keeps-at-at-terminals.spec.ts
 1 test-timeout-needs-reason:tests/e2e/linear-issue-view-persistence.spec.ts
 1 test-timeout-needs-reason:tests/e2e/local-cli-terminal-retention.spec.ts
-1 test-timeout-needs-reason:tests/e2e/main-thread-git-cost.spec.ts
 1 test-timeout-needs-reason:tests/e2e/manual-worktree-order-persistence.spec.ts
 1 test-timeout-needs-reason:tests/e2e/markdown-literal-save-reopen.spec.ts
 1 test-timeout-needs-reason:tests/e2e/markdown-review-selection-performance.spec.ts

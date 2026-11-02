@@ -5,7 +5,7 @@ import type {
   GlobalSettings
 } from '../../../../shared/global-settings-types'
 import { useMountedRef } from '../../hooks/useMountedRef'
-import { withImportedTerminalColorOverrides } from '../../../../shared/terminal-theme-selection'
+import { ghosttyImportSettingsUpdate } from '../../../../shared/ghostty-import-preview'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 
 export type UseGhosttyImportReturn = {
@@ -90,11 +90,7 @@ export function useGhosttyImport(
       return
     }
     const requestId = requestIdRef.current
-    const merged = withImportedTerminalColorOverrides(
-      settings,
-      preview.diff,
-      getSystemPrefersDark()
-    )
+    const merged = ghosttyImportSettingsUpdate(settings, preview, getSystemPrefersDark())
     setApplyError(null)
     try {
       // Await persistence before marking applied so rejected IPC cannot report success.

@@ -20,7 +20,9 @@ afterEach(() => cleanup())
 
 const props: ComponentProps<typeof LazyOrchestrationCrewPanel> = {
   target: { kind: 'local' },
-  party: 'term_coordinator'
+  party: 'term_coordinator',
+  canMention: false,
+  mention: () => {}
 }
 
 it('leaves a failed load out quietly and loads again on the next mount', async () => {

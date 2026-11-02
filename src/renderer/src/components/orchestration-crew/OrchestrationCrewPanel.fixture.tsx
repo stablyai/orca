@@ -37,14 +37,26 @@ export const keyboardPanes = defineFixture({
           Terminal destination A
           <input aria-label="Terminal destination A" />
         </label>
-        <CrewPanelContent target={{ kind: 'local' }} party="term_a" snapshot={snapshot('Alpha')} />
+        <CrewPanelContent
+          target={{ kind: 'local' }}
+          party="term_a"
+          canMention={false}
+          mention={() => {}}
+          snapshot={snapshot('Alpha')}
+        />
       </div>
       <div data-native-chat-root className="relative overflow-hidden" data-testid="crew-pane-b">
         <label>
           Native destination B
           <input aria-label="Native destination B" />
         </label>
-        <CrewPanelContent target={{ kind: 'local' }} party="term_b" snapshot={snapshot('Beta')} />
+        <CrewPanelContent
+          target={{ kind: 'local' }}
+          party="term_b"
+          canMention={false}
+          mention={() => {}}
+          snapshot={snapshot('Beta')}
+        />
       </div>
     </div>
   )
@@ -219,7 +231,13 @@ function pane(value: OrchestrationCrewSnapshot) {
             />
           ))}
         </div>
-        <CrewPanelContent target={{ kind: 'local' }} party="term_self" snapshot={value} />
+        <CrewPanelContent
+          target={{ kind: 'local' }}
+          party="term_self"
+          canMention
+          mention={() => {}}
+          snapshot={value}
+        />
       </div>
     )
   })
@@ -232,7 +250,13 @@ function nativeChat(value: OrchestrationCrewSnapshot) {
     render: () => (
       <div className="flex h-130 flex-col overflow-hidden rounded-md border border-border bg-background">
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <CrewPanelContent target={{ kind: 'local' }} party="term_self" snapshot={value} />
+          <CrewPanelContent
+            target={{ kind: 'local' }}
+            party="term_self"
+            snapshot={value}
+            canMention
+            mention={() => {}}
+          />
           <div className="mx-auto grid w-full max-w-3xl gap-3 px-4 pt-10">
             {Array.from({ length: 12 }, (_, index) => (
               <div
@@ -265,6 +289,8 @@ const tenWorkers = crew([], WORKERS, [])
 const managerAndThree = crew([MANAGER], [WORKERS[2], WORKERS[4], WORKERS[5]], [])
 const managedByOnly = crew([MANAGER], [], [])
 const peerOnly = crew([], [], [PEER])
+// Mention all is dimmed once no worker still runs.
+const allFinished = crew([], [WORKERS[5], WORKERS[7]], [])
 
 export const twoWorkersCollapsed = pane(twoWorkers)
 export const twoWorkersExpanded = expanded(twoWorkers)
@@ -278,5 +304,6 @@ export const managedByOnlyCollapsed = pane(managedByOnly)
 export const managedByOnlyExpanded = expanded(managedByOnly)
 export const peerOnlyCollapsed = pane(peerOnly)
 export const peerOnlyExpanded = expanded(peerOnly)
+export const allFinishedExpanded = expanded(allFinished)
 export const nativeChatCollapsed = nativeChat(fiveWorkers)
 export const nativeChatExpanded = expanded(fiveWorkers, nativeChat)
