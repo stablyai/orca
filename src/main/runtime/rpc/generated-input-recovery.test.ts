@@ -1,10 +1,14 @@
 import './unused-default-rpc-methods.test-fixture'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { GeneratedAgentInputNotices } from '../generated-agent-input-notices'
 import { GENERATED_INPUT_METHODS } from './methods/generated-input'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from './core'
-import { createGeneratedInputNoticeFeed } from '../../../shared/generated-input-notice-feed'
+import {
+  createGeneratedInputNoticeFeed,
+  type GeneratedInputNoticeDelta
+} from '../../../shared/generated-input-notice-feed'
 import type { GeneratedAgentInputNotice } from '../../../shared/generated-agent-input-notice'
+import { GeneratedInputNoticeProjection } from '../../../shared/generated-input-notice-projection'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 
 function harness() {
@@ -37,6 +41,9 @@ function harness() {
   const dismiss = method('terminal.dismissGeneratedInputNotice')
   const wire: string[] = []
   const views: GeneratedAgentInputNotice[][] = []
+  const view = new Map<string, GeneratedAgentInputNotice>()
+  const deltas: GeneratedInputNoticeDelta[] = []
+  let snapshots = 0
   const pageReads: (() => void)[] = []
   let holdPages = false
   let pageCalls = 0
@@ -52,7 +59,24 @@ function harness() {
       wire.push(JSON.stringify(result))
       return result
     },
-    onChange: (current) => views.push(current)
+    // The consumer's indexed view, recorded after each snapshot or delta.
+    onSnapshot: (current) => {
+      snapshots += 1
+      view.clear()
+      for (const notice of current) {
+        view.set(notice.id, notice)
+      }
+      views.push([...view.values()])
+    },
+    onDelta: (delta) => {
+      if (delta.kind === 'added') {
+        view.set(delta.notice.id, delta.notice)
+      } else {
+        view.delete(delta.id)
+      }
+      deltas.push(delta)
+      views.push([...view.values()])
+    }
   })
   const connect = () =>
     'stream' in subscribe
@@ -80,6 +104,8 @@ function harness() {
     dismiss,
     wire,
     views,
+    deltas,
+    snapshots: () => snapshots,
     connect,
     add,
     settle,
@@ -231,5 +257,102 @@ it('carries an unsubmitted draft through frames and pages, and reads older notic
   ])
   for (const cleanup of h.cleanups.values()) {
     cleanup()
+  }
+})
+
+// K6: after the snapshot, one live add and its dismissal touch only that notice on the client:
+// no complete-view rebuild, whatever the retained population.
+async function liveChangeCost(population: number) {
+  const h = harness()
+  for (let i = 0; i < population; i += 1) {
+    h.add(`t${i}`)
+  }
+  void h.connect()
+  for (let i = 0; i < 20 && h.snapshots() === 0; i += 1) {
+    await h.settle()
+  }
+  expect(h.snapshots()).toBe(1)
+  const rebuilds = vi.spyOn(GeneratedInputNoticeProjection.prototype, 'complete')
+  h.add('x')
+  const added = h.deltas.at(-1)
+  expect(added?.kind).toBe('added')
+  h.notices.dismiss(added?.kind === 'added' ? added.notice.id : '')
+  const cost = { rebuilds: rebuilds.mock.calls.length, deltas: h.deltas.length }
+  rebuilds.mockRestore()
+  expect(h.snapshots()).toBe(1)
+  for (const cleanup of h.cleanups.values()) {
+    cleanup()
+  }
+  return cost
+}
+
+it('applies one live add and dismissal as two deltas at 3,000 and 30,000 retained notices', async () => {
+  for (const population of [3_000, 30_000]) {
+    expect(await liveChangeCost(population)).toEqual({ rebuilds: 0, deltas: 2 })
+  }
+})
+
+// K8: dismissals through the compaction threshold keep the seek index linear in live notices, a
+// survivor snapshot visits only what it sends plus that bounded index, and every client receives
+// one change carrying one notice.
+it('keeps the index bounded across dismissals and fans one change out once per client', async () => {
+  for (const population of [3_000, 30_000]) {
+    const notices = new GeneratedAgentInputNotices()
+    for (let i = 0; i < population; i += 1) {
+      notices.add({
+        agent: 'claude',
+        text: `t${i}`,
+        handle: 'h',
+        worktreeId: 'w',
+        ptyId: null,
+        certainty: 'not-sent'
+      })
+    }
+    // Dismiss nine in ten, oldest first, through repeated compactions.
+    let all: string[] = []
+    for (
+      let cursor: { cursor: number; offset: number } | null = { cursor: 0, offset: 0 };
+      cursor;
+    ) {
+      const page = notices.page(cursor.cursor, cursor.offset)
+      all = all.concat(page.frames.filter((frame) => frame.offset === 0).map((frame) => frame.id))
+      cursor = page.next
+    }
+    const live = population / 10
+    for (const id of all.slice(0, population - live)) {
+      notices.dismiss(id)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads the owner's private seek index to bound it.
+    const order = (notices as unknown as { order: unknown[] }).order
+    expect(order.length).toBeLessThanOrEqual(2 * live + 16)
+    notices.pageVisits = 0
+    let pages = 0
+    for (
+      let cursor: { cursor: number; offset: number } | null = { cursor: 0, offset: 0 };
+      cursor;
+    ) {
+      const page = notices.page(cursor.cursor, cursor.offset)
+      pages += 1
+      cursor = page.next
+    }
+    expect(notices.pageVisits).toBeLessThanOrEqual(order.length + pages)
+
+    const received = Array.from({ length: 100 }, () => [] as unknown[])
+    const unsubscribe = received.map((changes) =>
+      notices.subscribe((change) => changes.push(change))
+    )
+    notices.add({
+      agent: 'claude',
+      text: 'one more',
+      handle: 'h',
+      worktreeId: 'w',
+      ptyId: null,
+      certainty: 'not-sent'
+    })
+    for (const changes of received) {
+      expect(changes).toHaveLength(1)
+      expect(changes[0]).toMatchObject({ kind: 'added', notice: { text: 'one more' } })
+    }
+    unsubscribe.forEach((stop) => stop())
   }
 })

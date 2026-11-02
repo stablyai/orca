@@ -3,7 +3,10 @@ import type { GeneratedAgentInputNotice } from '../../../shared/generated-agent-
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../shared/terminal-runtime-capabilities'
-import { createGeneratedInputNoticeFeed } from '../../../shared/generated-input-notice-feed'
+import {
+  createGeneratedInputNoticeFeed,
+  type GeneratedInputNoticeDelta
+} from '../../../shared/generated-input-notice-feed'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
@@ -39,21 +42,36 @@ function projectNotices(target: RuntimeClientTarget) {
       }
     })
   }
-  return (notices: GeneratedAgentInputNotice[], session: string): void => {
-    const wanted = new Map(notices.map((notice) => [notice.id, notice]))
-    for (const [id, toastId] of shown) {
-      if (!wanted.has(id) || !toastId.endsWith(`:${session}:${id}`)) {
-        shown.delete(id)
-        toast.dismiss(toastId)
-      }
+  const add = (notice: GeneratedAgentInputNotice, session: string): void => {
+    if (!shown.has(notice.id)) {
+      const toastId = `generated-input:${environment}:${session}:${notice.id}`
+      shown.set(notice.id, toastId)
+      show(notice, toastId)
     }
-    for (const notice of notices) {
-      if (!shown.has(notice.id)) {
-        const toastId = `generated-input:${environment}:${session}:${notice.id}`
-        shown.set(notice.id, toastId)
-        show(notice, toastId)
-      }
+  }
+  const remove = (id: string): void => {
+    const toastId = shown.get(id)
+    if (toastId !== undefined) {
+      shown.delete(id)
+      toast.dismiss(toastId)
     }
+  }
+  return {
+    // A (re)subscription's complete view: one pass over what is shown and what is wanted.
+    onSnapshot: (notices: GeneratedAgentInputNotice[], session: string): void => {
+      const wanted = new Map(notices.map((notice) => [notice.id, notice]))
+      for (const [id, toastId] of shown) {
+        if (!wanted.has(id) || !toastId.endsWith(`:${session}:${id}`)) {
+          remove(id)
+        }
+      }
+      for (const notice of notices) {
+        add(notice, session)
+      }
+    },
+    // A live change touches only its own toast.
+    onDelta: (delta: GeneratedInputNoticeDelta, session: string): void =>
+      delta.kind === 'added' ? add(delta.notice, session) : remove(delta.id)
   }
 }
 
@@ -63,7 +81,7 @@ function feedFor(target: RuntimeClientTarget) {
       callRuntimeRpc(target, 'terminal.generatedInputNotices.page', from ?? {}, {
         timeoutMs: 15_000
       }),
-    onChange: projectNotices(target)
+    ...projectNotices(target)
   })
 }
 

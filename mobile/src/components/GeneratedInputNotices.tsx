@@ -58,8 +58,16 @@ export function GeneratedInputNotices({
       // A refused page throws; the feed then keeps what it has rather than deleting anything.
       readPage: async (from) =>
         readNoticePage.interpret(await readNoticePage.request(client, from ?? {})),
-      onChange: (notices, session) => {
+      onSnapshot: (notices, session) => {
         setShown(notices.map((notice) => ({ key: `${session}:${notice.id}`, notice })))
+      },
+      // A live change adds or removes its own banner; the rest keep their identity.
+      onDelta: (delta, session) => {
+        setShown((current) =>
+          delta.kind === 'added'
+            ? [...current, { key: `${session}:${delta.notice.id}`, notice: delta.notice }]
+            : current.filter(({ notice }) => notice.id !== delta.id)
+        )
       }
     })
     const unsubscribe = client.subscribe(

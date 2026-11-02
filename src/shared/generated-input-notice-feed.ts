@@ -5,7 +5,12 @@ import type {
 } from './generated-agent-input-notice'
 import { isTuiAgent } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
-import { GeneratedInputNoticeProjection } from './generated-input-notice-projection'
+import {
+  GeneratedInputNoticeProjection,
+  type GeneratedInputNoticeDelta
+} from './generated-input-notice-projection'
+
+export type { GeneratedInputNoticeDelta }
 
 const frameSchema = z.object({
   id: z.string().min(1),
@@ -55,24 +60,28 @@ export type GeneratedInputNoticeFeed = {
  *  time (each request is the backpressure), applying live changes as they arrive. */
 export function createGeneratedInputNoticeFeed(deps: {
   readPage: (from: { cursor: number; offset: number } | undefined) => Promise<unknown>
-  onChange: (notices: GeneratedAgentInputNotice[], session: string) => void
+  /** The whole complete view, after a (re)subscription's snapshot: reconcile against it. */
+  onSnapshot: (notices: GeneratedAgentInputNotice[], session: string) => void
+  /** One live complete notice added or dismissed: apply it to the consumer's indexed view. */
+  onDelta: (delta: GeneratedInputNoticeDelta, session: string) => void
 }): GeneratedInputNoticeFeed {
   const projection = new GeneratedInputNoticeProjection()
   let stopped = false
-  let published = -1
   let revision = 0
-  // Only a complete snapshot speaks for the host, and only a change in complete notices is news.
+  // Only a complete snapshot speaks for the host; after it, a live change touches only itself.
   const publish = (): void => {
-    if (
-      stopped ||
-      !projection.currentSession ||
-      !projection.isSynced ||
-      projection.version === published
-    ) {
+    const session = projection.currentSession
+    if (stopped || !session || !projection.isSynced) {
       return
     }
-    published = projection.version
-    deps.onChange(projection.complete(), projection.currentSession)
+    const changes = projection.takeChanges()
+    if ('full' in changes) {
+      deps.onSnapshot(changes.full, session)
+      return
+    }
+    for (const delta of changes.deltas) {
+      deps.onDelta(delta, session)
+    }
   }
   const readSnapshot = async (token: number): Promise<void> => {
     let from: { cursor: number; offset: number } | undefined
