@@ -17049,6 +17049,12 @@
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "Couldn't save a pasted image beside the document. It may not load after Orca restarts."
+        },
+        "PluginEditorNeedsDesktopNotice": {
+          "browser": "{{value0}} runs only in an isolated frame, which browser clients cannot give it.",
+          "isolationOff": "{{value0}} runs only in an isolated frame, and isolated plugin frames are turned off.",
+          "heading": "This editor needs the Orca desktop app",
+          "openSource": "Open Source"
         }
       },
       "diff": {
