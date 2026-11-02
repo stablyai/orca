@@ -5,7 +5,7 @@ import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
-import { rehydrateRepairedWorkspaces } from './startup-repaired-workspaces'
+import { hydratedTabsSnapshot, rehydrateRepairedWorkspaces } from './startup-repaired-workspaces'
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
 import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
@@ -204,6 +204,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             )
           })
           restoreStructuredLaunchSurfaces()
+          const hydratedTabs = hydratedTabsSnapshot()
           // Discovery must not wait for terminal or SSH restoration.
           const startupWorktreeRefresh = refreshStartupWorktrees(actions, () => cancelled)
           const repairedWorkspaces = await timeRendererStartupStep(
@@ -213,7 +214,12 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           if (cancelled) {
             return
           }
-          await rehydrateRepairedWorkspaces(repairedWorkspaces, actions, sessionHydrationOptions)
+          await rehydrateRepairedWorkspaces(
+            repairedWorkspaces,
+            hydratedTabs,
+            actions,
+            sessionHydrationOptions
+          )
           // Prune after catalogs hydrate or valid visits disappear; seed missing active-workspace recency (docs/cmd-j-empty-query-ordering.md).
           timeRendererStartupSyncStep('visit-timestamp-prune', () => {
             actions.pruneLastVisitedTimestamps()
