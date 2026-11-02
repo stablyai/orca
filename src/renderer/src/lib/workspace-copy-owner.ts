@@ -80,12 +80,20 @@ function sameEndpoint(a: HostAuthorityEndpoint, b: HostAuthorityEndpoint): boole
     : b.kind === 'environment' && a.environmentId === b.environmentId
 }
 
-type CatalogMemo<R> = WeakMap<object, { inputs: readonly unknown[]; results: Map<string, R> }>
+/** The immutable catalog snapshots results are shared under: a worktree catalog, or one folder id's copies. */
+type CatalogSnapshot =
+  | NonNullable<WorktreeOperationRouteState['worktreesByRepo']>
+  | ReturnType<typeof selectFolderWorkspaceCopies>
+
+type CatalogMemo<R> = WeakMap<
+  CatalogSnapshot,
+  { inputs: readonly unknown[]; results: Map<string, R> }
+>
 
 /** One result per key while the anchor snapshot and inputs stay the same, shared by every reader of that snapshot. */
 function memoOnCatalog<R>(
   cache: CatalogMemo<R>,
-  anchor: object,
+  anchor: CatalogSnapshot,
   inputs: readonly unknown[],
   key: string,
   compute: () => R
