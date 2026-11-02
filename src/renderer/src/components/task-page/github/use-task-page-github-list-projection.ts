@@ -168,40 +168,23 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   })
 
   // Why: load only the clicked page so a high-page jump doesn't exhaust GitHub's Search API rate bucket.
-  const nextModel = model as typeof model & {
-    applyTypeFilter: typeof applyTypeFilter
-    currentPageItems: typeof currentPageItems
-    typeFilteredCurrentPageItems: typeof typeFilteredCurrentPageItems
-    filteredWorkItems: typeof filteredWorkItems
-    softHiddenVisibleCount: typeof softHiddenVisibleCount
-    githubListPending: typeof githubListPending
-    showGitHubTaskSkeletons: typeof showGitHubTaskSkeletons
-    loadedGitHubAuthorLogins: typeof loadedGitHubAuthorLogins
-    primaryGithubFilterSlug: typeof primaryGithubFilterSlug
-    showPRManagementColumns: typeof showPRManagementColumns
-    githubTaskGridClass: typeof githubTaskGridClass
-    ensurePRChecksLoaded: typeof ensurePRChecksLoaded
-    lastLoadedPageIndex: typeof lastLoadedPageIndex
-    lastLoadedPageFull: typeof lastLoadedPageFull
-    fallbackTotalPages: typeof fallbackTotalPages
-    totalPages: typeof totalPages
-  }
-  nextModel.applyTypeFilter = applyTypeFilter
-  nextModel.currentPageItems = currentPageItems
-  nextModel.typeFilteredCurrentPageItems = typeFilteredCurrentPageItems
-  nextModel.filteredWorkItems = filteredWorkItems
-  nextModel.softHiddenVisibleCount = softHiddenVisibleCount
-  nextModel.githubListPending = githubListPending
-  nextModel.showGitHubTaskSkeletons = showGitHubTaskSkeletons
-  nextModel.loadedGitHubAuthorLogins = loadedGitHubAuthorLogins
-  nextModel.primaryGithubFilterSlug = primaryGithubFilterSlug
-  nextModel.showPRManagementColumns = showPRManagementColumns
-  nextModel.githubTaskGridClass = githubTaskGridClass
-  nextModel.ensurePRChecksLoaded = ensurePRChecksLoaded
-  nextModel.lastLoadedPageIndex = lastLoadedPageIndex
-  nextModel.lastLoadedPageFull = lastLoadedPageFull
-  nextModel.fallbackTotalPages = fallbackTotalPages
-  nextModel.totalPages = totalPages
-  return nextModel
+  return Object.assign(model, {
+    applyTypeFilter,
+    currentPageItems,
+    typeFilteredCurrentPageItems,
+    filteredWorkItems,
+    softHiddenVisibleCount,
+    githubListPending,
+    showGitHubTaskSkeletons,
+    loadedGitHubAuthorLogins,
+    primaryGithubFilterSlug,
+    showPRManagementColumns,
+    githubTaskGridClass,
+    ensurePRChecksLoaded,
+    lastLoadedPageIndex,
+    lastLoadedPageFull,
+    fallbackTotalPages,
+    totalPages
+  })
 }
 export type TaskPageGitHubListProjectionModel = ReturnType<typeof useTaskPageGitHubListProjection>
