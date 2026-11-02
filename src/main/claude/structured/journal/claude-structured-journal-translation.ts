@@ -6,7 +6,7 @@ import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import { claudeProviderFrameActivity } from '../../../native-chat/agent-session-wire/provider-frame-activity'
+import { publishClaudeTurnActivity } from '../../claude-turn-activity'
 import {
   claudeProviderFrameKind,
   createClaudeProviderFrameFallback,
@@ -123,17 +123,6 @@ export function createClaudeJournalTranslator(
     streamedThinking.flush()
   }
 
-  const publishActivity = (kind: string, payload: unknown): void => {
-    const turnId = turn.id
-    if (turnId === null) {
-      return
-    }
-    const text = claudeProviderFrameActivity(kind, payload)
-    if (text !== undefined) {
-      deps.sink.setActivity?.(text ? { turnId, text } : null)
-    }
-  }
-
   const handleStream = (message: Record<string, unknown>, observedAt: number): boolean => {
     const delta = streamedBlocks.observe(message, observedAt)
     const thinking = streamedThinking.observe(message, observedAt)
@@ -239,7 +228,8 @@ export function createClaudeJournalTranslator(
             event.message,
             event.startsTurn === true,
             event.observedAt ?? Date.now(),
-            event.requestedAt
+            event.requestedAt,
+            event.clientMessageId
           )
         ) {
           providerFallback.append(
@@ -252,7 +242,7 @@ export function createClaudeJournalTranslator(
           )
         }
         context.observeResponse(event.message, event.observedAt ?? Date.now())
-        publishActivity(kind, event.message)
+        publishClaudeTurnActivity(turn, deps.sink, event)
         // Idle also closes faults without a result; the live cause decides failed reopening.
         if (claudeSessionStateEndsTurn(event.message)) {
           corrections.abandon()
@@ -261,7 +251,7 @@ export function createClaudeJournalTranslator(
         }
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)
-        publishActivity(event.kind, event.payload)
+        publishClaudeTurnActivity(turn, deps.sink, event)
       }
     },
     journalPrompts: prompts,
