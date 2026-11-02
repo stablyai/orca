@@ -9071,7 +9071,9 @@
           "cb330ef7f8": " of {{value0}}",
           "c822571b2e": " matching \"{{value0}}\"",
           "plugin_themes": "Plugins",
-          "from_plugin": "From {{value0}}"
+          "from_plugin": "From {{value0}}",
+          "delete_imported_theme": "Delete {{value0}}",
+          "delete_theme": "Delete theme"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9467,7 +9469,9 @@
           "match_dark_mode": "Match dark mode",
           "match_dark_mode_description": "Share the dark terminal theme and divider color in light mode.",
           "light_preview_description": "Shows the effective light terminal appearance.",
-          "dark_preview_description": "Shows the effective dark terminal appearance."
+          "dark_preview_description": "Shows the effective dark terminal appearance.",
+          "deleted_imported_theme": "Deleted \"{{value0}}\"",
+          "undo": "Undo"
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI magenta color",
