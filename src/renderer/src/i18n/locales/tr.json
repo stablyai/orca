@@ -22309,6 +22309,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: okunabilir yedek yok, bu yüzden boş başlayacak.",
+      "sectionKeptCurrent": "{{section}}: mevcut çalıştırmalarınız korunacak",
       "sectionRestored": "{{section}}: {{time}} kaydedilen yedekten geri yüklendi.",
       "projectsForgotten": "Orca projelerinizi ve çalışma alanı ayrıntılarını unutacak. Diskteki dosyalara dokunulmaz.",
       "newerProjectsRemoved": "Bu yedekten sonra eklenen projeler, çalışma alanı ayrıntılarıyla birlikte Orca'dan kaldırılacak. Diskteki dosyalara dokunulmaz.",
@@ -22351,7 +22352,7 @@
       "noneFound": "(bulunamadı)",
       "sqlitePath": "SQLite yolu: {{path}}",
       "sectionsDamaged": "Bu profilin kayıtlı durumunun bir bölümü hasarlı: {{sections}}. Diğer her şey sağlam.",
-      "repairCommand": "Orca'yı kapatın, ardından yalnızca hasarlı bölümleri yedeklerden değiştirip diğer her şeyi korumak için `{{command}}` komutunu çalıştırın. Orca hasarlı dosyanın bir kopyasını saklar.",
+      "repairCommand": "Orca’yı durdurun, ardından yalnızca hasarlı kısımları onarmak ve diğer her şeyi korumak için `{{command}}` komutunu çalıştırın. Orca hasarlı dosyanın bir kopyasını saklar.",
       "restoreWholeBackup": "Bunun yerine bir yedeği bütünüyle geri yüklemek için önce `{{exportsCommand}}`, ardından `{{rollbackCommand}}` komutunu çalıştırın.",
       "sqliteUnreadable": "SQLite durumu okunamadığı için etkin profil Orca'da güvenli bir şekilde açılamadı.",
       "legacyJsonPath": "Eski JSON yolu: {{path}}",

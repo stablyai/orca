@@ -22876,6 +22876,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: no readable backup, so it will start empty.",
+      "sectionKeptCurrent": "{{section}}: your current runs will be kept",
       "sectionRestored": "{{section}}: restored from the backup saved {{time}}.",
       "projectsForgotten": "Orca will forget your projects and their workspace details. Files on disk are not touched.",
       "newerProjectsRemoved": "Projects added after that backup will be removed from Orca, along with their workspace details. Files on disk are not touched.",
@@ -22918,7 +22919,7 @@
       "noneFound": "(none found)",
       "sqlitePath": "SQLite path: {{path}}",
       "sectionsDamaged": "Part of this profile's saved state is damaged: {{sections}}. Everything else is intact.",
-      "repairCommand": "Stop Orca, then run `{{command}}` to replace only the damaged parts from backups and keep everything else. Orca keeps a copy of the damaged file.",
+      "repairCommand": "Stop Orca, then run `{{command}}` to repair only the damaged parts and keep everything else. Orca keeps a copy of the damaged file.",
       "restoreWholeBackup": "To restore a whole backup instead, run `{{exportsCommand}}`, then `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca cannot safely open the active profile because its SQLite state is unreadable.",
       "legacyJsonPath": "Legacy JSON path: {{path}}",
