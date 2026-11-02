@@ -1,3 +1,6 @@
+import { deriveContextTransferState } from '../native-chat/agent-session-journal/context-transfer-state'
+import { contextTransferDigest } from '../native-chat/agent-session-context-transfer-text'
+import type { ContextTransferRecord } from '../native-chat/agent-session-journal/context-transfer-record'
 import { createPiRpcLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -203,6 +206,61 @@ describe('Pi host launch resolution', () => {
       forkedFromKey: agentSessionProviderHandleKey(h.prior(elsewhere).handle)
     })
     expect(() => piRpcProviderLink(forked, elsewhere, 2, 'bad', 200)).toThrow('did not fork')
+    const targetLink = h.prior(elsewhere)
+    const actualFork = piRpcProviderLink(forked, join(root, 'fork.jsonl'), 2, 'fork', 200)
+    const messages = [
+      {
+        itemId: 'saved-assistant',
+        revision: 0,
+        sequence: 1,
+        sequenceIndex: 0,
+        role: 'assistant' as const,
+        kind: 'message',
+        text: 'The saved answer is 42'
+      }
+    ]
+    const facts: ContextTransferRecord[] = [
+      {
+        kind: 'handoff',
+        id: 'handoff',
+        handoffId: 'handoff',
+        sessionId: identity.sessionId,
+        sourceLink: { ...h.prior(join(root, 'missing-original.jsonl')), linkId: 'original-link' },
+        sourceCursor: null,
+        contextFloor: null,
+        trigger: 'pi-session-missing',
+        capturedAt: 100,
+        capture: {
+          selectionVersion: 1,
+          messages,
+          coverage: {
+            eligibleCount: 1,
+            omittedCount: 0,
+            firstItemId: messages[0].itemId,
+            lastItemId: messages[0].itemId,
+            inventoryDigest: contextTransferDigest(messages)
+          }
+        }
+      },
+      {
+        kind: 'target',
+        id: 'target',
+        handoffId: 'handoff',
+        sessionId: identity.sessionId,
+        preparedAt: 100,
+        fence: 1,
+        acquisitionGeneration: 'prior-generation',
+        sourceLinkId: 'original-link',
+        predecessorTargetId: null,
+        targetLink,
+        firstInputId: null
+      }
+    ]
+    expect(deriveContextTransferState(facts, [targetLink, actualFork])).toMatchObject({
+      kind: 'uncertain',
+      handoff: { id: 'handoff' },
+      target: { id: 'target' }
+    })
   })
 
   it('resumes the stored session file after Orca restarts and reopens the store', async () => {
@@ -235,15 +293,19 @@ describe('Pi host launch resolution', () => {
     expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc', '--session', file])
   })
 
-  it('distinguishes an unsaved creation from an existing session that could not restore', async () => {
+  it('classifies a missing session before fresh construction regardless of creation origin', async () => {
     const h = await setup()
     const missing = join(root, 'missing.jsonl')
     h.withPrior(h.prior(missing))
     const unsaved = await h.resolver(identity)
-    expect(unsaved.replacement).toBe('unsaved')
+    expect(unsaved.replacement).toBe('restore-failed')
+    expect(unsaved.historyUnavailable).toBe(true)
     expect(piRpcProviderLink(unsaved, join(root, 'new.jsonl'), 2, 'new', 200)).toMatchObject({
       origin: 'created',
-      supersedesKey: agentSessionProviderHandleKey(h.prior(missing).handle)
+      replaces: {
+        key: agentSessionProviderHandleKey(h.prior(missing).handle),
+        reason: 'restore-failed'
+      }
     })
     h.withPrior(h.prior(missing, 'resumed'))
     const lost = await h.resolver(identity)

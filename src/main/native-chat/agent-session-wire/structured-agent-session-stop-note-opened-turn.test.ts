@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -46,9 +47,10 @@ async function stopWhileTheTurnOpens(
     agents: NO_STRUCTURED_AGENTS,
     agent: 'codex',
     adapter: {
-      open: async () => ({
-        reportedOptions: { model: '' }
-      }),
+      open: async () =>
+        readyConstruction({
+          reportedOptions: { model: '' }
+        }),
       acquire: vi.fn(),
       dispatch: vi.fn(),
       closeSession: vi.fn(),

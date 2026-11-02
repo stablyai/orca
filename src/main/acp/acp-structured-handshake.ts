@@ -1,17 +1,15 @@
-// An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
-// session or start a new one, then return its protocol facts to the host. A saved session the
-// agent cannot reopen is replaced by a new one, with a warning row that any later start writes if
-// this one never did; while a reopened session replays its history, nothing it sends is written
-// except context usage, and afterwards the turns of it the chat never saw are added once.
+import {
+  readyConstruction,
+  assertRecoveryConstructionPermit,
+  type ConstructionStep,
+  type RecoveryConstructionIntent
+} from '../native-chat/agent-session-wire/structured-agent-session-construction'
+// Native construction reports unavailable history before the host authorizes a replacement.
 
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
-import {
-  ACP_REOPEN_FAILED,
-  acpReopenTakeover,
-  acpSessionNotRestoredRow
-} from './acp-session-reopen-failure'
+import { ACP_REOPEN_FAILED, acpReopenTakeover } from './acp-session-reopen-failure'
 import { catchUpAcpHistory } from './history/acp-history-catch-up'
 import type { AcpLoadHistoryFrame } from './history/acp-history-replay'
 import { ACP_HANDLE_TRANSPORT, acpAgentName } from './acp-structured-agent-definitions'
@@ -30,6 +28,7 @@ import {
 } from './acp-structured-child'
 
 type AcpHandshakeInput = {
+  constructionIntent?: RecoveryConstructionIntent
   acquire: StructuredAgentSessionAcquireInput
   deps: AcpStructuredSessionAdapterDeps
   generation: string
@@ -51,7 +50,7 @@ type AcpHandshakeInput = {
 
 export async function initializeAcpStructuredSession(
   input: AcpHandshakeInput
-): Promise<StructuredAgentSessionProviderOpenResult> {
+): Promise<ConstructionStep<StructuredAgentSessionProviderOpenResult>> {
   const { acquire, deps, launch, connection, options, prompts, child, onSettled } = input
   const { spec } = deps
   const sessionId = acquire.identity.sessionId
@@ -72,6 +71,18 @@ export async function initializeAcpStructuredSession(
   let liveLane: AcpStructuredLane | null = null
   let takeover: ReturnType<typeof acpReopenTakeover> | null = null
   let replayed: AcpLoadHistoryFrame[] | null = null
+  if (input.constructionIntent) {
+    if (!resume?.sourceLink) {
+      throw new Error('ACP recovery has no source')
+    }
+    assertRecoveryConstructionPermit(
+      input.constructionIntent.permit,
+      resume.sourceLink,
+      acquire.fence
+    )
+    takeover = { replaces: { key: resume.key, reason: 'restore-failed', replacedAt: now() } }
+    return readyConstruction(await finishStart())
+  }
   if (resume) {
     const attaching = input.lanes.create(resume.sessionId, true)
     liveLane = attaching
@@ -92,108 +103,119 @@ export async function initializeAcpStructuredSession(
         now: now(),
         warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
       })
+      const sourceLink = resume.sourceLink
+      if (!sourceLink) {
+        throw error
+      }
+      return {
+        kind: 'history-unavailable',
+        sourceLink,
+        trigger: 'acp-load-rejected',
+        createFresh: async (permit, signal) => {
+          assertRecoveryConstructionPermit(permit, sourceLink, acquire.fence)
+          signal.throwIfAborted()
+          assertStarting()
+          return finishStart()
+        }
+      }
     }
   }
-  if (!started || !liveLane) {
-    liveLane?.dispose()
-    input.lanes.clear()
-    started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup })
+  return readyConstruction(await finishStart())
+
+  async function finishStart(): Promise<StructuredAgentSessionProviderOpenResult> {
+    if (!started || !liveLane) {
+      liveLane?.dispose()
+      input.lanes.clear()
+      started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup })
+      assertStarting()
+      liveLane = input.lanes.create(started.sessionId)
+    }
+    // Only a load that reopened the chat's own conversation catches up, and only from what that
+    // conversation replayed; a replacement session has no history of the chat's to add.
+    if (
+      replayed &&
+      spec.historyCatchUp &&
+      !takeover &&
+      started.kind !== 'new' &&
+      started.sessionId === resume?.sessionId &&
+      acquire.events
+    ) {
+      await catchUpAcpHistory({
+        frames: replayed,
+        identity: spec.historyCatchUp,
+        sink: acquire.events,
+        sessionId,
+        agent: spec.agent,
+        providerSessionId: started.sessionId,
+        dialect: spec.dialect,
+        assertCurrent: assertStarting,
+        ...(deps.logger ? { logger: deps.logger } : {})
+      })
+      assertStarting()
+    }
+    const childStops = await probeAcpChildStops(connection, spec.dialect)
     assertStarting()
-    liveLane = input.lanes.create(started.sessionId)
-  }
-  // Only a load that reopened the chat's own conversation catches up, and only from what that
-  // conversation replayed; a replacement session has no history of the chat's to add.
-  if (
-    replayed &&
-    spec.historyCatchUp &&
-    !takeover &&
-    started.kind !== 'new' &&
-    started.sessionId === resume?.sessionId &&
-    acquire.events
-  ) {
-    await catchUpAcpHistory({
-      frames: replayed,
-      identity: spec.historyCatchUp,
-      sink: acquire.events,
-      sessionId,
-      agent: spec.agent,
-      providerSessionId: started.sessionId,
-      dialect: spec.dialect,
-      assertCurrent: assertStarting,
-      ...(deps.logger ? { logger: deps.logger } : {})
+    options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
+    liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
+    const mode = spec.permissionModeConfig
+    if (mode && acquire.permissionMode !== 'own') {
+      // Fail startup rather than silently use a different permission mode.
+      const requested = mode.values[acquire.permissionMode ?? 'ask'] ?? mode.values.ask
+      const configId = options.modeConfigId()
+      const { configOptions } = await connection.setConfigOption(configId, requested)
+      assertStarting()
+      if (configOptions.find((option) => option.id === configId)?.currentValue !== requested) {
+        throw new Error('Permission mode could not be confirmed')
+      }
+      options.adoptSession(
+        { ...started.response, configOptions },
+        started.kind === 'new' ? 'new' : 'loaded'
+      )
+    }
+    const link: AgentSessionProviderHandleLink = {
+      linkId:
+        deps.mintLinkId?.() ?? `${spec.agent}-${acquire.fence}-${started.sessionId}`.slice(0, 128),
+      handle: { transport: ACP_HANDLE_TRANSPORT, agent: spec.agent, nativeId: started.sessionId },
+      origin: started.kind === 'new' ? 'created' : 'resumed',
+      mintedAtFence: acquire.fence,
+      observedAt: now(),
+      ...takeover
+    }
+    const reading = liveLane
+    const unbind = acquire.events?.bindReadingControl?.({
+      pauseReading: () => connection.pauseReading(),
+      resumeReading: () => {
+        connection.resumeReading()
+        reading.retry()
+      }
     })
-    assertStarting()
-  }
-  const childStops = await probeAcpChildStops(connection, spec.dialect)
-  assertStarting()
-  options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
-  liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
-  const mode = spec.permissionModeConfig
-  if (mode && acquire.permissionMode !== 'own') {
-    // Fail startup rather than silently use a different permission mode.
-    const requested = mode.values[acquire.permissionMode ?? 'ask'] ?? mode.values.ask
-    const configId = options.modeConfigId()
-    const { configOptions } = await connection.setConfigOption(configId, requested)
-    assertStarting()
-    if (configOptions.find((option) => option.id === configId)?.currentValue !== requested) {
-      throw new Error('Permission mode could not be confirmed')
+    if (unbind) {
+      child.unbindReadingControl = unbind
     }
-    options.adoptSession(
-      { ...started.response, configOptions },
-      started.kind === 'new' ? 'new' : 'loaded'
-    )
-  }
-  const link: AgentSessionProviderHandleLink = {
-    linkId:
-      deps.mintLinkId?.() ?? `${spec.agent}-${acquire.fence}-${started.sessionId}`.slice(0, 128),
-    handle: { transport: ACP_HANDLE_TRANSPORT, agent: spec.agent, nativeId: started.sessionId },
-    origin: started.kind === 'new' ? 'created' : 'resumed',
-    mintedAtFence: acquire.fence,
-    observedAt: now(),
-    ...takeover
-  }
-  const reading = liveLane
-  const unbind = acquire.events?.bindReadingControl?.({
-    pauseReading: () => connection.pauseReading(),
-    resumeReading: () => {
-      connection.resumeReading()
-      reading.retry()
+    if (connection.exited || connection.closed) {
+      throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
     }
-  })
-  if (unbind) {
-    child.unbindReadingControl = unbind
-  }
-  if (connection.exited || connection.closed) {
-    throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
-  }
-  // Include warning rows missed by earlier failed starts.
-  const lost = [
-    ...(launch.resume?.unannouncedLosses() ?? []),
-    ...(takeover?.replaces ? [takeover.replaces.key] : [])
-  ]
-  for (const key of lost) {
-    liveLane.apply(acpSessionNotRestoredRow(key, started.sessionId, agentName))
-  }
-  assertStarting()
-  Object.assign(child, {
-    childStops,
-    lane: liveLane,
-    turns: new AcpStructuredTurns({
-      connection,
-      withdrawRequests: () => prompts.withdrawAll(),
+    assertStarting()
+    Object.assign(child, {
+      childStops,
       lane: liveLane,
-      agentName,
-      now,
-      settle: onSettled,
-      sessionLost: input.onSessionLost
+      turns: new AcpStructuredTurns({
+        connection,
+        withdrawRequests: () => prompts.withdrawAll(),
+        lane: liveLane,
+        agentName,
+        now,
+        settle: onSettled,
+        sessionLost: input.onSessionLost
+      })
     })
-  })
-  if (!isAcpReadySession(child)) {
-    throw new Error('ACP session did not open')
-  }
-  return {
-    link,
-    reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
-    catalogListing: options.startListing()
+    if (!isAcpReadySession(child)) {
+      throw new Error('ACP session did not open')
+    }
+    return {
+      link,
+      reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
+      catalogListing: options.startListing()
+    }
   }
 }

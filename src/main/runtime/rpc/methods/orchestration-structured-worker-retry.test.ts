@@ -1,3 +1,5 @@
+import { readyConstruction } from '../../../native-chat/agent-session-wire/structured-agent-session-construction'
+import { readyConstructionValue } from '../../../native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
@@ -24,8 +26,8 @@ beforeEach(async () => {
   rig = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
   const acquire = rig.adapter.acquire.getMockImplementation()!
   rig.adapter.acquire.mockImplementation(async (input) => {
-    const acquired = await acquire(input)
-    return {
+    const acquired = readyConstructionValue(await acquire(input))
+    return readyConstruction({
       ...acquired,
       link: {
         ...acquired.link!,
@@ -33,7 +35,7 @@ beforeEach(async () => {
           ? 'resumed'
           : 'created'
       }
-    }
+    })
   })
   setStructuredAgentSessionHost(rig.host)
   db = new OrchestrationDb(':memory:')

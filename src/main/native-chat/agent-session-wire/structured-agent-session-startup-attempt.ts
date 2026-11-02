@@ -79,6 +79,7 @@ type Tracked = {
   expiry: StructuredAgentSessionStartupSettled | null
   failure?: SubmissionRejectionFact
   retry?: boolean
+  continuation?: true
   readiness: PromiseWithResolvers<'ready' | 'ended'>
 }
 
@@ -121,6 +122,16 @@ export class StructuredAgentSessionStartupAttempts {
     const tracked = this.open.get(sessionId)
     if (tracked?.child && sameProviderChild(tracked.child, child)) {
       Object.assign(tracked, { failure, retry })
+    }
+  }
+
+  continueConstruction(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity
+  ): void {
+    const tracked = this.open.get(sessionId)
+    if (tracked?.child && sameProviderChild(tracked.child, child)) {
+      tracked.continuation = true
     }
   }
 

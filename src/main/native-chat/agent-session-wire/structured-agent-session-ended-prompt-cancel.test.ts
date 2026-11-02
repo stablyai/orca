@@ -49,6 +49,9 @@ async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; i
       { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   const old = await turn('turn-1', ENDED)
+  if (old === null) {
+    throw new Error('Expected the ordinary journal item to be retained')
+  }
   const pending = {
     state: 'pending' as const,
     selectedOptionId: null,
@@ -65,6 +68,9 @@ async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; i
     },
     { fence: ENDED, turnScope: { kind: 'turn', turnItemId: old.itemId } }
   )
+  if (card === null) {
+    throw new Error('Expected the ordinary journal item to be retained')
+  }
   await turn('turn-2', LIVE)
   await journal.queuedMessages.insert({
     messageId: 'queued-1',

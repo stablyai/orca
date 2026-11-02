@@ -1,3 +1,7 @@
+import type {
+  ConstructionStep,
+  RecoveryConstructionIntent
+} from '../native-chat/agent-session-wire/structured-agent-session-construction'
 import type { SubmissionRejectionFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { StructuredAgentSessionSetOptionInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -24,7 +28,13 @@ export type AcpStructuredChild = Pick<
   prompts: AcpStructuredSession['prompts']
   childStops?: AcpStructuredSession['childStops']
   unbindReadingControl?: () => void
-  open: (signal: AbortSignal) => Promise<StructuredAgentSessionProviderOpenResult>
+  open: (
+    signal: AbortSignal,
+    constructionIntent?: RecoveryConstructionIntent
+  ) => Promise<
+    | StructuredAgentSessionProviderOpenResult
+    | ConstructionStep<StructuredAgentSessionProviderOpenResult>
+  >
   closing?: Promise<boolean>
   dispose: () => void
 }

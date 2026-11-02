@@ -1,3 +1,4 @@
+import type { RecoveryConstructionIntent } from '../native-chat/agent-session-wire/structured-agent-session-construction'
 import type { ClaudeAccountRecipe } from '../../shared/agent-session-acquired-account'
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
@@ -54,6 +55,7 @@ export type StructuredAgentLaunchBasis = {
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
   /** The permission mode the host decided this start runs with; absent asks. */
   permissionMode?: AgentChatPermissionChoice
+  constructionIntent?: RecoveryConstructionIntent
   accountRecipe?: ClaudeAccountRecipe
 }
 
@@ -62,6 +64,7 @@ export type StructuredLaunchRequest = {
   /** The reservation's token, which the seal hands the child. */
   spawnToken: string
   permissionMode?: AgentChatPermissionChoice
+  constructionIntent?: RecoveryConstructionIntent
   accountRecipe?: ClaudeAccountRecipe
 }
 
@@ -142,7 +145,8 @@ async function composedPart<L>(
   part: StructuredAgentLaunchPartResolver<L>,
   identity: AgentSessionJournalIdentity,
   permissionMode?: AgentChatPermissionChoice,
-  accountRecipe?: ClaudeAccountRecipe
+  accountRecipe?: ClaudeAccountRecipe,
+  constructionIntent?: RecoveryConstructionIntent
 ): Promise<StructuredAgentLaunchPart<L> & { cwd: string }> {
   const record = admittedRecord(definition, sources.store, identity.sessionId)
   const launchEnv = once(() => sources.resolveAgentLaunchEnv?.(definition.agent) ?? {})
@@ -154,6 +158,7 @@ async function composedPart<L>(
   const refresh = sources.refreshAfterMissingProgram
   const basis: StructuredAgentLaunchBasis = {
     record,
+    ...(constructionIntent ? { constructionIntent } : {}),
     launchDirectory: once(() => resolveAgentSessionLaunchDirectory(sources, record)),
     baseEnvironment: () => environments.base(),
     launchEnv,
@@ -180,14 +185,15 @@ export function composeStructuredLaunch<L>(
   sources: StructuredAgentLaunchSources,
   part: StructuredAgentLaunchPartResolver<L>
 ): StructuredAgentLaunchResolver<L> {
-  return async ({ identity, spawnToken, permissionMode, accountRecipe }) => {
+  return async ({ identity, spawnToken, permissionMode, accountRecipe, constructionIntent }) => {
     const { launch, cwd, env, inheritedEnvToDelete, cliRuntimeCommand } = await composedPart(
       definition,
       sources,
       part,
       identity,
       permissionMode,
-      accountRecipe
+      accountRecipe,
+      constructionIntent
     )
     admittedRecord(definition, sources.store, identity.sessionId)
     const child = sealStructuredSessionChild({

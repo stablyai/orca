@@ -67,6 +67,9 @@ it('keeps full child requests answerable outside the bounded transcript and clea
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }
   )
+  if (approval === null) {
+    throw new Error('Expected the ordinary journal item to be retained')
+  }
   const longChoice = '\\"😀'.repeat(30_000)
   const question = await journal.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'child', ordinal: 2 },
@@ -91,6 +94,9 @@ it('keeps full child requests answerable outside the bounded transcript and clea
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }
   )
+  if (question === null) {
+    throw new Error('Expected the ordinary journal item to be retained')
+  }
   await journal.appendItem(
     parent,
     { kind: 'turn', turnId: 'parent', state: 'completed' },

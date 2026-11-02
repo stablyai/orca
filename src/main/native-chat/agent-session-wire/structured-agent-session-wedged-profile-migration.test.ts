@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 // Real wedged record shapes must become acquirable while retaining conversation and provider history.
@@ -125,9 +126,10 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
-      open: async () => ({
-        reportedOptions: { model: '' }
-      }),
+      open: async () =>
+        readyConstruction({
+          reportedOptions: { model: '' }
+        }),
       acquire,
       releaseAcquisition: vi.fn(async () => false),
       dispatch: vi.fn(),
@@ -155,22 +157,24 @@ function startAgent(): Promise<unknown> {
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wedged-profile-'))
   resetHostTestOperationIds()
-  acquire = vi.fn(async ({ fence }) => ({
-    acquisitionGeneration: globalThis.crypto.randomUUID(),
-    process: {
-      hostId: 'local',
-      pid: 4242,
-      processStartTimeMs: 1_700_000_000_000,
-      spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-new'
-    },
-    link: {
-      linkId: `link-${fence}`,
-      handle: codexProviderHandle(THREAD),
-      origin: 'resumed' as const,
-      mintedAtFence: fence,
-      observedAt: NOW
-    }
-  }))
+  acquire = vi.fn(async ({ fence }) =>
+    readyConstruction({
+      acquisitionGeneration: globalThis.crypto.randomUUID(),
+      process: {
+        hostId: 'local',
+        pid: 4242,
+        processStartTimeMs: 1_700_000_000_000,
+        spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-new'
+      },
+      link: {
+        linkId: `link-${fence}`,
+        handle: codexProviderHandle(THREAD),
+        origin: 'resumed' as const,
+        mintedAtFence: fence,
+        observedAt: NOW
+      }
+    })
+  )
 })
 
 afterEach(async () => {
@@ -671,7 +675,7 @@ describe('already-wedged profiles become usable on load', () => {
     )
     acquire.mockImplementation(async ({ fence }) => {
       order.push('acquire')
-      return {
+      return readyConstruction({
         acquisitionGeneration: globalThis.crypto.randomUUID(),
         process: { hostId: 'local', pid: 4242, processStartTimeMs: 1, spawnToken: 'spawn-new' },
         link: {
@@ -681,7 +685,7 @@ describe('already-wedged profiles become usable on load', () => {
           mintedAtFence: fence,
           observedAt: NOW
         }
-      }
+      })
     })
     openHost({
       scanSpawnTokenProcesses: scan,

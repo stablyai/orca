@@ -81,6 +81,9 @@ describe('readAgentSessionHistory', () => {
       { kind: 'turn', turnId: 'turn-1', state: 'running' },
       options
     )
+    if (turn === null) {
+      throw new Error('Expected the ordinary journal item to be retained')
+    }
     const replies = { ...options, turnScope: { kind: 'turn' as const, turnItemId: turn.itemId } }
     await fixture.journal.appendItem(item(1), body('obsolete reply'), replies)
     await fixture.journal.appendItem(item(2), body('initial reply'), replies)

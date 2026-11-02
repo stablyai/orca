@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -87,9 +88,10 @@ function adapter(): StructuredAgentSessionAdapter {
   return startsWhenPublished(
     {
       acquire,
-      open: async () => ({
-        reportedOptions: { model: '' }
-      }),
+      open: async () =>
+        readyConstruction({
+          reportedOptions: { model: '' }
+        }),
       releaseAcquisition,
       dispatch: async (input) => {
         await input.beforeDispatch?.()
@@ -140,22 +142,24 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wire-host-'))
   resetHostTestOperationIds()
   ordinal = 0
-  acquire = vi.fn(async ({ fence }) => ({
-    acquisitionGeneration: globalThis.crypto.randomUUID(),
-    process: {
-      hostId: 'local',
-      pid: 4242,
-      processStartTimeMs: 1_700_000_000_000,
-      spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
-    },
-    link: {
-      linkId: `link-${fence}`,
-      handle: codexProviderHandle(THREAD),
-      origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
-      mintedAtFence: fence,
-      observedAt: NOW
-    }
-  }))
+  acquire = vi.fn(async ({ fence }) =>
+    readyConstruction({
+      acquisitionGeneration: globalThis.crypto.randomUUID(),
+      process: {
+        hostId: 'local',
+        pid: 4242,
+        processStartTimeMs: 1_700_000_000_000,
+        spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+      },
+      link: {
+        linkId: `link-${fence}`,
+        handle: codexProviderHandle(THREAD),
+        origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
+        mintedAtFence: fence,
+        observedAt: NOW
+      }
+    })
+  )
   releaseAcquisition = vi.fn(async () => true)
   dispatch = vi.fn(async () => accepted())
   cancelTurn = vi.fn(async () => ({ cancelled: true }))

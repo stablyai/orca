@@ -77,6 +77,7 @@ export function registerStructuredAgentSessionStart(
             if (ready === 'ready') {
               return result
             }
+            const continuation = handle.result.continuation
             result = await lock.commit(async () => {
               const session = context.sessions.get(sessionId)
               const ended = session?.lastEndedChild
@@ -94,6 +95,9 @@ export function registerStructuredAgentSessionStart(
                   'The previous agent process could not be verified as stopped.'
                 )
               }
+              if (continuation) {
+                return { ...failedStructuredAgentSessionStart(), retry: true }
+              }
               const failure = structuredAgentSessionStartFailureFact({
                 exit: handle.result.failure ?? ended.failure
               })
@@ -106,6 +110,13 @@ export function registerStructuredAgentSessionStart(
                   (ended.cause === 'exit' && failure.kind === 'providerStartFailed')
               }
             })
+          }
+          if (handle.result.continuation && result.retry) {
+            attemptId = randomUUID()
+            handle = attempts.begin(sessionId, attemptId, registeredAt)
+            register()
+            number--
+            continue
           }
           if (result.ok || result.aborted || result.expired || !result.retry || number === 4) {
             break

@@ -113,7 +113,7 @@ export async function prepareCodexMessageDispatch(
 }
 
 export function turnInputFor(
-  host: CodexTurnHost,
+  host: Pick<CodexTurnHost, 'skillReport'>,
   body: AgentJournalMessageItem
 ): Record<string, unknown>[] {
   const input: Record<string, unknown>[] = []

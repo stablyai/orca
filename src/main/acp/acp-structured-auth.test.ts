@@ -45,9 +45,7 @@ async function signInWith(options: {
         ? {
             resume: {
               sessionId: PROVIDER_SESSION,
-              key: 'acp-key',
-              mayBeUnsaved: () => false,
-              unannouncedLosses: () => []
+              key: 'acp-key'
             }
           }
         : {})

@@ -1,7 +1,9 @@
-import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
+import { normalizeConstruction } from './structured-agent-session-construction'
+import { structuredAgentSessionAdapterCapabilities } from './structured-agent-session-adapter-capabilities'
+
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
+
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
 import type {
@@ -18,6 +20,10 @@ import {
 
 export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessionAdapter {
   private readonly routes = new Map<string, SessionRoute>()
+  private readonly capabilities = structuredAgentSessionAdapterCapabilities(
+    () => this.agents,
+    this.routes
+  )
   private allAdaptersClosed = false
   private closePromise: Promise<void> | null = null
 
@@ -25,14 +31,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     private readonly agents: StructuredAgentRegistry,
     private readonly closeAdapters: () => Promise<void>
   ) {}
+  supportsCreate = this.capabilities.supportsCreate
 
-  supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean => {
-    const adapter = this.agents.registration(agent)?.adapter
-    return adapter ? (adapter.supportsLocation?.(location) ?? false) : false
-  }
-
-  supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
-    this.adapters().some((adapter) => adapter.supportsLocation?.(location) ?? false)
+  supportsLocation = this.capabilities.supportsLocation
 
   /** Closure is permanent; late acquisition must never reopen routing to closed adapters. */
   async acquire(input: Parameters<StructuredAgentSessionAdapter['acquire']>[0]) {
@@ -47,7 +48,22 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return releaseSessionRoute(input, this.routes, () => this.adapters())
   }
 
-  open: StructuredAgentSessionAdapter['open'] = (input) => this.owner(input.sessionId).open(input)
+  open: StructuredAgentSessionAdapter['open'] = (input) =>
+    this.owner(input.sessionId).open(input).then(normalizeConstruction)
+
+  injectHistoricalContext: NonNullable<StructuredAgentSessionAdapter['injectHistoricalContext']> = (
+    input
+  ) =>
+    this.owner(input.sessionId).injectHistoricalContext?.(input) ??
+    Promise.resolve({ kind: 'unsupported' })
+  historicalInputBytes: NonNullable<StructuredAgentSessionAdapter['historicalInputBytes']> = (
+    input
+  ) =>
+    this.owner(input.sessionId).historicalInputBytes?.(input) ??
+    Promise.resolve({
+      bytes: Buffer.byteLength(JSON.stringify(input.body)),
+      limit: 8 * 1024 * 1024
+    })
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
@@ -57,53 +73,25 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     mode: AgentChatPermissionChoice
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
-
-  /** Session support may narrow the owner’s declared rewind, never widen it. */
-  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (
-    sessionId,
-    agent
-  ) => {
-    const owner = this.capabilityOwner(sessionId, agent)
-    if (!owner?.definition.capabilities.rewind) {
-      return { supported: false, reason: 'unsupported' }
-    }
-    return owner.adapter.rewindSupport?.(sessionId) ?? { supported: true }
-  }
+  rewindSupport = this.capabilities.rewindSupport
 
   rewind: NonNullable<StructuredAgentSessionAdapter['rewind']> = (input) =>
     this.owner(input.sessionId).rewind?.(input) ??
     Promise.resolve({ ok: false, reason: 'unsupported' })
+  forkForRewind = this.capabilities.forkForRewind
 
-  forkForRewind: NonNullable<StructuredAgentSessionAdapter['forkForRewind']> = (input) =>
-    this.capabilityOwner(input.record.sessionId, input.record.provider)?.adapter.forkForRewind?.(
-      input
-    ) ?? Promise.resolve({ ok: false, reason: 'unsupported' })
+  nameProviderConversation = this.capabilities.nameProviderConversation
 
-  /** Routed by the record's agent so a chat at rest still reaches its adapter. */
-  nameProviderConversation: NonNullable<StructuredAgentSessionAdapter['nameProviderConversation']> =
-    (input) =>
-      this.capabilityOwner(
-        input.record.sessionId,
-        input.record.provider
-      )?.adapter.nameProviderConversation?.(input)
+  stopProviderNaming = this.capabilities.stopProviderNaming
 
-  stopProviderNaming = (): void => {
-    for (const adapter of this.adapters()) {
-      adapter.stopProviderNaming?.()
-    }
-  }
-
-  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> = (
-    input
-  ) =>
-    this.capabilityOwner(
-      input.record.sessionId,
-      input.record.provider
-    )?.adapter.renameProviderSession?.(input) ?? Promise.resolve()
+  renameProviderSession = this.capabilities.renameProviderSession
 
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
     this.owner(input.sessionId).recoverRewind?.(input) ??
     Promise.resolve({ ok: false, reason: 'unsupported' })
+
+  compactUsesPrompt = (sessionId: string) =>
+    this.owner(sessionId).compactUsesPrompt?.(sessionId) ?? false
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) => {
     const compact = this.owner(input.sessionId).compact
@@ -167,25 +155,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.readCommands?.(sessionId)
-
-  atRestCommands: StructuredAgentSessionAtRestCommands = {
-    read: (record) =>
-      this.agents.registration(record.provider)?.adapter.atRestCommands?.read(record),
-    snapshot: (record) =>
-      this.agents.registration(record.provider)?.adapter.atRestCommands?.snapshot?.(record) ?? {
-        commandsPending: false
-      },
-    settled: async (record, budgetMs, independent) => {
-      const source = this.agents.registration(record.provider)?.adapter.atRestCommands
-      return source?.settled ? source.settled(record, budgetMs, independent) : source?.read(record)
-    },
-    onChange: (listener) => {
-      const stops = this.adapters().flatMap((adapter) =>
-        adapter.atRestCommands ? [adapter.atRestCommands.onChange(listener)] : []
-      )
-      return () => stops.forEach((stop) => stop())
-    }
-  }
+  atRestCommands = this.capabilities.atRestCommands
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     this.owner(input.sessionId).answerPrompt(input)
@@ -316,14 +286,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       throw new Error(`no live structured adapter owns ${sessionId}`)
     }
     return adapter
-  }
-
-  private capabilityOwner(sessionId: string, agent?: string): StructuredAgentRegistration | null {
-    const route = this.routes.get(sessionId)
-    if (route?.state === 'live') {
-      return route.registration
-    }
-    return agent ? this.agents.registration(agent) : null
   }
 
   private liveOwnerOrNull(sessionId: string): StructuredAgentSessionAdapter | null {

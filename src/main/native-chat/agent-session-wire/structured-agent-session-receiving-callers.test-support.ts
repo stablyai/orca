@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import {
   receivingPersistedFixtures,
   receivingRuntimeStore
@@ -73,7 +74,7 @@ export async function createReceivingCallerFixture(options: { reportsRecipe?: bo
     if (input.events) {
       sinks.set(input.identity.sessionId, input.events)
     }
-    return {
+    return readyConstruction({
       acquisitionGeneration: `caller-generation-${++generation}`,
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: recipe.home },
       ...(options.reportsRecipe === false ? {} : { accountRecipe: recipe }),
@@ -92,7 +93,7 @@ export async function createReceivingCallerFixture(options: { reportsRecipe?: bo
         mintedAtFence: input.fence,
         observedAt: rig.clock.now
       }
-    }
+    })
   })
   rig.adapter.dispatch.mockImplementation(async (input) => ({
     state: 'accepted',

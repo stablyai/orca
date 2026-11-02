@@ -78,6 +78,9 @@ async function publicationRig(history: number, sends: number, ending: Ending) {
     },
     options
   )
+  if (turn === null) {
+    throw new Error('Expected the ordinary journal item to be retained')
+  }
   if (ending !== 'no-cut') {
     await journal.appendItem(
       {
@@ -110,6 +113,9 @@ async function publicationRig(history: number, sends: number, ending: Ending) {
       { ...hostTestMessage('/context'), command: { name: 'context' } },
       options
     )
+    if (command === null) {
+      throw new Error('Expected the ordinary journal item to be retained')
+    }
     await journal.appendItem(
       identity('command-turn'),
       {

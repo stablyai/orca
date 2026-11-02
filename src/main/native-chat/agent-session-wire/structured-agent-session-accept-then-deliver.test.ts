@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
@@ -73,19 +74,20 @@ let adapterExtras: Partial<StructuredAgentSessionAdapter>
 let idleMs: number
 let clock: number
 
-const spawnChild: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spawnToken }) => ({
-  process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-  acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
-  link: {
-    linkId: `link-${fence}`,
-    handle: codexProviderHandle(THREAD),
-    origin: store.getRecord(SESSION)?.providerHandleChain.length
-      ? ('resumed' as const)
-      : ('created' as const),
-    mintedAtFence: fence,
-    observedAt: NOW
-  }
-})
+const spawnChild: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spawnToken }) =>
+  readyConstruction({
+    process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+    acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
+    link: {
+      linkId: `link-${fence}`,
+      handle: codexProviderHandle(THREAD),
+      origin: store.getRecord(SESSION)?.providerHandleChain.length
+        ? ('resumed' as const)
+        : ('created' as const),
+      mintedAtFence: fence,
+      observedAt: NOW
+    }
+  })
 
 const starts = structuredAgentSessionHeldStarts(() => host)
 
@@ -107,9 +109,10 @@ async function startHost(): Promise<void> {
       ...adapterExtras,
       open:
         adapterExtras.open ??
-        (async () => ({
-          reportedOptions: { model: '' }
-        }))
+        (async () =>
+          readyConstruction({
+            reportedOptions: { model: '' }
+          }))
     }),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',

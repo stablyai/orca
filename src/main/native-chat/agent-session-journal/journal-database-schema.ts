@@ -1,7 +1,7 @@
 // Keep legacy repair/import/set-aside tables for older clients using the same schema version.
 
 /** Database version is independent of row versions; newer databases must remain read-only. */
-export const JOURNAL_DB_SCHEMA_VERSION = 4
+export const JOURNAL_DB_SCHEMA_VERSION = 5
 
 // Versions 1–2 existed only in unreleased builds.
 export const JOURNAL_DB_OLDEST_RELEASED_VERSION = 3

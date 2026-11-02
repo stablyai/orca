@@ -1,3 +1,4 @@
+import type { CodexAcquisitionAttempt } from './codex-structured-session-state'
 import type { CodexAppServerServerRequest } from './app-server/codex-app-server-connection-types'
 import { disposeCodexServerRequest } from './codex-server-request-disposition'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
@@ -131,4 +132,23 @@ export function deliverCodexUnhandledFrame(
     )
   }
   return admission
+}
+
+/** Buffers pre-publication events and drops events from superseded children. */
+export function deliverCodexAcquisitionEvent(
+  sessions: ReadonlyMap<string, CodexSession>,
+  acquisition: CodexAcquisitionAttempt['window'],
+  sessionId: string,
+  event: () => unknown,
+  retainedBytes?: number
+): void {
+  if (acquisition.buffer(event, retainedBytes)) {
+    return
+  }
+  if (sessions.get(sessionId)?.connection === acquisition.connection) {
+    event()
+  } else if (acquisition.isOverflowed) {
+    // Overflow fails acquisition; close the child so callers can retry.
+    void acquisition.connection?.close()
+  }
 }

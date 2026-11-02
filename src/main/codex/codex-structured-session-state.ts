@@ -1,3 +1,4 @@
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { CodexRenameInvocationDeps } from './codex-provider-session-rename'
 import type { CodexAppliedSettings } from './codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
@@ -47,7 +48,7 @@ export type CodexStructuredLaunch = {
   codexHome: string | null
   resumeThreadId: string | null
   /** Replace an unsaved thread created by this session; never supersede a proven resume. */
-  supersedeIfUnsaved?: boolean
+  sourceLink?: AgentSessionProviderHandleLink
   permissionPolicy?: CodexStructuredPermissionPolicy
   /** Open on the chosen model to avoid a first-turn switch. */
   model?: string

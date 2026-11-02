@@ -26,7 +26,7 @@ import type { ContentBlock } from './generated/acp-protocol.generated'
 
 const ACP_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
 // Reserve space for the JSON-RPC envelope around the prompt blocks.
-const ACP_PROMPT_LINE_BUDGET = resolveAcpPeerOptions().maxLineBytes - 64 * 1024
+export const ACP_PROMPT_LINE_BUDGET = resolveAcpPeerOptions().maxLineBytes - 64 * 1024
 // Budget raw images for base64's 4:3 expansion and leave room for text.
 export const ACP_PROMPT_IMAGE_MAX_BYTES = Math.floor((ACP_PROMPT_LINE_BUDGET * 3) / 4) - 1024 * 1024
 const MAX_IMAGE_COUNT = 20

@@ -1,31 +1,20 @@
-import { randomUUID } from 'node:crypto'
 import { withProviderDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
-  AgentSessionAcquisitionExitProvenError,
-  AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionRefusal,
-  AgentSessionPreSpawnError,
-  isAgentSessionPreSpawnError,
-  type AgentSessionAcquisition,
   type AgentSessionDispatchOutcome as DispatchOutcome,
   type StructuredAgentSessionAcquireInput,
   type StructuredAgentSessionAdapter as SessionAdapter,
   type StructuredAgentSessionSetOptionInput as SetOptionInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { acquireAcpStructuredSession } from './acp-structured-acquire'
 import { rejectedAcpDispatch, type AcpStructuredSession } from './acp-structured-session'
-import type { ProviderStartAttempt } from '../provider-process/provider-acquisition-starts'
-import { waitForAcpExit, type AcpStructuredConnection } from './acp-structured-connection'
-import { AcpConnectionClosedError } from './acp-errors'
-import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { awaitAcpTurnEnd, interruptAcpTurn } from './acp-structured-stop'
-import { acpDispatchPrompt } from './acp-prompt-content'
+import { acpSessionAcceptsImages } from './acp-structured-options'
+import { acpDispatchPrompt, acpPromptBlocks, ACP_PROMPT_LINE_BUDGET } from './acp-prompt-content'
 import {
   ACP_OPTION_WRITE_TIMEOUT_MS,
   ACP_STOP_GRACE_MS,
@@ -63,93 +52,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return supportsAcpStructuredLocation(spec, location, isWindowsProcessStartTimeAvailable)
   }
 
-  async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
-    const sessionId = input.identity.sessionId
-    const gate = this.deps.spec.launchGate?.enter(input.signal)
-    const attempt = this.children.starts.begin(gate?.signal ?? input.signal)
-    try {
-      if (!(await this.children.stop(sessionId))) {
-        throw new AgentSessionAcquisitionExitUnprovenError(
-          new Error(
-            `the previous ${this.deps.spec.agent} child for ${sessionId} could not be stopped`
-          )
-        )
-      }
-      return await this.start({ ...input, signal: attempt.signal }, attempt)
-    } finally {
-      this.children.starts.end(attempt)
-      gate?.leave()
-    }
-  }
-
-  private async start(
-    input: StructuredAgentSessionAcquireInput,
-    attempt: ProviderStartAttempt<AcpStructuredConnection>
-  ): Promise<AgentSessionAcquisition> {
-    const sessionId = input.identity.sessionId
-    const generation = this.deps.mintGeneration?.() ?? randomUUID()
-    try {
-      const { acquisition, session } = await acquireAcpStructuredSession({
-        acquire: input,
-        deps: this.deps,
-        generation,
-        abandoned: () => attempt.signal.aborted,
-        track: (connection) => {
-          this.children.starts.track(attempt, connection)
-          this.deps.spec.launchGate?.retain(connection)
-        },
-        onExit: (session) => {
-          if (session && this.children.sessions.get(sessionId) === session) {
-            this.children.finish(session, this.now())
-          }
-        },
-        onConnectionLost: (session, error) => this.children.connectionLost(session, error),
-        onSettled: (settlement) => this.deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
-        forceClose: (id) => this.children.stopAfterFailure(id)
-      })
-      if (attempt.signal.aborted) {
-        session.dispose()
-        throw new Error('closed while starting')
-      }
-      this.children.sessions.set(sessionId, session)
-      return acquisition
-    } catch (error) {
-      const { connection } = attempt
-      if (connection && error instanceof AcpConnectionClosedError) {
-        // Wait briefly for process exit so startup failures include final diagnostics.
-        await waitForAcpExit(connection, this.stopGraceMs(), attempt.signal)
-      }
-      // Capture spontaneous exit before close can classify it as requested.
-      const exitedOnItsOwn = connection?.exited === true && !attempt.signal.aborted
-      if (connection && !(await connection.close().catch(() => false))) {
-        // Retain failed cleanup for retry before another child can spawn.
-        this.children.starts.retainFailed(sessionId, connection)
-        throw new AgentSessionAcquisitionExitUnprovenError(error)
-      }
-      if (connection?.lastCloseResult?.killDelivered && !connection.exited) {
-        throw new AgentSessionAcquisitionRootExitObservedError(error, 'kill-delivered')
-      }
-      if (attempt.signal.aborted) {
-        const closed = new Error(
-          `${acpAgentName(this.deps.spec.agent)} was closed while starting`,
-          { cause: error }
-        )
-        throw connection ? closed : new AgentSessionPreSpawnError(closed)
-      }
-      // Once the exit is proven, the start's error names a CLI or folder the spawn found missing.
-      if (error instanceof Error && connection?.exited) {
-        withProviderSpawnAbsence(error, connection.spawnAbsence)
-      }
-      if (connection && exitedOnItsOwn && !isAgentSessionPreSpawnError(error)) {
-        throw new AgentSessionAcquisitionExitProvenError(
-          withObservedProviderExit(
-            new Error(connection.stderrTail() || String(error), { cause: error })
-          )
-        )
-      }
-      throw error
-    }
-  }
+  acquire = (input: StructuredAgentSessionAcquireInput) =>
+    acquireAcpStructuredSession(input, this.deps, this.children)
 
   open: NonNullable<SessionAdapter['open']> = async (input) => {
     const child = this.children.sessions.get(input.sessionId)
@@ -162,7 +66,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       throw new Error('ACP child changed before it opened')
     }
     try {
-      return await child.open(input.signal)
+      return await child.open(input.signal, input.constructionIntent)
     } catch (error) {
       const failure = childState.acpStartupFailure(child, error)
       if (failure) {
@@ -217,8 +121,27 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return { state: 'admitted' }
   }
 
+  compactUsesPrompt = () => true
+
+  historicalInputBytes: NonNullable<SessionAdapter['historicalInputBytes']> = async (input) => ({
+    bytes: Buffer.byteLength(
+      JSON.stringify(
+        await acpPromptBlocks(input.body, await acpSessionAcceptsImages(this.live(input.sessionId)))
+      )
+    ),
+    limit: ACP_PROMPT_LINE_BUDGET
+  })
+
   compact: NonNullable<SessionAdapter['compact']> = async (input) =>
-    this.live(input.sessionId).turns.compact(input.command)
+    this.live(input.sessionId).turns.compact(
+      input.command,
+      input.body
+        ? await acpPromptBlocks(
+            input.body,
+            await acpSessionAcceptsImages(this.live(input.sessionId))
+          )
+        : undefined
+    )
 
   cancelTurn: SessionAdapter['cancelTurn'] = async (input) => {
     const session = this.live(input.sessionId)

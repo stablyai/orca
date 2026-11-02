@@ -3,6 +3,8 @@ import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandlesEqual,
   appendAgentSessionProviderHandleLink,
+  decodePersistedAgentSessionProviderHandleChain,
+  encodePersistedAgentSessionProviderHandleChain,
   findAgentSessionProviderHandleLink,
   isAgentSessionHandleProvider,
   isAgentSessionProviderHandleChain,
@@ -655,25 +657,45 @@ describe('replacing a conversation the provider could not restore', () => {
     ).toThrow('agent_session_provider_handle_invalid')
   })
 
-  it('is refused in a Claude or Codex chain, whose rows older builds read', () => {
-    for (const [first, lost, next] of [
-      [CLAUDE, CLAUDE, claudeProviderHandle('sess-2', null)],
-      [codexProviderHandle('t-1'), codexProviderHandle('t-1'), codexProviderHandle('t-2')]
-    ] as const) {
-      expect(() =>
-        appendAgentSessionProviderHandleLink(
-          [link({ handle: first })],
-          fresh({
-            handle: next,
-            replaces: {
-              key: agentSessionProviderHandleKey(lost),
-              reason: 'restore-failed',
-              replacedAt: 3_000
-            }
-          })
-        )
-      ).toThrow('agent_session_provider_handle_invalid')
-    }
+  it('preserves and reads the original Codex source beside its replacement', () => {
+    const original = link({ handle: codexProviderHandle('t-1') })
+    const replacement = fresh({
+      handle: codexProviderHandle('t-2'),
+      replaces: {
+        key: agentSessionProviderHandleKey(original.handle),
+        reason: 'restore-failed',
+        replacedAt: 3_000
+      }
+    })
+    const chain = appendAgentSessionProviderHandleLink([original], replacement)
+    expect(chain).toEqual([original, replacement])
+    expect(
+      decodePersistedAgentSessionProviderHandleChain(
+        encodePersistedAgentSessionProviderHandleChain(chain)
+      )
+    ).toEqual(chain)
+    expect(() =>
+      appendAgentSessionProviderHandleLink([original], {
+        ...replacement,
+        replaces: { ...replacement.replaces!, key: agentSessionProviderHandleKey(CLAUDE) }
+      })
+    ).toThrow('agent_session_provider_handle_invalid')
+  })
+
+  it('still refuses replacement in a Claude chain', () => {
+    expect(() =>
+      appendAgentSessionProviderHandleLink(
+        [link({ handle: CLAUDE })],
+        fresh({
+          handle: claudeProviderHandle('sess-2', null),
+          replaces: {
+            key: agentSessionProviderHandleKey(CLAUDE),
+            reason: 'restore-failed',
+            replacedAt: 3_000
+          }
+        })
+      )
+    ).toThrow('agent_session_provider_handle_invalid')
   })
 
   it('still supersedes only a creation the provider never saved', () => {

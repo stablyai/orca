@@ -1,3 +1,4 @@
+import { assertRecoveryConstructionPermit } from '../native-chat/agent-session-wire/structured-agent-session-construction'
 import { open, realpath } from 'node:fs/promises'
 import { isAbsolute, normalize } from 'node:path'
 import { z } from 'zod'
@@ -35,7 +36,8 @@ import {
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
-  replacement?: 'unsaved' | 'restore-failed'
+  replacement?: 'restore-failed'
+  historyUnavailable?: true
   /** Conversation files, newest first; empty for a new conversation. */
   lineage?: readonly string[]
 }
@@ -177,19 +179,25 @@ export function piRpcLaunchPart(
         throw new Error('Pi resume handle is not a host session file')
       }
       const source = previous.handle.nativeId
-      const header = await readPiSessionHeader(source)
+      if (basis.constructionIntent) {
+        assertRecoveryConstructionPermit(
+          basis.constructionIntent.permit,
+          previous,
+          record.lease.runtimeFence
+        )
+      }
+      const header = basis.constructionIntent ? null : await readPiSessionHeader(source)
       if (
+        header !== null &&
         previous.origin === 'adopted' &&
-        (!header ||
-          header.id !== sessionIdFromFileName(source) ||
-          !(await samePiDirectory(header.cwd, cwd)))
+        (header.id !== sessionIdFromFileName(source) || !(await samePiDirectory(header.cwd, cwd)))
       ) {
         throw agentSessionRefusalError('agent_session_identity_required', {
           reason: 'transcriptNotFound'
         })
       }
       if (header === null) {
-        replacement = previous.origin === 'created' ? 'unsaved' : 'restore-failed'
+        replacement = 'restore-failed'
       } else if (await samePiDirectory(header.cwd, cwd)) {
         sessionFile = source
       } else {
@@ -215,7 +223,7 @@ export function piRpcLaunchPart(
           : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
-        ...(replacement ? { replacement } : {})
+        ...(replacement ? { replacement, historyUnavailable: true as const } : {})
       },
       env: withoutPiCallerEnv(env),
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
@@ -263,9 +271,6 @@ export function piRpcProviderLink(
     mintedAtFence: fence,
     observedAt: at,
     ...(launch.forkFile && key ? { forkedFromKey: key } : {}),
-    ...(launch.replacement === 'unsaved' && key
-      ? { supersedesKey: key, ...(previous?.replaces ? { replaces: previous.replaces } : {}) }
-      : {}),
     ...(launch.replacement === 'restore-failed' && key
       ? { replaces: { key, reason: 'restore-failed', replacedAt: at } }
       : {})

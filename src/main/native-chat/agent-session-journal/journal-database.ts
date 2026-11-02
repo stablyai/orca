@@ -1,3 +1,5 @@
+import { finishContextTransferTransaction } from './journal-context-transfer'
+import { CONTEXT_TRANSFER_TABLE_SQL } from './context-transfer-repository'
 // Read user_version before persistent pragmas/DDL: even enabling WAL mutates newer databases.
 
 import { ensureJournalOutcomeTables } from './journal-outcome-format'
@@ -111,6 +113,7 @@ function migrateJournalSchema(db: Database.Database, stored: number): void {
       db.exec(createJournalTablesSql())
     }
     db.exec(createAgentSessionRecordTablesSql())
+    db.exec(CONTEXT_TRANSFER_TABLE_SQL)
     db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION}`)
   })
 }
@@ -143,5 +146,7 @@ export function runJournalTransaction<T>(
       }
     }
     throw error
+  } finally {
+    finishContextTransferTransaction(db)
   }
 }

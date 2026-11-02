@@ -51,8 +51,7 @@ async function compact(spec: AcpLaunchSpec, frames?: AcpFixtureFrame[]) {
   }
   const command = await commandRun(rig)
   expect(await rig.adapter.compact({ sessionId: SESSION, fence: 1, command })).toEqual({
-    state: 'accepted',
-    providerIdentity: null
+    state: 'admitted'
   })
   return { rig, command, prompt: await rig.frame('session/prompt') }
 }

@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import {
   expectLargeRetainedPrefixRewind,
   expectSupersededRewindReplay,
@@ -68,13 +69,14 @@ beforeEach(async () => {
     {
       supportsCreate: (_location, agent) => agent === 'codex',
       supportsLocation: () => true,
-      open: async () => ({
-        reportedOptions: { model: '' }
-      }),
+      open: async () =>
+        readyConstruction({
+          reportedOptions: { model: '' }
+        }),
       acquire: async (input) => {
         acquires.push(input)
         sink = input.events!
-        return {
+        return readyConstruction({
           process: {
             hostId: 'local',
             pid: 4000 + acquires.length,
@@ -89,7 +91,7 @@ beforeEach(async () => {
             origin: acquires.length === 1 ? 'created' : 'resumed',
             handle: codexProviderHandle(HOST_TEST_THREAD)
           }
-        }
+        })
       },
       dispatch: vi.fn(async (): Promise<AgentSessionDispatchOutcome> => ({
         state: 'unknown',
@@ -126,8 +128,12 @@ afterEach(async () => {
 /** Await startup reconciliation; unresolved rewind fails startup in its own stop step. */
 async function attachAndStart(fence: number | null) {
   const attached = await host.attach(caller, hostTestAttachParams(fence))
-  const { serialize } = host.collaboratorsForTests()
-  await serialize(HOST_TEST_SESSION, async () => {})
+  const { serialize, sessions, runtimeState } = host.collaboratorsForTests()
+  const readiness = await serialize(HOST_TEST_SESSION, async () => {
+    const child = sessions.get(HOST_TEST_SESSION)?.child
+    return child ? runtimeState.startupAttempts.readiness(HOST_TEST_SESSION, child) : null
+  })
+  await readiness?.wait()
   await serialize(HOST_TEST_SESSION, async () => {})
   return attached
 }

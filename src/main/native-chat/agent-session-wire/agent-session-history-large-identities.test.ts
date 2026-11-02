@@ -152,6 +152,9 @@ describe('identity bounding at admission', () => {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
+    if (appended === null) {
+      throw new Error('Expected the ordinary journal item to be retained')
+    }
     expect(appended.itemId.length).toBeLessThan(2048)
     expect(appended.itemId).toContain('~orca-oversized~')
 

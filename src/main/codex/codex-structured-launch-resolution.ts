@@ -126,8 +126,7 @@ export function codexStructuredLaunchPart(
         args: [...prefixArgs, ...args, 'app-server'],
         codexHome: accountHome.path,
         resumeThreadId,
-        // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
-        ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
+        ...(head ? { sourceLink: head } : {}),
         // Own settings leaves a new thread to config and a resumed thread to its saved policy.
         ...(basis.permissionMode === 'own'
           ? {}

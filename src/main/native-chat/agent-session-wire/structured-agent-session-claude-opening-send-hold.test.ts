@@ -584,8 +584,17 @@ it.each([10, 100])(
       )
     }
     const stale = await turn('imported-root')
+    if (stale === null) {
+      throw new Error('Expected the ordinary journal item to be retained')
+    }
     const foreign = await turn('foreign-root', fence - 1)
+    if (foreign === null) {
+      throw new Error('Expected the ordinary journal item to be retained')
+    }
     const subagent = await turn('child-root', fence, 'child')
+    if (subagent === null) {
+      throw new Error('Expected the ordinary journal item to be retained')
+    }
     let visits = 0
     let scanning = false
     const settle = unheld.settleUnheldStructuredAgentSessionTurns

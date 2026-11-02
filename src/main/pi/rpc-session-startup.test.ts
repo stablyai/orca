@@ -1,3 +1,4 @@
+import { readyConstructionValue } from '../native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closePiRpcAdapterFixtures,
@@ -10,12 +11,14 @@ import {
 } from './rpc-session-adapter.test-fixture'
 
 function openAt8(h: Awaited<ReturnType<typeof setup>>, acquisitionGeneration: string) {
-  return h.adapter.open({
-    sessionId,
-    fence: 8,
-    acquisitionGeneration,
-    signal: new AbortController().signal
-  })
+  return h.adapter
+    .open({
+      sessionId,
+      fence: 8,
+      acquisitionGeneration,
+      signal: new AbortController().signal
+    })
+    .then(readyConstructionValue)
 }
 
 afterEach(closePiRpcAdapterFixtures)

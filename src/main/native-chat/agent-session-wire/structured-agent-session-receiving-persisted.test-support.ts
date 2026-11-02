@@ -1,3 +1,4 @@
+import { normalizeConstruction } from './structured-agent-session-construction'
 import { join } from 'node:path'
 import { Store } from '../../persistence/loading-store/store'
 import { ProfileStateSqliteAuthority } from '../../persistence/profile-state/profile-state-sqlite-authority'
@@ -48,17 +49,23 @@ export function receivingPersistedFixtures({
         }
       })
       const record = rig.store.requireWritableRecord(PARENT)
-      const acquired = await rig.adapter.acquire({
-        identity: {
-          sessionId: PARENT,
-          workspaceId: input.location.workspaceId,
-          hostId: 'local',
-          agent: 'claude',
-          providerHandle: null
-        },
-        fence: record.lease.runtimeFence,
-        spawnToken: 'pre-journal-spawn'
-      })
+      const construction = await rig.adapter
+        .acquire({
+          identity: {
+            sessionId: PARENT,
+            workspaceId: input.location.workspaceId,
+            hostId: 'local',
+            agent: 'claude',
+            providerHandle: null
+          },
+          fence: record.lease.runtimeFence,
+          spawnToken: 'pre-journal-spawn'
+        })
+        .then(normalizeConstruction)
+      if (construction.kind !== 'ready') {
+        throw new Error('Expected ready persisted fixture')
+      }
+      const acquired = construction.value
       await rig.store.commitProcessIdentity({
         sessionId: PARENT,
         fence: record.lease.runtimeFence,

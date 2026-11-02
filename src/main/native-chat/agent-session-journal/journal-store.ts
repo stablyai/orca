@@ -1,3 +1,5 @@
+import { createJournalContextTransfer } from './journal-context-transfer'
+import { ContextTransferRepository } from './context-transfer-repository'
 import { journalInputOrder } from './journal-input-order'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
@@ -5,14 +7,11 @@ import { JournalWriteProjection } from './journal-write-projection'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './journal-commit'
-import { createJournalPublicReader } from './journal-public-read'
+import { createJournalItemReader, createJournalPublicReader } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
-  AgentJournalItemBody,
-  AgentJournalRenderItem,
   AgentJournalSnapshot,
-  AgentJournalSubmission,
-  AgentJournalTurnLifecycle
+  AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentJournalCursor,
@@ -20,12 +19,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
-import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
-import {
-  newestStructuredAgentSessionTurnBySequence,
-  runningStructuredAgentSessionTurnItemBySequence
-} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+
 import { journalWroteBeforeOpen, readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader } from './journal-open'
@@ -42,7 +36,6 @@ import {
 import { journalTombstoneRowBuilder } from './journal-row-builders'
 import type {
   AgentSessionJournalOptions,
-  JournalItemLinkageVisitor,
   JournalLifecycleBatchInput,
   JournalPlannedLifecycleBatchInput,
   JournalTombstoneInput
@@ -57,17 +50,22 @@ import type { JournalOperationReceipt } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
 import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
-import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
 
 type JournalCollaborators = ReturnType<typeof createJournalStoreCollaborators>
 
 export class AgentSessionJournal {
   private readonly goalAttachments: JournalCollaborators['goalAttachments']
+  readonly contextTransfers: ContextTransferRepository
+  readonly recoveryEcho: ReturnType<typeof createJournalContextTransfer>['recoveryEcho']
+  readonly exportRecoveryContext: ReturnType<
+    typeof createJournalContextTransfer
+  >['exportRecoveryContext']
   private readonly identity: AgentSessionJournalIdentity
   private readonly database: JournalHostDatabase
 
   private state: JournalReducerState
   private readonly readPublic = createJournalPublicReader()
+  private readonly itemReader = createJournalItemReader(() => this.state)
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private reopenUnmarked: AgentJournalCursor | null = null
   private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null
@@ -89,6 +87,20 @@ export class AgentSessionJournal {
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
     this.database = options.database
+    this.contextTransfers = new ContextTransferRepository(
+      options.database,
+      options.identity.sessionId
+    )
+    const transfer = createJournalContextTransfer({
+      database: this.database,
+      sessionId: this.identity.sessionId,
+      snapshot: () => this.snapshot(),
+      canonicalItemId: (id) => this.canonicalItemId(id),
+      itemBody: (id) => this.itemBody(id),
+      carries: (id) => this.stoppedHistoryCarried().get(id) ?? []
+    })
+    this.recoveryEcho = transfer.recoveryEcho
+    this.exportRecoveryContext = transfer.exportRecoveryContext
     this.state = createJournalReducerState(options.identity.sessionId, '')
     this.queue = new JournalWriteQueue(options.identity.sessionId)
     this.projection = new JournalWriteProjection({
@@ -163,6 +175,7 @@ export class AgentSessionJournal {
 
   async open(): Promise<void> {
     await this.restore()
+    this.contextTransfers.reopen()
     this.openedThrough = this.cursor()
     journalInputOrder(this.state).markOpeningRecovery()
   }
@@ -195,50 +208,17 @@ export class AgentSessionJournal {
   publicRead = () =>
     this.readPublic(this.state, this.queuedMessages.displayState(), this.queuedMessages.revision())
 
-  /** Visit without allocating/sorting a snapshot. */
-  visitItems = (
-    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
-  ): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body)
-    }
-  }
-
-  itemBody = (itemId: string): AgentJournalItemBody | null =>
-    this.state.items.get(itemId)?.body ?? null
-
-  /** Host-only stopped-history IDs carried by each send. */
-  stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
-    this.state.stoppedHistoryCarried
-
-  item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
-
-  /** Remember publication even after a rewind removes the row. */
-  hasRecordedItem = (itemId: string): boolean =>
-    this.state.items.has(itemId) || this.state.tombstones.has(itemId)
-
-  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body, item)
-    }
-  }
-
-  /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
-  runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
-    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
-
-  newestTurn = (): AgentJournalTurnLifecycle | null =>
-    newestStructuredAgentSessionTurnBySequence(this.state.items.values())
-
-  threadGoalSource = (): JournalThreadGoalSource =>
-    journalThreadGoalSource(this.state.items.values())
-
-  /** Read across the journal, beyond any client's loaded page. */
-  threadGoal = () => this.threadGoalSource().goal
-
-  /** Read across the journal, beyond any client's loaded page. */
-  contextUsage = (): AgentSessionContextUsage =>
-    latestStructuredAgentContextFacts(this.state.items.values())
+  visitItems = this.itemReader.visitItems
+  itemBody = this.itemReader.itemBody
+  stoppedHistoryCarried = this.itemReader.stoppedHistoryCarried
+  item = this.itemReader.item
+  hasRecordedItem = this.itemReader.hasRecordedItem
+  visitItemsWithLinkage = this.itemReader.visitItemsWithLinkage
+  runningTurn = this.itemReader.runningTurn
+  newestTurn = this.itemReader.newestTurn
+  threadGoalSource = this.itemReader.threadGoalSource
+  threadGoal = this.itemReader.threadGoal
+  contextUsage = this.itemReader.contextUsage
 
   /** Includes activity from revisions/tombstones absent from rendered items. */
   lastActivityAt = (): number => this.state.lastActivityAt

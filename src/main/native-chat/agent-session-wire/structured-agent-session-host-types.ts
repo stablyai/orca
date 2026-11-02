@@ -1,3 +1,4 @@
+import type { RecoveryConstructionPermit } from './structured-agent-session-construction'
 import type { AgentSessionRecordReader } from '../../runtime/orchestration/structured-session-lineage'
 import type { NativeResponseEvidence } from '../../runtime/orchestration/structured-parent-account-work'
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
@@ -103,6 +104,9 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   /** Read adapter-held sends at each decision. */
   readonly heldSends?: () => ReadonlySet<string> | undefined
   readonly exitObservation?: DeferredStructuredAgentSessionEventSink['exitObservation']
+  /** Exact idle construction continuation; ordinary Stop still owns its own close. */
+  recoveryPermit?: RecoveryConstructionPermit
+  recoveryContinuation?: true
   close?: StructuredAgentSessionChildClose
 }
 

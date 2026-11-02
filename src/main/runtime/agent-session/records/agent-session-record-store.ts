@@ -294,6 +294,9 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   admittedSendCount = (sessionId: string) => this.transactions.admittedSendCount(sessionId)
 
+  recordReceipt = (apply: (draft: AgentSessionStoreState) => void) =>
+    this.transactions.receipt(apply)
+
   commitOperationReceipt = (receipt: JournalOperationReceipt) =>
     this.transactions.commitReceipt(receipt)
 

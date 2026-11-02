@@ -28,6 +28,13 @@ export class JournalLifecycleBatchAppender {
     private readonly deps: {
       state: () => JournalReducerState
       cursor: () => AgentJournalCursor
+      recoveryMutations?: (
+        mutations: readonly JournalLifecycleMutationInput[],
+        fence: number
+      ) => {
+        mutations: readonly JournalLifecycleMutationInput[]
+        dispatches: ((seq: number, ts: number) => JournalRow)[]
+      }
       enqueueRows: (
         plan: () => readonly ((seq: number, ts: number) => JournalRow)[]
       ) => Promise<JournalRow[]>
@@ -99,6 +106,8 @@ export class JournalLifecycleBatchAppender {
     if (this.wasApplied(input.settlementId)) {
       return []
     }
+    const recovery = this.deps.recoveryMutations?.(stated, input.fence)
+    stated = recovery?.mutations ?? stated
     const { ownerFence } = input
     const mutations =
       ownerFence === undefined
@@ -114,86 +123,89 @@ export class JournalLifecycleBatchAppender {
     const revisions = new Map<string, number>()
     const plannedItems = new Set<string>()
     let namedSettlement = false
-    return partitionJournalLifecycleMutations(input.settlementId, mutations, options).flatMap(
-      (chunk): ((seq: number, ts: number) => JournalRow)[] => {
-        const previouslyPlanned = chunk.mutations.some((mutation) => {
-          const itemId = journalLifecycleMutationItemId(mutation)
-          return plannedItems.has(current.aliases.get(itemId) ?? itemId)
-        })
-        for (const mutation of chunk.mutations) {
-          const itemId = journalLifecycleMutationItemId(mutation)
-          plannedItems.add(current.aliases.get(itemId) ?? itemId)
-        }
-        const [only] = chunk.mutations
-        if (
-          chunk.mutations.length === 1 &&
-          only &&
-          !journalLifecycleMutationFitsOneBatch(chunk.settlementId, only, options)
-        ) {
-          const itemId = journalLifecycleMutationItemId(only)
-          const resolved = current.aliases.get(itemId) ?? itemId
-          if (only.kind === 'tombstone') {
-            const build = journalTombstoneRowBuilder(
-              this.deps.state,
-              itemId,
-              input.fence,
-              revisions
-            )
-            return !previouslyPlanned && current.tombstones.has(resolved)
+    return [
+      ...(recovery?.dispatches ?? []),
+      ...partitionJournalLifecycleMutations(input.settlementId, mutations, options).flatMap(
+        (chunk): ((seq: number, ts: number) => JournalRow)[] => {
+          const previouslyPlanned = chunk.mutations.some((mutation) => {
+            const itemId = journalLifecycleMutationItemId(mutation)
+            return plannedItems.has(current.aliases.get(itemId) ?? itemId)
+          })
+          for (const mutation of chunk.mutations) {
+            const itemId = journalLifecycleMutationItemId(mutation)
+            plannedItems.add(current.aliases.get(itemId) ?? itemId)
+          }
+          const [only] = chunk.mutations
+          if (
+            chunk.mutations.length === 1 &&
+            only &&
+            !journalLifecycleMutationFitsOneBatch(chunk.settlementId, only, options)
+          ) {
+            const itemId = journalLifecycleMutationItemId(only)
+            const resolved = current.aliases.get(itemId) ?? itemId
+            if (only.kind === 'tombstone') {
+              const build = journalTombstoneRowBuilder(
+                this.deps.state,
+                itemId,
+                input.fence,
+                revisions
+              )
+              return !previouslyPlanned && current.tombstones.has(resolved)
+                ? []
+                : [
+                    (seq, ts) => ({
+                      ...build(seq, ts),
+                      ...(input.recovered ? { recovered: true as const } : {})
+                    })
+                  ]
+            }
+            const existing = current.items.get(resolved)
+            // Oversized-only settlements lack batch receipts; terminal item bodies prove completion.
+            return !previouslyPlanned &&
+              existing &&
+              isDeepStrictEqual(existing.body, only.body) &&
+              (!Object.hasOwn(only, 'echoOf') || current.itemEchoes.has(itemId)) &&
+              (only.linkage === undefined ||
+                isDeepStrictEqual(
+                  agentJournalLinkageFields(existing),
+                  agentJournalLinkageFields(only.linkage)
+                ))
               ? []
               : [
-                  (seq, ts) => ({
-                    ...build(seq, ts),
-                    ...(input.recovered ? { recovered: true as const } : {})
-                  })
+                  journalItemRowBuilder(
+                    this.deps.state,
+                    itemId,
+                    only.body,
+                    {
+                      ...only.linkage,
+                      ...journalItemEchoFields(only),
+                      turnScope: only.turnScope,
+                      fence: input.fence,
+                      ownerFence: only.ownerFence,
+                      observedAt: only.observedAt,
+                      recovered: input.recovered
+                    },
+                    revisions
+                  )
                 ]
           }
-          const existing = current.items.get(resolved)
-          // Oversized-only settlements lack batch receipts; terminal item bodies prove completion.
-          return !previouslyPlanned &&
-            existing &&
-            isDeepStrictEqual(existing.body, only.body) &&
-            (!Object.hasOwn(only, 'echoOf') || current.itemEchoes.has(itemId)) &&
-            (only.linkage === undefined ||
-              isDeepStrictEqual(
-                agentJournalLinkageFields(existing),
-                agentJournalLinkageFields(only.linkage)
-              ))
+          // Preserve generation evidence even when replanning yields fewer mutations.
+          const id = namedSettlement ? chunk.settlementId : input.settlementId
+          namedSettlement = true
+          return this.wasApplied(id)
             ? []
             : [
-                journalItemRowBuilder(
+                journalLifecycleBatchRowBuilder(
                   this.deps.state,
-                  itemId,
-                  only.body,
-                  {
-                    ...only.linkage,
-                    ...journalItemEchoFields(only),
-                    turnScope: only.turnScope,
-                    fence: input.fence,
-                    ownerFence: only.ownerFence,
-                    observedAt: only.observedAt,
-                    recovered: input.recovered
-                  },
+                  id,
+                  chunk.mutations,
+                  input,
                   revisions
                 )
               ]
         }
-        // Preserve generation evidence even when replanning yields fewer mutations.
-        const id = namedSettlement ? chunk.settlementId : input.settlementId
-        namedSettlement = true
-        return this.wasApplied(id)
-          ? []
-          : [
-              journalLifecycleBatchRowBuilder(
-                this.deps.state,
-                id,
-                chunk.mutations,
-                input,
-                revisions
-              )
-            ]
-      }
-    )
+      )
+    ]
   }
 
   private assertDistinctItems(mutations: readonly JournalLifecycleMutationInput[]): void {

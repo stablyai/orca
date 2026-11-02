@@ -1,3 +1,8 @@
+import { normalizeConstruction } from './structured-agent-session-construction'
+import {
+  prepareNativeRecovery,
+  recoveryConstructionIntent
+} from './structured-agent-session-recovery'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
@@ -33,21 +38,63 @@ export async function openStructuredAgentSessionProviderChild(
     if (acquisitionGeneration === null) {
       throw new Error('An unopened provider child has no acquisition generation')
     }
-    const result = await waitForPromiseWithSignal(
-      context.deps.adapter.open({
-        sessionId,
-        fence: child.fence,
-        acquisitionGeneration,
-        signal: attempt.signal
-      }),
-      attempt.signal
+    const journal = context.sessions.get(sessionId)?.journal
+    const record = context.deps.store.getRecord(sessionId)
+    if (!journal || !record) {
+      throw new Error('Recovery owner changed while opening')
+    }
+    const acquiredPermit = context.sessions.get(sessionId)?.child?.recoveryPermit
+    const constructionIntent = acquiredPermit
+      ? { kind: 'recovery' as const, permit: acquiredPermit }
+      : await context.serialize(sessionId, async () =>
+          recoveryConstructionIntent({
+            store: context.deps.store,
+            journal,
+            record,
+            now: context.now()
+          })
+        )
+    const construction = normalizeConstruction(
+      await waitForPromiseWithSignal(
+        context.deps.adapter.open({
+          sessionId,
+          fence: child.fence,
+          acquisitionGeneration,
+          ...(constructionIntent ? { constructionIntent } : {}),
+          signal: attempt.signal
+        }),
+        attempt.signal
+      )
     )
+    let recoveryPermit = acquiredPermit ?? constructionIntent?.permit
+    const result =
+      construction.kind === 'ready'
+        ? construction.value
+        : await construction.createFresh(
+            (recoveryPermit = await context.serialize(sessionId, async () =>
+              prepareNativeRecovery({
+                store: context.deps.store,
+                journal,
+                record,
+                source: construction.sourceLink,
+                trigger: construction.trigger,
+                now: context.now()
+              })
+            )),
+            attempt.signal
+          )
     if (attempt.signal.aborted) {
       return
     }
     await settleStructuredAgentSessionProviderStarted(
       context,
-      { ...result, sessionId, fence: child.fence, acquisitionGeneration },
+      {
+        ...result,
+        sessionId,
+        fence: child.fence,
+        acquisitionGeneration,
+        ...(recoveryPermit ? { recoveryPermit } : {})
+      },
       attempt.signal
     )
   } catch (error) {

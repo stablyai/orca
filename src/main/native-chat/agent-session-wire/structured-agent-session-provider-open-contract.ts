@@ -1,3 +1,7 @@
+import type {
+  ConstructionStep,
+  RecoveryConstructionIntent
+} from './structured-agent-session-construction'
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -7,6 +11,7 @@ export type StructuredAgentSessionProviderOpenInput = {
   fence: number
   acquisitionGeneration: string
   signal: AbortSignal
+  constructionIntent?: RecoveryConstructionIntent
 }
 
 export type StructuredAgentSessionProviderOpenResult = {
@@ -19,4 +24,7 @@ export type StructuredAgentSessionProviderOpenResult = {
 
 export type StructuredAgentSessionProviderOpen = (
   input: StructuredAgentSessionProviderOpenInput
-) => Promise<StructuredAgentSessionProviderOpenResult>
+) => Promise<
+  | StructuredAgentSessionProviderOpenResult
+  | ConstructionStep<StructuredAgentSessionProviderOpenResult>
+>

@@ -1,5 +1,10 @@
+import {
+  recordStartedHandle,
+  type OpenedProvider
+} from './structured-agent-session-provider-handle-publication'
+import { continueNativeRecovery } from './structured-agent-session-recovery-lifetime'
 import type { StructuredAgentSessionOptionsReportedEvent } from './structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenResult } from './structured-agent-session-provider-open-contract'
+
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
@@ -43,13 +48,11 @@ export type StructuredAgentSessionProviderStartedContext = {
   flushLifecycle?: (sessionId: string) => Promise<unknown>
   /** Release startup’s delivery barrier and drain all currently handable sends. */
   wakeDelivery: (sessionId: string) => Promise<void>
+  continueStartingChild?: (
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity
+  ) => Promise<void>
   stopStartingChild: (sessionId: string, child: StructuredAgentSessionProviderChildIdentity) => void
-}
-
-type OpenedProvider = StructuredAgentSessionProviderOpenResult & {
-  sessionId: string
-  fence: number
-  acquisitionGeneration: string
 }
 
 export async function settleStructuredAgentSessionProviderStarted(
@@ -81,6 +84,26 @@ export async function settleStructuredAgentSessionProviderStarted(
     }
     if (!(await applyRewindAtStart(context, event.sessionId, session, rewind))) {
       context.stopStartingChild(event.sessionId, child)
+      return null
+    }
+    if (
+      await continueNativeRecovery({
+        store: context.deps.store,
+        journal: session.journal,
+        record: context.deps.store.requireWritableRecord(event.sessionId),
+        child: session.child,
+        busy:
+          !!context.deps.adapter.holdsDispatch?.(event.sessionId) ||
+          !!context.deps.adapter.liveTurnId?.(event.sessionId),
+        now: context.now(),
+        stop: async () => {
+          if (!context.continueStartingChild) {
+            throw new Error('Recovery construction has no lifetime owner')
+          }
+          await context.continueStartingChild(event.sessionId, child)
+        }
+      })
+    ) {
       return null
     }
     if (
@@ -214,36 +237,6 @@ function rewindRecoveryFailed(
     })
   }
   return 'failed'
-}
-
-/** Persist the opened handle before delivery so future starts can resume; false if no handle is proven. */
-async function recordStartedHandle(
-  context: StructuredAgentSessionProviderStartedContext,
-  event: OpenedProvider
-): Promise<boolean> {
-  const { store, logger } = context.deps
-  const { link } = event
-  if (!link) {
-    // Only an already-proven handle permits open without a new link.
-    return store.getRecord(event.sessionId)?.lease.provenHandleLinkId != null
-  }
-  try {
-    const committed = await store.transitionHandoff(event.sessionId, (record) =>
-      recordAgentSessionProviderHandle({ record, fence: event.fence, link, now: context.now() })
-    )
-    // Inherit only a committed new context; a resumed CLI keeps its own later title.
-    if (event.newConversation ?? (link.origin === 'created' || link.origin === 'forked')) {
-      context.deps.nameProviderConversation?.(committed)
-    }
-    return true
-  } catch (error) {
-    logger.warn('recording the handle a started provider answered with failed', {
-      scope: 'provider-started-handle',
-      sessionId: event.sessionId,
-      error
-    })
-    return false
-  }
 }
 
 /** Prompt catalog recheck after startup may prove installation or restored sign-in; the probe decides. */

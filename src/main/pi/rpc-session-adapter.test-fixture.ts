@@ -168,13 +168,21 @@ export async function setup(
     onSettled: settled,
     logger: { warn: vi.fn(), error: vi.fn() }
   })
-  const acquired = await adapter.acquire(input)
-  const started = await adapter.open({
+  const construction = await adapter.acquire(input)
+  if (construction.kind !== 'ready') {
+    throw new Error('Unexpected missing Pi history in ordinary fixture')
+  }
+  const acquired = construction.value
+  const opened = await adapter.open({
     sessionId,
     fence: 7,
     acquisitionGeneration: acquired.acquisitionGeneration,
     signal: new AbortController().signal
   })
+  if (opened.kind !== 'ready') {
+    throw new Error('Unexpected missing Pi history in ordinary fixture')
+  }
+  const started = opened.value
   lifecycle.mockClear()
   const connection = connections[0]
   if (!connection) {
@@ -215,7 +223,11 @@ export async function restart(
     h.connections.push(connection)
     return connection
   })
-  const acquired = await h.adapter.acquire({ ...h.input, fence: 8, ...input })
+  const construction = await h.adapter.acquire({ ...h.input, fence: 8, ...input })
+  if (construction.kind !== 'ready') {
+    throw new Error('Fixture requires available history')
+  }
+  const acquired = construction.value
   const child = h.connections.at(-1)
   if (!child) {
     throw new Error('child missing')

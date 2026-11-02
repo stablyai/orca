@@ -1,3 +1,4 @@
+import { normalizeConstruction } from './structured-agent-session-construction'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
 type Acquire = StructuredAgentSessionAdapter['acquire']
@@ -21,8 +22,11 @@ export function structuredAgentSessionHeldStarts(
   }
   return {
     held: (acquire) => async (input) => {
-      const acquired = await acquire(input)
-      const generation = acquired.acquisitionGeneration
+      const acquired = normalizeConstruction(await acquire(input))
+      if (acquired.kind !== 'ready') {
+        return acquired
+      }
+      const generation = acquired.value.acquisitionGeneration
       waiting.set(generation, new Promise<void>((resolve) => held.set(generation, resolve)))
       return acquired
     },

@@ -1,3 +1,6 @@
+import { rebaseCompletedContextRewind } from './context-transfer-rebase'
+import { readContextTransfers } from './context-transfer-repository'
+import { participateContextTransferJournal } from './journal-context-transfer'
 import { journalInputAcceptance } from './journal-input-provenance'
 import { copyJournalNativeState } from './journal-input-conversion'
 import { journalInputOrder } from './journal-input-order'
@@ -33,6 +36,7 @@ export function prepareJournalOutcomeWrite(
     savedAt,
     !previous || previous.format < 2
   )
+  participateContextTransferJournal(db, live, transition.state, rows, savedAt)
   advanceJournalOutcomeSource(db, live.sessionId, live.epoch, transition.state.lastSequence)
   return { adopt: transition.adopt }
 }
@@ -45,6 +49,7 @@ export function publishJournalOutcomeEpoch(
   rows: readonly JournalRow[],
   previous?: JournalReducerState
 ): { adopt: () => JournalReducerState } {
+  readContextTransfers(db, sessionId)
   const first = rows[0]
   if (!first || first.seq !== 1 || first.kind !== 'epoch') {
     throw new Error('missing founding epoch')
@@ -70,5 +75,6 @@ export function publishJournalOutcomeEpoch(
     }
   )
   advanceJournalOutcomeSource(db, sessionId, epoch, transition.state.lastSequence)
+  rebaseCompletedContextRewind(db, sessionId, epoch)
   return { adopt: transition.adopt }
 }

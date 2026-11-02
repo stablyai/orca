@@ -103,8 +103,11 @@ describe('ACP child published before its handshake', () => {
     expect(rig.lifecycle).toEqual([])
     answer?.()
     expect(await opening).toMatchObject({
-      link: { handle: { nativeId: PROVIDER_SESSION }, origin: 'created' },
-      reportedOptions: { model: 'grok-4.7', effort: 'high' }
+      kind: 'ready',
+      value: {
+        link: { handle: { nativeId: PROVIDER_SESSION }, origin: 'created' },
+        reportedOptions: { model: 'grok-4.7', effort: 'high' }
+      }
     })
     expect(writes).toEqual([])
     rig.child().agent.notify('session/update', {
@@ -232,9 +235,7 @@ describe('ACP child published before its handshake', () => {
       launch: {
         resume: {
           sessionId: 'saved-session',
-          key: 'saved-key',
-          mayBeUnsaved: () => false,
-          unannouncedLosses: () => []
+          key: 'saved-key'
         }
       }
     })

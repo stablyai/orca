@@ -110,14 +110,17 @@ export class AcpStructuredTurns {
   }
 
   /** The host owns compaction-message settlement; reuse its open command turn. */
-  async compact(command: StructuredAgentSessionCommandRun): Promise<AgentSessionCommandAdmission> {
+  async compact(
+    command: StructuredAgentSessionCommandRun,
+    prompt?: ContentBlock[]
+  ): Promise<AgentSessionCommandAdmission> {
     if (this.active || this.ended) {
       throw new Error(`${this.deps.agentName} is still working`)
     }
     const { lane } = this.deps
     const send: Send = {
       clientMessageId: command.clientMessageId,
-      prompt: [...ACP_COMPACT_PROMPT],
+      prompt: prompt ?? [...ACP_COMPACT_PROMPT],
       requestedAt: this.deps.now()
     }
     lane.beginCommand(command)
@@ -127,13 +130,14 @@ export class AcpStructuredTurns {
         send.requestedAt,
         command.turnId
       )
+      this.unsettled.add(send.clientMessageId)
       this.active = send
       this.run(send, opened.promptId)
     } catch (error) {
       lane.forgetCommand(command.turnId)
       throw error
     }
-    return { state: 'accepted', providerIdentity: null }
+    return { state: 'admitted' }
   }
 
   accept(clientMessageId: string): void {

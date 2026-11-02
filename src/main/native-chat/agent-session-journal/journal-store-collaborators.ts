@@ -1,3 +1,6 @@
+import { contextTransferEchoDispatch } from './context-transfer-echo'
+import { journalDispatchRowBuilder } from './journal-row-builders'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
@@ -120,6 +123,32 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,
     cursor: host.cursor,
+    recoveryMutations: (mutations, fence) => {
+      const dispatches: ((seq: number, ts: number) => JournalRow)[] = []
+      const kept = mutations.filter((mutation) => {
+        if (mutation.kind !== 'item') {
+          return true
+        }
+        const identity = mutation.identity ?? parseAgentJournalItemKey(mutation.itemId)
+        if (!identity) {
+          return true
+        }
+        const echo = host.journal().recoveryEcho(identity, mutation.body, fence)
+        if (!echo) {
+          return true
+        }
+        if (echo.kind === 'carrier') {
+          dispatches.push(
+            journalDispatchRowBuilder(
+              host.state,
+              contextTransferEchoDispatch(echo, identity, fence)
+            )
+          )
+        }
+        return false
+      })
+      return { mutations: kept, dispatches }
+    },
     enqueueRows: (plan) => rowWriter.enqueueRows(plan, inputReceipt)
   })
   return {
@@ -149,6 +178,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       inputReceipt,
       state: host.state,
       enqueue: host.enqueue,
+      recoveryEcho: (resolved, fence) =>
+        host.journal().recoveryEcho(resolved.identity, resolved.body, fence),
       claimAttachments
     }),
     lifecycleBatchAppender,
@@ -156,6 +187,19 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       serialize: host.serialize,
       state: host.state,
       writeRows: (plan) => rowWriter.writeRows(plan, inputReceipt),
+      recoveryItem: (resolved, options) => {
+        const echo = host.journal().recoveryEcho(resolved.identity, resolved.body, options.fence)
+        return !echo
+          ? null
+          : echo.kind === 'history'
+            ? []
+            : [
+                journalDispatchRowBuilder(
+                  host.state,
+                  contextTransferEchoDispatch(echo, resolved.identity, options.fence)
+                )
+              ]
+      },
       planSettlement: (batch) => lifecycleBatchAppender.planResolved(batch)
     })
   }

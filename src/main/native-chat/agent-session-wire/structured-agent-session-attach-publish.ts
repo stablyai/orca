@@ -1,3 +1,4 @@
+import type { RecoveryConstructionPermit } from './structured-agent-session-construction'
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 // The attach's last commit: the child it spawned or kept becomes the session's, its sink the one
 // the session's events go through, and its open begins.
@@ -27,6 +28,7 @@ export type AttachCandidate = {
 export type BoundAttach = {
   acquisitionGeneration: string | null
   /** The account home the spawned child launched under, when its adapter reports one. */
+  recoveryPermit?: RecoveryConstructionPermit
   accountHome?: AgentSessionAccountHome
   owner: AttachedOwner
   fence: number
@@ -90,6 +92,7 @@ export async function publishAttachedChild(
           generation: acquisitionGeneration,
           fence,
           phase: 'starting' as const,
+          ...(bound.recoveryPermit ? { recoveryPermit: bound.recoveryPermit } : {}),
           catalogSource: attempt.catalogSource,
           heldSends: () => context.deps.adapter.heldSends?.(sessionId),
           exitObservation: eventSink.exitObservation,

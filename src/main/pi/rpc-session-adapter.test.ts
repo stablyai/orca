@@ -174,7 +174,8 @@ describe('Pi RPC session ownership and delivery', () => {
     })
     expect(h.connections).toHaveLength(1)
     await expect(h.adapter.acquire({ ...h.input, fence: 9 })).resolves.toMatchObject({
-      process: { pid: 4123 }
+      kind: 'ready',
+      value: { process: { pid: 4123 } }
     })
     resolving.resolve(launch!)
     await Promise.resolve()
@@ -236,7 +237,8 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(observeClose).not.toHaveBeenCalled()
     h.adapter.acknowledgeSessionRelease(sessionId)
     await expect(h.adapter.acquire({ ...h.input, fence: 8 })).resolves.toMatchObject({
-      process: { pid: 4123 }
+      kind: 'ready',
+      value: { process: { pid: 4123 } }
     })
     let drained = false
     const delivery = h.adapter.drainObservedExits().then(() => {

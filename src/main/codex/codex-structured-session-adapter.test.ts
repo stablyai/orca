@@ -207,7 +207,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codexStartedLink(adapter)?.handle).toEqual(codexProviderHandle('thread-proven'))
   })
 
-  it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {
+  it('returns authoritative history unavailability before constructing a replacement', async () => {
     const codex = fakeCodex({
       'thread/resume': () => {
         throw new CodexAppServerRequestError(
@@ -217,30 +217,52 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         )
       }
     })
-    const adapter = adapterFor(codex, {
-      resumeThreadId: 'thread-unsaved',
-      supersedeIfUnsaved: true
-    })
-
-    await acquireReadyCodexForTest(adapter, {
+    const sourceLink = {
+      linkId: 'saved-source',
+      handle: codexProviderHandle('thread-unsaved'),
+      origin: 'created' as const,
+      mintedAtFence: 1,
+      observedAt: 1
+    }
+    const adapter = adapterFor(codex, { resumeThreadId: 'thread-unsaved', sourceLink })
+    const acquired = await adapter.acquire({
       identity: identityFor('session-1'),
       fence: 9,
       spawnToken: 'spawn-9'
     })
-
-    expect(codex.connections[0].calls.slice(1, 3).map((call) => call.method)).toEqual([
-      'thread/resume',
-      'thread/start'
-    ])
-    expect(codexStartedLink(adapter)).toEqual({
-      linkId: `codex-9-${THREAD_ID}`,
-      handle: codexProviderHandle(THREAD_ID),
-      origin: 'created',
-      supersedesKey: 'codex:"thread-unsaved"',
-      mintedAtFence: 9,
-      observedAt: 1_700_000_000_500
+    if (acquired.kind !== 'ready') {
+      throw new Error('expected process acquisition')
+    }
+    const opening = await adapter.open({
+      sessionId: 'session-1',
+      fence: 9,
+      acquisitionGeneration: acquired.value.acquisitionGeneration,
+      signal: new AbortController().signal
     })
-    expect(codex.connections[0].closeCount).toBe(0)
+    expect(opening).toMatchObject({
+      kind: 'history-unavailable',
+      sourceLink,
+      trigger: 'codex-no-rollout'
+    })
+    expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
+      'initialize',
+      'thread/resume'
+    ])
+    if (opening.kind !== 'history-unavailable') {
+      throw new Error('expected recovery continuation')
+    }
+    const opened = await opening.createFresh(
+      {
+        handoffId: 'prepared-handoff',
+        targetAttemptId: 'prepared-attempt',
+        sourceLinkId: sourceLink.linkId,
+        fence: 9
+      },
+      new AbortController().signal
+    )
+    expect(opened.link).toMatchObject({ origin: 'created', handle: codexProviderHandle(THREAD_ID) })
+    expect(opened.link?.supersedesKey).toBeUndefined()
+    await adapter.closeSession('session-1')
   })
 
   it('rejects a resume that lands on a different thread; the host closes once', async () => {
@@ -251,11 +273,14 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       fence: 9,
       spawnToken: 'spawn-9'
     })
+    if (acquired.kind !== 'ready') {
+      throw new Error('Expected a ready acquisition')
+    }
     await expect(
       adapter.open({
         sessionId: 'session-1',
         fence: 9,
-        acquisitionGeneration: acquired.acquisitionGeneration ?? null,
+        acquisitionGeneration: acquired.value.acquisitionGeneration,
         signal: new AbortController().signal
       })
     ).rejects.toThrow('resumed thread-other instead of thread-proven')

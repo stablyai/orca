@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -83,7 +84,7 @@ function startHost(): void {
       releaseAcquisition,
       open: async () => {
         await at('open')
-        return { reportedOptions: { model: 'default' } }
+        return readyConstruction({ reportedOptions: { model: 'default' } })
       },
       dispatch: async (input) => {
         await at('dispatch')
@@ -221,7 +222,7 @@ beforeEach(async () => {
   acquire = vi.fn(async (input) => {
     events = input.events
     await at('spawn')
-    return {
+    return readyConstruction({
       process: { hostId: 'local', pid: 4242, processStartTimeMs: 1, spawnToken: input.spawnToken },
       acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
       link: {
@@ -231,7 +232,7 @@ beforeEach(async () => {
         mintedAtFence: input.fence,
         observedAt: NOW
       }
-    }
+    })
   })
   closeSession = vi.fn(async () => true)
   releaseAcquisition = vi.fn(async () => true)

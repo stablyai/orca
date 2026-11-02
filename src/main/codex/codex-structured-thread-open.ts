@@ -1,3 +1,9 @@
+import {
+  assertRecoveryConstructionPermit,
+  type ConstructionStep,
+  type RecoveryConstructionIntent
+} from '../native-chat/agent-session-wire/structured-agent-session-construction'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   providerDiagnostic,
@@ -12,8 +18,8 @@ import { readCodexSandboxPolicy, type CodexSandboxPolicy } from './codex-structu
 
 export type CodexOpenedThread = {
   threadId: string
+  recoverySourceThreadId?: string
   reportedPermissionMode?: string | null
-  supersededThreadId?: string
   thread?: Record<string, unknown>
   historyMode?: 'legacy' | 'paginated'
   model?: string
@@ -59,7 +65,9 @@ export async function openCodexThread(
   launch: {
     cwd: string
     resumeThreadId: string | null
-    supersedeIfUnsaved?: boolean
+    fence?: number
+    sourceLink?: AgentSessionProviderHandleLink
+    constructionIntent?: RecoveryConstructionIntent
     permissionPolicy?: CodexStructuredPermissionPolicy
     /** Avoid a duplicate base prompt caused by switching models on the first turn. */
     model?: string
@@ -69,7 +77,9 @@ export async function openCodexThread(
   /** null: no deadline; the start that opens the thread bounds it (`signal`). */
   timeoutMs: number | null | undefined,
   signal?: AbortSignal
-): Promise<CodexOpenedThread> {
+): Promise<
+  CodexOpenedThread | Extract<ConstructionStep<CodexOpenedThread>, { kind: 'history-unavailable' }>
+> {
   const resumeThreadId = launch.resumeThreadId
   const config = { ...launch.threadConfig, ...shellEnvironmentSetConfig(launch.commandEnv) }
   const threadSettings = {
@@ -85,7 +95,19 @@ export async function openCodexThread(
       { timeoutMs }
     )
   }
-  let supersededThreadId: string | undefined
+  let recoverySourceThreadId: string | undefined
+  if (launch.constructionIntent) {
+    if (!launch.sourceLink || launch.fence === undefined) {
+      throw new Error('Recovery construction has no source owner')
+    }
+    assertRecoveryConstructionPermit(
+      launch.constructionIntent.permit,
+      launch.sourceLink,
+      launch.fence
+    )
+    recoverySourceThreadId = resumeThreadId ?? undefined
+    return readOpenedThread(await startThread(), resumeThreadId, recoverySourceThreadId)
+  }
   let opened: unknown
   if (!resumeThreadId) {
     opened = await startThread()
@@ -107,37 +129,66 @@ export async function openCodexThread(
       opened = await resumeThread()
     } catch (error) {
       throwIfSignalAborted(signal)
+      let finalError = error
+      if (isCodexArchivedThreadError(error)) {
+        await connection.request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
+        try {
+          opened = await resumeThread()
+        } catch (retryError) {
+          finalError = retryError
+        }
+        if (opened !== undefined) {
+          return readOpenedThread(opened, resumeThreadId)
+        }
+      }
+      throwIfSignalAborted(signal)
       if (
-        isCodexAppServerRequestError(error) &&
-        error.method === 'thread/resume' &&
-        error.code === -32600 &&
-        /\bthread\s+(\S+)\s+already has an active writer\b/i.exec(error.message)?.[1] ===
+        isCodexAppServerRequestError(finalError) &&
+        finalError.method === 'thread/resume' &&
+        finalError.code === -32600 &&
+        /\bthread\s+(\S+)\s+already has an active writer\b/i.exec(finalError.message)?.[1] ===
           resumeThreadId
       ) {
         throw withProviderDiagnostic(
           Object.assign(
-            new AgentSessionAcquisitionRefusal(error.message, 'conversationOpenElsewhere'),
-            { cause: error }
+            new AgentSessionAcquisitionRefusal(finalError.message, 'conversationOpenElsewhere'),
+            { cause: finalError }
           ),
-          providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
+          providerDiagnostic(finalError.providerDiagnostic?.text ?? finalError.message, 'log')
         )
       }
-      if (isCodexArchivedThreadError(error)) {
-        await connection.request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
-        opened = await resumeThread()
-      } else if (launch.supersedeIfUnsaved && isCodexNoRolloutError(error, resumeThreadId)) {
-        supersededThreadId = resumeThreadId
-        opened = await startThread()
-      } else {
-        throw error
+      if (!isCodexNoRolloutError(finalError, resumeThreadId) || !launch.sourceLink) {
+        throw finalError
+      }
+      const sourceLink = launch.sourceLink
+      return {
+        kind: 'history-unavailable',
+        sourceLink,
+        trigger: 'codex-no-rollout',
+        createFresh: async (permit, freshSignal) => {
+          if (launch.fence === undefined) {
+            throw new Error('Recovery construction has no source owner')
+          }
+          assertRecoveryConstructionPermit(permit, sourceLink, launch.fence)
+          freshSignal.throwIfAborted()
+          return readOpenedThread(await startThread(), resumeThreadId, resumeThreadId)
+        }
       }
     }
   }
+  return readOpenedThread(opened, resumeThreadId, recoverySourceThreadId)
+}
+
+function readOpenedThread(
+  opened: unknown,
+  resumeThreadId: string | null,
+  recoverySourceThreadId?: string
+): CodexOpenedThread {
   const threadId = readCodexThreadId(opened)
   if (!threadId) {
     throw new Error('codex app-server did not name the thread it opened')
   }
-  if (supersededThreadId === undefined && resumeThreadId && threadId !== resumeThreadId) {
+  if (recoverySourceThreadId === undefined && resumeThreadId && threadId !== resumeThreadId) {
     throw new Error(`codex app-server resumed ${threadId} instead of ${resumeThreadId}`)
   }
   const result = opened as Record<string, unknown>
@@ -153,7 +204,7 @@ export async function openCodexThread(
   return {
     threadId,
     reportedPermissionMode: reportedCodexPermissionMode(result),
-    ...(supersededThreadId === undefined ? {} : { supersededThreadId }),
+    ...(recoverySourceThreadId === undefined ? {} : { recoverySourceThreadId }),
     thread,
     ...(thread.historyMode === 'legacy' || thread.historyMode === 'paginated'
       ? { historyMode: thread.historyMode }

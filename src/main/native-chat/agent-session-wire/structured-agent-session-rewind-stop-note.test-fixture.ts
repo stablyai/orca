@@ -94,8 +94,11 @@ export async function expectRawStopNoteRewindRecovery({
       hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
     )
   ).toMatchObject({ ok: true })
-  // Rewind settlement runs in startup after attach; drain serialization before asserting.
-  await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
+  const collaborators = host.collaboratorsForTests()
+  const child = collaborators.sessions.get(HOST_TEST_SESSION)?.child
+  if (child) {
+    await collaborators.runtimeState.startupAttempts.readiness(HOST_TEST_SESSION, child)?.wait()
+  }
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   expect(journal.itemBody(noteId)).toEqual(unconfirmed)
   expect(journal.snapshot().items.find((item) => item.itemId === noteId)?.body).toEqual({

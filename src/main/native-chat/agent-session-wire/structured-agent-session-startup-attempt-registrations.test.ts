@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -62,22 +63,23 @@ async function hostFor(definition: StructuredAgentDefinition): Promise<{
   resetHostTestOperationIds()
   const store = await openTestAgentSessionRecordStore(root)
   const acquire: Mock<StructuredAgentSessionAdapter['acquire']> = vi.fn(
-    async (input: StructuredAgentSessionAcquireInput) => ({
-      process: {
-        hostId: 'local',
-        pid: 4242,
-        processStartTimeMs: 1_700_000_000_000,
-        spawnToken: input.spawnToken
-      },
-      acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
-      link: {
-        linkId: `link-${input.fence}`,
-        handle: handle(definition),
-        origin: 'created' as const,
-        mintedAtFence: input.fence,
-        observedAt: NOW
-      }
-    })
+    async (input: StructuredAgentSessionAcquireInput) =>
+      readyConstruction({
+        process: {
+          hostId: 'local',
+          pid: 4242,
+          processStartTimeMs: 1_700_000_000_000,
+          spawnToken: input.spawnToken
+        },
+        acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
+        link: {
+          linkId: `link-${input.fence}`,
+          handle: handle(definition),
+          origin: 'created' as const,
+          mintedAtFence: input.fence,
+          observedAt: NOW
+        }
+      })
   )
   const dispatch: Mock<StructuredAgentSessionAdapter['dispatch']> = vi.fn(async () => ({
     state: 'admitted' as const
@@ -86,7 +88,7 @@ async function hostFor(definition: StructuredAgentDefinition): Promise<{
   const adapter: StructuredAgentSessionAdapter = {
     open: () =>
       new Promise((resolve) => {
-        ready = () => resolve({ reportedOptions: {} })
+        ready = () => resolve(readyConstruction({ reportedOptions: {} }))
       }),
     acquire,
     dispatch,

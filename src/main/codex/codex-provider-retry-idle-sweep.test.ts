@@ -1,3 +1,4 @@
+import { readyConstruction } from '../native-chat/agent-session-wire/structured-agent-session-construction'
 // Published retry rows count as activity, keeping reconnecting sessions alive.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -53,12 +54,13 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   const store = await openTestAgentSessionRecordStore(root)
   const adapter: StructuredAgentSessionAdapter = {
-    open: async () => ({
-      reportedOptions: { model: '' }
-    }),
+    open: async () =>
+      readyConstruction({
+        reportedOptions: { model: '' }
+      }),
     acquire: async ({ fence, spawnToken, events }) => {
       sink = events ?? null
-      return {
+      return readyConstruction({
         process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW - 1_000, spawnToken },
         acquisitionGeneration: 'generation-1',
         link: {
@@ -68,7 +70,7 @@ beforeEach(async () => {
           mintedAtFence: fence,
           observedAt: NOW
         }
-      }
+      })
     },
     closeSession,
     releaseAcquisition: async () => true,

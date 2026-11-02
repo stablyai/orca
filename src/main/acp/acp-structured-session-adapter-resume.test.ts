@@ -36,9 +36,7 @@ const resume = {
   launch: {
     resume: {
       sessionId: PROVIDER_SESSION,
-      key: 'acp:grok:saved',
-      mayBeUnsaved: () => false,
-      unannouncedLosses: () => []
+      key: 'acp:grok:saved'
     }
   }
 }
@@ -339,75 +337,52 @@ describe('reattaching a Grok chat the journal holds', () => {
     }
   })
 
-  it('starts a new session in place of a created one that session/load reports missing', async () => {
+  it.each([
+    [-32603, 'session file is corrupt'],
+    [-32002, 'Resource not found']
+  ])('reports a rejected load before any replacement for %s', async (code, message) => {
+    const sourceLink = {
+      linkId: 'saved-source',
+      origin: 'created' as const,
+      mintedAtFence: 1,
+      observedAt: 1,
+      handle: { transport: 'acp', agent: 'grok', nativeId: 'saved-1' }
+    }
     const rig = await openAcpAdapterRig({
-      launch: {
-        resume: {
-          sessionId: 'never-saved',
-          key: 'acp:grok:never-saved',
-          mayBeUnsaved: () => true,
-          unannouncedLosses: () => []
-        }
-      },
+      launch: { resume: { sessionId: 'saved-1', key: 'acp-key-saved-1', sourceLink } },
       initialize: RESUMES,
-      script: (agent) =>
-        agent.on('session/load', (frame) => agent.fail(frame, -32002, 'Resource not found'))
+      script: (agent) => agent.on('session/load', (frame) => agent.fail(frame, code, message))
     })
     await rig.acquire()
-    expect(rig.started().link).toMatchObject({
-      origin: 'created',
-      handle: { nativeId: PROVIDER_SESSION },
-      supersedesKey: 'acp:grok:never-saved'
+    const opening = rig.opening()
+    expect(opening).toMatchObject({
+      kind: 'history-unavailable',
+      sourceLink,
+      trigger: 'acp-load-rejected'
     })
-    await exchange(rig, 'hi', true)
-    expect(await texts(rig)).toEqual(['hello', 'hi'])
+    expect(rig.sent('session/new')).toEqual([])
+    if (opening?.kind !== 'history-unavailable') {
+      throw new Error('no recovery continuation')
+    }
+    const result = await opening.createFresh(
+      {
+        handoffId: 'prepared-handoff',
+        targetAttemptId: 'prepared-target',
+        sourceLinkId: sourceLink.linkId,
+        fence: 1
+      },
+      new AbortController().signal
+    )
+    expect(result.link).toMatchObject({ origin: 'created', handle: { nativeId: PROVIDER_SESSION } })
     expect(await notRestoredRows(rig)).toEqual([])
   })
-
-  it.each([
-    ['a saved session', false, -32603, 'session file is corrupt'],
-    ['a created session that fails for another reason', true, -32603, 'session file is corrupt'],
-    ['a saved session the agent reports missing', false, -32002, 'Resource not found']
-  ])(
-    'continues %s it cannot reopen in a new one, says so once, and keeps working',
-    async (_label, mayBeUnsaved, code, message) => {
-      const rig = await openAcpAdapterRig({
-        launch: {
-          resume: {
-            sessionId: 'saved-1',
-            key: 'acp-key-saved-1',
-            mayBeUnsaved: () => mayBeUnsaved,
-            unannouncedLosses: () => []
-          }
-        },
-        initialize: RESUMES,
-        script: (agent) => agent.on('session/load', (frame) => agent.fail(frame, code, message))
-      })
-      await rig.acquire()
-      expect(rig.started().link).toMatchObject({
-        origin: 'created',
-        handle: { nativeId: PROVIDER_SESSION },
-        replaces: { key: 'acp-key-saved-1', reason: 'restore-failed', replacedAt: 5_000 }
-      })
-      expect(rig.started().link?.supersedesKey).toBeUndefined()
-      expect(rig.sent('session/new')).toHaveLength(1)
-      const rows = await notRestoredRows(rig)
-      expect(rows).toHaveLength(1)
-      expect(rows[0]?.body).toMatchObject({ kind: 'status', tone: 'warning' })
-      await exchange(rig, 'hi', true)
-      expect(await texts(rig)).toEqual(['hello', 'hi'])
-      expect(await notRestoredRows(rig)).toHaveLength(1)
-    }
-  )
 
   it('refuses a signed-out agent at reopen rather than replacing its session', async () => {
     const rig = await openAcpAdapterRig({
       launch: {
         resume: {
           sessionId: 'saved-1',
-          key: 'acp-key-saved-1',
-          mayBeUnsaved: () => false,
-          unannouncedLosses: () => []
+          key: 'acp-key-saved-1'
         }
       },
       initialize: RESUMES,
@@ -426,9 +401,7 @@ describe('reattaching a Grok chat the journal holds', () => {
       launch: {
         resume: {
           sessionId: 'saved-1',
-          key: 'acp-key-saved-1',
-          mayBeUnsaved: () => false,
-          unannouncedLosses: () => []
+          key: 'acp-key-saved-1'
         }
       },
       initialize: RESUMES,

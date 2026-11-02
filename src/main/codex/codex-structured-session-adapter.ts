@@ -1,3 +1,12 @@
+import { normalizeConstruction } from '../native-chat/agent-session-wire/structured-agent-session-construction'
+import {
+  codexHistoricalInputBytes,
+  injectCodexHistoricalContext
+} from './codex-structured-context-delivery'
+import {
+  readyConstruction,
+  type ConstructionStep
+} from '../native-chat/agent-session-wire/structured-agent-session-construction'
 import { projectCodexSessionOptions } from './codex-structured-service-tier'
 import * as codexRewind from './codex-structured-rewind'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'
@@ -25,12 +34,12 @@ import {
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
-  type CodexAcquisitionAttempt,
   type CodexSession,
   type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-state'
 import {
+  deliverCodexAcquisitionEvent,
   deliverCodexServerRequest,
   deliverCodexUnhandledFrame,
   translateCodexNotification
@@ -97,7 +106,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   permissionModeRequiresAcquisition = (): boolean => false
 
-  acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
+  acquire = (
+    input: StructuredAgentSessionAcquireInput
+  ): Promise<ConstructionStep<AgentSessionAcquisition>> =>
     acquireCodexStructuredSession({
       input,
       deps: this.deps,
@@ -105,39 +116,24 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       acquisitions: this.acquisitions,
       notificationRetries: this.notificationRetries,
       deliver: (acquisition, sessionId, event, retainedBytes) =>
-        this.deliver(acquisition, sessionId, event, retainedBytes),
+        deliverCodexAcquisitionEvent(this.sessions, acquisition, sessionId, event, retainedBytes),
       handleServerRequest: (sessionId, request) => this.handleServerRequest(sessionId, request),
       handleUnhandledFrame: (sessionId, kind, payload) =>
         this.handleUnhandledFrame(sessionId, kind, payload),
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
         this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
-    })
+    }).then(readyConstruction)
 
   open = (input: StructuredAgentSessionProviderOpenInput) => {
     const attempt = this.acquisitions.get(input.sessionId)
     if (!attempt?.open) {
       return Promise.reject(new Error(`no spawned codex child for session ${input.sessionId}`))
     }
-    return attempt.open(input)
+    return attempt.open(input).then(normalizeConstruction)
   }
 
-  /** Buffers pre-publication events and drops events from superseded children. */
-  private deliver(
-    acquisition: CodexAcquisitionAttempt['window'],
-    sessionId: string,
-    event: () => unknown,
-    retainedBytes?: number
-  ): void {
-    if (acquisition.buffer(event, retainedBytes)) {
-      return
-    }
-    if (this.sessions.get(sessionId)?.connection === acquisition.connection) {
-      event()
-    } else if (acquisition.isOverflowed) {
-      // Overflow fails acquisition; close the child so callers can retry.
-      void acquisition.connection?.close()
-    }
-  }
+  historicalInputBytes = codexHistoricalInputBytes(this.sessions)
+  injectHistoricalContext = injectCodexHistoricalContext(this.sessions)
 
   /** Journal first so observers never see an event ahead of its durable row. */
   private emit(

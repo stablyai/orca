@@ -79,6 +79,9 @@ async function pendingPrompt(
       turnScope: turn ? { kind: 'turn', turnItemId: turn.itemId } : AGENT_JOURNAL_THREAD_SCOPE
     }
   )
+  if (item === null) {
+    throw new Error('Expected the ordinary journal item to be retained')
+  }
   return { journal, itemId: item.itemId }
 }
 

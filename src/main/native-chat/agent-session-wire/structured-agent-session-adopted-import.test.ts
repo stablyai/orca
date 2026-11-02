@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -125,22 +126,25 @@ function attachParams(
 
 function adapter(): StructuredAgentSessionAdapter {
   return {
-    open: async () => ({
-      reportedOptions: { model: '' }
-    }),
+    open: async () =>
+      readyConstruction({
+        reportedOptions: { model: '' }
+      }),
     acquire: vi
       .fn<StructuredAgentSessionAdapter['acquire']>()
-      .mockImplementation(async ({ fence, spawnToken }) => ({
-        acquisitionGeneration: globalThis.crypto.randomUUID(),
-        process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
-        link: {
-          linkId: 'resumed-link',
-          handle: codexProviderHandle(THREAD),
-          origin: 'resumed',
-          mintedAtFence: fence,
-          observedAt: NOW
-        }
-      })),
+      .mockImplementation(async ({ fence, spawnToken }) =>
+        readyConstruction({
+          acquisitionGeneration: globalThis.crypto.randomUUID(),
+          process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
+          link: {
+            linkId: 'resumed-link',
+            handle: codexProviderHandle(THREAD),
+            origin: 'resumed',
+            mintedAtFence: fence,
+            observedAt: NOW
+          }
+        })
+      ),
     // Proven release preserves the original failure instead of wrapping unproven exit.
     releaseAcquisition: vi.fn(async () => true),
     dispatch: vi.fn(),
@@ -245,17 +249,19 @@ describe('adopting a provider conversation on create', () => {
         nativeId: agent === 'pi' ? transcriptPath : THREAD
       }
       const sessionAdapter = adapter()
-      vi.mocked(sessionAdapter.acquire).mockImplementation(async ({ fence, spawnToken }) => ({
-        acquisitionGeneration: `generation-${fence}`,
-        process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
-        link: {
-          linkId: 'resumed-link',
-          handle,
-          origin: 'resumed',
-          mintedAtFence: fence,
-          observedAt: NOW
-        }
-      }))
+      vi.mocked(sessionAdapter.acquire).mockImplementation(async ({ fence, spawnToken }) =>
+        readyConstruction({
+          acquisitionGeneration: `generation-${fence}`,
+          process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
+          link: {
+            linkId: 'resumed-link',
+            handle,
+            origin: 'resumed',
+            mintedAtFence: fence,
+            observedAt: NOW
+          }
+        })
+      )
 
       const result = await attach(
         transcriptPath,

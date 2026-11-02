@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -50,13 +51,14 @@ function adapter(): StructuredAgentSessionAdapter {
     {
       supportsCreate: (_location, agent) => agent === 'codex',
       supportsLocation: () => true,
-      open: async () => ({
-        reportedOptions: { model: '' }
-      }),
+      open: async () =>
+        readyConstruction({
+          reportedOptions: { model: '' }
+        }),
       acquire: async (input) => {
         acquires += 1
         sink = input.events!
-        return {
+        return readyConstruction({
           process: {
             hostId: 'local',
             pid: 4000 + acquires,
@@ -71,7 +73,7 @@ function adapter(): StructuredAgentSessionAdapter {
             origin: acquires === 1 ? 'created' : 'resumed',
             handle: codexProviderHandle(THREAD)
           }
-        }
+        })
       },
       dispatch,
       cancelTurn: async () => ({ cancelled: false }),

@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 // @vitest-environment happy-dom
 import { cleanup } from '@testing-library/react'
 
@@ -68,23 +69,25 @@ export function adapter(
   return {
     supportsLocation: () => true,
     supportsCreate: () => true,
-    open: async () => ({ reportedOptions: {} }),
-    acquire: vi.fn(async (input) => ({
-      acquisitionGeneration: `generation-${input.fence}`,
-      process: {
-        hostId: 'local',
-        pid: 4001,
-        processStartTimeMs: HOST_TEST_NOW,
-        spawnToken: input.spawnToken
-      },
-      link: {
-        linkId: `link-${input.fence}`,
-        mintedAtFence: input.fence,
-        observedAt: HOST_TEST_NOW,
-        origin: 'created' as const,
-        handle: claudeProviderHandle(CLAUDE_SESSION, null)
-      }
-    })),
+    open: async () => readyConstruction({ reportedOptions: {} }),
+    acquire: vi.fn(async (input) =>
+      readyConstruction({
+        acquisitionGeneration: `generation-${input.fence}`,
+        process: {
+          hostId: 'local',
+          pid: 4001,
+          processStartTimeMs: HOST_TEST_NOW,
+          spawnToken: input.spawnToken
+        },
+        link: {
+          linkId: `link-${input.fence}`,
+          mintedAtFence: input.fence,
+          observedAt: HOST_TEST_NOW,
+          origin: 'created' as const,
+          handle: claudeProviderHandle(CLAUDE_SESSION, null)
+        }
+      })
+    ),
     atRestCommands: catalog,
     dispatch: vi.fn(async () => ({ state: 'unknown' as const, reason: 'test' })),
     cancelTurn: async () => ({ cancelled: true }),

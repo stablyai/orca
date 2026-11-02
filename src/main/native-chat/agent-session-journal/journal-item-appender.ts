@@ -1,14 +1,18 @@
-import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
-import { journalItemRowBuilder } from './journal-row-builders'
+import { journalItemRowBuilder, journalDispatchRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalAppendResult, JournalItemAppendOptions } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
+import { contextTransferEchoDispatch, type ContextTransferEcho } from './context-transfer-echo'
 import type { JournalAttachmentClaim, journalInputClaimsReceipt } from './journal-submission-hook'
 
 // Module-level Error stacks retain startup code and buffers; construct them only when needed.
@@ -25,6 +29,7 @@ export class JournalItemAppender {
       ) => ReturnType<typeof journalInputClaimsReceipt>
       state: () => JournalReducerState
       enqueue: JournalRowWriter['enqueue']
+      recoveryEcho?: (resolved: JournalResolvedItem, fence: number) => ContextTransferEcho | null
       claimAttachments: JournalAttachmentClaim
     }
   ) {}
@@ -34,13 +39,8 @@ export class JournalItemAppender {
     body: AgentJournalItemBody,
     options: JournalItemAppendOptions,
     receipt?: JournalOperationReceipt
-  ): Promise<JournalAppendResult> {
-    const itemId = agentJournalItemKey(identity)
-    return this.deps
-      .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options), (rows) =>
-        this.deps.inputReceipt(rows, receipt)
-      )
-      .then((row) => appendResult(row, itemId))
+  ): Promise<JournalAppendResult | null> {
+    return this.appendResolved(() => ({ identity, body }), options, receipt)
   }
 
   /** A client-authored message claims the uploads it names with its row; a swept one refuses both. */
@@ -69,7 +69,8 @@ export class JournalItemAppender {
   /** Resolve against preceding queued writes; null appends nothing. */
   appendResolved(
     resolve: () => JournalResolvedItem | null,
-    options: JournalItemAppendOptions
+    options: JournalItemAppendOptions,
+    receipt?: JournalOperationReceipt
   ): Promise<JournalAppendResult | null> {
     let itemId = ''
     return this.deps
@@ -80,6 +81,17 @@ export class JournalItemAppender {
             throw new NothingResolvedError('journal_item_resolved_to_nothing')
           }
           itemId = agentJournalItemKey(resolved.identity)
+          const echo = this.deps.recoveryEcho?.(resolved, options.fence)
+          if (echo?.kind === 'history') {
+            throw new NothingResolvedError('journal_item_is_injected_history')
+          }
+          if (echo?.kind === 'carrier') {
+            itemId = agentJournalSubmissionKey(echo.clientMessageId)
+            return journalDispatchRowBuilder(
+              this.deps.state,
+              contextTransferEchoDispatch(echo, resolved.identity, options.fence)
+            )(seq, ts)
+          }
           return journalItemRowBuilder(
             this.deps.state,
             resolved.identity,
@@ -87,10 +99,17 @@ export class JournalItemAppender {
             options
           )(seq, ts)
         },
-        (rows) => this.deps.inputReceipt(rows)
+        (rows) => this.deps.inputReceipt(rows, receipt)
       )
       .then(
-        (row) => appendResult(row, itemId),
+        (row) =>
+          row.kind === 'dispatch'
+            ? {
+                cursor: { epoch: row.epoch, sequence: row.seq },
+                itemId,
+                revision: this.deps.state().items.get(itemId)?.revision ?? 0
+              }
+            : appendResult(row, itemId),
         (error: unknown) => {
           if (error instanceof NothingResolvedError) {
             return null

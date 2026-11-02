@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import { vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
@@ -88,7 +89,7 @@ export function createQueuedRigProvider(
       const thread = context?.pendingClear
         ? `${THREAD}-context-${record!.providerContextBoundary!.operationId}`
         : (context?.head?.handle.nativeId ?? THREAD)
-      return {
+      return readyConstruction({
         process: {
           hostId: 'local',
           pid: 4242,
@@ -106,7 +107,7 @@ export function createQueuedRigProvider(
           mintedAtFence: fence,
           observedAt: NOW
         }
-      }
+      })
     },
     dispatch,
     closeSession,

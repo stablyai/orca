@@ -1,3 +1,4 @@
+import { readyConstruction } from './structured-agent-session-construction'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -103,25 +104,28 @@ beforeEach(async () => {
     store,
     adapter: startsWhenPublished(
       {
-        open: async () => ({
-          reportedOptions: { model: '' }
-        }),
-        acquire: vi.fn(async ({ fence }) => ({
-          acquisitionGeneration: globalThis.crypto.randomUUID(),
-          process: {
-            hostId: 'local',
-            pid: 4242,
-            processStartTimeMs: 1_700_000_000_000,
-            spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
-          },
-          link: {
-            linkId: `link-${fence}`,
-            handle: codexProviderHandle(THREAD),
-            origin: 'created' as const,
-            mintedAtFence: fence,
-            observedAt: NOW
-          }
-        })),
+        open: async () =>
+          readyConstruction({
+            reportedOptions: { model: '' }
+          }),
+        acquire: vi.fn(async ({ fence }) =>
+          readyConstruction({
+            acquisitionGeneration: globalThis.crypto.randomUUID(),
+            process: {
+              hostId: 'local',
+              pid: 4242,
+              processStartTimeMs: 1_700_000_000_000,
+              spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+            },
+            link: {
+              linkId: `link-${fence}`,
+              handle: codexProviderHandle(THREAD),
+              origin: 'created' as const,
+              mintedAtFence: fence,
+              observedAt: NOW
+            }
+          })
+        ),
         releaseAcquisition: vi.fn(async () => true),
         dispatch,
         closeSession,

@@ -39,6 +39,9 @@ async function probeIdentity(
       { cwd, permissionPolicy: codexStructuredPermissionPolicy('ask'), ...thread },
       20_000
     )
+    if ('kind' in opened) {
+      throw new Error('Expected the real native thread to reopen')
+    }
     await connection.request(
       'thread/shellCommand',
       { threadId: opened.threadId, command: PROBE },
