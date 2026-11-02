@@ -3,6 +3,7 @@ import {
   getOverlayFocusSources,
   isOverlayFocusSourceDismissed,
   overlayFocusAppliesTo,
+  overlayFocusContains,
   subscribeOverlayFocusChanges
 } from '@/lib/overlay-focus-ownership'
 
@@ -81,7 +82,8 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
     const sources = sourceOverlays.filter(
       (owner) =>
         !destination?.root ||
-        (!owner.contains(destination.root) && overlayFocusAppliesTo(owner, destination.root))
+        (!overlayFocusContains(owner, destination.root) &&
+          overlayFocusAppliesTo(owner, destination.root))
     )
     if (
       getOverlayFocusOwners(destination?.root ?? undefined).some(

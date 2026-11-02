@@ -7,7 +7,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
-import { useOverlayFocusScope } from './use-overlay-focus-scope'
+import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { translate } from '@/i18n/i18n'
 
@@ -77,33 +77,35 @@ function SheetContent({
     overlayClassName?: string
     overlayStyle?: React.CSSProperties
   }) {
-  const focusScopeRef = useOverlayFocusScope(props.ref)
+  const { ref: focusScopeRef, scope } = useOverlayFocusScope(props.ref)
   return (
     <SheetPortal>
       <SheetOverlay className={overlayClassName} style={overlayStyle} />
-      <SheetPrimitive.Content
-        data-slot="sheet-content"
-        className={cn(sheetContentVariants({ side }), className)}
-        // Disable native dragging where portaled sheet headers overlap the titlebar.
-        style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        {...props}
-        ref={focusScopeRef}
-        onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
-        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-      >
-        {children}
-        {showCloseButton && (
-          <SheetPrimitive.Close
-            data-slot="sheet-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          >
-            <XIcon />
-            <span className="sr-only">
-              {translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
-            </span>
-          </SheetPrimitive.Close>
-        )}
-      </SheetPrimitive.Content>
+      <OverlayFocusScope value={scope}>
+        <SheetPrimitive.Content
+          data-slot="sheet-content"
+          className={cn(sheetContentVariants({ side }), className)}
+          // Disable native dragging where portaled sheet headers overlap the titlebar.
+          style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          {...props}
+          ref={focusScopeRef}
+          onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
+          onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+        >
+          {children}
+          {showCloseButton && (
+            <SheetPrimitive.Close
+              data-slot="sheet-close"
+              className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            >
+              <XIcon />
+              <span className="sr-only">
+                {translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
+              </span>
+            </SheetPrimitive.Close>
+          )}
+        </SheetPrimitive.Content>
+      </OverlayFocusScope>
     </SheetPortal>
   )
 }

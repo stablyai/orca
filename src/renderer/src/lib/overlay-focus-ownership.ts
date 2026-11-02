@@ -2,6 +2,7 @@ import { getVisibleOverlays, isVisibleOverlay } from './visible-overlay'
 
 const NON_OWNING_SURFACES =
   '[data-focus-behavior="page"], [data-focus-behavior="composer-suggestions"]'
+const overlayParents = new WeakMap<HTMLElement, () => HTMLElement | null>()
 const dismissedOwners = new WeakSet<HTMLElement>()
 const listeners = new Set<() => void>()
 
@@ -15,13 +16,31 @@ export function overlayFocusAppliesTo(owner: HTMLElement, target?: Element | nul
   )
 }
 
+/** Portaled descendants belong to the same focus scope as their containing surface. */
+export function overlayFocusContains(owner: HTMLElement, target: Element): boolean {
+  for (let scope: Element | null = target; scope;) {
+    if (owner.contains(scope)) {
+      return true
+    }
+    scope =
+      (scope instanceof HTMLElement ? overlayParents.get(scope)?.() : undefined) ??
+      scope.parentElement
+  }
+  return false
+}
+
 /** Page lists and editor suggestions do not take focus; their nested popups still do. */
 export function getOverlayFocusOwners(containing?: Element): HTMLElement[] {
   return getVisibleOverlays({
     ignoreMatches: NON_OWNING_SURFACES,
     ignoreContaining: containing,
     ignoreDismissed: true
-  }).filter((owner) => !hasDismissedFocusScope(owner) && overlayFocusAppliesTo(owner, containing))
+  }).filter(
+    (owner) =>
+      !hasDismissedFocusScope(owner) &&
+      (!containing || !overlayFocusContains(owner, containing)) &&
+      overlayFocusAppliesTo(owner, containing)
+  )
 }
 
 /** Include parent scopes hidden from accessibility by a nested modal. */
@@ -77,7 +96,15 @@ export function subscribeOverlayFocusChanges(listener: () => void): () => void {
   }
 }
 
-export function registerOverlayFocusOwner(owner: HTMLElement): void {
+export function registerOverlayFocusOwner(
+  owner: HTMLElement,
+  parent?: () => HTMLElement | null
+): void {
+  if (parent) {
+    overlayParents.set(owner, parent)
+  } else {
+    overlayParents.delete(owner)
+  }
   dismissedOwners.delete(owner)
   queueMicrotask(() => listeners.forEach((listener) => listener()))
 }
