@@ -16,6 +16,7 @@ type ContributionValidationManifest = {
     panels: IdentifiedContribution[]
     commands: (IdentifiedContribution & { action?: string; when?: 'global' | 'workspace' })[]
     events: { on: PluginEventName }[]
+    hooks: { event: string }[]
     languagePacks: { locale: string }[]
     keybindings: { command: string; key: string; when?: 'global' | 'workspace' }[]
     vmRecipes: PathContribution[]
@@ -187,6 +188,20 @@ export function validatePluginManifestContributions(
       code: 'custom',
       path: ['main'],
       message: 'required when contributes.commands contains a worker command'
+    })
+  }
+  rejectDuplicateValues(
+    manifest.contributes.hooks.map((hook) => hook.event),
+    String,
+    'hooks',
+    'hook',
+    ctx
+  )
+  if (!manifest.main && manifest.contributes.hooks.length > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['main'],
+      message: 'required when contributes.hooks is non-empty'
     })
   }
   if (!manifest.main && manifest.contributes.events.length > 0) {

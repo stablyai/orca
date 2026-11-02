@@ -13,7 +13,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | --- | --- | --- | --- | --- |
 | `$schema` | string | no | 1.4.245 | JSON Schema URL for editor completion. Ignored by Orca. |
 | `manifestVersion` | `2` | yes | 1.4.245 | Manifest format. Use 2 for new plugins. |
-| `execution` | `"data"` \| `"declarative"` \| `"sandboxed-ui"` \| `"trusted-worker"` | yes | 1.4.245 | Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation. Example: `"data"` |
+| `execution` | `"data"` \| `"declarative"` \| `"sandboxed-ui"` \| `"trusted-worker"` | yes | 1.4.245 | Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main`, events and hooks). Contributions beyond it fail validation. Example: `"data"` |
 | `id` | string | yes | 1.4.160 | Plugin id, kebab-case. The install identity is `<publisher>.<id>`, where Orca derives the publisher from the repository owner. The reserved names `constructor` and `prototype` are refused. Example: `"gleam-syntax"` |
 | `publisher` | string | no | 1.4.160 | Deprecated: leave it out. Orca derives the publisher from where the plugin comes from, the way a Go module is named by its repository path: the repository owner for the official and community catalogs and for Git URL installs (`acme` for `github.com/acme/gleam-syntax`), and `local` for a folder. A value here is ignored for catalog and Git installs. Leaving it out needs `engines.orca` of at least `>=1.4.246`, because older Orca requires it; if you keep it for older Orca, it must equal the repository owner. Reserved owners (`stablyai`, `official`, `anthropic`, `openai`, `github` and any starting `orca`) and ids starting `orca-` install only from Orca's official catalog. Example: `"acme"` |
 | `name` | string | yes | 1.4.160 | Display name. Example: `"Gleam"` |
@@ -28,11 +28,12 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `icon` | string | no | 1.4.160 | Square image shown beside the plugin name. PNG, WEBP, static, at least 128×128, square, at most 256 KB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"assets/icon.png"` |
 | `engines` | object | yes | 1.4.160 | Host versions this plugin supports. Older hosts refuse to load it. |
 | `engines.orca` | string | yes | 1.4.160 | Oldest Orca release this plugin runs on, as `>=x.y.z`. Raise it to the newest "Since" of any field you use; a format 2 manifest needs at least `>=1.4.245`, because older Orca cannot read format 2. Example: `">=1.4.245"` |
-| `main` | string | no | 1.4.160 | Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"dist/main.mjs"` |
+| `main` | string | no | 1.4.160 | Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"dist/main.mjs"` |
 | `contributes` | object | no | 1.4.160 | What the plugin adds to Orca. Every point defaults to empty. |
 | `contributes.panels` | [PanelContribution](#panelcontribution)[] | no | 1.4.160 | Sidebar panels. At most 64. |
 | `contributes.commands` | [CommandContribution](#commandcontribution)[] | no | 1.4.160 | Command palette entries. At most 256. |
 | `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 4. |
+| `contributes.hooks` | [HookContribution](#hookcontribution)[] | no | 1.4.248 | Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 3. |
 | `contributes.languagePacks` | [LanguagePackContribution](#languagepackcontribution)[] | no | 1.4.160 | Interface translations. At most 16. |
 | `contributes.keybindings` | [KeybindingContribution](#keybindingcontribution)[] | no | 1.4.160 | Keyboard shortcuts for contributed commands. At most 256. |
 | `contributes.vmRecipes` | [VmRecipeContribution](#vmrecipecontribution)[] | no | 1.4.160 | Virtual machine environment recipes. At most 64. |
@@ -46,7 +47,6 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
-| `contributes.hooks` | any[] | no | 1.4.245 | Reserved for agent hooks; must be empty until their format is defined. |
 | `contributes.taskSources` | any[] | no | 1.4.245 | Reserved for task sources; must be empty until their format is defined. |
 | `contributes.connections` | any[] | no | 1.4.245 | Reserved for account connections; must be empty until their format is defined. |
 | `contributes.statusBarItems` | any[] | no | 1.4.245 | Reserved for status bar items; must be empty until their format is defined. |
@@ -88,6 +88,14 @@ An event subscription. Requires `main`, the `trusted-worker` execution profile a
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
 | `on` | `"workspace.created"` \| `"workspace.removed"` \| `"agent.status.changed"` \| `"workspace.changed"` | yes | 1.4.160 | Event delivered to the plugin worker. |
+
+## HookContribution
+
+A hook Orca runs through the worker before (or after) it acts. Requires `main` and the `trusted-worker` execution profile.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `event` | `"terminal.send"` \| `"workspace.create.before"` \| `"workspace.create.after"` | yes | 1.4.248 | Hook the worker handles with `orca.hooks.on`. |
 
 ## LanguagePackContribution
 
@@ -214,7 +222,7 @@ One screenshot of the plugin in use.
 - **`terminal:send` needs `trusted-worker`.** Panels get no host method that types into a terminal, so Orca refuses the capability on any other profile instead of asking the user to grant something the plugin can never use.
 - **New fields, contribution points and values are additive.** They arrive with a `Since` version; nothing else changes. `manifestVersion` rises only if an existing field changes meaning.
 - **Deprecation.** A field to be removed is marked deprecated here and keeps working for at least one release; it is removed only together with a higher `engines.orca` requirement, and its name is never reused.
-- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `statusBarItems` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills`, `mcpServers` and `hooks` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
+- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections`, `statusBarItems` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills` and `mcpServers` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
 
 ## Planned contribution points
 
@@ -227,7 +235,6 @@ Each reserved point is planned as declared data that Orca renders and enforces, 
 - `sidebarCards`: Declarative left-sidebar cards with fixed layouts whose values a worker updates.
 - `mcpServers`: MCP server definitions that Orca offers to the agents it launches.
 - `skills`: Agent skills shipped as files that Orca installs for the agents it launches.
-- `hooks`: Agent lifecycle hooks, such as before and after a tool call, for the agents Orca launches.
 
 ## Legacy format 1
 

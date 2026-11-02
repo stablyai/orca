@@ -33,6 +33,7 @@ import { workspaceLifecycleKey } from '../../../runtime/workspaces/workspace-lif
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { beginWorkspaceCreateTelemetry } from '../../../workspace-create-telemetry'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -55,9 +56,12 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           repo,
           request: args.automationProvenanceRequest
         })
-        const createArgs: CreateWorktreeArgsWithSystemProvenance = {
-          ...args,
-          automationProvenance
+        let createArgs: CreateWorktreeArgsWithSystemProvenance = { ...args, automationProvenance }
+        try {
+          createArgs = await applyWorkspaceCreatePluginHook(createArgs, repo)
+        } catch (error) {
+          releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
+          throw error
         }
 
         let result: CreateWorktreeResult

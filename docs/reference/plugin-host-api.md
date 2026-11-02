@@ -186,6 +186,18 @@ A worker receives the events its manifest lists in `contributes.events` through 
 | `agent.status.changed` | `{ workspaceId: string \| null; paneKey: string; terminalId?: string; title?: string; state: "working" \| "blocked" \| "waiting" \| "done"; receivedAt: number; mainAgent?: { state: "working" \| "blocked" \| "waiting" \| "done"; outcome?: "success" \| "failure" \| "cancellation" \| "superseded" \| "interruption" \| "unconfirmed"; stateStartedAt: number } }` | An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it. |
 | `workspace.changed` | `{ context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } \| null }` | The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context. |
 
+## Hooks
+
+A worker changes or stops what Orca is about to do with `orca.hooks.on(hook, (event, next) => ...)`, which returns `{ dispose() }`. Each hook must be listed in `contributes.hooks` (`main` and the `trusted-worker` profile; no capability). Return `next(event)` to go on, with the fields the hook allows changed; return a result such as `{ deny: reason }` to stop; return nothing to pass. Plugins run one after another (installed plugins by key, then development folders), then Orca acts on what is left. A plugin that takes longer than 2 s (worker start included), throws, crashes or is disabled counts as having passed, and `orca plugin logs` shows the hook, the plugin and how long it took.
+
+Hooks run in the workers of the Orca that handles the request, before it acts: for an SSH or WSL terminal or workspace, that is the desktop, before the work is sent to its host. A paired client reaching a remote Orca server is decided by that server's plugins. `orca plugin types` writes the events as `PluginHooks` in `orca/host`; `orca/testing` `mountWorker(...).hooks.fire(hook, event)` returns what the chain decided.
+
+| Hook | Event | Stop result | `next` may change | Summary |
+| --- | --- | --- | --- | --- |
+| `terminal.send` | `{ terminalId: string; text: string; enter: boolean; inputKind: "driving" \| "orchestration" \| "launch" }` | `{ deny: string }` | `text`, `enter` | Text Orca, a client or a plugin is about to type into a terminal (not keys a person presses in it). Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send. |
+| `workspace.create.before` | `{ kind: "worktree" \| "folder"; projectId: string; name: string; branch?: string; base?: string }` | `{ deny: string }` | `name`, `branch`, `base` | A worktree or folder workspace is about to be created. Change `name`, `branch` or `base` with `next`, or return `{ deny }` to refuse it. |
+| `workspace.create.after` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string; branch: string }` | none | nothing | A worktree or folder workspace was created. Observe only: Orca does not wait for it, and results are ignored. |
+
 ## Errors
 
 A failed call rejects with an `Error` carrying `code`, `message`, `retryable` and, for `rate_limited`, `retryAfterMs`. Treat a code not listed here as `action_failed`:

@@ -242,6 +242,15 @@ export async function startPluginWorker(
         signal
       )
     },
+    runHook(event, payload, timeoutMs) {
+      return sendPluginWorkerRequest(
+        requests,
+        WORKER_METHODS.runHook,
+        { event, payload },
+        timeoutMs,
+        `hook ${event}`
+      )
+    },
     notifyDataChanged(change) {
       if (!exited && !disposed) {
         sendToChild(pluginEvent(WORKER_EVENTS.dataChanged, change))

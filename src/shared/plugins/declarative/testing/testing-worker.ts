@@ -1,5 +1,9 @@
 import { PLUGIN_V1_EVENT_ALIASES } from '../../contributions/plugin-event-contribution'
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS } from '../../events/plugin-events'
+import { isPluginHookName } from '../../contributions/plugin-hook-contribution'
+import { PLUGIN_HOOK_SPECS } from '../../events/plugin-hook-payloads'
+import { runPluginHookChain } from '../../workers/plugin-hook-chain'
+import { runPluginWorkerHookHandlers } from '../../workers/plugin-worker-hooks'
 import type { PluginWorkerPanelPost } from '../../workers/plugin-panel-bridge-protocol'
 import {
   createPluginWorkerApiTables,
@@ -21,7 +25,12 @@ export type MountWorkerOptions = {
   events: readonly string[]
   /** Command ids it may register, as listed in `contributes.commands`; null skips the check. */
   commands: readonly string[] | null
+  /** Hooks Orca runs through it, as listed in `contributes.hooks`; defaults to the manifest's. */
+  hooks: readonly string[]
 }
+
+/** What a hook chain of this one worker decided: Orca goes on with `event`, or it was refused. */
+export type HookDecision = { kind: 'continue'; event: unknown } | { kind: 'deny'; reason: string }
 
 /** The caller a test's `request` names when it does not pass one. */
 const TEST_PANEL = { id: 'test-panel', surface: 'panel', contributionId: 'panel' } as const
@@ -42,6 +51,7 @@ function messageOf(error: unknown): string {
 export async function mountWorker(module: WorkerModule, options: MountWorkerOptions) {
   const { host } = options
   const subscribed = new Set(options.events)
+  const hooked = new Set(options.hooks)
   const tables = createPluginWorkerApiTables()
   const logs: string[] = []
   const posts: PluginWorkerPanelPost[] = []
@@ -121,6 +131,37 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
       await Promise.all([...handlers].map(async (handler) => handler(parsed.data)))
       await host.idle()
     },
+    hooks: {
+      /** Runs a hook as Orca would, with this worker as the only plugin: the same deadline, the
+       *  same fields `next` may change, and the same checks on what it returns. */
+      async fire(event: string, payload: unknown): Promise<HookDecision> {
+        if (!isPluginHookName(event)) {
+          throw new Error(`hooks.fire: "${event}" is not a hook Orca runs`)
+        }
+        if (!hooked.has(event)) {
+          throw new Error(`hooks.fire: "${event}" never runs: it is not in contributes.hooks`)
+        }
+        const parsed = PLUGIN_HOOK_SPECS[event].payload.safeParse(payload)
+        if (!parsed.success) {
+          throw new TypeError(
+            `hooks.fire: that ${event} event is not one Orca sends: ${parsed.error.issues[0]?.message ?? ''}`
+          )
+        }
+        const outcome = await runPluginHookChain({
+          event,
+          payload: parsed.data,
+          participants: ['worker'],
+          invoke: (_plugin, current) =>
+            runPluginWorkerHookHandlers(tables.hooks.get(event) ?? [], current),
+          log: (_plugin, line) => void logs.push(line),
+          now: () => performance.now()
+        })
+        await host.idle()
+        return outcome.kind === 'deny'
+          ? { kind: 'deny', reason: outcome.reason }
+          : { kind: 'continue', event: outcome.payload }
+      }
+    },
     /** Runs a registered command, as the palette or `orca plugin` would. */
     async command(commandId: string, args?: unknown): Promise<unknown> {
       const handler = tables.commands.get(commandId)
@@ -150,6 +191,7 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
       stopListening()
       stopAnswering()
       tables.events.clear()
+      tables.hooks.clear()
       tables.commands.clear()
       tables.panelRequests.clear()
       try {

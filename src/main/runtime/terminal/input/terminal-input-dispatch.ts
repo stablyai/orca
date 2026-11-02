@@ -21,6 +21,7 @@ import {
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { terminalSendPluginHook } from './terminal-send-plugin-hook'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected abstract writeTerminalAction(
@@ -136,13 +137,22 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     },
     options: RuntimeTerminalWriteOptions
   ): Promise<RuntimeTerminalSend> {
+    const hooked = terminalSendPluginHook(handle, action, options.inputKind)
+    return this.sendTerminalAfterPluginHooks(handle, hooked ? await hooked : action, options)
+  }
+
+  private async sendTerminalAfterPluginHooks(
+    handle: string,
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    options: RuntimeTerminalWriteOptions
+  ): Promise<RuntimeTerminalSend> {
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN
       ? this.startRestoredHandlePane(handle, { signal: options.signal })
       : null
     if (starting) {
       const target = await starting
-      return { ...(await this.sendTerminal(target, action, options)), handle }
+      return { ...(await this.sendTerminalAfterPluginHooks(target, action, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {

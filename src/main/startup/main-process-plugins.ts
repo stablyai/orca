@@ -42,6 +42,7 @@ import {
   watchPluginWorkspaceContext
 } from '../plugins/plugin-runtime-binding'
 import { emitPluginWorktreeLifecycle } from './main-process-pty-startup'
+import { installPluginHookRunner } from '../plugins/hooks/plugin-hook-participants'
 import { mainProcessState as state } from './main-process-state'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
@@ -235,6 +236,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   // Bound here, not in the IPC handlers: a headless serve never opens a window to register them.
   const pluginDelegate = pluginRuntimeDelegate(runtime, () => agentHookServer.getStatusSnapshot())
   pluginService.setRuntimeDelegate(pluginDelegate)
+  installPluginHookRunner(pluginService)
   // Headless RPC resolves this service too; consent shares the desktop hash-keyed write path.
   setPluginServiceForRpc(state.pluginService, {
     applyConsent: (request) =>
