@@ -4136,6 +4136,7 @@
           "platform": "macos",
           "result": "passed",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/power/system-resume-broadcast.test.ts src/main/power/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2",
           "durationSeconds": 8.141,
           "summary": "The retained behavioral cohort passed 25 tests after removing source-only ordering tests. Historical pre-removal receipts are preserved verbatim with their originally executed commands: [{\"date\":\"2026-08-01\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot\",\"result\":\"passed\",\"durationSeconds\":1.6,\"summary\":\"Four focused files and 33 tests passed, including stalled cancellation, active progress, late metadata replay, failure isolation, committed-quit bridge lifetime, and post-settlement cleanup.\"}] No new native desktop or hosted run is claimed."
         }
