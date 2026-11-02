@@ -17,9 +17,10 @@ export async function showAccountUsage({ client, flags, json }: HandlerContext):
       `Unsupported --agent "${String(agent)}". Use one of: ${ACCOUNT_USAGE_AGENTS.join(', ')}.`
     )
   }
+  const fresh = flags.get('fresh') === true
   const response = await client.call<Partial<AccountsUsageSnapshot>>(
     'accounts.list',
-    { refreshUsage: flags.get('fresh') === true },
+    { refreshUsage: fresh },
     { timeoutMs: 120_000 }
   )
   const { claude, codex, rateLimits } = response.result
@@ -29,7 +30,7 @@ export async function showAccountUsage({ client, flags, json }: HandlerContext):
       'The running Orca runtime does not report account usage. Update or restart Orca and try again.'
     )
   }
-  const accounts = buildAccountUsageRows({ claude, codex, rateLimits }).filter(
+  const accounts = buildAccountUsageRows({ claude, codex, rateLimits }, { fresh }).filter(
     (row) => agent === undefined || row.agent === agent
   )
   printResult({ ...response, result: { accounts } }, json, (result) =>

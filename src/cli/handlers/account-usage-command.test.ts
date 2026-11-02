@@ -121,6 +121,18 @@ describe('orca account usage', () => {
     ])
   })
 
+  it('says to retry, not to pass --fresh, when the host skipped an unread account', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await showAccountUsage(context([['fresh', true]]).ctx)
+
+    const unread = JSON.parse(String(log.mock.calls[0][0])).result.accounts.find(
+      (row: { accountId: string | null }) => row.accountId === 'a1'
+    )
+    expect(unread.error).toBe(
+      'No usage read yet; Orca reads unselected accounts at most once a minute, so try again shortly.'
+    )
+  })
+
   it('rejects an unknown --agent before calling the host', async () => {
     const { ctx, call } = context([['agent', 'foo']])
     await expect(showAccountUsage(ctx)).rejects.toThrow('Unsupported --agent "foo"')

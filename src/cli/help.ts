@@ -191,7 +191,7 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--agent <id>           Only this agent, e.g. claude, codex, gemini, or antigravity'
   }
   if (command === 'account usage' && flag === 'fresh') {
-    return '--fresh                Re-read usage for every account before printing'
+    return '--fresh                Re-read usage before printing (unselected accounts at most once a minute)'
   }
   if (command.startsWith('account ') && flag === 'agent') {
     return '--agent <id>           Account provider: opencode or devin'

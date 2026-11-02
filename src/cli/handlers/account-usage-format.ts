@@ -67,6 +67,9 @@ export type AccountsUsageSnapshot = {
 
 const SYSTEM_DEFAULT_LABEL = 'System default'
 const NOT_READ_YET = 'No usage read yet; run with --fresh.'
+// The host skips an unselected-account read within a minute of the last one, so --fresh can still leave a row unread.
+const NOT_READ_AFTER_FRESH =
+  'No usage read yet; Orca reads unselected accounts at most once a minute, so try again shortly.'
 const BEING_READ = 'Usage is still being read; try again shortly.'
 
 function isoTime(ms: number | null | undefined): string | null {
@@ -142,7 +145,8 @@ function managedAccountRows(
   targetAccountId: string | null,
   target: RateLimitRuntimeTarget,
   active: ProviderRateLimits | null,
-  inactive: RateLimitState['inactiveClaudeAccounts']
+  inactive: RateLimitState['inactiveClaudeAccounts'],
+  notReadYet: string
 ): AccountUsageRow[] {
   const selectedIds = new Set([
     accounts.activeAccountId,
@@ -173,7 +177,7 @@ function managedAccountRows(
       ? `Selected on another runtime; Orca reads usage for the ${targetLabel(target)} selection only.`
       : entry?.isFetching
         ? BEING_READ
-        : NOT_READ_YET
+        : notReadYet
     rows.push(
       row(
         agent,
@@ -187,8 +191,12 @@ function managedAccountRows(
 }
 
 /** Flattens the host's accounts snapshot into one usage row per agent account. */
-export function buildAccountUsageRows(snapshot: AccountsUsageSnapshot): AccountUsageRow[] {
+export function buildAccountUsageRows(
+  snapshot: AccountsUsageSnapshot,
+  { fresh = false }: { fresh?: boolean } = {}
+): AccountUsageRow[] {
   const { claude, codex, rateLimits } = snapshot
+  const notReadYet = fresh ? NOT_READ_AFTER_FRESH : NOT_READ_YET
   // The active usage snapshot belongs to the account selected for the rate-limit target, which may be a WSL distro.
   const claudeTargetAccountId = getSelectedClaudeAccountIdForTarget(
     {
@@ -211,7 +219,8 @@ export function buildAccountUsageRows(snapshot: AccountsUsageSnapshot): AccountU
       claudeTargetAccountId,
       rateLimits.claudeTarget,
       rateLimits.claude,
-      rateLimits.inactiveClaudeAccounts
+      rateLimits.inactiveClaudeAccounts,
+      notReadYet
     ),
     ...managedAccountRows(
       'codex',
@@ -219,7 +228,8 @@ export function buildAccountUsageRows(snapshot: AccountsUsageSnapshot): AccountU
       codexTargetAccountId,
       rateLimits.codexTarget,
       rateLimits.codex,
-      rateLimits.inactiveCodexAccounts
+      rateLimits.inactiveCodexAccounts,
+      notReadYet
     )
   ]
   const singleAccountProviders = [

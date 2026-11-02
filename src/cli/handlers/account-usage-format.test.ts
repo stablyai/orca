@@ -174,6 +174,20 @@ describe('account usage rows', () => {
     )
   })
 
+  it('does not point back to --fresh for an account the host had read within the last minute', () => {
+    const rows = buildAccountUsageRows(
+      snapshot({ claude: limits('claude', { session: SESSION }) }),
+      {
+        fresh: true
+      }
+    )
+
+    expect(rows.find((row) => row.accountId === 'a2')?.error).toBe(
+      'No usage read yet; Orca reads unselected accounts at most once a minute, so try again shortly.'
+    )
+    expect(rows.find((row) => row.accountId === 'a1')?.error).toBeNull()
+  })
+
   it('attributes the active usage to the account selected for the WSL rate-limit target', () => {
     const base = snapshot({
       claude: limits('claude', { session: SESSION }),
