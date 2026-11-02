@@ -29,6 +29,20 @@ export function getRepositoryPaneSearchEntries(
   return [
     getRepositoryFormatterSearchEntry(),
     {
+      title: translate('settings.projectDefaultAgent.title', 'Default agent'),
+      description: translate(
+        'settings.projectDefaultAgent.description',
+        'Choose the agent used for new workspaces in this project.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword('settings.projectDefaultAgent.keywordAgent', 'agent'),
+        ...translateSearchKeyword('settings.projectDefaultAgent.keywordDefault', 'default agent'),
+        ...translateSearchKeyword('settings.projectDefaultAgent.keywordBlank', 'blank terminal'),
+        ...translateSearchKeyword('settings.projectDefaultAgent.keywordInherit', 'inherit global')
+      ]
+    },
+    {
       title: translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
       description: translate(
         'components.RepositoryJiraProjectSection.description',

@@ -27,7 +27,7 @@ Orca wakes you with the answer. To hand work off with nothing back, use `orca-cl
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
+ORCA orchestration worker-start --spec "<task>" --worktree current --agent default
 ```
 
 - Start every independent worker, then **end your turn**. "Report back" and
@@ -40,9 +40,10 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
   (`ORCA repo list --json` gives the id). If nothing needs to come back to you
   (the user will work in those chats), don't start workers; per workspace run
-  `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
+  `ORCA worktree create --name <name> --no-parent --agent default --prompt "<brief>" --json`
   and end your turn.
-- Add `--model` only if the user named one.
+- When the user does not name an agent, use `--agent default`: Orca resolves the target project on the worker execution host. The coordinator project, agent, and parent lineage do not choose for the target. An explicit agent ID overrides the default for one launch without changing the saved setting. A Blank Terminal default, an unavailable configured agent, or an older host unable to resolve defaults fails before workspace creation or dispatch. `worker-start` still requires `--agent` or `--terminal`.
+- Add `--model` only if the user named one; for example, `--agent claude --model opus --effort high`.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use

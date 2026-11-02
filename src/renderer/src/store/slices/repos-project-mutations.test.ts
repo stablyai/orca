@@ -1,4 +1,5 @@
 import { describe } from 'vitest'
+import { registerReposProjectDefaultAgentTests } from './repos-project-default-agent.spec'
 import { registerReposProjectHostLifecycleTests } from './repos-project-host-lifecycle.spec'
 import { registerReposProjectHostCapabilityTests } from './repos-project-host-capability.spec'
 import { registerReposProjectGroupsOwnerRoutingTests } from './repos-project-groups-owner-routing.spec'
@@ -14,3 +15,5 @@ describe('repos-project-groups-delete', registerReposProjectGroupsDeleteTests)
 describe('repos-update-serialization', registerReposUpdateSerializationTests)
 describe('repos-project-group-create-race', registerReposProjectGroupCreateRaceTests)
 describe('repos-remove-project-purge-leak', registerReposRemoveProjectPurgeLeakTests)
+
+describe('repos-project-default-agent', registerReposProjectDefaultAgentTests)

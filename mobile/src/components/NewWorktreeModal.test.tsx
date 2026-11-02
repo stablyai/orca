@@ -60,6 +60,7 @@ import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
+import { PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 
 import { NewWorktreeModal } from './NewWorktreeModal'
 
@@ -256,7 +257,10 @@ describe('NewWorktreeModal project targets', () => {
         return replied({ repos: listed })
       }
       if (method === 'status.get') {
-        return replied({ hostPlatform })
+        return replied({ hostPlatform, capabilities: [PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY] })
+      }
+      if (method === 'agent.resolveDefault') {
+        return replied({ agent: 'codex', source: 'project', projectName: 'orca' })
       }
       if (method === 'worktree.create') {
         return replied({
@@ -320,7 +324,7 @@ describe('NewWorktreeModal project targets', () => {
 
     expect(server).toHaveBeenCalledWith(
       'worktree.create',
-      expect.objectContaining({ repo: 'id:server-repo' }),
+      expect.objectContaining({ repo: 'id:server-repo', startupAgent: 'codex' }),
       expect.anything()
     )
     expect(desktop).not.toHaveBeenCalledWith(

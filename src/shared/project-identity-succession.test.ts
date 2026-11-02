@@ -46,6 +46,22 @@ describe('carryProjectStateThroughIdentityChange', () => {
     expect([...result.remappedProjectIds]).toEqual([['repo:r1', 'github:acme/app']])
   })
 
+  it('carries explicit blank and inherited project agent choices through identity changes', () => {
+    const projected = makeProject({ id: 'github:acme/app', sourceRepoIds: ['r1'] })
+    const previous = makeProject({
+      id: 'repo:r1',
+      sourceRepoIds: ['r1'],
+      defaultTuiAgent: 'blank'
+    })
+    expect(
+      carryProjectStateThroughIdentityChange([projected], [previous]).projects[0]?.defaultTuiAgent
+    ).toBe('blank')
+    expect(
+      carryProjectStateThroughIdentityChange([projected], [{ ...previous, defaultTuiAgent: null }])
+        .projects[0]?.defaultTuiAgent
+    ).toBeNull()
+  })
+
   it('ignores prior rows that still exist under their own id', () => {
     const kept = makeProject({ id: 'git:host/acme/app', sourceRepoIds: ['r1'] })
     const renamed = makeProject({ id: 'git:host/acme/tool', sourceRepoIds: ['r2'] })

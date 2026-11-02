@@ -353,6 +353,33 @@ describe('Store', () => {
     })
   })
 
+  it('persists each project default agent state across restart', async () => {
+    const project = makeProject({ id: 'repo:r1', sourceRepoIds: ['r1'] })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [makeRepo({ id: 'r1' })],
+      projects: [project]
+    })
+    const store = await createStore()
+    expect(store.getProjects()[0]?.defaultTuiAgent).toBeUndefined()
+
+    expect(store.updateProject(project.id, { defaultTuiAgent: 'codex' })?.defaultTuiAgent).toBe(
+      'codex'
+    )
+    store.flush()
+    expect((await createStore()).getProjects()[0]?.defaultTuiAgent).toBe('codex')
+
+    expect(store.updateProject(project.id, { defaultTuiAgent: 'blank' })?.defaultTuiAgent).toBe(
+      'blank'
+    )
+    store.flush()
+    expect((await createStore()).getProjects()[0]?.defaultTuiAgent).toBe('blank')
+
+    expect(store.updateProject(project.id, { defaultTuiAgent: null })?.defaultTuiAgent).toBeNull()
+    store.flush()
+    expect((await createStore()).getProjects()[0]?.defaultTuiAgent).toBeNull()
+  })
+
   it('carries project state and independent setups across a repo remote identity change', async () => {
     const originProjectId = 'git:git.example.com/acme/app'
     writeDataFile({
