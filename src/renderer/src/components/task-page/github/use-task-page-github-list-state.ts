@@ -72,7 +72,6 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
       selectedReposKey,
       initialTaskQuery,
       getCachedWorkItems,
-      taskSource,
       appliedTaskSearch,
       githubPageSize,
       githubPerRepoPageLimit
