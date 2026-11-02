@@ -171,14 +171,14 @@ describe('reordering same-id primaries on separate machines', () => {
     isMainWorktree: false
   }
 
-  it('drops a primary between a ranked non-primary and its twin, writing only that copy', () => {
+  it('drops a linked worktree between ranked primaries, writing only that row', () => {
     const { writes, applied } = dropCard([...twins.slice(0, 2), feature], 'ssh:vm-c', 1)
 
     expect(writes.map((entry) => entry.executionHostId)).toEqual(['ssh:vm-c'])
     expect(renderedHosts(applied)).toEqual(['ssh:vm-a', 'ssh:vm-c', 'ssh:vm-b'])
   })
 
-  it('keeps the dropped slot when unranked primaries and a non-primary materialize ranks', () => {
+  it('keeps a linked worktree between primaries when unranked rows materialize ranks', () => {
     const unranked = [...twins.slice(0, 2), feature].map(
       ({ manualOrder: _manualOrder, ...row }) => row
     )
