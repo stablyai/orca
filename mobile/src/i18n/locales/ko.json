@@ -521,6 +521,10 @@
       "disconnected": "첨부 실패(연결 끊김)",
       "imageTooLarge": "이미지가 너무 커서 첨부할 수 없습니다.",
       "permissionDenied": "사진 접근 권한 거부됨"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "에이전트에게 넘김",
+      "startedAgent": "에이전트 시작됨"
     }
   },
   "common": {
@@ -1483,40 +1487,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "조치 필요",
-      "cancelled": "취소됨",
-      "checkDetails": "{{name}} 체크 세부 정보",
-      "failed": "실패",
       "failing": "{{count}}개 실패",
-      "failingChecks_one": "실패한 검사 {{count}}개",
-      "failingChecks_other": "실패한 검사 {{count}}개",
-      "fix": "수정",
-      "fixFailing": "AI로 실패한 체크 수정",
-      "inProgress": "진행 중",
-      "inspectOrFix": "세부 정보를 확인하거나 AI로 수정을 시작하세요.",
-      "loadDetailsFailed": "체크 세부 정보를 불러오지 못했습니다.",
-      "neutral": "중립",
-      "neutralCount": "{{count}}개 중립",
       "noChecks": "체크 없음",
       "openOnWeb": "웹에서 {{name}} 열기",
       "passed": "{{count}}개 통과",
-      "pending": "대기 중",
-      "pendingCount": "{{count}}개 대기 중",
-      "queued": "대기 중",
-      "rerunFailing": "실패한 체크 다시 실행",
-      "skipped": "건너뜀",
-      "successful": "성공",
-      "timedOut": "시간 초과",
-      "title": "체크",
-      "unavailable": "검사를 사용할 수 없습니다."
+      "title": "체크"
     },
     "commentCard": {
       "daysAgo_one": "{{count}}일 전",
       "daysAgo_other": "{{count}}일 전",
-      "deleteComment": "댓글 삭제",
       "deleteConfirmMessage": "GitHub에서 댓글이 영구적으로 삭제됩니다.",
       "deleteConfirmTitle": "댓글을 삭제하시겠습니까?",
-      "editComment": "댓글 수정",
       "editPlaceholder": "댓글 수정…",
       "hoursAgo_one": "{{count}}시간 전",
       "hoursAgo_other": "{{count}}시간 전",
@@ -1525,37 +1506,19 @@
       "minutesAgo_other": "{{count}}분 전",
       "monthsAgo_one": "{{count}}개월 전",
       "monthsAgo_other": "{{count}}개월 전",
-      "openOnGitHub": "GitHub에서 댓글 열기",
       "reply": "답장",
-      "replyPlaceholder": "답장 작성…",
-      "replyToComment": "댓글에 답장하기",
       "resolve": "해결",
-      "resolveThread": "스레드 해결",
-      "resolved": "해결됨",
       "unresolve": "해결 취소",
-      "unresolveThread": "스레드 해결 취소",
       "yearsAgo_one": "{{count}}년 전",
       "yearsAgo_other": "{{count}}년 전"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "댓글 추가…",
-      "all": "모두",
-      "bots": "봇",
       "comment": "댓글",
-      "commentsLoadFailed": "댓글을 불러오지 못했습니다. 새로고침을 눌러 다시 시도하세요.",
       "description": "설명",
       "descriptionLoadFailed": "설명을 불러오지 못했습니다. 새로고침을 눌러 다시 시도하세요.",
-      "humans": "사람",
-      "noBotComments": "봇 댓글이 없습니다.",
       "noComments": "아직 댓글이 없습니다.",
       "noDescription": "설명이 제공되지 않았습니다.",
-      "noHumanComments": "사람 댓글이 없습니다.",
-      "resolvedCommentCount": "{{author}}님의 댓글 · 해결됨 ({{count}})",
-      "resolvedCommentSingle": "{{author}}님의 댓글 · 해결됨",
-      "resolvedThreadCount": "{{author}}님의 스레드 · 해결됨 ({{count}})",
-      "resolvedThreadSingle": "{{author}}님의 스레드 · 해결됨",
       "showMore": "{{count}}개 더 보기",
-      "showMoreOf": "남은 {{remaining}}개 중 {{count}}개 더 보기",
       "title": "댓글"
     },
     "conflictingFilesSection": {
@@ -1584,27 +1547,14 @@
       "details": "세부 정보"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "자동 병합 켜기/끄기",
-      "autoMergeLabel": "준비되면 자동 병합",
-      "autoMergeOff": "꺼짐",
-      "autoMergeOn": "켜짐",
-      "closeAccessibilityLabel": "PR 닫기",
       "closeConfirmMessage": "병합하지 않고 #{{number}}을(를) 닫습니다.",
       "closeConfirmTitle": "PR을 닫으시겠습니까?",
-      "markReadyAccessibilityLabel": "PR을 리뷰 준비 완료로 표시",
       "markReadyButton": "리뷰 준비 완료",
-      "mergeAccessibilityLabel": "PR 병합",
-      "mergeButton": "병합",
-      "mergeConfirmTitle": "PR을 병합하시겠습니까?",
-      "recheckAccessibilityLabel": "병합 상태 다시 확인",
-      "recheckButton": "다시 확인",
       "reopenAccessibilityLabel": "PR 다시 열기",
       "reopenButton": "다시 열기",
       "reopenConfirmMessage": "#{{number}}을(를) 다시 엽니다.",
       "reopenConfirmTitle": "PR을 다시 여시겠습니까?",
-      "unlinkAccessibilityLabel": "PR 연결 해제",
-      "unlinkButton": "연결 해제",
-      "unlinkFailed": "PR 연결을 해제하지 못했습니다."
+      "unlinkButton": "연결 해제"
     },
     "prActionsState": {
       "behindHint": "병합하기 전에 브랜치 업데이트",
@@ -1697,25 +1647,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} 브랜치는 열려 있는 PR에 연결되어 있지 않습니다.",
-      "branchRequired": "PR을 작성하기 전에 브랜치를 체크아웃하세요.",
-      "createFailed": "PR을 작성하지 못했습니다.",
-      "createPr": "PR 작성",
-      "createPullRequest": "PR 작성",
       "currentBranchNotLinked": "현재 브랜치는 열려 있는 PR에 연결되어 있지 않습니다.",
-      "linkExistingPr": "기존 PR 연결",
       "linkExistingPullRequest": "기존 PR 연결",
       "linkedPrUnavailable": "연결된 PR #{{number}} 사용 불가",
-      "noOpenPullRequest": "열려 있는 PR 없음",
-      "refreshOrCreate": "새로고침하여 다시 확인하거나 이 브랜치의 새 PR을 작성하세요.",
-      "refreshPullRequest": "PR 새로고침",
-      "title": "PR"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "제목 편집 취소",
-      "editTitle": "PR 제목 편집",
-      "openInBrowser": "브라우저에서 PR #{{number}} 열기",
-      "openOnWeb": "웹에서 PR #{{number}} 열기",
-      "saveTitle": "제목 저장"
+      "refreshOrCreate": "새로고침하여 다시 확인하거나 이 브랜치의 새 PR을 작성하세요."
     },
     "prViewPanel": {
       "branchUnavailable": "현재 브랜치를 확인할 수 없습니다.",
@@ -1723,20 +1658,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "사용자 목록을 불러오지 못했습니다.",
-      "noMatches": "일치하는 사용자가 없습니다.",
-      "removeReviewer": "{{login}} 제거",
-      "requestReviewer": "{{login}}에게 리뷰 요청",
-      "searchPeople": "사용자 검색",
-      "title": "리뷰어"
+      "noMatches": "일치하는 사용자가 없습니다."
     },
     "reviewersSection": {
-      "addOrRemove": "리뷰어 추가 또는 제거",
       "approved": "승인됨",
       "changesRequested": "변경 요청됨",
       "commented": "댓글 작성됨",
       "dismissed": "해제됨",
-      "loadFailed": "리뷰어를 불러오지 못했습니다. 새로고침을 눌러 다시 시도하세요.",
-      "loading": "리뷰어 로드 중…",
       "noReviewers": "리뷰 요청 없음",
       "pending": "대기 중",
       "removeReviewer": "{{login}} 제거",
@@ -2416,8 +2344,7 @@
       "actionFailed": "댓글 작업에 실패했습니다."
     },
     "usePrTitleAction": {
-      "disconnected": "데스크톱에 연결되어 있지 않습니다.",
-      "updateFailed": "제목을 업데이트하지 못했습니다."
+      "disconnected": "데스크톱에 연결되어 있지 않습니다."
     },
     "useQuickCommands": {
       "loadFailed": "빠른 명령을 불러오지 못했습니다.",
@@ -2842,7 +2769,6 @@
       "emptyMessage": "워크트리에 변경 사항이 없습니다.",
       "emptyTitle": "로컬 변경 사항 없음",
       "generateMessage": "AI로 commit 메시지 생성",
-      "noStagedFiles": "스테이징된 파일 없음",
       "openActions": "소스 제어 작업 열기",
       "reconnecting": "데스크톱에 다시 연결 중…",
       "regenerateHint": "다시 생성하려면 메시지를 지웁니다.",
@@ -2983,9 +2909,7 @@
       "pushBeforeCreateFailed": "푸시에 실패했습니다. 푸시 오류를 해결한 후 다시 시도하세요."
     },
     "hubTab": {
-      "changes": "변경 사항",
-      "commits": "커밋",
-      "pullRequest": "PR"
+      "changes": "변경 사항"
     },
     "loaders": {
       "connectingToDesktop": "데스크톱에 연결 중…",
@@ -3045,7 +2969,6 @@
       "publishBranch": "브랜치 게시",
       "pull": "풀",
       "push": "푸시",
-      "stageAll": "모두 스테이지",
       "sync": "동기화"
     },
     "remoteDropdown": {
@@ -3193,9 +3116,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "커밋 메시지를 생성하지 못했습니다."
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "PR을 생성하기 전에 브랜치를 체크아웃하세요."
     },
     "useMobileGitRequests": {
       "actionFailed": "소스 제어 작업에 실패했습니다.",

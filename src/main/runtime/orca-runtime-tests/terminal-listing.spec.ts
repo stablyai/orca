@@ -423,26 +423,23 @@ describe('OrcaRuntimeService', () => {
       leaves: Map<string, unknown>
       leavesByPtyId: Map<string, { preview?: string; lastOutputAt?: number | null }[]>
     }
-    const originalLeaves = runtimePrivate.leaves
-    runtimePrivate.leaves = new Proxy(originalLeaves, {
-      get(target, prop) {
-        if (
-          prop === 'values' ||
-          prop === 'entries' ||
-          prop === 'keys' ||
-          prop === Symbol.iterator
-        ) {
-          return () => {
-            throw new Error('onPtyData should use the PTY leaf index')
-          }
-        }
-        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
-        const value = Reflect.get(target, prop, target)
-        return typeof value === 'function' ? value.bind(target) : value
-      }
-    })
+    const rejectTraversal = () => {
+      throw new Error('onPtyData should use the PTY leaf index')
+    }
+    const traversalSpies = [
+      vi.spyOn(runtimePrivate.leaves, 'values').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, 'entries').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, 'keys').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, Symbol.iterator).mockImplementation(rejectTraversal)
+    ]
 
-    runtime.onPtyData(`pty-${targetIndex}`, 'hello indexed\n', 123)
+    try {
+      runtime.onPtyData(`pty-${targetIndex}`, 'hello indexed\n', 123)
+    } finally {
+      for (const spy of traversalSpies) {
+        spy.mockRestore()
+      }
+    }
 
     const [targetLeaf] = runtimePrivate.leavesByPtyId.get(`pty-${targetIndex}`) ?? []
     expect(targetLeaf).toMatchObject({

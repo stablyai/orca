@@ -521,6 +521,10 @@
       "disconnected": "添付に失敗しました（接続切断）。",
       "imageTooLarge": "画像が大きすぎて添付できません。",
       "permissionDenied": "写真へのアクセスが拒否されました。"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Agentに引き継ぎました",
+      "startedAgent": "Agentを開始しました"
     }
   },
   "common": {
@@ -1483,40 +1487,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "操作が必要です",
-      "cancelled": "キャンセル済み",
-      "checkDetails": "{{name}} のチェックの詳細",
-      "failed": "失敗",
       "failing": "失敗 {{count}} 件",
-      "failingChecks_one": "失敗したチェック {{count}} 件",
-      "failingChecks_other": "失敗したチェック {{count}} 件",
-      "fix": "修正",
-      "fixFailing": "失敗したチェックを AI で修正",
-      "inProgress": "進行中",
-      "inspectOrFix": "詳細を確認するか、AI に修正を依頼してください。",
-      "loadDetailsFailed": "チェックの詳細を読み込めませんでした。",
-      "neutral": "中立",
-      "neutralCount": "中立 {{count}} 件",
       "noChecks": "チェックなし",
       "openOnWeb": "{{name}} をウェブで開く",
       "passed": "成功 {{count}} 件",
-      "pending": "保留中",
-      "pendingCount": "保留中 {{count}} 件",
-      "queued": "キュー待ち",
-      "rerunFailing": "失敗したチェックを再実行",
-      "skipped": "スキップ済み",
-      "successful": "成功",
-      "timedOut": "タイムアウト",
-      "title": "チェック",
-      "unavailable": "チェックは利用できません"
+      "title": "チェック"
     },
     "commentCard": {
       "daysAgo_one": "{{count}} 日前",
       "daysAgo_other": "{{count}} 日前",
-      "deleteComment": "コメントを削除",
       "deleteConfirmMessage": "GitHub 上のコメントを完全に削除します。",
       "deleteConfirmTitle": "コメントを削除しますか?",
-      "editComment": "コメントを編集",
       "editPlaceholder": "コメントを編集…",
       "hoursAgo_one": "{{count}} 時間前",
       "hoursAgo_other": "{{count}} 時間前",
@@ -1525,37 +1506,19 @@
       "minutesAgo_other": "{{count}} 分前",
       "monthsAgo_one": "{{count}} か月前",
       "monthsAgo_other": "{{count}} か月前",
-      "openOnGitHub": "GitHub でコメントを開く",
       "reply": "返事",
-      "replyPlaceholder": "返信を入力…",
-      "replyToComment": "コメントに返信",
       "resolve": "解決",
-      "resolveThread": "スレッドを解決",
-      "resolved": "解決済み",
       "unresolve": "未解決に戻す",
-      "unresolveThread": "スレッドを未解決に戻す",
       "yearsAgo_one": "{{count}} 年前",
       "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "コメントを追加…",
-      "all": "全て",
-      "bots": "ボット",
       "comment": "コメント",
-      "commentsLoadFailed": "コメントを読み込めませんでした。「更新」をタップして再試行してください。",
       "description": "説明",
       "descriptionLoadFailed": "説明を読み込めませんでした。「更新」をタップして再試行してください。",
-      "humans": "人間",
-      "noBotComments": "ボットのコメントはありません。",
       "noComments": "コメントはまだありません。",
       "noDescription": "説明はありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。",
-      "resolvedCommentCount": "{{author}} の解決済みコメント（{{count}} 件）",
-      "resolvedCommentSingle": "{{author}} の解決済みコメント",
-      "resolvedThreadCount": "{{author}} の解決済みスレッド（{{count}} 件）",
-      "resolvedThreadSingle": "{{author}} の解決済みスレッド",
       "showMore": "さらに {{count}} 件を表示",
-      "showMoreOf": "残り {{remaining}} 件のうち {{count}} 件を表示",
       "title": "コメント"
     },
     "conflictingFilesSection": {
@@ -1584,27 +1547,14 @@
       "details": "詳細"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "自動マージを切り替え",
-      "autoMergeLabel": "準備が整ったら自動マージ",
-      "autoMergeOff": "オフ",
-      "autoMergeOn": "オン",
-      "closeAccessibilityLabel": "PR を閉じる",
       "closeConfirmMessage": "#{{number}} をマージせずに閉じます。",
       "closeConfirmTitle": "PR を閉じますか？",
-      "markReadyAccessibilityLabel": "PR をレビュー可能にする",
       "markReadyButton": "レビュー可能にする",
-      "mergeAccessibilityLabel": "PR をマージ",
-      "mergeButton": "マージ",
-      "mergeConfirmTitle": "PR をマージしますか？",
-      "recheckAccessibilityLabel": "マージ状態を再確認",
-      "recheckButton": "再確認",
       "reopenAccessibilityLabel": "PR を再オープン",
       "reopenButton": "再オープン",
       "reopenConfirmMessage": "#{{number}} を再オープンします。",
       "reopenConfirmTitle": "PR を再オープンしますか？",
-      "unlinkAccessibilityLabel": "PR のリンクを解除",
-      "unlinkButton": "リンクを解除",
-      "unlinkFailed": "PR のリンク解除に失敗しました。"
+      "unlinkButton": "リンクを解除"
     },
     "prActionsState": {
       "behindHint": "マージする前にブランチを更新する",
@@ -1697,25 +1647,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} はオープンな PR にリンクされていません。",
-      "branchRequired": "PR を作成する前にブランチをチェックアウトしてください。",
-      "createFailed": "PR の作成に失敗しました。",
-      "createPr": "PR を作成",
-      "createPullRequest": "PR を作成",
       "currentBranchNotLinked": "現在のブランチはオープンな PR にリンクされていません。",
-      "linkExistingPr": "既存の PR をリンク",
       "linkExistingPullRequest": "既存の PR をリンク",
       "linkedPrUnavailable": "リンク済みの PR #{{number}} は利用できません",
-      "noOpenPullRequest": "オープンな PR はありません",
-      "refreshOrCreate": "更新して再確認するか、このブランチの新しい PR を作成してください。",
-      "refreshPullRequest": "PR を更新",
-      "title": "PR"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "タイトルの編集をキャンセル",
-      "editTitle": "PR のタイトルを編集",
-      "openInBrowser": "PR #{{number}} をブラウザで開く",
-      "openOnWeb": "PR #{{number}} をウェブで開く",
-      "saveTitle": "タイトルを保存"
+      "refreshOrCreate": "更新して再確認するか、このブランチの新しい PR を作成してください。"
     },
     "prViewPanel": {
       "branchUnavailable": "現在のブランチを取得できません。",
@@ -1723,20 +1658,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "ユーザーの読み込みに失敗しました",
-      "noMatches": "一致するユーザーはいません",
-      "removeReviewer": "{{login}} をレビュアーから削除",
-      "requestReviewer": "{{login}} にレビューを依頼",
-      "searchPeople": "ユーザーを検索",
-      "title": "レビュアー"
+      "noMatches": "一致するユーザーはいません"
     },
     "reviewersSection": {
-      "addOrRemove": "レビュアーを追加・削除",
       "approved": "承認された",
       "changesRequested": "変更要求",
       "commented": "コメント済み",
       "dismissed": "却下済み",
-      "loadFailed": "レビュアーを読み込めませんでした。「更新」をタップして再試行してください。",
-      "loading": "レビュアーを読み込み中…",
       "noReviewers": "レビューの依頼はありません",
       "pending": "保留中",
       "removeReviewer": "{{login}} を削除",
@@ -2416,8 +2344,7 @@
       "actionFailed": "コメントの操作に失敗しました。"
     },
     "usePrTitleAction": {
-      "disconnected": "デスクトップに接続されていません。",
-      "updateFailed": "タイトルの更新に失敗しました。"
+      "disconnected": "デスクトップに接続されていません。"
     },
     "useQuickCommands": {
       "loadFailed": "クイックコマンドの読み込みに失敗しました。",
@@ -2842,7 +2769,6 @@
       "emptyMessage": "ワークツリーに変更はありません。",
       "emptyTitle": "ローカルの変更なし",
       "generateMessage": "AIでコミットメッセージを生成",
-      "noStagedFiles": "ステージ済みのファイルなし",
       "openActions": "ソース管理の操作を開く",
       "reconnecting": "デスクトップに再接続中…",
       "regenerateHint": "再生成するには、メッセージをクリアしてください。",
@@ -2983,9 +2909,7 @@
       "pushBeforeCreateFailed": "プッシュに失敗しました。プッシュのエラーを解決してから、もう一度お試しください。"
     },
     "hubTab": {
-      "changes": "変更点",
-      "commits": "コミット",
-      "pullRequest": "PR"
+      "changes": "変更点"
     },
     "loaders": {
       "connectingToDesktop": "デスクトップに接続中…",
@@ -3045,7 +2969,6 @@
       "publishBranch": "ブランチを公開",
       "pull": "プル",
       "push": "プッシュ",
-      "stageAll": "ステージオール",
       "sync": "同期"
     },
     "remoteDropdown": {
@@ -3193,9 +3116,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "コミットメッセージの生成に失敗しました。"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "PR を作成する前にブランチをチェックアウトしてください。"
     },
     "useMobileGitRequests": {
       "actionFailed": "ソース管理の操作に失敗しました。",

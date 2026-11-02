@@ -521,6 +521,10 @@
       "disconnected": "添加失败（连接已断开）",
       "imageTooLarge": "图片过大，无法添加",
       "permissionDenied": "照片访问权限被拒绝"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "已移交给智能体",
+      "startedAgent": "已启动智能体"
     }
   },
   "common": {
@@ -1483,40 +1487,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "需要操作",
-      "cancelled": "已取消",
-      "checkDetails": "{{name}} 检查详情",
-      "failed": "失败",
       "failing": "{{count}} 项失败",
-      "failingChecks_one": "{{count}} 项检查失败",
-      "failingChecks_other": "{{count}} 项检查失败",
-      "fix": "修复",
-      "fixFailing": "使用 AI 修复失败的检查",
-      "inProgress": "进行中",
-      "inspectOrFix": "检查详细信息或启动 AI 修复过程。",
-      "loadDetailsFailed": "加载检查详情失败",
-      "neutral": "中性",
-      "neutralCount": "{{count}} 项中性",
       "noChecks": "无检查项",
       "openOnWeb": "在网页上打开 {{name}}",
       "passed": "{{count}} 项通过",
-      "pending": "待处理",
-      "pendingCount": "{{count}} 项待处理",
-      "queued": "已加入队列",
-      "rerunFailing": "重新运行失败的检查",
-      "skipped": "已跳过",
-      "successful": "成功",
-      "timedOut": "已超时",
-      "title": "检查项",
-      "unavailable": "检查不可用"
+      "title": "检查项"
     },
     "commentCard": {
       "daysAgo_one": "{{count}} 天前",
       "daysAgo_other": "{{count}} 天前",
-      "deleteComment": "删除评论",
       "deleteConfirmMessage": "这将永久删除 GitHub 上的这条评论。",
       "deleteConfirmTitle": "删除评论？",
-      "editComment": "编辑评论",
       "editPlaceholder": "编辑评论…",
       "hoursAgo_one": "{{count}} 小时前",
       "hoursAgo_other": "{{count}} 小时前",
@@ -1525,37 +1506,19 @@
       "minutesAgo_other": "{{count}} 分钟前",
       "monthsAgo_one": "{{count}} 个月前",
       "monthsAgo_other": "{{count}} 个月前",
-      "openOnGitHub": "在 GitHub 上打开评论",
       "reply": "回复",
-      "replyPlaceholder": "撰写回复…",
-      "replyToComment": "回复评论",
       "resolve": "解决",
-      "resolveThread": "解决讨论串",
-      "resolved": "已解决",
       "unresolve": "标记为未解决",
-      "unresolveThread": "将讨论串标记为未解决",
       "yearsAgo_one": "{{count}} 年前",
       "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "添加评论…",
-      "all": "全部",
-      "bots": "机器人",
       "comment": "评论",
-      "commentsLoadFailed": "无法加载评论。请点按刷新重试。",
       "description": "描述",
       "descriptionLoadFailed": "无法加载描述。请点按刷新重试。",
-      "humans": "人类",
-      "noBotComments": "没有机器人评论。",
       "noComments": "还没有评论。",
       "noDescription": "没有提供描述。",
-      "noHumanComments": "没有人类评论。",
-      "resolvedCommentCount": "{{author}} 的已解决评论（{{count}}）",
-      "resolvedCommentSingle": "{{author}} 的已解决评论",
-      "resolvedThreadCount": "{{author}} 的已解决讨论串（{{count}}）",
-      "resolvedThreadSingle": "{{author}} 的已解决讨论串",
       "showMore": "再显示 {{count}} 条",
-      "showMoreOf": "再显示 {{count}} 条（剩余 {{remaining}} 条）",
       "title": "评论"
     },
     "conflictingFilesSection": {
@@ -1584,27 +1547,14 @@
       "details": "详情"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "切换自动合并",
-      "autoMergeLabel": "满足条件后自动合并",
-      "autoMergeOff": "关闭",
-      "autoMergeOn": "开启",
-      "closeAccessibilityLabel": "关闭PR",
       "closeConfirmMessage": "#{{number}} 将被关闭，不会合并。",
       "closeConfirmTitle": "关闭 PR？",
-      "markReadyAccessibilityLabel": "将 PR 标记为已准备好接受评审",
       "markReadyButton": "标记为可评审",
-      "mergeAccessibilityLabel": "合并 PR",
-      "mergeButton": "合并",
-      "mergeConfirmTitle": "合并 PR？",
-      "recheckAccessibilityLabel": "重新检查合并状态",
-      "recheckButton": "重新检查",
       "reopenAccessibilityLabel": "重新开启 PR",
       "reopenButton": "重新开启",
       "reopenConfirmMessage": "#{{number}} 将被重新开启。",
       "reopenConfirmTitle": "重新开启 PR？",
-      "unlinkAccessibilityLabel": "取消 PR 关联",
-      "unlinkButton": "取消关联",
-      "unlinkFailed": "取消 PR 关联失败。"
+      "unlinkButton": "取消关联"
     },
     "prActionsState": {
       "behindHint": "合并前更新分支",
@@ -1697,25 +1647,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} 未关联到开放的 PR。",
-      "branchRequired": "创建 PR 前，请先检出分支。",
-      "createFailed": "创建 PR 失败。",
-      "createPr": "创建PR",
-      "createPullRequest": "创建 PR",
       "currentBranchNotLinked": "当前分支未关联到开放的 PR。",
-      "linkExistingPr": "关联现有 PR",
       "linkExistingPullRequest": "关联现有 PR",
       "linkedPrUnavailable": "关联的 PR #{{number}} 不可用",
-      "noOpenPullRequest": "暂无开放的 PR",
-      "refreshOrCreate": "刷新以重新检查，或为此分支创建新的 PR。",
-      "refreshPullRequest": "刷新 PR",
-      "title": "PR"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "取消编辑标题",
-      "editTitle": "编辑 PR 标题",
-      "openInBrowser": "在浏览器中打开 PR #{{number}}",
-      "openOnWeb": "在网页上打开 PR #{{number}}",
-      "saveTitle": "保存标题"
+      "refreshOrCreate": "刷新以重新检查，或为此分支创建新的 PR。"
     },
     "prViewPanel": {
       "branchUnavailable": "当前分支不可用。",
@@ -1723,20 +1658,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "加载人员失败",
-      "noMatches": "没有匹配的人员",
-      "removeReviewer": "移除 {{login}}",
-      "requestReviewer": "请求 {{login}} 评审",
-      "searchPeople": "搜索人员",
-      "title": "评审人"
+      "noMatches": "没有匹配的人员"
     },
     "reviewersSection": {
-      "addOrRemove": "添加或移除评审人",
       "approved": "已批准",
       "changesRequested": "要求更改",
       "commented": "已评论",
       "dismissed": "已撤销",
-      "loadFailed": "无法加载评审人。请点按刷新重试。",
-      "loading": "正在加载评审人…",
       "noReviewers": "尚未请求评审",
       "pending": "待处理",
       "removeReviewer": "移除 {{login}}",
@@ -2416,8 +2344,7 @@
       "actionFailed": "评论操作失败"
     },
     "usePrTitleAction": {
-      "disconnected": "未连接到桌面。",
-      "updateFailed": "更新标题失败。"
+      "disconnected": "未连接到桌面。"
     },
     "useQuickCommands": {
       "loadFailed": "加载快捷命令失败",
@@ -2842,7 +2769,6 @@
       "emptyMessage": "工作树无更改。",
       "emptyTitle": "无本地更改",
       "generateMessage": "使用 AI 生成提交信息",
-      "noStagedFiles": "没有已暂存的文件",
       "openActions": "打开源代码控制操作菜单",
       "reconnecting": "正在重新连接桌面…",
       "regenerateHint": "清除消息以重新生成。",
@@ -2983,9 +2909,7 @@
       "pushBeforeCreateFailed": "推送失败。请解决推送错误后重试。"
     },
     "hubTab": {
-      "changes": "更改",
-      "commits": "提交",
-      "pullRequest": "PR"
+      "changes": "更改"
     },
     "loaders": {
       "connectingToDesktop": "正在连接桌面…",
@@ -3045,7 +2969,6 @@
       "publishBranch": "发布分支",
       "pull": "拉",
       "push": "推",
-      "stageAll": "暂存全部",
       "sync": "同步"
     },
     "remoteDropdown": {
@@ -3193,9 +3116,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "生成提交信息失败"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "创建 PR 前，请先检出分支。"
     },
     "useMobileGitRequests": {
       "actionFailed": "源代码控制操作失败",

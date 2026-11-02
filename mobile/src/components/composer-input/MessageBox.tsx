@@ -32,6 +32,8 @@ type MessageBoxProps = Omit<
   /** Drawn over the text, which hides while it is set, e.g. dictation's live preview. */
   inputOverlay?: ReactNode
   monospace?: boolean
+  /** One pill-shaped row with its controls beside the text, for short replies. */
+  inline?: boolean
   style?: StyleProp<ViewStyle>
 }
 
@@ -49,6 +51,7 @@ export function MessageBox({
   docked = false,
   inputOverlay,
   monospace = false,
+  inline = false,
   style,
   editable = true,
   multiline = true,
@@ -61,9 +64,17 @@ export function MessageBox({
   const hasActions = leading !== undefined || trailing !== undefined || onSend !== undefined
   const minHeight = hasActions ? MESSAGE_MIN_HEIGHT : FORM_MESSAGE_MIN_HEIGHT
   return (
-    <View style={[styles.box, !hasActions && styles.formBox, docked && styles.docked, style]}>
+    <View
+      style={[
+        styles.box,
+        !hasActions && styles.formBox,
+        inline && styles.inlineBox,
+        docked && styles.docked,
+        style
+      ]}
+    >
       {/* Always wrapped, so showing the overlay never remounts the field under the keyboard. */}
-      <View>
+      <View style={inline ? styles.inlineText : undefined}>
         <TextInput
           ref={ref}
           value={value}
@@ -88,7 +99,7 @@ export function MessageBox({
         {inputOverlay}
       </View>
       {hasActions ? (
-        <View style={styles.actionRow}>
+        <View style={[styles.actionRow, inline && styles.inlineActions]}>
           {leading}
           <View style={styles.actionSpacer} />
           {trailing}

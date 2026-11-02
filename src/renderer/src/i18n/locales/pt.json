@@ -1596,6 +1596,8 @@
       "claudeRemoveFolder": "O Orca exclui deste computador a pasta do Claude desta conta e seu login. O histórico de chat compartilhado com Padrão do sistema é mantido. Se esta conta estiver selecionada, o próximo Claude que você iniciar usará Padrão do sistema."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Operação do Git em outro lugar",
+      "remoteOperationInAnotherWorkspace": "Outro espaço de trabalho está executando uma operação do Git, como push, pull ou force push. Aguarde a conclusão antes de usar esta ação para que as operações não se sobreponham.",
       "actionModel": {
         "on": "Ativado",
         "off": "Desativado",
@@ -20701,6 +20703,8 @@
         "unnamedSender": "um agente",
         "messageFromCoordinator": "Mensagem do coordenador",
         "startedWorker": "Worker iniciado",
+        "handedOffToAgent": "Entregue a um agente",
+        "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarefa do coordenador",
         "updateFromWorker": "Atualização do worker"
       },
@@ -23359,12 +23363,14 @@
       "serveSimUnavailable": "serve-sim não está disponível.",
       "serveSimNoEndpoints": "serve-sim não retornou endpoints de streaming.",
       "serveSimEndpointUnreachable": "serve-sim foi iniciado, mas seu endpoint de streaming não está acessível.",
+      "deviceHubInputBlocked": "O Device Hub do Xcode assumiu a entrada deste simulador, então toques e digitação não chegarão até ele. Feche o Device Hub e conecte o simulador novamente.",
       "androidSdkMissing": "Android SDK não encontrado. Instale o Android Studio e defina ANDROID_HOME.",
       "adbUnavailable": "adb não está disponível.",
       "noAndroidDevices": "Nenhum dispositivo Android ou AVD encontrado. Crie um no Android Studio.",
       "androidDeviceNotRunning": "O dispositivo Android \"{{device}}\" não está em execução. Inicie-o primeiro.",
       "unknownDeviceOrAvd": "\"{{device}}\" não é um dispositivo em execução nem um AVD conhecido.",
       "avdBootTimeout": "O AVD \"{{avdName}}\" não terminou de inicializar a tempo.",
+      "avdExitedBeforeBoot": "O AVD \"{{avdName}}\" parou antes de terminar de inicializar: {{detail}}",
       "scrcpyDownloadFailed": "Não foi possível baixar o servidor scrcpy: {{detail}}",
       "scrcpyServerInvalid": "O servidor scrcpy baixado era inválido ou estava incompleto."
     },

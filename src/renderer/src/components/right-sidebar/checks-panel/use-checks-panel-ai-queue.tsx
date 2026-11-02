@@ -11,7 +11,7 @@ import type { ChecksPanelAiAcknowledgementState } from './use-checks-panel-ai-ac
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { toast } from 'sonner'
 import { buildResolvePullRequestConflictsPrompt } from '../SourceControl'
-import { buildPRCommentsResolutionPrompt } from '../../pr-comments-resolution-prompt'
+import { buildPRCommentsResolutionPrompt } from '../../../../../shared/github/pr-comments-resolution-prompt'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import type { PRCommentGroup } from '../../../../../shared/pr-comment-groups'
 import { translate } from '@/i18n/i18n'

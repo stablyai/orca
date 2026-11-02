@@ -2,6 +2,7 @@ import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
+import { MobileSourceControlNextStepBar } from './MobileSourceControlNextStepBar'
 import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
@@ -52,6 +53,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('expo-clipboard', () => ({ setStringAsync: async () => {} }))
+vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
 vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
   ArrowDownUp: 'ArrowDownUp',
@@ -61,6 +63,8 @@ vi.mock('lucide-react-native', () => ({
   CloudUpload: 'CloudUpload',
   FileText: 'FileText',
   GitBranch: 'GitBranch',
+  GitMerge: 'GitMerge',
+  GitPullRequest: 'GitPullRequest',
   GitPullRequestArrow: 'GitPullRequestArrow',
   History: 'History',
   Minus: 'Minus',
@@ -173,6 +177,7 @@ function initialState(): MobileSourceControlContentState {
     createPrAction: {
       visible: false,
       label: 'Create Pull Request',
+      reviewLabel: 'pull request',
       disabled: true,
       loading: false,
       pushFirst: false,
@@ -210,17 +215,31 @@ const controls: { patch: ((patch: Partial<MobileSourceControlContentState>) => v
 function Fixture({ initial }: { initial: MobileSourceControlContentState }) {
   const [state, setState] = useState(initial)
   controls.patch = (patch) => setState((previous) => ({ ...previous, ...patch }))
-  return createElement(MobileSourceControlContent, {
-    primaryAction: state.primaryAction,
-    state: {
-      ...state,
-      setCommitMessage: (next) =>
-        setState((previous) => ({
-          ...previous,
-          commitMessage: typeof next === 'function' ? next(previous.commitMessage) : next
-        }))
-    }
-  })
+  const liveState = {
+    ...state,
+    setCommitMessage: (next: string | ((previous: string) => string)) =>
+      setState((previous) => ({
+        ...previous,
+        commitMessage: typeof next === 'function' ? next(previous.commitMessage) : next
+      }))
+  }
+  // Laid out as the panel does: the commit box lives in the bar beside the list.
+  return createElement(
+    'View',
+    null,
+    createElement(MobileSourceControlContent, { state: liveState, bottomInset: 0 }),
+    createElement(MobileSourceControlNextStepBar, {
+      view: { kind: 'composer' },
+      notice: null,
+      agentNotice: null,
+      mergeConfirm: null,
+      composer: liveState,
+      primaryAction: state.primaryAction,
+      keyboardLift: state.keyboardLift,
+      bottomInset: 0,
+      onHeightChange: noop
+    })
+  )
 }
 
 function render(initial = initialState()) {
@@ -380,5 +399,28 @@ describe('AI commit message button', () => {
     expect(generateButton()?.props.accessibilityHint).toBe('Clear the message to regenerate.')
     patch({ generatingMessage: true })
     expect(generateButton()?.props.disabled).toBe(false)
+  })
+})
+
+describe('next-step bar and the keyboard', () => {
+  function input() {
+    return renderer?.root.findAll((node) => String(node.type) === 'TextInput')[0] ?? null
+  }
+
+  it('rides the keyboard for its own commit box and steps aside for any other field', () => {
+    render()
+    // Another field (a PR comment) raised the keyboard: the bar must not cover it.
+    patch({ keyboardLift: 300 })
+    expect(input()).toBeNull()
+    patch({ keyboardLift: 0 })
+    act(() => {
+      const onFocus = input()?.props.onFocus
+      if (typeof onFocus !== 'function') {
+        throw new Error('missing focus handler')
+      }
+      onFocus()
+    })
+    patch({ keyboardLift: 300 })
+    expect(input()).not.toBeNull()
   })
 })

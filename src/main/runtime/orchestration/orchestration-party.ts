@@ -10,6 +10,7 @@ import {
   resolveStructuredWorkerIdentity,
   resolveStructuredWorkerIdentityForRoot
 } from '../structured-worker-authority'
+import type { StructuredWorkerIdentity } from '../structured-worker-identity'
 import { canonicalOrcaSessionId } from './canonical-orca-session-id'
 import type { AgentSessionRecordReader } from './structured-session-lineage'
 import type { OrchestrationDb } from './db'
@@ -46,13 +47,29 @@ export function resolveOrcaSessionParty(
 ): OrchestrationSessionParty {
   const id = canonicalOrcaSessionId(orcaSessionId, store)
   const worker = resolveStructuredWorkerIdentityForRoot(id, db)
-  if (!worker && db && isRecordedStructuredWorkerSession(id, db)) {
+  const party = sessionPartyFromWorkerIdentity(
+    id,
+    worker,
+    !worker && Boolean(db && isRecordedStructuredWorkerSession(id, db))
+  )
+  if (!party) {
     // Without its handle, one worker would split into two parties and bind as a chat.
     throw new OrchestrationError(
       CODES.notLive,
       `Agent session ${id} is a structured worker whose worker identity this host no longer has, so orchestration cannot address it. No effects were applied.`,
       NO_EFFECTS
     )
+  }
+  return party
+}
+
+export function sessionPartyFromWorkerIdentity(
+  id: OrcaSessionId,
+  worker: Pick<StructuredWorkerIdentity, 'handle' | 'paneKey'> | null,
+  recordedWorker: boolean
+): OrchestrationSessionParty | undefined {
+  if (!worker && recordedWorker) {
+    return undefined
   }
   const key = { terminalHandle: worker?.handle ?? null, orcaSessionId: id }
   return {
