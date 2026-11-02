@@ -141,6 +141,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     agentSessionRecordPredecessorIds(this.database, sessionId).filter(
       (id) => clearSuccessor(this.getConversation(id)) === sessionId
     )
+  lineageRevision = (): object => this.transactions.lineageRevision()
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>

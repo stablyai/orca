@@ -284,8 +284,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     new OrchestrationStructuredMailboxPointerDelivery<RuntimeMessageWaiter>({
       getDb: () => this._orchestrationDb,
       getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
-      resolveStructuredTarget: (mailboxHandle) =>
-        this.resolveStructuredMailboxTarget(mailboxHandle),
+      resolveStructuredTarget: (handle) => this.resolveStructuredMailboxTarget(handle),
+      redeliver: (handle) => this.deliverPendingMessagesForHandle(handle),
       getCliCommand: localOrchestrationCliCommand,
       senderSnapshot: (party, reportedDispatchId) =>
         this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),

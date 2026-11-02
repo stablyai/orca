@@ -20,6 +20,11 @@ export type AgentSessionRecordReader = {
   senderIdentityRevision?: () => number
   /** The sessions a committed /clear continued into this one, from the store's in-memory index. */
   listClearedFrom?: (sessionId: string) => readonly string[]
+  /** One session's tab is gone from an index that exists; false while no index exists. */
+  isSessionTabRetired?: (sessionId: string) => boolean
+  /** Changes identity only when records join or leave or a /clear links them, so lookups derived from
+   *  every record's lineage can be reused across other writes. */
+  lineageRevision?: () => object
 }
 
 /** Null until the agent-session host is installed; callers that must see records ensure it first. */
@@ -36,6 +41,8 @@ export function conversationRecordReader(store: {
   senderIdentityRevision?: () => number
   listVisibleSessionIds?: () => string[]
   listClearedFrom?: (sessionId: string) => readonly string[]
+  isSessionTabRetired?: AgentSessionRecordReader['isSessionTabRetired']
+  lineageRevision?: AgentSessionRecordReader['lineageRevision']
 }): AgentSessionRecordReader {
   return {
     getRecord: store.getConversation,
@@ -46,7 +53,9 @@ export function conversationRecordReader(store: {
     ...(store.senderIdentityRevision
       ? { senderIdentityRevision: store.senderIdentityRevision }
       : {}),
-    ...(store.listClearedFrom ? { listClearedFrom: store.listClearedFrom } : {})
+    ...(store.listClearedFrom ? { listClearedFrom: store.listClearedFrom } : {}),
+    isSessionTabRetired: store.isSessionTabRetired,
+    lineageRevision: store.lineageRevision
   }
 }
 
