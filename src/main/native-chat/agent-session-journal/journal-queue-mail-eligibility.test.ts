@@ -154,14 +154,17 @@ describe("the queue's one rule for the next card", () => {
         ordered: QueuedMessageRow[]
       }
       let reads = 0
-      cards.ordered = new Proxy(cards.ordered, {
-        get(target, key, receiver) {
-          if (typeof key === 'string' && /^\d+$/.test(key)) {
+      const counted: QueuedMessageRow[] = []
+      cards.ordered.forEach((card, index) => {
+        Object.defineProperty(counted, index, {
+          enumerable: true,
+          get: () => {
             reads += 1
+            return card
           }
-          return Reflect.get(target, key, receiver)
-        }
+        })
       })
+      cards.ordered = counted
       for (let selection = 0; selection < 10; selection += 1) {
         expect(next(journal)).toBe('C')
       }
