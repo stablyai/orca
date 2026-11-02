@@ -13,6 +13,7 @@ import type { TerminalViewAttributes } from '../../../../shared/terminal-view-at
 
 function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
   isConnected: () => boolean
+  getPtyId: () => string
   sendInput: ReturnType<typeof vi.fn<(data: string) => boolean>>
   sendInputImmediate: ReturnType<typeof vi.fn<(data: string) => boolean>>
 } {
@@ -20,6 +21,7 @@ function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
   const sendOk = overrides?.sendOk ?? true
   return {
     isConnected: () => connected,
+    getPtyId: () => 'pty-1',
     sendInput: vi.fn<(data: string) => boolean>(() => sendOk),
     sendInputImmediate: vi.fn<(data: string) => boolean>(() => sendOk)
   }

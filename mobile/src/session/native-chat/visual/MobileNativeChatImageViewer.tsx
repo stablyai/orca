@@ -44,11 +44,10 @@ export function MobileNativeChatImageViewer({
         <Pressable
           style={({ pressed }) => [
             styles.close,
-            { top: insets.top + spacing.sm },
+            { top: insets.top + spacing.sm, right: insets.right + spacing.lg },
             pressed && { opacity: feedback.pressedOpacity }
           ]}
           onPress={close}
-          hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel={t('chat.nativeChatImageViewer.closeImage', 'Close image')}
         >
@@ -106,10 +105,13 @@ const styles = themedStyleSheet(() => ({
   stage: {
     flex: 1
   },
+  // Page Pressables ignore hitSlop, so the button itself is the 44pt target.
   close: {
     position: 'absolute',
-    right: spacing.lg,
-    padding: spacing.sm,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radii.pill,
     backgroundColor: colors.bgRaised
   }

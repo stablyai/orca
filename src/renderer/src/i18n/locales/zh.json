@@ -6691,6 +6691,7 @@
       },
       "settings": {
         "AccountsPane": {
+          "locationSaveFailed": "无法保存账户位置。请重试。",
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
           "63843e37e2": "删除 Claude 账户？",
@@ -22689,6 +22690,7 @@
       "serveSimUnavailable": "serve-sim 不可用。",
       "serveSimNoEndpoints": "serve-sim 未返回流端点。",
       "serveSimEndpointUnreachable": "serve-sim 已启动，但无法访问其流端点。",
+      "deviceHubInputBlocked": "Xcode 的 Device Hub 已接管此模拟器的输入，因此点按和输入都无法送达。请退出 Device Hub，然后重新连接模拟器。",
       "androidSdkMissing": "未找到 Android SDK。请安装 Android Studio 并设置 ANDROID_HOME。",
       "adbUnavailable": "adb 不可用。",
       "noAndroidDevices": "未找到 Android 设备或 AVD。请在 Android Studio 中创建一个。",

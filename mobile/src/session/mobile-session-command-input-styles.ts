@@ -76,9 +76,6 @@ export const mobileSessionCommandInputStyles = themedStyleSheet(() => ({
     bottom: -2,
     position: 'absolute'
   },
-  liveInputCaptureDisabled: {
-    opacity: 0.45
-  },
   dictationButtonActive: {
     borderWidth: 1,
     borderColor: colors.textSecondary
