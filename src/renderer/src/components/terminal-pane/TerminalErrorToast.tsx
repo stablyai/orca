@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { unwrapHostRefusalIpcLines } from './terminal-error-ipc-unwrap'
 import { translate } from '@/i18n/i18n'
-import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
 import {
-  humanizeFolderWorkspacePathError,
+  humanizeFolderWorkspacePathErrors,
   isFolderWorkspacePathError
 } from '@/lib/folder-workspace-path-status'
 import { Button } from '@/components/ui/button'
@@ -15,9 +14,11 @@ import {
 import { describeClaudePinnedLaunchError } from './claude-pinned-launch-error-copy'
 import { StartOnActiveAccountButton } from './StartOnActiveAccountButton'
 import {
+  failedSpawnEnvironmentFooter,
   localizeTerminalSpawnHints,
   withoutTerminalSpawnIssueRequest
 } from './terminal-spawn-error-display'
+import { isWslDistroHoldText, localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
 import {
   describeSshSignInRequiredTerminalError,
   isSshSignInRequiredTerminalError
@@ -125,11 +126,6 @@ function isFolderWorkspacePathOnlyError(error: string): boolean {
   return lines.length > 0 && lines.every(isFolderWorkspacePathError)
 }
 
-// Why: a moved or deleted folder is the user's to fix, so it gets actionable copy, not an issue link.
-function humanizeFolderWorkspacePathErrors(error: string): string {
-  return error.split('\n').map(humanizeFolderWorkspacePathError).join('\n')
-}
-
 /** An SSH host state (reconnecting, or waiting for the user to sign in), not a bug to report. */
 function isSshHostStateTerminalError(error: string): boolean {
   return isSshSignInRequiredTerminalError(error) || isSshReconnectOwnedTerminalError(error)
@@ -144,7 +140,8 @@ export function humanizeTerminalError(error: string, agentId?: string | null): s
   if (isSshSignInRequiredTerminalError(error)) {
     return describeSshSignInRequiredTerminalError(error)
   }
-  const unwrapped = unwrapHostRefusalIpcLines(error)
+  // Hosts send a held start as its code (older) or English sentence (newer); either reads in the user's language.
+  const unwrapped = localizeWslDistroHoldText(unwrapHostRefusalIpcLines(error))
   let humanized = humanizeFolderWorkspacePathErrors(
     localizeTerminalSpawnHints(agentLaunchErrorText(unwrapped, agentId) ?? unwrapped)
   )
@@ -244,7 +241,8 @@ export function TerminalErrorToast({
     !showDaemonRestart &&
     !isAgentLaunchOnlyError(error) &&
     !isExplainedTerminalError(error) &&
-    !isFolderWorkspacePathOnlyError(error)
+    !isFolderWorkspacePathOnlyError(error) &&
+    !isWslDistroHoldText(error)
   const humanizedError = humanizeTerminalError(error, agentId)
   // Why: the toast appends its own linked request, so the host's plain-text one would repeat it.
   const displayError = showIssueLink
@@ -268,7 +266,7 @@ export function TerminalErrorToast({
       return
     }
     let cancelled = false
-    void resolveClientEnvironmentFooter().then((footer) => {
+    void failedSpawnEnvironmentFooter(displayError).then((footer) => {
       if (!cancelled) {
         setEnvironmentFooter({ error: displayError, footer })
       }

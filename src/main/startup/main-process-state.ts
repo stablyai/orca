@@ -29,7 +29,7 @@ import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketp
 import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
 import type { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'

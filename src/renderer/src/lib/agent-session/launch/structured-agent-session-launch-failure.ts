@@ -13,7 +13,10 @@ import {
 import { wslHostsAvailable } from '@/components/sidebar/use-wsl-hosts-enabled'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
+import {
+  StructuredAgentSessionCreateRefusalError,
+  StructuredAgentSessionCreateSourceFailedError
+} from './structured-agent-session-launch-errors'
 
 export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
   /** Words that replace the refusal's generic cause: the host's sign-in guidance, or why this
@@ -58,6 +61,13 @@ export function structuredChatUnavailableText(reason?: string): string {
 
 /** The host's refusal behind a failed launch; undefined when the failure carried none. */
 export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure | undefined {
+  if (error instanceof StructuredAgentSessionCreateSourceFailedError) {
+    return {
+      kind: 'refused',
+      code: 'structured_agent_session_unsupported',
+      causeText: error.causeText
+    }
+  }
   if (error instanceof StructuredAgentSessionCreateRefusalError && error.hostReason) {
     return {
       kind: 'refused',

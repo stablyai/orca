@@ -168,7 +168,8 @@ export function createClaudeJournalTranslator(
     ...messageContext,
     prompts,
     context,
-    goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable')
+    goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable'),
+    acceptStartupFailure: deps.acceptStartupFailure
   }
 
   return {

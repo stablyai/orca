@@ -73,6 +73,7 @@ it('draws one row for a run of provider retries, with what failed on its second 
   function Harness(): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,

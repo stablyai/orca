@@ -305,6 +305,10 @@ vi.mock('../emulator-scrcpy-touch', () => ({
   registerEmulatorScrcpyTouchHandler: registerEmulatorScrcpyTouchHandlerMock
 }))
 
+vi.mock('../emulator-scrcpy-keyboard', () => ({
+  registerEmulatorScrcpyKeyboardHandler: vi.fn()
+}))
+
 vi.mock('../filesystem/filesystem', () => ({
   registerFilesystemHandlers: registerFilesystemHandlersMock
 }))

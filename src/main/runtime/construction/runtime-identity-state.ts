@@ -1,3 +1,4 @@
+import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
 import { randomUUID } from 'node:crypto'
 import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
 import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
@@ -23,7 +24,6 @@ import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeSyncedTab,
   RuntimeTerminalFocus,
   RuntimeTerminalResolvePane,
   RuntimeWorktreeTerminalSleepResult
@@ -51,8 +51,6 @@ import type {
   PtyRegistrationClaim,
   RuntimeWorktreeTerminalSleepState
 } from '../runtime-terminal-state-records'
-import type { TerminalHandleRecord } from '../runtime-terminal-contracts'
-import type { PtyIncarnationHandleRecord } from '../orca-runtime-core'
 import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
 import { RuntimeTerminalWaiterRegistry } from '../terminal/wait/terminal-waiter-registry'
 import { RuntimeTerminalWriter } from '../runtime-terminal-writer'
@@ -91,7 +89,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected readonly orchestrationFederation!: RuntimeOrchestrationFederation
 
-  protected rendererGraphEpoch = 0
+  protected abstract readonly terminalIdentity: TerminalIdentitySource
+  protected abstract readonly rendererGraphEpoch: number
 
   protected graphStatus: RuntimeGraphStatus = 'unavailable'
 
@@ -116,7 +115,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     onTimeout: (_revision, windowId) => this.handleGraphReloadTimeout(windowId)
   })
 
-  protected tabs = new Map<string, RuntimeSyncedTab>()
+  protected abstract readonly tabs: TerminalIdentitySource['tabs']
 
   protected legacyStructuredSessionTabIds: readonly string[] = []
 
@@ -286,20 +285,20 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   protected deliveryRecheckTimersByPtyId = new Map<string, ReturnType<typeof setTimeout>>()
 
   // Sequence authoritative graph statements to distinguish absent surfaces from unpublished ones.
-  protected graphSequence = 0
+  protected abstract readonly graphSequence: number
 
-  protected leaves = new Map<string, RuntimeLeafRecord>()
+  protected abstract readonly leaves: TerminalIdentitySource['leaves']
 
   // Index per-keystroke output by PTY so redraw cost does not scale with all open terminals.
-  protected leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
+  protected leavesByPtyId = new Map<string, readonly RuntimeLeafRecord[]>()
 
-  handles = new Map<string, TerminalHandleRecord>()
+  abstract readonly handles: TerminalIdentitySource['handles']
 
-  protected handleByLeafKey = new Map<string, string>()
+  protected abstract readonly handleByLeafKey: TerminalIdentitySource['leafHandles']
 
-  protected handleByPtyId = new Map<string, string>()
+  protected abstract readonly handleByPtyId: TerminalIdentitySource['reverse']
 
-  protected handleByPtyIncarnation = new Map<string, PtyIncarnationHandleRecord>()
+  protected abstract readonly handleByPtyIncarnation: TerminalIdentitySource['incarnations']
 
   // Fence predecessor aliases until the announced replacement's spawn commit binds its pane.
   protected pendingPtyHandleReplacementFences = new Map<
@@ -315,7 +314,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     this.repointPendingMessagesForHandle(handle)
   )
 
-  protected syntheticTerminalHandles = new Set<string>()
+  protected abstract readonly syntheticTerminalHandles: TerminalIdentitySource['synthetic']
 
   protected detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
 

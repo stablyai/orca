@@ -37,6 +37,7 @@ import {
   installClaudeProfileRouter
 } from './claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
+import { claudeRoutedHomeAsync } from './claude-profile-routed-home'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 const command = vi.hoisted(() => ({ path: '/unused-claude' }))
@@ -219,6 +220,7 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
     expect(f.router.routedHome()).toBeNull()
     expect(f.router.routedHome('identity')).toBeNull()
+    await expect(claudeRoutedHomeAsync(f.router)).resolves.toBeNull()
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe('')
     expect(f.router.coveredBySystemDefault('a')).toBe(true)
 
@@ -232,6 +234,7 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.coveredBySystemDefault('a')).toBe(false)
     expect(f.router.routedHome()).toBe(f.home('a'))
     expect(f.router.routedHome('identity')).toBe(f.home('a'))
+    await expect(claudeRoutedHomeAsync(f.router)).resolves.toBe(f.home('a'))
   })
 
   it('pins an --account launch to System default only while that holds the account’s login', async () => {
@@ -453,6 +456,8 @@ describe('ClaudeProfileRouter', () => {
     expect(() => f.router.preparation()).toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
     expect(() => f.router.routedHome()).toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
     expect(f.router.routedHome('identity')).toBe(f.home('b'))
+    await expect(claudeRoutedHomeAsync(f.router)).rejects.toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
+    await expect(claudeRoutedHomeAsync(f.router, 'identity')).resolves.toBe(f.home('b'))
     expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
     f.router.publish()
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('b'))

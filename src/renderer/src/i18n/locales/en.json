@@ -916,6 +916,8 @@
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
+      "remoteOperationInAnotherWorkspace": "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
       "actionModel": {
         "on": "On",
         "off": "Off",
@@ -1852,7 +1854,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "The structured agent session is not available yet. Retry in a moment.",
         "gone": "This chat is no longer on this host, so it cannot be reopened here.",
-        "hostCannotOpen": "This chat can't be reopened until Orca is updated."
+        "hostCannotOpen": "This chat can't be reopened until Orca is updated.",
+        "worktreeDeleted": "The worktree was deleted.",
+        "folderWorkspaceRemoved": "The folder workspace was removed."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
@@ -2153,6 +2157,9 @@
         "fcbee32f08": "Telemetry notice"
       },
       "GitHubItemDialog": {
+        "refreshTask": "Refresh task",
+        "refreshTaskFailed": "Unable to refresh this task. Try again.",
+        "refreshTaskUnsupported": "Update Orca on this server to refresh tasks here.",
         "3cd5ae5b7b": "No files changed.",
         "filesUnavailable": "Couldn't load changed files.",
         "filesRetry": "Retry",
@@ -4669,7 +4676,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "No other accounts",
-            "9332ba8684": "Switch to",
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
@@ -6545,11 +6551,7 @@
           "dbe2d18972": "More {{value0}} actions",
           "openInOrcaBrowser": "Open in Orca browser",
           "2c67730e07": "Open in Orca",
-          "e42941631a": "View on Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Edit issue",
-          "b22f058067": "View on GitHub",
-          "e97d8f2876": "Issue #{{value0}}",
           "moreIssueActions": "More issue actions",
           "copyLink": "Copy link",
           "copyLinkSuccess": "{{value0}} copied",
@@ -6572,8 +6574,6 @@
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "Created by Orca CLI",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "View on Jira",
           "linkedJira": "Linked Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -7482,6 +7482,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Account location could not be saved. Try again.",
           "c2d2751587": "Remove Account",
           "dbb9626ed1": "Cancel",
           "63843e37e2": "Remove Claude Account?",
@@ -12056,7 +12057,10 @@
             "secrets": "Store its own encrypted secrets",
             "settingsOwn": "Read and change its own settings",
             "agentsRead": "Get notified when agent status changes",
-            "terminalRun": "Run commands in your terminals, including SSH"
+            "terminalRun": "Run commands in your terminals, including SSH",
+            "terminalRead": "Read the output of your terminals, including SSH",
+            "workspaceWrite": "Open your workspaces and files, and run built-in commands",
+            "agentLaunch": "Start agents in your workspaces, including SSH"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
           "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network and run other programs.",
@@ -13181,7 +13185,11 @@
         "AppearanceThemeControl": {
           "useTerminalTheme": "Use its terminal colors",
           "matchTerminal": "Match Terminal",
-          "dynamic": "dynamic"
+          "dynamic": "dynamic",
+          "browseThemes": "Browse themes",
+          "moreThemes": "More themes",
+          "moreThemesLoading": "Loading themes…",
+          "installingTheme": "Installing {{value0}}…"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -13344,7 +13352,8 @@
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
           "update": "Update",
-          "review": "Review"
+          "review": "Review",
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
@@ -13368,7 +13377,8 @@
           "languageCoverage": "Interface language · {{value0}}% translated",
           "newFileMenu": "Adds to the + menu",
           "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
-          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer"
+          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer",
+          "statusBar": "Status bar"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -13384,7 +13394,8 @@
           "replacesShortcut": "{{value0}} ({{value1}}) replaces your shortcut for {{value2}}.",
           "updatesKeepApproval": "Updates ask again only for new access",
           "fullAccessUpdates": "Updates can change its code without asking",
-          "editsFileTypes": "Opens and edits {{value0}} files in Orca. It can read the files it opens."
+          "editsFileTypes": "Opens and edits {{value0}} files in Orca. It can read the files it opens.",
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}. You can switch it back in its plugin page."
         },
         "PluginPageAction": {
           "failedTitle": "Couldn’t install {{value0}}",
@@ -14221,6 +14232,7 @@
                 "baseCommitLabel": "base commit:",
                 "failingChecks_one": "{{count}} failing check",
                 "failingChecks_other": "{{count}} failing checks",
+                "pipelineFailed": "{{name}} failed",
                 "pendingChecks_one": "{{count}} check pending",
                 "pendingChecks_other": "{{count}} checks pending",
                 "unresolvedChecks_one": "{{count}} check unresolved",
@@ -15531,16 +15543,15 @@
             "dc1f3f5535": "Jump back in",
             "c2a0215163": "Waiting for input",
             "0c14dac908": "2m",
-            "77c0dae863": "Done",
-            "3166f865af": "14m",
             "609517273b": "Working",
             "005afbad3d": "now",
-            "e986b282af": "Last opened",
-            "8a3ebdbdac": "1h",
             "04a94cadee": "40 worktrees · 5 active",
             "b5308d5e2c": "M1 Mini",
             "aefd110ea5": "Pair a desktop",
-            "d08ee9c466": "New workspace"
+            "d08ee9c466": "New workspace",
+            "aa44b4a6b2": "Browse your issues and reviews",
+            "eda5c8d01b": "Automations",
+            "cd2ad5b641": "Schedule agent work and view runs"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "Send",
@@ -16950,7 +16961,8 @@
                 "description": "This file isn't UTF-8 text. Saving it as UTF-8 replaces any characters that aren't valid UTF-8 with �, and the original bytes can't be recovered.",
                 "action": "Save as UTF-8"
               }
-            }
+            },
+            "deniedByPlugin": "The plugin {{plugin}} refused this save: {{reason}}"
           }
         },
         "RichMarkdownTableControls": {
@@ -17086,6 +17098,12 @@
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "Couldn't save a pasted image beside the document. It may not load after Orca restarts."
+        },
+        "PluginEditorNeedsDesktopNotice": {
+          "browser": "{{value0}} runs only in an isolated frame, which browser clients cannot give it.",
+          "isolationOff": "{{value0}} runs only in an isolated frame, and isolated plugin frames are turned off.",
+          "heading": "This editor needs the Orca desktop app",
+          "openSource": "Open Source"
         }
       },
       "diff": {
@@ -19168,6 +19186,12 @@
           "Tree": {
             "loading": "Loading…"
           }
+        },
+        "PluginCommandReplacementRow": {
+          "title": "{{value0}} runs instead of Orca’s {{value1}}",
+          "conflict": "Not used: {{value0}}, installed first, replaces it",
+          "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
+          "switch": "Use {{value0}} instead of Orca’s {{value1}}"
         }
       }
     },
@@ -19349,6 +19373,7 @@
       "failureWords": {
         "theAgent": "The agent",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
+        "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",
         "runCommandAgain": "Run /{{command}} again.",
         "sendToTryAgain": "Send your message to try again.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
@@ -19890,14 +19915,9 @@
         "exitUnconfirmedFromTerminal": "{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then open this conversation from Session History.",
         "exitUnconfirmed": "{{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then try again.",
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
-        "historyUnavailable": "Orca couldn't read the conversation",
-        "chatHeld": "another chat or terminal is using it",
-        "startFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
-        "notSavedAfterClose": "{{agent}}'s terminal was closed, but {{agent}} hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead.",
-        "otherTerminalAfterClose": "{{agent}}'s terminal was closed, but {{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History.",
-        "chatFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open. Your conversation is saved. Open it from Session History.",
         "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
         "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
+        "terminalExitUnprovenInChat": "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Make sure it has stopped, then try again.",
         "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again."
       },
       "state": {
@@ -20037,6 +20057,8 @@
         "messageFromCoordinator": "Message from coordinator",
         "showMore": "Show more",
         "startedWorker": "Started worker",
+        "handedOffToAgent": "Handed off to agent",
+        "startedAgent": "Started agent",
         "taskFromCoordinator": "Task from coordinator",
         "updateFromWorker": "Update from worker"
       },
@@ -20637,6 +20659,7 @@
       "detectingAgents": "Detecting Agents on this workspace host…",
       "detectionFailed": "Could not detect Agents on this workspace host.",
       "noAgents": "No enabled Agents were detected on this workspace host.",
+      "onlySourceFamilyDetected": "Only Agents sharing the usage limit with {{agent}} are available on this workspace host. Enable or install a different Agent.",
       "context": "Context",
       "modeFocused": "Focused handoff (Recommended)",
       "modeFocusedDescription": "Uses the latest status and current workspace, reading older transcript details only when needed.",
@@ -20755,7 +20778,24 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [Optional]",
-      "createDescription": "Choose the project and workspace name. Select an agent if you want to start one."
+      "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
+      "setupCheckFailed": "Could not check setup configuration. Try again.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Choose whether to run setup before creating this workspace.",
+        "cancel": "Cancel",
+        "retry": "Retry",
+        "setupScript": "Setup script",
+        "askRunSetup": "Run setup now?",
+        "defaultTabCommands": "Default tab commands",
+        "askRunDefaultTabs": "Run default tab commands now?",
+        "setupAndDefaultTabs": "Setup and default tab commands",
+        "askRunSetupAndDefaultTabs": "Run setup and default tab commands now?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "local settings"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
@@ -21026,8 +21066,18 @@
       "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
       "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",
       "stayInTerminal": "Stay in terminal",
+      "switchToTerminal": "Switch to terminal",
       "cta": "Use Chat UI",
       "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
+      "terminalSaveFailed": "Could not switch to terminal. Choose Terminal in Settings → Agents.",
+      "dismiss": "Dismiss",
+      "liveSwitching": "Live switching available",
+      "liveSwitchingTitle": "Live switching 101",
+      "liveSwitchingDescription": "Right-click an agent tab to switch between Chat UI and the terminal.",
+      "liveSwitchingGotIt": "Got it",
+      "liveSwitchingTerminalTab": "Claude Code",
+      "liveSwitchingPolishTab": "Polish Bottom…",
+      "liveSwitchingCouncilTab": "Council Review",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
       "demoReply": "Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:",
@@ -21490,6 +21540,7 @@
     "scanIssues": {
       "issuesOmitted": "Additional scan issues were omitted.",
       "sessionMetadataUnreadable": "Session metadata could not be read this scan.",
+      "transcriptTooLarge": "A {{label}} conversation is too large to load in Session History. Try resuming it in {{label}} directly.",
       "openCodeScannerUnavailable": "OpenCode history was skipped because its background scanner could not start; the app remains responsive.",
       "openCodeScanIncomplete": "OpenCode history scan did not complete: {{detail}}",
       "openCodeWslReaderPreparing": "Preparing the WSL SQLite reader. Refresh Vault after setup finishes.",
@@ -22042,7 +22093,8 @@
       "linkedCount_other": "{{count}} linked",
       "addEmoji": "Add emoji",
       "addEmojiTooltip": "Add emoji (or type :)",
-      "noEmojiFound": "No emoji found"
+      "noEmojiFound": "No emoji found",
+      "labels": "Labels: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",
@@ -23347,12 +23399,14 @@
       "serveSimUnavailable": "serve-sim is unavailable.",
       "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
       "serveSimEndpointUnreachable": "serve-sim started but its stream endpoint is not reachable.",
+      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "androidSdkMissing": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
       "adbUnavailable": "adb is unavailable.",
       "noAndroidDevices": "No Android devices or AVDs found. Create one in Android Studio.",
       "androidDeviceNotRunning": "Android device \"{{device}}\" is not running. Boot it first.",
       "unknownDeviceOrAvd": "\"{{device}}\" is not a running device or a known AVD.",
       "avdBootTimeout": "AVD \"{{avdName}}\" did not finish booting in time.",
+      "avdExitedBeforeBoot": "AVD \"{{avdName}}\" stopped before it finished booting: {{detail}}",
       "scrcpyDownloadFailed": "Could not download scrcpy server: {{detail}}",
       "scrcpyServerInvalid": "Downloaded scrcpy server was invalid or truncated."
     },

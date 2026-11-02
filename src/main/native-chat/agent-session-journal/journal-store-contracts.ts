@@ -12,13 +12,13 @@ import type {
   AgentJournalCursor,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
-import type { JournalReadRow } from './journal-read-row'
+import type { JournalRowsRead } from './journal-read-row'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRowWriter } from './journal-row-writer'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
@@ -32,7 +32,7 @@ export type AgentSessionJournalOptions = {
 }
 
 export type JournalReadSince =
-  | { ok: true; rows: JournalReadRow[]; cursor: AgentJournalCursor }
+  | ({ ok: true; cursor: AgentJournalCursor } & JournalRowsRead)
   | { ok: false; reset: AgentJournalResetReason }
 
 export type ResolveDispatchInput = {

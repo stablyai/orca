@@ -809,6 +809,8 @@
       "claudeRemoveFolder": "Orca 會從這部電腦刪除此帳戶的 Claude 資料夾及其登入資訊。與系統預設共用的聊天記錄會保留。如果已選取此帳戶，您下次啟動的 Claude 將使用系統預設。"
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作",
+      "remoteOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作（例如推送、拉取或強制推送）。請等待其完成後再使用此動作，以免操作重疊。",
       "actionModel": {
         "on": "開啟",
         "off": "關閉",
@@ -1712,7 +1714,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "結構化代理程式工作階段尚不可用。稍後重試。",
         "gone": "此聊天不再在此主機上，因此無法在此處重新開啟。",
-        "hostCannotOpen": "在 Orca 更新之前，無法重新開啟此聊天。"
+        "hostCannotOpen": "在 Orca 更新之前，無法重新開啟此聊天。",
+        "worktreeDeleted": "工作樹已刪除。",
+        "folderWorkspaceRemoved": "資料夾工作區已移除。"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "使用已佈建根目錄的配方不支援稀疏檢出。"
@@ -4458,7 +4462,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "沒有其他帳戶",
-            "9332ba8684": "切換到",
             "d450654fa2": "Claude 帳戶",
             "11e2354daf": "Claude 用量執行環境",
             "3dd7ddfae1": "開啟 Claude 詳情和帳戶切換器",
@@ -6237,11 +6240,7 @@
           "dbe2d18972": "更多 {{value0}} 操作",
           "openInOrcaBrowser": "在 Orca 瀏覽器中開啟",
           "2c67730e07": "在 Orca 中開啟",
-          "e42941631a": "在 Linear 上檢視",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "編輯議題",
-          "b22f058067": "在 GitHub 上檢視",
-          "e97d8f2876": "議題 #{{value0}}",
           "moreIssueActions": "更多議題操作",
           "copyLink": "複製連結",
           "copyLinkSuccess": "{{value0}} 已複製",
@@ -6264,8 +6263,6 @@
           "cliCreatedFromShell": "透過 `orca worktree create` 建立",
           "cliStartupAgent": "以 {{value0}} 啟動",
           "cliCreated": "由 Orca CLI 建立",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "在 Jira 中檢視",
           "linkedJira": "已關聯 Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -7155,6 +7152,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "無法儲存帳戶位置。請再試一次。",
           "c2d2751587": "移除帳戶",
           "dbb9626ed1": "取消",
           "63843e37e2": "移除 Claude 帳戶？",
@@ -13807,6 +13805,7 @@
                 "baseCommitLabel": "基準提交：",
                 "failingChecks_one": "{{count}} 項檢查失敗",
                 "failingChecks_other": "{{count}} 項檢查失敗",
+                "pipelineFailed": "{{name}} 失敗",
                 "pendingChecks_one": "{{count}} 項檢查待處理",
                 "pendingChecks_other": "{{count}} 項檢查待處理",
                 "unresolvedChecks_one": "{{count}} 項檢查尚未解決",
@@ -18814,6 +18813,7 @@
       "failureWords": {
         "theAgent": "代理程式",
         "providerStartFailed": "{{agent}} 在完成啟動前已停止。",
+        "savedConversationMissing": "{{agent}} 找不到此聊天已儲存的對話。",
         "runCommandAgain": "請重新執行 /{{command}}。",
         "sendToTryAgain": "請傳送您的訊息以重試。",
         "sendAgainToTryOnceMore": "請重新傳送您的訊息，再試一次。",
@@ -19441,6 +19441,8 @@
         "unnamedSender": "一個代理程式",
         "messageFromCoordinator": "來自協調者的訊息",
         "startedWorker": "已啟動工作代理程式",
+        "handedOffToAgent": "已交接給代理程式",
+        "startedAgent": "已啟動代理程式",
         "taskFromCoordinator": "來自協調者的任務",
         "updateFromWorker": "來自工作代理程式的更新"
       },
@@ -20012,6 +20014,7 @@
       "detectingAgents": "正在此工作區主機上偵測代理程式…",
       "detectionFailed": "無法偵測此工作區主機上的代理程式。",
       "noAgents": "未在此工作區主機上偵測到已啟用的代理程式。",
+      "onlySourceFamilyDetected": "此工作區主機上可用的代理程式均與 {{agent}} 共用使用額度。請啟用或安裝其他代理程式。",
       "context": "上下文",
       "modeFocused": "重點移交（推薦）",
       "modeFocusedDescription": "使用最新進度和目前工作區，僅在需要時讀取更早的工作階段記錄細節。",
@@ -20125,7 +20128,23 @@
     },
     "newWorkspace": {
       "agentOptional": "代理程式 [選填]",
-      "createDescription": "選擇專案和工作區名稱。如果想啟動代理程式，請選擇一個。"
+      "createDescription": "選擇專案和工作區名稱。如果想啟動代理程式，請選擇一個。",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "選擇是否在建立此工作區前執行設定。",
+        "cancel": "取消",
+        "retry": "重試",
+        "setupScript": "設定指令碼",
+        "defaultTabCommands": "預設分頁指令",
+        "setupAndDefaultTabs": "設定及預設分頁指令",
+        "askRunSetup": "立即執行設定？",
+        "askRunDefaultTabs": "立即執行預設分頁指令？",
+        "askRunSetupAndDefaultTabs": "立即執行設定及預設分頁指令？",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + 本機",
+        "localSource": "本機設定"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一個議題更改正在進行中。"
@@ -20852,6 +20871,7 @@
     "scanIssues": {
       "issuesOmitted": "已省略其他掃描問題。",
       "sessionMetadataUnreadable": "本次掃描無法讀取工作階段後設資料。",
+      "transcriptTooLarge": "有一個 {{label}} 對話過大，無法在工作階段歷史記錄中載入。請嘗試直接在 {{label}} 中繼續該對話。",
       "openCodeScannerUnavailable": "由於無法啟動背景掃描器，已跳過 OpenCode 歷史記錄；應用程式仍可正常回應。",
       "openCodeScanIncomplete": "OpenCode 歷史記錄掃描未完成：{{detail}}",
       "openCodeWslReaderPreparing": "正在準備 WSL SQLite 讀取器。設定完成後請重新整理 Vault。",
@@ -21394,7 +21414,8 @@
       "checksNeutral": "中性",
       "allReviewChecks": "審查：{{count}} · 檢查：{{status}}",
       "showLinked_other": "顯示 {{count}} 個已連結的審查與任務",
-      "linkedCount_other": "已連結 {{count}} 項"
+      "linkedCount_other": "已連結 {{count}} 項",
+      "labels": "標籤：{{labels}}"
     },
     "attachments": {
       "updateRuntime": "更新遠端執行環境以更改工作區連結",
@@ -22630,12 +22651,14 @@
       "serveSimUnavailable": "無法使用 serve-sim。",
       "serveSimNoEndpoints": "serve-sim 未傳回串流端點。",
       "serveSimEndpointUnreachable": "serve-sim 已啟動，但無法連線至其串流端點。",
+      "deviceHubInputBlocked": "Xcode 的 Device Hub 已接管此模擬器的輸入，因此點按和輸入都無法送達。請結束 Device Hub，然後重新連接模擬器。",
       "androidSdkMissing": "找不到 Android SDK。請安裝 Android Studio 並設定 ANDROID_HOME。",
       "adbUnavailable": "無法使用 adb。",
       "noAndroidDevices": "找不到 Android 裝置或 AVD。請在 Android Studio 中建立一個。",
       "androidDeviceNotRunning": "Android 裝置「{{device}}」尚未執行。請先啟動它。",
       "unknownDeviceOrAvd": "「{{device}}」不是正在執行的裝置，也不是已知的 AVD。",
       "avdBootTimeout": "AVD「{{avdName}}」未在時限內完成啟動。",
+      "avdExitedBeforeBoot": "AVD「{{avdName}}」在完成啟動前已停止：{{detail}}",
       "scrcpyDownloadFailed": "無法下載 scrcpy 伺服器：{{detail}}",
       "scrcpyServerInvalid": "下載的 scrcpy 伺服器無效或不完整。"
     },

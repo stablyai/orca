@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import {
   agentSessionLeaseFixture,

@@ -6,9 +6,10 @@ import {
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { stripClaudePinnedLaunchMarker } from '../shared/claude/claude-pinned-launch-error'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
-import { selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
+import { ambiguousWorkspaceChoices, selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
+import { readableWslDistroCliRefusal } from './wsl-distro-cli-refusal'
 
 export type CliErrorContext = {
   commandPath?: readonly string[]
@@ -67,10 +68,22 @@ export function cliErrorCode(error: unknown): string | undefined {
 }
 
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
-  const message = stripClaudePinnedLaunchMarker(
-    error instanceof Error ? error.message : String(error)
+  const message = readableWslDistroCliRefusal(
+    stripClaudePinnedLaunchMarker(error instanceof Error ? error.message : String(error))
   )
   const selector = contextRecovery(cliErrorCode(error), context)
+  const workspaceChoices =
+    error instanceof RuntimeClientError &&
+    !(error instanceof RuntimeRpcFailureError) &&
+    error.code === 'selector_ambiguous'
+      ? ambiguousWorkspaceChoices(error.data)
+      : undefined
+  if (workspaceChoices) {
+    return formatMessageWithNextSteps(
+      `${message}\nWorkspace choices (JSON data):\n${JSON.stringify(workspaceChoices, null, 2)}`,
+      nextStepsFromData(errorData(error))
+    )
+  }
   if (selector) {
     return formatMessageWithNextSteps(
       message,

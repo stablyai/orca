@@ -60,6 +60,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
 
 export type MobileStructuredAgentSessionArgs = {
   client: RpcClient | null
+  /** The route's paired host owns follow-up behavior even when another host executes the chat. */
+  pairedHostClient: RpcClient | null
   sessionId: string | null
   /** Host/workspace scope used to keep same provider ids isolated. */
   sourceIdentity?: string

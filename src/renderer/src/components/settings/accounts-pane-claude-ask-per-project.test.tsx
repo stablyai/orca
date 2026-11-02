@@ -13,6 +13,7 @@ function buildModel(updateSettings: AccountsPaneSectionModel['updateSettings']) 
   const accountRuntime = { runtime: 'host' as const, wslDistro: null, label: 'This device' }
   const model: AccountsPaneSectionModel = {
     updateSettings,
+    updateSettingsOrThrow: vi.fn(),
     searchQuery: '',
     recordFeatureInteraction: vi.fn(),
     wslSupportedPlatform: false,
