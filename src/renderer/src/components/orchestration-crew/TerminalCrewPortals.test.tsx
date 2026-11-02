@@ -5,7 +5,7 @@ import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
   initialStore,
   resetSenderStore
@@ -107,7 +107,9 @@ function mount() {
 }
 beforeEach(() => {
   resetSenderStore()
-  useAppStore.setState({ settings: { experimentalOrchestrationPanel: true } as GlobalSettings })
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: true }
+  })
 })
 afterEach(() => {
   cleanup()
@@ -126,14 +128,18 @@ afterEach(() => {
 })
 
 it('mounts no pane panel, identity lookup or crew read while the setting is off, live both ways', () => {
-  useAppStore.setState({ settings: { experimentalOrchestrationPanel: false } as GlobalSettings })
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: false }
+  })
   const { first, second } = mount()
   expect(document.querySelector('[data-orchestration-crew]')).toBeNull()
   expect(rig.identity).not.toHaveBeenCalled()
   expect(rig.crew).not.toHaveBeenCalled()
 
   act(() =>
-    useAppStore.setState({ settings: { experimentalOrchestrationPanel: true } as GlobalSettings })
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: true }
+    })
   )
   for (const pane of [first, second]) {
     expect(
@@ -142,7 +148,9 @@ it('mounts no pane panel, identity lookup or crew read while the setting is off,
   }
 
   act(() =>
-    useAppStore.setState({ settings: { experimentalOrchestrationPanel: false } as GlobalSettings })
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: false }
+    })
   )
   expect(document.querySelector('[data-orchestration-crew]')).toBeNull()
 })
