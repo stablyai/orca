@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import type * as SecureFile from '../../shared/secure-file'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE } from './claude-account-registration'
 import {
@@ -24,7 +25,20 @@ import { describeClaudeProfile } from './claude-profile-paths'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 import { ClaudeAccountService } from './service'
 
+const secureFile = vi.hoisted(() => ({ canProtect: true }))
+vi.mock('../../shared/secure-file', async (original) => {
+  const actual = await original<typeof SecureFile>()
+  return {
+    ...actual,
+    writeSecureFile: (...args: Parameters<typeof actual.writeSecureFile>) =>
+      actual.writeSecureFile(...args) && secureFile.canProtect
+  }
+})
+
 const roots: string[] = []
+afterEach(() => {
+  secureFile.canProtect = true
+})
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })))
 
 function account(id: string, extra: Partial<ClaudeManagedAccount> = {}): ClaudeManagedAccount {
@@ -213,6 +227,74 @@ describe('ClaudeAccountService', () => {
     expect(
       f.settings().claudeManagedAccounts.find((entry) => entry.id === id)?.apiEndpoint?.baseUrl
     ).toBe('https://api.sakana.ai')
+  })
+
+  it('removes the new endpoint file when the folder had none before a failed edit', async () => {
+    const f = fixture([account('a')])
+    const endpoint = {
+      label: 'Sakana AI',
+      baseUrl: 'https://api.sakana.ai',
+      authToken: 'old-token',
+      model: 'fugu',
+      smallFastModel: 'fugu'
+    }
+    await f.service.saveApiEndpointAccount(endpoint)
+    const id = newId(f)
+    rmSync(join(f.home(id), 'orca-api-endpoint.json'))
+    const setup = f.runtimeAuth.prepareAccountFolder.getMockImplementation()!
+    f.runtimeAuth.prepareAccountFolder
+      .mockImplementationOnce(setup)
+      .mockImplementationOnce(async (accountId: string) => {
+        await setup(accountId)
+        throw new Error('setup failed')
+      })
+
+    await expect(
+      f.service.saveApiEndpointAccount({ ...endpoint, authToken: 'new-token' }, id)
+    ).rejects.toThrow('setup failed')
+
+    expect(existsSync(join(f.home(id), 'orca-api-endpoint.json'))).toBe(false)
+  })
+
+  it('refuses an edit when settings.json keeps the URL but not the new token', async () => {
+    const f = fixture([account('a')])
+    const endpoint = {
+      label: 'Sakana AI',
+      baseUrl: 'https://api.sakana.ai',
+      authToken: 'old-token',
+      model: 'fugu',
+      smallFastModel: 'fugu'
+    }
+    await f.service.saveApiEndpointAccount(endpoint)
+    const id = newId(f)
+    const setup = f.runtimeAuth.prepareAccountFolder.getMockImplementation()!
+    f.runtimeAuth.prepareAccountFolder
+      .mockImplementationOnce(setup)
+      // Setup leaves a settings.json the user owns as it was.
+      .mockImplementationOnce(async () => ({ configDir: f.home(id), readPath: f.home(id) }))
+
+    await expect(
+      f.service.saveApiEndpointAccount({ ...endpoint, authToken: 'new-token' }, id)
+    ).rejects.toThrow('settings')
+
+    expect(readClaudeApiEndpointToken(f.home(id))).toBe('old-token')
+  })
+
+  it('refuses a new endpoint account when its token file cannot be protected', async () => {
+    const f = fixture([account('a')])
+    secureFile.canProtect = false
+
+    await expect(
+      f.service.saveApiEndpointAccount({
+        label: 'Sakana AI',
+        baseUrl: 'https://api.sakana.ai',
+        authToken: 'token',
+        model: 'fugu',
+        smallFastModel: 'fugu'
+      })
+    ).rejects.toThrow('Could not restrict')
+
+    expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a'])
   })
 
   it("labels each row with its folder's login and asks a folder without one to sign in", () => {

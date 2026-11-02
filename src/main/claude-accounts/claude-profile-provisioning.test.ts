@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as FsUtils from '../codex-accounts/fs-utils'
+import type * as SecureFile from '../../shared/secure-file'
+const secureFile = vi.hoisted(() => ({ canProtect: true }))
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 vi.mock('node:fs', async (original) => {
   const actual = await original<typeof fs>()
@@ -11,6 +13,14 @@ vi.mock('node:fs', async (original) => {
 vi.mock('../codex-accounts/fs-utils', async (original) => {
   const actual = await original<typeof FsUtils>()
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
+})
+vi.mock('../../shared/secure-file', async (original) => {
+  const actual = await original<typeof SecureFile>()
+  return {
+    ...actual,
+    writeSecureFile: (...args: Parameters<typeof actual.writeSecureFile>) =>
+      actual.writeSecureFile(...args) && secureFile.canProtect
+  }
 })
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { provisionClaudeProfile } from './claude-profile-provisioning'
@@ -37,6 +47,7 @@ function fixture() {
 const provision = (f: { profileHome: string; userHome: string }) =>
   provisionClaudeProfile({ profileHome: f.profileHome, userHome: f.userHome, platform: 'linux' })
 afterEach(() => {
+  secureFile.canProtect = true
   vi.clearAllMocks()
   for (const dir of roots.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true })
@@ -167,6 +178,30 @@ describe('Claude profile refresh from the default home', () => {
       expect(f.read(elsewhere)).toEqual({ mine: true })
     }
   )
+  it('leaves no endpoint settings behind when they cannot be protected', async () => {
+    const f = fixture()
+    secureFile.canProtect = false
+    const report = await provisionClaudeProfile({
+      profileHome: f.profileHome,
+      userHome: f.userHome,
+      platform: 'linux',
+      endpointEnv: { ANTHROPIC_AUTH_TOKEN: 'endpoint-token' }
+    })
+    expect(report.surfaces['settings.json']).toBe('failed')
+    expect(fs.existsSync(join(f.profileHome, 'settings.json'))).toBe(false)
+  })
+  it('drops the endpoint settings once the folder no longer has an endpoint', async () => {
+    const f = fixture()
+    await provisionClaudeProfile({
+      profileHome: f.profileHome,
+      userHome: f.userHome,
+      platform: 'linux',
+      endpointEnv: { ANTHROPIC_AUTH_TOKEN: 'endpoint-token' }
+    })
+    expect(fs.existsSync(join(f.profileHome, 'settings.json'))).toBe(true)
+    await provision(f)
+    expect(fs.existsSync(join(f.profileHome, 'settings.json'))).toBe(false)
+  })
   it('adds an endpoint account’s env over the user’s settings and drops other credentials', async () => {
     const f = fixture()
     f.json(join(f.source, 'settings.json'), {

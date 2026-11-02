@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { CLAUDE_API_ENDPOINT_FILE } from '../../shared/claude-profile-routing'
@@ -52,6 +52,14 @@ export function normalizeClaudeApiEndpointRequest(
   }
 }
 
+/** Refuses to leave a token in a file other local users may be able to read. */
+export function writeEndpointCredentialFile(path: string, contents: string): void {
+  if (!writeSecureFile(path, contents)) {
+    rmSync(path, { force: true })
+    throw new Error('Could not restrict the permissions of the endpoint credential file.')
+  }
+}
+
 export function writeClaudeApiEndpoint(
   home: string,
   endpoint: ClaudeApiEndpointAccountRequest
@@ -62,7 +70,10 @@ export function writeClaudeApiEndpoint(
     model: endpoint.model,
     smallFastModel: endpoint.smallFastModel
   }
-  writeSecureFile(join(home, CLAUDE_API_ENDPOINT_FILE), `${JSON.stringify(file, null, 2)}\n`)
+  writeEndpointCredentialFile(
+    join(home, CLAUDE_API_ENDPOINT_FILE),
+    `${JSON.stringify(file, null, 2)}\n`
+  )
   return {
     baseUrl: file.baseUrl,
     model: file.model,
@@ -82,8 +93,14 @@ export function readClaudeApiEndpointRaw(home: string): string | null {
   }
 }
 
-export function restoreClaudeApiEndpointRaw(home: string, raw: string): void {
-  writeSecureFile(join(home, CLAUDE_API_ENDPOINT_FILE), raw)
+/** `raw` is null when the folder had no endpoint file before the edit. */
+export function restoreClaudeApiEndpointRaw(home: string, raw: string | null): void {
+  const path = join(home, CLAUDE_API_ENDPOINT_FILE)
+  if (raw === null) {
+    rmSync(path, { force: true })
+    return
+  }
+  writeEndpointCredentialFile(path, raw)
 }
 
 function readClaudeApiEndpointFile(home: string): ClaudeApiEndpointFile | null {

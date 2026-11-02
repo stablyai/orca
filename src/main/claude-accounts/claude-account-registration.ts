@@ -10,6 +10,7 @@ import type {
 } from '../../shared/managed-account-types'
 import {
   normalizeClaudeApiEndpointRequest,
+  readClaudeApiEndpointEnv,
   readClaudeApiEndpointRaw,
   readClaudeApiEndpointToken,
   restoreClaudeApiEndpointRaw,
@@ -129,13 +130,13 @@ export class ClaudeAccountRegistration {
       apiEndpoint = writeClaudeApiEndpoint(folder.readPath, endpoint)
       // Set up again so the folder's settings carry the endpoint before any launch.
       await runtimeAuth.prepareAccountFolder(id, target)
-      if (!settingsCarryEndpoint(folder.readPath, endpoint.baseUrl)) {
+      if (!settingsCarryEndpoint(folder.readPath)) {
         throw new Error(CLAUDE_ENDPOINT_SETTINGS_FAILED_MESSAGE)
       }
     } catch (error) {
       if (!saved) {
         await runtimeAuth.removeAccountFolder(id, target).catch(() => {})
-      } else if (previousFile !== null) {
+      } else {
         // Launches read the folder, so it must keep matching the endpoint the account still shows.
         try {
           restoreClaudeApiEndpointRaw(folder.readPath, previousFile)
@@ -238,13 +239,16 @@ function sameOrigin(saved: string | undefined, next: string): boolean {
   }
 }
 
-function settingsCarryEndpoint(home: string, baseUrl: string): boolean {
+// Every value counts: a user-owned settings.json can keep the URL but an old token or model.
+function settingsCarryEndpoint(home: string): boolean {
+  const endpointEnv = readClaudeApiEndpointEnv(home)
   const settings = readClaudeProfileObject(join(home, 'settings.json'))
   const env = settings.kind === 'present' ? settings.value.env : undefined
-  return (
-    typeof env === 'object' &&
-    env !== null &&
-    (env as Record<string, unknown>).ANTHROPIC_BASE_URL === baseUrl
+  if (!endpointEnv || typeof env !== 'object' || env === null) {
+    return false
+  }
+  return Object.entries(endpointEnv).every(
+    ([key, value]) => (env as Record<string, unknown>)[key] === value
   )
 }
 

@@ -1,5 +1,5 @@
 import { getManagedScriptFileName, removeManagedHooks } from '../claude/hook-settings'
-import { writeSecureFile } from '../../shared/secure-file'
+import { writeEndpointCredentialFile } from './claude-api-endpoint'
 import { readClaudeProfileObject } from './claude-profile-paths'
 import { lstatIfPresent } from './claude-profile-prompt-history'
 import type { ClaudeProfileSurfaceOutcome } from './claude-profile-report'
@@ -56,6 +56,6 @@ export function copySettingsWithEndpoint(
     return 'unchanged'
   }
   // Restricts the file on Windows too, where a POSIX mode would be ignored.
-  writeSecureFile(target, `${JSON.stringify(desired, null, 2)}\n`)
+  writeEndpointCredentialFile(target, `${JSON.stringify(desired, null, 2)}\n`)
   return 'synced'
 }
