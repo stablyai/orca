@@ -77,7 +77,10 @@ const switched: MobileSessionTab[] = []
 
 // The page's own router: a host-list tap served inside this document carries its pane here, not in the shell route.
 const setParams = vi.fn()
-const page = { params: {} as { paneKey?: string }, router: { setParams } }
+const page: { params: { paneKey?: string }; router: { setParams: typeof setParams } } = {
+  params: {},
+  router: { setParams }
+}
 
 function Probe({
   terminalsLoaded,
