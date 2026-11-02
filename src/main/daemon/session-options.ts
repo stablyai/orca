@@ -21,4 +21,6 @@ export type SessionOptions = {
   onExit?: (code: number) => void
   startupIngress?: PtyStartupIngressIntent
   ownerBackend?: PtyOwnerBackend
+  /** The bound prepared Setup attempt whose completion record is consumed before display. */
+  setupCompletionToken?: string
 }

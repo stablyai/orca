@@ -99,6 +99,7 @@ export abstract class PreparedAgentLaunchExecution {
           deadlineAt: Infinity
         },
         streamClient: { onData() {}, onExit() {} },
+        setupCompletionToken: setup.attemptId,
         rawSpawnObserver: () => {
           let selected = false
           let ended = false
