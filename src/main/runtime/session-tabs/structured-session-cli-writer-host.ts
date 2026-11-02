@@ -91,15 +91,18 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
 
   async assertStructuredAdoptionTerminalWritersExited(
     agent: StructuredAgentId,
-    providerSessionId: string
+    providerSessionId: string,
+    closingPaneKeys?: readonly string[]
   ): Promise<void> {
     await assertCliConversationWritersExited(
       {
         rows: () => this.getAgentProviderSessionRows(),
-        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null
+        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null,
+        ptyIdForPaneKey: (paneKey) => this.getPtyRecordForPaneKey(paneKey)?.ptyId ?? null
       },
       agent,
-      providerSessionId
+      providerSessionId,
+      closingPaneKeys
     )
   }
 }

@@ -107,4 +107,29 @@ describe('canonical status store conversation admission', () => {
       )
     ).resolves.toBeUndefined()
   })
+
+  // The source terminal's own agent stops with the close that follows, so it is no other writer.
+  it('leaves out the panes the caller closes, by key or by their PTY, unless a shared server holds it', async () => {
+    const ptys: Record<string, string> = { 'tab-1:leaf': 'pty-1', 'legacy-1': 'pty-1' }
+    const admit = (
+      rows: AgentStatusIpcPayload[],
+      topology: 'pane-owned' | 'shared' = 'pane-owned'
+    ) =>
+      assertCliConversationWritersExited(
+        {
+          rows: () => rows,
+          observation: () => ({ current: () => true, presence: async () => 'live', topology }),
+          ptyIdForPaneKey: (paneKey) => ptys[paneKey] ?? null
+        },
+        'claude',
+        'conversation',
+        ['tab-1:leaf']
+      )
+    await expect(admit([{ ...row, paneKey: 'tab-1:leaf' }])).resolves.toBeUndefined()
+    await expect(admit([{ ...row, paneKey: 'legacy-1' }])).resolves.toBeUndefined()
+    await expect(admit([{ ...row, paneKey: 'tab-2:leaf' }])).rejects.toMatchObject(conflict)
+    await expect(admit([{ ...row, paneKey: 'tab-1:leaf' }], 'shared')).rejects.toMatchObject(
+      conflict
+    )
+  })
 })
