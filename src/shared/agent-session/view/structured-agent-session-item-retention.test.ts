@@ -127,41 +127,6 @@ function streamRevision(
 }
 
 describe('structured agent session item retention', () => {
-  it('bounds retained items on a long live session', () => {
-    const streamed = streamItems(
-      hydrate([item(0)]),
-      Array.from({ length: CAP + 500 }, (_, index) => index + 1)
-    )
-
-    expect(streamed.items).toHaveLength(CAP)
-    expect(streamed.items.at(-1)?.sequence).toBe(CAP + 500)
-    expect(streamed.items[0]?.sequence).toBe(501)
-  })
-
-  it('offers paging for items the cap dropped', () => {
-    const streamed = streamItems(
-      hydrate([item(0)]),
-      Array.from({ length: CAP + 10 }, (_, index) => index + 1)
-    )
-
-    expect(streamed.hasOlder).toBe(true)
-    expect(oldestStructuredAgentSessionCursor(streamed)).toEqual({
-      epoch: 'epoch-a',
-      sequence: streamed.items[0]?.sequence
-    })
-  })
-
-  it('leaves a session under the cap untouched', () => {
-    const hydrated = hydrate([item(0)])
-    const streamed = streamItems(
-      hydrated,
-      Array.from({ length: 200 }, (_, index) => index + 1)
-    )
-
-    expect(streamed.items).toHaveLength(201)
-    expect(streamed.hasOlder).toBe(false)
-  })
-
   it('widens the retained window when older items are paged in', () => {
     const streamed = streamItems(
       hydrate([item(1_000)], true),

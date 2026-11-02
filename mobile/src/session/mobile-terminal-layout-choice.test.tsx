@@ -28,7 +28,7 @@ vi.mock('lucide-react-native', () => ({
   Edit3: 'Icon',
   Trash2: 'Icon'
 }))
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children: unknown }) =>
     visible ? children : null
 }))

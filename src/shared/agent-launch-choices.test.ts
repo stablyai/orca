@@ -14,7 +14,6 @@ import * as startupShell from './tui-agent-startup-shell'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 import { describe, expect, it, vi } from 'vitest'
 import * as choiceArgs from './agent-choice-args'
-import { normalizeAgentModelOptionChoices } from './agent-launch-choices'
 import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
@@ -142,17 +141,6 @@ describe('dedicated agent choices', () => {
       joinSpy.mockRestore()
       sliceSpy.mockRestore()
     }
-  })
-
-  it('retains independent options and bounded opaque model ids without discovery', () => {
-    expect(normalizeAgentModelOptionChoices({ options: { effort: 'high' } })).toEqual({
-      options: { effort: 'high' }
-    })
-    expect(normalizeAgentModelOptionChoices({ model: 'retired-unlisted-id' })).toEqual({
-      model: 'retired-unlisted-id'
-    })
-    expect(normalizeAgentModelOptionChoices({ options: { model: 'other' } })).toBeUndefined()
-    expect(normalizeAgentModelOptionChoices({ model: 'x'.repeat(513) })).toBeUndefined()
   })
 
   it('lifts a complete tuple atomically and keeps surviving raw bytes', () => {

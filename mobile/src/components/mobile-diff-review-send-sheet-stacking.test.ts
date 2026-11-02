@@ -45,7 +45,9 @@ vi.mock('./mobile-diff-review-screen-styles', () => ({
 vi.mock('react-native-reanimated', async () =>
   (await import('../test-support/reanimated-pager-stub')).reanimatedPagerStub()
 )
-vi.mock('./mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'MountedBottomDrawer' }))
+vi.mock('./bottom-drawer/mounted-bottom-drawer', () => ({
+  MountedBottomDrawer: 'MountedBottomDrawer'
+}))
 const loadSnapshot = vi.hoisted(() => vi.fn())
 vi.mock('../session/mobile-diff-review-loaders', () => ({
   loadMobileDiffReviewSnapshot: loadSnapshot,

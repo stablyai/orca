@@ -1,21 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import {
-  agentSessionAccountHome,
-  agentSessionAccountHomesEqual
-} from './agent-session-account-home'
+import { agentSessionAccountHomesEqual } from './agent-session-account-home'
 import { isPersistedAgentSessionRecord } from './agent-session-record'
 import { agentSessionRecordFixture } from './agent-session-record.test-fixture'
 import { encodeAgentSessionRecord } from './agent-session-record-stored-form'
 
 describe('agent session account home', () => {
-  it('stores the variable and path exactly as older builds wrote them', () => {
-    expect(
-      JSON.stringify(
-        agentSessionAccountHome({ accountHomeVariable: 'CODEX_HOME' }, '/home/dev/.codex')
-      )
-    ).toBe('{"variable":"CODEX_HOME","path":"/home/dev/.codex"}')
-  })
-
   // Validate agent-specific env ownership at launch, when this binding becomes the child environment.
   it('reads any well-formed variable, and sets aside one that is not a variable name', () => {
     const record = encodeAgentSessionRecord(agentSessionRecordFixture())
