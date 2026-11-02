@@ -9,7 +9,7 @@ import type {
   StructuredAgentId
 } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionOwnerObservation } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionOwnerObservation } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import {
   agentSessionAccountHomesEqual,

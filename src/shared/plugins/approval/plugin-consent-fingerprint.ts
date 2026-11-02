@@ -5,6 +5,7 @@ import {
   type PluginExecutionProfile
 } from '../contributions/plugin-execution-profile'
 import type { PluginManifest } from '../manifest/plugin-manifest'
+import { isPluginJsonObject } from '../manifest/plugin-json-object'
 import {
   PLUGIN_CONTRIBUTION_POINT_POLICY,
   PLUGIN_CONTRIBUTION_POINTS,
@@ -65,7 +66,18 @@ export function canonicalizePluginConsent(
   const declarativeIdentity = hasDeclarativePluginContributions(manifest)
     ? `\0instructional-content:${contentIdentity ?? 'unresolved'}`
     : ''
-  return `${capabilities}${executionIdentity}${workerIdentity}${executableIdentity}${declarativeIdentity}`
+  return `${capabilities}${executionIdentity}${workerIdentity}${executableIdentity}${declarativeIdentity}${replacementIdentity(manifest)}`
+}
+
+/** Taking over a built-in action needs its own approval, also for a dev folder whose code may
+ *  change freely; empty for every plugin that replaces nothing, so their consent is unchanged. */
+function replacementIdentity(manifest: PluginConsentSubject): string {
+  const actions = (manifest.contributes?.commands ?? [])
+    .flatMap((command) =>
+      isPluginJsonObject(command) && typeof command.replaces === 'string' ? [command.replaces] : []
+    )
+    .toSorted()
+  return actions.length > 0 ? `\0replaces:${actions.join(',')}` : ''
 }
 
 export function fingerprintPluginConsent(

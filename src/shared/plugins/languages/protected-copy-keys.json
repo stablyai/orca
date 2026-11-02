@@ -236,6 +236,7 @@
     "auto.components.settings.PluginInstallConsent.editsFileTypes",
     "auto.components.settings.PluginInstallConsent.fullAccessUpdates",
     "auto.components.settings.PluginInstallConsent.noOtherAccess",
+    "auto.components.settings.PluginInstallConsent.replacesAction",
     "auto.components.settings.PluginInstallConsent.replacesShortcut",
     "auto.components.settings.PluginInstallConsent.updatesKeepApproval",
     "auto.components.settings.PluginInstallDialog.cancel",
