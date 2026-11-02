@@ -1,3 +1,5 @@
+import type { BrowserLinkOpenContext } from './browser-link-destination'
+import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
 import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/terminal-file-open-in-group-toast'
 import { beginLinkOpenRequest } from './link-open-request'
 import { translate } from '@/i18n/i18n'
@@ -7,6 +9,40 @@ import {
   canHttpLinkOpenInSourceGroup,
   type HttpLinkSourceOwner
 } from '@/lib/http-link-routing'
+
+export type OpenHttpLinkOptions = {
+  worktreeId?: string | null
+  /** Opt-in for routing a remote-owned source through its managed browser. */
+  allowRemoteInApp?: boolean
+  /** Preserve a source surface's existing desktop-browser provider for remote documents. */
+  allowClientBrowserFallback?: boolean
+  /** Unconditional: always use the system browser regardless of settings. */
+  forceSystemBrowser?: boolean
+  /** Unconditional for local sources: open inside Orca regardless of settings. */
+  forceInApp?: boolean
+  /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
+  modifierHeld?: boolean
+  sourceOwner?: HttpLinkSourceOwner
+  linkContext?: BrowserLinkOpenContext
+  onBrowserOpenComplete?: (result: HttpLinkBrowserCompletion) => void
+}
+
+export type HttpLinkBrowserCompletion = { pageId: string | null; background: boolean }
+
+type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
+  workspaceId: string
+  url: string
+  intent: { kind: 'url' }
+  linkContext?: BrowserLinkOpenContext
+  expectedRuntimeEnvironmentId?: string
+  expectedSshConnectionId?: string
+  allowClientBrowserFallback?: boolean
+}
+
+/** Resolves to the page id when the page renders on this desktop, else null. */
+export type WorkspaceHttpLinkBrowserOpener = (
+  request: WorkspaceHttpLinkBrowserRequest
+) => Promise<string | null | void>
 
 // Keep original terminal catalog keys: their shipped translations are now shared with native chat.
 
@@ -125,6 +161,7 @@ export type HttpLinkRoutingPreferenceRequester = (
 ) => boolean | Promise<boolean> | null | undefined
 
 export type RoutedHttpLinkOptions = {
+  onBrowserOpenComplete?: (result: HttpLinkBrowserCompletion) => void
   worktreeId: string
   sourceTabId?: string | null
   openInSourceGroup?: boolean
@@ -155,7 +192,8 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       worktreeId: deps.worktreeId,
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
-      sourceOwner
+      sourceOwner,
+      ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
     })
     return
   }
@@ -166,7 +204,8 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
       modifierHeld: true,
-      sourceOwner
+      sourceOwner,
+      ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
     })
     return
   }
@@ -179,7 +218,8 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       ...(linkContext ? { linkContext } : {}),
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
-      sourceOwner
+      sourceOwner,
+      ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
     })
     return
   }
@@ -192,7 +232,8 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
         allowRemoteInApp: true,
         worktreeId: deps.worktreeId,
         forceSystemBrowser: !openInOrca,
-        sourceOwner
+        sourceOwner,
+        ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
       })
     })
     .catch(() => {
@@ -201,7 +242,8 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
         allowRemoteInApp: true,
         worktreeId: deps.worktreeId,
         forceSystemBrowser: true,
-        sourceOwner
+        sourceOwner,
+        ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
       })
     })
 }

@@ -24,6 +24,7 @@ export function useOnboardingAndFeatureTips() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const [onboardingLoaded, setOnboardingLoaded] = useState(false)
   const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
+  const [chatUiHereCornerCardOpen, setChatUiHereCornerCardOpen] = useState(false)
   const promptedThisSessionRef = useRef(false)
   const suppressedByOnboardingThisSessionRef = useRef(false)
 
@@ -145,7 +146,7 @@ export function useOnboardingAndFeatureTips() {
     if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
       trackChatUiFeatureTipExposure(chatUiLaunchTipVariant, settings ?? null)
       if (isChatUiLaunchTipHeldOut(settings ?? null)) {
-        // Control behaves as if the tip never existed, so the next pending tip may take this launch.
+        // Suppressed profiles leave this launch available for the next pending tip.
         actions.markFeatureTipsSeen(['chat-ui-here'])
         return
       }
@@ -161,6 +162,15 @@ export function useOnboardingAndFeatureTips() {
     }
     // Mark seen when shown so a crash before dismissal cannot repeat the tip.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
+    if (
+      featureTipsDecision.tipId === 'chat-ui-here' &&
+      chatUiLaunchTipVariant === 'chat-ui-off' &&
+      settings?.telemetry?.chatUiLaunchTipCohort !== 'treatment-center'
+    ) {
+      // Terminal-default profiles get the nonblocking card; chat users still acknowledge the modal.
+      setChatUiHereCornerCardOpen(true)
+      return
+    }
     actions.openModal('feature-tips', {
       source: 'app_open',
       tipId: featureTipsDecision.tipId
@@ -179,7 +189,14 @@ export function useOnboardingAndFeatureTips() {
 
   const shouldRender = onboarding !== null && shouldShowOnboarding(onboarding)
   return useMemo(
-    () => ({ applyStartupOnboardingState, onboarding, setOnboarding, shouldRender }),
-    [applyStartupOnboardingState, onboarding, shouldRender]
+    () => ({
+      applyStartupOnboardingState,
+      onboarding,
+      setOnboarding,
+      shouldRender,
+      chatUiHereCornerCardOpen,
+      setChatUiHereCornerCardOpen
+    }),
+    [applyStartupOnboardingState, onboarding, shouldRender, chatUiHereCornerCardOpen]
   )
 }

@@ -45,7 +45,7 @@ const dependencyExports: [string, string[]][] = [
   ['../terminal-history-gc', ['cancelHistoryGc']],
   ['./window-all-closed-quit-policy', ['shouldQuitWhenAllWindowsClosed']],
   ['./configure-process', ['isDevParentShutdownRequested']],
-  ['../persistence', ['getCanonicalUserDataPath']]
+  ['../persistence/loading-store/user-data-path', ['getCanonicalUserDataPath']]
 ]
 
 it('keeps startup services live when the updater has vetoed before-quit', async () => {

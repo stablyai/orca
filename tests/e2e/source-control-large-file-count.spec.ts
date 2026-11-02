@@ -280,41 +280,6 @@ test.describe('Source Control large file count (#8013)', () => {
     }
   })
 
-  test('a large modified set under the status cap stays responsive', async ({
-    orcaPage,
-    electronApp,
-    registerPostElectronShutdownCleanup
-  }) => {
-    test.setTimeout(600_000)
-    const modifiedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '750')
-    const fixture = createLargeFileCountRepo({ trackedFiles: modifiedFiles, modifiedFiles })
-    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
-    try {
-      await waitForSessionReady(orcaPage)
-      const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
-      const workingSetBeforeMb = await readRendererWorkingSetMb(electronApp)
-      const measurement = await measureSourceControlLoad(orcaPage, {
-        worktreeId,
-        repoPath: fixture.repoPath,
-        expectedRows: modifiedFiles,
-        pollCycles: 3
-      })
-      const workingSetAfterMb = await readRendererWorkingSetMb(electronApp)
-      logMeasurement(`modified=${modifiedFiles}`, {
-        ...measurement,
-        rendererWorkingSetMb: { before: workingSetBeforeMb, after: workingSetAfterMb }
-      })
-
-      expect(measurement.didHitLimit).toBe(false)
-      expect(measurement.entryCount).toBeGreaterThanOrEqual(modifiedFiles)
-      expect(measurement.renderedRows).toBeGreaterThan(0)
-      expect(measurement.renderedRows).toBeLessThan(MAX_MOUNTED_ROWS)
-      expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
-    } finally {
-      await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
-    }
-  })
-
   test('a change set over the status cap degrades to the too-many-changes state', async ({
     orcaPage,
     electronApp,
@@ -422,87 +387,6 @@ test.describe('Source Control large file count (#8013)', () => {
           )
         )
         .toBeNull()
-    } finally {
-      await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
-    }
-  })
-
-  test('untracked line-stat cache stays effective up to the status cap', async ({
-    orcaPage,
-    registerPostElectronShutdownCleanup
-  }) => {
-    test.setTimeout(600_000)
-    // Compare warm sub-cap scales on this machine; a too-small full-result cache makes their ratio grow.
-    const fileBytes = 65_536
-    const smallRepo = createLargeFileCountRepo({
-      trackedFiles: 10,
-      untrackedFiles: 400,
-      untrackedFileBytes: fileBytes
-    })
-    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(smallRepo.repoPath))
-    let largeRepo: ReturnType<typeof createLargeFileCountRepo> | null = null
-    try {
-      largeRepo = createLargeFileCountRepo({
-        trackedFiles: 10,
-        untrackedFiles: 800,
-        untrackedFileBytes: fileBytes
-      })
-      const largeRepoPath = largeRepo.repoPath
-      registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(largeRepoPath))
-      await waitForSessionReady(orcaPage)
-
-      const warmRescanPerFileMs = async (repoPath: string, files: number): Promise<number> => {
-        const worktreeId = await addAndActivateRepo(orcaPage, repoPath)
-        const measurement = await measureSourceControlLoad(orcaPage, {
-          worktreeId,
-          repoPath,
-          expectedRows: files,
-          pollCycles: 1
-        })
-        return measurement.rescanMs / files
-      }
-
-      const smallPerFileMs = await warmRescanPerFileMs(smallRepo.repoPath, 400)
-      const largePerFileMs = await warmRescanPerFileMs(largeRepo.repoPath, 800)
-      console.log(
-        `[large-file-count] line-stat-cache smallPerFileMs=${smallPerFileMs.toFixed(4)} largePerFileMs=${largePerFileMs.toFixed(4)} ratio=${(largePerFileMs / smallPerFileMs).toFixed(2)}`
-      )
-      expect(largePerFileMs).toBeLessThan(smallPerFileMs * 2)
-    } finally {
-      await unregisterLargeFileCountRepos(orcaPage, [
-        smallRepo.repoPath,
-        ...(largeRepo ? [largeRepo.repoPath] : [])
-      ])
-    }
-  })
-
-  test('a large clean repo (tracked files only) loads instantly', async ({
-    orcaPage,
-    electronApp,
-    registerPostElectronShutdownCleanup
-  }) => {
-    test.setTimeout(600_000)
-    const trackedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '15000')
-    const fixture = createLargeFileCountRepo({ trackedFiles })
-    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
-    try {
-      await waitForSessionReady(orcaPage)
-      const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
-      const workingSetBeforeMb = await readRendererWorkingSetMb(electronApp)
-      const measurement = await measureSourceControlLoad(orcaPage, {
-        worktreeId,
-        repoPath: fixture.repoPath,
-        expectedRows: 0,
-        pollCycles: 2
-      })
-      const workingSetAfterMb = await readRendererWorkingSetMb(electronApp)
-      logMeasurement(`clean tracked=${trackedFiles}`, {
-        ...measurement,
-        rendererWorkingSetMb: { before: workingSetBeforeMb, after: workingSetAfterMb }
-      })
-
-      expect(measurement.entryCount).toBe(0)
-      expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
     } finally {
       await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
     }

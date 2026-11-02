@@ -20,7 +20,7 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'

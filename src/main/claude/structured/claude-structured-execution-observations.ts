@@ -1,20 +1,15 @@
 import type { ClaudeSession } from './claude-structured-session-state'
 
-/** Provider observations only; requested choices and picker defaults cannot vouch for a run. */
+/** Fast routing reports precede this input and cannot vouch for its execution. */
 export function claudeExecutionObservations(session: ClaudeSession): Record<string, string> {
   const model =
     session.reportedModelMutation === session.optionMutationSequence
       ? (session.reportedOptions.model ?? session.appliedOptions?.model)
       : session.appliedOptions?.model
   const effort = session.appliedOptions?.effort
-  const fast =
-    session.fastModeReportedMutation === session.optionMutationSequence &&
-    session.fastModeState === 'on' &&
-    session.reportedOptions.fastMode !== false
   return {
     ...(model ? { model } : {}),
-    ...(effort ? { effort } : {}),
-    ...(fast ? { fastMode: 'true' } : {})
+    ...(effort ? { effort } : {})
   }
 }
 
@@ -32,11 +27,6 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
       const { effort: _old, ...applied } = session.appliedOptions
       session.appliedOptions = applied
     }
-  }
-  if (key === 'model' || key === 'fastMode') {
-    delete session.fastModeReportedMutation
-  } else if (session.fastModeReportedMutation === previous) {
-    session.fastModeReportedMutation = sequence
   }
   return sequence
 }

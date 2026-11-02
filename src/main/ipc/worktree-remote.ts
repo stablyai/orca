@@ -7,7 +7,7 @@ import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { Repo } from '../../shared/repo-types'
 import type {

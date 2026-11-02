@@ -35,7 +35,7 @@ import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
-import { getCanonicalUserDataPath } from '../persistence'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
@@ -200,6 +200,7 @@ function installWillQuitHandler(): void {
       .then((routes) => routes.closeAllLocalSshBrowserRoutes())
       .catch(() => {})
     browserManager.setBrowserGuestStateChangedListener(null)
+    browserManager.setOffscreenTabOpener(null)
     const emulatorShutdown =
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
     const finalStore = state.store

@@ -34,7 +34,7 @@ import * as rpc from '@/runtime/runtime-rpc-client'
 import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { nativeChatComposerDraftWritesSettled } from '@/components/native-chat/native-chat-composer-draft-persistence'
-import type { SelectionOperation } from '../../../shared/structured-agent-session-selection-operations'
+import type { SelectionOperation } from '../../../shared/agent-session/options/structured-agent-session-selection-operations'
 
 // No initial chat mode proves availability rejection preceded terminal-tab adoption.
 describe('structured chat adoption guard on the launch path', () => {
