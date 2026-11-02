@@ -142,6 +142,9 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     }
     const releaseDelay = releaseTagsResult.releaseDelay
     this.delayedUpdate = toDelayedUpdate(releaseDelay?.heldRelease, delayDays)
+    if (delayDays > 0 && !releaseDelay) {
+      throw new ReleaseFeedPreflightError('manifest-unavailable', variant, 'Unknown release age')
+    }
     const newerTag = releaseTagsResult.tags[0] ?? null
     const fallbackTag = includePrerelease ? (releaseTagsResult.tags[1] ?? null) : null
     this.pendingPrereleaseFallback =
@@ -159,7 +162,6 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
             retryLaunched: false
           }
         : null
-    // Console.app/--enable-logging captures console.info for field diagnostics.
     if (newerTag) {
       this.clearPublishingWindowLastGoodCheck()
       const url = getReleaseDownloadUrl(newerTag)

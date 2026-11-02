@@ -29,6 +29,13 @@ export const off = defineFixture({
   render: () => <GeneralUpdateSettingsSection />
 })
 
+export const infoTooltip = defineFixture({
+  ...off,
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('button[aria-label="About Update Delay"]')?.focus()
+  }
+})
+
 export const heldRelease = defineFixture({
   width: 640,
   store: { settings: settingsWithDelay(7), updateStatus: heldStatus(7, 2) },

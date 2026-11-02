@@ -15,7 +15,7 @@ export function getUpdateDelayTitle(): string {
 export function getUpdateDelayDescription(): string {
   return translate(
     'settings.updateDelay.description',
-    'Wait this many days after a release is published before Orca offers it, giving time for broken or compromised releases to be pulled.'
+    'Wait this many days after a release is published before Orca offers it.'
   )
 }
 

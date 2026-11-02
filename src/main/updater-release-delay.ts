@@ -13,7 +13,7 @@ export type DatedReleaseTag = {
   releasedAt: number | null
 }
 
-export type HeldRelease = { tag: string; version: string; releasedAt: number }
+export type HeldRelease = DatedReleaseTag
 
 export type ReleaseDelayResult = {
   /** Newest newer release still inside the delay window. */
@@ -36,23 +36,13 @@ export function applyReleaseDelay(
   const held = candidates.find(
     (entry) => compareVersions(entry.version, currentVersion) > 0 && !isOldEnough(entry)
   )
-  const feedDates = allTags.flatMap((entry) =>
-    entry.releasedAt === null ? [] : [entry.releasedAt]
-  )
-  const oldestFeedDate = feedDates.length ? Math.min(...feedDates) : null
   return {
     eligible: candidates.filter(isOldEnough),
     releaseDelay: {
-      heldRelease: held
-        ? { tag: held.tag, version: held.version, releasedAt: held.releasedAt ?? now }
-        : null,
+      heldRelease: held ?? null,
       isTagOldEnough: (tag) => {
         const entry = allTags.find((candidate) => candidate.tag === tag)
-        if (entry) {
-          return isOldEnough(entry)
-        }
-        // Tags absent from the feed predate every entry in it.
-        return oldestFeedDate !== null && oldestFeedDate <= cutoff
+        return entry !== undefined && isOldEnough(entry)
       }
     }
   }
@@ -62,7 +52,7 @@ export function toDelayedUpdate(
   heldRelease: HeldRelease | null | undefined,
   delayDays: number
 ): DelayedUpdate | null {
-  if (!heldRelease) {
+  if (!heldRelease || heldRelease.releasedAt === null) {
     return null
   }
   return {

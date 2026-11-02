@@ -451,17 +451,23 @@ describe('fetchNewerReleaseTagsWithReadiness update delay', () => {
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
     const result = await fetchNewerReleaseTagsWithReadiness('1.4.1', 1, delay)
     expect(result.tags).toEqual([])
-    expect(result.releaseDelay?.heldRelease?.tag).toBe('v1.4.2')
+    expect(result.releaseDelay?.heldRelease).toEqual({
+      tag: 'v1.4.2',
+      version: '1.4.2',
+      releasedAt: null
+    })
   })
 
-  it('treats stable-fallback tags missing from the feed as older than its oldest entry', async () => {
+  it('requires a known old timestamp for a stable-fallback tag', async () => {
     respondWithAtom(['v1.4.3'], [], [], [], { 'v1.4.3': daysAgo(9) })
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
     const aged = await fetchNewerReleaseTagsWithReadiness('1.4.3', 1, delay)
-    expect(aged.releaseDelay?.isTagOldEnough('v1.4.0')).toBe(true)
+    expect(aged.releaseDelay?.isTagOldEnough('v1.4.3')).toBe(true)
+    expect(aged.releaseDelay?.isTagOldEnough('v1.4.0')).toBe(false)
+    expect(aged.releaseDelay?.isTagOldEnough('v1.4.4')).toBe(false)
 
     respondWithAtom(['v1.4.3'], [], [], [], { 'v1.4.3': daysAgo(2) })
     const fresh = await fetchNewerReleaseTagsWithReadiness('1.4.3', 1, delay)
-    expect(fresh.releaseDelay?.isTagOldEnough('v1.4.0')).toBe(false)
+    expect(fresh.releaseDelay?.isTagOldEnough('v1.4.3')).toBe(false)
   })
 })

@@ -1066,7 +1066,8 @@
     },
     "updateDelay": {
       "title": "Update Delay",
-      "description": "Wait this many days after a release is published before Orca offers it, giving time for broken or compromised releases to be pulled.",
+      "description": "Wait this many days after a release is published before Orca offers it.",
+      "info": "About Update Delay",
       "none": "None",
       "availableSoon": "Available to you {{relative}}",
       "availableOn": "Available to you {{date}} ({{relative}})",

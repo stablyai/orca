@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { GeneralPane } from './GeneralPane'
+import { TooltipProvider } from '../ui/tooltip'
 const fake = vi.hoisted(() => ({
   query: '',
   getVersion: vi.fn(async () => '1.4.100'),
@@ -67,7 +68,7 @@ it.each([false, true])(
       fontSuggestions: [],
       wslSupportedPlatform
     }
-    const view = render(<GeneralPane {...props} />)
+    const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
     await act(async () => {})
     // Assert DOM identity across query edits so search cannot remount sections and add reads.
     const mountedHeading = screen.getByText('Updates', { exact: true })
@@ -105,7 +106,7 @@ it('keeps showing store-published remote update state without a remount', async 
     fontSuggestions: []
   }
   fake.query = 'update'
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   const mountedHeading = screen.getByText('Updates', { exact: true })
   expect(screen.getByText('1 paired server · 1 up to date')).toBeTruthy()
@@ -125,7 +126,7 @@ it('keeps explicit remote refresh and true hide/reopen reads', async () => {
     updateSettings: vi.fn(),
     fontSuggestions: []
   }
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   fireEvent.click(screen.getByRole('button', { name: 'Check for Server Updates' }))
   expect(fake.refresh).toHaveBeenCalledTimes(2)
@@ -141,7 +142,7 @@ it('keeps explicit remote refresh and true hide/reopen reads', async () => {
 it('preserves an autosave draft until external settings change or the section hides', async () => {
   const settings = { ...getDefaultSettings('/synthetic'), editorAutoSaveDelayMs: 1000 }
   const props = { settings, updateSettings: vi.fn(), fontSuggestions: [] }
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Auto Save Delay' }), {
     target: { value: '2500' }
@@ -176,7 +177,7 @@ it('retains the revealed release picker only while Updates remains visible', asy
     updateSettings: vi.fn(),
     fontSuggestions: []
   }
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   fireEvent.click(screen.getByText('Updates', { exact: true }), { altKey: true })
   expect(screen.getByText('Release picker open')).toBeTruthy()
@@ -202,7 +203,7 @@ it('does not publish a version result from a genuinely unmounted section', async
     updateSettings: vi.fn(),
     fontSuggestions: []
   }
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   fake.query = 'Tab Order'
   await act(async () => view.rerender(<GeneralPane {...props} />))

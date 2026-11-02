@@ -1,7 +1,12 @@
 import type { BrowserWindow } from 'electron'
 import type { ElectronAutoUpdater } from '../electron-updater-loader'
 import type { LocalBuildFeed } from '../local-builds/local-build-feed-server'
-import type { DelayedUpdate, UpdateSource, UpdateStatus } from '../../shared/update-status-types'
+import type {
+  DelayedUpdate,
+  UpdateCheckOptions,
+  UpdateSource,
+  UpdateStatus
+} from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
 import type { PrimaryEventSuppression, UpdateCheckVariant } from './updater-types'
 
@@ -81,7 +86,7 @@ export abstract class UpdaterState {
   protected activeUpdateCheckLaunchAttemptId: number | null = null
   protected activeUpdateCheckEventAttemptId: number | null = null
   protected updateAvailableEventPendingAttemptId: number | null = null
-  protected pendingUserInitiatedCheckAfterInFlight: UpdateCheckVariant | null = null
+  protected pendingUserInitiatedCheckAfterInFlight: UpdateCheckOptions | null = null
   protected activeUpdateNudgeId: string | null = null
   protected awaitingNudgeCheckOutcome = false
   protected nudgeCheckInFlight = false

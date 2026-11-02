@@ -1,11 +1,12 @@
 import type React from 'react'
-import { useId, useRef } from 'react'
-import { CircleCheck, Clock, Loader2 } from 'lucide-react'
+import { useId, useState } from 'react'
+import { CircleCheck, Clock, Info, Loader2 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { useNow } from '@/hooks/use-now'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Progress } from '../ui/progress'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSegmentedControl } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
@@ -57,14 +58,17 @@ export function UpdateDelaySetting(): React.JSX.Element {
   const delayDays = useAppStore((s) => normalizeUpdateDelayDays(s.settings?.updateDelayDays))
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateStatus = useAppStore((s) => s.updateStatus)
-  // Keep the panel mounted through re-checks so its buttons do not jump out from under the cursor.
-  const delayedUpdateRef = useRef<DelayedUpdate | undefined>(undefined)
-  if (updateStatus.state === 'not-available') {
-    delayedUpdateRef.current = updateStatus.delayedUpdate
-  } else if (updateStatus.state !== 'checking') {
-    delayedUpdateRef.current = undefined
+  const [lastDelayedUpdate, setLastDelayedUpdate] = useState<DelayedUpdate | undefined>()
+  // Keep the panel mounted through re-checks without mutating refs during render.
+  const delayedUpdate =
+    updateStatus.state === 'checking'
+      ? lastDelayedUpdate
+      : updateStatus.state === 'not-available'
+        ? updateStatus.delayedUpdate
+        : undefined
+  if (delayedUpdate !== lastDelayedUpdate) {
+    setLastDelayedUpdate(delayedUpdate)
   }
-  const delayedUpdate = delayedUpdateRef.current
   const checking = updateStatus.state === 'checking'
   const now = useNow(MINUTE_MS, Boolean(delayedUpdate))
   const labelId = useId()
@@ -104,11 +108,25 @@ export function UpdateDelaySetting(): React.JSX.Element {
       className="space-y-3"
     >
       <div className="space-y-2">
-        <div className="space-y-1">
+        <div className="flex items-center gap-1.5">
           <Label id={labelId}>{title}</Label>
-          <p id={descriptionId} className="select-text text-xs text-muted-foreground">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={translate('settings.updateDelay.info', 'About Update Delay')}
+              >
+                <Info className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4} className="max-w-xs">
+              {description}
+            </TooltipContent>
+          </Tooltip>
+          <span id={descriptionId} className="sr-only">
             {description}
-          </p>
+          </span>
         </div>
         <SettingsSegmentedControl
           value={delayDays}

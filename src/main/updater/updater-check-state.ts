@@ -39,14 +39,14 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     return 'default'
   }
 
-  protected launchPendingUserInitiatedCheckAfterInFlight(variant: UpdateCheckVariant): void {
+  protected launchPendingUserInitiatedCheckAfterInFlight(options: UpdateCheckOptions): void {
     this.pendingUserInitiatedCheckAfterInFlight = null
     setTimeout(() => {
       // Wait one tick for electron-updater to clear its promise or the modifier check dedupes into the stable check.
       if (this.currentStatus.state === 'checking') {
         this.currentStatus = { state: 'idle' }
       }
-      this.checkForUpdatesFromMenu(this.getOptionsForUpdateCheckVariant(variant))
+      this.checkForUpdatesFromMenu(options)
     }, 0)
   }
 

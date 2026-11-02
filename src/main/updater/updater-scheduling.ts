@@ -125,13 +125,13 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     this.backgroundCheckPromotedToUserInitiated = false
     this.userInitiatedCheck = false
     this.completeSilentUpdateCheck(userInitiated)
-    this.scheduleCheckWhenDelayedUpdateClears(userInitiated)
+    this.scheduleCheckWhenDelayedUpdateClears()
     this.sendSettledCheckStatus({ state: 'not-available', userInitiated })
   }
 
   /** Offer a held release when it clears instead of up to a day later. */
-  private scheduleCheckWhenDelayedUpdateClears(userInitiated: boolean | undefined): void {
-    if (userInitiated || !this.delayedUpdate) {
+  private scheduleCheckWhenDelayedUpdateClears(): void {
+    if (!this.delayedUpdate) {
       return
     }
     const wakeMs = getDelayedUpdateWakeDelayMs(this.delayedUpdate, Date.now())
