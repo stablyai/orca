@@ -1,4 +1,4 @@
-import { isolateJournalTransition } from './journal-reducer-transition'
+import { JournalDraftMap, JournalDraftSet } from './journal-transition-collections'
 import { journalInputOrder } from './journal-input-order'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDispatchRowApplies, queuedHandOffInDoubt } from './journal-dispatch-settlement'
@@ -100,14 +100,20 @@ export class LegacyQueuedCards {
       }
       return state
     }
-    const { state: display } = isolateJournalTransition(state, (draft) => {
-      for (const { card, submission: entry } of handedOff) {
-        const send = draft.submissions.get(entry.clientMessageId)!
-        draft.inputs.presentations.set(send.clientMessageId, card)
-        foldQueuedHandOffInDoubt(send)
-        placeQueuedHandOffInDoubt(draft, send)
-      }
-    })
+    const display: JournalReducerState = {
+      ...state,
+      items: new JournalDraftMap(state.items),
+      submissions: new JournalDraftMap(state.submissions),
+      normalizedHandOffs: new JournalDraftSet(state.normalizedHandOffs),
+      inputs: { ...state.inputs, presentations: new JournalDraftMap(state.inputs.presentations) }
+    }
+    for (const { card, submission: entry } of handedOff) {
+      const send = { ...entry }
+      display.submissions.set(send.clientMessageId, send)
+      display.inputs.presentations.set(send.clientMessageId, card)
+      foldQueuedHandOffInDoubt(send)
+      placeQueuedHandOffInDoubt(display, send)
+    }
     if (this.viewed) {
       this.viewed.display = display
     }

@@ -15,7 +15,8 @@ import {
   type AdmittedOutcome
 } from './journal-outcome-format-1'
 import { decodeOutcomeFormat1Onto } from './journal-outcome-format-1-decode'
-import { AgentSessionJournalError } from './journal-write-guards'
+import { AgentSessionJournalError, JournalOutcomeDecodeError } from './journal-write-guards'
+export { JournalOutcomeDecodeError } from './journal-write-guards'
 
 export type JournalOutcome = {
   seq: number
@@ -29,12 +30,6 @@ export type JournalOutcome = {
 
 /** A key first written over a frozen input prefix keeps the place the prefix gave it. */
 export const JOURNAL_PREFIX_ORDINAL = 'b'
-
-/** Stored outcome content this build rejects; storage errors never become this, so they stay
- * retryable, as main's replay keeps them. */
-export class JournalOutcomeDecodeError extends Error {
-  override readonly name = 'JournalOutcomeDecodeError'
-}
 
 const scalars = (state: JournalReducerState): Record<string, unknown> =>
   z.record(z.string(), z.unknown()).parse(JSON.parse(journalStateScalars(state)))

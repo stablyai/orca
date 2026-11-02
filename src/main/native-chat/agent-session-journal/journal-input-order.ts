@@ -21,11 +21,20 @@ import type { InputPlaceQuery } from './journal-input-place-index'
 import { JournalInputLineageOwner } from './journal-input-lineage'
 import { JournalInputCardIndex } from './journal-input-card-index'
 
-export {
-  initializeJournalInputOrder,
-  journalInputOrder,
-  setJournalInputOrder
-} from './journal-input-order-registry'
+import { getJournalInputOrder, setJournalInputOrder } from './journal-input-order-registry'
+export { setJournalInputOrder } from './journal-input-order-registry'
+
+export function initializeJournalInputOrder(
+  state: JournalReducerState,
+  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+): JournalInputOrder {
+  const owner = new JournalInputOrder(state, originalAcceptance)
+  setJournalInputOrder(state, owner)
+  return owner
+}
+export function journalInputOrder(state: JournalReducerState): JournalInputOrder {
+  return getJournalInputOrder(state) ?? initializeJournalInputOrder(state)
+}
 
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
 export class JournalInputOrder {

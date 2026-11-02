@@ -1,8 +1,10 @@
 import * as legacyChange from '../agent-session-journal/journal-queue-legacy-change'
-import { readTestJournalOutcomes } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  readTestJournalOutcomes,
+  appendTestJournalQueueRow
+} from '../agent-session-journal/journal-host-database-test-support'
 import { outcomeFormat1EntryParsers } from '../agent-session-journal/journal-outcome-format-1'
 import { JournalDraftMap } from '../agent-session-journal/journal-transition-collections'
-import { appendTestJournalQueueRow } from '../agent-session-journal/journal-host-database-test-support'
 import { expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,

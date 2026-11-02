@@ -4,7 +4,10 @@ import { getStructuredAgentSessionLaunchSelection } from '../../lib/agent-sessio
 import {
   subscribeStructuredAgentLaunchStatus,
   structuredAgentSessionLaunchHasRetainedInput,
-  getStructuredLaunchStateBySessionId
+  getStructuredLaunchStateBySessionId,
+  getStructuredAgentSessionLaunchResumes,
+  useStructuredAgentSessionLaunchFailure,
+  useStructuredAgentSessionLaunchLifecycle
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { relaunchFailedStructuredAgentSessionWithMessage } from '../../lib/agent-session/launch/structured-agent-session-launch-message'
 import {
@@ -12,11 +15,6 @@ import {
   retryStructuredAgentSessionLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import {
-  getStructuredAgentSessionLaunchResumes,
-  useStructuredAgentSessionLaunchFailure,
-  useStructuredAgentSessionLaunchLifecycle
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 export type StructuredAgentSessionLaunchView = {
   kind: 'new' | 'resume'

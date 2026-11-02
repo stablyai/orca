@@ -1,7 +1,6 @@
 import { readJournalSessionEpoch } from './journal-row-table'
-import { AgentSessionJournalError } from './journal-write-guards'
+import { AgentSessionJournalError, JournalOutcomeDecodeError } from './journal-write-guards'
 import { JOURNAL_OUTCOME_FORMAT_2 } from './journal-outcome-format-2'
-import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 import type Database from '../../sqlite/sync-database'
 
 /** The newest record format this build reads, and the one it writes. Each stored record carries its
