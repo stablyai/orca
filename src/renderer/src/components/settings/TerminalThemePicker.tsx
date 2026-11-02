@@ -209,33 +209,34 @@ export function ThemePicker({
                         ) : null}
                       </button>
                       {theme.group === 'imported' && onDeleteImportedTheme ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              className="mr-1.5 shrink-0 text-muted-foreground opacity-0 group-focus-within/theme-row:opacity-100 group-hover/theme-row:opacity-100 [@media(hover:none)]:opacity-100"
-                              onClick={() => {
-                                onDeleteImportedTheme(theme)
-                                // The row unmounts with focus inside it; keep keyboard users in the picker.
-                                searchInputRef.current?.focus()
-                              }}
-                              aria-label={translate(
-                                'auto.components.settings.SettingsFormControls.delete_imported_theme',
-                                'Delete {{value0}}',
-                                { value0: theme.label }
+                        <span className="mr-1.5 flex shrink-0 text-muted-foreground opacity-0 group-focus-within/theme-row:opacity-100 group-hover/theme-row:opacity-100 [@media(hover:none)]:opacity-100">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                onClick={() => {
+                                  onDeleteImportedTheme(theme)
+                                  // The row unmounts with focus inside it; keep keyboard users in the picker.
+                                  searchInputRef.current?.focus()
+                                }}
+                                aria-label={translate(
+                                  'auto.components.settings.SettingsFormControls.delete_imported_theme',
+                                  'Delete {{value0}}',
+                                  { value0: theme.label }
+                                )}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" sideOffset={4}>
+                              {translate(
+                                'auto.components.settings.SettingsFormControls.delete_theme',
+                                'Delete theme'
                               )}
-                            >
-                              <Trash2 />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" sideOffset={4}>
-                            {translate(
-                              'auto.components.settings.SettingsFormControls.delete_theme',
-                              'Delete theme'
-                            )}
-                          </TooltipContent>
-                        </Tooltip>
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
                       ) : null}
                     </div>
                   ))}
