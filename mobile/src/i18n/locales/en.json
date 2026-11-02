@@ -1171,7 +1171,12 @@
       "loadingProjects": "Loading projects…"
     },
     "newWorktreeModal": {
-      "remoteRepository": "Remote repository"
+      "remoteRepository": "Remote repository",
+      "resolvingDefaultAgent": "Resolving default agent…",
+      "defaultAgentUnavailable": "Default agent unavailable",
+      "projectDefaultSource": "Project default",
+      "globalDefaultSource": "Global default",
+      "automaticDefaultSource": "Automatic"
     },
     "newWorktreeModalDrawers": {
       "project": "Project",
