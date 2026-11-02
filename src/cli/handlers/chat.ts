@@ -3,15 +3,15 @@ import type {
   AgentSessionHistoryPage,
   AgentSessionMutationResult,
   AgentSessionSendResult
-} from '../../shared/agent-session-wire'
-import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../shared/agent-session-runtime-capabilities'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
+import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../shared/agent-session/agent-session-wire'
 import type { RuntimeWorktreePsResult } from '../../shared/runtime-worktree-contracts'
-import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   structuredAgentSessionMessageSendMutation,
   structuredAgentSessionSendBody
-} from '../../shared/structured-agent-session-send-mutation'
+} from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   chatTranscript,
   formatChatList,

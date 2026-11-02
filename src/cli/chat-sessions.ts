@@ -1,9 +1,9 @@
-import type { AgentJournalRenderItem } from '../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../shared/agent-session/journal/agent-session-journal-types'
 import type {
   RuntimeWorktreeAgentRow,
   RuntimeWorktreePsSummary
 } from '../shared/runtime-worktree-contracts'
-import { structuredAgentSessionTabId } from '../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../shared/agent-session/view/structured-agent-session-projection'
 import { RuntimeClientError } from './runtime-client'
 
 const CHAT_HANDLE_PREFIX = structuredAgentSessionTabId('')
