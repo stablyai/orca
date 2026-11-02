@@ -1,3 +1,4 @@
+import type { ConversationPreferences } from './conversation-navigation-preferences'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
 import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
@@ -49,6 +50,7 @@ export type PersistedUIState = {
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
+  conversationPreferences?: ConversationPreferences
   /** Project-header order in repo grouping, independent of workspace sort: manual permits drag, recent follows visible activity. */
   projectOrderBy: ProjectOrderBy
   /** Deprecated; the Active only filter is retired and ignored on hydration. */

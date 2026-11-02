@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
+import { fireEvent, screen } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SidebarHeader from './SidebarHeader'
@@ -23,9 +24,9 @@ const mocks = vi.hoisted(() => {
 type MockState = {
   repos: { id: string }[]
   groupBy: string
-  sidebarBody: 'workspaces' | 'agents'
+  sidebarBody: 'conversations' | 'workspaces' | 'agents'
   sidebarWidth: number
-  setSidebarBody: (body: 'workspaces' | 'agents') => void
+  setSidebarBody: (body: 'conversations' | 'workspaces' | 'agents') => void
   openModal: (modal: string, data?: unknown) => void
   updateSettings: (patch: Record<string, unknown>) => void
   activeContextualTourId: string | null
@@ -132,6 +133,32 @@ afterEach(() => {
 })
 
 describe('SidebarHeader', () => {
+  it('names the selected Activity section instead of the workspace grouping', () => {
+    mockState.sidebarBody = 'agents'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+    expect(container.textContent).toContain('Activity')
+    expect(container.querySelector('button')?.textContent).not.toContain('Projects')
+  })
+  it.each([
+    { groupBy: 'repo', label: 'Projects', body: 'conversations' },
+    { groupBy: 'workspace-status', label: 'Projects', body: 'conversations' },
+    { groupBy: 'repo', label: 'Workspaces', body: 'workspaces' }
+  ])(
+    'names the workspace view choice $label for $groupBy grouping',
+    async ({ groupBy, label, body }) => {
+      mockState.groupBy = groupBy
+      act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+      const trigger = container.querySelector<HTMLButtonElement>('[data-sidebar-section-title]')
+      if (!trigger) {
+        throw new Error('Sidebar view chooser not rendered')
+      }
+      await act(async () => fireEvent.keyDown(trigger, { key: 'ArrowDown' }))
+      const choice = screen.getByRole('menuitem', { name: label })
+      await act(async () => fireEvent.click(choice))
+      expect(mockState.setSidebarBody).toHaveBeenCalledWith(body)
+    }
+  )
+
   it.each(['workspaces', 'agents'] as const)(
     'prioritizes questions, then working, and shows idle zero in the %s view',
     (sidebarBody) => {
@@ -191,7 +218,8 @@ describe('SidebarHeader', () => {
 
     expect(headerButton('New workspace')).toBeTruthy()
     expect(headerButton('Add project')).toBeTruthy()
-    expect(container.querySelector('[data-slot="dropdown-menu-trigger"]')).toBeNull()
+    expect(createButton().getAttribute('aria-haspopup')).toBeNull()
+    expect(headerButton('Add project').getAttribute('aria-haspopup')).toBeNull()
 
     await act(async () => {
       headerButton('Add project').click()
@@ -199,5 +227,36 @@ describe('SidebarHeader', () => {
 
     expect(mockState.openModal).toHaveBeenCalledWith('add-repo')
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('turns off agent activity from the active bell button', () => {
+    mockState.sidebarBody = 'agents'
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+
+    const activityButton = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Turn off activity view"]'
+    )
+    expect(activityButton?.getAttribute('aria-pressed')).toBe('true')
+
+    act(() => {
+      activityButton?.click()
+    })
+
+    expect(mockState.setSidebarBody).toHaveBeenCalledWith('conversations')
+  })
+
+  it('keeps Projects and Workspaces distinct regardless of branch grouping', () => {
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+    expect(container.querySelector('[data-sidebar-section-title="workspaces"]')?.textContent).toBe(
+      'Workspaces'
+    )
+    mockState.groupBy = 'workspace-status'
+    mockState.sidebarBody = 'conversations'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+    expect(container.querySelector('[data-sidebar-section-title="projects"]')?.textContent).toBe(
+      'Projects'
+    )
   })
 })

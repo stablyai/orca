@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import { launchHostIsRemote } from '../../../shared/agent-launch-remote'
 import { getConnectionIdFromState } from '@/lib/connection-context'
@@ -21,13 +22,20 @@ export type AgentLaunchExecutionContext = {
 /** `null` means the host's OS is unknown; the user has been told why the launch stopped. */
 export function resolveAgentLaunchExecutionContext(
   store: ReturnType<typeof useAppStore.getState>,
-  args: { worktreeId: string; launchPlatform?: NodeJS.Platform }
+  args: { worktreeId: string; launchPlatform?: NodeJS.Platform; executionHostId?: ExecutionHostId }
 ): AgentLaunchExecutionContext | null {
+  if (args.executionHostId) {
+    store = {
+      ...store,
+      activeWorktreeId: args.worktreeId,
+      activeWorkspaceExecutionHostId: args.executionHostId
+    }
+  }
   // Why: `undefined` (rival host rows disagree) is not evidence of a remote; main rejects it anyway.
   const worktreeSshConnectionId = getConnectionIdFromState(store, args.worktreeId)
   // Why getKnownWorktreeById: folder workspaces are not in allWorktrees, and their path marks WSL.
   const workspacePath = (
-    store.getKnownWorktreeById?.(args.worktreeId) ??
+    store.getKnownWorktreeById?.(args.worktreeId, args.executionHostId) ??
     store.allWorktrees?.().find((entry) => entry.id === args.worktreeId)
   )?.path
   // Why: the agent runs on the workspace's execution host, so its OS and shell decide quoting (#22204).

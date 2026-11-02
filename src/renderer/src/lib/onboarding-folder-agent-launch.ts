@@ -101,6 +101,7 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   ) =>
     activateAndRevealWorktree(args.worktreeId, {
       sidebarRevealBehavior: 'auto',
+      ...(args.launch.agent === null ? { navigationIntent: 'user-open' as const } : {}),
       ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
       ...(startup ? { startup } : {}),
       ...(providesInitialSurface ? { providesInitialSurface: true } : {})

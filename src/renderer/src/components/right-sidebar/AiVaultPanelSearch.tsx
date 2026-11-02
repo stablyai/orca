@@ -59,10 +59,12 @@ function describeSkippedHosts(hosts: readonly AiVaultSearchHostOutcome[]): strin
 export function AiVaultPanelSearch({
   search,
   noAgents,
+  hasMetadataMatches = false,
   children
 }: {
   search: ReturnType<typeof useAiVaultPanelSearch>
   noAgents: boolean
+  hasMetadataMatches?: boolean
   children: ReactNode
 }) {
   const { needsLocalConsent, response, error, loading, retry: onRetry } = search
@@ -152,7 +154,7 @@ export function AiVaultPanelSearch({
       )
     }
   }
-  if (response?.kind === 'results' && search.hits.length === 0) {
+  if (response?.kind === 'results' && search.hits.length === 0 && !hasMetadataMatches) {
     message = translate(
       'sessionSearch.panel.noMatches',
       'No matching sessions in the indexed history. Try another query or scope.'

@@ -88,9 +88,9 @@ describe('Store', () => {
     expect(settings.localAccountRuntimeDefaultedToAutoForAllUsers).toBe(true)
     expect(settings.terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
     expect(settings.terminalUseSeparateLightTheme).toBe(true)
-    expect(settings.rightSidebarOpenByDefault).toBe(true)
-    expect(settings.showTasksButton).toBe(true)
-    expect(settings.showAutomationsButton).toBe(true)
+    expect(settings.rightSidebarOpenByDefault).toBe(false)
+    expect(settings.showTasksButton).toBe(false)
+    expect(settings.showAutomationsButton).toBe(false)
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
     expect(settings.openInApplications).toEqual([
       { id: 'vscode', label: 'VS Code', command: 'code' }
@@ -168,7 +168,7 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(280)
-    expect(ui.rightSidebarOpen).toBe(true)
+    expect(ui.rightSidebarOpen).toBe(false)
     expect(ui.rightSidebarTab).toBe('explorer')
     expect(ui.groupBy).toBe('repo')
     expect(ui.lastActiveRepoId).toBeNull()

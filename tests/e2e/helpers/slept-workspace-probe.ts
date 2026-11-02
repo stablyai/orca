@@ -4,6 +4,7 @@ import { expect } from '@stablyai/playwright-test'
 import { ensureTerminalVisible } from './store'
 import { waitForActivePanePtyId, waitForActiveTerminalManager } from './terminal'
 import { dismissSetupScriptPrompts } from './sidebar-setup-prompt'
+import { showWorkspaceSidebar } from './sidebar-project-dialog'
 
 export type WorkspaceSample = {
   livePtyCount: number
@@ -104,6 +105,7 @@ export async function giveWorkspaceALivePty(page: Page, worktreeId: string): Pro
 
 /** The shipping sleep path: right-click the sidebar row, click "Sleep". */
 export async function sleepWorkspaceViaSidebar(page: Page, worktreeId: string): Promise<void> {
+  await showWorkspaceSidebar(page)
   const row = rowLocator(page, worktreeId)
   await expect(row).toBeVisible()
   await row.scrollIntoViewIfNeeded()
@@ -117,6 +119,7 @@ export async function sleepWorkspaceViaSidebar(page: Page, worktreeId: string): 
 }
 
 export async function activateWorkspaceByClick(page: Page, worktreeId: string): Promise<void> {
+  await showWorkspaceSidebar(page)
   const row = rowLocator(page, worktreeId)
   await expect(row).toBeVisible()
   await row.scrollIntoViewIfNeeded()

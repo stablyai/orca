@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getManualRepoOrder } from '../../../../shared/manual-repo-order'
+import { applyManualRepoOrder, getManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { splitRepoReorderByHost } from '../slices/repo-reorder-host-split'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -14,11 +14,11 @@ export function createRepoOrderingActions(
   return {
     setActiveRepo: (projectId) => set({ activeRepoId: projectId }),
 
-    reorderRepos: async (orderedIds) => {
+    reorderRepos: async (orderedIds, ownerOrder) => {
       // Optimistically apply the new order for instant sidebar update; resync only if main rejects (racing add/remove).
       const previous = get().repos
       const remainingById = new Map<string, { repos: Repo[]; nextIndex: number }>()
-      for (const repo of previous) {
+      for (const repo of ownerOrder ? applyManualRepoOrder(previous, ownerOrder) : previous) {
         const existing = remainingById.get(repo.id)
         if (existing) {
           existing.repos.push(repo)

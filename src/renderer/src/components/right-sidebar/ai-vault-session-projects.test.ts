@@ -48,6 +48,34 @@ describe('toAiVaultProjectKey', () => {
 })
 
 describe('buildAiVaultProjectContext', () => {
+  it('attributes a structured chat to its stored workspace on its own host even when its cwd matches another project', () => {
+    const repo = makeRepo({ id: 'saved-repo', path: '/saved', displayName: 'Saved project' })
+    const worktree = makeWorktree({
+      id: 'saved-workspace',
+      repoId: repo.id,
+      projectId: 'saved-project',
+      path: '/saved'
+    })
+    const session = {
+      ...baseSession,
+      cwd: '/elsewhere',
+      structuredSession: { sessionId: 'stored-chat', workspaceId: worktree.id }
+    }
+    const args = {
+      repos: [repo],
+      worktrees: [worktree],
+      projectHostSetupProjection: makeProjection({
+        projects: [makeProject({ id: 'saved-project', displayName: 'Saved project' })]
+      })
+    }
+    expect(
+      buildAiVaultSessionProjectById({ ...args, sessions: [session] }).get(session.id)
+    ).toMatchObject({ key: 'project:saved-project' })
+    const remote = { ...session, executionHostId: 'runtime:remote' as const }
+    expect(
+      buildAiVaultSessionProjectById({ ...args, sessions: [remote] }).get(remote.id)?.key
+    ).not.toBe('project:saved-project')
+  })
   it('uses durable worktree project ids before repo fallback', () => {
     const repo = makeRepo({ id: 'repo-1', displayName: 'Legacy Repo', path: '/Users/ada/orca' })
     const project = makeProject({ id: 'project-1', displayName: 'Canonical Orca' })
