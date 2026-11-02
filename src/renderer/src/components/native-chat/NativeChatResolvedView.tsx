@@ -208,6 +208,7 @@ export function NativeChatResolvedView({
   })
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
   const mountedPromptCard = shownPromptCard ?? collapsedCard
+  const composerReady = shownPromptCard === null && targetPtyId !== null && canSend
   const rootInput = useNativeChatRootInputRouting({
     tabId: terminalTabId,
     rootRef,
@@ -215,7 +216,7 @@ export function NativeChatResolvedView({
     questionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady: shownPromptCard === null && targetPtyId !== null && canSend
+    composerReady
   })
 
   // Match mobile ordering: hook preview before optimistic user echoes.
@@ -345,14 +346,7 @@ export function NativeChatResolvedView({
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
-      <NativeChatCrewFrame
-        crew={{
-          ...crew,
-          isVisible,
-          composerRef,
-          canMention: canSend && !shownPromptCard && targetPtyId !== null
-        }}
-      >
+      <NativeChatCrewFrame crew={{ ...crew, isVisible, composerRef, canMention: composerReady }}>
         {find.isOpen ? <NativeChatFindBar find={find} isVisible={isVisible} /> : null}
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />

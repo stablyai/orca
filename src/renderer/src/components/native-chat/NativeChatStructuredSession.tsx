@@ -184,6 +184,7 @@ export function NativeChatStructuredSession(
   // An owned prompt keeps its card; otherwise a missing program leaves the composer disabled.
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
+  const canMention = composerShown && install.unavailableHint === undefined
   const approval = prompt?.body.kind === 'approval' ? chatApprovalFromJournal(prompt.body) : null
   const cancelPrompt = () => cancelStructuredPrompt(controller, prompt, props.agent)
   const rootInput = useNativeChatRootInputRouting({
@@ -274,15 +275,7 @@ export function NativeChatStructuredSession(
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
       {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme, handOff)}
-      <NativeChatCrewFrame
-        crew={{
-          target: props.target,
-          sessionId: props.sessionId,
-          isVisible: props.isVisible,
-          composerRef,
-          canMention: composerShown && install.unavailableHint === undefined
-        }}
-      >
+      <NativeChatCrewFrame crew={{ ...props, composerRef, canMention }}>
         <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
           {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
           {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
