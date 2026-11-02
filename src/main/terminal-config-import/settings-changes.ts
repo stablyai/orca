@@ -32,10 +32,11 @@ export function settingsChanges(
   current: GlobalSettings,
   patch: Partial<GlobalSettings>
 ): Partial<GlobalSettings> {
+  const currentValues = new Map<string, unknown>(Object.entries(current))
   return Object.fromEntries(
-    Object.entries(patch).filter(([key, value]) => {
-      const currentValue: unknown = key in current ? Reflect.get(current, key) : undefined
-      return value !== undefined && !valuesEqual(currentValue ?? emptyLike(value), value)
-    })
+    Object.entries(patch).filter(
+      ([key, value]) =>
+        value !== undefined && !valuesEqual(currentValues.get(key) ?? emptyLike(value), value)
+    )
   )
 }
