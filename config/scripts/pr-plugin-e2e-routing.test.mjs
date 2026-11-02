@@ -63,9 +63,54 @@ describe('plugin PR E2E routing', () => {
     ['src/main/plugins/panels/plugin-panel-controller.ts', 'plugin-panel-containment'],
     ['src/main/plugins/catalog/plugin-file-type-suggestion.ts', 'plugin-file-type-suggestion'],
     ['src/main/plugins/catalog/plugin-auto-updater.ts', 'plugin-update-review-toast'],
-    ['src/shared/plugins/manifest/plugin-manifest.ts', 'plugin-startup-budget']
+    ['src/shared/plugins/manifest/plugin-manifest.ts', 'plugin-startup-budget'],
+    ['src/main/plugins/panels/plugin-frame-module-transform.ts', 'plugin-buildless-tsx'],
+    ['src/cli/plugin-authoring/plugin-type-files.ts', 'plugin-buildless-tsx'],
+    ['examples/plugins/hello-tsx/src/panel.tsx', 'plugin-buildless-tsx'],
+    [
+      'src/shared/plugins/declarative/runtime/declarative-memory-retention.ts',
+      'plugin-components-hot-reload'
+    ],
+    [
+      'src/renderer/src/components/right-sidebar/PluginDeclarativePanelNotices.tsx',
+      'plugin-components-hot-reload'
+    ],
+    ['src/main/plugins/plugin-dev-watcher.ts', 'plugin-components-hot-reload'],
+    ['resources/plugins/declarative/orca-runtime.mjs', 'plugin-components-hot-reload'],
+    ['src/renderer/src/components/plugins/plugin-icon-glyphs.ts', 'plugin-declarative-panel'],
+    ['src/main/plugins/view/plugin-view-capture.ts', 'plugin-shot'],
+    ['src/main/plugins/view/plugin-view-editor-shot.ts', 'plugin-shot-editor'],
+    ['src/renderer/src/store/plugin-shot-replay.ts', 'plugin-shot'],
+    ['src/main/plugins/testing/plugin-test-register.ts', 'plugin-shot'],
+    ['src/renderer/src/components/plugins/view/plugin-view-request-handler.ts', 'plugin-shot'],
+    ['src/renderer/src/components/right-sidebar/plugin-panel-draw-status.ts', 'plugin-shot'],
+    ['src/main/runtime/rpc/methods/plugin-view.ts', 'plugin-shot'],
+    ['src/cli/handlers/plugin-view.ts', 'plugin-shot'],
+    ['src/cli/handlers/plugin-shot-default-dir.ts', 'plugin-shot'],
+    ['src/cli/handlers/plugin-shot-default-dir.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-chrome.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-editor.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-scenario.ts', 'plugin-shot'],
+    ['src/cli/plugin-authoring/plugin-panel-check.ts', 'plugin-shot'],
+    ['src/cli/plugin-authoring/plugin-test-runner.ts', 'plugin-shot'],
+    ['src/renderer/src/store/plugin-view-capture.ts', 'plugin-shot'],
+    ['examples/plugins/hello-orca/main.mjs', 'plugin-demo'],
+    ['examples/plugins/hello-worker-panel/worker/main.mjs', 'plugin-worker-panel'],
+    ['src/main/plugins/panels/plugin-panel-bridge.ts', 'plugin-worker-panel'],
+    ['src/main/plugins/plugin-runtime-binding.ts', 'plugin-panel-agents'],
+    ['examples/plugins/test-fixtures/hostile-panel/panel.html', 'plugin-panel-containment']
   ])('routes %s to %s', (file, spec) => {
     expect(selectPrE2eSpecs([file])).toContain(`tests/e2e/${spec}.spec.ts`)
+  })
+
+  // Editor shots never take the --scenario branch, so replay sources stay off the editor journey.
+  it.each([
+    ['src/renderer/src/store/plugin-shot-replay.ts', 'plugin-shot-editor'],
+    ['src/main/plugins/view/plugin-view-replay-shot.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-scenario.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-editor.ts', 'plugin-shot']
+  ])('does not route %s to %s', (file, spec) => {
+    expect(selectPrE2eSpecs([file])).not.toContain(`tests/e2e/${spec}.spec.ts`)
   })
 
   it('routes every plugin product source to at least one plugin spec', () => {

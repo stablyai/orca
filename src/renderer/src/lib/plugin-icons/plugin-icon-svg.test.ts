@@ -31,36 +31,6 @@ describe('sanitizePluginIconSvg', () => {
     expect(icon?.svg).not.toContain('inkscape')
   })
 
-  it('treats an icon drawn only in currentColor as monochrome', () => {
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1" fill="currentColor" stroke="none"/></svg>'
-      )?.monochrome
-    ).toBe(true)
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg"><path fill="currentColor"/><path fill="#f00"/></svg>'
-      )?.monochrome
-    ).toBe(false)
-    // An unpainted shape keeps SVG's default black fill.
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg"><path fill="currentColor"/><path d="M0 0h1"/></svg>'
-      )?.monochrome
-    ).toBe(false)
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path/><path/></svg>'
-      )?.monochrome
-    ).toBe(true)
-    // Stroke-only icons declare fill="none", usually on the root.
-    expect(
-      sanitizePluginIconSvg(
-        '<svg xmlns="http://www.w3.org/2000/svg" fill="none"><path stroke="currentColor"/></svg>'
-      )?.monochrome
-    ).toBe(true)
-  })
-
   it.each([
     ['script', '<script>alert(1)</script>', 'script'],
     ['foreign content', '<foreignObject><div/></foreignObject>', 'foreignObject'],

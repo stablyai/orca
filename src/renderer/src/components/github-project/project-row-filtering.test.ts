@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
-  filterProjectTableRowsByOpenRepos,
   filterProjectTableRowsBySelectedRepos,
   resolveSelectedProjectRowRepo
 } from './project-row-filtering'
@@ -71,37 +70,62 @@ function table(rows: GitHubProjectRow[]): GitHubProjectTable {
   }
 }
 
-describe('filterProjectTableRowsByOpenRepos', () => {
-  it('keeps rows whose repository slug resolves to at least one live repo', () => {
-    const rows = [row('visible', 'acme/orca'), row('missing', 'acme/removed')]
-    const filtered = filterProjectTableRowsByOpenRepos(table(rows), (slug) =>
-      slug?.toLowerCase() === 'acme/orca' ? [repo('repo-1')] : []
-    )
-
-    expect(filtered.rows.map((r) => r.id)).toEqual(['visible'])
-    expect(filtered.totalCount).toBe(1)
-  })
-
-  it('keeps rows while any of multiple Orca repos map to the slug', () => {
-    const rows = [row('visible', 'acme/orca')]
-    const filtered = filterProjectTableRowsByOpenRepos(table(rows), () => [
-      repo('repo-1'),
-      repo('repo-2')
-    ])
-
-    expect(filtered.rows.map((r) => r.id)).toEqual(['visible'])
-  })
-
-  it('filters missing or unresolved repository slugs', () => {
-    const rows = [row('missing-slug', null), row('unresolved', 'gitlab/orca')]
-    const filtered = filterProjectTableRowsByOpenRepos(table(rows), () => [])
-
-    expect(filtered.rows).toEqual([])
-    expect(filtered.totalCount).toBe(0)
-  })
-})
-
 describe('filterProjectTableRowsBySelectedRepos', () => {
+  it('keeps 67 draft items and inaccessible content while scoping repository-backed items', () => {
+    // Normalized shapes: drafts and restricted items carry no repository or number.
+    const drafts = Array.from({ length: 67 }, (_, position): GitHubProjectRow => {
+      const base = row(`draft-${position}`, null)
+      return {
+        ...base,
+        itemType: 'DRAFT_ISSUE',
+        content: { ...base.content, number: null, state: null, body: 'Draft body' },
+        fieldValuesByFieldId: {
+          status: {
+            kind: 'single-select',
+            fieldId: 'status',
+            optionId: 'todo',
+            name: 'Todo',
+            color: 'GRAY'
+          }
+        },
+        position
+      }
+    })
+    const draftTable = table(drafts)
+    const lookup = vi.fn(() => originOnly([]))
+    expect(filterProjectTableRowsBySelectedRepos(draftTable, lookup, true, new Set())).toBe(
+      draftTable
+    )
+    expect(lookup).not.toHaveBeenCalled()
+
+    const restricted = ['ISSUE', 'PULL_REQUEST'].map((type): GitHubProjectRow => {
+      const base = row(`restricted-${type}`, null)
+      return {
+        ...base,
+        itemType: 'REDACTED',
+        content: { ...base.content, title: 'Restricted item', number: null, state: null }
+      }
+    })
+    const issue = row('issue', 'acme/orca')
+    const pullRequest: GitHubProjectRow = { ...row('pr', 'acme/orca'), itemType: 'PULL_REQUEST' }
+    const filtered = filterProjectTableRowsBySelectedRepos(
+      table([
+        ...drafts,
+        ...restricted,
+        issue,
+        pullRequest,
+        row('unselected', 'acme/other'),
+        // An older host sends inaccessible Issue/PR content as a blank Issue row.
+        row('old-host-blank-issue', null)
+      ]),
+      (slug) => originOnly([repo(slug === 'acme/orca' ? 'selected' : 'other')]),
+      true,
+      new Set(['selected'])
+    )
+    expect(filtered.rows).toEqual([...drafts, ...restricted, issue, pullRequest])
+    expect(filtered.totalCount).toBe(71)
+  })
+
   it('keeps a row when at least one slug match is selected', () => {
     const rows = [row('visible', 'acme/orca'), row('hidden', 'acme/tool')]
     const filtered = filterProjectTableRowsBySelectedRepos(

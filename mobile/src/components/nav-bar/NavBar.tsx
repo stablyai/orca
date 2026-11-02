@@ -1,6 +1,15 @@
 import type { ReactNode } from 'react'
-import { Animated, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, spacing } from '../../theme/mobile-theme'
+import {
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle
+} from 'react-native'
+import { ChevronDown } from 'lucide-react-native'
+import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -73,6 +82,41 @@ export function NavBar({
   )
 }
 
+/** A title that opens a picker, e.g. the diff screen's file name that opens Jump to file. */
+export function NavBarTitleButton({
+  title,
+  subtitle,
+  onPress,
+  accessibilityLabel
+}: {
+  title: string
+  subtitle?: string
+  onPress: () => void
+  accessibilityLabel: string
+}) {
+  useMobileColorScheme()
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={({ pressed }) => [styles.titleButton, pressed && pressedStyle]}
+    >
+      <View style={styles.titleButtonRow}>
+        <Text style={[styles.title, styles.titleButtonText]} numberOfLines={1}>
+          {title}
+        </Text>
+        <ChevronDown size={14} color={colors.textSecondary} strokeWidth={2.2} />
+      </View>
+      {subtitle !== undefined ? (
+        <Text style={styles.subtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      ) : null}
+    </Pressable>
+  )
+}
+
 /** Subtitle text for a custom subtitle row, e.g. beside a connection dot. */
 export function NavBarSubtitleText({ children }: { children: ReactNode }) {
   useMobileColorScheme()
@@ -140,6 +184,21 @@ const styles = themedStyleSheet(() => ({
   subtitle: {
     color: colors.textSecondary,
     fontSize: 12,
+    flexShrink: 1
+  },
+  titleButton: {
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    maxWidth: '100%'
+  },
+  titleButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    maxWidth: '100%'
+  },
+  titleButtonText: {
     flexShrink: 1
   }
 }))

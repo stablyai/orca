@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AccessibilityInfo, Pressable, ScrollView, Text, View } from 'react-native'
+import { mobileSessionReviewCommentStyles } from '../session/mobile-session-review-comment-styles'
 import { TriangleAlert, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -28,6 +29,7 @@ export function AgentHistorySkippedNotice({ issues }: { issues: readonly Transcr
             : t('agentHistory.panel.skipped_other', '{{count}} transcripts skipped', { count })}
         </Text>
         <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
           onPress={() => setShown((value) => !value)}
           hitSlop={10}
           accessibilityRole="button"
@@ -71,6 +73,7 @@ export function AgentHistoryResumeNotice({
     <View style={[styles.notice, styles.noticeRow]}>
       <Text style={styles.noticeText}>{message}</Text>
       <Pressable
+        style={({ pressed }) => pressed && pressedStyle}
         onPress={onDismiss}
         hitSlop={12}
         accessibilityRole="button"
@@ -120,3 +123,34 @@ const styles = themedStyleSheet(() => ({
     fontSize: typography.metaSize
   }
 }))
+export function useAgentHistoryResumeToast() {
+  const [message, setMessage] = useState<string | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  const showToast = useCallback((text: string) => {
+    clearTimeout(timer.current)
+    setMessage(text)
+    // The toast has no focus or live region, so announce it on both platforms.
+    AccessibilityInfo.announceForAccessibility(text)
+    timer.current = setTimeout(() => setMessage(null), 3_000)
+  }, [])
+  return { message, showToast }
+}
+
+export function AgentHistoryResumeToast({
+  message,
+  bottomInset
+}: {
+  message: string | null
+  bottomInset: number
+}) {
+  useMobileColorScheme()
+  return message ? (
+    <View
+      pointerEvents="none"
+      style={[mobileSessionReviewCommentStyles.toast, { bottom: bottomInset + spacing.lg }]}
+    >
+      <Text style={mobileSessionReviewCommentStyles.toastText}>{message}</Text>
+    </View>
+  ) : null
+}

@@ -14,7 +14,7 @@ import {
   acquired,
   claudeFrame,
   fakeClaude
-} from './claude-structured-session-test-support'
+} from './structured/claude-structured-session-test-support'
 
 const PLAN_PROMPT: Pick<ClaudePendingPrompt, 'toolName'> = { toolName: 'ExitPlanMode' }
 const ALLOW: PermissionResult = { behavior: 'allow', updatedInput: {}, toolUseID: 'tool-plan' }

@@ -1,7 +1,7 @@
 import {
   isImageRefBlock,
   type NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,

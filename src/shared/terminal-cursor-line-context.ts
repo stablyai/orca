@@ -6,6 +6,7 @@ type TerminalCursorCell = {
   isBold(): boolean | number
   isDim(): boolean | number
   isFgDefault(): boolean | number
+  isInverse(): boolean | number
 }
 
 type TerminalCursorLine<Cell extends TerminalCursorCell> = {
@@ -20,6 +21,7 @@ export type TerminalCursorContextSource<Cell extends TerminalCursorCell = Termin
   readonly modes: { readonly showCursor: boolean }
   readonly buffer: {
     readonly active: {
+      readonly type?: 'normal' | 'alternate'
       readonly baseY: number
       readonly cursorX: number
       readonly cursorY: number
@@ -84,6 +86,14 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
     return null
   }
   const reusableCell = buffer.getNullCell?.()
+  const cursorHidden = !terminal.modes.showCursor
+  // Why: a hidden native cursor needs screen evidence, read from the cursor cell alone and only then.
+  const hiddenCursorEvidence = cursorHidden
+    ? {
+        activeBuffer: buffer.type,
+        cursorInverse: Boolean(cursorLine.getCell(buffer.cursorX, reusableCell)?.isInverse())
+      }
+    : {}
   const rows: string[] = []
   const typedRows: string[] = []
   const promptGlyphBoldRows: boolean[] = []
@@ -142,7 +152,8 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
       !(buffer.getLine(cursorRow + 1)?.isWrapped ?? false),
       buffer.cursorX
     ),
-    cursorHidden: !terminal.modes.showCursor,
-    cursorViewportRow: cursorRow - buffer.viewportY
+    cursorHidden,
+    cursorViewportRow: cursorRow - buffer.viewportY,
+    ...hiddenCursorEvidence
   }
 }

@@ -27,10 +27,12 @@ import {
 } from '@/runtime/local-runtime-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 const mocks = vi.hoisted(() => ({
   support: vi.fn(),
   subscribe: vi.fn(),
@@ -92,7 +94,7 @@ vi.mock('@/components/settings/agent-launch-settings-transport', async (importOr
   return { ...actual, readHostAgentLaunchSettings: vi.fn().mockResolvedValue(null) }
 })
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: mocks.subscribe }))
-vi.mock('@/lib/structured-agent-session-host-admission', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', () => ({
   askHostCreateSupport: mocks.support
 }))
 // Like the real hook: a closed menu acquires nothing, and the stored inventory stays.

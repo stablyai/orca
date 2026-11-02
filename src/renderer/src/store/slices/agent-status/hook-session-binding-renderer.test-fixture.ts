@@ -1,6 +1,6 @@
 import { expect } from 'vitest'
 import type { HookSessionBindingRendererFixture } from '../../../../../shared/agent-hook-session-binding.test-fixture'
-import { getAgentResumeArgv } from '../../../../../shared/agent-session-resume'
+import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
 import { resumeRecordFromStatus } from '../../../../../shared/agent-resume-record-from-status'
 import { createTestStore, makeTab } from '../store-test-helpers'
 import { isInheritedFromActivePane } from '../../../hooks/ipc-events/agent-status-routing'

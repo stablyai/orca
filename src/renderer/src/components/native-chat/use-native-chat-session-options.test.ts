@@ -2,7 +2,7 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
+import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat-session-option-dispatch'
 import {
   clearNativeChatModelEnrichmentForTests,
@@ -12,7 +12,7 @@ import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveNativeChatSessionOptionDefaults
 } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { resolveAgentSessionOptionLaunch } from '../../../../shared/agent-session-option-launch'
+import { resolveAgentSessionOptionLaunch } from '../../../../shared/agent-session/options/agent-session-option-launch'
 import type {
   NativeChatSessionOptionSettingsMutation,
   PersistedNativeChatSessionOptions

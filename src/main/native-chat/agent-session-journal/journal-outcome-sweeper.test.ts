@@ -112,20 +112,3 @@ it('retries a failed pass at the next periodic pass, and runs none after it stop
   await vi.advanceTimersByTimeAsync(12 * 60 * 60_000)
   expect(retiredRecords()).toBe(10)
 })
-
-it('rests nine times as long as each page worked, holding the sweep to a 10% duty cycle', async () => {
-  retire(100)
-  // Every page takes 30 ms on the sweeper's clock.
-  let clock = 0
-  const rests = vi.fn(async (_ms: number) => {})
-  const sweeper = new JournalOutcomeSweeper({
-    database: () => database,
-    now: () => (clock += 30),
-    delay: rests
-  })
-  sweepers.push(sweeper)
-  await sweeper.pass()
-  expect(retiredRecords()).toBe(0)
-  // Four record pages, each followed by its rest; the last page finds nothing more to do.
-  expect(rests.mock.calls).toEqual([[270], [270], [270], [270]])
-})

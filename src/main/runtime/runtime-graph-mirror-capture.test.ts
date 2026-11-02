@@ -28,7 +28,7 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 import type { RuntimeSyncedTab } from '../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
-// Window-owned builds capture the mirror; layout-owner builds use main layout. runtime-leaf-record-projection.test.ts pins both projections to this fixture.
+// Window-owned builds capture the mirror; layout-owner builds use main layout.
 
 type MirrorMaps = {
   tabs: Map<string, RuntimeSyncedTab>

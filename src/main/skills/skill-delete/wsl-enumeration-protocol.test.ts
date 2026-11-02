@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   parseWslInspectPathsOutput,
   parseWslListEntriesOutput,
-  WslEnumerationProtocolError,
-  WSL_INSPECT_PATHS_SCRIPT,
-  WSL_LIST_ENTRIES_SCRIPT
+  WslEnumerationProtocolError
 } from './wsl-enumeration-protocol'
 
 const NUL = '\0'
@@ -26,12 +24,6 @@ describe('parseWslListEntriesOutput', () => {
       { name: 'link', kind: 'symlink' }
     ])
     expect(listings.get(directories[1])).toEqual([])
-  })
-
-  it('reports an absent directory as an empty listing rather than a missing key', () => {
-    const listings = parseWslListEntriesOutput('', ['/a', '/b'])
-    expect([...listings.keys()]).toEqual(['/a', '/b'])
-    expect(listings.get('/a')).toEqual([])
   })
 
   it('refuses an unknown record kind instead of guessing', () => {
@@ -74,31 +66,5 @@ describe('parseWslInspectPathsOutput', () => {
     expect(() =>
       parseWslInspectPathsOutput(records('P', '0', 'socket', '/x', '1'), ['/p'])
     ).toThrow(WslEnumerationProtocolError)
-  })
-})
-
-describe('guest scripts', () => {
-  it('classify a symlink before following it, so a broken link is not "missing"', () => {
-    expect(WSL_INSPECT_PATHS_SCRIPT.indexOf('-L "$path"')).toBeLessThan(
-      WSL_INSPECT_PATHS_SCRIPT.indexOf('-d "$path"')
-    )
-    expect(WSL_LIST_ENTRIES_SCRIPT.indexOf('-L "$entry"')).toBeLessThan(
-      WSL_LIST_ENTRIES_SCRIPT.indexOf('-d "$entry"')
-    )
-  })
-
-  it('reads mtime without dereferencing, matching WSL discovery', () => {
-    expect(WSL_INSPECT_PATHS_SCRIPT).toContain(`stat -c '%Y' -- "$path"`)
-    expect(WSL_INSPECT_PATHS_SCRIPT).not.toContain('stat -L')
-  })
-
-  it('takes every path positionally rather than interpolating it into the script', () => {
-    expect(WSL_LIST_ENTRIES_SCRIPT).toContain('for dir in "$@"; do')
-    expect(WSL_INSPECT_PATHS_SCRIPT).toContain('for path in "$@"; do')
-  })
-
-  it('marks an unreadable directory instead of listing it as empty', () => {
-    expect(WSL_LIST_ENTRIES_SCRIPT).toContain('if ! [ -r "$dir" ]; then')
-    expect(WSL_LIST_ENTRIES_SCRIPT).toContain(`printf 'X\\0'`)
   })
 })

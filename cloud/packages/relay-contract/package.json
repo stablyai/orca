@@ -29,6 +29,26 @@
       "types": "./dist/assignment-invariants.d.ts",
       "default": "./dist/assignment-invariants.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./admission-budgets": {
+      "types": "./dist/admission-budgets.d.ts",
+      "default": "./dist/admission-budgets.js"
+    },
+    "./idle-regional-rehome": {
+      "types": "./dist/idle-regional-rehome.d.ts",
+      "default": "./dist/idle-regional-rehome.js"
+    },
+    "./protocol-limits": {
+      "types": "./dist/protocol-limits.d.ts",
+      "default": "./dist/protocol-limits.js"
+    },
+    "./region-correction": {
+      "types": "./dist/region-correction.d.ts",
+      "default": "./dist/region-correction.js"
+    },
+    "./relay-regions": {
+      "types": "./dist/relay-regions.d.ts",
+      "default": "./dist/relay-regions.js"
+    }
   }
 }

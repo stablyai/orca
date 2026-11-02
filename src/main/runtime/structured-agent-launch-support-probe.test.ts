@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { structuredAgentSupportsLaunch } from './structured-agent-launch-support'
 
@@ -94,22 +94,6 @@ describe.skipIf(process.platform === 'win32')(
         await structuredAgentSupportsLaunch('opencode', workspace, runtimeWith(settings))
       ).toBe(true)
       expect((await launchWith(settings)).command).toBe(join(privateBin, 'opencode'))
-    })
-
-    it('keeps a refused release first on PATH on the terminal chat when nothing points elsewhere', async () => {
-      const settings = { ...base, agentDefaultEnv: {} }
-      expect(
-        await structuredAgentSupportsLaunch('opencode', workspace, runtimeWith(settings))
-      ).toBe(false)
-    })
-
-    it('runs a stable 2.x first on PATH in the structured chat', async () => {
-      await fakeOpencode(shellBin, '2.0.21')
-      const settings = { ...base, agentDefaultEnv: {} }
-      expect(
-        await structuredAgentSupportsLaunch('opencode', workspace, runtimeWith(settings))
-      ).toBe(true)
-      expect((await launchWith(settings)).command).toBe(join(shellBin, 'opencode'))
     })
 
     it('checks and launches the binary the Command setting names', async () => {

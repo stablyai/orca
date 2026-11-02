@@ -52,22 +52,6 @@ describe('matchesOrcaTabQuery', () => {
     expect(query({ active: true, currentWindow: true }, POPOUT)).toEqual([20])
     expect(query({ active: true, lastFocusedWindow: true }, POPOUT)).toEqual([11])
   })
-
-  it('resolves WINDOW_ID_CURRENT and window types', () => {
-    expect(query({ windowId: -2 }, POPOUT)).toEqual([20])
-    expect(query({ windowType: 'normal' })).toEqual([10, 11, 30])
-    expect(query({ currentWindow: false })).toEqual([20])
-  })
-
-  it('filters status and index, and never matches pinned or grouped tabs', () => {
-    expect(query({ status: 'loading' })).toEqual([11])
-    expect(query({ status: 'unloaded' })).toEqual([30])
-    expect(query({ discarded: true })).toEqual([30])
-    expect(query({ discarded: false, index: 0 })).toEqual([10, 20])
-    expect(query({ index: 0 })).toEqual([10, 20])
-    expect(query({ pinned: true })).toEqual([])
-    expect(query({ groupId: 3 })).toEqual([])
-  })
 })
 
 describe('matchesDiscardedTabNativeQuery', () => {

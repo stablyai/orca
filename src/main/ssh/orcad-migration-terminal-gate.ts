@@ -1,6 +1,6 @@
 /** Relay PTYs cannot move to orcad: prove host-wide exit or retain possible survivors in the legacy bridge. Lost contact and unaccounted leases never prove exit. */
 import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../shared/ssh-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { PtyExitProof } from '../pty-exit-proof'
 
 export type OrcadMigrationTerminalVerdict =

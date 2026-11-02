@@ -2,8 +2,8 @@ import { createElement, useState, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session-wire'
-import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/structured-agent-session-reducer'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import { fieldsOf } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
@@ -37,7 +37,7 @@ vi.mock('lucide-react-native', () => ({
   ShieldCheck: 'ShieldCheck',
   X: 'X'
 }))
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children?: ReactNode }) =>
     visible ? createElement('BottomDrawer', null, children) : null
 }))

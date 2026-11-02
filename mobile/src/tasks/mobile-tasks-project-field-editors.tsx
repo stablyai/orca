@@ -7,6 +7,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { View, Text, Pressable, Check, colors, TextField } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentationModel) {
   const {
@@ -84,7 +85,11 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                   return (
                     <Pressable
                       key={option.id}
-                      style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                      style={({ pressed }) => [
+                        styles.detailChip,
+                        selected ? styles.detailChipSelected : undefined,
+                        pressed && pressedStyle
+                      ]}
                       disabled={projectMutating}
                       accessibilityState={{ selected }}
                       onPress={() =>
@@ -119,7 +124,10 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                     return (
                       <Pressable
                         key={iteration.id}
-                        style={styles.actionRow}
+                        style={({ pressed }) => [
+                          styles.actionRow,
+                          pressed && { backgroundColor: colors.translucentFill }
+                        ]}
                         disabled={projectMutating}
                         accessibilityState={{ selected }}
                         onPress={() =>
@@ -178,7 +186,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                   autoCapitalize="none"
                 />
                 <Pressable
-                  style={styles.inlineSaveButton}
+                  style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
                   disabled={projectMutating}
                   onPress={saveTextField}
                 >
@@ -189,7 +197,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
               </>
             )}
             <Pressable
-              style={styles.inlineSaveButton}
+              style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
               disabled={projectMutating || isEmpty}
               onPress={() => void mutateProjectRowField(projectRowItem, field, null)}
             >

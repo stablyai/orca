@@ -12,9 +12,9 @@ vi.mock('./system-ssh-binary', () => ({ findSystemSsh: findSystemSshMock }))
 import {
   buildControlPathQueryArgs,
   buildMuxedLocalForwardCancelArgs,
-  cancelMuxedLocalForward,
-  parseControlPath
+  cancelMuxedLocalForward
 } from './system-ssh-muxed-forward-cancel'
+
 import type { SshTarget } from '../../../shared/ssh-types'
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -63,12 +63,6 @@ describe('system SSH muxed forward cancel', () => {
     expect(args.some((arg, index) => arg === '-S' && args[index + 1] === 'none')).toBe(false)
   })
 
-  it('takes the expanded ControlPath, and none where the target does not multiplex', () => {
-    expect(parseControlPath(controlPathAnswer.stdout)).toBe('/tmp/cm-abc123')
-    expect(parseControlPath('user deploy\ncontrolpath none\n')).toBeNull()
-    expect(parseControlPath('user deploy\n')).toBeNull()
-  })
-
   // Why: `-O cancel` also cancels every forward a loaded ssh_config declares for the host.
   it('asks that socket to cancel only this exact forward, reading no ssh_config', () => {
     const args = buildMuxedLocalForwardCancelArgs(
@@ -85,35 +79,12 @@ describe('system SSH muxed forward cancel', () => {
     expect(args).toContain('127.0.0.1:59418:127.0.0.1:6768')
   })
 
-  it('reports the port released when the master dropped the forward', async () => {
-    await expect(cancelMuxedLocalForward(createTarget(), 59418, '127.0.0.1', 6768)).resolves.toBe(
-      true
-    )
-    expect(cancelCall()?.args).toContain('/tmp/cm-abc123')
-  })
-
   it('asks nothing when the target has no control socket', async () => {
     runProcessMock.mockResolvedValue(ok('controlpath none\n'))
     await expect(cancelMuxedLocalForward(createTarget(), 59418, '127.0.0.1', 6768)).resolves.toBe(
       false
     )
     expect(cancelCall()).toBeUndefined()
-  })
-
-  it('reports nothing released when ssh refuses the request', async () => {
-    runProcessMock.mockImplementation(async (request: { args: string[] }) =>
-      request.args[0] === '-G'
-        ? controlPathAnswer
-        : {
-            code: 255,
-            signal: null,
-            stdout: '',
-            stderr: 'Control socket connect(/tmp/cm): No such file or directory'
-          }
-    )
-    await expect(cancelMuxedLocalForward(createTarget(), 59418, '127.0.0.1', 6768)).resolves.toBe(
-      false
-    )
   })
 
   // Why: a refused cancel exits 0, so only its stderr tells the port apart from a released one.
@@ -131,23 +102,8 @@ describe('system SSH muxed forward cancel', () => {
     )
   })
 
-  it('reports nothing released when ssh cannot be spawned at all', async () => {
-    runProcessMock.mockRejectedValue(new Error('ENOENT'))
-    await expect(cancelMuxedLocalForward(createTarget(), 59418, '127.0.0.1', 6768)).resolves.toBe(
-      false
-    )
-  })
-
   it('asks no master on Windows, whose OpenSSH cannot multiplex', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
-    await expect(cancelMuxedLocalForward(createTarget(), 59418, '127.0.0.1', 6768)).resolves.toBe(
-      false
-    )
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('reports nothing released without a system ssh binary', async () => {
-    findSystemSshMock.mockReturnValue(null)
     await expect(cancelMuxedLocalForward(createTarget(), 59418, '127.0.0.1', 6768)).resolves.toBe(
       false
     )

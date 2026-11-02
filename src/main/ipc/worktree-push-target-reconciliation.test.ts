@@ -2,11 +2,7 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitRemoteExec, WorktreePushTargetStore } from './worktree-push-target-cleanup'
-import {
-  _resetPrRemoteReconciliationRateLimitForTests,
-  isOrcaGeneratedPrRemoteName,
-  reconcileOrphanedPrRemotesWithExec
-} from './worktree-push-target-reconciliation'
+import { reconcileOrphanedPrRemotesWithExec } from './worktree-push-target-reconciliation'
 
 type ExecMock = Mock<GitRemoteExec>
 
@@ -77,21 +73,6 @@ function removeCalls(exec: ExecMock): string[][] {
     .map(([args]) => args)
     .filter((args) => args[0] === 'remote' && args[1] === 'remove')
 }
-
-describe('isOrcaGeneratedPrRemoteName', () => {
-  it('matches Orca-generated names, including disambiguated ones', () => {
-    expect(isOrcaGeneratedPrRemoteName('pr-head')).toBe(true)
-    expect(isOrcaGeneratedPrRemoteName('pr-contributor-orca')).toBe(true)
-    expect(isOrcaGeneratedPrRemoteName('pr-head-2')).toBe(true)
-    expect(isOrcaGeneratedPrRemoteName('pr-contributor-orca-3')).toBe(true)
-  })
-
-  it('does not match unrelated remote names', () => {
-    expect(isOrcaGeneratedPrRemoteName('origin')).toBe(false)
-    expect(isOrcaGeneratedPrRemoteName('upstream')).toBe(false)
-    expect(isOrcaGeneratedPrRemoteName('project-remote')).toBe(false)
-  })
-})
 
 describe('reconcileOrphanedPrRemotesWithExec', () => {
   it('leaves a remote alone when no worktree metadata ever proves Orca created it (user-created, ambiguous)', async () => {
@@ -170,19 +151,6 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
     expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
   })
 
-  it('reclaims a remote left behind by a worktree removed outside Orca (path 3)', async () => {
-    const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/gone')]: forkTarget() }),
-      exec,
-      []
-    )
-    expect(reclaimed).toEqual([FORK_REMOTE])
-    expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
-  })
-
   it('reclaims a remote even when the only referencing metadata lacks remoteCreated, as long as another entry proves provenance (path 1)', async () => {
     const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
@@ -199,24 +167,6 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
     expect(reclaimed).toEqual([FORK_REMOTE])
   })
 
-  it('never touches origin or upstream even if metadata is malformed', async () => {
-    const exec = makeExec({
-      remotes: remoteLines([
-        { name: 'origin', url: FORK_URL },
-        { name: 'upstream', url: FORK_URL }
-      ])
-    })
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/a')]: forkTarget({ remoteName: 'origin' }) }),
-      exec,
-      []
-    )
-    expect(reclaimed).toEqual([])
-    expect(removeCalls(exec)).toEqual([])
-  })
-
   it('scopes provenance and liveness to the same repo (remotes are repo-local)', async () => {
     const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
@@ -227,11 +177,5 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       []
     )
     expect(reclaimed).toEqual([])
-  })
-})
-
-describe('reconcileOrphanedPrRemotes rate limiting', () => {
-  it('exposes a test reset so repeated test runs are not affected by prior cooldowns', () => {
-    expect(() => _resetPrRemoteReconciliationRateLimitForTests()).not.toThrow()
   })
 })

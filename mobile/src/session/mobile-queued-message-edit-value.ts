@@ -1,5 +1,5 @@
 import type { MobileNativeChatDraftInputs } from './native-chat/composer/mobile-native-chat-draft-inputs'
-import { pickedSkillsInText } from '../../../src/shared/structured-agent-session-send-mutation'
+import { pickedSkillsInText } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 
 type Image = MobileNativeChatDraftInputs['images'][number]
 export function sameMobileQueuedEditImage(left: Image, right: Image): boolean {

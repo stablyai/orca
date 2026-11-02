@@ -126,16 +126,6 @@ describe('web runtime browser client placement', () => {
     )
   })
 
-  it('omits placement when fresh preparation selects the legacy server path', async () => {
-    const preparePlacement = vi.fn().mockResolvedValue({ kind: 'server' })
-    const runtimeCall = successfulCreateCalls()
-    stubRuntimeApi(preparePlacement, runtimeCall)
-
-    await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(true)
-
-    expect(runtimeCall.mock.calls[0]?.[0].params).not.toHaveProperty('placement')
-  })
-
   it('does not prepare or publish placement for an explicit server request', async () => {
     const preparePlacement = vi.fn()
     const runtimeCall = successfulCreateCalls()

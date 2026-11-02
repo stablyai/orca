@@ -1,8 +1,6 @@
-import {
-  agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey
-} from '../../../shared/agent-session-provider-handle'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   neverThrowingStructuredAgentSessionLogger,

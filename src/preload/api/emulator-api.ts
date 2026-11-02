@@ -25,6 +25,16 @@ export type EmulatorApi = {
       meta: { codecId: string; width: number; height: number }
     }) => void
   ) => () => void
+  sendScrcpyTouch: (touch: {
+    deviceId: string
+    type: 'begin' | 'move' | 'end'
+    x: number
+    y: number
+  }) => void
+  /** Resolves false when the device has no live scrcpy control socket. */
+  sendScrcpyKeyboard: (
+    input: { deviceId: string; text: string } | { deviceId: string; key: string; shift: boolean }
+  ) => Promise<boolean>
   onVideoStreamFrame: (
     callback: (data: {
       streamId: string

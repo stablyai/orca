@@ -27,14 +27,14 @@ import { promptSkillRefs } from './native-chat-prompt-document'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { QueuedEditHostFixtureModule } from '../../../../shared/queued-edit-host.test-fixture'
-import { agentSessionSendBodyFingerprint } from '../../../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageEditHoldResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { captureInsertionTarget, insertText } from '../dictation/dictation-insertion-target'
 import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
-import { projectQueuedMessageCards } from '../../../../shared/structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { useNativeChatComposerEditSession } from './use-native-chat-composer-edit-session'
 import {
   readNativeChatComposerDraft,

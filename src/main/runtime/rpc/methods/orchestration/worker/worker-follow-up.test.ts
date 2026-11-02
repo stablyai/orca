@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES } from '../../../../../../shared/orchestration-worker-start-prompt-budget'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
 import {
   getFollowUpDispatch,
@@ -139,11 +140,103 @@ describe('a follow-up to a finished terminal worker', () => {
 
     await vi.waitFor(() => expect(getFollowUpDispatch(h.db, dispatchId)).toBeDefined())
     const followUp = getFollowUpDispatch(h.db, dispatchId)!
-    expect(h.db.getTask(followUp.task_id)?.spec).toContain('and the docs')
+    expect(h.db.getTask(followUp.task_id)?.spec).toContain('`check` command above')
     await vi.waitFor(() =>
       expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
     )
     expect(h.db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(0)
+    expect(h.db.getUnreadMessages(`dispatch:${followUp.id}`)).toMatchObject([
+      { body: 'and the docs' }
+    ])
+  })
+
+  it('starts a follow-up for a backlog larger than any Task and hands all of it to check', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker()
+    const large = 'x'.repeat(Math.ceil(ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES / 10))
+    for (let index = 0; index < 25; index += 1) {
+      await send(dispatchId, `${index} ${large}`)
+    }
+    // The worker was woken for this mail before it reported, as a live worker is.
+    h.db.markAsDelivered(
+      h.db.getUnreadMessages(`dispatch:${dispatchId}`).map((message) => message.id),
+      `dispatch:${dispatchId}`
+    )
+    h.settle(taskId, dispatchId, 'succeeded')
+
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+
+    await vi.waitFor(() =>
+      expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
+    )
+    const followUp = getFollowUpDispatch(h.db, dispatchId)!
+    expect(h.db.getTask(followUp.task_id)?.spec).not.toContain(large)
+    expect(
+      JSON.stringify(vi.mocked(h.runtime.sendTerminalAgentPrompt).mock.calls.at(-1))
+    ).toContain(
+      '# Messages for this task are waiting; read them:\\n  orca orchestration check --terminal term_worker'
+    )
+    // Its start prompt is the wake, so no pointer types over the turn it starts.
+    expect(h.db.getUndeliveredUnreadMessages(`dispatch:${followUp.id}`)).toHaveLength(0)
+    expect(
+      h.db
+        .getUnreadMessages(`dispatch:${followUp.id}`)
+        .map((message) => message.body?.split(' ')[0])
+    ).toEqual(Array.from({ length: 25 }, (_, index) => String(index)))
+  })
+
+  it('retries a follow-up a restart interrupted before it placed an agent, with the mail it took', async () => {
+    userDataDir = mkdtempSync(join(tmpdir(), 'orca-follow-up-midstart-'))
+    h.setup({ userDataDir })
+    const { taskId, dispatchId } = await h.startWorker()
+    await send(dispatchId, 'DO NOT PUSH')
+    h.settle(taskId, dispatchId, 'succeeded')
+    // The claim commits; the app quits before the start places an agent.
+    const claimed = h.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 9,
+      taskSpec: 'New messages',
+      taskRunId: h.activeRunId,
+      startOptions: { agent: 'codex' },
+      runtimeEpoch: 'runtime_before_restart',
+      followUpOf: dispatchId,
+      takesMailOf: dispatchId
+    }).dispatch.id
+
+    h.restart()
+
+    await vi.waitFor(() => expect(getFollowUpDispatch(h.db, claimed)).toBeDefined())
+    const retry = getFollowUpDispatch(h.db, claimed)!
+    await vi.waitFor(() =>
+      expect(h.db.getUnreadMessages(`dispatch:${retry.id}`)).toMatchObject([
+        { body: 'DO NOT PUSH' }
+      ])
+    )
+  })
+
+  it('keeps the mail a stopped follow-up never read for the next send, without restarting it', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker()
+    await send(dispatchId, 'DO NOT PUSH')
+    h.settle(taskId, dispatchId, 'succeeded')
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+    await vi.waitFor(() =>
+      expect(h.db.getWorkerDispatch(getFollowUpDispatch(h.db, dispatchId)?.id ?? '')?.state).toBe(
+        'ready'
+      )
+    )
+    const stopped = getFollowUpDispatch(h.db, dispatchId)!.id
+    h.db.beginWorkerStop(stopped, h.runtime.getRuntimeId())
+    h.db.settleWorkerStop(stopped)
+
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+    expect(getFollowUpDispatch(h.db, stopped)).toBeUndefined()
+
+    await send(dispatchId, 'and the docs')
+    const next = getFollowUpDispatch(h.db, stopped)!
+    await vi.waitFor(() =>
+      expect(h.db.getUnreadMessages(`dispatch:${next.id}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
+    )
   })
 
   it('holds unread mail for a follow-up another send is starting and moves it in once that one is ready', async () => {
@@ -178,10 +271,12 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
   })
 
-  it('counts a follow-up that reported before its start was observed as having taken the mail', async () => {
+  it('asks the coordinator instead of restarting a follow-up that reported without reading its mail', async () => {
     h.setup()
     const { taskId, dispatchId } = await h.startWorker()
     await send(dispatchId, 'DO NOT PUSH')
+    // Sent before the follow-up starts, as anything it takes is.
+    h.db.db.prepare("UPDATE messages SET created_at = datetime('now', '-1 minute')").run()
     h.settle(taskId, dispatchId, 'succeeded')
     vi.mocked(h.runtime.sendTerminalAgentPrompt).mockImplementationOnce(async (handle) => {
       const followUp = getFollowUpDispatch(h.db, dispatchId)!
@@ -192,13 +287,22 @@ describe('a follow-up to a finished terminal worker', () => {
     continueAllUnreadWorkerMail(h.runtime, h.db)
 
     await vi.waitFor(() =>
-      expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
+      expect(h.db.getUnreadMessages(`run:${h.activeRunId}`)).toMatchObject([
+        { type: 'escalation', subject: 'Mail did not reach the finished worker' }
+      ])
     )
     const followUp = getFollowUpDispatch(h.db, dispatchId)!
-    expect(h.db.getTask(followUp.task_id)?.spec).toContain('DO NOT PUSH')
-    expect(h.db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(0)
-    expect(h.db.getUnreadMessages(`dispatch:${followUp.id}`)).toHaveLength(0)
-    expect(h.db.getUnreadMessages(`run:${h.activeRunId}`)).toHaveLength(0)
+    expect(getFollowUpDispatch(h.db, followUp.id)).toBeUndefined()
+    expect(h.db.getUnreadMessages(`dispatch:${followUp.id}`)).toMatchObject([
+      { body: 'DO NOT PUSH' }
+    ])
+
+    // Mail newer than that follow-up still continues it, carrying the unread mail along.
+    await send(followUp.id, 'and the docs')
+    const next = getFollowUpDispatch(h.db, followUp.id)!
+    await vi.waitFor(() =>
+      expect(h.db.getUnreadMessages(`dispatch:${next.id}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
+    )
   })
 
   it('keeps the mail a failed follow-up took when a replayed report ran during its start', async () => {
@@ -244,6 +348,42 @@ describe('a follow-up to a finished terminal worker', () => {
     await vi.waitFor(() =>
       expect(h.db.getUnreadMessages(`dispatch:${retry}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
     )
+  })
+
+  it('moves held mail as new to a follow-up already running, except a pointer whose Enter is in flight', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker()
+    await send(dispatchId, 'typed, Enter in flight')
+    await send(dispatchId, 'woken before')
+    const [inFlight, delivered] = h.db.getUnreadMessages(`dispatch:${dispatchId}`)
+    h.db.db
+      .prepare(
+        "UPDATE messages SET pointer_enter_pending = 3, pointer_pty_id = 'pty_old' WHERE id = ?"
+      )
+      .run(inFlight!.id)
+    h.db.markAsDelivered([delivered!.id], `dispatch:${dispatchId}`)
+    h.settle(taskId, dispatchId, 'succeeded')
+    const winner = h.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 9,
+      taskSpec: 'first',
+      taskRunId: h.activeRunId,
+      startOptions: { agent: 'codex' },
+      followUpOf: dispatchId
+    })
+    h.db.markWorkerDispatchReady(winner.dispatch.id)
+
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+
+    expect(h.db.getMessageById(inFlight!.id)).toMatchObject({
+      to_handle: `dispatch:${winner.dispatch.id}`,
+      pointer_enter_pending: 3,
+      pointer_pty_id: 'pty_old'
+    })
+    expect(h.db.getMessageById(delivered!.id)).toMatchObject({
+      to_handle: `dispatch:${winner.dispatch.id}`,
+      delivered_at: null
+    })
   })
 
   it('from a follow-up that never got a worker, continues the worker before it', async () => {

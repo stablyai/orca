@@ -8,7 +8,7 @@ import {
   validateGhAccountBinding
 } from '../github/gh-account-binding-inventory'
 import { getRateLimit } from '../github/rate-limit'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { track } from '../telemetry/client'
 import { assertRegisteredGitHubRepo, getGitHubLocalGitOptionArgs } from './github-repo-routing'

@@ -90,22 +90,20 @@ export function diffReviewActionMountAdapters(
             hostId: HOST,
             worktreeId: WORKSPACE,
             screenState,
-            diffState: { kind: 'idle' },
             currentItem: item,
             queue: [item],
             filteredQueue: [item],
-            filter: 'all',
             currentIndex: 0,
-            activeHunkIndex: null,
             composer: null,
             composerBody: '',
-            listRef: { current: null },
             setScreenState: (update) => {
               screenState = typeof update === 'function' ? update(screenState) : update
             },
-            setFilter: () => {},
-            setCurrentIndex: () => {},
-            setActiveHunkIndex: () => {},
+            selectIndex: () => {},
+            selectKey: () => {},
+            moveSelection: () => {},
+            // Viewed state stays on the phone here; GitHub-viewed files have their own recordings.
+            remoteViewed: () => null,
             setComposerBody: () => {},
             setActionError: (update) => {
               actionError = typeof update === 'function' ? update(actionError) : update
@@ -139,9 +137,6 @@ export function diffReviewActionMountAdapters(
             }
             if (name === 'discard') {
               return interactions.runGitMutation('git.discard', item)
-            }
-            if (name === 'stage-reviewed') {
-              return interactions.stageReviewedFiles()
             }
             if (name === 'open-send-sheet') {
               return interactions.openSendSheet()

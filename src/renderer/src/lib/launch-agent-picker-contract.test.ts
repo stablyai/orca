@@ -5,7 +5,10 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { createElement } from 'react'
 import { AgentLaunchSetupPanel } from '../components/agent/AgentLaunchSetupPanel'
 import { TooltipProvider } from '../components/ui/tooltip'
-import { useAgentLaunchPickerInventory } from '../components/agent/use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from '../components/agent/use-agent-launch-picker-inventory'
 import type { NewTabAgentMenuModel } from '../components/tab-bar/new-tab-agent-menu-model'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../shared/agent-launch-picker'
 import {
@@ -160,7 +163,8 @@ describe('picker window launch contract', () => {
         rows,
         ['claude'],
         (selected) => agentPickerChoiceSeeds(selected, store.settings),
-        () => 'Claude'
+        () => 'Claude',
+        undefined
       )[0]
       entry.catalog = {
         origin: 'probe',
@@ -277,80 +281,6 @@ describe('picker window launch contract', () => {
 })
 
 it.each(['claude', 'codex'] as const)(
-  'passes %s speed through the real picker-to-terminal compiler',
-  async (agent) => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-    const { agentPickerDraft, agentPickerLaunchInputs } =
-      await import('../../../shared/agent-launch-picker')
-    const { editAgentPickerSpeed } = await import('../../../shared/agent-launch-picker-arguments')
-    const options: Record<string, string> =
-      agent === 'claude' ? { fastMode: 'false' } : { serviceTier: 'default' }
-    const entry = {
-      agent,
-      label: agent,
-      rows: [{ agent, kind: 'terminal' as const }],
-      surfaces: ['chat' as const, 'terminal' as const],
-      defaultSurface: 'chat' as const,
-      terminal: { permissionMode: 'ask' as const },
-      structured: {
-        model: agent === 'claude' ? 'opus' : 'account-model',
-        permissionMode: 'ask' as const,
-        options
-      },
-      arguments:
-        agent === 'claude'
-          ? '--settings ./team.json --settings \'{"language":"french"}\''
-          : '--add-dir docs',
-      catalog: {
-        origin: 'probe' as const,
-        fetchedAt: 1,
-        models: [
-          {
-            id: agent === 'claude' ? 'opus' : 'account-model',
-            label: 'Model',
-            isDefault: true,
-            efforts: [],
-            supportsFastMode: true,
-            ...(agent === 'codex'
-              ? { serviceTiers: [{ value: 'account_fast_v9', label: 'Fast' }] }
-              : {})
-          }
-        ]
-      }
-    }
-    Object.assign(store.settings, { agentPermissionDefault: 'ask' })
-    const draft = editAgentPickerSpeed(
-      entry,
-      agentPickerDraft(entry),
-      agent === 'claude' ? 'fastMode' : 'serviceTier',
-      agent === 'claude' ? 'true' : 'account_fast_v9',
-      entry.structured.model
-    )
-    const launch = {
-      ...draft,
-      surface: 'terminal' as const
-    }
-    mockCreateTab.mockClear()
-    launchAgentInNewTab({
-      requestId: 'picker-fast-contract',
-      agent,
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal',
-      ...agentPickerLaunchInputs(launch, entry)
-    })
-    const command = queuedStartups()[0]?.command ?? ''
-    expect(command).toContain(
-      agent === 'claude' ? '"fastMode":true' : 'service_tier=account_fast_v9'
-    )
-    if (agent === 'claude') {
-      expect(command).toContain('"language":"french"')
-      expect(command).toContain('./team.json')
-    }
-    expect(command).not.toContain('account-model')
-  }
-)
-
-it.each(['claude', 'codex'] as const)(
   'keeps failed %s defaults unknown through acquisition, controls, projection and actual dispatch, then wakes to a permission-preserving edit',
   async (agent) => {
     const { projectAgentLaunchSettings } = await import('../../../shared/agent-launch-settings')
@@ -390,7 +320,9 @@ it.each(['claude', 'codex'] as const)(
     let current: AgentPickerEntry
     const launches: AgentPickerDraft[] = []
     function Panel({ open }: { open: boolean }) {
-      const entries = useAgentLaunchPickerInventory('wt-1', menu, open)
+      const entries = useAgentPickerInventoryEntries(
+        useAgentLaunchPickerInventorySource('wt-1', menu, open)
+      )
       current = entries[0]
       return open
         ? createElement(

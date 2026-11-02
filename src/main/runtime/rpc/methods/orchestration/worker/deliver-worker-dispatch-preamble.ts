@@ -68,7 +68,8 @@ export async function deliverWorkerDispatchPreamble(args: {
           ? formatOrcaSessionAddress(chat)
           : terminalHandle,
     devMode: args.devMode,
-    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+    unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
   })
   if (chat) {
     const dispatch = args.db.getDispatchContextById(args.dispatchId)
@@ -156,6 +157,7 @@ function workerTaskSource(args: {
     db: args.db,
     dispatch: { id: args.dispatchId, run_id: args.runId, task_id: args.taskId },
     from: args.coordinatorHandle,
-    senderName: (party, reported) => args.runtime.orchestrationSenderNames.nameOf(party, reported)
+    senderSnapshot: (party, reported) =>
+      args.runtime.orchestrationSenderNames.snapshotOf(party, reported)
   })
 }

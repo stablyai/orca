@@ -7,7 +7,7 @@ import {
   type Dispatch,
   type SetStateAction
 } from 'react'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
 import {
   findLandedImagePreviewEchoes,

@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
 import { chatImageAccess } from '@/lib/local-file-access'
-import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
+import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session/agent-session-attachments'
 import {
   records,
   restoredImageChecks,

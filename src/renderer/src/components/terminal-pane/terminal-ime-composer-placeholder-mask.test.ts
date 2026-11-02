@@ -120,6 +120,10 @@ describe('terminal IME composer placeholder mask', () => {
     [
       'Claude',
       `\x1b[2J\x1b[H${'─'.repeat(24)}\r\n❯ \x1b7\x1b[2mTry “fix the failing test”\x1b[22m\x1b8`
+    ],
+    [
+      'Claude with a labelled frame',
+      `\x1b[2J\x1b[H${'─'.repeat(24)} mode ─\r\n❯ \x1b7\x1b[2mTry “fix the failing test”\x1b[22m\r\n${'─'.repeat(31)}\x1b8`
     ]
   ])('owns a structurally verified %s placeholder during composition', async (_agent, frame) => {
     const rig = openTerminal()

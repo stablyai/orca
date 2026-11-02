@@ -11,8 +11,10 @@ export { IN_PROCESS_OPTIONS_READER, type StructuredAgentSessionOptionsReader }
 import { structuredAgentSessionThreadGoalReport } from './structured-agent-session-thread-goal'
 // Saved choices, catalog defaults and actual execution reports remain separate facts.
 
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
-import type { AgentSessionAcceptedInputSources } from '../../../shared/agent-session-options-result'
+import type {
+  AgentSessionOptionsResult,
+  AgentSessionAcceptedInputSources
+} from '../../../shared/agent-session/options/agent-session-options-result'
 import { journalOpenReadRefusal } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import {
@@ -22,6 +24,7 @@ import {
 } from './structured-agent-session-option-models'
 import { structuredAgentSessionImmediatePermission } from './structured-agent-session-launch-permission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import { readStructuredSessionRecovery } from './structured-agent-session-recovery-read'
 import { structuredAgentSessionNeverSent } from './structured-agent-session-never-sent'
 
 export {
@@ -221,8 +224,10 @@ export async function readStructuredAgentSessionOptions(
       current.serviceTier = projected.options.serviceTier
     }
   }
+  const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   return {
     ...options,
+    ...recovery,
     ...(live?.effortFixed
       ? {
           models: options.models.map(({ effortsKnown: _unknown, ...row }) => ({

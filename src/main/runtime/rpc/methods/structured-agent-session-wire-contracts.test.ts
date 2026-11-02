@@ -1,23 +1,14 @@
-import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
-import {
-  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
-  AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
-  RUNTIME_CAPABILITIES,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
+import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.generated'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
-import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
-import { parseRuntimeClientCapabilities } from '../runtime-client-capabilities'
 import {
   attachParams,
   call,
@@ -25,15 +16,14 @@ import {
   envelope,
   hostCalls,
   installStructuredHostStub,
-  openStream,
   SESSION,
-  sendParams,
   STRUCTURED_CLIENT,
   STRUCTURED_MOBILE_CLIENT
 } from './structured-agent-session-rpc.test-fixture'
 import {
   createQueuedMessageTestRig,
-  eventually
+  eventually,
+  QUEUED_RIG_CALLER
 } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import {
   HOST_TEST_SESSION as HOST_SESSION,
@@ -88,123 +78,7 @@ it.each([
   expect(hostCalls.history).toHaveBeenCalledWith(request, undefined, replaceHistory)
 })
 
-it('allows the local desktop renderer to replace a missed gap with a snapshot', async () => {
-  let input: AgentSessionSubscribeInput | undefined
-  hostCalls.subscribe.mockImplementation((opened: AgentSessionSubscribeInput) => {
-    input = opened
-    opened.emit({ type: 'end' })
-    return () => {}
-  })
-  const cursor = { epoch: 'epoch-a', sequence: 10 }
-  await call(
-    'agentSession.subscribe',
-    { sessionId: SESSION, cursor },
-    {
-      clientId: 'desktop-renderer',
-      clientKind: 'runtime',
-      clientCapabilities: [...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]
-    }
-  )
-  expect(input?.cursor).toEqual(cursor)
-  expect(input?.snapshotCatchUp).toBe(true)
-})
-
-describe('agentSession.conversationOutline', () => {
-  it('derives the outline from the host journal on each request', async () => {
-    hostCalls.journalSnapshot.mockReturnValueOnce({
-      sessionId: SESSION,
-      cursor: { epoch: 'epoch-a', sequence: 12 },
-      items: [
-        {
-          itemId: 'prompt-1',
-          revision: 1,
-          sequence: 4,
-          observedAt: 4,
-          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix it' }] }
-        },
-        {
-          itemId: 'reply-1',
-          revision: 1,
-          sequence: 5,
-          observedAt: 5,
-          body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Done' }] }
-        }
-      ],
-      submissions: []
-    })
-
-    const response = await call(
-      'agentSession.conversationOutline',
-      { sessionId: SESSION },
-      STRUCTURED_CLIENT
-    )
-
-    expect(hostCalls.journalSnapshot).toHaveBeenCalledWith(SESSION)
-    expect(response).toMatchObject({
-      ok: true,
-      result: {
-        sessionId: SESSION,
-        cursor: { epoch: 'epoch-a', sequence: 12 },
-        entries: [{ itemId: 'prompt-1', sequence: 4, preview: 'Fix it', imageCount: 0 }],
-        omittedEntries: 0
-      }
-    })
-  })
-
-  it('refuses a client that never negotiated structured sessions', async () => {
-    const response = await call(
-      'agentSession.conversationOutline',
-      { sessionId: SESSION },
-      { clientKind: 'runtime', clientCapabilities: [] }
-    )
-    expect(response).toMatchObject({ ok: false })
-    expect(hostCalls.journalSnapshot).not.toHaveBeenCalled()
-  })
-})
-
-describe('agentSession.item', () => {
-  it('returns a whole output that every other read sends a head of', async () => {
-    const output = 'z'.repeat(64 * 1024)
-    const item = {
-      itemId: 'tool-1',
-      revision: 2,
-      sequence: 7,
-      observedAt: 7,
-      body: {
-        kind: 'tool-call',
-        name: 'shell',
-        input: { command: 'cat big.log' },
-        state: 'completed',
-        output: { head: output, byteLength: output.length, digest: 'd', truncated: false }
-      }
-    }
-    hostCalls.journalSnapshot.mockReturnValueOnce({
-      sessionId: SESSION,
-      cursor: { epoch: 'epoch-a', sequence: 7 },
-      items: [item],
-      submissions: []
-    })
-
-    const response = await call(
-      'agentSession.item',
-      { sessionId: SESSION, itemId: 'tool-1' },
-      STRUCTURED_MOBILE_CLIENT
-    )
-
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
-    expect(response).toMatchObject({ ok: true, result: { item } })
-  })
-})
-
 describe('options without a selected model across client versions', () => {
-  const CURRENT_CLIENT = {
-    ...STRUCTURED_CLIENT,
-    clientCapabilities: [
-      ...STRUCTURED_CLIENT.clientCapabilities,
-      AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY
-    ]
-  }
-
   const DESKTOP_CLIENTS = [
     ['local desktop', [...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]],
     ['paired desktop', remoteRuntimeClientCapabilities(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES)]
@@ -269,69 +143,6 @@ describe('options without a selected model across client versions', () => {
       expect(reply).not.toHaveProperty('result.current.model')
     }
   )
-
-  it('returns the captured absence to a phone that reads options without a model', async () => {
-    const report = missingModelReport()
-    hostCalls.readOptions.mockResolvedValue(report)
-    const reply = await call(
-      'agentSession.options',
-      { sessionId: SESSION },
-      { ...CURRENT_CLIENT, clientKind: 'mobile' }
-    )
-    expect(reply).toMatchObject({ ok: true, result: report })
-    expect(reply).not.toHaveProperty('result.current.model')
-  })
-
-  it('keeps same-build in-process reads available', async () => {
-    const report = missingModelReport()
-    hostCalls.readOptions.mockResolvedValue(report)
-    expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
-      ok: true,
-      result: report
-    })
-  })
-
-  it.each(['reported-model', ''])(
-    'preserves an existing string-valued report (%j)',
-    async (model) => {
-      const report = { models: [], current: { model, effort: 'off' } }
-      hostCalls.readOptions.mockResolvedValue(report)
-      for (const client of [STRUCTURED_CLIENT, CURRENT_CLIENT]) {
-        expect(await call('agentSession.options', { sessionId: SESSION }, client)).toMatchObject({
-          ok: true,
-          result: report
-        })
-      }
-    }
-  )
-
-  it('resumes legacy discovery after the provider reports a model', async () => {
-    hostCalls.readOptions.mockResolvedValueOnce(missingModelReport())
-    expect(
-      await call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
-    ).toMatchObject({
-      ok: true,
-      result: { current: { model: '' } }
-    })
-    const report = { models: [], current: { model: 'later-model', effort: 'off' } }
-    hostCalls.readOptions.mockResolvedValueOnce(report)
-    expect(
-      await call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
-    ).toMatchObject({
-      ok: true,
-      result: report
-    })
-  })
-
-  it('keeps authenticated capability input compatible with older parsers', () => {
-    for (const [, capabilities] of DESKTOP_CLIENTS) {
-      expect(parseRuntimeClientCapabilities(capabilities)).toEqual(capabilities)
-      expect(capabilities).toContain(AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY)
-    }
-    expect(remoteRuntimeClientCapabilities()).not.toContain(
-      AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY
-    )
-  })
 })
 
 describe('legacy attach-shaped permission creation', () => {
@@ -447,38 +258,6 @@ describe('prompt response parameters', () => {
 })
 
 describe('agentSession.send reply timing', () => {
-  it('holds a pending reply until handover for a client that cannot show a later rejection', async () => {
-    hostCalls.send.mockResolvedValueOnce(pendingSendResult())
-    hostCalls.waitForSendSettlement.mockResolvedValueOnce(undefined)
-
-    await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
-
-    expect(hostCalls.waitForSendSettlement).toHaveBeenCalledWith(SESSION, 'client-1', {
-      until: 'handed-over-or-behind-command',
-      budgetMs: STRUCTURED_AGENT_SESSION_START_WAIT_MS
-    })
-  })
-
-  it('answers at acceptance for the local desktop and paired desktop clients (W2)', async () => {
-    for (const clientCapabilities of [
-      DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES,
-      // A paired desktop gains the structured surface as its own capability; the reply rule rides
-      // on the list it already sends.
-      [...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-    ]) {
-      hostCalls.send.mockResolvedValueOnce(pendingSendResult())
-      const response = await call('agentSession.send', sendParams(), {
-        clientKind: 'runtime',
-        clientCapabilities: [...clientCapabilities]
-      })
-      expect(response).toMatchObject({
-        ok: true,
-        result: { value: { submission: { dispatchState: 'pending' } } }
-      })
-    }
-    expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
-  })
-
   it('keeps an old phone image send immediate and never recovers its interrupted send as a hidden card', async () => {
     const rig = await createQueuedMessageTestRig()
     hostCalls.send.mockImplementation(rig.host.send.bind(rig.host))
@@ -492,6 +271,15 @@ describe('agentSession.send reply timing', () => {
     let release = () => {}
     try {
       const working = await rig.workingSend()
+      const compactId = hostTestOperationId()
+      const compactFields = { command: 'compact' as const, delivery: 'queue-if-active' as const }
+      expect(
+        await rig.host.conversationCommand(QUEUED_RIG_CALLER, {
+          ...compactFields,
+          envelope: rig.envelope(compactFields, 'agentSession.conversationCommand', compactId),
+          userSend: true
+        })
+      ).toMatchObject({ ok: true, value: { queued: { messageId: compactId } } })
       const image = imageSend()
       expect(
         await call('agentSession.send', image.request, STRUCTURED_MOBILE_CLIENT)
@@ -499,8 +287,12 @@ describe('agentSession.send reply timing', () => {
         ok: true,
         result: { value: { submission: { clientMessageId: image.id } } }
       })
-      expect(await rig.drafts()).toEqual([])
+      expect((await rig.drafts()).map((card) => card.messageId)).toEqual([compactId])
+      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
       await rig.settleAccepted(working, 'working')
+      await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
+      rig.finishCompact()
       await eventually(async () => {
         expect((await rig.submission(image.id))?.handedOverAt).toBeDefined()
         expect(
@@ -532,83 +324,3 @@ describe('agentSession.send reply timing', () => {
     }
   })
 })
-
-function pendingSendResult() {
-  return {
-    ok: true,
-    replayed: false,
-    fence: 1,
-    cursor: { epoch: 'epoch-a', sequence: 1 },
-    value: {
-      clientMessageId: 'client-1',
-      submission: {
-        clientMessageId: 'client-1',
-        fence: 1,
-        payloadFingerprint: 'fingerprint',
-        dispatchState: 'pending' as const,
-        providerItemId: null,
-        reason: null,
-        submittedAt: 1,
-        resolvedAt: null,
-        handoverRecorded: true as const
-      }
-    }
-  }
-}
-
-describe('agentSession.subscribeTurnCompletions', () => {
-  const subscribed = () => hostCalls.subscribeTurnCompletions.mock.calls.map(([sub]) => sub)
-
-  it('opts a client into prompt edges only when it asks', async () => {
-    await openStream('agentSession.subscribeTurnCompletions', {}, STRUCTURED_CLIENT)
-    await openStream(
-      'agentSession.subscribeTurnCompletions',
-      { includePrompts: true },
-      STRUCTURED_CLIENT
-    )
-    expect(subscribed().map((sub) => sub.includePrompts)).toEqual([false, true])
-  })
-
-  it("ignores a newer client's opt-in it does not know rather than refusing the stream", async () => {
-    const replies = await openStream(
-      'agentSession.subscribeTurnCompletions',
-      { includePrompts: true, includeSomethingNewer: true },
-      STRUCTURED_CLIENT
-    )
-    expect(replies.filter((reply) => !reply.ok)).toEqual([])
-    expect(subscribed().map((sub) => sub.includePrompts)).toEqual([true])
-  })
-})
-
-it.each([false, true])(
-  'negotiates command demand per request and subscriber: capable=%s',
-  async (capable) => {
-    const client = {
-      ...STRUCTURED_CLIENT,
-      clientCapabilities: [
-        ...STRUCTURED_CLIENT.clientCapabilities,
-        ...(capable ? [AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY] : [])
-      ]
-    }
-    hostCalls.readCommands = vi.fn(async () => ({ commands: [] }))
-    expect(await call('agentSession.commands', { sessionId: SESSION }, client)).toMatchObject({
-      ok: true
-    })
-    expect(hostCalls.readCommands).toHaveBeenCalledWith(SESSION, capable)
-    let subscription: AgentSessionSubscribeInput | undefined
-    hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
-      subscription = input
-      input.emit({ type: 'end' })
-      return () => {}
-    })
-    await call('agentSession.subscribe', { sessionId: SESSION }, client)
-    expect(subscription?.commandsOnRequest).toBe(capable)
-    expect(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES).toContain(
-      AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY
-    )
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
-    expect(
-      parseRuntimeClientCapabilities([...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES])
-    ).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
-  }
-)

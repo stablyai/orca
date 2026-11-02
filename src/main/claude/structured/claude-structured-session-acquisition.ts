@@ -1,6 +1,6 @@
 import type { AgentSessionAcquisition } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
-import { buildClaudePermissionCallbacks } from '../claude-structured-inbound-control'
+import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from '../claude-replay-turn-resolution'
 import { claudeStartedUnechoedSend } from '../claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from '../claude-session-state-turn-over'
@@ -15,25 +15,27 @@ import {
 import { claudeConfigDirEnvPatch } from '../claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from '../claude-prompt-registry'
-import { adoptClaudeStructuredSpawnOptions } from '../claude-structured-spawn-options'
-import { observeClaudeExecutionModel } from '../claude-structured-execution-observations'
-import { observeClaudeFastModeFacts } from '../claude-structured-session-options'
+import { adoptClaudeStructuredSpawnOptions } from './launch/claude-structured-spawn-options'
+import { observeClaudeExecutionModel } from './claude-structured-execution-observations'
+import { observeClaudeFastModeFacts } from './launch/claude-structured-session-options'
 import {
   createClaudeSessionPublication,
   reportClaudeOptions
 } from './claude-structured-session-publication'
 import type * as sessionState from './claude-structured-session-state'
-import { resolveClaudeAcquisitionError } from '../claude-structured-session-close'
+import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
-import { claudeTurnResumePointWriter } from '../claude-structured-resume-point'
+import { claudeTurnResumePointWriter } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
-import { resolveClaudeAcquisitionLaunch } from '../claude-structured-acquisition-launch'
+import { resolveClaudeAcquisitionLaunch } from './launch/claude-structured-acquisition-launch'
 import {
   bindClaudeConnectionJournalControls,
   createClaudeSessionJournalTranslator
-} from '../claude-structured-session-journal-control'
+} from './journal/claude-structured-session-journal-control'
 import { isRootClaudeFrame } from '../claude-turn-opening'
+import { createClaudeStartupOutcome } from './claude-structured-startup-outcome'
+import { claudeStartupResultError } from '../claude-stream-json-exit-error'
 
 export async function acquireClaudeSession({
   input,
@@ -58,6 +60,13 @@ export async function acquireClaudeSession({
   // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
   let childEnded: Error | null = null
   const initProof = createClaudeInitProof()
+  // Owned by this acquisition alone, so a late frame cannot fail a replacement's open.
+  const startup = createClaudeStartupOutcome()
+  const childFailed = (error: Error): void => {
+    childEnded ??= error
+    startup.fail(error)
+    initProof.reject(error)
+  }
   const translator = createClaudeSessionJournalTranslator(
     input.events,
     String(input.fence),
@@ -67,7 +76,8 @@ export async function acquireClaudeSession({
       callbacks,
       sessionId
     },
-    () => (liveSession && sessions.get(sessionId) === liveSession ? liveSession : null)
+    () => (liveSession && sessions.get(sessionId) === liveSession ? liveSession : null),
+    (message) => startup.accept(claudeStartupResultError(message))
   )
   const contextActivity = translator?.contextActivity ?? 0
   const recordTurnEnd = claudeTurnResumePointWriter(sessionId, sessions, deps)
@@ -205,10 +215,7 @@ export async function acquireClaudeSession({
           onMessage,
           canUseTool,
           onUserDialog,
-          onFault: (error) => {
-            childEnded ??= error
-            initProof.reject(error)
-          },
+          onFault: childFailed,
           onExit: (error, exit) => {
             if (exit?.expected) {
               naming?.failed()
@@ -216,9 +223,7 @@ export async function acquireClaudeSession({
               return
             }
             // Mark in place because the fault report may retain this error object.
-            withObservedProviderExit(error)
-            childEnded ??= error
-            initProof.reject(error)
+            childFailed(withObservedProviderExit(error))
             callbacks.handleExit(sessionId, attempt, error)
           }
         }
@@ -264,6 +269,7 @@ export async function acquireClaudeSession({
         proof: initProof,
         contextActivity,
         onLateRefusal: (error) => callbacks.handleExit(sessionId, attempt, error),
+        startup,
         emit,
         naming
       }

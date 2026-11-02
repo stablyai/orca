@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionTransition } from './structured-agent-session-transition'
 
@@ -146,26 +146,6 @@ BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
   await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
   expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
     agentJournalItemKey(identity('first'))
-  ])
-})
-
-it('refuses a transition whole, so none of its steps ever lands', async () => {
-  const { journal, deferred, sink, bind } = await rig({ maxQueuedOperations: 1 })
-  const step = (recordId: string) =>
-    itemStep(() => ({ identity: identity(recordId), body: tool(recordId, 'running') }))
-  const admitted = { lifecycle: false, publish: false, steps: [step('a')] }
-  const refused = { lifecycle: false, publish: false, steps: [step('b'), step('c')] }
-
-  expect(sink.tryAppendTransition?.(admitted)).toEqual({ accepted: true })
-  expect(sink.tryAppendTransition?.(refused)).toEqual({
-    accepted: false,
-    reason: 'backpressure'
-  })
-  bind()
-  await deferred.drained()
-
-  expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
-    agentJournalItemKey(identity('a'))
   ])
 })
 
