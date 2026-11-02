@@ -1,6 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
-import { findAgentInputDialogIndex } from './agent-input-dialog'
+import { findAgentInputDialogIndex, type TypedText } from './agent-input-dialog'
 import { readScreenInputVeto, type RuledScreen } from './screen-input-veto'
 import {
   isAgentForegroundWrapperProcess,
@@ -25,15 +25,18 @@ export type GeneratedInputObservation = {
   process: GeneratedInputProcess
   /** Admission rests on compatibility quiet rather than a positive composer marker. */
   quiet: boolean
+  /** The agent the quiet check expects in front when it differs from `agent` (a follow-up's own
+   *  consumer, while `agent` is what the target resolves to for framing). */
+  consumer?: TuiAgent | null
   /** Text this operation already typed; its rows are composer content, not dialog controls. */
-  typedText?: string
+  typedText?: TypedText
 }
 
 /** The current screen gives input to a dialog or overlay, or has not caught up yet. */
 export function screenRefusesGeneratedInput(
   agent: TuiAgent | null | undefined,
   screen: GeneratedInputScreen,
-  typedText = ''
+  typedText: TypedText = ''
 ): boolean {
   if (screen === 'unknown') {
     return false
@@ -63,8 +66,9 @@ export function admitsGeneratedInput(observation: GeneratedInputObservation): bo
   if (!observation.quiet) {
     return true
   }
-  const expected = agent
-    ? isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess)
+  const consumer = observation.consumer !== undefined ? observation.consumer : agent
+  const expected = consumer
+    ? isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[consumer].expectedProcess)
     : recognizeAgentProcess(foreground) !== null
   return expected || (isAgentForegroundWrapperProcess(foreground) && process.hasChildProcesses)
 }

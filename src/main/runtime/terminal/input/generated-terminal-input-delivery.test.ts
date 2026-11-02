@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -5,7 +6,7 @@ import type { PluginHookChainOutcome } from '../../../../shared/plugins/workers/
 import { setPluginHookRunner } from '../../../plugins/hooks/plugin-hook-dispatch'
 import { createAgentPromptSubmissionRuntime } from '../../agent-prompt-submission-runtime-test-fixture'
 import { deliverGeneratedTerminalInput } from './generated-terminal-input-delivery'
-import { finalReplayFrame } from '../../agent-transcript-replay-test-harness'
+import { finalReplayFrame, readRuntimeFixture } from '../../agent-transcript-replay-test-harness'
 
 vi.mock('../../../git/worktree', () => ({
   listWorktrees: vi
@@ -417,5 +418,189 @@ describe('generated input retargeted to a replacement PTY', () => {
     expect(Date.now() - started).toBeLessThan(1_500)
     await new Promise((resolve) => setImmediate(resolve))
     expect(writes).toEqual([])
+  })
+})
+
+// K1: a default leaf send re-resolved to a replacement running another agent takes every
+// sequence fact (readiness rules, framing, Enter reserve and classification) from the replacement.
+describe('generated input retargeted to a replacement running another agent', () => {
+  type Pty = { connected: boolean; launchAgent?: string; ptyId: string }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected PTY table and handle lookups on OrcaRuntimeService.
+  const internals = (runtime: object) =>
+    runtime as unknown as {
+      ptysById: Map<string, Pty>
+      getLivePtyForHandle: (handle: string) => unknown
+      getLiveLeafForHandle: (handle: string) => unknown
+      assertLiveTerminalHandleTargetsPty: (handle: string, ptyId: string) => void
+      writeTerminalAgentPrompt: (...args: unknown[]) => Promise<{ submits: number }>
+      getPtyLifecycleSignal: (ptyId: string) => AbortSignal
+    }
+
+  /** A default leaf whose queued send is replaced by `agent` running on a new PTY. */
+  async function leafReplacedBy(
+    original: 'claude' | 'omp',
+    onWrite: Parameters<typeof createAgentPromptSubmissionRuntime>[0] = () => {}
+  ) {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(onWrite, original)
+    const host = internals(runtime)
+    const leaf = { ...host.ptysById.get('pty-prompt')!, writable: true, ptyId: 'pty-prompt' }
+    vi.spyOn(host, 'getLivePtyForHandle').mockReturnValue(null)
+    vi.spyOn(host, 'getLiveLeafForHandle').mockImplementation(() => ({ leaf }))
+    vi.spyOn(host, 'assertLiveTerminalHandleTargetsPty').mockImplementation((_handle, ptyId) => {
+      if (ptyId !== leaf.ptyId) {
+        throw new Error('terminal_handle_stale')
+      }
+    })
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    // The head holds the queue at its write guard while the leaf is replaced.
+    const head = deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'head',
+      submit: false,
+      agent: original,
+      beforeWrite: () => held,
+      timeoutMs: 1_000
+    })
+    const replace = (ptyId: string, agent: string, screen: string) => {
+      runtime.registerPty(ptyId, 'repo-1::/tmp/worktree-a', null)
+      host.ptysById.get(ptyId)!.launchAgent = agent
+      leaf.ptyId = ptyId
+      runtime.onPtyData(ptyId, screen, 0)
+    }
+    return { runtime, handle, writes, head, release, replace }
+  }
+
+  // R6-1: the old agent's readiness rules once refused a ready Claude replacement at 60 s.
+  it('delivers to a ready Claude replacement of a queued Codex send', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => {},
+        'codex'
+      )
+      const host = internals(runtime)
+      runtime.registerPty('pty-replacement', 'repo-1::/tmp/worktree-a', null)
+      const replacement = host.ptysById.get('pty-replacement')!
+      replacement.launchAgent = 'claude'
+      replacement.connected = true
+      runtime.onPtyData('pty-replacement', readRuntimeFixture('claude-ready-task-wakeup'), 0)
+      vi.spyOn(host, 'getLivePtyForHandle').mockReturnValue({ pty: replacement })
+      vi.spyOn(host, 'assertLiveTerminalHandleTargetsPty').mockImplementation(() => {})
+      const payload = '\x1b[200~replaced\x1b[201~'
+      const sent = host.writeTerminalAgentPrompt(
+        handle,
+        'pty-prompt',
+        0,
+        payload,
+        {
+          inputKind: 'driving',
+          composerReady: true,
+          inputDeadline: Date.now() + 60_000,
+          promptForSchedule: 'replaced',
+          acceptQueued: true,
+          requestId: 'retarget',
+          observationTimeoutMs: 0
+        },
+        undefined,
+        { resolve: () => 'pty-replacement', payloadFor: () => payload }
+      )
+      const settled = sent.then(
+        () => 'delivered',
+        () => 'refused'
+      )
+      await vi.advanceTimersByTimeAsync(10_000)
+      await expect(settled).resolves.toBe('delivered')
+      expect(writes.filter((data) => data.includes('replaced'))).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([false, true])(
+    'reports a Claude send replaced by OMP delivered once its text carries Enter (observedReady %s)',
+    async (observedReady) => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, handle, writes, head, release, replace } = await leafReplacedBy('claude')
+        runtime.onPtyData('pty-prompt', READY, 0)
+        await vi.advanceTimersByTimeAsync(1)
+        const result = deliverGeneratedTerminalInput(runtime, handle, {
+          text: 'new OMP prompt',
+          submit: true,
+          agent: 'claude',
+          observedReady,
+          composerReady: true,
+          timeoutMs: 3_000
+        })
+        await vi.advanceTimersByTimeAsync(1)
+        replace('pty-omp', 'omp', readRuntimeFixture('omp-18-composer'))
+        release()
+        await vi.advanceTimersByTimeAsync(3_100)
+        await expect(result).resolves.toBe('delivered')
+        await head
+        expect(
+          writes.filter((data) => data.includes('new OMP prompt') && data.endsWith('\r'))
+        ).toHaveLength(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it('reports an OMP send replaced by Claude unconfirmed when a dialog withholds its Enter', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, handle, writes, head, release, replace } = await leafReplacedBy(
+        'omp',
+        (current, data) => {
+          if (data.includes('Claude followup')) {
+            current.onPtyData('pty-claude', DIALOG, 0)
+          }
+        }
+      )
+      runtime.onPtyData('pty-prompt', readRuntimeFixture('omp-18-composer'), 0)
+      await vi.advanceTimersByTimeAsync(1)
+      const result = deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'Claude followup',
+        submit: true,
+        agent: 'omp',
+        composerReady: true,
+        timeoutMs: 3_000
+      })
+      await vi.advanceTimersByTimeAsync(1)
+      replace('pty-claude', 'claude', READY)
+      release()
+      await vi.advanceTimersByTimeAsync(3_100)
+      await expect(result).resolves.toBe('unconfirmed')
+      await head
+      expect(writes).toEqual(['\x1b[200~Claude followup\x1b[201~'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // K5: a finished request leaves nothing on the PTY's long-lived lifecycle signal.
+  it.each([10, 100])('leaves no lifecycle listener behind after %i sends', async (count) => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, handle } = await createAgentPromptSubmissionRuntime(() => {}, 'claude')
+      runtime.onPtyData('pty-prompt', READY, 0)
+      const signal = internals(runtime).getPtyLifecycleSignal('pty-prompt')
+      const baseline = getEventListeners(signal, 'abort').length
+      for (let index = 0; index < count; index += 1) {
+        await expect(
+          deliverGeneratedTerminalInput(runtime, handle, {
+            text: `done ${index}`,
+            submit: false,
+            agent: 'claude',
+            timeoutMs: 1_000
+          })
+        ).resolves.toBe('staged')
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(getEventListeners(signal, 'abort').length - baseline).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

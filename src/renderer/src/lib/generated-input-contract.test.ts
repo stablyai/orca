@@ -15,6 +15,7 @@ import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runt
 import type { RuledScreen } from '../../../shared/screen-input-veto'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type * as RuntimeTerminalStreamModule from '@/runtime/runtime-terminal-stream'
+import type * as AgentInputDialogModule from '../../../shared/agent-input-dialog'
 
 type Facts = {
   capable: boolean
@@ -34,6 +35,10 @@ type Facts = {
   runtime: OrcaRuntimeService | null
   handle: string
   holdProcessRead: Promise<void> | null
+  /** Another process takes the terminal once the producer's own first inspection has answered. */
+  processAfterInspect: string | null
+  /** Runs after each write the terminal takes (a dialog opening between chunks). */
+  afterWrite: ((count: number) => void) | null
 }
 const f = vi.hoisted((): Facts => ({
   capable: true,
@@ -47,7 +52,9 @@ const f = vi.hoisted((): Facts => ({
   writes: [],
   runtime: null,
   handle: '',
-  holdProcessRead: null
+  holdProcessRead: null,
+  processAfterInspect: null,
+  afterWrite: null
 }))
 
 vi.mock('../../../main/git/worktree', () => {
@@ -84,15 +91,26 @@ vi.mock('@/runtime/runtime-terminal-stream', async (importOriginal) => ({
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: async () => {
     await f.holdProcessRead
-    return { foregroundProcess: f.process, hasChildProcesses: false }
+    const foreground = f.process
+    if (f.processAfterInspect) {
+      f.process = f.processAfterInspect
+      f.processAfterInspect = null
+    }
+    return { foregroundProcess: foreground, hasChildProcesses: false }
   }
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: async (_ptyId: string, data: string) => {
     f.writes.push(data)
+    f.afterWrite?.(f.writes.length)
     return true
   }
 }))
+// Counts how often an operation normalizes the text it typed (once, however many frames).
+vi.mock('../../../shared/agent-input-dialog', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentInputDialogModule>()
+  return { ...actual, prepareTypedText: vi.fn(actual.prepareTypedText) }
+})
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: async () => f.capable,
   callRuntimeRpc: async (
@@ -131,6 +149,8 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 const { deliverGeneratedPaste, pasteDraftToAgentPtyWhenReady, submitPromptToAgentPty } =
   await import('./agent-paste-draft')
 const { sendPromptWithGuardedPasteAndEnter } = await import('./active-agent-note-send-delivery')
+const { sendFollowupPromptWhenAgentReady } = await import('./agent-followup-delivery')
+const { prepareTypedText } = await import('../../../shared/agent-input-dialog')
 
 const DIALOG = [
   'Bypass Permissions',
@@ -150,6 +170,8 @@ async function setUp(agent: TuiAgent, capable: boolean): Promise<string> {
   f.streamTail = []
   f.writes = []
   f.holdProcessRead = null
+  f.processAfterInspect = null
+  f.afterWrite = null
   const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, agent)
   f.runtime = runtime
   f.handle = handle
@@ -485,6 +507,48 @@ describe.each([
     expect(f.writes).toEqual([])
   })
 
+  // K3: a follow-up authorized for Aider never reaches Claude, even where the terminal's launch
+  // identity still says Claude.
+  it('never sends an Aider follow-up to Claude that took the terminal after its first check', async () => {
+    const ptyId = await setUp('claude', capable)
+    f.grid = { lines: ['❯ '], alternateScreen: false }
+    f.pasteMode = true
+    f.process = 'aider'
+    f.processAfterInspect = 'claude'
+    stream('\x1b[?2004h\x1b[?2031h❯ ')
+    const result = sendFollowupPromptWhenAgentReady({
+      ptyId,
+      agent: 'aider',
+      expectedProcess: 'aider',
+      prompt: 'Aider only followup'
+    })
+    await vi.advanceTimersByTimeAsync(61_000)
+    await expect(result).resolves.toBe(false)
+    expect(f.writes).toEqual([])
+  })
+
+  // K4: a short budget still leaves a legal moment to start the text, as main delivered.
+  it('delivers a startup prompt to the plain Claude 2.1.291 composer within a 1,000 ms budget', async () => {
+    const ptyId = await setUp('claude', capable)
+    f.process = 'claude'
+    const lines = (await grid('claude-ready-task-wakeup')).lines
+    f.streamTail = [...lines]
+    f.backlog = lines.join('\r\n')
+    f.runtime?.onPtyData('pty-prompt', f.backlog, Date.now())
+    const result = pasteDraftToAgentPtyWhenReady({
+      ptyId,
+      content: 'go',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true,
+      timeoutMs: 1000
+    })
+    await vi.advanceTimersByTimeAsync(1100)
+    await expect(result).resolves.toBe(true)
+    expect(f.writes.filter((data) => data.includes('go'))).toHaveLength(1)
+    expect(f.writes.at(-1)).toBe('\r')
+  })
+
   // Controls kept: inline ZCode delivers from its grid; a plain shell never receives the text.
   it('delivers to an inline ZCode composer and refuses a plain shell', async () => {
     const ptyId = await setUp('zcode', capable)
@@ -509,4 +573,87 @@ describe.each([
     await expect(refused).resolves.toBe('not-sent')
     expect(f.writes).toEqual([])
   })
+})
+
+describe('older-host evidence and work bounds', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(100_000)
+    vi.stubGlobal('window', globalThis)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  // K2: the operation's own stream holds older dialog-free text while the host's current read
+  // already returns the recorded trust dialog; the read's dialog still vetoes.
+  it('refuses on a dialog in the current read even when its own stream holds older text', async () => {
+    const ptyId = await setUp('claude', false)
+    f.process = 'claude'
+    f.backlog = 'Claude Code starting\r\n'
+    f.streamTail = [...(await grid('claude-dialog-trust-workspace')).lines]
+    const result = pasteDraftToAgentPtyWhenReady({
+      ptyId,
+      content: 'generated text',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true,
+      timeoutMs: 3000
+    })
+    await vi.advanceTimersByTimeAsync(3100)
+    await expect(result).resolves.toBe(false)
+    expect(f.writes).toEqual([])
+  })
+
+  // K9: a chunked paste checks every frame against the current screen but normalizes its text once.
+  it.each([10, 100])(
+    'normalizes the typed text once for a %i-chunk paste, and a dialog between chunks still stops it',
+    async (chunks) => {
+      const ptyId = await setUp('claude', false)
+      f.process = 'claude'
+      f.grid = { lines: ['❯ '], alternateScreen: false }
+      f.pasteMode = true
+      const content = 'x'.repeat(chunks * 16 * 1024)
+      vi.mocked(prepareTypedText).mockClear()
+      const delivered = pasteDraftToAgentPtyWhenReady({
+        ptyId,
+        content,
+        agent: 'claude',
+        submit: false,
+        forcePaste: true,
+        intent: 'running',
+        timeoutMs: 6000
+      })
+      await vi.advanceTimersByTimeAsync(6000)
+      await expect(delivered).resolves.toBe(true)
+      expect(f.writes.length).toBeGreaterThan(chunks)
+      const normalized = vi
+        .mocked(prepareTypedText)
+        .mock.calls.reduce((units, [text]) => units + text.length, 0)
+      expect(normalized).toBe(content.length)
+
+      // Control: a dialog painted after the third frame refuses every later frame.
+      f.writes.length = 0
+      f.grid = { lines: ['❯ '], alternateScreen: false }
+      f.afterWrite = (count) => {
+        if (count === 3) {
+          f.grid = { lines: DIALOG, alternateScreen: false }
+        }
+      }
+      const stopped = pasteDraftToAgentPtyWhenReady({
+        ptyId,
+        content,
+        agent: 'claude',
+        submit: false,
+        forcePaste: true,
+        intent: 'running',
+        timeoutMs: 6000
+      })
+      await vi.advanceTimersByTimeAsync(6000)
+      await expect(stopped).resolves.toBe(false)
+      expect(f.writes).toHaveLength(3)
+    }
+  )
 })

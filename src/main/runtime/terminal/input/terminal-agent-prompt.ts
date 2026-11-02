@@ -48,6 +48,10 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     let afterWriteError: unknown
     const result = await runGeneratedInputOperation(source, {
       agent: first.agent,
+      // A follow-up was authorized for the caller's agent; the target's resolved agent frames it.
+      ...(options.requireConsumer && options.generatedAgent !== undefined
+        ? { consumer: options.generatedAgent }
+        : {}),
       submit,
       intent: options.generatedIntent ?? 'running',
       lifetime: attempt,

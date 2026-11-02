@@ -16,6 +16,15 @@ type Composer = { row: number; empty: boolean; regionEnd: number }
 
 const squash = (value: string): string => value.replace(/[\s\u00a0]+/g, ' ').trim()
 
+/** Text an operation typed, normalized once for every check against it. */
+export type PreparedTypedText = { readonly squashed: string }
+
+export function prepareTypedText(text: string): PreparedTypedText {
+  return { squashed: squash(text) }
+}
+
+export type TypedText = string | PreparedTypedText
+
 function leadingColumns(row: string): number {
   return row.length - row.trimStart().length
 }
@@ -23,8 +32,8 @@ function leadingColumns(row: string): number {
 /** The last genuine composer and the rows the text just typed into it spans. Indentation alone
  *  cannot tell a draft's continuation from a menu's sibling options, so only rows that are part of
  *  the known typed text are composer content. */
-function findComposer(rows: readonly string[], typedText: string): Composer | null {
-  const typed = squash(typedText)
+function findComposer(rows: readonly string[], typedText: TypedText): Composer | null {
+  const typed = typeof typedText === 'string' ? squash(typedText) : typedText.squashed
   for (let i = rows.length - 1; i >= 0; i -= 1) {
     const match = GLYPH_ROW.exec(rows[i])
     if (!match || NUMBERED_CHOICE.test(match[2])) {
@@ -60,7 +69,7 @@ function isRunningTurnFooter(rows: readonly string[], row: string, composer: Com
 
 /** Only the current input region owns keys: hints in history above the composer, or inside its
  *  just-typed text, are not a dialog. Returns the character offset of the owning control row. */
-export function findAgentInputDialogIndex(text: string, typedText = ''): number | null {
+export function findAgentInputDialogIndex(text: string, typedText: TypedText = ''): number | null {
   const rows = text.split('\n')
   const composer = findComposer(rows, typedText)
   const start = composer ? composer.regionEnd + 1 : 0

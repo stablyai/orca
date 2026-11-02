@@ -1,13 +1,11 @@
 import type { TuiAgent } from './tui-agent'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
-import { resolvePasteReadySignal } from './draft-paste-ready-scanner'
-import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from './agent-prompt-injection'
 import { admitsGeneratedInput } from './generated-agent-input-admission'
 import {
   GENERATED_AGENT_INPUT_QUIET_MS,
-  signalAllowsCompatibilityEvidence,
   type GeneratedInputIntent
 } from './generated-agent-input-readiness'
+import { prepareTypedText, type PreparedTypedText } from './agent-input-dialog'
+import { ENTER_COMMIT_MARGIN_MS, generatedInputSequence } from './generated-input-sequence'
 import {
   GeneratedInputObservation,
   type GeneratedInputObservationFeed
@@ -22,6 +20,7 @@ import {
   GENERATED_INPUT_RETIRED as RETIRED,
   GENERATED_INPUT_TURN_BUDGET_MS,
   ownTurn,
+  raceUntil,
   type GeneratedInputLifetime,
   type GeneratedInputOutcomeKind
 } from './generated-input-lifetime'
@@ -43,6 +42,8 @@ export type GeneratedInputSource = GeneratedInputObservationFeed & {
   /** After the turn opens: true when the source now targets a different terminal than it
    *  observed (a default target re-resolved before any byte); its evidence starts over. */
   takeRetarget?: () => boolean
+  /** The agent the current target runs, when the source resolves it; read again on a retarget. */
+  readonly agent?: TuiAgent | null
   read: (signal: AbortSignal) => Promise<GeneratedInputEvidence>
   /** Writes the text as one frame or ordered chunks, each through the gate; false when a frame
    *  was refused or not taken. */
@@ -60,6 +61,9 @@ export type GeneratedInputSource = GeneratedInputObservationFeed & {
 
 export type GeneratedInputOperationRequest = {
   agent: TuiAgent | null
+  /** The agent the caller authorized this request for, when that differs from the target's
+   *  resolved agent; `requireConsumer` checks it, never the framing agent. */
+  consumer?: TuiAgent | null
   submit: boolean
   intent: GeneratedInputIntent
   /** The request's one lifetime, created where it was accepted. */
@@ -83,8 +87,6 @@ export type GeneratedInputOperationResult = {
   finished: Promise<void>
 }
 
-// The checks before Enter end early enough for Enter's own check and write to land in the budget.
-const ENTER_COMMIT_MARGIN_MS = 50
 const CHECK_INTERVAL_MS = 150
 
 /** One generated write, from observation through its outcome, for either source. The outcome
@@ -93,27 +95,37 @@ export function runGeneratedInputOperation(
   source: GeneratedInputSource,
   request: GeneratedInputOperationRequest
 ): Promise<GeneratedInputOperationResult> {
-  const { agent, submit, lifetime } = request
+  const { submit, lifetime } = request
   let running = request.intent === 'running'
-  const readySignal = resolvePasteReadySignal(agent ? TUI_AGENT_CONFIG[agent] : null, submit)
-  const permitsQuiet = signalAllowsCompatibilityEvidence(readySignal)
+  // Every target-dependent fact, derived again once the queue turn selects its final target.
+  let seq = generatedInputSequence(request.agent, submit, source)
+  const consumer = (): TuiAgent | null =>
+    request.consumer !== undefined ? request.consumer : seq.agent
   const acceptedAt = Date.now()
-  const enterReserveMs =
-    submit && !source.textCarriesEnter
-      ? source.enterReserveMs + AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + ENTER_COMMIT_MARGIN_MS
-      : 0
   let wake: (() => void) | null = null
-  let observation = new GeneratedInputObservation(readySignal, () => wake?.())
+  // When the no-grid lane's quiet comes due, so the check runs then rather than a beat later.
+  let quietDueAt: number | null = null
+  let observation = new GeneratedInputObservation(seq.readySignal, () => wake?.())
   let error: unknown
+  // The typed text is the same for every frame: normalized once per operation.
+  let typedRaw: string | undefined
+  let typedPrepared: PreparedTypedText | undefined
+  const typed = (text?: string): PreparedTypedText | undefined => {
+    if (text !== undefined && text !== typedRaw) {
+      typedRaw = text
+      typedPrepared = prepareTypedText(text)
+    }
+    return text === undefined ? undefined : typedPrepared
+  }
   const within = <T>(promise: Promise<T>): Promise<T> => lifetime.within(promise)
   const nextCheck = (): Promise<void> =>
     within(
       new Promise<void>((resolve) => {
-        const grace = observation.graceAt
-        const delay =
-          grace !== null && grace > Date.now()
-            ? Math.min(CHECK_INTERVAL_MS, grace - Date.now())
-            : CHECK_INTERVAL_MS
+        const now = Date.now()
+        const due = [observation.graceAt, quietDueAt].filter(
+          (at): at is number => at !== null && at > now
+        )
+        const delay = Math.min(CHECK_INTERVAL_MS, ...due.map((at) => at - now))
         const timer = setTimeout(done, delay)
         function done(): void {
           clearTimeout(timer)
@@ -129,16 +141,19 @@ export function runGeneratedInputOperation(
     // was streamed meanwhile still is.
     const evidence: GeneratedInputEvidence =
       running && read.screen === null ? { ...read, screen: 'unknown' } : read
-    const tail = observation.tail || read.tail || ''
+    // Every lane of current evidence is judged: a dialog the source's read returns vetoes even
+    // when this operation's own stream holds older, dialog-free text.
+    const tail = [observation.tail, read.tail ?? ''].filter((lane) => lane.trim() !== '').join('\n')
     return { evidence, tail, screen: admissionScreen(evidence, tail) }
   }
-  /** Quiet the no-grid lane needs: a normal quiet window, never more than the budget allows. */
+  /** Quiet the no-grid lane needs: a normal quiet window, short enough that a check (one interval
+   *  early at worst) still finds a legal text start before the last one the Enter reserve allows. */
   const compatibilityQuietMs = (): number =>
     lifetime.deadline === null
       ? GENERATED_AGENT_INPUT_QUIET_MS
       : Math.min(
           GENERATED_AGENT_INPUT_QUIET_MS,
-          Math.max(0, lifetime.deadline - acceptedAt - enterReserveMs)
+          Math.max(0, lifetime.deadline - seq.enterReserveMs - CHECK_INTERVAL_MS - acceptedAt)
         )
 
   /** Startup proves the agent reads input; running only waits out blocking evidence. */
@@ -151,15 +166,17 @@ export function runGeneratedInputOperation(
       let marker = running || request.observedReady === true || observation.signalled()
       // Current evidence (a ready grid, or an older host's no-grid lane) is re-read each check;
       // the no-grid lane needs the expected consumer (or an unknown one) in front.
+      const { agent, readySignal } = seq
+      const requiredQuietMs = compatibilityQuietMs()
+      quietDueAt = observation.lastOutput + requiredQuietMs
       const noGrid =
-        !marker &&
-        admitsWithoutGrid(evidence, tail, agent, readySignal, quietMs, compatibilityQuietMs())
+        !marker && admitsWithoutGrid(evidence, tail, agent, readySignal, quietMs, requiredQuietMs)
       const current =
         noGrid || (!marker && gridShowsReadyComposer(evidence, agent, readySignal, quietMs))
       marker ||= current
       const quiet =
         !marker &&
-        permitsQuiet &&
+        seq.permitsQuiet &&
         (observation.quietArmed || evidence.bracketedPaste === true) &&
         quietMs >= GENERATED_AGENT_INPUT_QUIET_MS
       // A startup signal refused once is asked again only after the agent paints something new.
@@ -169,7 +186,8 @@ export function runGeneratedInputOperation(
           agent,
           screen,
           process: evidence.process,
-          quiet: (quiet && !marker) || noGrid || request.requireConsumer === true
+          quiet: (quiet && !marker) || noGrid || request.requireConsumer === true,
+          ...(request.requireConsumer ? { consumer: consumer() } : {})
         })
         // Output during the read voids quiet; positive evidence survives a busy footer.
         if (accepted && (marker || observed === observation.sequence)) {
@@ -186,33 +204,34 @@ export function runGeneratedInputOperation(
     }
   }
 
-  const gate = (enter: boolean): GeneratedInputFrameGate => ({
+  const gate = (frame: 'text' | 'enter'): GeneratedInputFrameGate => ({
     admit: async (typedText) => {
-      if (lifetime.retired) {
+      // Text is refused when the budget left cannot also hold its settle wait and Enter.
+      if (
+        lifetime.retired ||
+        (frame === 'text' &&
+          (lifetime.deadline === null || Date.now() + seq.enterReserveMs >= lifetime.deadline))
+      ) {
         return false
       }
       const { evidence, screen } = await read()
       return (
         !lifetime.retired &&
         admitsGeneratedInput({
-          agent,
+          agent: seq.agent,
           screen,
           process: evidence.process,
           quiet: request.requireConsumer === true,
-          typedText
+          ...(request.requireConsumer ? { consumer: consumer() } : {}),
+          typedText: typed(typedText)
         })
       )
     },
-    dispatching: () => lifetime.dispatching(enter)
+    // Whether this frame is the Enter comes from the sequence's selected target.
+    dispatching: () => lifetime.dispatching(frame === 'enter' || seq.carriesEnter)
   })
-  const textGate = gate(source.textCarriesEnter === true && submit)
-  const enterGate = gate(true)
-  // Text is refused when the budget left cannot also hold its settle wait and Enter.
-  const textAdmit = textGate.admit
-  textGate.admit = async (typedText) =>
-    lifetime.deadline !== null &&
-    Date.now() + enterReserveMs < lifetime.deadline &&
-    (await textAdmit(typedText))
+  const textGate = gate('text')
+  const enterGate = gate('enter')
 
   const body = async (): Promise<void> => {
     // The turn is taken in call order and owned from its grant, whatever happens after.
@@ -228,9 +247,15 @@ export function runGeneratedInputOperation(
       // A request with no caller deadline gets its wait-through-dialog budget from here.
       lifetime.arm(Date.now() + GENERATED_INPUT_TURN_BUDGET_MS)
       if (source.takeRetarget?.()) {
-        // A replacement terminal is a fresh start: its own evidence, proved like a launch.
+        // A replacement terminal is a fresh start: its own agent, rules, framing and evidence,
+        // proved like a launch.
+        seq = generatedInputSequence(
+          source.agent !== undefined ? source.agent : request.agent,
+          submit,
+          source
+        )
         observation.close()
-        observation = new GeneratedInputObservation(readySignal, () => wake?.())
+        observation = new GeneratedInputObservation(seq.readySignal, () => wake?.())
         await within(observation.start(source)).catch(() => undefined)
         running = false
       }
@@ -238,7 +263,7 @@ export function runGeneratedInputOperation(
         return lifetime.settle()
       }
       lifetime.textDone()
-      if (submit && !source.textCarriesEnter) {
+      if (submit && !seq.carriesEnter) {
         await within(
           raceUntil(
             source.settle(lifetime.signal),
@@ -270,23 +295,4 @@ export function runGeneratedInputOperation(
   }
   const finished = body()
   return lifetime.outcome.then((settled) => ({ outcome: settled, error, finished }))
-}
-
-/** Resolves when `promise` does or at `until`, whichever comes first. */
-function raceUntil(promise: Promise<unknown>, until: number, signal: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, Math.max(0, until - Date.now()))
-    const stop = (): void => clearTimeout(timer)
-    signal.addEventListener('abort', stop, { once: true })
-    promise.then(
-      () => {
-        stop()
-        resolve()
-      },
-      (reason: unknown) => {
-        stop()
-        reject(reason)
-      }
-    )
-  })
 }

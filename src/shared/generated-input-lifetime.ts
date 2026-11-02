@@ -25,6 +25,9 @@ export class GeneratedInputLifetime {
   })
   private textStarted = false
   private parent: GeneratedInputLifetime | null = null
+  // Listeners on signals that outlive the request (the PTY's lifecycle, the caller's), removed
+  // at retirement so finished requests are not retained by them.
+  private readonly unfollow: (() => void)[] = []
   deadline: number | null
 
   constructor(options: {
@@ -88,6 +91,9 @@ export class GeneratedInputLifetime {
       return
     }
     clearTimeout(this.timer)
+    for (const remove of this.unfollow.splice(0)) {
+      remove()
+    }
     this.controller.abort()
     // An abort raised inside a write is read after the writer records whether it was taken.
     queueMicrotask(() => this.settle())
@@ -177,8 +183,9 @@ export class GeneratedInputLifetime {
     }
     if (signal.aborted) {
       end()
-    } else {
+    } else if (!this.retired) {
       signal.addEventListener('abort', end, { once: true })
+      this.unfollow.push(() => signal.removeEventListener('abort', end))
     }
   }
 }
@@ -207,4 +214,27 @@ export function ownTurn(
   granted.catch(() => undefined)
   lifetime.signal.addEventListener('abort', () => queueMicrotask(release), { once: true })
   return { granted, release }
+}
+
+/** Resolves when `promise` does or at `until`, whichever comes first. */
+export function raceUntil(
+  promise: Promise<unknown>,
+  until: number,
+  signal: AbortSignal
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, Math.max(0, until - Date.now()))
+    const stop = (): void => clearTimeout(timer)
+    signal.addEventListener('abort', stop, { once: true })
+    promise.then(
+      () => {
+        stop()
+        resolve()
+      },
+      (reason: unknown) => {
+        stop()
+        reject(reason)
+      }
+    )
+  })
 }

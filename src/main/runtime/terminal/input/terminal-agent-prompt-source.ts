@@ -193,6 +193,9 @@ export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithOb
         return was
       },
       read: () => this.readGeneratedInputEvidence(state.target.ptyId, state.target.generation),
+      get agent() {
+        return state.target.agent
+      },
       get textCarriesEnter() {
         return state.target.submitWithPaste
       },

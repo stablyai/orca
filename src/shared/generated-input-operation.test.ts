@@ -4,8 +4,9 @@ import { GeneratedInputLifetime } from './generated-input-lifetime'
 import { GeneratedInputObservation } from './generated-input-observation'
 
 // A queue and terminal standing in for either source: one turn at a time, a ready composer.
-function harness() {
+function harness(lines: string[] = ['❯ ']) {
   const writes: string[] = []
+  let reads = 0
   let tail = Promise.resolve()
   const releases = { granted: 0, released: 0 }
   const observers = new Set<(data: string) => void>()
@@ -50,11 +51,14 @@ function harness() {
       return () => observers.delete(onData)
     },
     acquire,
-    read: async () => ({
-      screen: { lines: ['❯ '], alternateScreen: false },
-      process: { known: false },
-      bracketedPaste: true
-    }),
+    read: async () => {
+      reads += 1
+      return {
+        screen: { lines, alternateScreen: false },
+        process: { known: false },
+        bracketedPaste: true
+      }
+    },
     enterReserveMs: 0,
     writeText: async (gate) => {
       if (!(await gate.admit())) {
@@ -89,6 +93,7 @@ function harness() {
     })
   return {
     writes,
+    reads: () => reads,
     releases,
     observers,
     send,
@@ -154,6 +159,11 @@ describe('one owner for a generated request lifetime and its queue turn', () => 
     'installs one observer per queued send for %i sends and releases all',
     async (count) => {
       const h = harness()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: counts the observation's private per-chunk scan.
+      const scans = vi.spyOn(
+        GeneratedInputObservation.prototype as unknown as { scan: () => void },
+        'scan'
+      )
       const releaseQueue = await h.holdQueue()
       const sends = Array.from({ length: count }, (_, index) => h.send(`p${index}`, 60_000))
       await vi.advanceTimersByTimeAsync(0)
@@ -165,6 +175,9 @@ describe('one owner for a generated request lifetime and its queue turn', () => 
           observe(chunk)
         }
       }
+      // Each chunk is scanned once per observing send: work linear in Q times output.
+      expect(scans).toHaveBeenCalledTimes(count * 4)
+      scans.mockRestore()
       releaseQueue()
       const results = await Promise.all(sends)
       await Promise.all(results.map((result) => result.finished))
@@ -174,6 +187,41 @@ describe('one owner for a generated request lifetime and its queue turn', () => 
       expect(h.releases).toEqual({ granted: count + 1, released: count + 1 })
     }
   )
+})
+
+// K8: a send held at a dialog re-reads once per check interval (or once per output burst), so T
+// blocked terminals cost T reads per interval and nothing after their deadline.
+describe('reads while blocked', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it.each([10, 100])('bounds reads for %i terminals blocked at a dialog', async (terminals) => {
+    const dialog = ['Bypass Permissions', '❯ 1. No, exit', 'Enter to confirm · Esc to cancel']
+    const blocked = Array.from({ length: terminals }, () => harness(dialog))
+    const sends = blocked.map((h) => h.send('held', 60_000))
+    await vi.advanceTimersByTimeAsync(30_000)
+    const perInterval = 30_000 / 150
+    for (const h of blocked) {
+      expect(h.reads()).toBeLessThanOrEqual(perInterval + 2)
+    }
+    // One output burst wakes each blocked send once.
+    const before = blocked.map((h) => h.reads())
+    for (const h of blocked) {
+      for (const observe of h.observers) {
+        observe('x')
+        observe('y')
+      }
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    blocked.forEach((h, index) => expect(h.reads() - before[index]).toBeLessThanOrEqual(2))
+    await vi.advanceTimersByTimeAsync(30_001)
+    const results = await Promise.all(sends)
+    expect(results.every((result) => result.outcome === 'not-sent')).toBe(true)
+    const settled = blocked.map((h) => h.reads())
+    await vi.advanceTimersByTimeAsync(10_000)
+    blocked.forEach((h, index) => expect(h.reads()).toBe(settled[index]))
+    expect(blocked.every((h) => h.writes.length === 0 && h.observers.size === 0)).toBe(true)
+  })
 })
 
 describe('streaming-safe observation', () => {
@@ -197,5 +245,35 @@ describe('streaming-safe observation', () => {
     observation.close()
     emit('after close')
     expect(observation.tail.endsWith('after close')).toBe(false)
+  })
+
+  // K8: parser state stays bounded: an escape sequence that never ends, and output arriving while
+  // the subscription is set up, neither grow without limit nor drop what arrived.
+  it('bounds its escape carry and setup buffer', async () => {
+    const observation = new GeneratedInputObservation('claude-composer-prompt', () => {})
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads the observation's private parser state to bound it.
+    const internals = observation as unknown as { escapeCarry: string; pending: string }
+    let emit!: (data: string) => void
+    let replayed = 0
+    await observation.start({
+      observe: (onData) => {
+        emit = onData
+        // Output while setup is still running, past the setup bound.
+        for (let index = 0; index < 40; index += 1) {
+          onData('z'.repeat(1024))
+        }
+        return () => {}
+      },
+      replay: () => {
+        replayed += 1
+        return ''
+      }
+    })
+    expect(replayed).toBe(1)
+    expect(internals.pending).toBe('')
+    expect(observation.tail.length).toBe(8 * 1024)
+    emit(`\x1b]0;${'t'.repeat(10_000)}`)
+    expect(internals.escapeCarry.length).toBeLessThanOrEqual(4096)
+    observation.close()
   })
 })
