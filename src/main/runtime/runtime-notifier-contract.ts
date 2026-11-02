@@ -16,6 +16,7 @@ import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identi
 import type { TerminalPaneRevealTarget } from '../../shared/terminal-pane-reveal'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
+import type { PreparedAgentLaunchNotice } from '../../shared/prepared-agent-launch'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type {
@@ -27,6 +28,7 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
+  RuntimeNewTerminalTabPlacement,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
@@ -78,6 +80,7 @@ export type RuntimeNotifier = {
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       afterTabId?: string
+      newTabPlacement?: RuntimeNewTerminalTabPlacement
       shellOverride?: string
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
@@ -164,6 +167,7 @@ export type RuntimeNotifier = {
   ): Promise<void>
   /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
   workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
+  preparedAgentLaunchNotice?(notice: PreparedAgentLaunchNotice): void
   // Only the host renderer owns slept-agent wake records; phones request navigation-free wake through this optional bridge.
   resumeSleepingAgents?(worktreeId: string): void
   terminalFitOverrideChanged(

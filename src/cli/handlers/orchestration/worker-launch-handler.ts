@@ -10,7 +10,11 @@ import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { isDevCliInvocation } from './runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
 import { formatWorkerStart, type WorkerReleaseReceipt } from './worker-output'
-import { isUnobservedTurnStart, WORKER_START_VIEW } from './worker-start-agent-view'
+import {
+  acceptedPendingStart,
+  isUnobservedTurnStart,
+  WORKER_START_VIEW
+} from './worker-start-agent-view'
 import {
   printOrchestrationResult,
   renderOrchestrationArgv,
@@ -56,6 +60,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       residualResources: unknown[]
       nextCommands?: string[]
       next?: string
+      pending?: unknown
     }>(client, flags, 'orchestration.workerStart', {
       task,
       ...(spec ? { spec } : {}),
@@ -82,7 +87,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     }).catch(async (error: unknown) => {
       throw await explainOlderRuntimeRunRequired(client, error)
     })
-    if (result.result.state !== 'ready') {
+    const pending = acceptedPendingStart(result.result)
+    if (result.result.state !== 'ready' && !pending) {
       process.exitCode = 1
     }
     const keepOpenState =
@@ -100,7 +106,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     if (flags.has('full')) {
       printResult(renderedResult, json, (value) =>
         withReceiptNext(
-          `${formatWorkerStart(value)}${value.keptOpen ? '\nKept open after it finishes' : ''}`,
+          `${formatWorkerStart(value)}${pending ? `\nStill pending (launch ${pending.operationId}): Setup or the agent launch continues and the task will be delivered; don't resend.` : ''}${value.keptOpen ? '\nKept open after it finishes' : ''}`,
           value
         )
       )

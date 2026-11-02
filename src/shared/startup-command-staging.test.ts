@@ -7,6 +7,7 @@ import {
   utimesSync,
   writeFileSync
 } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -14,6 +15,7 @@ import {
   STAGED_STARTUP_COMMAND_STALE_MS,
   discardStagedStartupCommand,
   stageStartupCommand,
+  sweepPriorBootOwnedStaging,
   sweepStaleStagedStartupCommands
 } from './startup-command-staging'
 
@@ -157,6 +159,76 @@ describe('stageStartupCommand', () => {
       expect(readdirSync(directory)).toEqual([])
     }
   )
+
+  it.each(['ksh', 'mksh'])('evaluates an owned launch in its original %s reader', (shell) => {
+    const staged = stageStartupCommand({
+      command: `cx '${'x'.repeat(600)}'`,
+      shellPath: `/bin/${shell}`,
+      platform: 'linux',
+      orcaBuiltLine: true,
+      directory,
+      owned: true
+    })
+    expect(staged.command).toBe(`eval "$(command cat -- '${staged.scriptPath}')"`)
+    discardStagedStartupCommand(staged)
+  })
+
+  it('keeps owned launch files private and outside age-based cleanup until exact retirement', () => {
+    const staged = stageStartupCommand({
+      command: `cx '${'x'.repeat(600)}'`,
+      shellPath: '/bin/zsh',
+      platform: 'darwin',
+      directory,
+      owned: true
+    })
+    expect(staged.directoryPath).toBeDefined()
+    expect(statSync(staged.directoryPath!).mode & 0o777).toBe(0o700)
+    expect(statSync(staged.scriptPath!).mode & 0o777).toBe(0o600)
+    expect(staged.command).toBe(`. '${staged.scriptPath}'`)
+    // Fixed timestamps far past the age cutoff, so the outcome never depends on the wall clock.
+    const stagedAtSeconds = 1_000_000
+    for (const path of [staged.directoryPath!, staged.scriptPath!]) {
+      utimesSync(path, stagedAtSeconds, stagedAtSeconds)
+    }
+    sweepStaleStagedStartupCommands({
+      directory,
+      now: stagedAtSeconds * 1000 + 10 * STAGED_STARTUP_COMMAND_STALE_MS
+    })
+    expect(readFileSync(staged.scriptPath!, 'utf8')).toContain(`cx '${'x'.repeat(600)}'`)
+    discardStagedStartupCommand(staged)
+    expect(readdirSync(directory)).toEqual([])
+    expect(() =>
+      stageStartupCommand({
+        command: 'x'.repeat(600),
+        shellPath: '/bin/zsh',
+        platform: 'darwin',
+        directory: join(directory, 'missing'),
+        owned: true
+      })
+    ).toThrow()
+  })
+
+  it('reclaims owned launch files only after the host has booted again', () => {
+    const owned = (ownerBoot?: string) =>
+      stageStartupCommand({
+        command: `cx '${'x'.repeat(600)}'`,
+        shellPath: '/bin/zsh',
+        platform: 'darwin',
+        directory,
+        owned: true,
+        ...(ownerBoot ? { owner: { pid: process.pid, boot: ownerBoot } } : {})
+      })
+    const crashedBeforeReboot = owned('boot-before')
+    const untagged = owned()
+    const current = owned('boot-now')
+    sweepPriorBootOwnedStaging({
+      directory,
+      bootTag: createHash('sha256').update('boot-now').digest('hex').slice(0, 16)
+    })
+    expect(() => statSync(crashedBeforeReboot.directoryPath!)).toThrow()
+    expect(readFileSync(current.scriptPath!, 'utf8')).toContain('cx ')
+    expect(readFileSync(untagged.scriptPath!, 'utf8')).toContain('cx ')
+  })
 
   it('types the full command and says so when the script cannot be written', () => {
     const command = 'a'.repeat(600)

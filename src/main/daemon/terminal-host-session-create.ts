@@ -112,7 +112,8 @@ export async function createOrAttachTerminalSession(
     opts.cancelSignal
       ? { signal: opts.cancelSignal, error: () => new TerminalAttachCanceledError(sessionId) }
       : undefined,
-    describeAgentRestore(opts)
+    describeAgentRestore(opts),
+    opts.reservedCapacity
   )
   const paced = lease instanceof Promise
   if (lease instanceof Promise) {

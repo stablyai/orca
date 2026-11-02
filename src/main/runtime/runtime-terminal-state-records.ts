@@ -89,6 +89,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
+  /** The incarnation whose prepared-launch startup (composer hold, view) already ran; never saved. */
+  preparedStartupIncarnationId?: PtyIncarnationId
   launchAgent: TuiAgent | null
   /** Identify flagged unmanaged --command panes before foreground reads; null for adopted/restored panes. */
   launchCommandAgent: TuiAgent | null

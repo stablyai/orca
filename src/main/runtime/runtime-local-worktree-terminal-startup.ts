@@ -1,6 +1,11 @@
+import type { PendingPreparedAgentLaunch } from '../../shared/prepared-agent-launch'
 import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
+import {
+  startPreparedLocalWorktreeTerminals,
+  type PreparedStartupPorts
+} from './runtime-prepared-worktree-terminal-startup'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
@@ -18,12 +23,9 @@ import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from './runtime-worktree-agent-startup'
-import type {
-  WorktreeProvisionTerminalOptions,
-  WorktreeTerminalProvisioningArgs
-} from './runtime-worktree-terminal-provisioning'
+import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
 
-type Ports = {
+type Ports = PreparedStartupPorts & {
   canSpawn: boolean
   provisionInBackground?: () => boolean
   createTerminal: (
@@ -52,6 +54,7 @@ type Ports = {
 
 export type RuntimeLocalWorktreeTerminalStartupResult = {
   warning?: string
+  pendingStartup?: PendingPreparedAgentLaunch
   returnedSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
   didSpawnStartup: boolean
@@ -89,6 +92,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalTabId: string | null = null
   let startupTerminalPaneKey: string | null = null
   let startupTerminalPtyId: string | null = null
+  const prepared = await startPreparedLocalWorktreeTerminals(args, provisionArgs(args, null, true))
+  if (prepared && !(prepared instanceof Error)) {
+    return prepared
+  }
   let sequencedStartup = startup
   let wrappedSetupCommand: string | undefined
   if (startup && setup?.waitForAgentStartup === true) {
@@ -111,7 +118,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   // Main owns failed agent startup too, keeping its reason visible without a terminal service.
   if (sequencedStartup && (ports.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)) {
     try {
-      const launchRuntime = args.startupLaunchRuntime
+      // Nothing was accepted: report it the way the shipped start reports a failed agent terminal.
+      const launchRuntime = prepared ?? args.startupLaunchRuntime
       if (launchRuntime instanceof Error && !ORCA_LAYOUT_OWNER_IS_MAIN) {
         throw launchRuntime
       }
@@ -133,7 +141,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         telemetry: sequencedStartup.telemetry,
         // Keep failed starts visible in their panes.
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
-        ...ownerSurfacing(shouldActivate)
+        ...(shouldActivate ? {} : { surfaceOwner: false as const })
       })
       request.onStartupTerminalCreated?.(terminal)
       if (args.draftPaste) {
@@ -253,7 +261,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 }
 
 function provisionArgs(
-  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],
+  args: StartupArgs,
   primaryTerminalHandle: string | null,
   hasStartupTerminal: boolean,
   wrappedSetupCommand?: string
@@ -275,9 +283,7 @@ function provisionArgs(
   }
 }
 
-function callerProvidesInitialSurface(
-  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]
-): boolean {
+function callerProvidesInitialSurface(args: StartupArgs): boolean {
   // Background agent creates already leave their initial surface to the caller.
   return (
     args.promisedAgentChat === true ||
@@ -287,17 +293,12 @@ function callerProvidesInitialSurface(
   )
 }
 
+type StartupArgs = Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]
 function setupPlatform(
   setup: CreateWorktreeResult['setup'],
   fallback: 'windows' | 'posix'
 ): 'windows' | 'posix' {
   return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallback)
-}
-
-function ownerSurfacing(
-  shouldSurface: boolean
-): Pick<WorktreeProvisionTerminalOptions, 'surfaceOwner'> {
-  return shouldSurface ? {} : { surfaceOwner: false }
 }
 
 function appendFailure(

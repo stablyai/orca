@@ -1,3 +1,5 @@
+import { worktreeCreateSetupReceipt } from '../runtime-worktree-create-setup-receipt'
+import { preparedWorktreeStart, type PreparedStart } from './prepared-worktree-start'
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS,
@@ -32,6 +34,8 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { applyWorkspaceCreatePluginHook } from '../../plugins/hooks/workspace-create-plugin-hook'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
+  /** The prepared-terminal layer above implements it; a local create starts its agent there. */
+  abstract startSetupAgentTerminals(...args: Parameters<PreparedStart>): ReturnType<PreparedStart>
   protected abstract resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo
@@ -125,6 +129,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         deps: {
           store,
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
+          startPrepared: (worktree, options, prompts) =>
+            preparedWorktreeStart(this, worktree, args)(options, prompts),
           provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
           createTerminal: (selector, options) =>
             this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
@@ -223,7 +229,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       startupTerminalHandle,
       startupTerminalTabId,
       startupTerminalPaneKey,
-      startupTerminalPtyId
+      startupTerminalPtyId,
+      pendingStartup
     } = await startRuntimeLocalWorktreeTerminals({
       request: args,
       repo,
@@ -239,6 +246,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning,
       ports: {
         canSpawn: Boolean(this.ptyController?.spawn),
+        startPrepared: preparedWorktreeStart(this, worktree, args, setup, defaultTabs),
         provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
         createTerminal: (selector, options) =>
           this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree),
@@ -270,22 +278,14 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       ...(returnedSetup ? { setup: returnedSetup } : {}),
       ...(args.awaitTerminalProvisioning
         ? {
-            setupReceipt: {
-              requested: effectiveDecision,
+            setupReceipt: worktreeCreateSetupReceipt({
+              effectiveDecision,
               hookFound,
-              startupPolicy: setup?.waitForAgentStartup
-                ? ('wait-for-setup' as const)
-                : ('start-immediately' as const),
-              state: !hookFound
-                ? ('not_configured' as const)
-                : effectiveDecision === 'skip' || !shouldRunSetup
-                  ? ('skipped' as const)
-                  : // The in-process setup hook already started; spawn_failed would strand retrying callers.
-                    didSpawnSetup || didStartInProcessSetupHook
-                    ? ('running' as const)
-                    : ('spawn_failed' as const),
-              ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
-            }
+              shouldRunSetup,
+              waitForAgentStartup: setup?.waitForAgentStartup,
+              started: didSpawnSetup || didStartInProcessSetupHook,
+              setupTerminalHandle
+            })
           }
         : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
@@ -297,6 +297,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       ...(addResult.localBaseRefUpdateSuggestion
         ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
         : {}),
+      ...(pendingStartup ? { startupTerminal: { spawned: false, pending: pendingStartup } } : {}),
       ...(didSpawnStartup && startupTerminalHandle
         ? {
             startupTerminal: {

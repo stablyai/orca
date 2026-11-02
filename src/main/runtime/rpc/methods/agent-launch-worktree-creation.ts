@@ -112,27 +112,34 @@ export function agentLaunchWorkspaceFactory(
           ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
           // Chats have no startup command to sequence after setup; provision setup synchronously and return its completion token.
           awaitTerminalProvisioning: true,
+          ...(startupAgent ? { preparedAgentLaunch: true } : {}),
           observeSetupCompletion: true
         })
+        const preparedTerminal = result.startupTerminal?.pending
+          ? await runtime.waitForPreparedAgentTerminal(result.startupTerminal.pending)
+          : undefined
+        const startupTerminal = preparedTerminal ?? result.startupTerminal
         if (!startupAgent) {
           await waitForStructuredSetup(runtime, result.setupReceipt)
         }
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-        const warning =
+        const createWarning =
           result.warnings?.reduce(
             (combined, lineage) => combineLaunchWarnings(combined, lineage.message),
             result.warning
           ) ?? result.warning
+        const warning = preparedTerminal?.warning
+          ? combineLaunchWarnings(createWarning, preparedTerminal.warning)
+          : createWarning
         return {
           worktreeId: result.worktree.id,
           workspacePath: result.worktree.path,
           connectionId: repo.connectionId ?? null,
-          startupTerminalHandle: result.startupTerminal?.handle,
-          startupTerminalCreation,
+          startupTerminalHandle: startupTerminal?.handle,
+          // A prepared agent terminal is created by its publication, not the startup callback.
+          startupTerminalCreation: preparedTerminal ?? startupTerminalCreation,
           ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {}),
-          ...(result.startupTerminal?.paneKey
-            ? { startupTerminalPaneKey: result.startupTerminal.paneKey }
-            : {}),
+          ...(startupTerminal?.paneKey ? { startupTerminalPaneKey: startupTerminal.paneKey } : {}),
           ...(warning ? { warning } : {})
         }
       } catch (error) {

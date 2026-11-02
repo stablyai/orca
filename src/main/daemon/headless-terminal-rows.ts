@@ -45,3 +45,29 @@ export function readHeadlessTerminalRows(
   }
   return rows
 }
+
+/** Ctrl+L is safe at an empty PSReadLine prompt; PowerShell’s continuation prompt (>>) is excluded. */
+export function isCursorOnEmptyPromptLine(terminal: Terminal): boolean {
+  const buffer = terminal.buffer.active
+  const line = buffer.getLine(buffer.baseY + buffer.cursorY)
+  if (!line) {
+    return false
+  }
+  const upToCursor = line.translateToString(true, 0, buffer.cursorX).trimEnd()
+  const fullLine = line.translateToString(true).trimEnd()
+  return fullLine === upToCursor && upToCursor.endsWith('>') && !upToCursor.endsWith('>>')
+}
+
+/**
+ * The cursor's row is one whole line of the normal screen: no program owns an alternate screen, and
+ * no wrap runs into or out of the row, so a line inserted above it cannot split what is typed there.
+ */
+export function isCursorOnWholeNormalLine(terminal: Terminal): boolean {
+  const buffer = terminal.buffer.active
+  const row = buffer.baseY + buffer.cursorY
+  return (
+    buffer.type === 'normal' &&
+    buffer.getLine(row)?.isWrapped === false &&
+    buffer.getLine(row + 1)?.isWrapped !== true
+  )
+}

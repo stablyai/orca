@@ -105,14 +105,15 @@ export function reconcileUnpublishedTerminalCreation(
 export function registerPendingTerminalCreation(
   pendingCreations: Map<string, PendingTerminalCreation>,
   sessionId: string,
-  creation: TerminalCreationWork
+  creation: TerminalCreationWork,
+  retainPhysical = false
 ): (published: boolean) => void {
   const settled = Promise.withResolvers<void>()
   const pending: PendingTerminalCreation = {
     completion: settled.promise,
     recover: async () => {
       const disposition = await creation.completion
-      if (disposition.kind !== 'no-fork') {
+      if (!retainPhysical && disposition.kind !== 'no-fork') {
         await disposition.recover?.()
       }
     }
@@ -207,7 +208,8 @@ export async function runTerminalCreation<Result>(
     const finishPending = registerPendingTerminalCreation(
       pendingCreations,
       opts.sessionId,
-      creation
+      creation,
+      opts.retainOnPublicationFailure
     )
     let published = false
     try {
@@ -221,7 +223,11 @@ export async function runTerminalCreation<Result>(
     await creation.finish(reconcileUnpublishedTerminalCreation(sessions, opts.sessionId))
     const disposition = await creation.completion
     requestedOptions.onCreationDisposition?.(disposition)
-    if (!sessions.has(opts.sessionId) && disposition.kind !== 'no-fork') {
+    if (
+      !opts.retainOnPublicationFailure &&
+      !sessions.has(opts.sessionId) &&
+      disposition.kind !== 'no-fork'
+    ) {
       // Failed unpublished resources keep the same ordinary cleanup owner across Retry/disposal.
       recoverUnpublishedTerminalCreation(disposition)
     }

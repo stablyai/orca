@@ -18,6 +18,12 @@ import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc
 
 export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscriptions {
   private colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
+  private readonly preparedLaunchReconnectListeners = new Set<() => void>()
+
+  onPreparedLaunchReconnect(listener: () => void): () => void {
+    this.preparedLaunchReconnectListeners.add(listener)
+    return () => this.preparedLaunchReconnectListeners.delete(listener)
+  }
 
   setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
     this.colorQueryReplyColors = colors
@@ -44,6 +50,9 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       this.resyncBackgroundedSessions()
       // Replacement daemons lack colors; pushes sent while disconnected were dropped.
       this.syncColorQueryReplyColors()
+      for (const listener of this.preparedLaunchReconnectListeners) {
+        queueMicrotask(listener)
+      }
     }
   }
 

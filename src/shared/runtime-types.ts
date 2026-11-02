@@ -165,6 +165,7 @@ export type {
   RuntimeTerminalOrphanTopologyGroup,
   RuntimeTerminalOrphanTopologyTab,
   RuntimeTerminalPresentation,
+  RuntimeNewTerminalTabPlacement,
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalPromptStage,
   RuntimeTerminalRead,

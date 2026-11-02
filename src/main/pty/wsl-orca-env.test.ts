@@ -8,6 +8,7 @@ import {
 } from '../../shared/setup-agent-sequencing'
 import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from './wsl-orca-env'
 import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from '../ipc/pty/host-env/remote-viewer-clipboard-env'
+import { SETUP_STATUS_FILE_ENV } from '../../shared/observed-setup-launch'
 
 describe('addOrcaWslInteropEnv', () => {
   it.each(['1', '0'])(
@@ -62,6 +63,17 @@ describe('addOrcaWslInteropEnv', () => {
       `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
       `${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/u`
     ])
+  })
+
+  it('translates the host Setup status file so the guest writes the file the daemon reads', () => {
+    const env: Record<string, string> = {
+      [SETUP_STATUS_FILE_ENV]:
+        'C:\\Users\\me\\AppData\\Local\\Temp\\orca-owned-launch-w-x\\setup-status'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV?.split(':')).toContain(`${SETUP_STATUS_FILE_ENV}/p`)
   })
 
   it('preserves existing WSLENV entries and does not duplicate the handle entry', () => {

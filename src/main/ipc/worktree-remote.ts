@@ -154,6 +154,7 @@ import {
   type WorktreeCreatePathClaim
 } from '../worktree-create-in-flight'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { PreparedLaunchNotAcceptedError } from '../runtime/terminal/launch/prepared-terminal-pending'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
@@ -179,6 +180,7 @@ type StagedStartupResult = {
   startupTerminal?: CreateWorktreeResult['startupTerminal']
   activationSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
+  defaultTabsHandled?: true
   warning?: string
 }
 
@@ -314,7 +316,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
   return { lineage, workspaceLineage }
 }
 
-async function spawnLocalStartupAndSetupTerminals(args: {
+export async function spawnLocalStartupAndSetupTerminals(args: {
   runtime: OrcaRuntimeService
   worktree: Worktree
   startup: CreateWorktreeArgs['startup']
@@ -323,10 +325,66 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
   /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
   automationCreate: boolean
+  preparedAgentLaunch?: true
 }): Promise<StagedStartupResult> {
   const { runtime, worktree, startup, defaultTabs, createdWithAgent } = args
   const userAct = args.automationCreate ? {} : { wslUserAct: true as const }
   let { setup } = args
+  if (startup && args.preparedAgentLaunch && isTuiAgent(createdWithAgent)) {
+    const first = defaultTabs?.tabs[0]
+    const prepared = await runtime
+      .startSetupAgentTerminals(
+        `id:${worktree.id}`,
+        setup?.waitForAgentStartup ? setup : undefined,
+        {
+          command: startup.command,
+          env: startup.env,
+          launchConfig: startup.launchConfig,
+          launchAgent: createdWithAgent,
+          viewMode: startup.viewMode,
+          startupCommandDelivery: startup.startupCommandDelivery,
+          telemetry: startup.telemetry,
+          ...(first?.title ? { title: first.title } : {}),
+          surfaceOwner: false,
+          ...userAct
+        },
+        () => {},
+        worktree,
+        undefined,
+        first?.color
+      )
+      .catch((error: unknown) => {
+        // Nothing was accepted, so the shipped start below owns this agent instead.
+        if (error instanceof PreparedLaunchNotAcceptedError) {
+          console.warn('[worktree-create] prepared agent start was not accepted', error.message)
+          return null
+        }
+        throw error
+      })
+    if (prepared) {
+      const provisioned = await runtime.provisionManagedWorktreeTerminals(
+        {
+          worktreeSelector: `id:${worktree.id}`,
+          worktreeId: worktree.id,
+          worktreePath: worktree.path,
+          hasStartupTerminal: true,
+          ...(setup && !setup.waitForAgentStartup ? { setup } : {}),
+          setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(setup, 'posix'),
+          ...(defaultTabs
+            ? { defaultTabs: { ...defaultTabs, tabs: defaultTabs.tabs.slice(1) } }
+            : {}),
+          surfaceOwner: false,
+          ...userAct
+        },
+        worktree
+      )
+      return {
+        didSpawnSetup: setup?.waitForAgentStartup === true || provisioned.setupSpawned,
+        defaultTabsHandled: true,
+        startupTerminal: { spawned: false, pending: prepared.pending }
+      }
+    }
+  }
   if (!startup || defaultTabs?.tabs.length) {
     return { didSpawnSetup: false }
   }
@@ -1725,13 +1783,18 @@ async function performLocalWorktreeCreate(
       setup,
       defaultTabs,
       createdWithAgent: args.createdWithAgent,
-      automationCreate: Boolean(args.automationProvenance)
+      automationCreate: Boolean(args.automationProvenance),
+      ...(args.preparedAgentLaunch ? { preparedAgentLaunch: true } : {})
     })
   )
 
   // Automation terminals are host-provisioned, so return none for renderer launch.
   const provisionedByHost = Boolean(args.automationProvenance)
-  if (provisionedByHost && (setup || defaultTabs?.tabs.length)) {
+  if (
+    provisionedByHost &&
+    !stagedStartup.defaultTabsHandled &&
+    (setup || defaultTabs?.tabs.length)
+  ) {
     void runtime.provisionManagedWorktreeTerminals(
       {
         worktreeSelector: `id:${worktree.id}`,
@@ -1773,7 +1836,7 @@ async function performLocalWorktreeCreate(
             : setup && !stagedStartup.didSpawnSetup
               ? { setup }
               : {}),
-          ...(defaultTabs ? { defaultTabs } : {})
+          ...(defaultTabs && !stagedStartup.defaultTabsHandled ? { defaultTabs } : {})
         }),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }

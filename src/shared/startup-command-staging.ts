@@ -1,13 +1,20 @@
 /** Stage long/multiline launches on the PTY host: ready markers may precede raw mode, so MAX_CANON truncates long lines
  * (1024 bytes on macOS), and raw newlines submit early in bash 3.2. Self-delete scripts before starting the agent. */
-import { randomBytes } from 'node:crypto'
-import { readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import { chmodSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hasControlByte, TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from './startup-line-prompt-carry'
 import { quoteStartupArg } from './tui-agent-startup-shell'
+import type { PreparedLaunchIncarnation } from './prepared-agent-launch'
 
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
+const OWNED_STAGING_PREFIX = 'orca-owned-launch-'
+const OWNED_STAGING_BOOT = /^orca-owned-launch-([0-9a-f]{16})-/
+/** Staged without a boot: its writer and reader files carry the proof instead. */
+export const OWNED_STAGING_WRITER_PREFIX = 'orca-owned-launch-w-'
+export const OWNED_STAGING_WRITER_FILE = 'writer'
+export const OWNED_STAGING_READER_FILE = 'reader'
 
 /** Which delivery ran for a spawn's typed startup line, decided by the host that owns the PTY. */
 export type StartupLineDelivery = 'typed' | 'staged' | 'typed-after-stage-failed'
@@ -21,6 +28,7 @@ export type StartupCommandStaging = {
   delivery: StartupLineDelivery
   /** Present while the script exists; the host unlinks it if the PTY exits before sourcing it. */
   scriptPath?: string
+  directoryPath?: string
   /** Why staging failed, for the host's log. */
   failure?: string
 }
@@ -64,7 +72,10 @@ export function shouldStageStartupCommand(args: {
   return needsStaging && (SOURCING_SHELLS.has(shellName) || args.orcaBuiltLine === true)
 }
 
-function stagedScriptLine(shellName: string | null, quotedPath: string): string {
+function stagedScriptLine(shellName: string | null, quotedPath: string, owned?: true): string {
+  if (owned && (shellName === 'ksh' || shellName === 'mksh')) {
+    return `eval "$(command cat -- ${quotedPath})"`
+  }
   if (shellName === 'fish') {
     // fish sourcing loses job control; eval preserves typed-line behavior.
     return `eval (string collect < ${quotedPath})`
@@ -82,20 +93,26 @@ export function stageStartupCommand(args: {
   orcaBuiltLine?: boolean
   platform?: NodeJS.Platform
   directory?: string
+  owned?: true
+  /** The daemon that owns the launch; a later boot, or its exit with no live reader, frees its files. */
+  owner?: PreparedLaunchIncarnation
 }): StartupCommandStaging {
   const platform = args.platform ?? process.platform
   if (!shouldStageStartupCommand({ ...args, platform })) {
     return { command: args.command, delivery: 'typed' }
   }
   const directory = args.directory ?? tmpdir()
-  if (!staleSweepStarted) {
+  if (!args.owned && !staleSweepStarted) {
     staleSweepStarted = true
     // Crash cleanup must not delay launch.
     setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
   const shellName = stagingShellName(args.shellPath)
+  const directoryPath = args.owned
+    ? createOwnedStagingDirectory({ owner: args.owner, directory })
+    : undefined
   const scriptPath = join(
-    directory,
+    directoryPath ?? directory,
     `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
   )
   const quotedPath = quoteStartupArg(scriptPath, 'posix')
@@ -107,6 +124,12 @@ export function stageStartupCommand(args: {
       { mode: 0o600, flag: 'wx' }
     )
   } catch (error) {
+    if (args.owned) {
+      if (directoryPath) {
+        rmSync(directoryPath, { recursive: true, force: true })
+      }
+      throw error
+    }
     return {
       command: args.command,
       delivery: 'typed-after-stage-failed',
@@ -114,10 +137,43 @@ export function stageStartupCommand(args: {
     }
   }
   return {
-    command: stagedScriptLine(shellName, quotedPath),
+    command: stagedScriptLine(shellName, quotedPath, args.owned),
     delivery: 'staged',
-    scriptPath
+    scriptPath,
+    ...(directoryPath ? { directoryPath } : {})
   }
+}
+
+/** A private directory this daemon generation owns; the collector removes it once nothing can still use it. */
+export function createOwnedStagingDirectory(args: {
+  owner?: PreparedLaunchIncarnation
+  directory?: string
+}): string {
+  const bootTag = args.owner?.boot ? ownedStagingBootTag(args.owner.boot) : undefined
+  const directoryPath = mkdtempSync(
+    join(
+      args.directory ?? tmpdir(),
+      bootTag ? `${OWNED_STAGING_PREFIX}${bootTag}-` : OWNED_STAGING_WRITER_PREFIX
+    )
+  )
+  try {
+    chmodSync(directoryPath, 0o700)
+    if (!bootTag && args.owner) {
+      writeFileSync(
+        join(directoryPath, OWNED_STAGING_WRITER_FILE),
+        JSON.stringify({
+          pid: args.owner.pid,
+          namespace: args.owner.namespace,
+          start: args.owner.start
+        }),
+        { mode: 0o600, flag: 'wx' }
+      )
+    }
+  } catch (error) {
+    rmSync(directoryPath, { recursive: true, force: true })
+    throw error
+  }
+  return directoryPath
 }
 
 /** Explain fallback because the full typed line may leave the shell awaiting more input. */
@@ -137,6 +193,9 @@ export function discardStagedStartupCommand(staging: StartupCommandStaging | und
   }
   try {
     rmSync(staging.scriptPath, { force: true })
+    if (staging.directoryPath) {
+      rmSync(staging.directoryPath, { recursive: true, force: true })
+    }
   } catch {
     // The age-gated sweep is the fallback.
   }
@@ -161,6 +220,54 @@ export function sweepStaleStagedStartupCommands(args: { directory?: string; now?
       if (now - statSync(path).mtimeMs > STAGED_STARTUP_COMMAND_STALE_MS) {
         rmSync(path, { force: true })
       }
+    } catch {
+      // Raced another instance's sweep.
+    }
+  }
+}
+
+export function ownedStagingBootTag(boot: string): string {
+  return createHash('sha256').update(boot).digest('hex').slice(0, 16)
+}
+
+/** Name the shell that can read this path before handing it over; a failed record keeps it unknown. */
+export function recordStagedStartupReader(
+  staging: StartupCommandStaging,
+  pid: number | null | undefined
+): void {
+  if (!staging.directoryPath) {
+    return
+  }
+  try {
+    if (!pid) {
+      throw new Error('reader_unknown')
+    }
+    writeFileSync(join(staging.directoryPath, OWNED_STAGING_READER_FILE), String(pid), {
+      mode: 0o600,
+      flag: 'wx'
+    })
+  } catch {
+    // Without a named reader the writer's exit proves nothing, so drop that proof too.
+    rmSync(join(staging.directoryPath, OWNED_STAGING_WRITER_FILE), { force: true })
+  }
+}
+
+/** Owned launches are never age-swept; only a later host boot proves their reader is gone. */
+export function sweepPriorBootOwnedStaging(args: { directory?: string; bootTag: string }): void {
+  const directory = args.directory ?? tmpdir()
+  let names: string[]
+  try {
+    names = readdirSync(directory)
+  } catch {
+    return
+  }
+  for (const name of names) {
+    const tag = OWNED_STAGING_BOOT.exec(name)?.[1]
+    if (!tag || tag === args.bootTag) {
+      continue
+    }
+    try {
+      rmSync(join(directory, name), { recursive: true, force: true })
     } catch {
       // Raced another instance's sweep.
     }

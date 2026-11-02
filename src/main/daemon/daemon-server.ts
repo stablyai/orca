@@ -20,6 +20,7 @@ import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { checkPtySpawnHealth } from './pty-subprocess'
 import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
+import { collectOwnedStartupStaging } from './prepared-agent-launch-staging-collector'
 import { TerminalHost } from './terminal-host'
 import { DaemonAutomaticWorkGuard } from './daemon-automatic-work-guard'
 import { answerAutomaticWorkRequest } from './daemon-automatic-work-protocol'
@@ -136,6 +137,7 @@ export class DaemonServer {
       onTransportChanged: () => this.lifecycle.reevaluateIdleShutdown(),
       onConnectionAccepted: () => this.lifecycle.onConnectionAccepted(),
       onAuthenticatedPair: () => {
+        void collectOwnedStartupStaging()
         options.onAuthenticatedClientPair?.()
         this.lifecycle.onAuthenticatedPair()
       },
@@ -250,6 +252,8 @@ export class DaemonServer {
     }
     // Only the endpoint winner may inspect or rewrite the automatic-work marker.
     this.automaticWork.start()
+    // Crash leftovers from launches this host can no longer read; never waits on launch admission.
+    void collectOwnedStartupStaging()
   }
 
   shutdown(): Promise<void> {

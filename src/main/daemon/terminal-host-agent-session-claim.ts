@@ -1,3 +1,5 @@
+import type { PreparedLaunchIncarnation } from '../../shared/prepared-agent-launch'
+import type { RawPtySpawnObserver } from './pty-subprocess'
 import { terminalStartError } from '../../shared/terminal-start-failure'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalCreationWork } from './terminal-creation-work'
@@ -10,6 +12,11 @@ import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
 export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
+  retainOnPublicationFailure?: true
+  /** The daemon incarnation that owns this launch's staged files, for crash collection. */
+  ownedStaging?: PreparedLaunchIncarnation
+  reservedCapacity?: () => void
+  rawSpawnObserver?: () => RawPtySpawnObserver
   agentSessionGeneration?: string
   /** Request identity for the fork gate; absent for in-process callers. */
   spawnAdmission?: { clientId: string; declaredIntent: SpawnIntent | null; deadlineAt: number }

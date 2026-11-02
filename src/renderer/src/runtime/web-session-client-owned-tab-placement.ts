@@ -10,6 +10,8 @@ import {
 export type ClientOwnedAdoptedTab = {
   tabId: string
   groupId: string
+  /** The next tab this client already placed, in the host's order; first placement lands before it. */
+  beforeTabId?: string
 }
 
 export type ClientOwnedPlacementInput = {
@@ -80,7 +82,7 @@ type WorkingGroup = {
   tabOrder: string[]
 }
 
-/** Append unseen snapshot tabs, apply client placements/rekeys and drop vanished tabs with local-close focus repair. Existing tabs keep client order/groups; only explicit intent changes focus. */
+/** Place unseen snapshot tabs (before their host-order successor, else appended), apply client placements/rekeys and drop vanished tabs with local-close focus repair. Existing tabs keep client order/groups; only explicit intent changes focus. */
 export function reconcileClientOwnedTabPlacement(
   input: ClientOwnedPlacementInput
 ): ClientOwnedPlacementResult {
@@ -175,7 +177,8 @@ export function reconcileClientOwnedTabPlacement(
     }
     const target = ensureGroup(targetGroupId)
     if (!target.tabOrder.includes(adopted.tabId)) {
-      target.tabOrder.push(adopted.tabId)
+      const before = adopted.beforeTabId ? target.tabOrder.indexOf(adopted.beforeTabId) : -1
+      target.tabOrder.splice(before === -1 ? target.tabOrder.length : before, 0, adopted.tabId)
     }
   }
 

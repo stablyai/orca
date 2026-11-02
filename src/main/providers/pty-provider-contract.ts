@@ -1,4 +1,8 @@
 import type {
+  PreparedAgentSpawn,
+  PreparedAgentLaunchRequest
+} from '../daemon/prepared-agent-launch-protocol'
+import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../shared/pty-fenced-termination'
@@ -129,6 +133,10 @@ export type IPtyProvider = {
   readonly routesFreshSpawnsToLocalProvider?: true
   /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
   recoverFreshSpawnRouting?: () => Promise<boolean>
+  prepareAgentLaunchSpawn?(options: PtySpawnOptions): Promise<PreparedAgentSpawn>
+  supportsPreparedAgentLaunches?: () => boolean | Promise<boolean>
+  onPreparedLaunchReconnect?: (listener: () => void) => () => void
+  preparedAgentLaunch?: (payload: PreparedAgentLaunchRequest['payload']) => Promise<unknown>
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
   /** Process-owner cleanup for history stored outside the workspace tree. */
   deleteWorktreeHistory?: (worktreeId: string) => Promise<void>

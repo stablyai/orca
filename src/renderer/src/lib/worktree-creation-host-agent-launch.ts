@@ -46,11 +46,14 @@ export function windowStartupAfterCreate(
   startup?: WorktreeStartupPayload
   agent: TuiAgent | null
   terminalOptions: CreationTerminalOptions
+  startupTerminalTabId?: string
 } {
-  const backendSpawned = result.startupTerminal?.spawned === true
+  const backendSpawned = hasBackendStartup(result)
   const plan = planWindowStartup(request, result, backendSpawned)
+  const startupTerminalTabId = backendStartupTabId(result)
   return {
     ...plan,
+    ...(startupTerminalTabId ? { startupTerminalTabId } : {}),
     terminalOptions: {
       worktreeCreationId: creationId,
       ...(plan.startup ? { createNewTerminalForStartup: true } : {}),
@@ -80,4 +83,13 @@ function planWindowStartup(
     return { agent: request.agent }
   }
   return { startup: buildWorktreeCreationStartupOpt(request, backendSpawned), agent: request.agent }
+}
+
+export function hasBackendStartup(result: CreatedWorktreeResult): boolean {
+  return result.startupTerminal?.spawned === true || result.startupTerminal?.pending !== undefined
+}
+
+/** A pending launch names the tab reserved for its agent; per-tab seeds belong there, not on Setup. */
+export function backendStartupTabId(result: CreatedWorktreeResult): string | undefined {
+  return result.startupTerminal?.tabId ?? result.startupTerminal?.pending?.tabId
 }

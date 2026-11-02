@@ -244,6 +244,12 @@ export class Session extends SessionProcessInspection {
     await this.output.flushParsedWrites()
   }
 
+  /** Whether a line inserted above the cursor leaves the screen's typed input whole, once all output so far is parsed. */
+  async takesLineAboveCursor(): Promise<boolean> {
+    await this.output.flushParsedWrites()
+    return this.output.isCursorOnWholeNormalLine()
+  }
+
   clearScrollback(): void {
     this.output.clearScrollback(this.subprocess, this.shellReady.isGatingWrites)
   }

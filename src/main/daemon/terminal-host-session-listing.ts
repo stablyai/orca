@@ -54,3 +54,8 @@ export function hasLiveTerminalHostSessions(sessions: ReadonlyMap<string, Sessio
   }
   return hasLive
 }
+
+/** The ORCA_PANE_KEY a session was spawned with, when it had one. */
+export function sessionSpawnPaneKey(session: Session): string | undefined {
+  return spawnPaneKeys.get(session)
+}

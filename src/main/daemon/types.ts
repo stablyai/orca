@@ -1,3 +1,4 @@
+import type { PreparedAgentLaunchRequest } from './prepared-agent-launch-protocol'
 import type { TerminalStartFailure } from '../../shared/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
@@ -258,6 +259,7 @@ export type TakePendingOutputResult = {
 }
 
 export type DaemonRequest =
+  | PreparedAgentLaunchRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest

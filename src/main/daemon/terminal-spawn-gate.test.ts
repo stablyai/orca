@@ -14,6 +14,40 @@ function stream() {
 }
 
 describe('TerminalSpawnGate', () => {
+  it('charges pending launches without holding a fork lease and transfers capacity at dispatch', () => {
+    const gate = new TerminalSpawnGate({
+      log: () => {},
+      hostTerminals: new HostTerminalLedger({ dir: null, maxTerminals: 1, log: () => {} })
+    })
+    const reserved = gate.reservePreparedLaunch()
+    expect(gate.snapshot()).toMatchObject({
+      terminals: 1,
+      inFlight: { interactive: 0, user: 0, automatic: 0 }
+    })
+    expect(() => gate.reservePreparedLaunch()).toThrow()
+    const lease = gate.admit(
+      {
+        clientId: 'test',
+        declaredIntent: 'interactive',
+        hasAgentSessionClaim: false,
+        hasHistorySeed: false,
+        deadlineAt: Infinity
+      },
+      undefined,
+      undefined,
+      reserved
+    )
+    if (lease instanceof Promise) {
+      throw new Error('interactive admission unexpectedly waited')
+    }
+    expect(gate.snapshot().terminals).toBe(1)
+    lease.commit('session', true)
+    lease.abandon()
+    reserved()
+    expect(gate.snapshot().terminals).toBe(1)
+    gate.onSessionExit('session')
+    expect(gate.snapshot().terminals).toBe(0)
+  })
   let host: TerminalHost
   let gate: TerminalSpawnGate
   let log: Mock<(event: string, details: Record<string, unknown>) => void>

@@ -1,3 +1,4 @@
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
@@ -30,6 +31,11 @@ import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
 
 export type TerminalCreateOptions = {
+  /** Main-only rejoin of a process already accepted by its daemon. */
+  attachOnly?: boolean
+  expectedIncarnationId?: PtyIncarnationId
+  /** Main-only: the first publication of a prepared agent, this runtime's one new launch of it. */
+  preparedFirstPublication?: true
   command?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string
@@ -75,6 +81,8 @@ export type TerminalCreateOptions = {
   targetGroupId?: string
   /** Main-internal placement anchor; removed before PTY dispatch. */
   afterTabId?: string
+  /** A tab this create makes takes the launch's initial place (afterTabId, else first). */
+  placeNewTab?: true
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
   /** Attribute host-built startupAgent launches by surface; missing/unknown surface becomes unknown. Ignore without startupAgent. */

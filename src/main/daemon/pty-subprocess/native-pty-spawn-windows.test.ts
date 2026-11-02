@@ -119,6 +119,26 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     vi.restoreAllMocks()
   })
 
+  it('retains physical ownership when raw observer setup throws after spawn', async () => {
+    const pane = healthyPane(4242)
+    nodePty.spawn.mockReturnValue(pane)
+    const work = new TerminalCreationWork()
+    await expect(
+      spawnNativeDaemonPty({
+        ...args,
+        windowsFallbackAttempts: [attempts[0]!],
+        creationWork: work,
+        // Only the raw observer fails; the owner's own subscriptions still work.
+        rawSpawnObserver: () => {
+          throw new Error('listener failed')
+        }
+      })
+    ).rejects.toThrow('listener failed')
+    await work.finish()
+    expect(await work.completion).toMatchObject({ kind: 'physical' })
+    expect(pane.kill).toHaveBeenCalledTimes(1)
+  })
+
   it('classifies installed-DLL-format-derived bytes through fresh rejection and the RPC envelope', async () => {
     // Expanded installed DLL format strings with max 128/PID 4242; not a console-exhaustion capture.
     const bytes = readFileSync(
@@ -387,6 +407,30 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     expect(result.shellPath).toBe('pwsh.exe')
     expect(healthy.write).toHaveBeenCalledExactlyOnceWith('\x1b[?61;4c')
     expect(result.claimStartupEvents?.().data).toEqual(['\x1b[1t\x1b[?1004h'])
+  })
+
+  it('selects only the successful raw observer after ConPTY replacement', async () => {
+    const broken = fakePane(990111, ['Microsoft Windows\r\n'])
+    const healthy = healthyPane(990112)
+    nodePty.spawn.mockReturnValueOnce(broken).mockReturnValueOnce(healthy)
+    const observers: {
+      onExit: ReturnType<typeof vi.fn>
+      onSelected: ReturnType<typeof vi.fn>
+    }[] = []
+    await spawnNativeDaemonPty({
+      ...args,
+      rawSpawnObserver: () => {
+        const observer = { onExit: vi.fn(), onSelected: vi.fn() }
+        observers.push(observer)
+        return observer
+      }
+    })
+    expect(observers).toHaveLength(2)
+    expect(observers[0].onExit).toHaveBeenCalled()
+    expect(observers[0].onSelected).not.toHaveBeenCalled()
+    expect(observers[1].onSelected).toHaveBeenCalledTimes(1)
+    healthy.emitExit(0)
+    expect(observers[1].onExit).toHaveBeenCalledTimes(1)
   })
 
   it.each(['physical-exit', 'deadline', 'observation-retry'] as const)(

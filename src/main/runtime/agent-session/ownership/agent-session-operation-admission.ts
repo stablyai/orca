@@ -26,6 +26,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { matchesPreparedLaunchGeneration } from '../../../../shared/prepared-agent-launch'
 
 export type AgentSessionOperationAdmission = {
   callerKey: string
@@ -227,7 +228,7 @@ export function admitAgentSessionGlobalOperationInto(
 
 export function claimAgentSessionOperationInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
-  args: { callerKey: string; operationId: string }
+  args: { callerKey: string; operationId: string; now?: number }
 ): AgentSessionOperationClaim {
   const claimed = claimAgentSessionOperation(state.operations, args)
   state.operations = claimed.rows
@@ -255,4 +256,26 @@ export function settleAgentSessionOperationInto(
   args: { callerKey?: string; operationId: string; outcome: AgentSessionOperationOutcome }
 ): void {
   state.operations = settleAgentSessionOperation(state.operations, args)
+}
+
+/** Removes the exact descriptor and, when given, records the launch's final answer in its place. */
+export function retirePreparedAgentLaunchInto(
+  state: { operations: Map<string, AgentSessionOperationRow> },
+  args: {
+    callerKey: string
+    operationId: string
+    daemonGeneration: string
+    reservationGeneration: string
+    outcome?: AgentSessionOperationOutcome
+  }
+): boolean {
+  // Exact key: retiring one launch never walks the rest of the ledger.
+  const key = agentSessionOperationKey(args.callerKey, args.operationId)
+  const row = state.operations.get(key)
+  if (!row || !matchesPreparedLaunchGeneration(row.preparedLaunch, args)) {
+    return false
+  }
+  const { preparedLaunch: _retired, ...retained } = row
+  state.operations.set(key, args.outcome ? { ...retained, outcome: args.outcome } : retained)
+  return true
 }

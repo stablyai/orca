@@ -49,6 +49,7 @@ import type {
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type {
   RuntimeMobileSessionTabMove,
+  RuntimeNewTerminalTabPlacement,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
@@ -62,6 +63,10 @@ import type {
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
 import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
+import type {
+  PreparedAgentLaunchNotice,
+  PreparedLaunchSetupTab
+} from '../../shared/prepared-agent-launch'
 import type {
   RemoteCliBrowserScopeQuery,
   RemoteCliBrowserScopeReply
@@ -192,6 +197,7 @@ export type UiCommandEventApi = {
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       afterTabId?: string
+      newTabPlacement?: RuntimeNewTerminalTabPlacement
       shellOverride?: string
       title?: string
       ptyId?: string
@@ -289,6 +295,13 @@ export type UiCommandEventApi = {
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   /** Follow main's workspace sleep even when another client requested it. */
   onWorkspaceSleep: (callback: (notice: WorkspaceSleepNotice) => void) => () => void
+  /** An automatic agent launch outcome no surviving terminal shows. */
+  onPreparedAgentLaunchNotice?: (
+    callback: (notice: PreparedAgentLaunchNotice) => void
+  ) => () => void
+  /** Main's whole list of Setup tabs whose accepted launch still waits, sent on every change. */
+  onPreparedLaunchSetups?: (callback: (tabs: PreparedLaunchSetupTab[]) => void) => () => void
+  getPreparedLaunchSetups?: () => Promise<PreparedLaunchSetupTab[]>
   onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
   respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void

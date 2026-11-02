@@ -59,6 +59,7 @@ type WorkerAgentPlacementArgs = {
   agent: TuiAgent | undefined
   launchPreferences: AgentLaunchPreferences | undefined
   effects: WorkerEffect[]
+  onPreparedLaunch?: Parameters<typeof createWorkerWorktree>[0]['onPreparedLaunch']
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
   /** A follow-up continuing a worker; a closed one is brought back in place of a launch. */
@@ -169,6 +170,7 @@ async function launchWorkerAgent(
             withAgentTerminal: startupAgent !== undefined,
             promisedAgentChat,
             onWorkspaceCreated,
+            onPreparedLaunch: args.onPreparedLaunch,
             ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
             effects: args.effects
           })

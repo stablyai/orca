@@ -16,6 +16,44 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   turnStart?: string
   next?: string
   keptOpen?: true
+  pending?: unknown
+}
+
+/** The host's accepted launch, still running Setup or the agent start, that delivers the task once. */
+export type PendingWorkerStart = {
+  operationId: string
+  fingerprint: string
+  daemonGeneration: string
+  reservationGeneration: string
+}
+
+/** Only a receipt naming the whole accepted identity is pending; anything less stays unknown. */
+export function acceptedPendingStart(
+  value: WorkerStartAgentReceipt
+): PendingWorkerStart | undefined {
+  const pending = value.pending
+  if (
+    value.state !== 'outcome_unknown' ||
+    typeof pending !== 'object' ||
+    pending === null ||
+    !('operationId' in pending) ||
+    !('fingerprint' in pending) ||
+    !('daemonGeneration' in pending) ||
+    !('reservationGeneration' in pending)
+  ) {
+    return undefined
+  }
+  const { operationId, fingerprint, daemonGeneration, reservationGeneration } = pending
+  return isFilled(operationId) &&
+    isFilled(fingerprint) &&
+    isFilled(daemonGeneration) &&
+    isFilled(reservationGeneration)
+    ? { operationId, fingerprint, daemonGeneration, reservationGeneration }
+    : undefined
+}
+
+function isFilled(field: unknown): field is string {
+  return typeof field === 'string' && field.length > 0
 }
 
 // A hook-capable agent that has not shown its turn yet is usually slow, not dead; a resend duplicates the task.
@@ -45,6 +83,7 @@ type WorkerStartFields = {
   residualResources?: string[]
   nextCommands?: string[]
   keptOpen?: true
+  pending?: PendingWorkerStart
   next?: string
 }
 
@@ -55,7 +94,9 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
       const requested = value.launch?.requested
       const fellBack = value.mode?.mode !== undefined && value.mode.mode !== value.mode.preferred
       const residual = (value.residualResources ?? []).map(describeEffect)
-      const unobserved = isUnobservedTurnStart(value)
+      const pending = acceptedPendingStart(value)
+      // Both are a live start the caller must not repeat; only the worker's own report ends them.
+      const unobserved = isUnobservedTurnStart(value) || pending !== undefined
       return {
         dispatchId: value.dispatchId,
         taskId: value.taskId,
@@ -79,28 +120,39 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
           value.state !== 'ready' && !unobserved && residual.length ? residual : undefined,
         nextCommands: value.state === 'ready' || unobserved ? undefined : value.nextCommands,
         keptOpen: value.keptOpen,
-        next: unobserved
-          ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
-          : value.recovery
-            ? value.recovery
-            : value.next
+        pending,
+        next: pending
+          ? `Setup or the agent launch is still running; Orca delivers the task once it is ready. Don't resend or abandon it. End your turn; Orca wakes you when it reports. To check on it, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
+          : isUnobservedTurnStart(value)
+            ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
+            : value.recovery
+              ? value.recovery
+              : value.next
       }
     },
     failure: (value) =>
       value.state === 'ready'
         ? undefined
-        : isUnobservedTurnStart(value)
+        : acceptedPendingStart(value)
           ? {
-              // The worker is likely starting; a non-zero exit reads as a failure to retry.
+              // Accepted work continues; a non-zero exit reads as a failure to retry.
               level: 'warning',
               exitCode: 0,
-              code: 'turn_start_unobserved',
-              message: "task typed in; the worker may still be starting. Don't resend."
+              code: 'start_pending',
+              message: "Setup or launch still pending; the task will be delivered. Don't resend."
             }
-          : {
-              code: value.state === 'outcome_unknown' ? 'start_outcome_unknown' : 'start_failed',
-              message: `${value.failedStage ?? 'start'}: ${value.lastError ?? value.state}`
-            }
+          : isUnobservedTurnStart(value)
+            ? {
+                // The worker is likely starting; a non-zero exit reads as a failure to retry.
+                level: 'warning',
+                exitCode: 0,
+                code: 'turn_start_unobserved',
+                message: "task typed in; the worker may still be starting. Don't resend."
+              }
+            : {
+                code: value.state === 'outcome_unknown' ? 'start_outcome_unknown' : 'start_failed',
+                message: `${value.failedStage ?? 'start'}: ${value.lastError ?? value.state}`
+              }
   }
 
 /** A send a finished worker took as its next Task: worker-start's receipt plus where it went. */

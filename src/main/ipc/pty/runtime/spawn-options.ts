@@ -89,6 +89,11 @@ export async function buildRuntimePtySpawnOptions(
     claudeAuth: ctx.claudeAuth
   })
   ctx.spawnOptions = launch.spawnOptions
+  if (args.attachOnly) {
+    ctx.spawnOptions.attachOnly = true
+    ctx.spawnOptions.expectedIncarnationId = args.expectedIncarnationId
+    ctx.spawnOptions.expectedIncarnationIsAuthoritative = args.expectedIncarnationId !== undefined
+  }
   ctx.env = launch.env
   ctx.launchCommand = launch.launchCommand
   ctx.provisionalPtySize = seedPtySpawnSize({

@@ -1,3 +1,4 @@
+import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
@@ -144,6 +145,8 @@ export type RuntimePtySpawnArgs = {
   /** Planned command quoting determines the PTY runtime shell. */
   launchRuntime?: AgentLaunchRuntime
   isNewSession?: boolean
+  attachOnly?: boolean
+  expectedIncarnationId?: PtyIncarnationId
   /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
   initiallyHidden?: boolean
   persistHostSessionBinding?: boolean

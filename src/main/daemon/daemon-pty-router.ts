@@ -1,3 +1,4 @@
+import { DaemonPtyPreparedLaunchRouting } from './daemon-prepared-agent-launch-routing'
 import { DaemonPtyTargetInspection } from './daemon-pty-target-inspection'
 import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
@@ -24,7 +25,7 @@ import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-ro
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
-export class DaemonPtyRouter implements IPtyProvider {
+export class DaemonPtyRouter extends DaemonPtyPreparedLaunchRouting implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
@@ -35,6 +36,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
+    super()
     this.current = opts.current
     this.legacy = opts.legacy
     for (const adapter of this.allAdapters()) {
@@ -283,7 +285,8 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   private retireExitedLegacy(adapter: DaemonPtyAdapter, error: unknown): ExitedLegacyVerdict {
     const { current, legacy, legacyExitProof: exitProof, subscriptions } = this
-    return retireExitedLegacyAdapter({ adapter, error, current, legacy, exitProof, subscriptions })
+    const args = { adapter, error, current, legacy, exitProof, subscriptions }
+    return this.forgetRetiredPreparedLaunchOwner(adapter, retireExitedLegacyAdapter(args))
   }
 
   async getDefaultShell(): Promise<string> {

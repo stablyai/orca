@@ -1,3 +1,4 @@
+import type { PendingPreparedAgentLaunch } from '../../../../../../shared/prepared-agent-launch'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
@@ -95,6 +96,7 @@ export async function createWorkerWorktree(args: {
   onWorkspaceCreated?: (worktreeId: string) => void
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
+  onPreparedLaunch?: (pending: PendingPreparedAgentLaunch, setup: WorkerSetupReceipt) => void
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
   terminalHandle: string | undefined
@@ -119,6 +121,7 @@ export async function createWorkerWorktree(args: {
     runHooks: false,
     setupDecision,
     awaitTerminalProvisioning: true,
+    preparedAgentLaunch: true,
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
     ...(args.promisedAgentChat ? { promisedAgentChat: true } : {}),
@@ -138,7 +141,8 @@ export async function createWorkerWorktree(args: {
       callerTerminalHandle: params.from
     }
   })
-  const terminalHandle = created.startupTerminal?.handle
+  const pending = created.startupTerminal?.pending
+  let terminalHandle = created.startupTerminal?.handle
   effects.push({
     kind: 'worktree',
     action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
@@ -152,13 +156,19 @@ export async function createWorkerWorktree(args: {
     effects,
     residualResources: effects
   })
-  const setupReceipt = {
+  const setupReceipt: WorkerSetupReceipt = {
     requested: setupDecision,
     effective: setupDecision,
     source: params.setup ? 'explicit_request' : 'orchestration_default',
     hookFound: created.setupReceipt?.hookFound ?? false,
     startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
     state: created.setupReceipt?.state ?? 'not_configured'
+  }
+  if (pending) {
+    args.onPreparedLaunch?.(pending, setupReceipt)
+    // A prepared agent terminal is created by its publication, not by the startup callback above.
+    terminalCreation = await runtime.waitForPreparedAgentTerminal(pending)
+    terminalHandle = terminalCreation.handle
   }
   if (args.withAgentTerminal && !terminalHandle) {
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')

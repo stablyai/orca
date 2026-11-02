@@ -71,6 +71,7 @@ import type { JournalOperationReceipt } from '../../../native-chat/agent-session
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import { createPreparedLaunchRetirements } from './prepared-launch-retirements'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import {
   compareAndSetAgentSessionRecordName,
@@ -263,6 +264,22 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   /** Replay evaluation writes nothing; admitMutationOperation owns the transaction. */
   evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     evaluateAgentSessionMutationOperation(this.state, args)
+
+  recordPreparedAgentLaunch = (
+    args: AgentSessionOperationAdmission & { preparedLaunch: unknown }
+  ) =>
+    this.transact((draft) => {
+      const decision = admitAgentSessionGlobalOperationInto(draft, args)
+      if (decision.decision !== 'admit') {
+        return { decision, claim: null }
+      }
+      const key = agentSessionOperationKey(args.callerKey, args.operationId)
+      draft.operations.set(key, { ...decision.row, preparedLaunch: args.preparedLaunch })
+      return { decision, claim: claimAgentSessionOperationInto(draft, args) }
+    })
+
+  /** Removes the exact descriptor and records its answer; only one request per descriptor wins. */
+  retirePreparedAgentLaunch = createPreparedLaunchRetirements(this.transactions)
 
   /** Durable CAS decides which pending replay may run its effect; reading pending alone cannot grant it. */
   claimOperation = (args: Parameters<typeof claimAgentSessionOperationInto>[1]) =>

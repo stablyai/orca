@@ -28,6 +28,8 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
 import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
 import {
+  isCursorOnEmptyPromptLine,
+  isCursorOnWholeNormalLine,
   readHeadlessTerminalRows,
   readHeadlessTerminalLines,
   type HeadlessTerminalRow
@@ -283,16 +285,12 @@ export class HeadlessEmulator {
     return this.partialEscapeTail
   }
 
-  /** Ctrl+L is safe at an empty PSReadLine prompt; PowerShell’s continuation prompt (>>) is excluded. */
   isCursorOnEmptyPromptLine(): boolean {
-    const buffer = this.terminal.buffer.active
-    const line = buffer.getLine(buffer.baseY + buffer.cursorY)
-    if (!line) {
-      return false
-    }
-    const upToCursor = line.translateToString(true, 0, buffer.cursorX).trimEnd()
-    const fullLine = line.translateToString(true).trimEnd()
-    return fullLine === upToCursor && upToCursor.endsWith('>') && !upToCursor.endsWith('>>')
+    return isCursorOnEmptyPromptLine(this.terminal)
+  }
+
+  isCursorOnWholeNormalLine(): boolean {
+    return isCursorOnWholeNormalLine(this.terminal)
   }
 
   getVisibleLines(): string[] {

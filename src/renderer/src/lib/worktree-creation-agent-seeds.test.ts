@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
 import { seedAgentTabStateAfterWorktreeCreate } from './worktree-creation-agent-seeds'
+import { backendStartupTabId, hasBackendStartup } from './worktree-creation-host-agent-launch'
+import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/worktree-create-payload'
 
 const mocks = vi.hoisted(() => ({
   seedNativeChatAppliedSessionOptions: vi.fn(),
@@ -125,6 +127,44 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
 
     expect(seededTabIds()).toEqual(['agent-tab'])
     expect(mocks.seedNativeChatAppliedSessionOptions).toHaveBeenCalledWith(
+      'agent-tab',
+      'claude',
+      undefined
+    )
+  })
+
+  it('seeds the tab reserved for a pending agent while only Setup exists, never Setup', () => {
+    // Setup is interactive first; the agent tab appears only after Setup succeeds.
+    setTabs([{ id: 'setup-tab' }, { id: 'logs' }])
+    const result = {
+      worktree: { id: 'wt-1' },
+      startupTerminal: {
+        spawned: false,
+        pending: {
+          operationId: 'operation',
+          fingerprint: 'fingerprint',
+          daemonGeneration: 'daemon',
+          reservationGeneration: 'reservation',
+          worktreeId: 'wt-1',
+          tabId: 'agent-tab',
+          setupTerminalHandle: 'term_setup'
+        }
+      }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: seeding reads only the worktree id and the pending startup receipt.
+    const created = result as unknown as CreatedWorktreeResult
+
+    seedAgentTabStateAfterWorktreeCreate({
+      request,
+      worktreeId: 'wt-1',
+      primaryTabId: 'setup-tab',
+      startupTerminalTabId: backendStartupTabId(created),
+      backendSpawned: hasBackendStartup(created)
+    })
+    setTabs([{ id: 'setup-tab' }, { id: 'logs' }, { id: 'agent-tab', launchAgent: 'claude' }])
+
+    expect(seededTabIds()).toEqual(['agent-tab'])
+    expect(mocks.seedNativeChatAppliedSessionOptions).toHaveBeenCalledExactlyOnceWith(
       'agent-tab',
       'claude',
       undefined

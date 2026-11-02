@@ -128,6 +128,7 @@ export function buildLocalWorktreeCreateArgs(
 ): CreateWorktreeArgs {
   return {
     repoId: request.repoId,
+    preparedAgentLaunch: true,
     ...sharedCreateFields(request, attempt),
     ...(request.startup ? { startup: request.startup } : {}),
     ...(request.creationId ? { creationId: request.creationId } : {}),
@@ -146,6 +147,7 @@ export function buildRuntimeWorktreeCreateParams(
   const { startup, options } = request
   return {
     repo: request.repoId,
+    preparedAgentLaunch: true,
     ...sharedCreateFields(request, attempt),
     // Why: the host defaults a bare `parentWorkspace` to CLI provenance; app picks are manual.
     ...(attempt.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
