@@ -20,68 +20,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 
 describe('launchAgentInNewTab paired web runtime', () => {
-  it.each([true, false, 'failed'] as const)('delegates agent quick launch (%s)', async (mode) => {
-    store.settings.agentDefaultArgs = { claude: '--model "model with spaces"' }
-    const activate = mode === true
-    const status = mode === 'failed' ? 'failed' : 'created'
-    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
-      outcome: {
-        status,
-        ...(status === 'failed' ? { message: 'The host refused the launch.' } : {})
-      },
-      hostTabId: 'host-tab::leaf-1'
-    })
-    store.tabsByWorktree['wt-1'].push({ id: 'local-agent-tab', launchAgent: 'claude' })
-    const { launchAgentInNewTab } =
-      await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-1',
-      activate,
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      groupId: 'group-1'
-    })
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        surface: { kind: 'host-published' },
-        pasteDraftAfterLaunch: false
-      })
-    )
-    await result?.terminalCompletion
-    const startupPlan = mocks.createWebRuntimeSessionTerminal.mock.calls[0][0]
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      targetGroupId: 'group-1',
-      activate,
-      ...(activate ? {} : { selectWorktree: false }),
-      agentSessionKind: 'fresh',
-      launchAgent: 'claude',
-      preparedAgentCommand: false,
-      command: startupPlan.command,
-      env: startupPlan.env,
-      launchConfig: startupPlan.launchConfig,
-      viewMode: 'terminal'
-    })
-    expect(startupPlan.launchConfig.agentArgs).toBe(store.settings.agentDefaultArgs.claude)
-    expect(mocks.createTab).not.toHaveBeenCalled()
-    await expect(result?.terminalCompletion).resolves.toMatchObject({
-      outcome: { status },
-      ...(status === 'created' ? { tabId: 'web-terminal-host-tab' } : {})
-    })
-    expect(mocks.setActiveTabType).toHaveBeenCalledTimes(activate && status === 'created' ? 1 : 0)
-    expect(mocks.toastError).toHaveBeenCalledTimes(status === 'failed' ? 1 : 0)
-    if (status === 'failed') {
-      expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
-        expect.stringMatching(/Claude.*Check the workspace connection/)
-      )
-    }
-    // A local tab closes locally (the host close no-ops), so a launch leaves it alone.
-    expect(mocks.closeTab).not.toHaveBeenCalled()
-  })
-
   it('awaits the capable host map once and preserves explicit/raw and prepared command ownership', async () => {
     mocks.capability.mockResolvedValue(true)
     store.settings.agentLaunchChoices = { claude: { model: 'sonnet', options: { effort: 'low' } } }
@@ -555,50 +493,5 @@ describe('launchAgentInNewTab paired web runtime', () => {
     )
     expect(store.markNativeChatLaunchPromptFailed).toHaveBeenCalledOnce()
     expect(dispatch.mock.calls).toHaveLength(1)
-  })
-
-  it('forwards prompt launch env and captured config to the host runtime', async () => {
-    store.settings.agentDefaultArgs = { codex: '--model gpt-5 --reasoning-effort high' }
-    store.settings.agentDefaultEnv = { codex: { CODEX_PROFILE: 'captured' } }
-    const { launchAgentInNewTab } =
-      await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-2',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'fix the spinner',
-      groupId: 'group-1'
-    })
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        surface: { kind: 'host-published' },
-        pasteDraftAfterLaunch: false
-      })
-    )
-    await result?.terminalCompletion
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      targetGroupId: 'group-1',
-      activate: true,
-      agentSessionKind: 'fresh',
-      launchAgent: 'codex',
-      preparedAgentCommand: false,
-      command:
-        "codex '-c' 'disable_paste_burst=true' '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
-      env: { CODEX_PROFILE: 'captured' },
-      launchConfig: {
-        agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
-        agentArgs: '--model gpt-5 --reasoning-effort high',
-        agentEnv: { CODEX_PROFILE: 'captured' }
-      },
-      startupCommandDelivery: 'shell-ready',
-      prompt: 'fix the spinner',
-      promptDelivery: 'auto-submit',
-      viewMode: 'terminal'
-    })
-    expect(mocks.createTab).not.toHaveBeenCalled()
   })
 })

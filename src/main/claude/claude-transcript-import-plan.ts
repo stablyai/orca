@@ -7,8 +7,8 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 import {
   continuedOutsideNotice,

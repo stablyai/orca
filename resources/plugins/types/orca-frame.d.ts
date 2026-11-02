@@ -23,6 +23,9 @@ declare module 'orca/frame' {
     readonly content: EditorContent
     /** Bytes documents: the manifest suffix that matched, e.g. `xlsx`. */
     readonly fileType?: string
+    /** Only for a session with `merge`: the file changed on disk while the tab had unsaved edits;
+     *  this is the disk content those edits started from. */
+    readonly ancestor?: EditorContent
   }
   /** The whole new content, made against document `baseVersion`. */
   export type EditorEdit = { baseVersion: number; content: EditorContent }
@@ -55,7 +58,9 @@ declare module 'orca/frame' {
   export type EditorSessionOptions<T> = {
     decode?: (content: EditorContent) => T
     encode?: (value: T) => EditorContent
-    /** On a conflict: `base` is the last accepted value. Without it the outside document wins. */
+    /** On a conflict `base` is the last accepted value; when the file changes on disk under the
+     *  tab's unsaved edits, `base` is the disk content those edits started from and Orca skips its
+     *  banner. Without it the outside document wins, or Orca shows its banner. */
     merge?: (base: T, outside: T, mine: T) => T
     /** Wait after the last change before sending it; default 250. */
     debounceMs?: number

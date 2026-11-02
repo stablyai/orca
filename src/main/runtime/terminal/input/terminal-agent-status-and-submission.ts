@@ -1,6 +1,6 @@
 import { selectFreshExplicitAgentStatus } from '../../runtime-hook-agent-row-selection'
 import { acquireQueueTurn } from './agent-prompt-queue-turn'
-import { OrcaRuntimeWithControllerKnowsPtyIsLive } from './terminal-input-dispatch'
+import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
@@ -15,7 +15,7 @@ import type {
 import { readAgentPromptWaitText } from '../../agent-prompt-submission-verification'
 import type { AgentStatus } from '../../../../shared/agent-detection'
 
-export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithControllerKnowsPtyIsLive {
+export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithPluginHookedTerminalInput {
   protected abstract getPaneKeyForTerminalHandle(handle: string): string | null
 
   /** This prompt's turn in the PTY's generation-scoped input queue. Aborting while queued gives

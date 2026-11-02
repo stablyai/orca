@@ -2,13 +2,16 @@ import type { ITheme } from '@xterm/xterm'
 import type { GlobalSettings } from './global-settings-types'
 import { isPluginContentSwitchedOff } from './plugins/plugin-system-settings'
 import {
+  hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING,
   terminalColorOverridesForSlot,
   withTerminalColorOverrides,
-  type TerminalColorOverrideSettings
+  type TerminalColorOverrideSettings,
+  type TerminalThemeSlot
 } from './terminal-color-overrides'
 import {
   hasUsableTerminalThemeColors,
+  makeCustomTerminalThemeSelection,
   normalizeTerminalColorOverrides,
   normalizeTerminalCustomThemes,
   parseCustomTerminalThemeSelection,
@@ -115,6 +118,68 @@ export function resolveTerminalPalette(
   return {
     ...selection,
     theme: base && withTerminalColorOverrides(base, terminalColorOverridesForSlot(settings, slot))
+  }
+}
+
+type TerminalCustomThemeRemovalSettings = Pick<
+  GlobalSettings,
+  'terminalCustomThemes' | 'terminalThemeDark' | 'terminalThemeLight'
+> &
+  TerminalColorOverrideSettings
+
+export type TerminalCustomThemeRemoval = {
+  updates: Partial<GlobalSettings>
+  /** Puts the theme back unless re-imported since, and back into slots nobody changed since. */
+  undo: (current: TerminalCustomThemeRemovalSettings) => Partial<GlobalSettings>
+}
+
+const SLOT_THEME_SETTING = {
+  dark: 'terminalThemeDark',
+  light: 'terminalThemeLight'
+} as const satisfies Record<TerminalThemeSlot, keyof GlobalSettings>
+const SLOT_DEFAULT_THEME: Record<TerminalThemeSlot, string> = {
+  dark: DEFAULT_TERMINAL_THEME_DARK,
+  light: DEFAULT_TERMINAL_THEME_LIGHT
+}
+
+/** Deleting an imported theme moves each slot showing it to that slot's default, dropping the slot's overrides like any theme change. */
+export function terminalCustomThemeRemoval(
+  settings: TerminalCustomThemeRemovalSettings,
+  themeId: string
+): TerminalCustomThemeRemoval {
+  const themes = normalizeTerminalCustomThemes(settings.terminalCustomThemes)
+  const removed = themes.find(({ id }) => id === themeId)
+  const selection = makeCustomTerminalThemeSelection(themeId)
+  const slots = (['dark', 'light'] as const).filter(
+    (slot) => settings[SLOT_THEME_SETTING[slot]] === selection
+  )
+  const updates: Partial<GlobalSettings> = {
+    terminalCustomThemes: themes.filter(({ id }) => id !== themeId)
+  }
+  for (const slot of slots) {
+    updates[SLOT_THEME_SETTING[slot]] = SLOT_DEFAULT_THEME[slot]
+    updates[TERMINAL_COLOR_OVERRIDES_SETTING[slot]] = undefined
+  }
+  return {
+    updates,
+    undo: (current) => {
+      const restored: Partial<GlobalSettings> = {}
+      const currentThemes = normalizeTerminalCustomThemes(current.terminalCustomThemes)
+      if (removed && !currentThemes.some(({ id }) => id === themeId)) {
+        restored.terminalCustomThemes = normalizeTerminalCustomThemes([...currentThemes, removed])
+      }
+      for (const slot of slots) {
+        if (
+          current[SLOT_THEME_SETTING[slot]] === SLOT_DEFAULT_THEME[slot] &&
+          !hasTerminalColorOverrides(current, slot)
+        ) {
+          restored[SLOT_THEME_SETTING[slot]] = selection
+          restored[TERMINAL_COLOR_OVERRIDES_SETTING[slot]] =
+            settings[TERMINAL_COLOR_OVERRIDES_SETTING[slot]]
+        }
+      }
+      return restored
+    }
   }
 }
 

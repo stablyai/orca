@@ -124,13 +124,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     return probe
   }
 
-  async sendTerminal(
+  /** sendTerminal once plugin hooks decided (terminal-plugin-hooked-input.ts). */
+  protected async sendTerminalAfterPluginHooks(
     handle: string,
-    action: {
-      text?: string
-      enter?: boolean
-      interrupt?: boolean
-    },
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
     options: RuntimeTerminalWriteOptions
   ): Promise<RuntimeTerminalSend> {
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
@@ -139,7 +136,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       : null
     if (starting) {
       const target = await starting
-      return { ...(await this.sendTerminal(target, action, options)), handle }
+      return { ...(await this.sendTerminalAfterPluginHooks(target, action, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -219,7 +216,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     )
   }
 
-  async sendTerminalAgentPrompt(
+  /** sendTerminalAgentPrompt once plugin hooks decided. */
+  protected async sendAgentPromptAfterPluginHooks(
     handle: string,
     prompt: string,
     options: RuntimeAgentPromptWriteOptions
@@ -251,7 +249,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       : null
     if (starting) {
       const target = await starting
-      return { ...(await this.sendTerminalAgentPrompt(target, prompt, options)), handle }
+      return { ...(await this.sendAgentPromptAfterPluginHooks(target, prompt, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {

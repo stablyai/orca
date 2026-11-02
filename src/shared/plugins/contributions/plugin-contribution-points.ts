@@ -22,6 +22,7 @@ import {
   PLUGIN_EVENT_SUBSCRIPTION_LIMIT,
   pluginEventContributionSchema
 } from './plugin-event-contribution'
+import { PLUGIN_HOOK_LIMIT, pluginHookContributionSchema } from './plugin-hook-contribution'
 import type { PluginExecutionProfile } from './plugin-execution-profile'
 import {
   PLUGIN_CUSTOM_EDITOR_LIMIT,
@@ -34,6 +35,7 @@ import {
 import { PLUGIN_PANEL_LIMIT, pluginPanelContributionSchema } from './plugin-panel-contribution'
 import {
   pluginFieldDoc,
+  PLUGIN_HOOKS_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_PANEL_BRIDGE_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
@@ -53,6 +55,7 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'panels',
   'commands',
   'events',
+  'hooks',
   'languagePacks',
   'keybindings',
   'vmRecipes',
@@ -70,13 +73,12 @@ export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number
 
 /** `contributes` keys held for planned points, so each can ship later as an additive minor
  *  instead of a new manifest format. Each must stay empty until its format is defined.
- *  `skills`, `mcpServers` and `hooks` keep the meaning agent-plugin formats such as Claude Code's
- *  give them; `agents` is left unclaimed because those formats use it for subagent files. */
+ *  `skills` and `mcpServers` keep the meaning agent-plugin formats such as Claude Code's give them;
+ *  `agents` is left unclaimed because those formats use it for subagent files. */
 export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
   agentHarnesses: 'coding-agent harness definitions',
   skills: 'agent skills',
   mcpServers: 'MCP server definitions',
-  hooks: 'agent hooks',
   taskSources: 'task sources',
   connections: 'account connections',
   sidebarCards: 'sidebar cards'
@@ -96,9 +98,7 @@ export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
     'New coding-agent harnesses described as data: how to launch them and read their status.',
   sidebarCards: 'Declarative left-sidebar cards with fixed layouts whose values a worker updates.',
   mcpServers: 'MCP server definitions that Orca offers to the agents it launches.',
-  skills: 'Agent skills shipped as files that Orca installs for the agents it launches.',
-  hooks:
-    'Agent lifecycle hooks, such as before and after a tool call, for the agents Orca launches.'
+  skills: 'Agent skills shipped as files that Orca installs for the agents it launches.'
 }
 
 function reservedList(purpose: string) {
@@ -150,6 +150,12 @@ export const pluginContributesFields = {
     PLUGIN_EVENT_SUBSCRIPTION_LIMIT,
     'Events delivered to the plugin worker.',
     V1
+  ),
+  hooks: contributionList(
+    pluginHookContributionSchema,
+    PLUGIN_HOOK_LIMIT,
+    'Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one.',
+    PLUGIN_HOOKS_SINCE
   ),
   languagePacks: contributionList(
     pluginLanguagePackContributionSchema,
@@ -223,7 +229,6 @@ export const pluginReservedContributesFields = {
   agentHarnesses: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.agentHarnesses),
   skills: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.skills),
   mcpServers: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.mcpServers),
-  hooks: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.hooks),
   taskSources: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.taskSources),
   connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections),
   sidebarCards: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.sidebarCards)
@@ -248,6 +253,8 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   commands: { execution: 'declarative', catalogType: 'instructions', bindsContent: false },
   // Why no catalog type: events need a worker, which `main` already declares.
   events: { execution: 'trusted-worker', catalogType: null, bindsContent: false },
+  // Why trusted-worker: a hook changes or refuses what Orca does, which only full access may.
+  hooks: { execution: 'trusted-worker', catalogType: null, bindsContent: false },
   languagePacks: { execution: 'data', catalogType: 'interface-language', bindsContent: false },
   keybindings: { execution: 'declarative', catalogType: 'instructions', bindsContent: true },
   vmRecipes: { execution: 'declarative', catalogType: 'instructions', bindsContent: true },
