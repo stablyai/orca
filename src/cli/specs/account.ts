@@ -112,7 +112,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: [
       'orca account session-mover --agent claude --move',
-      'orca account session-mover --agent claude --move --environment macstudio'
+      'orca account session-mover --agent claude --move --environment build-box'
     ]
   }
 ]
