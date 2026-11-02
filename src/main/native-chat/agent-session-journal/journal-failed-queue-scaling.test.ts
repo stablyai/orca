@@ -318,17 +318,13 @@ function sourceIndexFold(size: number) {
     )
   }
   const owner = journalInputOrder(state).newestTurn
-  let walks = 0
+  const walks: { mock: { calls: readonly unknown[] } }[] = []
   let derived = 0
   const watch = () => {
     const maps = [state.items, ...Object.values(owner).filter((value) => value instanceof Map)]
     for (const map of maps) {
       for (const method of ['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const) {
-        const walk = Reflect.get(map, method)
-        vi.spyOn(map, method).mockImplementation(function (this: unknown, ...args: unknown[]) {
-          walks++
-          return Reflect.apply(walk, this, args)
-        })
+        walks.push(vi.spyOn(map, method))
       }
     }
   }
@@ -351,7 +347,7 @@ function sourceIndexFold(size: number) {
     refusal,
     commit,
     watch,
-    counts: () => ({ walks, derived }),
+    counts: () => ({ walks: walks.reduce((sum, spy) => sum + spy.mock.calls.length, 0), derived }),
     status: (turnItemId: string, itemId: string) => row({ ...usageLimit(turnItemId), itemId })
   }
 }
