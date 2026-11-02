@@ -23,7 +23,12 @@ import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter
 
 /** Who made a call: the open panel (frames only), and its host window's WebContents for desktop
  *  IPC calls. */
-export type PluginHostCaller = { webContentsId?: number; panel?: PluginPanelCaller }
+export type PluginHostCaller = {
+  webContentsId?: number
+  panel?: PluginPanelCaller
+  /** Aborts when a worker cancels the call or exits. */
+  signal?: AbortSignal
+}
 
 type FindApprovedPlugin = (
   pluginKey: string,
@@ -40,6 +45,7 @@ export function createPluginHostCallScope(
   const manifestRevision = JSON.stringify(admitted.manifest)
   return {
     callerWebContentsId: caller?.webContentsId,
+    signal: caller?.signal,
     log,
     panel: caller?.panel,
     pluginName: admitted.manifest.name,

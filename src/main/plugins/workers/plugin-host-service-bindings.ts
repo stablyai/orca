@@ -3,6 +3,7 @@ import type { PluginHostServices } from './plugin-host-methods'
 import type { PluginDesktopFrameServices } from './plugin-host-method-bindings'
 import type { PluginPanelBridgeServices } from './plugin-host-panel-method-bindings'
 import type { PluginStatusBarState } from '../status-bar/plugin-status-bar-state'
+import type { PluginRuntimeRpc } from './plugin-host-workspace-method-bindings'
 import {
   pluginSettingValueIssue,
   type PluginSettingContribution
@@ -45,6 +46,8 @@ export type PluginRuntimeDelegate = {
   }): Promise<{ delivered: boolean }>
   /** The hook server's agent rows; absent where no hook server runs. */
   listAgentStatuses?(): readonly PluginAgentStatusRow[]
+  /** The runtime RPC the `orca` CLI calls, in process; absent where none is bound. */
+  callRuntime?: PluginRuntimeRpc
 }
 
 export function bindPluginHostServices(input: {
@@ -67,6 +70,7 @@ export function bindPluginHostServices(input: {
     statusBar: input.statusBar
       ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds, input.statusBarRevision)
       : null,
+    runtimeRpc: delegate.callRuntime ?? null,
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
       if (!context) {

@@ -1453,8 +1453,11 @@
           "type": "string",
           "enum": [
             "workspace:read",
+            "workspace:write",
             "agent:read",
+            "agent:launch",
             "terminal:send",
+            "terminal:read",
             "notifications:show",
             "storage:own",
             "secrets:own",
@@ -1464,8 +1467,11 @@
           "x-orca-since": "1.4.160",
           "x-orca-enum-since": {
             "workspace:read": "1.4.160",
+            "workspace:write": "1.4.248",
             "agent:read": "1.4.245",
+            "agent:launch": "1.4.248",
             "terminal:send": "1.4.160",
+            "terminal:read": "1.4.248",
             "notifications:show": "1.4.160",
             "storage:own": "1.4.245",
             "secrets:own": "1.4.245",

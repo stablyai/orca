@@ -141,3 +141,11 @@ then reads every file the entry loads without running it, and
 `ORCA plugin open <plugin-key> --editor <file>` shows it on a real file.
 `ORCA plugin shot <plugin-key> --editor <file> --theme dark` saves a PNG of the editor on that
 file, without changing it; read the image to check what you built.
+
+## Driving workspaces, terminals and agents from a worker
+
+A `trusted-worker` can act as the `orca` CLI does, on whichever host owns the workspace:
+`host.call('workspace.list')` (`workspace:read`) for ids, kinds, paths and branches;
+`terminal.create({ workspaceId, command })` (`terminal:send`) then `terminal.read({ terminalId,
+maxLines })` (`terminal:read`) for its output; `agent.launch({ workspaceId, agent: 'claude', prompt })`
+(`agent:launch`); `workspace.open({ workspaceId })` (`workspace:write`) to show one. Panels get none.

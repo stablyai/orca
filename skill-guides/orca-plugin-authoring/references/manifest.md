@@ -181,7 +181,7 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 
 A host API the plugin may call once the user consents.
 
-- `kind` ("workspace:read" | "agent:read" | "terminal:send" | "notifications:show" | "storage:own" | "secrets:own" | "settings:own", required, since 1.4.160): Capability granted on user consent.
+- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, required, since 1.4.160): Capability granted on user consent.
 
 ## Screenshot
 

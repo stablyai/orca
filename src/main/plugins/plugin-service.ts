@@ -116,8 +116,8 @@ export class PluginService {
       capabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
       isCurrentApproved: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey)),
       isApprovalKept: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey, true)),
-      executeHostCall: (pluginKey, method, params) =>
-        this.executeHostCall(pluginKey, method, params, 'worker'),
+      executeHostCall: (pluginKey, method, params, signal) =>
+        this.executeHostCall(pluginKey, method, params, 'worker', signal ? { signal } : undefined),
       onPanelPost: (pluginKey, post) => this.panelBridge.onWorkerPost(pluginKey, post),
       log: (pluginKey) => this.installed.logs.capture(pluginKey),
       onStateChanged: () => this.notifyChanged(false)
