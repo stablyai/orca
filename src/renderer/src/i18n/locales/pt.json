@@ -316,6 +316,7 @@
     "scanIssues": {
       "issuesOmitted": "Outros problemas da verificação foram omitidos.",
       "sessionMetadataUnreadable": "Não foi possível ler os metadados das sessões nesta verificação.",
+      "transcriptTooLarge": "Uma conversa de {{label}} é grande demais para carregar no Histórico de sessões. Tente retomá-la diretamente no {{label}}.",
       "openCodeScannerUnavailable": "O histórico do OpenCode foi ignorado porque seu verificador em segundo plano não pôde ser iniciado; o aplicativo continua respondendo.",
       "openCodeScanIncomplete": "A verificação do histórico do OpenCode não foi concluída: {{detail}}",
       "openCodeWslReaderPreparing": "Preparando o leitor SQLite do WSL. Atualize o Vault após a conclusão da configuração.",
