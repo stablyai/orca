@@ -24,10 +24,6 @@ export const SAVED_RESTORE_CHECK_COMMAND = ['agent', 'saved-restore-check'] as c
 const POWERSHELL_PROOF_VARIABLE = 'OrcaSavedRestoreProof'
 const PROOF_PATTERN = '[0-9a-f]{32}'
 
-export function isSavedRestoreProof(value: unknown): value is string {
-  return typeof value === 'string' && new RegExp(`^${PROOF_PATTERN}$`).test(value)
-}
-
 /** The generated line with its one-shot proof scoped to this command alone. */
 export function withSavedRestoreProof(
   command: string,
