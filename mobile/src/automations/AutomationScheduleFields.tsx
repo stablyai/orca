@@ -96,6 +96,11 @@ export function AutomationScheduleFields({
         options={cadences}
         disabled={disabled}
         onSelect={(next) => {
+          if (next === 'once' && cadence !== 'once') {
+            change({ recurringTimezone: draft.timezone })
+          } else if (cadence === 'once' && next !== 'once') {
+            change({ timezone: draft.recurringTimezone ?? draft.timezone })
+          }
           setCadence(next)
           updateSchedule(next, time, day)
         }}

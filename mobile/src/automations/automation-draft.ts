@@ -27,6 +27,7 @@ export type AutomationDraft = {
   workspaceMode: 'existing' | 'new_per_run'
   rrule: string
   timezone: string
+  recurringTimezone?: string
   baseBranch: string
   setupDecision: 'inherit' | 'run' | 'skip'
   reuseSession: boolean
