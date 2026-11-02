@@ -13332,7 +13332,8 @@
           "languageCoverage": "Interface language · {{value0}}% translated",
           "newFileMenu": "Adds to the + menu",
           "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
-          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer"
+          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer",
+          "statusBar": "Status bar"
         },
         "PluginCardAction": {
           "installed": "Installed",
