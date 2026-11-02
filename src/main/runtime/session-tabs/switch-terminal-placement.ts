@@ -4,16 +4,23 @@ import type { WindowTabContent, WindowTabContentOutcome } from '../../../shared/
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import {
   decideTabContent,
+  tabContentRef,
   type TabContent,
   type TabContentRef
 } from '../../../shared/workspace-layout/workspace-layout-tab-content'
 import { loadChatTabLayout } from '../agent-session/agent-session-tab-layout'
+import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import { logicalTabIdOf } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { TerminalNotPlacedError } from './terminal-not-placed-error'
 
 export type SwitchedTabContentRequest = {
-  tabId: string
+  /** The tab, once decided; deciding without one finds the tab holding the source. */
+  tabId?: string
+  /** Read just `tabId` (no search by content). */
+  exact?: boolean
   expectSource: TabContentRef
   /** What the window shows; main's model takes `layout`. */
   window: WindowTabContent
@@ -29,10 +36,10 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
 
   /**
    * A switch's one layout write, in whichever store owns this workspace's layout (the window, or
-   * main's model and a windowless host's saved layout): the tab holding just the switch's source
-   * keeps its id and place and now holds the destination. Which tab, if any, is that owner's
-   * answer, never assumed; `tabId` is main's best id for it. `decide` asks only which tab it would
-   * be, changing nothing, so the chat's record names that tab before the write.
+   * main's model and a windowless host's saved layout): the decided tab, holding just the
+   * switch's source, keeps its id and place and now holds the destination. Which tab, if any, is
+   * that owner's answer, never assumed. `decide` asks only which tab it would be (or, `exact`, what
+   * one tab holds now), changing nothing, so the chat's record names that tab before the write.
    */
   async setSwitchedTabContent(
     workspaceId: string,
@@ -43,25 +50,23 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
     if (windowOwnsLayout && this.notifier?.setTabContent) {
       return this.notifier.setTabContent({
         worktreeId: workspaceId,
-        tabId: request.tabId,
+        ...(request.tabId !== undefined ? { tabId: request.tabId } : {}),
         expectSource: request.expectSource,
         content: request.window,
         focus: request.focus,
-        ...(decide ? { decide } : {})
+        ...(decide ? { decide } : {}),
+        ...(request.exact ? { exact: true } : {})
       })
     }
     if (decide) {
-      const session = this.getWorkspaceSessionForWorktree(workspaceId)
       return decideTabContent(
-        session
-          ? loadChatTabLayout(
-              this.getWorkspaceSessionHostIdForWorktree(workspaceId),
-              session,
-              workspaceId
-            ).loaded.layout.workspaces[workspaceId]
-          : undefined,
-        { ...request, content: request.layout }
+        this.ownerLayoutWorkspace(workspaceId),
+        { ...request, content: request.layout },
+        request.exact === true
       )
+    }
+    if (request.tabId === undefined) {
+      throw new TerminalNotPlacedError('tab_not_decided')
     }
     const reply = await this.applyLayoutCommand({
       type: 'setTabContent',
@@ -79,30 +84,106 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
     }
   }
 
+  /** This workspace's layout as its owner has it when that owner is main: main's own model, or a
+   *  windowless host's saved layout. */
+  protected ownerLayoutWorkspace(workspaceId: string): WorkspaceLayout | undefined {
+    const live = ORCA_LAYOUT_OWNER_IS_MAIN ? this.mainLayoutWorkspace(workspaceId) : undefined
+    if (live) {
+      return live
+    }
+    const session = this.getWorkspaceSessionForWorktree(workspaceId)
+    return session
+      ? loadChatTabLayout(
+          this.getWorkspaceSessionHostIdForWorktree(workspaceId),
+          session,
+          workspaceId
+        ).loaded.layout.workspaces[workspaceId]
+      : undefined
+  }
+
+  protected abstract mainLayoutWorkspace(worktreeId: string): WorkspaceLayout | undefined
+
+  /** The tab holding just this content, asked of the layout owner (never the published tab
+   *  graph, which can trail it). */
+  async ownerTabHolding(
+    workspaceId: string,
+    content: Pick<SwitchedTabContentRequest, 'window' | 'layout'>
+  ): Promise<string | undefined> {
+    const held = await this.setSwitchedTabContent(
+      workspaceId,
+      { ...content, expectSource: tabContentRef(content.layout), focus: false },
+      true
+    )
+    return held.retargeted ? held.tabId : undefined
+  }
+
   /**
-   * A switch's layout change in commit order: the owner says which tab would take the destination,
-   * changing nothing; `commit` records that tab in the chat-tab journal; then the owner changes the
-   * tab, checking again. A refusal there (the user changed the tab meanwhile, or the window let the
-   * request expire unapplied) changed nothing, and the caller opens the destination as an
-   * ordinary tab. A failed decision or commit leaves the source as it was.
+   * The tab a switch's chat opens in when it doesn't fill the switched tab: the tab already holding
+   * the chat, else its usual id, else the next free one, as the layout owner has its tabs (a
+   * window lists its own tabs; main follows the same rule, `mirroredTabContainers`).
+   */
+  switchChatTabId(workspaceId: string, sessionId: string): string {
+    const shown = (this.mobileSessionTabsByWorktree.get(workspaceId)?.tabs ?? []).map((row) => ({
+      id: logicalTabIdOf(row),
+      holds: row.type === 'agent-session' && row.sessionId === sessionId
+    }))
+    const tabs = [
+      ...(this.ownerLayoutWorkspace(workspaceId)?.tabs ?? []).map((tab) => ({
+        id: tab.id,
+        holds: tab.kind === 'agent-session' && tab.entityId === sessionId
+      })),
+      ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [] : shown)
+    ]
+    const held = tabs.find((tab) => tab.holds)
+    if (held) {
+      return held.id
+    }
+    const taken = new Set(tabs.map((tab) => tab.id))
+    const preferred = structuredAgentSessionTabId(sessionId)
+    let id = preferred
+    for (let suffix = 2; taken.has(id); suffix++) {
+      id = `${preferred}-${suffix}`
+    }
+    return id
+  }
+
+  /**
+   * A switch's layout change in commit order: the owner says which tab would take the
+   * destination, changing nothing; `commit` records that tab in the chat-tab journal; then the
+   * owner changes exactly that tab, checking again. A refusal there (the user changed the tab
+   * meanwhile, or the request reached the window past its deadline) changed nothing, and the
+   * caller opens the destination as an ordinary tab. A failed decision or commit leaves the source
+   * as it was.
+   *
+   * After the commit an answer that never came is unknown, never a refusal: the tab is asked again,
+   * bound to it, unless `current` says a later close or switch superseded this one. Already
+   * holding the destination is done, still holding the source applies it now, anything else is
+   * the ordinary fallback. With the owner still silent, the committed tab stands, and the owner's
+   * startup puts the destination there.
    */
   async switchTabContent(
     workspaceId: string,
     request: SwitchedTabContentRequest,
-    commit: (tabId: string) => Promise<void>
+    commit: (tabId: string) => Promise<void>,
+    current: () => boolean = () => true
   ): Promise<WindowTabContentOutcome> {
     const decided = await this.setSwitchedTabContent(workspaceId, request, true)
     if (!decided.retargeted || !decided.tabId) {
       return { retargeted: false }
     }
     await commit(decided.tabId)
+    const bound = { ...request, tabId: decided.tabId }
     try {
-      return await this.setSwitchedTabContent(workspaceId, { ...request, tabId: decided.tabId })
-    } catch (error) {
-      if (error instanceof TerminalNotPlacedError) {
-        return { retargeted: false }
+      return await this.setSwitchedTabContent(workspaceId, bound)
+    } catch {
+      if (!current()) {
+        return { retargeted: true, tabId: decided.tabId }
       }
-      throw error
+    }
+    try {
+      return await this.setSwitchedTabContent(workspaceId, bound)
+    } catch {
+      return { retargeted: true, tabId: decided.tabId }
     }
   }
 
@@ -116,8 +197,11 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
     args: {
       terminal: RuntimeTerminalCreate
       chatSessionId: string
-      /** The chat's tab as main knows it. */
-      chatTabId: string
+      /** The chat's tab as its owner named it; none (a retry whose chat already left) finds the
+       *  tab holding the terminal. */
+      chatTabId?: string
+      /** False once a later switch or close superseded this placement. */
+      current?: () => boolean
       activate: boolean
       focusWindow: boolean
       commit: () => Promise<void>
@@ -138,23 +222,27 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
       ...(pty.incarnationId ? { incarnationId: pty.incarnationId } : {}),
       recordedPaneKey: `${tabId}:${leafId}`
     }
+    const content = {
+      window: {
+        kind: 'terminal' as const,
+        terminalId: tabId,
+        leafId,
+        ptyId: pty.ptyId,
+        ...(terminal.title ? { title: terminal.title } : {}),
+        ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {})
+      },
+      layout: { kind: 'terminal' as const, terminalId: tabId, leafId, adopt }
+    }
     const switched = await this.switchTabContent(
       workspaceId,
       {
-        tabId: args.chatTabId,
+        tabId: args.chatTabId ?? (await this.ownerTabHolding(workspaceId, content)),
         expectSource: { kind: 'agent-session', sessionId: args.chatSessionId },
-        window: {
-          kind: 'terminal',
-          terminalId: tabId,
-          leafId,
-          ptyId: pty.ptyId,
-          ...(terminal.title ? { title: terminal.title } : {}),
-          ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {})
-        },
-        layout: { kind: 'terminal', terminalId: tabId, leafId, adopt },
+        ...content,
         focus: args.focusWindow
       },
-      args.commit
+      args.commit,
+      args.current
     )
     if (!switched.retargeted) {
       await this.placeOrdinaryTerminal(workspaceId, terminal, { tabId, leafId, adopt }, args)

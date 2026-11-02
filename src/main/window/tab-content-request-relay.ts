@@ -14,14 +14,14 @@ import {
 import { addFanoutListener, addFanoutListeners } from '../event-listener-fanout'
 
 const TAB_CONTENT_REPLY_MS = 10_000
-// The window refuses at the deadline and answers in the same task it applies in, so a reply not
-// here by then plus this grace means it changed nothing.
 const TAB_CONTENT_REPLY_GRACE_MS = 2_000
 
 /**
  * Asks the window that owns the layout to change what one tab holds (or which tab it would), and
- * waits for its answer: whether the tab now holds the content. No answer by the deadline means the
- * window refused it; only a window that died meanwhile leaves that unknown.
+ * waits for its answer: whether the tab now holds the content. The window refuses a request it
+ * gets past the deadline, so one that never started changes nothing; but a request it applied in
+ * time can still lose its answer. No answer (the deadline passed, or the window died) is unknown,
+ * never a refusal: the caller reads the tab again.
  */
 export function requestTabContentFromRenderer(
   mainWindow: BrowserWindow,
@@ -59,7 +59,7 @@ export function requestTabContentFromRenderer(
     const onGone = (): void => finish(new TerminalRevealUnconfirmedError('renderer_unavailable'))
     const expiresAt = Date.now() + TAB_CONTENT_REPLY_MS
     const timeout = setTimeout(
-      () => finish(new TerminalNotPlacedError('Tab content change timed out')),
+      () => finish(new TerminalRevealUnconfirmedError('Tab content change unanswered')),
       TAB_CONTENT_REPLY_MS + TAB_CONTENT_REPLY_GRACE_MS
     )
     releaseListeners.push(
@@ -70,6 +70,7 @@ export function requestTabContentFromRenderer(
     try {
       webContents.send('ui:setTabContent', { ...request, requestId, expiresAt })
     } catch {
+      // Never sent: nothing changed.
       finish(new TerminalNotPlacedError('renderer_unavailable'))
     }
   })

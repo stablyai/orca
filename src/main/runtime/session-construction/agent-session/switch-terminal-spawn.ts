@@ -151,8 +151,10 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
 
   /**
    * Whether the conversation's live terminal is this switch's own: parked (nothing views it), as an
-   * attempt whose answer was lost leaves it, or what the switched tab holds now, asked of the
-   * layout owner that holds the tab (never the published tab graph, which can trail that owner).
+   * attempt whose answer was lost leaves it, or what the switched tab holds now, read from the
+   * layout owner bound to exactly that tab (the readback settlement uses; never the published tab
+   * graph, which can trail that owner). A request that named no tab, its chat already gone from
+   * every tab (an earlier attempt placed its terminal), finds the tab by what holds the terminal.
    * Any other is another tab's: adopting it would put one terminal in two tabs, and the switch
    * checks only its own tab (Brennan 11-01), so it opens its own beside it. Derived each time;
    * nothing is kept. Temporary under that ruling (STA-13394): a retry whose first terminal is no
@@ -173,17 +175,23 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       terminalId && paneKey?.startsWith(`${terminalId}:`)
         ? paneKey.slice(terminalId.length + 1)
         : undefined
-    if (!switchedTabId || !terminalId || !leafId) {
+    if (!terminalId || !leafId) {
       return false
     }
-    // The owner's own answer for that one tab: the switched tab holds just this terminal.
+    const content = {
+      window: { kind: 'terminal' as const, terminalId, leafId, ptyId },
+      layout: { kind: 'terminal' as const, terminalId, leafId, adopt: { ptyId } }
+    }
+    if (switchedTabId === undefined) {
+      return (await this.ownerTabHolding(workspaceId, content)) !== undefined
+    }
     const held = await this.setSwitchedTabContent(
       workspaceId,
       {
         tabId: switchedTabId,
+        exact: true,
         expectSource: { kind: 'terminal', terminalId },
-        window: { kind: 'terminal', terminalId, leafId, ptyId },
-        layout: { kind: 'terminal', terminalId, leafId, adopt: { ptyId } },
+        ...content,
         focus: false
       },
       true

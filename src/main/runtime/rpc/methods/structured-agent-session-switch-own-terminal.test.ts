@@ -108,7 +108,8 @@ async function windowOwnedSwitch(opts: { loseFirstAnswer?: boolean } = {}) {
         expectSource: request.expectSource,
         content: request.window,
         focus: false,
-        ...(decide ? { decide } : {})
+        ...(decide ? { decide } : {}),
+        ...(request.exact ? { exact: true } : {})
       })
       if (!decide && answer.retargeted && request.window.kind === 'terminal') {
         // The window's pane for that terminal views it.
@@ -121,9 +122,9 @@ async function windowOwnedSwitch(opts: { loseFirstAnswer?: boolean } = {}) {
       return answer
     }
   )
-  const run = (invocationId: string) =>
+  const run = (invocationId: string, named = true) =>
     executeStructuredSessionSwitch(
-      { sessionId: id, execution: { invocationId, sourceTabId: T } },
+      { sessionId: id, execution: { invocationId, ...(named ? { sourceTabId: T } : {}) } },
       { runtime: r.runtime },
       'terminal'
     )
@@ -163,27 +164,33 @@ it('a retry after a switch whose answer to the client was lost returns that term
   expect(r.spawned).toHaveLength(1)
 })
 
-it('after main restarts, a retry naming the chat’s tab adopts the terminal the window keeps there', async () => {
-  const { r, run, shownInT } = await windowOwnedSwitch()
-  const first = await run('first')
-  expect(first).toMatchObject({ status: 'completed', terminal: r.spawned[0]!.tabId })
-  // Main restarts: its switches and claims are gone and it has heard no tab graph yet; the
-  // execution owner keeps the terminal, which the window still shows in T.
-  r.relaunch()
-  setStructuredAgentSessionHost(await rig.restart())
-  r.runtime.storeMobileSessionSnapshot(WORKTREE_ID, {
-    worktree: WORKTREE_ID,
-    publicationEpoch: 'restarted',
-    snapshotVersion: 1,
-    activeGroupId: null,
-    activeTabId: null,
-    activeTabType: null,
-    tabs: []
-  })
-  expect(await run('after-restart')).toMatchObject({
-    status: 'completed',
-    terminal: r.spawned[0]!.tabId
-  })
-  expect(r.started()).toBe(1)
-  expect(shownInT()).toEqual([expect.objectContaining({ id: T, entityId: r.spawned[0]!.tabId })])
-})
+it.each([
+  ['naming the chat’s tab', true],
+  ['naming no tab', false]
+])(
+  'after main restarts, a retry %s adopts the terminal the window keeps there',
+  async (_name, named) => {
+    const { r, run, shownInT } = await windowOwnedSwitch()
+    const first = await run('first', named)
+    expect(first).toMatchObject({ status: 'completed', terminal: r.spawned[0]!.tabId })
+    // Main restarts: its switches and claims are gone and it has heard no tab graph yet; the
+    // execution owner keeps the terminal, which the window still shows in T.
+    r.relaunch()
+    setStructuredAgentSessionHost(await rig.restart())
+    r.runtime.storeMobileSessionSnapshot(WORKTREE_ID, {
+      worktree: WORKTREE_ID,
+      publicationEpoch: 'restarted',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    })
+    expect(await run('after-restart', named)).toMatchObject({
+      status: 'completed',
+      terminal: r.spawned[0]!.tabId
+    })
+    expect(r.started()).toBe(1)
+    expect(shownInT()).toEqual([expect.objectContaining({ id: T, entityId: r.spawned[0]!.tabId })])
+  }
+)

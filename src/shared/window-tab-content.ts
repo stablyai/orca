@@ -27,8 +27,9 @@ export type WindowTabContentRequest = {
   /** Only answer which tab would take the content, changing nothing: main records the chat's
    *  tab before anything retires the source. */
   decide?: boolean
-  /** Past this (ms since epoch) the window refuses, so a reply main stopped waiting for changed
-   *  nothing. */
+  /** Read just `tabId` (no search by content): what a decided tab holds now. */
+  exact?: boolean
+  /** Past this (ms since epoch) the window refuses: a request delivered late changes nothing. */
   expiresAt: number
 }
 

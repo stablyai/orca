@@ -294,3 +294,85 @@ it('opens a split pane’s chat right after the tab holding the source terminal'
   const chat = tabs().find((tab) => tab.contentType === 'agent-session')
   expect(group()?.tabOrder).toEqual(['before', chat?.id, SWITCHED, 'after'])
 })
+
+it('changes only the decided tab: another tab holding the source is never changed instead', () => {
+  seed(SWITCHED)
+  const before = tabs()
+  const request = {
+    worktreeId: WORKTREE,
+    tabId: 'before',
+    expectSource: { kind: 'terminal', terminalId: SWITCHED },
+    content: { kind: 'agent-session', sessionId: 'session-exact', agent: 'codex' },
+    focus: false
+  } as const
+  // Deciding searches by content; the change, and an exact reading, stay on the named tab.
+  expect(setWindowTabContent({ ...request, decide: true })).toEqual({
+    retargeted: true,
+    tabId: SWITCHED
+  })
+  expect(setWindowTabContent({ ...request, decide: true, exact: true })).toEqual({
+    retargeted: false
+  })
+  expect(setWindowTabContent(request)).toEqual({ retargeted: false })
+  expect(tabs()).toEqual(before)
+})
+
+const ipcListeners = new Map<string, Set<(...args: unknown[]) => void>>()
+vi.mock('electron', () => ({
+  ipcMain: {
+    on: (name: string, listener: (...args: unknown[]) => void) =>
+      ipcListeners.set(name, (ipcListeners.get(name) ?? new Set()).add(listener)),
+    removeListener: (name: string, listener: (...args: unknown[]) => void) =>
+      ipcListeners.get(name)?.delete(listener)
+  }
+}))
+
+// Through main's real relay: the window applies in time and its answer is lost. That is unknown,
+// never a refusal, and asking the same tab again finds the change done, without changing it twice.
+it('settles a change whose answer was lost by asking the same tab again', async () => {
+  seed(SWITCHED)
+  vi.useFakeTimers()
+  try {
+    const { EventEmitter } = await import('node:events')
+    const { requestTabContentFromRenderer } =
+      await import('../../../main/window/tab-content-request-relay')
+    const { TerminalRevealUnconfirmedError } =
+      await import('../../../main/runtime/session-tabs/terminal-not-placed-error')
+    let answer = false
+    const webContents = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+      send: (_channel: string, request: Parameters<typeof setWindowTabContent>[0]) => {
+        const outcome = setWindowTabContent(request)
+        if (answer) {
+          for (const listener of ipcListeners.get('ui:tabContentReply') ?? []) {
+            listener(
+              { sender: webContents },
+              { ...outcome, requestId: (request as never)['requestId'] }
+            )
+          }
+        }
+      }
+    })
+    const mainWindow = Object.assign(new EventEmitter(), { isDestroyed: () => false, webContents })
+    const request = {
+      worktreeId: WORKTREE,
+      tabId: SWITCHED,
+      expectSource: { kind: 'terminal', terminalId: SWITCHED },
+      content: { kind: 'agent-session', sessionId: 'session-lost', agent: 'codex' },
+      focus: false
+    } as const
+    const lost = requestTabContentFromRenderer(mainWindow as never, request).catch((e) => e)
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(await lost).toBeInstanceOf(TerminalRevealUnconfirmedError)
+    const changed = tabs()
+    answer = true
+    await expect(requestTabContentFromRenderer(mainWindow as never, request)).resolves.toEqual({
+      retargeted: true,
+      tabId: SWITCHED
+    })
+    expect(tabs()).toEqual(changed)
+    expect(tabs().filter((tab) => tab.entityId === 'session-lost')).toHaveLength(1)
+  } finally {
+    vi.useRealTimers()
+  }
+})

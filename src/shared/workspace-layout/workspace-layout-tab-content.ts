@@ -35,8 +35,8 @@ export type TabContent =
     }
   | { kind: 'agent-session'; sessionId: string; agent: AgentType }
 
-/** A switch: the tab holding just `expectSource` (`tabId` first) keeps its id and place and now
- *  holds `content`; `tabId` already holding `content` is done; otherwise nothing changes. */
+/** A switch: `tabId`, the tab its owner decided, holding just `expectSource` keeps its id and
+ *  place and now holds `content`; already holding `content` is done; otherwise nothing changes. */
 export type SetTabContentCommand = {
   type: 'setTabContent'
   tabId: string
@@ -62,23 +62,29 @@ export function tabHoldsOnly(tab: HeldTabContent, content: TabContentRef): boole
 
 /**
  * The one condition, for every layout owner: the switch changes the tab that holds just its
- * source, the caller's tab first, else whichever tab holds it (the caller may know only the
- * content, as main does for a window's tab). A caller's tab already holding the destination is a
- * retry after a lost answer: done. Anything else (the user closed or split it) is null, and the
- * switch opens its destination as an ordinary tab.
+ * source. Deciding which tab, the caller's tab comes first, else whichever tab holds the source
+ * (the caller may know only the content, as main does for a window's tab). Once decided, the
+ * change and any later reading are bound to `exact`ly that tab: it holding the destination is a
+ * retry after a lost answer, done; anything else there (the user closed, split or refilled it) is
+ * null, and the switch opens its destination as an ordinary tab, never in another tab.
  */
 export function switchedTab<T extends HeldTabContent>(
   tabs: readonly T[],
   tabId: string | undefined,
   source: TabContentRef,
-  destination: TabContentRef
+  destination: TabContentRef,
+  exact = false
 ): { tab: T; done: boolean } | null {
   const named = tabId === undefined ? undefined : tabs.find((tab) => tab.id === tabId)
   if (named && tabHoldsOnly(named, destination)) {
     return { tab: named, done: true }
   }
   const holder =
-    named && tabHoldsOnly(named, source) ? named : tabs.find((tab) => tabHoldsOnly(tab, source))
+    named && tabHoldsOnly(named, source)
+      ? named
+      : exact
+        ? undefined
+        : tabs.find((tab) => tabHoldsOnly(tab, source))
   return holder ? { tab: holder, done: false } : null
 }
 
@@ -91,25 +97,27 @@ const heldContentOf = (tab: LayoutTab): HeldTabContent & { tab: LayoutTab } => (
 })
 
 /** Which tab `setTabContent` would change, changing nothing: a switch records its chat's tab
- *  there before the write that retires the source. */
+ *  there before the write that retires the source. `exact` reads just the named tab. */
 export function decideTabContent(
   workspace: WorkspaceLayout | undefined,
-  command: Pick<SetTabContentCommand, 'tabId' | 'expectSource' | 'content'>
+  command: Pick<SetTabContentCommand, 'expectSource' | 'content'> & { tabId?: string },
+  exact = false
 ): { retargeted: boolean; tabId?: string } {
   const found = workspace
     ? switchedTab(
         workspace.tabs.map(heldContentOf),
         command.tabId,
         command.expectSource,
-        tabContentRef(command.content)
+        tabContentRef(command.content),
+        exact
       )
     : null
   return found ? { retargeted: true, tabId: found.tab.id } : { retargeted: false }
 }
 
 /**
- * The tab takes the switch's destination in place (see `switchedTab`); it answers which tab and
- * whether it did. A retired terminal's panes go in the same write and its id is recorded closed,
+ * The decided tab takes the switch's destination in place (see `switchedTab`, bound to exactly
+ * that tab); it answers which tab and whether it did. A retired terminal's panes go in the same write and its id is recorded closed,
  * so a late record can't bring it back beside the chat.
  */
 export function setTabContent(
@@ -122,7 +130,8 @@ export function setTabContent(
     workspace.tabs.map(heldContentOf),
     command.tabId,
     command.expectSource,
-    tabContentRef(command.content)
+    tabContentRef(command.content),
+    true
   )
   if (!found || found.done) {
     return applied(model, { ...(found ? { tabId: found.tab.id } : {}), retargeted: Boolean(found) })

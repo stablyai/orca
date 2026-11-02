@@ -20,7 +20,7 @@ import {
   switchFromKeptTerminal
 } from './structured-agent-session-switch-execution.test-fixture'
 import { TerminalRevealUnconfirmedError } from '../../session-tabs/terminal-not-placed-error'
-import { chatTabId } from '../../agent-session/agent-session-tab-layout'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // A switch's commit point is the chat-tab record: the layout owner first says which tab would
 // change, the record commits, and only then does the tab change. Before it nothing changed; after
@@ -89,13 +89,16 @@ it.each([
   }
   // Committed: the switch happened, whatever the window's answer, and its source was replaced.
   expect(result).toEqual({ status: 'completed', sessionId: id })
-  expect(changes).toEqual([true, false])
   if (cut === 'lost') {
+    // No answer is unknown, never a refusal: the tab is asked once more, and with the owner still
+    // silent the committed tab stands.
+    expect(changes).toEqual([true, false, false])
     expect(rig.store.getSessionTabId(id)).toBe(TAB_ID)
     expect(settled).toHaveBeenCalledExactlyOnceWith({ ...stoppedSource, replacedBySessionId: id })
   } else {
-    // The record follows the chat to the ordinary tab it opened in instead.
-    expect(rig.store.getSessionTabId(id)).toBe(chatTabId(id))
+    // The record follows the chat to the ordinary tab it opened in instead, never the changed tab.
+    expect(changes).toEqual([true, false])
+    expect(rig.store.getSessionTabId(id)).toBe(structuredAgentSessionTabId(id))
   }
 })
 

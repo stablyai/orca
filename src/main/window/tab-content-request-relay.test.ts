@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { expect, it, vi } from 'vitest'
-import { TerminalNotPlacedError } from '../runtime/session-tabs/terminal-not-placed-error'
+import { TerminalRevealUnconfirmedError } from '../runtime/session-tabs/terminal-not-placed-error'
 
 const ipcEmitter = new EventEmitter()
 vi.mock('electron', () => ({
@@ -12,7 +12,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-it('sends its deadline, and takes no answer by then (plus grace) as a change the window refused', async () => {
+it('sends its deadline, and takes no answer by then (plus grace) as unknown, never a refusal', async () => {
   vi.useFakeTimers()
   vi.setSystemTime(1_000)
   const { requestTabContentFromRenderer } = await import('./tab-content-request-relay')
@@ -28,9 +28,10 @@ it('sends its deadline, and takes no answer by then (plus grace) as a change the
   const request = webContents.send.mock.calls[0]?.[1] as { expiresAt: number }
   // The window refuses at the deadline, so main waits a little past it.
   expect(request.expiresAt).toBe(11_000)
-  const refused = expect(pending).rejects.toBeInstanceOf(TerminalNotPlacedError)
+  // The window applies a request it got in time even when its answer is lost.
+  const unknown = expect(pending).rejects.toBeInstanceOf(TerminalRevealUnconfirmedError)
   await vi.advanceTimersByTimeAsync(request.expiresAt - Date.now() + 2_000)
-  await refused
+  await unknown
   expect(ipcEmitter.listenerCount('ui:tabContentReply')).toBe(0)
   vi.useRealTimers()
 })

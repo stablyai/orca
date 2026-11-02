@@ -48,7 +48,9 @@ export function setWindowTabContent(
     })),
     request.tabId,
     expectSource,
-    destination
+    destination,
+    // Only deciding searches by content; a change, and a reading, is bound to the decided tab.
+    !request.decide || request.exact === true
   )
   if (!found || found.done || request.decide) {
     return found ? { retargeted: true, tabId: found.tab.id } : { retargeted: false }
@@ -148,7 +150,7 @@ export function registerWindowTabContentRequests(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onSetTabContent(({ requestId, expiresAt, ...request }) => {
       try {
-        // Main stopped waiting at the deadline and took this as refused: change nothing.
+        // Past its deadline a request was never applied: main reads the tab again instead.
         const outcome =
           Date.now() >= expiresAt ? { retargeted: false } : setWindowTabContent(request)
         window.api.ui.replyTabContent?.({ requestId, ...outcome })

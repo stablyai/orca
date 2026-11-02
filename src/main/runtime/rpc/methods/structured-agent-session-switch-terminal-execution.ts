@@ -13,8 +13,6 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session/failu
 import { nativeConversationContent } from '../../../ai-vault/structured-chat-cli-fork'
 import { prepareSwitchCliTranscript } from './structured-agent-session-switch-transcript'
 import { TerminalNotPlacedError } from '../../session-tabs/terminal-not-placed-error'
-import { logicalTabHolding } from '../../session-tabs/session-tab-content-swap'
-import { chatTabId } from '../../agent-session/agent-session-tab-layout'
 
 /** Stop the chat with proof, spawn the terminal parked, then the chat's tab holds it in place. */
 export async function executeStructuredSessionTerminalSwitch(
@@ -40,15 +38,16 @@ export async function executeStructuredSessionTerminalSwitch(
     nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved'
       ? await prepareSwitchCliTranscript(ctx.runtime, sessionId, record.location.workspaceId, true)
       : undefined
-  // The chat's tab, read before the stop: the window's own id when it asked, else the tab the
-  // published snapshot shows holding the chat, else its recorded tab.
+  // The chat's tab, read before the stop: the caller's own id for it, else the tab its layout
+  // owner has holding the chat (never the published graph, which can trail the owner). A retry
+  // whose chat already left (an earlier attempt placed its terminal) names none: its terminal is
+  // then found by what holds it.
   const switchedTabId =
     execution?.sourceTabId ??
-    logicalTabHolding(ctx.runtime.mobileSessionTabsByWorktree.get(record.location.workspaceId), {
-      kind: 'agent-session',
-      sessionId
-    }) ??
-    chatTabId(sessionId)
+    (await ctx.runtime.ownerTabHolding(record.location.workspaceId, {
+      window: { kind: 'agent-session', sessionId, agent },
+      layout: { kind: 'agent-session', sessionId, agent }
+    }))
   // Admission before the chat stops: the create's own ownership decision. The switch checks only
   // its own tab (Brennan 11-01, temporary; a cross-tab check is a follow-up), so a terminal
   // elsewhere holding this conversation refuses nothing and is never moved: the new terminal then
@@ -116,6 +115,8 @@ export async function executeStructuredSessionTerminalSwitch(
       terminal,
       chatSessionId: sessionId,
       chatTabId: switchedTabId,
+      // A later switch back or close of the chat supersedes this placement's settling.
+      current: () => host.getSessionTabId(sessionId) === null,
       activate: true,
       focusWindow: agentLaunchMovesHostWindow(ctx),
       // The commit point, before the layout owner replaces the chat: it leaves the saved chat
