@@ -91,7 +91,8 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     },
     getHandle: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
     waitForEmptyComposer: (handle, signal) => this.waitForEmptyClaudeComposer(handle, signal),
-    sendCommand: async (handle, text, signal, stillWanted) => {
+    readComposerDraft: (handle) => this.readClaudeComposerDraft(handle),
+    sendCommand: async (handle, text, signal, beforeEachWrite) => {
       // The pane may have returned to its shell since the hook row was written.
       const guard = createLaunchedAgentWriteGuard(this, 'claude')
       try {
@@ -99,7 +100,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
           inputKind: 'driving',
           beforeWrite: async (ptyId) => {
             await guard.beforeWrite(ptyId)
-            stillWanted()
+            await beforeEachWrite()
           },
           acceptQueued: true,
           observationTimeoutMs: 0,
@@ -166,15 +167,16 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
         timeoutMs: Math.max(1, deadline - Date.now()),
         signal
       })
-      if (wait.satisfied) {
-        const screen = await this.readTerminal(handle, { screen: true, limit: 1 })
-        if (!screen.draft) {
-          return true
-        }
+      if (wait.satisfied && !(await this.readClaudeComposerDraft(handle))) {
+        return true
       }
       await new Promise((resolve) => setTimeout(resolve, CLAUDE_RENAME_RECHECK_MS).unref?.())
     }
     return false
+  }
+
+  private async readClaudeComposerDraft(handle: string): Promise<string | undefined> {
+    return (await this.readTerminal(handle, { screen: true, limit: 1 })).draft
   }
 
   /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */

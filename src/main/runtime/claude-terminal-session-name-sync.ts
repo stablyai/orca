@@ -20,12 +20,14 @@ export type ClaudeTerminalSessionNameSyncDeps = {
   getHandle: (paneKey: string) => string | null
   /** Resolves true once the composer is at rest and empty; false when the wait gave up. */
   waitForEmptyComposer: (handle: string, signal: AbortSignal) => Promise<boolean>
-  /** `stillWanted` runs at the write boundary; it throws to drop the command unwritten. */
+  /** The composer's current text, or undefined when it shows none. */
+  readComposerDraft: (handle: string) => Promise<string | undefined>
+  /** `beforeEachWrite` runs at every write boundary; it throws to stop the command there. */
   sendCommand: (
     handle: string,
     text: string,
     signal: AbortSignal,
-    stillWanted: () => void
+    beforeEachWrite: () => Promise<void>
   ) => Promise<void>
   renameTab: (handle: string, name: string) => Promise<void>
   readCustomTitle: (transcriptPath: string) => Promise<string | null>
@@ -33,11 +35,19 @@ export type ClaudeTerminalSessionNameSyncDeps = {
 
 type PendingRename = { name: string; abort: AbortController }
 
-// The pane went back to its shell or away; its hook row outlived the agent.
+const STALE = 'claude_session_name_sync_stale'
+// The user started typing before the paste: wait for the composer again.
+const COMPOSER_BUSY = 'claude_composer_busy'
+// The user typed into the pasted command: never submit their text with it.
+const COMPOSER_CHANGED = 'claude_composer_changed'
+
+// The pane went back to its shell or away, or the rename went stale or met the user's typing.
 const EXPECTED_REFUSALS = new Set([
   'agent_not_in_foreground',
   'terminal_handle_stale',
-  'claude_session_name_sync_stale'
+  STALE,
+  COMPOSER_BUSY,
+  COMPOSER_CHANGED
 ])
 
 /** Mirrors a terminal tab's name and the Claude Code session name (`/rename`) both ways, on the execution host. */
@@ -45,6 +55,8 @@ export class ClaudeTerminalSessionNameSync {
   // The name both sides last agreed on, so neither direction echoes the other.
   private readonly agreed = new Map<string, string>()
   private readonly pendingRenames = new Map<string, PendingRename>()
+  // The newest rename per pane, kept while it is written, so an older one still writing is dropped.
+  private readonly latestRenames = new Map<string, PendingRename>()
   // A title Claude showed before its transcript recorded it; rechecked at the pane's next turn change.
   private readonly unconfirmedTitles = new Map<string, string>()
   // The name each pane's title last showed; spinner frames of one name share it.
@@ -64,6 +76,11 @@ export class ClaudeTerminalSessionNameSync {
         if (parsePaneKey(paneKey)?.tabId === tabId) {
           pending.abort.abort()
           this.pendingRenames.delete(paneKey)
+        }
+      }
+      for (const paneKey of this.latestRenames.keys()) {
+        if (parsePaneKey(paneKey)?.tabId === tabId) {
+          this.latestRenames.delete(paneKey)
         }
       }
       return
@@ -124,6 +141,7 @@ export class ClaudeTerminalSessionNameSync {
     const abort = new AbortController()
     const rename = { name, abort }
     this.pendingRenames.set(paneKey, rename)
+    this.latestRenames.set(paneKey, rename)
     void this.deliver(paneKey, rename).finally(() => {
       if (this.pendingRenames.get(paneKey) === rename) {
         this.pendingRenames.delete(paneKey)
@@ -152,12 +170,7 @@ export class ClaudeTerminalSessionNameSync {
         handle,
         claudeRenameCommand(rename.name),
         rename.abort.signal,
-        () => {
-          // The write guard can wait; the setting or the tab's panes may change meanwhile.
-          if (!this.canCommit(paneKey)) {
-            throw new Error('claude_session_name_sync_stale')
-          }
-        }
+        this.writeCheck(handle, paneKey, rename)
       )
     } catch (error) {
       if (rename.abort.signal.aborted) {
@@ -167,6 +180,9 @@ export class ClaudeTerminalSessionNameSync {
       if (this.agreed.get(paneKey) === rename.name) {
         this.agreed.delete(paneKey)
       }
+      if (describe(error) === COMPOSER_BUSY && this.latestRenames.get(paneKey) === rename) {
+        this.renameSession(paneKey, rename.name)
+      }
       if (!EXPECTED_REFUSALS.has(describe(error))) {
         console.warn('[claude-session-name] /rename was not delivered:', describe(error))
       }
@@ -175,6 +191,30 @@ export class ClaudeTerminalSessionNameSync {
 
   private tabRenameGeneration(tabId: string | undefined): number {
     return (tabId && this.tabRenameGenerations.get(tabId)) || 0
+  }
+
+  /** Rechecked at each write: the paste needs the newest rename and an empty composer; Enter needs
+   *  the composer to hold only the pasted command. The draft is read from the screen just before
+   *  each write, which narrows but cannot close the window for a keystroke in between. */
+  private writeCheck(handle: string, paneKey: string, rename: PendingRename): () => Promise<void> {
+    const command = claudeRenameCommand(rename.name)
+    let pasted = false
+    return async () => {
+      const draft = (await this.deps.readComposerDraft(handle))?.replace(/\s+/g, ' ').trim()
+      if (pasted) {
+        if (draft && draft !== command) {
+          throw new Error(COMPOSER_CHANGED)
+        }
+        return
+      }
+      if (this.latestRenames.get(paneKey) !== rename || !this.canCommit(paneKey)) {
+        throw new Error(STALE)
+      }
+      if (draft) {
+        throw new Error(COMPOSER_BUSY)
+      }
+      pasted = true
+    }
   }
 
   private async confirmTitle(paneKey: string, title: string): Promise<void> {
@@ -215,6 +255,7 @@ export class ClaudeTerminalSessionNameSync {
     // A /rename typed in Claude is newer than a tab rename still waiting for the composer.
     pending?.abort.abort()
     this.pendingRenames.delete(paneKey)
+    this.latestRenames.delete(paneKey)
     const handle = this.deps.getHandle(paneKey)
     if (!handle) {
       return

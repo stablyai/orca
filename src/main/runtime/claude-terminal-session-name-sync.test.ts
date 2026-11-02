@@ -24,7 +24,11 @@ function harness(overrides: Partial<ClaudeTerminalSessionNameSyncDeps> = {}) {
     readTranscriptPath: () => '/t.jsonl',
     getHandle: () => 'handle-1',
     waitForEmptyComposer: async () => true,
-    sendCommand: async (_handle, text) => {
+    readComposerDraft: async () => undefined,
+    sendCommand: async (_handle, text, _signal, beforeEachWrite) => {
+      // The paste, then Enter, each behind the write check.
+      await beforeEachWrite()
+      await beforeEachWrite()
       sent.push(text)
       // Claude records the rename, then retitles its window.
       customTitle = text.replace('/rename ', '')
@@ -206,10 +210,10 @@ describe('ClaudeTerminalSessionNameSync', () => {
     const written: string[] = []
     const { sync } = harness({
       isEnabled: () => enabled,
-      sendCommand: async (_handle, text, _signal, stillWanted) => {
+      sendCommand: async (_handle, text, _signal, beforeEachWrite) => {
         // The write guard waits; sync is turned off meanwhile.
         enabled = false
-        stillWanted()
+        await beforeEachWrite()
         written.push(text)
       }
     })
@@ -245,6 +249,48 @@ describe('ClaudeTerminalSessionNameSync', () => {
     sync.observeTurnChange(PANE)
     await settle()
     expect(renameTab).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops an older rename still writing once a newer one was queued', async () => {
+    const written: string[] = []
+    let releaseFirst: (() => void) | undefined
+    const { sync } = harness({
+      sendCommand: async (_handle, text, _signal, beforeEachWrite) => {
+        if (text === '/rename older') {
+          // The write guard holds the older rename before its paste.
+          await new Promise<void>((resolve) => (releaseFirst = resolve))
+        }
+        await beforeEachWrite()
+        await beforeEachWrite()
+        written.push(text)
+      }
+    })
+    sync.tabRenamed('tab-1', 'older')
+    await settle()
+    sync.tabRenamed('tab-1', 'newer')
+    await settle()
+    releaseFirst?.()
+    await settle()
+    expect(written).toEqual(['/rename newer'])
+  })
+
+  it('waits for the composer again when the user starts typing before the paste', async () => {
+    const drafts: (string | undefined)[] = ['typing', undefined, undefined]
+    const { sync, sent } = harness({ readComposerDraft: async () => drafts.shift() })
+    sync.tabRenamed('tab-1', 'retried')
+    await settle()
+    await settle()
+    // Busy before the first paste, then two clean checks on the retry.
+    expect(drafts).toEqual([])
+    expect(sent).toEqual(['/rename retried'])
+  })
+
+  it('never submits when the user typed into the pasted command', async () => {
+    const drafts: (string | undefined)[] = [undefined, '/rename mine and my draft']
+    const { sync, sent } = harness({ readComposerDraft: async () => drafts.shift() })
+    sync.tabRenamed('tab-1', 'mine')
+    await settle()
+    expect(sent).toEqual([])
   })
 
   it('rechecks a title shown before its transcript path was known', async () => {
