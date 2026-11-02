@@ -8,14 +8,28 @@ import {
 const DEFAULT_MAX_SUBJECTS = 256
 const DEFAULT_MAX_IDS_PER_SUBJECT = 20
 
-export type AnnouncedNotification = { id: string; origin?: StructuredAttentionOrigin }
+export type AnnouncedNotification = {
+  id: string
+  origin?: StructuredAttentionOrigin
+  /** Announcements scoped to a worktree, so a whole-worktree acknowledgement can retire them. */
+  worktreeId?: string
+}
 
 export type AnnouncedNotificationRegistry = {
-  record: (paneKey: string, notificationId: string, origin?: StructuredAttentionOrigin) => void
+  record: (
+    paneKey: string,
+    notificationId: string,
+    origin?: StructuredAttentionOrigin,
+    worktreeId?: string
+  ) => void
   /** Journal-positioned announcements require a covering read to retire. */
   isBounded: (notificationId: string) => boolean
   /** Take unpositioned announcements and those covered by this read. */
   take: (paneKey: string, read?: StructuredAttentionRead) => readonly AnnouncedNotification[]
+  /** Take every announcement scoped to this worktree; a CLI ack reads the whole worktree. */
+  takeByWorktree: (
+    worktreeId: string
+  ) => readonly { paneKey: string; entries: readonly AnnouncedNotification[] }[]
 }
 
 export function createAnnouncedNotificationRegistry(limits?: {
@@ -27,9 +41,9 @@ export function createAnnouncedNotificationRegistry(limits?: {
   const idsBySubject = new Map<string, AnnouncedNotification[]>()
 
   return {
-    record: (paneKey, notificationId, origin) => {
+    record: (paneKey, notificationId, origin, worktreeId) => {
       const ids = (idsBySubject.get(paneKey) ?? []).filter((entry) => entry.id !== notificationId)
-      ids.push({ id: notificationId, origin })
+      ids.push({ id: notificationId, origin, worktreeId })
       // Reinsertion evicts the least recently announced subject.
       idsBySubject.delete(paneKey)
       idsBySubject.set(paneKey, ids.slice(-maxIdsPerSubject))
@@ -57,6 +71,38 @@ export function createAnnouncedNotificationRegistry(limits?: {
         idsBySubject.delete(paneKey)
       }
       return selected
+    },
+    takeByWorktree: (worktreeId) => {
+      const taken: { paneKey: string; entries: AnnouncedNotification[] }[] = []
+      for (const [paneKey, ids] of idsBySubject) {
+        const matching = ids.filter((entry) => entry.worktreeId === worktreeId)
+        if (matching.length === 0) {
+          continue
+        }
+        const kept = ids.filter((entry) => entry.worktreeId !== worktreeId)
+        if (kept.length > 0) {
+          idsBySubject.set(paneKey, kept)
+        } else {
+          idsBySubject.delete(paneKey)
+        }
+        taken.push({ paneKey, entries: matching })
+      }
+      return taken
     }
   }
+}
+
+// The renderer dismiss path and RPC-side worktree acknowledgements both need the
+// registry that registerNotificationHandlers records into. Registration owns the
+// instance; this accessor exposes the live one to the rest of the main process.
+let sessionRegistry: AnnouncedNotificationRegistry | null = null
+
+export function setSessionAnnouncedNotificationRegistry(
+  registry: AnnouncedNotificationRegistry | null
+): void {
+  sessionRegistry = registry
+}
+
+export function sessionAnnouncedNotifications(): AnnouncedNotificationRegistry | null {
+  return sessionRegistry
 }

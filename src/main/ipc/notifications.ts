@@ -17,7 +17,10 @@ import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
-import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
+import {
+  createAnnouncedNotificationRegistry,
+  setSessionAnnouncedNotificationRegistry
+} from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import { isStructuredAttentionRead } from '../../shared/agent-session/agent-session-attention'
@@ -91,6 +94,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   )
 
   const announced = createAnnouncedNotificationRegistry()
+  // RPC-side worktree acknowledgements retire announcements through this instance.
+  setSessionAnnouncedNotificationRegistry(announced)
 
   ipcMain.removeHandler('notifications:dismiss')
   ipcMain.handle(
@@ -163,7 +168,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     now: () => Date.now(),
     recordAnnounced: (request) => {
       if (request.paneKey && request.notificationId) {
-        announced.record(request.paneKey, request.notificationId, request.structuredOrigin)
+        announced.record(
+          request.paneKey,
+          request.notificationId,
+          request.structuredOrigin,
+          request.worktreeId
+        )
       }
     }
   })

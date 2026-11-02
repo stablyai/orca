@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import type { StructuredAttentionOrigin } from '../../shared/agent-session/agent-session-attention'
 import { createAnnouncedNotificationRegistry } from './announced-notification-registry'
+
+const journalOrigin: StructuredAttentionOrigin = {
+  scope: {
+    executionHostId: 'runtime:host-1',
+    wslDistro: null,
+    workspaceId: 'ws-1',
+    workspaceKind: 'git-worktree'
+  },
+  sessionId: 'session-1',
+  cause: { kind: 'completion', requestId: 'req-1' },
+  journalCursor: { epoch: 'epoch-1', sequence: 4 }
+}
 
 describe('createAnnouncedNotificationRegistry', () => {
   it('hands back each subject once, newest last, without duplicates', () => {
@@ -24,5 +37,30 @@ describe('createAnnouncedNotificationRegistry', () => {
     expect(registry.take('old').map((entry) => entry.id)).toEqual([])
     expect(registry.take('busy').map((entry) => entry.id)).toEqual(['id-2', 'id-3'])
     expect(registry.take('new').map((entry) => entry.id)).toEqual(['id-new'])
+  })
+
+  it('takes every announcement of a worktree across panes, positioned ones included', () => {
+    const registry = createAnnouncedNotificationRegistry()
+    registry.record('pane-a', 'id-1', undefined, 'repo::/w')
+    registry.record('pane-a', 'id-2', journalOrigin, 'repo::/w')
+    registry.record('pane-b', 'id-3', undefined, 'repo::/other')
+    registry.record('pane-c', 'id-4', undefined, 'repo::/w')
+    const taken = registry.takeByWorktree('repo::/w')
+    expect(taken.map((group) => [group.paneKey, group.entries.map((entry) => entry.id)]))
+      .toEqual([
+        ['pane-a', ['id-1', 'id-2']],
+        ['pane-c', ['id-4']]
+      ])
+    // Taken once: a second acknowledgement finds nothing, and other worktrees keep theirs.
+    expect(registry.takeByWorktree('repo::/w')).toEqual([])
+    expect(registry.take('pane-b').map((entry) => entry.id)).toEqual(['id-3'])
+  })
+
+  it('keeps a subject alive for its other worktrees when one worktree is taken', () => {
+    const registry = createAnnouncedNotificationRegistry()
+    registry.record('pane-a', 'id-1', undefined, 'repo::/w1')
+    registry.record('pane-a', 'id-2', undefined, 'repo::/w2')
+    registry.takeByWorktree('repo::/w1')
+    expect(registry.take('pane-a').map((entry) => entry.id)).toEqual(['id-2'])
   })
 })
