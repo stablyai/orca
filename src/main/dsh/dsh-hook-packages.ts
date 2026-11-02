@@ -27,7 +27,7 @@ export function describeDshProfilesMissingHookPackages(dshHome: string): string 
       profileDir,
       // DSH resolves the row only from the profile's own node_modules; a parent copy cannot reach engine peers.
       missing: DSH_HOOK_PACKAGES.filter(
-        (pkg) => !existsSync(join(profileDir, 'node_modules', ...pkg.split('/'), 'package.json'))
+        (pkg) => !existsSync(join(profileDir, 'node_modules', pkg, 'package.json'))
       )
     }))
     .filter(({ missing }) => missing.length > 0)

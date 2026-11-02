@@ -142,14 +142,11 @@ function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
 function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   // The CLI and app panes may use different homes; identify the one this status describes.
   const statusSummary = result.statuses
-    .map(
-      (status) =>
-        `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}${
-          status.detail && (status.state === 'partial' || status.state === 'error')
-            ? ` - ${status.detail}`
-            : ''
-        }`
-    )
+    .map((status) => {
+      const showDetail = status.detail && (status.state === 'partial' || status.state === 'error')
+      const path = status.configPath ? ` (${status.configPath})` : ''
+      return `${status.agent}: ${status.state}${path}${showDetail ? ` - ${status.detail}` : ''}`
+    })
     .join('\n')
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,
