@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { i18n, setRendererPluginLanguagePacks } from '@/i18n/i18n'
 
 import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
+import { agentSessionWriteKindForMethod } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 
 import {
   agentSessionWriteFailureText,
@@ -78,5 +79,35 @@ describe('desktop words for a write that did not happen', () => {
         { failure: { kind: 'startFailed' }, surface: 'rejection', context: { agentName: 'Claude' } }
       ])
     ).toBe("您的訊息未傳送。Claude couldn't start. Send your message to try again.")
+  })
+
+  it("says a queued card's message wasn't sent only when Orca couldn't confirm its mail", () => {
+    const send = agentSessionWriteKindForMethod('agentSession.queuedMessageSend', {})
+    for (const retryControl of [false, true]) {
+      expect(
+        agentSessionWriteFailureText(
+          {
+            kind: 'refused',
+            code: 'execution_owner_reconciling',
+            details: { reason: 'mailOwnerUnconfirmed' }
+          },
+          send,
+          { retryControl }
+        )
+      ).toBe(
+        "Orca couldn't confirm this message is still meant for this chat. Your message was not sent. Try again."
+      )
+    }
+    // Any other refused Send of a queued card keeps its existing words.
+    expect(
+      agentSessionWriteFailureText(
+        {
+          kind: 'refused',
+          code: 'agent_session_checkpoint_stale',
+          details: { reason: 'fenceStale' }
+        },
+        send
+      )
+    ).toBe("The command didn't run.")
   })
 })
