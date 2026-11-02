@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { bridgeId, createFakeRpcClient, rpcSuccess } from './bridge-host-test-fakes'
-import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
+import { bridgePendingRequestCap } from './bridge/bridge-caps'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../src/shared/source-control-runtime-capabilities'
 import { classifyExactGitHubOperation } from '../../../src/shared/github/exact-work-item-operation'
 import { createPageClient, INIT, GRANTS } from './bridge/bridge-page-client-test-harness'
@@ -85,7 +85,9 @@ it('rejects malformed opt-in rather than silently forwarding as legacy', () => {
 })
 it('cancelled probes retain inFlight occupancy, release listeners immediately and cannot settle a reused id', async () => {
   const f = hostRequests()
-  for (let i = 1; i <= BRIDGE_MAX_PENDING_REQUESTS; i++) {
+  // Desktop frames stop short of the whole cap, which keeps slots for photo picks.
+  const cap = bridgePendingRequestCap(false)
+  for (let i = 1; i <= cap; i++) {
     f.requests.open(frame(bridgeId(i)))
     f.requests.cancel(bridgeId(i))
   }
@@ -100,7 +102,7 @@ it('cancelled probes retain inFlight occupancy, release listeners immediately an
     request.resolve(rpcSuccess('probe', status))
   }
   await flush()
-  expect(f.client.requests).toHaveLength(BRIDGE_MAX_PENDING_REQUESTS)
+  expect(f.client.requests).toHaveLength(cap)
   expect(f.reply).not.toHaveBeenCalled()
   f.requests.open(frame())
   f.requests.open(frame()) // collision must not retire the original
