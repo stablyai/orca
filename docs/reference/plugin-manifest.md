@@ -43,13 +43,13 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.customEditors` | [CustomEditorContribution](#customeditorcontribution)[] | no | 1.4.245 | Editors that open files of given types in the editor tab. At most 16. |
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
+| `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.247 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
 | `contributes.hooks` | any[] | no | 1.4.245 | Reserved for agent hooks; must be empty until their format is defined. |
 | `contributes.taskSources` | any[] | no | 1.4.245 | Reserved for task sources; must be empty until their format is defined. |
 | `contributes.connections` | any[] | no | 1.4.245 | Reserved for account connections; must be empty until their format is defined. |
-| `contributes.statusBarItems` | any[] | no | 1.4.245 | Reserved for status bar items; must be empty until their format is defined. |
 | `contributes.sidebarCards` | any[] | no | 1.4.245 | Reserved for sidebar cards; must be empty until their format is defined. |
 | `capabilities` | [Capability](#capability)[] | no | 1.4.160 | Host APIs the plugin asks the user to grant. At most 32. |
 | `cover` | object | no | 1.4.245 | Wide image at the top of the plugin page. |
@@ -187,6 +187,19 @@ A setting shown under the plugin in Settings. Requires the `settings:own` capabi
 | `multiline` | boolean | no | 1.4.246 | Strings: a multi-line text box. |
 | `placeholder` | string | no | 1.4.246 | Strings and numbers: hint shown while empty. |
 
+## StatusBarItemContribution
+
+An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `id` | string | yes | 1.4.247 | Item id, unique among this plugin's status bar items; `statusBar.update` names it. Example: `"blocked-count"` |
+| `text` | string | no | 1.4.247 | Short label shown in the status bar. Example: `"3 blocked"` |
+| `icon` | `"activity"` \| `"bar-chart-3"` \| `"bell"` \| `"blocks"` \| `"book"` \| `"bot"` \| `"bug"` \| `"calendar"` \| `"cloud"` \| `"code"` \| `"database"` \| `"file-text"` \| `"flag"` \| `"folder"` \| `"gauge"` \| `"globe"` \| `"hammer"` \| `"layers"` \| `"lightbulb"` \| `"package"` \| `"plug"` \| `"puzzle"` \| `"rocket"` \| `"star"` \| `"terminal"` \| `"wrench"` \| `"zap"` \| `"add"` \| `"remove"` \| `"delete"` \| `"edit"` \| `"refresh"` \| `"search"` \| `"settings"` \| `"check"` \| `"close"` \| `"info"` \| `"warning"` \| `"error"` \| `"open-external"` \| `"copy"` \| `"download"` \| `"upload"` \| `"play"` \| `"pause"` \| `"stop"` \| `"more"` \| `"expand"` \| `"collapse"` \| `"next"` \| `"filter"` \| `"branch"` \| `"file"` \| `"agent"` \| `"link"` | no | 1.4.247 | Icon shown before the text, from the panel icon set. Example: `"bell"` |
+| `tone` | `"neutral"` \| `"accent"` \| `"success"` \| `"warning"` \| `"danger"` | no | 1.4.247 | Colour of the item. Defaults to `neutral`. Example: `"warning"` |
+| `tooltip` | string | no | 1.4.247 | Shown on hover. Defaults to the plugin name. |
+| `command` | string | no | 1.4.247 | Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed. Example: `"guard.showLog"` |
+
 ## Capability
 
 A host API the plugin may call once the user consents.
@@ -214,7 +227,7 @@ One screenshot of the plugin in use.
 - **`terminal:send` needs `trusted-worker`.** Panels get no host method that types into a terminal, so Orca refuses the capability on any other profile instead of asking the user to grant something the plugin can never use.
 - **New fields, contribution points and values are additive.** They arrive with a `Since` version; nothing else changes. `manifestVersion` rises only if an existing field changes meaning.
 - **Deprecation.** A field to be removed is marked deprecated here and keeps working for at least one release; it is removed only together with a higher `engines.orca` requirement, and its name is never reused.
-- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `statusBarItems` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills`, `mcpServers` and `hooks` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
+- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills`, `mcpServers` and `hooks` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
 
 ## Planned contribution points
 
@@ -223,7 +236,6 @@ Each reserved point is planned as declared data that Orca renders and enforces, 
 - `taskSources`: Issue and task providers such as Asana, Linear or Jira, declared as data that a worker fills with tasks.
 - `connections`: Account providers with a host-run sign-in, so a plugin never handles credentials itself.
 - `agentHarnesses`: New coding-agent harnesses described as data: how to launch them and read their status.
-- `statusBarItems`: Declarative status bar widgets (label, icon, tooltip) whose values a worker updates.
 - `sidebarCards`: Declarative left-sidebar cards with fixed layouts whose values a worker updates.
 - `mcpServers`: MCP server definitions that Orca offers to the agents it launches.
 - `skills`: Agent skills shipped as files that Orca installs for the agents it launches.

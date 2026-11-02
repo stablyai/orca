@@ -11,6 +11,7 @@ import { pluginHostCallRevoked, type PluginHostCallScope } from './workers/plugi
 import type { PluginPanelCaller } from '../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import type { PluginPanelBridgeServices } from './workers/plugin-host-panel-method-bindings'
 import type { PluginPanelBridge } from './panels/plugin-panel-bridge'
+import type { PluginStatusBarState } from './status-bar/plugin-status-bar-state'
 import type {
   PluginHostCallOutcome,
   PluginSurface
@@ -61,6 +62,7 @@ export function resolvePluginServiceHostCallPolicy(input: {
   pluginsDataDir: string
   desktop: PluginDesktopFrameServices | null | undefined
   panels: PluginPanelBridgeServices | null
+  statusBar?: PluginStatusBarState | null
   audit: PluginAuditLog
   log?: (pluginKey: string) => (line: string) => void
 }): PluginHostCallPolicy {
@@ -73,7 +75,11 @@ export function resolvePluginServiceHostCallPolicy(input: {
           pluginsDataDir: input.pluginsDataDir,
           desktop: input.desktop,
           panels: input.panels,
-          declaredSettings: plugin?.manifest.contributes.settings
+          declaredSettings: plugin?.manifest.contributes.settings,
+          statusBar: input.statusBar,
+          declaredStatusBarItemIds: plugin?.manifest.contributes.statusBarItems.map(
+            (item) => item.id
+          )
         })
       : null,
     audit: input.audit,

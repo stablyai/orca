@@ -79,6 +79,7 @@ describe('content-pack manifest contributions', () => {
       keybindings: [],
       vmRecipes: [],
       settings: [],
+      statusBarItems: [],
       themes: [],
       terminalThemes: [],
       iconThemes: [],

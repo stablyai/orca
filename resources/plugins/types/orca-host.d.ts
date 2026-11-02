@@ -142,6 +142,12 @@ declare module 'orca/host' {
       result: { ok: true }
       surfaces: "panel" | "editor"
     }
+    /** Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. Since host API 1.2. */
+    "statusBar.update": {
+      params: { id: string; text?: string; icon?: "activity" | "bar-chart-3" | "bell" | "blocks" | "book" | "bot" | "bug" | "calendar" | "cloud" | "code" | "database" | "file-text" | "flag" | "folder" | "gauge" | "globe" | "hammer" | "layers" | "lightbulb" | "package" | "plug" | "puzzle" | "rocket" | "star" | "terminal" | "wrench" | "zap" | "add" | "remove" | "delete" | "edit" | "refresh" | "search" | "settings" | "check" | "close" | "info" | "warning" | "error" | "open-external" | "copy" | "download" | "upload" | "play" | "pause" | "stop" | "more" | "expand" | "collapse" | "next" | "filter" | "branch" | "file" | "agent" | "link"; tone?: "neutral" | "accent" | "success" | "warning" | "danger"; tooltip?: string; visible?: boolean }
+      result: { ok: true }
+      surfaces: "worker"
+    }
   }
   export type HostMethodName = keyof HostMethods
   /** Methods a surface may call; any other gets `not_permitted`. */

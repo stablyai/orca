@@ -30,6 +30,7 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`plugin.request`](#pluginrequest) | none | panel, editor | no | 1.2 | Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name. |
 | [`agents.list`](#agentslist) | `agent:read` | worker, panel, editor | no | 1.2 | The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after. |
 | [`events.subscribe`](#eventssubscribe) | none | panel, editor | no | 1.2 | Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. |
+| [`statusBar.update`](#statusbarupdate) | none | worker | no | 1.2 | Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. |
 
 ### `workspace.readContext`
 
@@ -173,6 +174,14 @@ Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the
 
 ```ts
 (params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }) => { ok: true }
+```
+
+### `statusBar.update`
+
+Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled.
+
+```ts
+(params: { id: string; text?: string; icon?: "activity" | "bar-chart-3" | "bell" | "blocks" | "book" | "bot" | "bug" | "calendar" | "cloud" | "code" | "database" | "file-text" | "flag" | "folder" | "gauge" | "globe" | "hammer" | "layers" | "lightbulb" | "package" | "plug" | "puzzle" | "rocket" | "star" | "terminal" | "wrench" | "zap" | "add" | "remove" | "delete" | "edit" | "refresh" | "search" | "settings" | "check" | "close" | "info" | "warning" | "error" | "open-external" | "copy" | "download" | "upload" | "play" | "pause" | "stop" | "more" | "expand" | "collapse" | "next" | "filter" | "branch" | "file" | "agent" | "link"; tone?: "neutral" | "accent" | "success" | "warning" | "danger"; tooltip?: string; visible?: boolean }) => { ok: true }
 ```
 
 ## Events

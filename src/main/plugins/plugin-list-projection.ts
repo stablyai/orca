@@ -198,6 +198,7 @@ export async function buildPluginList(
           handler: command.handler,
           keybindings: command.keybindings
         })),
+        statusBarItems: plugin.manifest.contributes.statusBarItems,
         hasWorker: Boolean(plugin.manifest.main),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,

@@ -6,7 +6,7 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 
 ## Methods per surface
 
-- Worker (`trusted-worker`, `main`): `orca` passed to `activate(orca)`: `workspace.readContext`, `terminal.sendText`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `agents.list`
+- Worker (`trusted-worker`, `main`): `orca` passed to `activate(orca)`: `workspace.readContext`, `terminal.sendText`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `agents.list`, `statusBar.update`
 - Panel: global `orca` in an HTML panel; `host` imported from `orca` in a components panel: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `agents.list`, `events.subscribe`
 - Custom editor: global `orca` in the editor frame: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `agents.list`, `events.subscribe`
 
@@ -78,6 +78,8 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
   `(params?: {}) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number }[] }`
 - `events.subscribe` (no capability; panel, editor; since 1.2): Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you.
   `(params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }) => { ok: true }`
+- `statusBar.update` (no capability; worker; since 1.2): Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled.
+  `(params: { id: string; text?: string; icon?: "activity" | "bar-chart-3" | "bell" | "blocks" | "book" | "bot" | "bug" | "calendar" | "cloud" | "code" | "database" | "file-text" | "flag" | "folder" | "gauge" | "globe" | "hammer" | "layers" | "lightbulb" | "package" | "plug" | "puzzle" | "rocket" | "star" | "terminal" | "wrench" | "zap" | "add" | "remove" | "delete" | "edit" | "refresh" | "search" | "settings" | "check" | "close" | "info" | "warning" | "error" | "open-external" | "copy" | "download" | "upload" | "play" | "pause" | "stop" | "more" | "expand" | "collapse" | "next" | "filter" | "branch" | "file" | "agent" | "link"; tone?: "neutral" | "accent" | "success" | "warning" | "danger"; tooltip?: string; visible?: boolean }) => { ok: true }`
 
 ## Capabilities
 

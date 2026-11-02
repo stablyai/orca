@@ -588,7 +588,6 @@ arbitrary plugin UI:
 - `taskSources`: issue and task providers such as Asana, Linear or Jira, filled by a worker.
 - `connections`: account providers with a host-run sign-in.
 - `agentHarnesses`: new coding-agent harnesses described as data.
-- `statusBarItems`: declarative status bar widgets whose values a worker updates.
 - `sidebarCards`: declarative left-sidebar cards whose values a worker updates.
 - `mcpServers`: MCP server definitions offered to the agents Orca launches.
 - `skills`: agent skills shipped as files.

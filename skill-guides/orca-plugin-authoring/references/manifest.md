@@ -46,8 +46,9 @@
 - `customEditors` (CustomEditorContribution[], since 1.4.245): Editors that open files of given types in the editor tab. At most 16.
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
+- `statusBarItems` (StatusBarItemContribution[], since 1.4.247): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.
 
-Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `statusBarItems`, `sidebarCards`.
+Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `sidebarCards`.
 
 ## PanelContribution
 
@@ -155,6 +156,17 @@ A setting shown under the plugin in Settings. Requires the `settings:own` capabi
 - `maxLength` (integer, since 1.4.246): Strings: most characters.
 - `multiline` (boolean, since 1.4.246): Strings: a multi-line text box.
 - `placeholder` (string, since 1.4.246): Strings and numbers: hint shown while empty.
+
+## StatusBarItemContribution
+
+An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`.
+
+- `id` (string, required, since 1.4.247): Item id, unique among this plugin's status bar items; `statusBar.update` names it.
+- `text` (string, since 1.4.247): Short label shown in the status bar.
+- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link, since 1.4.247): Icon shown before the text, from the panel icon set.
+- `tone` ("neutral" | "accent" | "success" | "warning" | "danger", since 1.4.247): Colour of the item. Defaults to `neutral`.
+- `tooltip` (string, since 1.4.247): Shown on hover. Defaults to the plugin name.
+- `command` (string, since 1.4.247): Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.
 
 ## Capability
 

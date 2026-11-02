@@ -315,6 +315,16 @@
             "$ref": "#/$defs/SettingContribution"
           }
         },
+        "statusBarItems": {
+          "default": [],
+          "description": "Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.",
+          "x-orca-since": "1.4.247",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StatusBarItemContribution"
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -352,13 +362,6 @@
         },
         "connections": {
           "description": "Reserved for account connections; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
-        "statusBarItems": {
-          "description": "Reserved for status bar items; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
           "maxItems": 0,
           "type": "array",
@@ -1259,6 +1262,132 @@
       ],
       "additionalProperties": false,
       "description": "A setting shown under the plugin in Settings. Requires the `settings:own` capability, which is also how code reads it."
+    },
+    "StatusBarItemContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Item id, unique among this plugin's status bar items; `statusBar.update` names it.",
+          "x-orca-since": "1.4.247",
+          "examples": [
+            "blocked-count"
+          ]
+        },
+        "text": {
+          "description": "Short label shown in the status bar.",
+          "x-orca-since": "1.4.247",
+          "examples": [
+            "3 blocked"
+          ],
+          "type": "string",
+          "maxLength": 64
+        },
+        "icon": {
+          "description": "Icon shown before the text, from the panel icon set.",
+          "x-orca-since": "1.4.247",
+          "examples": [
+            "bell"
+          ],
+          "type": "string",
+          "enum": [
+            "activity",
+            "bar-chart-3",
+            "bell",
+            "blocks",
+            "book",
+            "bot",
+            "bug",
+            "calendar",
+            "cloud",
+            "code",
+            "database",
+            "file-text",
+            "flag",
+            "folder",
+            "gauge",
+            "globe",
+            "hammer",
+            "layers",
+            "lightbulb",
+            "package",
+            "plug",
+            "puzzle",
+            "rocket",
+            "star",
+            "terminal",
+            "wrench",
+            "zap",
+            "add",
+            "remove",
+            "delete",
+            "edit",
+            "refresh",
+            "search",
+            "settings",
+            "check",
+            "close",
+            "info",
+            "warning",
+            "error",
+            "open-external",
+            "copy",
+            "download",
+            "upload",
+            "play",
+            "pause",
+            "stop",
+            "more",
+            "expand",
+            "collapse",
+            "next",
+            "filter",
+            "branch",
+            "file",
+            "agent",
+            "link"
+          ]
+        },
+        "tone": {
+          "description": "Colour of the item. Defaults to `neutral`.",
+          "x-orca-since": "1.4.247",
+          "examples": [
+            "warning"
+          ],
+          "type": "string",
+          "enum": [
+            "neutral",
+            "accent",
+            "success",
+            "warning",
+            "danger"
+          ]
+        },
+        "tooltip": {
+          "description": "Shown on hover. Defaults to the plugin name.",
+          "x-orca-since": "1.4.247",
+          "type": "string",
+          "maxLength": 256
+        },
+        "command": {
+          "description": "Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.",
+          "x-orca-since": "1.4.247",
+          "examples": [
+            "guard.showLog"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "description": "An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`."
     },
     "Capability": {
       "type": "object",

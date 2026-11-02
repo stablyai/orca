@@ -18,6 +18,10 @@ import {
   type PluginPanelBridgeServices
 } from './plugin-host-panel-method-bindings'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
+import {
+  PLUGIN_STATUS_BAR_HANDLERS,
+  type PluginStatusBarServices
+} from './plugin-host-status-bar-method-bindings'
 
 export type { PluginHostCallScope } from './plugin-host-call-scope'
 
@@ -77,6 +81,8 @@ export type PluginHostServices = {
   desktop?: PluginDesktopFrameServices | null
   /** The plugin's open panels and its worker; absent where no panel host runs. */
   panels?: PluginPanelBridgeServices | null
+  /** Absent where no Orca window draws a status bar. */
+  statusBar?: PluginStatusBarServices | null
   settings: {
     getAll(pluginId: string): Record<string, PluginJsonValue>
     set(
@@ -191,7 +197,8 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
     const saved = await requireDesktop(services).saveFile(pluginId, params, scope)
     return { status: saved ? ('saved' as const) : ('cancelled' as const) }
   }),
-  ...PLUGIN_PANEL_BRIDGE_HANDLERS
+  ...PLUGIN_PANEL_BRIDGE_HANDLERS,
+  ...PLUGIN_STATUS_BAR_HANDLERS
 }
 
 function requireDesktop(services: PluginHostServices): PluginDesktopFrameServices {
