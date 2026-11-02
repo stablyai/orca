@@ -76,8 +76,7 @@ function details(
 async function mount() {
   const client = createFakeRpcClient()
   const logical = createStableLogicalRpcClient(client, 'relay')
-  const a = item('fork')
-  const b = item('upstream')
+  const [a, b] = [item('fork'), item('upstream')]
   const providerPages = vi.fn(async () => ({
     items: [a, b],
     sourcesByRepoId: {},
@@ -138,6 +137,7 @@ async function mount() {
       setItems,
       setLoading,
       setRefreshing,
+      setTaskListSettled: noop,
       taskStateHydrated: true,
       tasksSupported: true
     }
