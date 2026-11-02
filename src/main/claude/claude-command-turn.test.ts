@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
@@ -69,6 +70,8 @@ const QUOTA_ASSISTANT = {
   message: { role: 'assistant', content: [{ type: 'text', text: COMPACT_QUOTA }] }
 }
 
+const capturedLine = z.looseObject({ frame: z.record(z.string(), z.unknown()).optional() })
+
 /** The recorded signed-out assistant error and result, answering this command's input. */
 async function recordedSignedOut(): Promise<Record<string, unknown>[]> {
   const capture = await readFile(
@@ -78,7 +81,7 @@ async function recordedSignedOut(): Promise<Record<string, unknown>[]> {
   return capture
     .trim()
     .split('\n')
-    .map((line) => JSON.parse(line) as { kind: string; frame?: Record<string, unknown> })
+    .map((line) => capturedLine.parse(JSON.parse(line)))
     .flatMap(({ frame }) =>
       frame?.error === 'authentication_failed' || (frame?.type === 'result' && frame.is_error)
         ? [
