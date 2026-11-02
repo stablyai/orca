@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import {
   AgentSessionAcquisitionExitUnprovenError,

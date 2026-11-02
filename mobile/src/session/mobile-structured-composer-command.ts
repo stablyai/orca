@@ -8,7 +8,7 @@ import {
   isStructuredAgentSessionComposerCommand,
   type StructuredAgentSessionCommandRefusalCause,
   type StructuredAgentSessionComposerOptions
-} from '../../../src/shared/structured-agent-session-composer'
+} from '../../../src/shared/agent-session/view/structured-agent-session-composer'
 import {
   conversationCommandReply,
   heldConversationCommandParts,

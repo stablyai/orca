@@ -1,8 +1,8 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** Mutate journals between reads to catch in-place revisions and mid-array insertions missed by oldest-item-only cursor identity; both can silently omit or duplicate output. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'

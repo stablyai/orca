@@ -1,7 +1,7 @@
 import {
   agentSessionPastedTextName,
   type AgentSessionAttachmentClipboardTarget
-} from '../../../../shared/agent-session-attachments'
+} from '../../../../shared/agent-session/agent-session-attachments'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { blobToBase64 } from '@/lib/image-blob-png'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'

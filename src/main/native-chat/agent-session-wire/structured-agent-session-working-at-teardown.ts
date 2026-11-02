@@ -1,19 +1,17 @@
-import { agentSessionCurrentContextRows } from '../../../shared/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../../shared/agent-session/agent-session-context-clear'
 // Capture live host work immediately before stopping its child; stale persisted turns must never create resume offers.
 // Include pending prompts and running child work while that evidence still reflects the pre-stop state.
 
-import {
-  agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleRoot
-} from '../../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleRoot } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { latestStructuredAgentSessionUserItem } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger,
   AgentSessionResumeWork
-} from '../../../shared/agent-session-resume-marker'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -25,11 +23,11 @@ import {
   type AgentSessionRestartActivity,
   type AgentSessionRestartPrompt,
   type AgentSessionRestartTask
-} from '../../../shared/agent-session-restart-activity'
+} from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
 import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandTurn
@@ -37,12 +35,12 @@ import {
 import {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
-} from '../../../shared/structured-agent-session-live-turn'
+} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { isUnansweredHandedOverSubmission } from '../agent-session-journal/journal-unsent-send-hold'
 import { structuredAgentSessionShownStatus } from './structured-agent-session-shown-work'
 import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 
 function pendingSubmissionInFlight(

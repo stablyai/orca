@@ -6,8 +6,8 @@ import type { AgentSessionFailureFact } from '../../../../shared/agent-session/f
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
-import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
-import type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
+import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -16,7 +16,7 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 import type {
   StructuredAgentSessionCommandOutcome,
   StructuredAgentSessionCommandRefusalCause
-} from '../../../../shared/structured-agent-session-composer'
+} from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import {
   conversationCommandReply,
   heldConversationCommandParts,

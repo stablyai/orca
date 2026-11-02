@@ -13,12 +13,12 @@ import type {
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
-import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/agent-session-host-authority'
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { PtyBindingSourceExpectation } from '../persistence'
+import type { PtyBindingSourceExpectation } from '../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -161,8 +161,13 @@ export type RuntimePtyController = {
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(
     ptyId: string,
-    options?: { expectedIncarnationId?: PtyIncarnationId; scanChildProcesses?: boolean }
+    options?: {
+      expectedIncarnationId?: PtyIncarnationId
+      scanChildProcesses?: boolean
+      foregroundOnly?: boolean
+    }
   ): Promise<PtyProcessInspection>
+  supportsForegroundObservation?(ptyId: string): boolean
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   confirmShellForeground?(ptyId: string): Promise<boolean>
   hasChildProcesses?(ptyId: string): Promise<boolean>
@@ -175,7 +180,12 @@ export type RuntimePtyController = {
   /** Omitting the host lists every registered host. */
   listProcesses?(
     hostId?: ExecutionHostId,
-    opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
+    opts?: {
+      deadlineMs?: number
+      includeForegroundProcessEvidence?: boolean
+      ptyIds?: readonly string[]
+      targetOwnerOnly?: boolean
+    }
   ): Promise<PtyProcessInfo[]>
   listProcessesWithHostScope?(opts?: {
     deadlineMs?: number

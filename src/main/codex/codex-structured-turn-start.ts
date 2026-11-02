@@ -6,7 +6,7 @@ import { turnInputFor } from './codex-structured-message-options'
 import { reportedCodexPermissionMode } from './codex-structured-thread-open'
 import { admitCodexTurnPermission } from './codex-structured-turn-permission'
 import type { CodexSkillReport } from './codex-structured-skill-report'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf
@@ -18,7 +18,7 @@ import type {
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { codexTurnRequestOptions } from './codex-structured-service-tier'

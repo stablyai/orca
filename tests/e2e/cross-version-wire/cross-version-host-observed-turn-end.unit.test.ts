@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
-import { projectStructuredAgentSessionStatusSummary } from '../../../src/shared/structured-agent-session-projection'
+import { projectStructuredAgentSessionStatusSummary } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 // Pin an older reader that validates mainAgent.outcome; new interruption/unconfirmed arms must retain its normal done fallback.

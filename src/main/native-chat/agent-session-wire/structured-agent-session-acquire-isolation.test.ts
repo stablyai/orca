@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,

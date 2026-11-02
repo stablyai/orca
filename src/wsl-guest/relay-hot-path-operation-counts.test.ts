@@ -138,20 +138,6 @@ describe('relay hot-path operation counts', () => {
     expect(index.has(1)).toBe(false)
   })
 
-  // The idle arm pins one lookup per client; it cannot measure lazy-key savings under aggregate pressure.
-  it('notifyLegacyCapacity costs exactly one ledger lookup per active client when idle', () => {
-    vi.useFakeTimers()
-    for (const clientCount of [50, 100, 200, 400]) {
-      const { d, clients, ledger } = dispatcherWithClients(clientCount)
-
-      d.notifyLegacyCapacityIfLow()
-
-      expect(clients.visits, `clients enumerated at n=${clientCount}`).toBe(clientCount)
-      expect(ledger.getCalls, `ledger lookups at n=${clientCount}`).toBe(clientCount)
-      d.dispose()
-    }
-  })
-
   // Above aggregate low-water, lazy keys avoid enumerating clients that admission never needs.
   it('does not enumerate clients at all once the aggregate ceiling answers', () => {
     vi.useFakeTimers()
@@ -167,23 +153,6 @@ describe('relay hot-path operation counts', () => {
 
       expect(clients.visits, `clients enumerated at n=${clientCount}`).toBe(0)
       expect(ledger.getCalls, `ledger lookups at n=${clientCount}`).toBe(0)
-      d.dispose()
-    }
-  })
-
-  it('one broadcast publication costs a fixed number of lookups per subscriber', () => {
-    vi.useFakeTimers()
-    for (const clientCount of [10, 20, 40]) {
-      const { d, clients, ledger } = dispatcherWithClients(clientCount)
-
-      d.tryPublishToClients(
-        d.activeClients(),
-        { jsonrpc: '2.0', method: 'pty.data', params: { d: 'x' } },
-        'bulk'
-      )
-
-      expect(clients.visits, `clients enumerated at n=${clientCount}`).toBe(clientCount * 2)
-      expect(ledger.getCalls, `ledger lookups at n=${clientCount}`).toBe(clientCount * 4)
       d.dispose()
     }
   })

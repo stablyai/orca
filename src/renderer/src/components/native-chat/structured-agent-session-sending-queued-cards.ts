@@ -1,10 +1,10 @@
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { handedOffQueuedMessageIds } from '../../../../shared/structured-agent-session-draft-hand-off'
+import { handedOffQueuedMessageIds } from '../../../../shared/agent-session/view/structured-agent-session-draft-hand-off'
 import {
   queuedMessageCardImages,
   queuedMessageCardText,
   type QueuedMessageCard
-} from '../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 export function sendingQueuedMessageCards(

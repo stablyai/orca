@@ -9,7 +9,7 @@ import { pairToolBlocks } from '../../shared/native-chat/tools/native-chat-tool-
 import { pairNativeChatToolResults } from '../../shared/native-chat/tools/native-chat-tool-pairing'
 import { projectNativeChatTranscript } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat/native-chat-types'
-import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../shared/agent-session/view/structured-agent-session-message-projection'
 import {
   collab,
   HELPER,

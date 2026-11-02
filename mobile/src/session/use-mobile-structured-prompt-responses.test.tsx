@@ -5,11 +5,11 @@ import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/j
 import {
   encodeAgentSessionQuestionAnswers,
   type AgentSessionQuestionAnswer
-} from '../../../src/shared/agent-session-question-answer'
+} from '../../../src/shared/agent-session/agent-session-question-answer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   type StructuredAgentSessionState
-} from '../../../src/shared/structured-agent-session-reducer'
+} from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { formatQuestionFreeTextAnswer } from './native-chat/input/mobile-native-chat-question'
 import {
   projectStructuredQuestion,

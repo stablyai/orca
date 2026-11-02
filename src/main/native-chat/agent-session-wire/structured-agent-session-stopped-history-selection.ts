@@ -4,7 +4,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentSessionSendCarriesStoppedHistory,
@@ -12,7 +12,7 @@ import {
   agentSessionStoppedHistoryOwed,
   selectStoppedHistory,
   type StoppedHistoryDelivery
-} from '../../../shared/agent-session-stopped-history'
+} from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 type StoppedHistoryContext = {

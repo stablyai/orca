@@ -1,6 +1,6 @@
 import { openExistingStructuredSession } from '@/lib/open-existing-structured-session'
 import { ALL_TUI_AGENTS } from '../../../../shared/tui-agent-display-names'
-import { isStructuredAgentSessionIdFor } from '../../../../shared/structured-agent-session-create'
+import { isStructuredAgentSessionIdFor } from '../../../../shared/agent-session/structured-agent-session-create'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'

@@ -13,6 +13,7 @@ import { registerUndeliverableWriteHandler } from '@/lib/pane-manager/terminal-w
 import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { resolveTerminalColorSchemeMode } from '../../../../../shared/terminal-color-scheme-protocol'
+import { maybePushMode2031Flip } from '../terminal-mode-2031-replies'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { terminalRendersInlineImages } from '@/lib/pane-manager/pane-inline-images'
 import { CONPTY_DA1_RESPONSE } from '../../../../../shared/conpty-device-attributes'
@@ -91,6 +92,16 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       getSystemPrefersDark()
     )
     session.deps.recordPaneMode2031Subscription?.(session.pane.id, mode)
+  }
+  // Report a mode change skipped while the stream was down or another viewer held the grid (#10913).
+  session.catchUpMode2031 = (): void => {
+    maybePushMode2031Flip(
+      session.pane.id,
+      resolveTerminalColorSchemeMode(useAppStore.getState().settings, getSystemPrefersDark()),
+      session.transport,
+      session.deps.paneMode2031Ref.current,
+      session.deps.paneLastThemeModeRef.current
+    )
   }
   // Only facts retire gated subscriptions; missing withdrawal bytes would otherwise send theme replies to the replacement shell (#9993).
   session.handleHiddenMode2031UnsubscribeFact = (): void => {
@@ -180,8 +191,17 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       session.pendingVisibleRemoteViewportClaim = true
     }
   }
-  session.unsubscribeRemoteDesktopActivationClaim = onOverrideChange((event) => {
-    if (event.ptyId !== session.transport.getPtyId() || !isRemoteRuntimePtyId(event.ptyId)) {
+  session.unsubscribeFitOverrideChange = onOverrideChange((event) => {
+    if (event.ptyId !== session.transport.getPtyId()) {
+      return
+    }
+    if (event.mode === 'desktop-fit') {
+      session.catchUpMode2031()
+    } else {
+      // The holder may have reported its own appearance; re-send ours once on release.
+      session.deps.paneLastThemeModeRef.current.delete(session.pane.id)
+    }
+    if (!isRemoteRuntimePtyId(event.ptyId)) {
       return
     }
     if (event.mode === 'desktop-fit') {

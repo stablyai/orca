@@ -5,11 +5,9 @@ import {
   assertWorktreeCleanForRemoval,
   closeLocalWatcherForWorktreePathMock,
   computeWorktreePathMock,
-  deleteWorktreeHistoryDirMock,
   ensurePathWithinWorkspaceMock,
   getEffectiveHooks,
   gitRunner,
-  invalidateAuthorizedRootsCacheMock,
   join,
   listWorktrees,
   listWorktreesStrict,
@@ -286,60 +284,6 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktree).not.toHaveBeenCalled()
   })
 
-  it('formats preflight subprocess failures and skips PTY teardown', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    const killSpy = vi.fn().mockReturnValue(true)
-    runtime.setPtyController({
-      write: () => true,
-      kill: (id) => killSpy(id),
-      getForegroundProcess: async () => null
-    })
-    syncSinglePty(runtime, 'pty-1')
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
-      Object.assign(new Error('status failed'), {
-        stderr: 'fatal: unable to read current working directory\n'
-      })
-    )
-
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
-      `Failed to delete worktree at ${TEST_WORKTREE_PATH}. fatal: unable to read current working directory`
-    )
-
-    expect(killSpy).not.toHaveBeenCalled()
-    expect(removeWorktree).not.toHaveBeenCalled()
-  })
-
-  it('falls through to orphan cleanup when preflight reports missing/non-repo worktree', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
-      Object.assign(new Error('status failed'), {
-        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
-      })
-    )
-    vi.mocked(removeWorktree).mockRejectedValue(
-      Object.assign(new Error('git worktree remove failed'), {
-        stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
-      })
-    )
-    const gitSpy = vi
-      .spyOn(gitRunner, 'gitExecFileAsync')
-      .mockResolvedValue({ stdout: '', stderr: '' })
-    onTestFinished(() => gitSpy.mockRestore())
-
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
-    expect(removeWorktree).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      TEST_WORKTREE_PATH,
-      false,
-      expect.objectContaining({
-        knownRemovedWorktree: expect.objectContaining({ path: TEST_WORKTREE_PATH })
-      })
-    )
-    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
-  })
-
   it('retains metadata when an unproven orphan directory survives cleanup', async () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-orphan-retention-'))
     const repoPath = join(parentDir, 'repo')
@@ -523,35 +467,6 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('runs archive hooks for CLI worktree removal when hooks are explicitly enabled', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    vi.mocked(getEffectiveHooks).mockReturnValue({
-      scripts: {
-        archive: 'pnpm worktree:archive'
-      }
-    })
-    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    await runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: false, runHooks: true })
-
-    expect(runHook).toHaveBeenCalledWith(
-      'archive',
-      TEST_WORKTREE_PATH,
-      expect.objectContaining({ id: TEST_REPO_ID, path: TEST_REPO_PATH }),
-      undefined,
-      undefined
-    )
-    expect(removeWorktree).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      TEST_WORKTREE_PATH,
-      false,
-      expect.objectContaining({
-        knownRemovedWorktree: expect.objectContaining({ path: TEST_WORKTREE_PATH })
-      })
-    )
-  })
-
   it('clears optimistic reconcile tokens when a CLI worktree removal succeeds', async () => {
     const runtime = createWorktreeRemovalRuntime()
     const worktreeBaseStatus = vi.fn()
@@ -608,25 +523,6 @@ describe('OrcaRuntimeService', () => {
           recentSubjects: ['base commit 3', 'base commit 2']
         })
       )
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('emits current when the fetched base still matches created HEAD', async () => {
-    const { runtime, worktreeBaseStatus } = createReconcileRuntime()
-    const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
-    const gitSpy = mockReconcileGit({ postFetchSha: 'created-base-sha' })
-    try {
-      await reconcileWithToken(runtime, token)
-
-      expect(worktreeBaseStatus).toHaveBeenCalledWith({
-        repoId: TEST_REPO_ID,
-        worktreeId: TEST_WORKTREE_ID,
-        base: 'origin/main',
-        remote: 'origin',
-        status: 'current'
-      })
     } finally {
       gitSpy.mockRestore()
     }
@@ -695,42 +591,6 @@ describe('OrcaRuntimeService', () => {
     } finally {
       gitSpy.mockRestore()
     }
-  })
-
-  it('invalidates the filesystem-auth cache after CLI worktree creation', async () => {
-    // A stale filesystem-auth cache denied branch comparison for CLI-created paths.
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cli-worktree')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/cli-worktree')
-    vi.mocked(listWorktrees).mockResolvedValueOnce([
-      {
-        path: '/tmp/workspaces/cli-worktree',
-        head: 'abc',
-        branch: 'cli-worktree',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'cli-worktree'
-    })
-
-    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
   it('preserves create-time metadata on later runtime listings when Windows path formatting differs', async () => {

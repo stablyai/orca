@@ -6,7 +6,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { agentJournalTurnBody } from '../../../src/shared/agent-session-turn-record'
+import { agentJournalTurnBody } from '../../../src/shared/agent-session/lifecycle/agent-session-turn-record'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 
 // Skew the host clock by an hour so unconverted timestamp leakage is obvious.

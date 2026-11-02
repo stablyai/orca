@@ -15,7 +15,7 @@ import {
   isStructuredAgentSessionComposerCommand,
   STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
   structuredSlashCommands
-} from '../../../../shared/structured-agent-session-composer'
+} from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import capture from '../../../../shared/__fixtures__/omp-native-commands.json'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'

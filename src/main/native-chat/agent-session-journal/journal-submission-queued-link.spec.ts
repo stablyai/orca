@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createJournalReducerState, applyJournalRow } from './journal-reducer'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
@@ -15,7 +15,7 @@ import { createTrackedJournalOpener } from './journal-host-database-test-support
 import {
   agentSessionJournalProviderHandle,
   claudeProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalSubmissionQueuedLinkTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

@@ -6,14 +6,14 @@ import type { AgentJournalItemBody } from '../../../shared/agent-session/journal
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function createFixture() {
   const IDENTITY: AgentSessionJournalIdentity = {

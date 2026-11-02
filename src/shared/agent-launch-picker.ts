@@ -22,7 +22,10 @@ import { projectAgentLaunchProfile } from './agent-launch-profile'
 import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
 import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
-import type { AgentSessionModelCatalogResult, AgentSessionModelOption } from './agent-session-wire'
+import type {
+  AgentSessionModelCatalogResult,
+  AgentSessionModelOption
+} from './agent-session/agent-session-wire'
 import { orderAgentLaunchPickerAgents, type NewTabAgentMenuRow } from './agent-launch-picker-rows'
 import type { TuiAgent } from './tui-agent'
 

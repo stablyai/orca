@@ -11,8 +11,8 @@ import {
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../shared/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
 export async function verifyHeldLocalWorkerDone(mode: string): Promise<void> {

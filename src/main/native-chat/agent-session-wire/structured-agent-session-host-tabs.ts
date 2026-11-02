@@ -3,8 +3,8 @@ import {
   type SavedStructuredStatusGroup
 } from './structured-agent-session-saved-status'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** Retire durable tabs/restart offers together; advisory recovery bookkeeping must never block chat close. */

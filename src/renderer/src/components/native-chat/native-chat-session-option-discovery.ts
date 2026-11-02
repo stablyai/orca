@@ -20,7 +20,7 @@ import { callStructuredAgentSession } from '@/runtime/structured-agent-session-c
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 

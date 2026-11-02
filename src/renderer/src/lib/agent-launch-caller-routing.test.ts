@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   callerProfileCases,
   type AgentLaunchCallerProfile
@@ -15,7 +15,7 @@ import {
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
 
-import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
+import type * as LaunchAdmissionModule from './agent-session/launch/structured-agent-session-launch-admission'
 const store = createLaunchFunnelStore()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 const mockLaunchAgentInWebHostTab = vi.fn()
@@ -61,10 +61,13 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 const { mockToastInfo } = vi.hoisted(() => ({ mockToastInfo: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: mockToastInfo, error: vi.fn(), success: vi.fn() } }))
-vi.mock('@/lib/structured-agent-session-launch-admission', async (importOriginal) => ({
-  ...(await importOriginal<typeof LaunchAdmissionModule>()),
-  beginHostAdmittedStructuredLaunch: mockBeginHostAdmittedStructuredLaunch
-}))
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-admission',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof LaunchAdmissionModule>()),
+    beginHostAdmittedStructuredLaunch: mockBeginHostAdmittedStructuredLaunch
+  })
+)
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => mockHostCapabilities()
 }))
@@ -84,7 +87,7 @@ const cases = callerProfileCases()
 
 async function useActualAdmission(): Promise<void> {
   const actual = await vi.importActual<typeof LaunchAdmissionModule>(
-    './structured-agent-session-launch-admission'
+    './agent-session/launch/structured-agent-session-launch-admission'
   )
   mockBeginHostAdmittedStructuredLaunch.mockImplementationOnce(
     actual.beginHostAdmittedStructuredLaunch

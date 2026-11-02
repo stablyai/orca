@@ -1,9 +1,9 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 /** Post-create authority/preamble failure must retire both live and durable chat tabs; dropping only the dispatch hold restores an unowned dead tab after restart. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'

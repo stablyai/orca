@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { hashPluginTree } from './plugin-content-hash'
 import { installPluginFromLocalPath, readPluginLockfile } from './installation/plugin-install'
 import { bootstrapBundledPlugins } from './plugin-bundled-bootstrap'
+import { installStagedPluginTree } from './installation/plugin-install-staging'
+import { OFFICIAL_MARKETPLACE_GIT_SOURCE } from '../../shared/plugins/catalog/plugin-marketplace'
 
 const roots: string[] = []
 
@@ -112,15 +114,32 @@ describe('bundled plugin bootstrap', () => {
     const dataDir = join(userDataPath, 'plugins-data', 'stablyai.orca-skills')
     await mkdir(dataDir, { recursive: true })
     await writeFile(join(root, 'bundled-plugins.json'), JSON.stringify({ version: 1, plugins: [] }))
+    const events: string[] = []
+    const pluginDir = join(userDataPath, 'plugins', 'stablyai.orca-skills')
+    const beforeRetire = async (pluginKey: string): Promise<void> => {
+      await access(pluginDir)
+      events.push(`before:${pluginKey}`)
+    }
+    const afterRetire = async (pluginKey: string): Promise<void> => {
+      await expect(access(pluginDir)).rejects.toThrow()
+      events.push(`after:${pluginKey}`)
+    }
 
     await expect(
-      bootstrapBundledPlugins({ root, userDataPath, hostVersion: '1.4.0' })
+      bootstrapBundledPlugins({
+        root,
+        userDataPath,
+        hostVersion: '1.4.0',
+        beforeRetire,
+        afterRetire
+      })
     ).resolves.toEqual({
       installed: [],
       unchanged: [],
       retired: ['stablyai.orca-skills'],
       errors: []
     })
+    expect(events).toEqual(['before:stablyai.orca-skills', 'after:stablyai.orca-skills'])
     expect((await readPluginLockfile(join(userDataPath, 'plugins'))).plugins).toEqual({})
     await expect(access(join(userDataPath, 'plugins', 'stablyai.orca-skills'))).rejects.toThrow()
     await expect(access(dataDir)).rejects.toThrow()
@@ -160,6 +179,39 @@ describe('bundled plugin bootstrap', () => {
     ).resolves.toEqual({ installed: [], unchanged: [], retired: [], errors: [] })
     const lock = await readPluginLockfile(join(userDataPath, 'plugins'))
     expect(lock.plugins['someone.local-plugin']?.source.kind).toBe('local-path')
+  })
+
+  it('never replaces a catalog install of a bundled plugin with the shipped bytes', async () => {
+    const root = await tempRoot('orca-bundled-resources-')
+    const catalogRoot = await tempRoot('orca-bundled-catalog-')
+    const userDataPath = await tempRoot('orca-bundled-user-data-')
+    const pluginsDir = join(userDataPath, 'plugins')
+    const shipped = await writeBundle(root)
+    await writeIndex(root, shipped.path, shipped.hash)
+    await bootstrapBundledPlugins({ root, userDataPath, hostVersion: '1.4.0' })
+    const catalog = await writeBundle(catalogRoot, 'Newer Skills')
+    const updated = await installStagedPluginTree({
+      pluginsDir,
+      stagingDir: join(catalogRoot, catalog.path),
+      hostVersion: '1.4.0',
+      source: {
+        kind: 'marketplace',
+        marketplace: { ...OFFICIAL_MARKETPLACE_GIT_SOURCE, resolvedCommit: 'a'.repeat(40) },
+        plugin: { url: OFFICIAL_MARKETPLACE_GIT_SOURCE.url, ref: 'main' }
+      },
+      resolvedCommit: 'a'.repeat(40),
+      identity: { pluginKey: 'stablyai.orca-skills' }
+    })
+    expect(updated).toMatchObject({ ok: true })
+
+    await expect(
+      bootstrapBundledPlugins({ root, userDataPath, hostVersion: '1.4.0' })
+    ).resolves.toEqual({ installed: [], unchanged: [], retired: [], errors: [] })
+    const lock = await readPluginLockfile(pluginsDir)
+    expect(lock.plugins['stablyai.orca-skills']).toMatchObject({
+      contentHash: catalog.hash,
+      source: { kind: 'marketplace' }
+    })
   })
 
   it('refuses mismatched release hashes before publication', async () => {

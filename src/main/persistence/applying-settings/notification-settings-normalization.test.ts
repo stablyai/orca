@@ -47,3 +47,18 @@ describe('muted notification machines', () => {
     expect(persistedNotificationSettingsRepaired(persisted, normalized)).toBe(true)
   })
 })
+
+describe('agent needs-input notifications', () => {
+  it('inherits the old shared toggle on upgrade, then stands on its own', () => {
+    const { agentNeedsInput: _absentBeforeUpgrade, ...upgraded } = {
+      ...getDefaultNotificationSettings(),
+      agentTaskComplete: false
+    }
+    expect(normalizeNotificationSettings(upgraded).agentNeedsInput).toBe(false)
+    expect(normalizeNotificationSettings({}).agentNeedsInput).toBe(true)
+    expect(
+      normalizeNotificationSettings({ agentTaskComplete: false, agentNeedsInput: true })
+        .agentNeedsInput
+    ).toBe(true)
+  })
+})

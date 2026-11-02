@@ -1,7 +1,7 @@
 // Lost writes release Working as unknown; taken-but-unechoed sends release doubt; queued sends stay held.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import {
   DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,

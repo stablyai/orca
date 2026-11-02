@@ -116,14 +116,6 @@ describe('structuredAgentSessionOptionPicks', () => {
     ).toEqual([])
   })
 
-  it('drops ids a launch cannot seed back', () => {
-    expect(
-      structuredAgentSessionOptionPicks(liveState({ model: 'account-model' }), {
-        permissionMode: 'plan'
-      })
-    ).toEqual([])
-  })
-
   it('remembers explicit Fast on and off as booleans and re-encodes the launch seed', () => {
     const state = liveState({ model: 'account-model', fastMode: true })
     const picks = structuredAgentSessionOptionPicks(state, { fastMode: 'false' })

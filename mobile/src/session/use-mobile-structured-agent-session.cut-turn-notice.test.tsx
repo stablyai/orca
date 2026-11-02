@@ -3,7 +3,7 @@ import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
@@ -84,6 +84,7 @@ describe('useMobileStructuredAgentSession transcript', () => {
       rendered.hook = useMobileStructuredAgentSession({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook's request, subscription and connection members are provided.
         client: client as RpcClient,
+        pairedHostClient: null,
         sessionId: 'session-1',
         enabled: true,
         connected: true,

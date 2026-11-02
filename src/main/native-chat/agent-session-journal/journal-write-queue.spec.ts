@@ -7,7 +7,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -15,7 +15,7 @@ import {
 import type { AgentSessionJournal } from './journal-store'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { JournalWriteQueue } from './journal-write-queue'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalWriteQueueTests(): void {
   const IDENTITY = {

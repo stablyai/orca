@@ -10,8 +10,8 @@ import {
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'

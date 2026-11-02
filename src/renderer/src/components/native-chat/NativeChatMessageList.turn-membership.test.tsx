@@ -37,11 +37,11 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 
-import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 
 import { NativeChatMessageList } from './NativeChatMessageList'
 
@@ -49,7 +49,7 @@ import { installNativeChatMessageListTestViewport } from './native-chat-message-
 
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
-import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
+import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 

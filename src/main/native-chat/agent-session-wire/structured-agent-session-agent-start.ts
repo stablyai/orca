@@ -16,7 +16,7 @@ import {
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { attachStructuredAgentSessionForStart } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'

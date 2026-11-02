@@ -1,13 +1,14 @@
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Before start, new-chat options must match the workspace catalog's first model/effort frame so the picker stays stable.
 
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionAccountHome, AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import { agentChatPermissionModes } from '../../shared/agent-chat-permission-mode'
 import {

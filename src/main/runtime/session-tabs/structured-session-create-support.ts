@@ -12,7 +12,7 @@ import {
   resolveStructuredAgentSessionAdoptionForCreate,
   structuredAgentSessionAdoptAttach,
   type StructuredAgentSessionCreateIntentInput
-} from '../structured-agent-session-create-adoption'
+} from '../agent-session/structured-agent-session-create-adoption'
 import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
 import {
   resolveHostStructuredAgentCreateSupport,
@@ -21,12 +21,12 @@ import {
 import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
 import { structuredAgentChatProgramNeedsInstall } from '../structured-agent-availability'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../structured-agent-session-runtime'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../structured-agent-session-host-refusal'
+import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../agent-session/records/agent-session-record-store-slot'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../agent-session/structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
   protected abstract restoreStructuredAgentSessionTabsOnce(

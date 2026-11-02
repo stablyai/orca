@@ -11,14 +11,14 @@ import {
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { digestPayload } from './journal-payload-bounds'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalCrashBoundaryTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

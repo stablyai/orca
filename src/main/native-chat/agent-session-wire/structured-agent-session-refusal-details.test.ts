@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { classifyStoreFailure } from './structured-agent-session-attach'
 import {

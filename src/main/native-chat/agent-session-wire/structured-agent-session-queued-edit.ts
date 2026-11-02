@@ -3,7 +3,7 @@
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type {
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult,

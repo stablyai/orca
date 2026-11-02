@@ -8,7 +8,7 @@ import { classifyDispatchRejection } from '../../../../shared/agent-session/requ
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionRecordedRejectionParts } from '../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
-import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/structured-agent-session-message-projection'
+import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'

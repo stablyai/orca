@@ -7,7 +7,6 @@ import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-secti
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
-import { useAppStore } from '@/store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
@@ -91,7 +90,6 @@ function PRFilesCombinedDiffSections({
   fileTreeCollapsed,
   setFileTreeCollapsed
 }: PRFilesCombinedDiffSectionsProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
   const isDark = useDocumentDarkTheme()
   // The keyed mount fixes this file set; state preserves its identity without a render-time ref cache.
   const [entries] = useState<GitBranchChangeEntry[]>(() =>
@@ -322,7 +320,6 @@ function PRFilesCombinedDiffSections({
       virtualizer={virtualizer}
       sections={sections}
       isDark={isDark}
-      settings={settings}
       sectionHeights={sectionHeights}
       inlineReviewComments={inlineReviewComments}
       loadSection={loadSection}

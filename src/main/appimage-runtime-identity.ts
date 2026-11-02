@@ -55,7 +55,11 @@ function inspectRegularFile<T>(
     return null
   } finally {
     if (fd !== undefined) {
-      closeSync(fd)
+      try {
+        closeSync(fd)
+      } catch {
+        // Advisory cleanup must not override the verified inspection result.
+      }
     }
   }
 }

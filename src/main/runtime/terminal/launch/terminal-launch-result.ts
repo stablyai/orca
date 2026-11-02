@@ -1,4 +1,4 @@
-import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
+import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { admitStablePaneAdoption } from '../../runtime-terminal-pane-identity'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'

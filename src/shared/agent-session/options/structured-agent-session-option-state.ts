@@ -1,4 +1,4 @@
-import type { AgentSessionStatusSummary } from '../../agent-session-wire'
+import type { AgentSessionStatusSummary } from '../agent-session-wire'
 import type { AgentType } from '../../agent-status-types'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type { TrackedNativeChatSessionOption } from '../../native-chat/input/native-chat-session-option-state'

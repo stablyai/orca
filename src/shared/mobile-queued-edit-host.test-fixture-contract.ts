@@ -5,7 +5,7 @@ import type {
   AgentSessionSlashCommand,
   AgentSessionCommandsResult,
   AgentSessionSubscribeEvent
-} from './agent-session-wire'
+} from './agent-session/agent-session-wire'
 
 type StoredQueuedMessage = {
   messageId: string

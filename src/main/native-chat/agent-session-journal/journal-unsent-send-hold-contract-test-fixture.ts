@@ -3,15 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentMessageSource,
   AgentSessionMessageSource
 } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { holdUnsentSends, type UnsentSendHold } from './journal-unsent-send-hold'
 import type { AgentSessionJournal } from './journal-store'
 import {

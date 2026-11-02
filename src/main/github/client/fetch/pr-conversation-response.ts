@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { mapGraphQLReactionGroups } from '../../comment-reactions'
+import { tailDiffHunk } from '../../../../shared/github/pr-comment-diff-hunk'
 
 const commentSchema = z.object({
   id: z.string(),
@@ -33,6 +34,12 @@ const threadConnection = z.object({
         startLine: z.number().nullable(),
         originalLine: z.number().nullable(),
         originalStartLine: z.number().nullable(),
+        diffSide: z.string().nullish().catch(undefined),
+        // Optional so a failed or trimmed field never drops the thread.
+        rootHunk: z
+          .object({ nodes: z.array(z.object({ diffHunk: z.string().nullish() }).nullable()) })
+          .nullish()
+          .catch(undefined),
         comments: z.object({
           nodes: z.array(commentSchema.extend({ path: z.string() }).nullable())
         })
@@ -117,6 +124,10 @@ export function parsePRConversationResponse(stdout: string): {
           thread
             ? thread.comments.nodes.filter(hasDatabaseId).map((c) => ({
                 ...mapGraphQLComment(c),
+                // Left-side threads count old-file lines, which the shared tail numbering cannot place.
+                ...(c === thread.comments.nodes[0] && thread.diffSide !== 'LEFT'
+                  ? rootDiffHunk(thread.rootHunk)
+                  : {}),
                 path: c.path,
                 threadId: thread.id,
                 isResolved: thread.isResolved,
@@ -128,6 +139,13 @@ export function parsePRConversationResponse(stdout: string): {
         )
       : []
   }
+}
+
+function rootDiffHunk(
+  rootHunk: { nodes: ({ diffHunk?: string | null } | null)[] } | null | undefined
+): { diffHunk?: string } {
+  const diffHunk = tailDiffHunk(rootHunk?.nodes[0]?.diffHunk)
+  return diffHunk ? { diffHunk } : {}
 }
 
 const restCommentSchema = z.object({

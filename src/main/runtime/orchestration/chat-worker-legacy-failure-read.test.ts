@@ -4,7 +4,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { openTestJournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionJournalProjections } from '../../native-chat/agent-session-wire/structured-agent-session-status-journal-projection'

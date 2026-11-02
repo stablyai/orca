@@ -19,7 +19,7 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../agent-session-journal/journal-row-schema'
 
 const UNEXPECTED_PROVIDER_EXIT_OUTCOME =

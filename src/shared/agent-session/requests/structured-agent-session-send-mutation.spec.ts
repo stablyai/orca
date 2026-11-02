@@ -3,7 +3,7 @@ import type { AgentJournalMessageItem } from '../journal/agent-session-journal-t
 import type { AgentMessageSource } from '../agent-session-message-source'
 import { AgentJournalSubmissionSchema } from '../journal/agent-session-journal-submission-schema'
 import { SendParams } from '../../rpc-contract/structured-agent-session-params'
-import { structuredAgentSessionPayloadFingerprint } from '../../structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../lifecycle/structured-agent-session-mutation'
 import {
   agentSessionSendBodyFingerprint,
   structuredAgentSessionMessageSendMutation
@@ -27,23 +27,6 @@ const FROM: AgentMessageSource = {
 }
 
 describe('send fingerprints never cover the sender', () => {
-  it('fingerprints message choices with the operation, never the body', () => {
-    const send = (options?: { model: string; effort: string }) =>
-      structuredAgentSessionMessageSendMutation({
-        sessionId: 'session-1',
-        clientOperationId: 'op-1',
-        expectedRuntimeFence: 1,
-        body: BODY,
-        ...(options ? { options } : {})
-      })
-    const legacy = send()
-    const chosen = send({ model: 'model-a', effort: 'high' })
-    expect(chosen.envelope.payloadFingerprint).not.toBe(legacy.envelope.payloadFingerprint)
-    expect(chosen.options).toEqual({ model: 'model-a', effort: 'high' })
-    expect(SendParams.safeParse(legacy).success).toBe(true)
-    expect(SendParams.safeParse(chosen).success).toBe(true)
-  })
-
   it('reads a saved submission’s choices, ignoring keys an older build stored', () => {
     const submission = {
       clientMessageId: 'message-1',

@@ -1,4 +1,4 @@
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import * as autoSandbox from '../../codex/codex-structured-auto-sandbox'
 import { expect, it, vi } from 'vitest'

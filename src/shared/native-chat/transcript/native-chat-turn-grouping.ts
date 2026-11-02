@@ -1,7 +1,7 @@
 // Share desktop/mobile turn ownership, bar placement and row order.
 
 import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../agent-session-turn-record'
+import { readAgentJournalTurn } from '../../agent-session/lifecycle/agent-session-turn-record'
 import type { NativeChatRole } from '../native-chat-types'
 
 type NativeChatTurnRow = { id: string; role: NativeChatRole }
