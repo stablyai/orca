@@ -1911,6 +1911,7 @@
       "providerRetrying": "{{agent}} geçici bir sorunla karşılaştı ve yeniden deniyor.",
       "providerRetryingQuoted": "{{agent}} yeniden deniyor: {{detail}}.",
       "providerStartFailed": "{{agent}}, başlatılması tamamlanmadan durdu.",
+      "savedConversationMissing": "{{agent}} bu sohbetin kayıtlı konuşmasını bulamadı.",
       "queueFull": "Ajana iletilmeyi bekleyen çok fazla mesaj olduğu için bu mesaj gönderilmedi.",
       "quitTerminalAgent": "Sohbete burada devam etmek için o ajandan çıkın.",
       "runCommandAgain": "/{{command}} komutunu yeniden çalıştırın.",

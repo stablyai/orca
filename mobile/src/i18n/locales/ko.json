@@ -1907,6 +1907,7 @@
       "providerRetrying": "{{agent}}에 일시적인 문제가 발생하여 다시 시도하고 있습니다.",
       "providerRetryingQuoted": "{{agent}}이(가) 다시 시도하고 있습니다: {{detail}}.",
       "providerStartFailed": "{{agent}}이(가) 시작을 마치기 전에 중지되었습니다.",
+      "savedConversationMissing": "{{agent}}에서 이 채팅의 저장된 대화를 찾을 수 없습니다.",
       "queueFull": "에이전트를 기다리는 메시지가 너무 많아 이 메시지는 전송되지 않았습니다.",
       "quitTerminalAgent": "여기에서 채팅을 계속하려면 해당 에이전트를 종료하세요.",
       "runCommandAgain": "/{{command}}을(를) 다시 실행하세요.",
