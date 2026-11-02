@@ -140,18 +140,19 @@ export async function previewGhosttyImport(
     let content: string
     try {
       const info = await stat(configPath)
+      // Picked paths can be devices or FIFOs whose zero size would slip past the byte limit.
+      if (!info.isFile()) {
+        firstError ??= 'Config path is not a regular file.'
+        continue
+      }
       if (info.size > MAX_CONFIG_BYTES) {
-        if (firstError === null) {
-          firstError = `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
-        }
+        firstError ??= `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
         continue
       }
       content = await readFile(configPath, 'utf-8')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not read config file'
-      if (firstError === null) {
-        firstError = `Could not read config: ${message}`
-      }
+      firstError ??= `Could not read config: ${message}`
       continue
     }
     mergeParsedConfig(parsed, parseGhosttyConfig(content))

@@ -281,6 +281,7 @@ export function TerminalAppearanceSection({
             onOpenChange={ghostty.handleOpenChange}
             preview={ghostty.preview}
             loading={ghostty.loading}
+            choosingFile={ghostty.choosingFile}
             onApply={ghostty.handleApply}
             onChooseFile={ghostty.handleChooseFile}
             applied={ghostty.applied}

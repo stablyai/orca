@@ -17,6 +17,7 @@ type GhosttyImportModalProps = {
   onOpenChange: (open: boolean) => void
   preview: GhosttyImportPreview | null
   loading: boolean
+  choosingFile?: boolean
   onApply: () => void | Promise<void>
   onChooseFile: () => void | Promise<void>
   applied?: boolean
@@ -37,6 +38,7 @@ export function GhosttyImportModal({
   onOpenChange,
   preview,
   loading,
+  choosingFile = false,
   onApply,
   onChooseFile,
   applied = false,
@@ -70,7 +72,7 @@ export function GhosttyImportModal({
               variant="outline"
               size="sm"
               className="gap-1.5"
-              disabled={loading}
+              disabled={loading || choosingFile}
               onClick={() => void onChooseFile()}
             >
               <FileUp className="size-4" />
@@ -184,7 +186,7 @@ export function GhosttyImportModal({
                 {translate('auto.components.settings.GhosttyImportModal.f96688b6bc', 'Cancel')}
               </Button>
               {hasChanges && (
-                <Button onClick={() => void onApply()}>
+                <Button disabled={choosingFile} onClick={() => void onApply()}>
                   {translate(
                     'auto.components.settings.GhosttyImportModal.9d3e56ca36',
                     'Apply Changes'
