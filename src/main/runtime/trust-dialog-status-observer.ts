@@ -68,12 +68,13 @@ function isTrustDialogOnScreen(emulator: HeadlessEmulator): boolean {
   return reason === 'agent-trust-workspace' || reason === 'codex-trust-workspace'
 }
 
-/** Arrow keys from the highlighted choice to the trust choice, then Return; null without a visible cursor. */
+/** Arrow keys from the highlighted choice to the trust choice, then Return; null when the layout is not the known two-choice one. */
 function trustChoiceKeys(emulator: HeadlessEmulator): string | null {
   const choices = visibleLines(emulator).slice(-TRUST_DIALOG_CHOICE_ROWS, -1)
   const cursor = choices.findIndex((line) => TRUST_DIALOG_CURSOR_RE.test(line))
   const trust = choices.findIndex((line) => TRUST_DIALOG_CHOICE_RE.test(line))
-  if (cursor === -1 || trust === -1) {
+  // Rows between the two choices may be wrapped text, not choices, so only adjacent rows are trusted.
+  if (cursor === -1 || trust === -1 || Math.abs(trust - cursor) > 1) {
     return null
   }
   const arrow = trust > cursor ? '\x1b[B' : '\x1b[A'
@@ -161,7 +162,7 @@ export class TrustDialogStatusObserver {
       state: 'waiting',
       agentType: agent,
       prompt: '',
-      ...(keys ? { interactivePrompt: buildNativeChatFolderTrustPrompt(keys) } : {})
+      interactivePrompt: buildNativeChatFolderTrustPrompt(keys)
     })
     const row = this.deps.readStatus(ptyId)
     if (row?.state === 'waiting' && row.agentType === agent) {

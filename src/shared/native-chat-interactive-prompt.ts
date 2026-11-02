@@ -85,7 +85,9 @@ export function parseApprovalFromStatus(
       title: say('folderTrustTitle'),
       description: say('folderTrustHint'),
       options: [
-        { label: say('trustFolder'), send: folderTrust.trustSend },
+        ...(folderTrust.trustSend
+          ? [{ label: say('trustFolder'), send: folderTrust.trustSend }]
+          : []),
         { label: say('exit'), send: folderTrust.exitSend }
       ]
     }

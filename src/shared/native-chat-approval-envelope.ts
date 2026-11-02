@@ -55,16 +55,20 @@ export function parseNativeChatApprovalEnvelope(
 }
 
 /** A folder-trust dialog read off the screen; `trustSend` moves to the trust choice and confirms. */
-export function buildNativeChatFolderTrustPrompt(trustSend: string): string {
-  return JSON.stringify({ folderTrust: { trustSend } })
+/** A null `trustSend` means the trust choice could not be aimed; the card then offers only Exit. */
+export function buildNativeChatFolderTrustPrompt(trustSend: string | null): string {
+  return JSON.stringify({ folderTrust: trustSend ? { trustSend } : {} })
 }
 
 export function parseNativeChatFolderTrustEnvelope(
   interactivePrompt: string | undefined | null
-): { trustSend: string; exitSend: string } | null {
+): { trustSend: string | null; exitSend: string } | null {
   const trust = readEnvelopeField(interactivePrompt, 'folderTrust')
-  if (!trust || !('trustSend' in trust)) {
+  if (!trust) {
     return null
+  }
+  if (!('trustSend' in trust)) {
+    return { trustSend: null, exitSend: ESCAPE }
   }
   const trustSend = trust.trustSend
   // Only arrow keys then Return; anything else is not a trust-choice keystroke.

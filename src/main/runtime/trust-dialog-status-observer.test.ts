@@ -116,6 +116,16 @@ describe('TrustDialogStatusObserver', () => {
     expect(card?.kind === 'approval' && card.approval.options[0]?.send).toBe('\x1b[A\r')
   })
 
+  // A send would still hit the highlighted choice, so the card keeps Exit and locks terminal sends.
+  it('offers only Exit when no highlighted choice is visible', async () => {
+    const { prompts, recording, write } = await pane('codex-0-158-0-trustprompt', 'codex')
+    await write(recording.replaceAll('\u203a 1. Trust', '  1. Trust'))
+    const card = parseInteractivePrompt(prompts[0], undefined, 'codex')
+    expect(card?.kind === 'approval' && card.approval.options).toEqual([
+      { label: 'Exit', send: '\x1b' }
+    ])
+  })
+
   it('ignores the dialog wording quoted in ordinary output', async () => {
     const { published, write } = await pane('codex-0-158-0-trustprompt', 'codex')
     const reply = [
