@@ -7,8 +7,9 @@ import { keepTextFocusThroughTaps } from './keyboard-persisting-taps'
 import { MobileSessionTitleBlock } from '../session/MobileSessionTitleBlock'
 import type { SessionTitleCard } from '../session/use-session-title-card'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
+import type * as ReactNative from 'react-native'
 
-vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('react-native-web'))
+vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 
 function plant() {
   const container = document.createElement('div')
