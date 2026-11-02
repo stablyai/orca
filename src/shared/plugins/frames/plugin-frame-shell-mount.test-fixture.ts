@@ -1,4 +1,4 @@
-import { afterEach, vi } from 'vitest'
+import { afterEach, vi, type Mock } from 'vitest'
 import { buildPluginPanelShellHtml, type PluginFrameSurface } from './plugin-panel-shell'
 
 /** The injected `window.orca` is the public frame API; the envelope under it stays internal. */
@@ -34,8 +34,15 @@ afterEach(() => {
   Object.defineProperty(window, 'parent', { value: realParent, configurable: true })
 })
 
-export function mountShell(surface: PluginFrameSurface = 'panel') {
-  const parent = { postMessage: vi.fn() }
+export type MountedShell = {
+  orca: FrameOrca
+  parent: { postMessage: Mock<(message: Record<string, unknown>) => void> }
+  fromHost: (data: unknown, source?: unknown) => boolean
+  posted: () => Record<string, unknown>[]
+}
+
+export function mountShell(surface: PluginFrameSurface = 'panel'): MountedShell {
+  const parent = { postMessage: vi.fn<(message: Record<string, unknown>) => void>() }
   Object.defineProperty(window, 'parent', { value: parent, configurable: true })
   const script = buildPluginPanelShellHtml('<main></main>', surface).match(
     /<script>\n([\s\S]*?)<\/script>/
@@ -52,4 +59,4 @@ export function mountShell(surface: PluginFrameSurface = 'panel') {
   return { orca, parent, fromHost, posted }
 }
 
-export const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+export const flush = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 0))
