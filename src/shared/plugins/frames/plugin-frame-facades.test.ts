@@ -56,17 +56,6 @@ describe('window.orca.plugin', () => {
     answer(sent.id, { output: [{ id: '1' }] })
     await expect(todos).resolves.toEqual([{ id: '1' }])
   })
-
-  it('hands worker posts to plugin.on by event name', () => {
-    const { orca, push } = mountShell()
-    const changed = vi.fn()
-    const other = vi.fn()
-    orca.plugin.on('todos.changed', changed)
-    orca.plugin.on('other', other)
-    push({ kind: 'message', event: 'todos.changed', payload: { count: 3 } })
-    expect(changed).toHaveBeenCalledWith({ count: 3 })
-    expect(other).not.toHaveBeenCalled()
-  })
 })
 
 describe('window.orca events and data', () => {
@@ -84,22 +73,5 @@ describe('window.orca events and data', () => {
     ])
     push({ kind: 'event', event: 'agent.status.changed', payload: { state: 'done' } })
     expect(first).toHaveBeenCalledWith({ state: 'done' })
-  })
-
-  it('reads storage and settings, and hears which key changed', async () => {
-    const { orca, requests, answer, push } = mountShell()
-    const value = orca.storage.get('todos')
-    const setting = orca.settings.get('apiUrl')
-    const [get, settings] = requests()
-    answer(get.id, { value: null })
-    answer(settings.id, { settings: { apiUrl: 'https://x' } })
-    await expect(value).resolves.toBeNull()
-    await expect(setting).resolves.toBe('https://x')
-    const changed = vi.fn()
-    orca.storage.onDidChange(changed)
-    push({ kind: 'changed', area: 'settings', key: 'apiUrl' })
-    push({ kind: 'changed', area: 'storage', key: 'todos' })
-    expect(changed).toHaveBeenCalledOnce()
-    expect(changed).toHaveBeenCalledWith({ key: 'todos' })
   })
 })

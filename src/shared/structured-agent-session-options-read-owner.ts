@@ -50,6 +50,12 @@ export function createStructuredAgentSessionOptionsReadOwner(
   let leases = 0
   let version = 0
   let dirty = true
+  let retries = 0
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
+  const cancelRetry = () => {
+    clearTimeout(retryTimer)
+    retryTimer = undefined
+  }
   const listeners = new Set<() => void>()
   const notify = () => listeners.forEach((listener) => listener())
   const run = createCoalescingKeyedRunner<void>()
@@ -100,11 +106,24 @@ export function createStructuredAgentSessionOptionsReadOwner(
           }
           notify()
         }
+        if (isCurrentRead() && !dirty && retries < 2) {
+          retries++
+          retryTimer = setTimeout(() => {
+            retryTimer = undefined
+            if (!isCurrentRead()) {
+              return
+            }
+            dirty = true
+            schedule()
+          }, 250)
+        }
         return
       }
       if (!isCurrentRead()) {
         return
       }
+      retries = 0
+      cancelRetry()
       snapshot = {
         optionState: attached.optionCatalog
           ? applyStructuredAgentSessionOptions(
@@ -127,6 +146,8 @@ export function createStructuredAgentSessionOptionsReadOwner(
     }).catch(() => undefined)
   }
   const invalidate = () => {
+    cancelRetry()
+    retries = 0
     version++
     dirty = true
     schedule()
@@ -181,6 +202,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
       invalidate()
       return () => {
         if (lease === attached) {
+          cancelRetry()
           lease = undefined
           version++
           dirty = true

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { acpNotificationEnvelopeSchema } from '../acp-context-usage'
 import type { AcpDialect, AcpDialectNotification, AcpHookBlock } from './acp-dialect'
+import type { AvailableCommand } from '../generated/acp-protocol.generated'
 import { grokRequest, grokSettleRequest } from './grok-requests'
 import { grokBackgroundTaskNotification, grokToolBackgroundTasks } from './grok-background-tasks'
 import { grokModelEfforts } from './grok-model-catalog'
@@ -206,6 +207,25 @@ function notification(
   }
 }
 
+const initializeCommandsSchema = z.looseObject({
+  _meta: z.looseObject({
+    grokShell: z.literal(true),
+    availableCommands: z.array(z.looseObject({ name: z.string() }))
+  })
+})
+// Initialize lists only built-ins; a skill or workflow that takes a session-gated built-in's name carries these.
+const OTHER_ORIGIN_META = ['path', 'scope', 'workflowSource']
+
+function grokBuiltinCommands(initialized: unknown): (command: AvailableCommand) => boolean {
+  const parsed = initializeCommandsSchema.safeParse(initialized)
+  if (!parsed.success) {
+    return () => false
+  }
+  const names = new Set(parsed.data._meta.availableCommands.map((command) => command.name))
+  return (command) =>
+    names.has(command.name) && !OTHER_ORIGIN_META.some((key) => command._meta?.[key] !== undefined)
+}
+
 export const GROK_ACP_DIALECT: AcpDialect = {
   subagentStop: grokSubagentStop,
   backgroundTaskStop: grokBackgroundTaskStop,
@@ -226,6 +246,7 @@ export const GROK_ACP_DIALECT: AcpDialect = {
       : undefined,
   contextWindow,
   modelEfforts: grokModelEfforts,
+  builtinCommands: grokBuiltinCommands,
   hookBlock,
   promptErrorDetail: (error) => promptErrorDataSchema.safeParse(error.data).data?.message,
   failedTurnText: () => 'Grok ended this turn with an error.'

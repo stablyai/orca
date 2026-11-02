@@ -419,6 +419,8 @@ export type AgentSessionSlashCommand = {
   description?: string
   /** Provider-authored argument sketch, e.g. `<issue-url>`. */
   argumentHint?: string
+  /** The provider's own built-in command, not a user command or skill of the same name. */
+  builtin?: true
   /** The skill file the provider selects this skill by; two skills may share a name. */
   path?: string
 }

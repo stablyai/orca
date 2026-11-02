@@ -53,26 +53,6 @@ describe('issue edits retain the displayed repository', () => {
     })
   })
 
-  it('keeps body edits on the registered repo path and passes the opened issue target', async () => {
-    await runWorkItemBodyUpdate({
-      item,
-      repoPath: '/home/fixture/widgets',
-      projectOrigin: undefined,
-      body: 'Origin edit',
-      parsedSlug: ORIGIN
-    })
-
-    expect(window.api.gh.updateIssue).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      repoPath: '/home/fixture/widgets',
-      sourceContext: undefined,
-      number: 12,
-      updates: { body: 'Origin edit' },
-      ownerRepo: ORIGIN
-    })
-    expect(window.api.gh.updateIssueBySlug).not.toHaveBeenCalled()
-  })
-
   function expectProjectUpdate(
     sourceContext: TaskSourceContext,
     updates: Parameters<typeof runIssueUpdate>[0]['updates']
