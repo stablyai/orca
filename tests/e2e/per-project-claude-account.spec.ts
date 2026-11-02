@@ -215,19 +215,20 @@ test.describe('Per-project Claude account', () => {
         .locator('[data-testid="sortable-tab"][data-active="true"] [data-slot="tooltip-trigger"]')
         .first()
       const tooltip = orcaPage.locator('[data-slot="tooltip-content"]').first()
-      // Radix opens only on a pointermove it receives; the account roster loads on first open.
-      const hoverTab = async (): Promise<void> => {
-        await trigger.hover({ position: { x: 10, y: 6 } })
-        const box = await trigger.boundingBox()
-        if (box) {
-          await orcaPage.mouse.move(box.x + 30, box.y + 6, { steps: 5 })
-        }
+      // Radix opens only on a pointermove it receives, which a re-rendering tab can drop, so
+      // the whole gesture retries. The account roster loads on first open.
+      const openTooltip = async (): Promise<void> => {
+        await expect(async () => {
+          await orcaPage.mouse.move(600, 600)
+          await trigger.hover({ position: { x: 10, y: 6 } })
+          await trigger.hover({ position: { x: 30, y: 6 } })
+          await expect(tooltip).toBeVisible({ timeout: 1_500 })
+        }).toPass({ timeout: 10_000 })
       }
-      await hoverTab()
-      await expect(tooltip).toBeVisible({ timeout: 10_000 })
+      await openTooltip()
       await orcaPage.mouse.move(600, 600)
       await expect(tooltip).toBeHidden()
-      await hoverTab()
+      await openTooltip()
       await expect(tooltip).toContainText(` · ${PERSONAL.email}`, { timeout: 10_000 })
       await saveScreenshot(orcaPage, 'd-tab-tooltip-pinned-account')
       await orcaPage.mouse.move(600, 600)
