@@ -1,3 +1,4 @@
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
@@ -83,14 +84,24 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     receiveCatalog
   })
 
-  const interactionReadyRef = useRef(acceptsPicks)
+  const acceptsTurnPicks =
+    acceptsPicks && (!(args.isWorking ?? turnId !== null) || takesSendOptions || takesSelection)
+  const interactionReadyRef = useRef(acceptsTurnPicks)
   const lockSnapshotRef = useRef(
     (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
   )
   const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) =>
-    !acceptsPicks ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
+    !acceptsPicks
+      ? lockedStructuredAgentSessionOptionSnapshot(snapshot)
+      : !acceptsTurnPicks
+        ? snapshot.map((descriptor) =>
+            descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
+              ? descriptor
+              : { ...descriptor, settable: false, disabledReason: 'host-update-required' as const }
+          )
+        : snapshot
   useLayoutEffect(() => {
-    interactionReadyRef.current = acceptsPicks
+    interactionReadyRef.current = acceptsTurnPicks
     lockSnapshotRef.current = lockSnapshot
   })
   const optionSnapshot = lockSnapshot(
@@ -105,7 +116,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       record: optionStateRef.current.record,
       view,
       snapshot: lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
-      ready: acceptsPicks && interactionReadyRef.current,
+      ready: acceptsTurnPicks && interactionReadyRef.current,
       providerStarting,
       isCurrentContext,
       ...(!transportEnabled || fence === null
@@ -176,7 +187,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     optionSnapshot,
     optionSurface,
     setStructuredOption,
-    sendSource: { optionStateRef, optionView, takesSendOptions, takesSelection },
+    sendSource: { optionStateRef, optionView, controller, takesSendOptions, takesSelection },
     unavailable: hostCatalog.unavailable
   }
 }

@@ -60,6 +60,7 @@ export function sendStructuredAgentSessionTurn(
     body: AgentJournalMessageItem
     retryUnknown?: true
     delivery?: 'queue-if-active'
+    steer?: true
     queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     selection?: Readonly<Record<string, string>>
