@@ -18,6 +18,7 @@ import { join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import type * as ProcessHost from '@orca/process-host'
 import type * as WslRelayLaunch from '../../main/agent-hooks/wsl-hook-relay-launch'
+import type * as ManagedHookControls from '../../main/agent-hooks/managed-agent-hook-controls'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildColocatedWslLauncher } from '../../main/cli/wsl-cli-scripts'
 import { readWslCliContext } from '../../shared/wsl-cli-context'
@@ -55,7 +56,8 @@ vi.mock('../runtime-client', () => ({
   RuntimeClientError: Error,
   getDefaultUserDataPath: harness.data
 }))
-vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../main/agent-hooks/managed-agent-hook-controls', async (original) => ({
+  ...(await original<typeof ManagedHookControls>()),
   applyAgentStatusHooksEnabled: harness.apply,
   getManagedAgentHookStatuses: harness.status
 }))

@@ -1,8 +1,4 @@
-import {
-  wslHookInvocation,
-  conventionalHookInvocation,
-  runWslClaudeHookCommand
-} from './agent-hooks-wsl'
+import { wslHookInvocation, conventionalHookInvocation } from './agent-hooks-wsl'
 import { AGENT_HOOK_TARGETS } from '../../shared/agent-hook-types'
 import type { ManagedHookInvocation } from '../../main/claude/claude-hook-target'
 import { readUserClaudeConfigDirAsSet } from '../../shared/claude-user-config'
@@ -193,8 +189,8 @@ async function setAgentHooksEnabled(
   client: RuntimeClient,
   enabled: boolean
 ): Promise<AgentHookCommandResult> {
-  const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } =
-    await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+  const controls = await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+  const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } = controls
   const origin = wslHookInvocation()
   const updatedRuntime = await updateRunningRuntime(client, enabled)
   const offlineUpdate = updatedRuntime ? null : await updateEnabledOnDisk(enabled)
@@ -209,7 +205,7 @@ async function setAgentHooksEnabled(
     const nativeStatuses = updatedRuntime
       ? await getManagedAgentHookStatuses(nativeOptions)
       : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings, nativeOptions)
-    const claude = await runWslClaudeHookCommand(
+    const claude = await controls.runWslClaudeHookCommand(
       { distro: origin.distro, context: origin.context },
       enabled ? 'on' : 'off',
       updatedRuntime?.settings ?? offlineUpdate?.settings ?? null
@@ -259,8 +255,8 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   },
   'agent hooks status': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
-    const { getManagedAgentHookStatuses } =
-      await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+    const controls = await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+    const { getManagedAgentHookStatuses } = controls
     const origin = wslHookInvocation()
     const admission = origin?.context ? await client.getOfflineRuntimeAdmission() : null
     const settings = admission?.reachable
@@ -269,7 +265,7 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
     const invocation = hookInvocation()
     const statuses = origin?.context
       ? [
-          await runWslClaudeHookCommand(
+          await controls.runWslClaudeHookCommand(
             { distro: origin.distro, context: origin.context },
             'status',
             settings

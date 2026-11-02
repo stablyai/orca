@@ -1,10 +1,6 @@
 // The CLI loads these paths after electron-vite replaces out/main.
 export const CLI_MAIN_ENTRY_NAMES = [
   'agent-hooks/managed-agent-hook-controls',
-  'agent-hooks/wsl-hook-command-session',
-  'agent-hooks/wsl-hook-fs-adapter',
-  'agent-hooks/managed-hook-detection-commands',
-  'claude/hook-service',
   'gitlab/project-ref-parser',
   'orca-profiles/profile-index-store',
   'claude-accounts/keychain',

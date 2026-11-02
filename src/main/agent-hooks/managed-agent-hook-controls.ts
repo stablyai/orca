@@ -53,6 +53,15 @@ type RemoveOptions = ManagedHookInvocation & {
   shouldContinue?: (agent: AgentHookTarget) => boolean
 }
 
+export async function runWslClaudeHookCommand(
+  origin: { distro: string; context: string },
+  action: 'on' | 'off' | 'status',
+  settings: ManagedHookSettings
+): Promise<AgentHookInstallStatus> {
+  const operation = await import('./wsl-claude-hook-command.js')
+  return operation.runWslClaudeHookCommand(origin, action, settings)
+}
+
 export type StartupManagedHookAction = 'install' | 'skip'
 
 // Settings are per profile but hooks are user-global; startup removal would break other instances.
