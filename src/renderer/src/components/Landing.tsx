@@ -291,7 +291,7 @@ export default function Landing(): React.JSX.Element {
               {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
             </button>
 
-            <QuickChatButton landing />
+            <QuickChatButton />
 
             <button
               className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors"

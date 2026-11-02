@@ -38,8 +38,6 @@ type MockState = {
 
 let mockState: MockState
 
-vi.mock('../QuickChatButton', () => ({ QuickChatButton: () => <button aria-label="New chat" /> }))
-
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: MockState) => unknown) => selector(mockState)
   useAppStore.getState = () => mockState

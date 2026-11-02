@@ -11,9 +11,8 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { Button } from './ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
-export function QuickChatButton({ landing = false }: { landing?: boolean }) {
+export function QuickChatButton() {
   useUiLanguageRevision()
   const hasProjects = useAppStore((s) => s.repos.length > 0)
   const [started, setStarted] = useState(false)
@@ -36,16 +35,14 @@ export function QuickChatButton({ landing = false }: { landing?: boolean }) {
   }, [control])
   const label = translate('quickChat.newChat', 'New chat')
   // Keep the clicked landing control mounted until its launch or picker finishes.
-  if (isWebClientLocation() || (landing && hasProjects && !started)) {
+  if (isWebClientLocation() || (hasProjects && !started)) {
     return null
   }
-  const button = (
+  return (
     <Button
       ref={publish}
-      variant={landing ? 'secondary' : 'ghost'}
-      size={landing ? 'default' : 'icon-xs'}
-      className={landing ? undefined : 'w-8'}
-      data-quick-chat={landing ? 'landing' : 'sidebar'}
+      variant="secondary"
+      data-quick-chat="landing"
       aria-label={label}
       onClick={(event) => {
         const id = requestQuickChat(event.currentTarget)
@@ -56,17 +53,7 @@ export function QuickChatButton({ landing = false }: { landing?: boolean }) {
       }}
     >
       <MessageSquarePlus className="size-4" />
-      {landing && translate('quickChat.startChatting', 'Start chatting')}
+      {translate('quickChat.startChatting', 'Start chatting')}
     </Button>
-  )
-  return landing ? (
-    button
-  ) : (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
   )
 }

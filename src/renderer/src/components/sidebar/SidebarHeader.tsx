@@ -2,7 +2,6 @@ import React, { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { QuickChatButton } from '../QuickChatButton'
 import { SidebarHeaderActions } from './sidebar-header-actions'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
@@ -68,7 +67,6 @@ const SidebarHeader = React.memo(function SidebarHeader({
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <QuickChatButton />
         <Popover
           open={introOpen}
           onOpenChange={(open) => {

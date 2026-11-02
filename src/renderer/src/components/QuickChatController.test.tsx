@@ -92,7 +92,6 @@ function mount() {
   return render(
     <TooltipProvider>
       <QuickChatController />
-      <QuickChatButton landing />
       <QuickChatButton />
     </TooltipProvider>
   )
@@ -283,7 +282,7 @@ it('hides the web control and rejects programmatic ingress, and renders a repres
   view.rerender(
     <TooltipProvider>
       <QuickChatController />
-      <QuickChatButton landing />
+      <QuickChatButton />
     </TooltipProvider>
   )
   expect(screen.getByText(fr.quickChat.startChatting)).toBeTruthy()
