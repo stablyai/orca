@@ -8232,7 +8232,8 @@
           "273e7e81fe": "Configs",
           "1f744a72f4": "Config",
           "choose_file": "Choose Config File",
-          "not_found_choose_file": "No Ghostty config found on this computer. Choose a config file to import one from another location."
+          "not_found_choose_file": "No Ghostty config found on this computer. Choose a config file to import one from another location.",
+          "cleared": "Cleared"
         },
         "WarpThemeImportModal": {
           "title": "Import from Warp",

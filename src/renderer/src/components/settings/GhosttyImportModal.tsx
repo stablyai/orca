@@ -10,6 +10,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { SETTING_LABELS } from './setting-labels'
+import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { translate } from '@/i18n/i18n'
 
 type GhosttyImportModalProps = {
@@ -26,11 +27,31 @@ type GhosttyImportModalProps = {
 
 function formatDiffValue(value: unknown): string {
   if (value && typeof value === 'object') {
-    return Object.entries(value)
-      .map(([k, v]) => `${k}: ${String(v)}`)
-      .join(', ')
+    const entries = Object.entries(value)
+    return entries.length === 0
+      ? translate('auto.components.settings.GhosttyImportModal.cleared', 'Cleared')
+      : entries.map(([k, v]) => `${k}: ${String(v)}`).join(', ')
   }
   return String(value)
+}
+
+// Theme selections are opaque IDs, so show the theme names the import resolved instead.
+function formatPreviewEntry(preview: GhosttyImportPreview, key: string, value: unknown): string {
+  const themeNames = preview.terminalThemes ?? {}
+  if (key === 'terminalThemeDark' && themeNames.dark) {
+    return themeNames.dark
+  }
+  if (key === 'terminalThemeLight' && themeNames.light) {
+    return themeNames.light
+  }
+  if (key === 'terminalCustomThemes') {
+    const names = new Set([themeNames.dark, themeNames.light])
+    return normalizeTerminalCustomThemes(value)
+      .filter((theme) => theme.source === 'ghostty' && names.has(theme.name))
+      .map((theme) => theme.name)
+      .join(', ')
+  }
+  return formatDiffValue(value)
 }
 
 export function GhosttyImportModal({
@@ -113,7 +134,7 @@ export function GhosttyImportModal({
                   {Object.entries(preview.diff).map(([key, value]) => (
                     <li key={key} className="flex justify-between gap-2">
                       <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
-                      <span className="font-mono">{formatDiffValue(value)}</span>
+                      <span className="font-mono">{formatPreviewEntry(preview, key, value)}</span>
                     </li>
                   ))}
                 </ul>
@@ -130,7 +151,7 @@ export function GhosttyImportModal({
                   {Object.entries(preview.diff).map(([key, value]) => (
                     <li key={key} className="flex justify-between gap-2">
                       <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
-                      <span className="font-mono">{formatDiffValue(value)}</span>
+                      <span className="font-mono">{formatPreviewEntry(preview, key, value)}</span>
                     </li>
                   ))}
                 </ul>
