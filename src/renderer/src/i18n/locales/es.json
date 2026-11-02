@@ -7883,7 +7883,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Permite que los agentes de codificación controlen el emulador móvil activo con comandos de la CLI de Orca.",
           "f2f8d97bb6": "Control del emulador móvil para agentes",
-          "143961d031": "Dispositivo predeterminado",
           "8aec2f99a0": "Actualizar la disponibilidad del emulador",
           "ae1612c58c": "Disponibilidad",
           "f9af91ea26": "Muestra la acción Nuevo emulador móvil y permite que los agentes se conecten al emulador activo.",
@@ -7896,9 +7895,7 @@
           "d704fb5023": "Necesita configuración",
           "06b06429c6": "Comprobando la compatibilidad con el SDK de Android y el simulador de iOS.",
           "6d1483d4a0": "1 dispositivo emulador detectado.",
-          "0a452d4d3b": "{{value0}} dispositivos emuladores detectados.",
-          "f62a1bb759": "Orca seleccionará automáticamente un dispositivo emulador después de que se detecten los dispositivos.",
-          "b2fd62ea75": "Dispositivo predeterminado para nuevas pestañas del emulador y comandos de conexión de agentes. La selección automática prefiere un dispositivo que ya esté en ejecución."
+          "0a452d4d3b": "{{value0}} dispositivos emuladores detectados."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "No se encontraron interfaces"

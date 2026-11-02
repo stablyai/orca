@@ -1,3 +1,6 @@
+import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../shared/emulator-runtime-capabilities'
+import { supportsEmulatorOpeningPreferences } from './emulator-opening-preferences-capability'
 import { toast } from 'sonner'
 import type { EmulatorStreamInfo } from '@/components/emulator-pane/emulator-pane-types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -75,6 +78,18 @@ export async function openMobileEmulatorTab(
   }
 
   cancelPendingSimulatorPaneShutdown(worktreeId)
+  const capabilities = readLocalRuntimeCapabilitiesOrUnknown()
+  if (
+    capabilities?.includes(EMULATOR_OPENING_PREFERENCES_CAPABILITY) ||
+    (capabilities === null && (await supportsEmulatorOpeningPreferences()))
+  ) {
+    return ensureSimulatorTab(worktreeId, {
+      placement: options.placement ?? 'rightSplit',
+      targetGroupId,
+      surfacePane: true,
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+  }
   const alreadyLaunching = isManualSimulatorLaunchPending(worktreeId)
   if (alreadyLaunching) {
     return ensureSimulatorTab(worktreeId, {

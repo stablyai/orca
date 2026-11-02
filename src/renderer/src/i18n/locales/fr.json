@@ -8143,7 +8143,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Laisser les agents de codage contrôler l'émulateur mobile actif avec des commandes CLI Orca.",
           "f2f8d97bb6": "Contrôle de l'émulateur mobile par les agents",
-          "143961d031": "Appareil par défaut",
           "8aec2f99a0": "Actualiser la disponibilité des émulateurs",
           "ae1612c58c": "Disponibilité",
           "f9af91ea26": "Affiche l'action Nouvel émulateur mobile et permet aux agents de se rattacher à l'émulateur actif.",
@@ -8156,9 +8155,7 @@
           "d704fb5023": "Configuration requise",
           "06b06429c6": "Vérification de la prise en charge du SDK Android et du simulateur iOS.",
           "6d1483d4a0": "1 appareil émulateur détecté.",
-          "0a452d4d3b": "{{value0}} appareils émulateur détectés.",
-          "f62a1bb759": "Orca sélectionnera automatiquement un appareil émulateur une fois les appareils détectés.",
-          "b2fd62ea75": "Appareil par défaut pour les nouveaux onglets d'émulateur et les commandes d'attachement des agents. La sélection automatique privilégie un appareil déjà démarré."
+          "0a452d4d3b": "{{value0}} appareils émulateur détectés."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "Aucune interface trouvée"

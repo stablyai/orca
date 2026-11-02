@@ -1,3 +1,5 @@
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../shared/emulator-runtime-capabilities'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -64,7 +66,7 @@ function createDeferred<T>(): Deferred<T> {
 function runtimeSuccess<T>(result: T) {
   return {
     id: 'test',
-    ok: true,
+    ok: true as const,
     result,
     _meta: { runtimeId: 'test-runtime' }
   }
@@ -109,6 +111,7 @@ async function flushEffects(): Promise<void> {
 
 describe('useEmulatorPaneSession', () => {
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([])
     ;(
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
@@ -159,6 +162,31 @@ describe('useEmulatorPaneSession', () => {
     consumePrelaunchedSimulatorSession(WORKTREE_ID)
     delete (window as { api?: unknown }).api
     vi.restoreAllMocks()
+  })
+
+  it('asks the capable host on automatic open without sending a guessed device', async () => {
+    consumePrelaunchedSimulatorSession(WORKTREE_ID)
+    setLocalRuntimeCapabilitiesForTests([EMULATOR_OPENING_PREFERENCES_CAPABILITY])
+    vi.mocked(window.api.runtime.call).mockImplementation(async (request) => {
+      if (request.method === 'emulator.listDevices') {
+        return runtimeSuccess(deviceList)
+      }
+      return runtimeSuccess({ attached: false, selectionRequired: 'first-use' })
+    })
+    await act(async () => {
+      root.render(<AutoAttachProbe />)
+    })
+    await flushEffects()
+    expect(window.api.runtime.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'emulator.attach',
+        params: { worktree: WORKTREE_ID, focus: false, userInitiated: true }
+      })
+    )
+    expect(latest?.loading).toBe(false)
+    expect(latest?.selectedUdid).toBeNull()
+    expect(latest?.selectionRequired).toBe('first-use')
+    expect(latest?.error).toBeNull()
   })
 
   it('shows a connecting state instead of the old live preview while switching devices', async () => {
