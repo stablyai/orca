@@ -330,7 +330,7 @@ import {
   RepoIssueCommandRead,
   RepoSelector,
   RepoShow,
-  RepoWithGitHubTarget,
+  RepoWithGitHubAccountExpectation,
   SlugRepo
 } from './github-repo-target-params'
 import {
@@ -1079,10 +1079,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.countWorkItems': WorkItemsCount,
   'github.createIssue': CreateIssue,
   'github.issue': Issue,
-  'github.listAssignableUsers': RepoWithGitHubTarget,
+  'github.listAssignableUsers': RepoWithGitHubAccountExpectation,
   'github.listBindableAccounts': BindableAccounts,
   'github.listIssues': IssuesList,
-  'github.listLabels': RepoWithGitHubTarget,
+  'github.listLabels': RepoWithGitHubAccountExpectation,
   'github.listWorkItems': WorkItemsList,
   'github.markPRDraft': MarkPrDraft,
   'github.markPRReadyForReview': MarkPrReadyForReview,
