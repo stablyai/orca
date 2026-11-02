@@ -52,7 +52,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload,
     newRun = false,
-    retireBinding = false
+    retireBinding = false,
+    programStatusRelease?: true
   ): EnrichedAgentHookEventPayload | undefined {
     const rootContext = previewHookPresence(
       incoming,
@@ -216,7 +217,10 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       return previous
     }
     const effectivePayload = latch.event
-    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
+    if (
+      previous &&
+      shouldKeepClaudePermissionVisible(previous, effectivePayload, programStatusRelease)
+    ) {
       const held = withHeldChildWaitMainAgent(previous, effectivePayload)
       // Child prompts preserve main-agent progress and its paired shell evidence; the main agent's own waits do not.
       if (previous.toolAgentId) {

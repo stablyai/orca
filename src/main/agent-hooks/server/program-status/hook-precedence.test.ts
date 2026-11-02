@@ -91,12 +91,15 @@ describe('programStatusHookYieldEndsAt', () => {
     ).toBe(Infinity)
   })
 
-  it('keeps a question the hooks raised only from a working report that began before it', () => {
+  it('keeps a question through a re-sent working report that began before it, and lets a fresh one fall back', () => {
     for (const state of ['waiting', 'blocked'] as const) {
       const hook = row({ state, agentType: 'pi' })
       const working = report({ state: 'working', agentType: 'pi' })
-      expect(programStatusHookYieldEndsAt(hook, working, NOW - 1)).toBe(Infinity)
-      expect(programStatusHookYieldEndsAt(hook, working, NOW)).toBe(Infinity)
+      // The lease renewal re-sends the displaced working run; a fresh report of it (#37003) is
+      // resumed work, so only the re-send holds the row against hook silence without end.
+      expect(programStatusHookYieldEndsAt(hook, working, NOW - 1, true)).toBe(Infinity)
+      expect(programStatusHookYieldEndsAt(hook, working, NOW, true)).toBe(Infinity)
+      expect(programStatusHookYieldEndsAt(hook, working, NOW - 1)).toBe(NOW + SILENCE)
       expect(programStatusHookYieldEndsAt(hook, working, NOW + 1)).toBe(NOW + SILENCE)
       expect(programStatusHookYieldEndsAt(hook, working)).toBe(NOW + SILENCE)
       expect(programStatusHookYieldEndsAt(hook, report({ state: 'done', agentType: 'pi' }))).toBe(
