@@ -21,18 +21,13 @@ export const CANCEL_SETTLE_TIMEOUT_MS = 5_000
 
 export type CancelTerminal = PromptTerminal & Pick<OrcaRuntimeService, 'getPtyLivenessVerdict'>
 
-/** What a cancel reaches in its seam. */
 export type CancelSeam = Pick<ExternalConversationSeamDeps, 'store' | 'readHookRow'> & {
   prompts: ConversationPrompts
   chain: ConversationChain
-  /** The watchers' events, while anyone watches. */
   events: ConversationEvents | null
 }
 
-/**
- * Settles the conversation's queued and held work first, so a follow-up held behind an approval
- * is not pasted once the reject lands, then stops what its agent is doing now.
- */
+/** Cancel queued/held work before rejecting approval, or the rejection could release a follow-up send. */
 export async function cancelConversation(
   terminal: CancelTerminal,
   seam: CancelSeam,
@@ -44,7 +39,7 @@ export async function cancelConversation(
   }
   const id = conversationId(key)
   const settling = seam.chain.cancel(id, 'conversation_cancelled')
-  // A launch that already published its agent links it before ending, so look only after that.
+  // Published launches link before settling; wait before looking up the agent.
   const headRefused = settling
     ? await withTimeout<boolean | null>(settling, CANCEL_SETTLE_TIMEOUT_MS, null)
     : false
@@ -68,12 +63,7 @@ export async function cancelConversation(
   return stopLinkedAgent(terminal, seam, linked.link, signal)
 }
 
-/**
- * Stops the linked agent on the host's own word: an approval it waits on is rejected, a turn it
- * reports working gets one Escape. Idle, it is left alone and the cancel is an accepted no-op, so
- * its receipt keeps a retried delivery from interrupting a later turn. Nothing here says the agent
- * stopped: that is the turn-end verdict the host records.
- */
+/** Reject approval or send one Escape to a working agent; idle cancellation records a receipt without proving turn end. */
 async function stopLinkedAgent(
   terminal: CancelTerminal,
   { prompts, readHookRow, events }: CancelSeam,
@@ -115,7 +105,6 @@ async function stopLinkedAgent(
   }
 }
 
-/** Rejects through the prompt answer; an accepted reject tells the watchers which prompt it ended. */
 async function reject(
   terminal: CancelTerminal,
   prompts: ConversationPrompts,

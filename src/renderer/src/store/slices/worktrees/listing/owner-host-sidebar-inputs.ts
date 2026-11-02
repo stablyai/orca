@@ -7,12 +7,7 @@ import {
 import type { AppState } from '../../../types'
 import { tryRuntimeTargetForWorktreeOwner } from './worktree-owner-target'
 
-/**
- * Whether the workspace's owning host runs main's sidebar inputs, so it raises the unread flag
- * itself. A local owner runs this build (main, its SSH hosts, or the host that served the browser
- * client). A paired server answers by capability; an unresolved owner or an unreadable status
- * counts as older, so this window raises the flag.
- */
+/** Local/SSH/serving-web owners run this build; paired hosts prove sidebar-input ownership by capability. Unknown/unreadable owners use window flag fallback. */
 export async function ownerHostOwnsSidebarInputs(
   state: AppState,
   worktreeId: string,

@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { PanZoomSize } from './pan-zoom-view'
+import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
+import { svgMarkupDataUri } from '../../../../shared/svg-document'
 import { PanZoomImageDialog } from './PanZoomImageDialog'
 
 function readSvgImage(svg: string): { xml: string; size: PanZoomSize } | null {
-  // Why: sanitized SVG is HTML-serialized (`&nbsp;`), which an XML image document rejects.
+  // HTML-serialized sanitized SVG can contain &nbsp;, which XML image documents reject.
   const element = new DOMParser().parseFromString(svg, 'text/html').querySelector('svg')
   const [, , width, height] = (element?.getAttribute('viewBox') ?? '')
     .trim()
@@ -20,28 +21,13 @@ function readSvgImage(svg: string): { xml: string; size: PanZoomSize } | null {
   }
 }
 
-function useSvgObjectUrl(xml: string | null): string | null {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    if (xml === null) {
-      setUrl(null)
-      return
-    }
-    // Why: an image document keeps the copy's ids and styles out of the page that still shows the original.
-    const next = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }))
-    setUrl(next)
-    return () => URL.revokeObjectURL(next)
-  }, [xml])
-  return url
-}
-
 export default function DiagramViewerModal(): React.JSX.Element {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const svg = typeof modalData.svg === 'string' ? modalData.svg : ''
   const background = typeof modalData.background === 'string' ? modalData.background : undefined
   const image = useMemo(() => readSvgImage(svg), [svg])
-  const url = useSvgObjectUrl(image?.xml ?? null)
+  const url = useMemo(() => (image ? svgMarkupDataUri(image.xml) : null), [image])
 
   return (
     <PanZoomImageDialog

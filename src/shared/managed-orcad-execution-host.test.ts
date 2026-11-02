@@ -47,7 +47,7 @@ describe('managed Orca server host merging', () => {
   it('keeps both ids resolvable and shows one row routed to the server', () => {
     const hosts = registry({ kind: 'managed', environmentId: 'omarchy-server' })
 
-    // Why both: setups, folders and filters are owned by one id or the other.
+    // Setups, folders and filters may belong to either id.
     expect(hosts.map((host) => host.id)).toEqual([
       'local',
       'runtime:omarchy-server',

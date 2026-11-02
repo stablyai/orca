@@ -7,9 +7,7 @@ export type ControlRenewalOutcome =
   | 'activity_cell_not_authoritative'
   | 'control_activity_not_found'
   | 'control_activity_moved'
-  // The host's assignment row was already locked by one of the per-host
-  // transactional paths. Retryable, and never a reason to close a control: the
-  // next tick is 15s away and the lease has 105s on it.
+  // Contended assignment is retryable, never grounds to close control: next tick is 15s away with a 105s lease.
   | 'assignment_lock_unavailable'
   // Decided per row before the statement runs, so one malformed request cannot
   // cost the rest of the batch its renewal.
@@ -64,14 +62,7 @@ export function orderedControlRenewalRows<Row extends { identity: AssignmentIden
   )
 }
 
-// One statement renewing every due control lease on this cell, row-wise over the
-// unnested parameter arrays. Logic per row is what the single-row predecessor
-// did: lock the assignment, admit the caller's cell either as the current cell or
-// as the source of an active forward migration, lock that host's control lease,
-// push both expiries forward, and report one outcome. The one addition is
-// `present_assignment`, an unlocked probe that separates a host with no
-// assignment row at all from one whose row SKIP LOCKED passed over - the first
-// closes the control, the second retries.
+// Renew unnested rows like single-host logic: lock assignment, authorize current/forward-source cell, lock lease, extend expiries and report. Unlocked present_assignment distinguishes missing (close) from SKIP LOCKED (retry).
 export const CONTROL_RENEWAL_BATCH_SQL = `WITH renewal_input AS MATERIALIZED (
            SELECT
              renewal.ordinality AS row_index,

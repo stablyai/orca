@@ -6,18 +6,13 @@ import { getWorkspaceCleanupAgentEvidence } from '@/store/slices/workspace-clean
 import { withWorkspaceCleanupAgentStopApproval } from './workspace-cleanup-agent-stop-approval'
 
 export type WorkspaceCleanupAgentStopRequest = {
-  /** Workspaces with a live agent at the last delete click, in confirmation order. */
   candidates: WorkspaceCleanupCandidate[]
-  /** Set when the step guards a row's "Delete anyway" rather than the confirmed batch. */
   unverifiedCandidate: WorkspaceCleanupCandidate | null
 }
 
 export type WorkspaceCleanupAgentStopGate = {
   request: WorkspaceCleanupAgentStopRequest | null
-  /**
-   * Reads live agents now; returns the candidates stamped with the user's agent-stop approval,
-   * or null after opening (or refreshing) the stop step for agents the user has not approved.
-   */
+  /** Read live agents at delete time; return approved candidates or show/refresh stop confirmation for unapproved agents. */
   approve: (
     candidates: readonly WorkspaceCleanupCandidate[],
     unverifiedCandidate: WorkspaceCleanupCandidate | null

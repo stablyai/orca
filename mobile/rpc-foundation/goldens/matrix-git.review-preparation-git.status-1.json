@@ -371,9 +371,11 @@
       "status": "pending",
       "startedAt": 0
     },
-    "95c2e5ca74fc": {
-      "committed": "uncommitted",
-      "status": {
+    "95c11f23ad0d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
         "ok": true,
         "status": {
           "branch": "feature",
@@ -400,7 +402,13 @@
               "removed": {
                 "$rpc": "undefined"
               },
-              "status": "modified"
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
             },
             {
               "added": {
@@ -423,7 +431,13 @@
               "removed": {
                 "$rpc": "undefined"
               },
-              "status": "untracked"
+              "status": "untracked",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
             }
           ],
           "head": "abc1234",
@@ -492,6 +506,91 @@
     "ac07554f62ad": {
       "committed": "uncommitted",
       "status": "unread"
+    },
+    "ace37e236a18": {
+      "committed": "uncommitted",
+      "status": {
+        "ok": true,
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": {
+                "$rpc": "undefined"
+              },
+              "area": "staged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": {
+                "$rpc": "undefined"
+              },
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            },
+            {
+              "added": {
+                "$rpc": "undefined"
+              },
+              "area": "untracked",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/new.ts",
+              "removed": {
+                "$rpc": "undefined"
+              },
+              "status": "untracked",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "head": "abc1234",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
     },
     "b50556c964ed": {
       "name": "git.status#1",
@@ -571,81 +670,6 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "c7ee072b3a0f": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "ok": true,
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": {
-                "$rpc": "undefined"
-              },
-              "area": "staged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": {
-                "$rpc": "undefined"
-              },
-              "status": "modified"
-            },
-            {
-              "added": {
-                "$rpc": "undefined"
-              },
-              "area": "untracked",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/new.ts",
-              "removed": {
-                "$rpc": "undefined"
-              },
-              "status": "untracked"
-            }
-          ],
-          "head": "abc1234",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
-    },
     "da676cfabd9b": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -693,9 +717,9 @@
           "sender": ["1858779f58e9"],
           "payloads": ["ddee63fd3bf5"],
           "settlements": {
-            "status": "c7ee072b3a0f"
+            "status": "95c11f23ad0d"
           },
-          "state": "95c2e5ca74fc",
+          "state": "ace37e236a18",
           "effects": []
         }
       },

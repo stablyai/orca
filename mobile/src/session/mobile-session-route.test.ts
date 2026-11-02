@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mobileSessionRouteTarget } from './mobile-session-route'
 import {
-  hostStackHostRoute,
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
@@ -51,14 +50,18 @@ describe('mobile session route', () => {
       mobileSessionRouteTarget({
         hostId: 'host/one',
         worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1'
+        name: 'Fix #1',
+        paneKey: 'pane/one',
+        executionHost: 'runtime:server-1'
       })
     ).toEqual({
       name: '[hostId]/session/[worktreeId]',
       params: {
         hostId: 'host/one',
         worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1'
+        name: 'Fix #1',
+        paneKey: 'pane/one',
+        executionHost: 'runtime:server-1'
       }
     })
   })
@@ -69,7 +72,7 @@ describe('mobile session route', () => {
     ).toEqual({ hostId: 'host-1', worktreeId: 'repo::/tmp/wt' })
   })
 
-  it('mounts the host before replacing it with the session route', () => {
+  it('mounts the host, then opens the session over its list', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
     const target = mobileSessionRouteTarget({
@@ -80,15 +83,14 @@ describe('mobile session route', () => {
 
     navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', target)
 
-    expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
+    expect(push).toHaveBeenCalledWith('/h/host%2Fone')
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 
     harness.setState(mountedHostState('host/one'))
 
     expect(harness.navigation.dispatch).toHaveBeenCalledWith({
-      type: 'REPLACE',
+      type: 'PUSH',
       target: '/h',
-      source: 'host-index',
       payload: target
     })
   })

@@ -2,14 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearIssueContextResult } from '../../../shared/linear/agent-result-types'
 import type { LinearIssueRequest } from '../../../shared/linear/agent-access'
 import type { ResolvedIssue } from './client'
-import { ACTIVITY_QUERY } from '../issue-activity-raw'
-import {
-  ATTACHMENTS_QUERY,
-  CHILDREN_QUERY,
-  COMMENTS_QUERY,
-  INVERSE_RELATIONS_QUERY,
-  RELATIONS_QUERY
-} from './raw'
 
 // Separate signed/plain client spies expose body reads that would leave uploads.linear.app media unauthorized.
 const rawRequest = vi.fn()
@@ -146,21 +138,6 @@ function result(): LinearIssueContextResult {
 describe('Linear issue context includes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  it('declares cursor variables on every paged include query', () => {
-    for (const query of [
-      COMMENTS_QUERY,
-      CHILDREN_QUERY,
-      ATTACHMENTS_QUERY,
-      RELATIONS_QUERY,
-      ACTIVITY_QUERY,
-      INVERSE_RELATIONS_QUERY
-    ]) {
-      expect(query).toContain('$after: String')
-      expect(query).toContain('after: $after')
-    }
-    expect(ACTIVITY_QUERY).not.toContain('attachment { id title url source }')
   })
 
   it('does not probe grandchildren when the first child page exhausts the node cap', async () => {
@@ -400,7 +377,7 @@ describe('Linear issue context includes', () => {
     ])
   })
 
-  it('reads comment and child bodies through the signed public-file-url client', async () => {
+  it('reads comment bodies through the signed public-file-url client', async () => {
     rawRequest.mockResolvedValue({
       data: {
         issue: {

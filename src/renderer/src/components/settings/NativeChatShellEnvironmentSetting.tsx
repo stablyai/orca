@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isNativeChatShellEnvironmentName } from '../../../../shared/native-chat-shell-environment'
+import { isNativeChatShellEnvironmentName } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'

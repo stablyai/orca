@@ -11,14 +11,14 @@ import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
+import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
 
 // Native WebSockets normally emit close immediately after error or a relay-hello
 // refusal; bound the missing-close case so recovery is never left pending.
 const RELAY_ERROR_CLOSE_GRACE_MS = 250
 
 export class RelayOuterError extends Error {
-  // rejectedByRelayHello: the relay refused in a relay-hello frame, not just a close code.
-  // closeReason: the close frame's reason text; free text, so only compare exact values.
+  // Distinguish hello refusal from close codes; compare free-text close reasons only by exact value.
   constructor(
     readonly code: number,
     readonly rejectedByRelayHello = false,
@@ -38,11 +38,7 @@ type MobileRelayE2eeLinkOptions = {
   onText: (plaintext: string) => void
   onBinary: (plaintext: Uint8Array) => void
   onHello?: (hello: Extract<RelayPhoneHello, { ok: true }>) => void
-  // The cell's account of why the desktop is absent, read off the close frame.
-  // Reported separately from onError because a rejection is delivered as both a
-  // relay-hello and a close, and which one the runtime dispatches first is not
-  // ordered — only the close carries the reason, and it must not be lost to
-  // that race.
+  // Report close reasons separately because hello refusal and close dispatch order is unspecified, and only close names the cause.
   onHostCloseReason?: (reason: RelayHostCloseReason) => void
   // Fired once relay-auth is on the wire: from here the cell owns the wait.
   onOpen?: () => void
@@ -58,7 +54,7 @@ export class MobileRelayE2eeLink {
   private closed = false
   private rejectedHelloCode: number | null = null
   private closeGraceTimer: ReturnType<typeof setTimeout> | null = null
-  private inboundChain: Promise<void> = Promise.resolve()
+  private readonly inbound: WsInboundMessageQueue
 
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
@@ -83,6 +79,19 @@ export class MobileRelayE2eeLink {
       onBinary: options.onBinary,
       onError: (error) => this.fail(error)
     })
+    this.inbound = new WsInboundMessageQueue(
+      async (raw) => {
+        if (this.closed || this.rejectedHelloCode !== null) {
+          return
+        }
+        if (!this.outerReady) {
+          this.acceptHello(raw)
+        } else {
+          await this.channel.handleMessage(raw)
+        }
+      },
+      (error) => this.fail(asError(error))
+    )
     this.bindSocket()
   }
 
@@ -100,6 +109,7 @@ export class MobileRelayE2eeLink {
     }
     this.closed = true
     this.clearCloseGrace()
+    this.inbound.dispose()
     this.channel.dispose()
     this.socket.close()
   }
@@ -122,18 +132,7 @@ export class MobileRelayE2eeLink {
       this.options.onOpen?.()
     }
     this.socket.onmessage = (event) => {
-      this.inboundChain = this.inboundChain
-        .then(async () => {
-          if (this.closed || this.rejectedHelloCode !== null) {
-            return
-          }
-          if (!this.outerReady) {
-            this.acceptHello(event.data)
-          } else {
-            await this.channel.handleMessage(event.data)
-          }
-        })
-        .catch((error: unknown) => this.fail(asError(error)))
+      void this.inbound.enqueue(event.data)
     }
     // `error` is often delivered just before `close`; wait for close so a
     // typed relay code is not replaced by a generic transport error.
@@ -159,8 +158,7 @@ export class MobileRelayE2eeLink {
     }
   }
 
-  // Waits briefly for the close frame, which alone carries the reason, before
-  // failing with what is known; a dead socket may never deliver it.
+  // Bound waiting for close reason; dead native sockets may never emit it.
   private awaitClose(): void {
     this.closeGraceTimer ??= setTimeout(() => {
       this.closeGraceTimer = null
@@ -192,8 +190,7 @@ export class MobileRelayE2eeLink {
       throw new Error('invalid relay hello')
     }
     if (!parsed.data.ok) {
-      // Why: the cell closes right behind a refusal, and only that close carries
-      // the reason recovery needs; failing now would drop it.
+      // Wait for the following close to preserve the reason needed by recovery.
       this.rejectedHelloCode = parsed.data.code
       this.awaitClose()
       return
@@ -212,6 +209,7 @@ export class MobileRelayE2eeLink {
     }
     this.closed = true
     this.clearCloseGrace()
+    this.inbound.dispose()
     this.channel.dispose()
     this.options.onError(error)
     this.socket.close()

@@ -1,8 +1,4 @@
-/**
- * The server's record of which migrations it committed and which are still staged. A commit must
- * read as committed for as long as a client could ask, and an abandoned stage must not hold the
- * server awake or take a staging slot forever.
- */
+// Commit receipts remain authoritative indefinitely; abandoned stages expire.
 import { MAX_ORCAD_MIGRATION_IMPORT_RECEIPTS } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type {
   OrcadMigrationImportReceipt,
@@ -16,7 +12,7 @@ import {
   type OrcadMigrationRequestIdentity
 } from './orcad-migration-staged-file'
 
-// A client resumes a stage within minutes; a week only covers a host left offline meanwhile.
+// Allow a week for clients that went offline mid-move.
 export const ORCAD_MIGRATION_STAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 export function findOrcadMigrationImportReceipt(
@@ -32,7 +28,7 @@ export function findOrcadMigrationImportReceipt(
   const evicted = state.orcadMigrationEvictedReceipts?.find(
     (entry) => entry.migrationId === manifest.migrationId
   )
-  // Everything else a receipt holds is the manifest's own: rebuilt, it still checks against it.
+  // Rebuild the remaining receipt fields from the manifest.
   return evicted
     ? {
         version: manifest.version,
@@ -47,7 +43,7 @@ export function findOrcadMigrationImportReceipt(
     : undefined
 }
 
-/** Appends a receipt; one that ages out of the bounded list keeps its commit as a compact record. */
+/** Compact evicted receipts without losing proof of commit. */
 export function recordOrcadMigrationImportReceipt(
   state: PersistedState,
   receipt: OrcadMigrationImportReceipt
@@ -71,7 +67,6 @@ export function isLiveOrcadMigrationStage(stagedAt: string, now: number): boolea
   return now - Date.parse(stagedAt) < ORCAD_MIGRATION_STAGE_TTL_MS
 }
 
-/** Drops stages no client came back for; returns whether any went. */
 export function expireOrcadMigrationStages(state: PersistedState, now: number): boolean {
   const staged = state.orcadMigrationStagedCatalogs ?? []
   const live = staged.filter((entry) => isLiveOrcadMigrationStage(entry.stagedAt, now))
@@ -93,18 +88,14 @@ export function recordOrcadMigrationCommitWriteGeneration(
   migration: OrcadMigrationRequestIdentity,
   generationBefore: number
 ): void {
-  // A save suppressed by quit or maintenance never bumps the generation, so no in-process write
-  // can prove this commit; only a restart that reads it from disk does.
+  // Suppressed saves never advance generation; only a disk-loaded receipt can prove durability.
   runtime.orcadMigrationCommitWriteGenerations.set(
     orcadMigrationStagingKey(migration),
     runtime.writeGeneration > generationBefore ? runtime.writeGeneration : Number.POSITIVE_INFINITY
   )
 }
 
-/**
- * Whether the receipt is on disk. A catalog-state query can see an in-memory receipt whose flush
- * failed; consuming its received blobs then would leave a retry after restart without them.
- */
+/** Require disk durability before consuming blobs a restart might need to retry. */
 export function isOrcadMigrationCommitDurable(
   runtime: OrcadMigrationCommitGenerationRuntime,
   migration: OrcadMigrationRequestIdentity
@@ -117,7 +108,6 @@ export function isOrcadMigrationCommitDurable(
   if (runtime.lastDurableWriteGeneration < required) {
     return false
   }
-  // Durable stays durable, so the entry is no longer needed.
   runtime.orcadMigrationCommitWriteGenerations.delete(key)
   return true
 }

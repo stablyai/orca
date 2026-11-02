@@ -56,7 +56,6 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
     return () => {}
   }
 }))

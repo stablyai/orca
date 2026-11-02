@@ -16,6 +16,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '@/store/types'
 import type { RuntimeLayoutStreamStatus } from './runtime-layout-client'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { publicRuntimeEnvironment } from './paired-runtime-environment-test-fixture'
 import { createTestStore } from '../store/slices/store-test-helpers'
 import { installServerLayoutFrames } from './server-layout-frames'
 import { applyWebSessionTabsSnapshotWithContext } from './web-session-tabs-sync/apply-snapshot'
@@ -142,17 +143,7 @@ export function runtimeEnvironment(
   runtimeId: string,
   pairingRevision: number
 ): PublicKnownRuntimeEnvironment {
-  return {
-    id,
-    name: id,
-    createdAt: 1,
-    updatedAt: 1,
-    pairingRevision,
-    lastUsedAt: null,
-    runtimeId,
-    endpoints: [{ id: 'ws-1', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://server' }],
-    preferredEndpointId: 'ws-1'
-  }
+  return publicRuntimeEnvironment({ id, runtimeId, pairingRevision })
 }
 
 type MirrorStore = {

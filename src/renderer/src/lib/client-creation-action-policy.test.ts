@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { createBrowserLinkTestStore, WORKSPACE } from './browser-link-open.test-fixture'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES } from '../../../shared/browser-client-hosting-eligibility'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
   FLOATING_BROWSER_UNAVAILABLE_MESSAGE,
   LOCAL_BROWSER_UNAVAILABLE_MESSAGE,
@@ -14,6 +16,7 @@ import {
   assertManagedBrowserMaterializationAllowed,
   assertRuntimeManagedBrowserCreationAvailable,
   getClientCreationActionPolicy,
+  getWorkspaceClientCreationActionPolicy,
   resolveClientCreationActionPolicy,
   runtimeHostsPagesOnThisDesktop,
   type RuntimeBrowserHostingState
@@ -125,6 +128,26 @@ describe('resolveClientCreationActionPolicy', () => {
 })
 
 describe('client creation action guards', () => {
+  it.each([false, true])('does not read server focus for a workspace policy (web: %s)', (web) => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', web)
+    const store = createBrowserLinkTestStore()
+    const settings = getDefaultSettings('/home/test')
+    Object.defineProperty(settings, 'activeRuntimeEnvironmentId', {
+      get: () => {
+        throw new Error('Workspace policy read server focus')
+      }
+    })
+    store.setState({ settings })
+
+    const policy = getWorkspaceClientCreationActionPolicy(store.getState(), WORKSPACE)
+    expect(policy['managed-browser']).toEqual(
+      web
+        ? { state: 'hidden', reason: MANAGED_BROWSER_UNAVAILABLE_MESSAGE }
+        : { state: 'enabled', provider: 'local-client' }
+    )
+    expect(getClientCreationActionPolicy(store.getState(), WORKSPACE)).toEqual(policy)
+  })
+
   it('fails closed for an older paired runtime and rejects local browser materialization', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     const state = {
@@ -217,7 +240,8 @@ describe('client creation action guards', () => {
 describe('a runtime whose pages this desktop hosts', () => {
   function hostingState(
     environment: Pick<PublicKnownRuntimeEnvironment, 'id' | 'orcadDeployment'>,
-    settings: RuntimeBrowserHostingState['settings'] = {}
+    settings: RuntimeBrowserHostingState['settings'] = {},
+    extraCapabilities: string[] = []
   ): RuntimeBrowserHostingState {
     return {
       settings,
@@ -225,7 +249,12 @@ describe('a runtime whose pages this desktop hosts', () => {
       runtimeStatusByEnvironmentId: new Map([
         [
           environment.id,
-          { status: runtimeStatus([...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES]) }
+          {
+            status: runtimeStatus([
+              ...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES,
+              ...extraCapabilities
+            ])
+          }
         ]
       ])
     }
@@ -258,12 +287,21 @@ describe('a runtime whose pages this desktop hosts', () => {
     expect(() => assertRuntimeManagedBrowserCreationAvailable(state, 'managed-ssh')).toThrow()
   })
 
-  it('stays off when desktop-hosted remote pages are turned off, and in the web client', () => {
-    const disabled = hostingState(
-      { id: 'orcad-server' },
-      { browserClientHostedRemoteEnabled: false }
+  it('leaves pages on a streaming server when the setting asks for server rendering', () => {
+    const streaming = hostingState(
+      { id: 'electron-server' },
+      { browserClientHostedRemoteEnabled: false },
+      [BROWSER_SCREENCAST_RUNTIME_CAPABILITY]
     )
-    expect(runtimeHostsPagesOnThisDesktop(disabled, 'orcad-server')).toBe(false)
+    expect(runtimeHostsPagesOnThisDesktop(streaming, 'electron-server')).toBe(false)
+  })
+
+  it('hosts through the server it cannot stream from even when the setting asks for server rendering', () => {
+    const state = hostingState({ id: 'orcad-server' }, { browserClientHostedRemoteEnabled: false })
+    expect(runtimeHostsPagesOnThisDesktop(state, 'orcad-server')).toBe(true)
+  })
+
+  it('stays off in the web client', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     expect(
       runtimeHostsPagesOnThisDesktop(hostingState({ id: 'orcad-server' }), 'orcad-server')

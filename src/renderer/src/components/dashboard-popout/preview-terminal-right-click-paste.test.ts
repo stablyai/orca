@@ -80,8 +80,7 @@ describe('installPreviewTerminalRightClickPaste', () => {
     expect(pasteClipboardText).not.toHaveBeenCalled()
   })
 
-  // Why: xterm reports a right press to a mouse-tracking TUI, and Codex pastes on
-  // that report itself, so the press must never reach xterm's element (#25192).
+  // Consume right press before xterm: mouse-tracking TUIs such as Codex may paste on the report themselves.
   const pressTerminalElement = (
     init: MouseEventInit
   ): { reachedXterm: boolean; event: MouseEvent } => {

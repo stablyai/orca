@@ -26,6 +26,7 @@ export function useAutomationDraftEffects({
     setDraft,
     createOpen,
     editingAutomationId,
+    targetEdited,
     setupDecisionPolicyDefaultRef,
     setupDecisionDefaultSignatureRef,
     setupDecisionTouchedRef
@@ -53,19 +54,34 @@ export function useAutomationDraftEffects({
     }
   }, [draft.projectId, editingAutomationId, getDefaultTarget, setDraft])
   useEffect(() => {
-    if (!draft.projectId) {
+    if (
+      !draft.projectId ||
+      draft.workspaceMode !== 'existing' ||
+      (editingAutomationId !== null && !targetEdited)
+    ) {
       return
     }
     const defaultWorktree = getDefaultWorktree(dialogWorktrees)
     if (!draft.workspaceId && defaultWorktree) {
       setDraft((current) => ({ ...current, workspaceId: defaultWorktree.id }))
     }
-  }, [dialogWorktrees, draft.projectId, draft.workspaceId, setDraft])
+  }, [
+    dialogWorktrees,
+    draft.projectId,
+    draft.workspaceId,
+    draft.workspaceMode,
+    editingAutomationId,
+    targetEdited,
+    setDraft
+  ])
   useEffect(() => {
     if (!createOpen || draft.workspaceMode !== 'new_per_run' || !draft.projectId) {
       return
     }
-    void loadAutomationYamlHooksForRepo(draft.projectId, createDestinationHostId)
+    // Opening the create dialog is no act on the repo's WSL distro (E9); save re-checks in the foreground.
+    void loadAutomationYamlHooksForRepo(draft.projectId, createDestinationHostId, {
+      background: true
+    })
   }, [
     createOpen,
     createDestinationHostId,
@@ -74,7 +90,7 @@ export function useAutomationDraftEffects({
     loadAutomationYamlHooksForRepo
   ])
   useEffect(() => {
-    if (!createOpen) {
+    if (!createOpen || editingAutomationId !== null) {
       setupDecisionPolicyDefaultRef.current = undefined
       setupDecisionDefaultSignatureRef.current = null
       setupDecisionTouchedRef.current = false
@@ -99,6 +115,7 @@ export function useAutomationDraftEffects({
     setDraft((current) => ({ ...current, setupDecision: nextDefault }))
   }, [
     createOpen,
+    editingAutomationId,
     draft,
     getDraftSetupDecisionDefault,
     getDraftSetupDecisionDefaultSignature,

@@ -31,8 +31,7 @@ export function getLinearAgentSkillNavInstallStatus(
     skills: readonly DiscoveredSkill[]
   }
 ): SettingsNavInstallStatus {
-  // Why: the sidebar must evaluate the same installed name the card will update,
-  // including legacy-only linear-tickets installs.
+  // Use the card’s installed name, including legacy-only linear-tickets installs.
   const updateTarget = getLinearAgentSkillUpdateTarget(input.skills, input.installed)
   return getAgentSkillNavInstallStatus({ ...input, name: updateTarget.skillName })
 }

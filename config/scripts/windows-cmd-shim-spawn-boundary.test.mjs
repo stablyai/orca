@@ -29,7 +29,6 @@ const WINDOWS_SHIM_SPAWN_ALLOWLIST = [
   // Write or assert on shim files rather than spawning one.
   'config/scripts/dev-cli-terminal-wrapper.mjs',
   'config/scripts/dev-cli-terminal-wrapper.test.mjs',
-  'config/scripts/electron-builder-config.test.mjs',
   'config/scripts/live-remote-freeze-rpc.mjs',
   'config/scripts/pty-transcript-secret-scan.test.mjs',
   'config/scripts/remote-agent-session-authority-repro.mjs',
@@ -38,10 +37,8 @@ const WINDOWS_SHIM_SPAWN_ALLOWLIST = [
   'config/scripts/build-linux-local.mjs',
   'config/scripts/build-linux-local.test.mjs',
   // Benchmarks, repros and e2e drivers — developer-invoked or Linux-only in CI.
-  'config/scripts/run-ai-vault-typing-bench.mjs',
   'config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs',
   'config/scripts/run-multi-client-navigation-e2e.mjs',
-  'config/scripts/run-multi-workspace-typing-bench.mjs',
   'config/scripts/run-ssh-staged-upload-reliability.mjs',
   'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
   'config/scripts/run-terminal-scale-perf-e2e.mjs',

@@ -1,6 +1,4 @@
-// Panes main closed or took back, kept in memory so a terminal start already under way cannot bring
-// one back by its late binding (pty-binding-session-update.ts mints a missing pane). Layout-owner
-// build only: every caller is behind ORCA_LAYOUT_OWNER_IS_MAIN.
+// Layout-owner builds fence removed panes against late spawns that would recreate missing membership.
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -9,14 +7,7 @@ import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/te
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 
-/**
- * Why 5 min: past the longest a start can wait before it binds. An SSH start may first wait on a
- * credential prompt (SSH_CREDENTIAL_TIMEOUT_MS, 120 s) and a connect (CONNECT_TIMEOUT_MS, 30 s,
- * both ssh-connection-utils.ts), then on its relay request (REQUEST_TIMEOUT_MS, 30 s,
- * ssh-channel-multiplexer.ts); the local daemon admits a spawn within 12 s
- * (MAX_SPAWN_ADMISSION_WINDOW_MS, daemon-terminal-admission.ts). Pane ids are never reused, so a
- * longer fence refuses nothing legitimate; the bound only limits memory.
- */
+// Five minutes covers credential/connect/relay waits; unique pane IDs make longer fences harmless apart from memory.
 export const CLOSED_PANE_BINDING_FENCE_MS = 5 * 60_000
 
 const closedAtByPaneKey = new Map<string, number>()
@@ -46,10 +37,7 @@ function paneKeysIn(
   return keys
 }
 
-/**
- * Switch point: in a layout-owner build, `mutate` runs through `fencingRemovedPanes` with what `fence`
- * names (null: unfenced). Otherwise it is `mutate` itself; `fence` is never called.
- */
+/** Wrap only layout-owner mutations; switch-off builds must not even evaluate fence. */
 export function fencedIfLayoutOwner<V>(
   fence: () => Fence | null,
   mutate: () => DurableProfileStateMutation<V>
@@ -63,7 +51,7 @@ export function fencedIfLayoutOwner<V>(
   }
 }
 
-/** A write to these partitions: `fences` when it is a close or take-back, else it only lifts. */
+/** Close/take-back writes add fences; other partition writes only lift them. */
 export function partitionsFence(
   hostIds: readonly ExecutionHostId[],
   getSession: SessionsRead['getSession'],
@@ -72,7 +60,7 @@ export function partitionsFence(
   return { sessions: { hostIds: () => hostIds, getSession }, fences }
 }
 
-/** A window or client layout command: its closes fence, its terminal creates lift; others neither. */
+/** Layout closes fence, creates lift, other commands leave fences unchanged. */
 export function layoutCommandFence(
   type: LayoutCommand['type'],
   hostIds: readonly ExecutionHostId[],
@@ -87,17 +75,13 @@ export function layoutCommandFence(
   return null
 }
 
-/**
- * Runs a write of main's, then fences the panes it removed when `fences` (a close or take-back) and
- * lifts the fence of each pane it newly wrote: a real create under the same id binds as any. A
- * rolled-back write puts back the fences it changed.
- */
+/** Fence removals, lift explicit recreations, and restore changed fences on rollback. */
 function fencingRemovedPanes<V>(
   sessions: SessionsRead,
   fences: boolean,
   write: () => DurableProfileStateMutation<V>
 ): DurableProfileStateMutation<V> {
-  // The partitions as they were before: a tab's close can drop the partition list it came from.
+  // Capture partitions before a close can remove its own holder.
   const hostIds = [...sessions.hostIds()]
   const before = paneKeysIn(hostIds, sessions.getSession)
   const result = write()
@@ -148,7 +132,6 @@ function fencingRemovedPanes<V>(
   }
 }
 
-/** Whether main closed or took back this pane within the binding window. */
 export function isClosedPaneFenced(paneKey: string): boolean {
   const closedAt = closedAtByPaneKey.get(paneKey)
   if (closedAt === undefined) {

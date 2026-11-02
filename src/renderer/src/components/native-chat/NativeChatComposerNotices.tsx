@@ -5,8 +5,7 @@ import { cn } from '@/lib/utils'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
-/** One card above the composer, one row per notice, errors first. The live region stays mounted so
- *  a screen reader hears the first notice too. */
+/** Keep the live region mounted so screen readers announce the first notice; show errors first. */
 export function NativeChatComposerNotices({
   notices,
   className
@@ -36,7 +35,6 @@ export function NativeChatComposerNotices({
   )
 }
 
-/** The card where a question or approval card has taken the composer's place. */
 export function NativeChatPromptSlotNotices({
   notices
 }: {

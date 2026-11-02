@@ -6,8 +6,7 @@ export type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished
 
 export type PaneForegroundAgentTrackerDeps = {
   getPtyId: () => string | null
-  /** Local panes only — remote/SSH foreground reads are expensive RPCs and
-   *  their replayed OSC streams must not produce process evidence. */
+  /** Local reads only: remote RPC cost and replayed OSC streams must not produce process evidence. */
   isTrackablePtyId: (ptyId: string) => boolean
   readForegroundProcess: (
     ptyId: string,
@@ -26,13 +25,9 @@ export type PaneForegroundAgentTrackerDeps = {
   getPublishedEntry?: () => PaneForegroundAgentEntry | undefined
   /** A local read recognized an agent; lets the pane's process monitor watch for its exit. */
   onAgentProcessRead?: (process: RecognizedAgentProcess) => void
-  /** True when the pane is otherwise known to run an agent (launchAgent, live
-   *  hook status). Lets a restored agent pane confirm — rather than trust — a
-   *  133;D before any command-start read has recorded its own evidence. */
+  /** Launch/hook identity requires confirmation of 133;D even before any command-start read found the agent. */
   hasKnownAgentIdentity?: () => boolean
-  /** Fired when a confirming read proves the foreground genuinely returned to a
-   *  shell (agent exited). Lets callers clear a stale agent-named tab title that
-   *  the shell never repaints. */
+  /** Confirmed shell return lets callers clear an agent title the shell will not repaint. */
   onConfirmedShellForeground?: (reason: 'visible-pty' | 'command-finished' | 'process-exit') => void
   onCommandFinishedUnavailable?: () => void
   onVisibleForegroundSettled?: (outcome: 'agent' | 'shell' | 'inconclusive') => void

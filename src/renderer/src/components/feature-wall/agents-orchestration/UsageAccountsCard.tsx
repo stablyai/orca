@@ -103,9 +103,7 @@ export function UsageAccountsCard(props: {
   const [claudeAction, setClaudeAction] = useState<ConnectAction>('idle')
   const [codexAction, setCodexAction] = useState<ConnectAction>('idle')
 
-  // Why: load both account lists once on mount. AccountsPane re-fetches on
-  // every settings open; here the feature wall is short-lived so a single
-  // fetch is enough — sign-in flows refresh state inline below.
+  // Fetch once per mount; inline sign-in flows refresh account state afterward.
   useEffect(() => {
     let stale = false
     void fetchRateLimits()

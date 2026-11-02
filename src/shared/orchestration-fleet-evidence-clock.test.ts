@@ -11,12 +11,7 @@ import {
 } from './orchestration-fleet-projection'
 import { createFleetStatusIndex, statusForFleetWorker } from './orchestration-fleet-status-index'
 
-/**
- * The observation clock and the delivery clock are two facts, and the fleet path used to carry
- * one optional field for the first with a silent `?? receivedAt` fallback to the second
- * (failure table W1-14, then RR-W-P1A when the fix turned out to be inert). The seam under test
- * is the clock, so the binding is supplied and terminal identity is proven elsewhere.
- */
+/** Exercise explicit observation versus delivery clocks (W1-14/RR-W-P1A); binding is supplied and proven by identity tests. */
 const PANE_KEY = 'tab-clock:leaf-clock'
 const TERMINAL_HANDLE = 'term_clock'
 const NOW = 10 * AGENT_STATUS_STALE_AFTER_MS
@@ -69,8 +64,7 @@ describe('fleet evidence clocks', () => {
   })
 
   it('measures staleness on the observation clock a replay restamped past', () => {
-    // A relay reconnect replays the cached row and restamps delivery to now; the evidence
-    // underneath is an hour old and the worker is not live.
+    // Reconnect refreshes delivery, but the underlying observation remains an hour old.
     const evidence = mintFleetAgentStatusEvidence(
       payload({
         receivedAt: NOW,
@@ -88,8 +82,7 @@ describe('fleet evidence clocks', () => {
   })
 
   it('orders same-pane rows by delivery even when the observation clocks invert', () => {
-    // Delivery order is the producer's last assertion about the pane. The replay observed
-    // earlier and arrived later, and it is still the row that describes the pane now.
+    // Newest delivery is the producer’s current assertion even when its observation predates an earlier delivery.
     const observedFirstDeliveredLast = mintFleetAgentStatusEvidence(
       payload({ receivedAt: NOW, evidenceObservedAt: NOW - 5_000, state: 'done' }),
       binding

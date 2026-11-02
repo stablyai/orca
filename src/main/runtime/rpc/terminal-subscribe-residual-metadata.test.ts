@@ -98,10 +98,11 @@ describe('mobile subscribe residual metadata', () => {
           ...(transformedRawLength === undefined
             ? []
             : [
+                // Phones never decoded OutputSpan, so a transformed span reaches them as text.
                 {
-                  opcode: TerminalStreamOpcode.OutputSpan,
+                  opcode: TerminalStreamOpcode.Output,
                   seq: 15 + transformedRawLength,
-                  payload: { data: 'PAINT', rawLength: transformedRawLength, transformed: true }
+                  payload: 'PAINT'
                 }
               ])
         ])

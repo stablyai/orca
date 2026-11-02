@@ -86,7 +86,7 @@ describe('Codex hook-only child transcript reconciliation', () => {
     expect(delayed?.payload.subagents).toBeUndefined()
   })
 
-  it('reconciles a child after restart using the retained root session path', () => {
+  it('reconciles a child using the retained root path after clearing transcript state', () => {
     const { state, root, childBody } = fixture(true)
     seedLegacyAgentStatusForTests(state, root)
     state.codexSubagentTranscriptByPaneKey.clear()

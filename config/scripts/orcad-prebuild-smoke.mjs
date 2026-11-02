@@ -14,10 +14,7 @@ import { runProcessSync } from '@orca/process-host'
 
 const require = createRequire(import.meta.url)
 
-/**
- * Stages node-pty's JS with ONLY the slot's binaries in build/Release, the way orcad's installer
- * lays them out. No prebuilds/ directory is copied, so node-pty cannot fall back to upstream's.
- */
+// Stage only slot binaries as installer does; omitting upstream prebuilds prevents fallback from disguising a broken slot.
 export function stageSmokeNodePty({ slotDir, stageDir }) {
   const sourceDir = dirname(require.resolve('node-pty/package.json'))
   const nodePtyDir = join(stageDir, 'node_modules', 'node-pty')

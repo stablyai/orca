@@ -1,4 +1,5 @@
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import { CodexAppliedSettings } from './codex-structured-applied-settings'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 
 // Bound events retained before a session can route them.
@@ -6,6 +7,7 @@ export const MAX_CODEX_ACQUISITION_BUFFER_OPERATIONS = 1024
 export const MAX_CODEX_ACQUISITION_BUFFER_BYTES = 4 * 1024 * 1024
 
 export class CodexAcquisitionWindow {
+  readonly appliedSettings = new CodexAppliedSettings()
   readonly prompts = new CodexPromptRegistry()
   /** Null until the spawn resolves; the handshake can already emit events. */
   connection: CodexAppServerConnection | null = null

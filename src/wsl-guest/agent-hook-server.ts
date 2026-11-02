@@ -4,7 +4,7 @@ import {
   inferRelayClaudeInterrupt,
   type RelayInterruptHost
 } from './agent-hook-interrupt-reconciliation'
-import { applyRelayHookEvent } from './agent-hook-event-admission'
+import { applyRelayHookEvent, type RelayHookAdmissionOptions } from './agent-hook-event-admission'
 import { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
 import { RelayAgentHookCanonicalStatus } from './agent-hook-canonical-status'
 import type {
@@ -37,7 +37,6 @@ import {
   describeHookTransportInterference
 } from '../shared/agent-hook-transport-interference'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from '../shared/agent-hook-relay'
-import type { SpoolRecord } from '../shared/agent-hook-spool'
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { drainRelayHookSpool, ingestRelayHookSpoolRecord } from './agent-hook-spool-ingest'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
@@ -66,12 +65,13 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
   private lastEnvelopeMetaByPaneKey = new Map<string, CachedPaneEnvelopeMeta>()
   private forward: RelayHookForward
+  private readonly forwardClaudeAgentView: RelayHookServerOptions['forwardClaudeAgentView']
   private isPaneSurfaceRetired: (paneKey: string) => boolean
   private getAgentLaunchToken: (paneKey: string) => string | undefined
   private fixedToken: string | undefined
   private preferredPort: number
   private portFallbackApplied = false
-  private readonly presenceChecks = new RelayAgentPresence()
+  private readonly presenceChecks = new RelayAgentPresence(this.state)
   private retryScheduler: AgentHookResultRetryScheduler
   readonly claudeTerminalInterrupts = createRelayClaudeTerminalInterrupts(this.state, () =>
     this.relayInterruptHost()
@@ -85,6 +85,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.fixedToken = options.token
     this.preferredPort = options.preferredPort ?? 0
     this.forward = options.forward
+    this.forwardClaudeAgentView = options.forwardClaudeAgentView
     this.isPaneSurfaceRetired = options.isPaneSurfaceRetired ?? (() => false)
     this.getAgentLaunchToken = options.getAgentLaunchToken ?? (() => undefined)
     this.configureCanonicalHooks(
@@ -100,7 +101,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.retryScheduler = new AgentHookResultRetryScheduler({
       state: this.state,
       env: this.env,
-      isListening: () => this.server !== null,
+      isListening: () => this.server?.listening === true,
       applyEvent: (event, source, env, version) =>
         this.applyEvent(event, source, env, version, { checkPresence: false })
     })
@@ -122,7 +123,15 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.endpointFileWritten = false
     this.portFallbackApplied = false
     await drainRelayHookSpool(this.endpointDir, (record) =>
-      this.ingestSpoolRecord(record, isCurrent)
+      ingestRelayHookSpoolRecord(record, this.state, this.env, {
+        providerNormalization: this.providerNormalization,
+        checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
+        isCurrent,
+        apply: (...args) => this.applyEvent(...args),
+        onAccepted: (row) => this.retryScheduler.observeClaudeHook(row, record.receivedAt),
+        isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+        getAgentLaunchToken: this.getAgentLaunchToken
+      })
     )
     if (!isCurrent()) {
       return
@@ -134,13 +143,14 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
         handleRelayHookRequest(req, res, {
           isCurrent,
           token: this.token,
+          forwardClaudeAgentView: this.forwardClaudeAgentView,
           env: this.env,
           state: this.state,
           providerNormalization: this.providerNormalization,
           checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
           isPaneSurfaceRetired: this.isPaneSurfaceRetired,
           getAgentLaunchToken: this.getAgentLaunchToken,
-          applyEvent: (event, source, env, version) => this.applyEvent(event, source, env, version),
+          applyEvent: (...args) => this.applyEvent(...args),
           ingestTmuxHook: (source, body) => this.ingestCanonicalTmuxHook(source, body, this.env),
           retryScheduler: this.retryScheduler,
           transportInterference: this.transportInterference
@@ -150,6 +160,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       },
       setPort: (port) => {
         this.port = port
+        this.retryScheduler.activateClaudeHelperObservations()
       },
       onFallback: () => {
         this.portFallbackApplied = true
@@ -195,8 +206,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.lastEnvelopeMetaByPaneKey.clear()
   }
 
-  /** Request-driven replay: re-forwards each cached paneKey payload as a fresh notification. Forwards are
-   *  issued before the request handler returns, so the response trails all replayed notifications. */
+  // Emit cached replays before returning so the response follows every replay notification.
   replayCachedPayloadsForPanes(): number {
     const cachedSnapshot = new Map(this.state.lastStatusByPaneKey)
     const replayable = selectReplayableCachedPanes({
@@ -244,7 +254,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       () => this.state.lastStatusByPaneKey.get(paneKey),
       (event) => {
         if (meta) {
-          this.applyEvent(event, meta.source, meta.env, meta.version)
+          this.applyEvent(event, meta.source, meta.env, meta.version, { isReplay: event.isReplay })
         }
       }
     )
@@ -274,19 +284,16 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     })
   }
 
-  /** Test-only / diagnostics accessor. */
   getCoordinates(): { port: number; token: string; endpointFilePath: string } {
     return { port: this.port, token: this.token, endpointFilePath: this.endpointFilePath }
   }
-
-  // ─── Private ──────────────────────────────────────────────────────
 
   private applyEvent(
     incoming: AgentHookEventPayload,
     source: AgentHookSource,
     env?: string,
     version?: string,
-    options: { isReplay?: boolean; checkPresence?: boolean } = {}
+    options: RelayHookAdmissionOptions = {}
   ): AgentHookEventPayload | undefined {
     return applyRelayHookEvent(
       {
@@ -306,16 +313,5 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       version,
       options
     )
-  }
-
-  private ingestSpoolRecord(record: SpoolRecord, isCurrent: () => boolean): Promise<void> | void {
-    return ingestRelayHookSpoolRecord(record, this.state, this.env, {
-      providerNormalization: this.providerNormalization,
-      checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
-      isCurrent,
-      apply: (...args) => this.applyEvent(...args, { isReplay: true }),
-      isPaneSurfaceRetired: this.isPaneSurfaceRetired,
-      getAgentLaunchToken: this.getAgentLaunchToken
-    })
   }
 }

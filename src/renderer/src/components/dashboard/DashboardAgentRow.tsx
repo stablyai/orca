@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
+import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import { useClaudeAgentRowView } from './use-claude-agent-row-view'
 import {
   AgentStateDot,
   agentStateLabel,
@@ -31,13 +33,17 @@ import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
 } from '@/components/agent-child-row-text'
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return 'just now'
+    return translate('auto.components.dashboard.DashboardAgentRow.justNow', 'just now')
   }
-  return `${formatCompactDuration(delta)} ago`
+  return translate('auto.components.dashboard.DashboardAgentRow.timeAgo', '{{duration}} ago', {
+    duration: formatCompactDuration(delta)
+  })
 }
 
 // A child row's silence is the model's, on the clock its compact row and the strip read.
@@ -55,12 +61,12 @@ function stateDotTooltipLabel(
   if (dotState === 'interrupted') {
     return agentVerdictStatusLine(agent.entry) ?? agentStateLabel(dotState)
   }
-  // Why: report the observation, not a verdict on the agent — the elapsed gap is what
-  // lets the user apply context Orca has no way to know (a long build, a slow download).
+  // Report the observed silence; only the user knows whether a long build or download explains it.
   return dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : agentStateLabel(dotState)
 }
 
 type Props = {
+  showModel?: boolean
   agent: DashboardAgentRowData
   onDismiss: (paneKey: string) => void
   /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
@@ -79,6 +85,8 @@ type Props = {
   // Why: inline-card orchestration rows can fold their child agents.
   childAgentCount?: number
   childAgentsExpanded?: boolean
+  // Shown beside the collapsed count so hidden child work stays visible.
+  collapsedChildAgentsState?: AgentDotState
   onToggleChildAgents?: () => void
   // Why: chevron indentation replaces fixed-offset lineage connector art.
   hideLineageConnectors?: boolean
@@ -90,6 +98,7 @@ type Props = {
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
+  showModel = true,
   onDismiss,
   onActivate,
   now,
@@ -100,12 +109,16 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   isFocusedPane = false,
   childAgentCount,
   childAgentsExpanded = false,
+  collapsedChildAgentsState,
   onToggleChildAgents,
   hideLineageConnectors = false,
   sendTargetStatus,
   sendTargetDisabledReason,
   onSendTargetClick
 }: Props) {
+  useUiLanguageRevision()
+  const view = useClaudeAgentRowView(agent)
+  const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
@@ -118,10 +131,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // Why: subagent rows have no pane of their own, so focus the spawning parent's pane.
       onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      void viewClaudeAgentFromRow(agent)
     },
-    [onActivate, agent.tab.id, agent.activationPaneKey, agent.paneKey]
+    [onActivate, agent]
   )
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
@@ -156,9 +169,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
-  // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
-  // anywhere else a leftover tool line reads as still-running. See showsAgentToolPreview.
-  // Monitoring is excluded too: the lead turn is over, so its last tool line is stale.
+  // Show tool details only for working/approval waits; ended or monitoring turns have stale last-tool metadata.
   const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
@@ -178,33 +189,43 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const participatesInLineage = isLineageChild || lineageChildCount > 0
   const identityTitle =
     lineageChildCount > 0
-      ? `${formatAgentTypeLabel(agent.agentType)} - dispatched ${lineageChildCount} ${
-          lineageChildCount === 1 ? 'agent' : 'agents'
-        }`
+      ? translate(
+          'auto.components.dashboard.DashboardAgentRow.dispatchedAgents',
+          '{{agentType}} - dispatched {{count}} agents',
+          {
+            agentType: formatAgentTypeLabel(agent.agentType),
+            count: lineageChildCount,
+            defaultValue_one: '{{agentType}} - dispatched {{count}} agent'
+          }
+        )
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
-  // Why: a stop or a failure is a terminal outcome, so surface it in the leading state dot; a
-  // failure does so even while subagents still run.
+  // Surface failed main-agent outcomes even while subagents continue running.
   const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
   const dotTooltipLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,
     stateDotTooltipLabel(agent, dotState, now)
   )
-  // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
-  // row's own timestamp slot rather than hiding in a hover tooltip.
+  // Unverifiable rows expose elapsed silence in their timestamp slot; do not hide their only content in a tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
-
-  // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 
   const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
   const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
   const relativeTimestamp = noUpdateLabel ?? doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = noUpdateLabel ? [noUpdateLabel] : []
   if (startedTimeAgo !== null) {
-    tsParts.push(`started ${startedTimeAgo}`)
+    tsParts.push(
+      translate('auto.components.dashboard.DashboardAgentRow.startedAgo', 'started {{time}}', {
+        time: startedTimeAgo
+      })
+    )
   }
   if (doneTimeAgo !== null) {
-    tsParts.push(`done ${doneTimeAgo}`)
+    tsParts.push(
+      translate('auto.components.dashboard.DashboardAgentRow.doneAgo', 'done {{time}}', {
+        time: doneTimeAgo
+      })
+    )
   }
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
@@ -225,7 +246,17 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
-      data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
+      data-focused-agent-pane={highlighted ? 'true' : undefined}
+      data-current={view?.current ? 'true' : undefined}
+      aria-current={view?.current ? 'true' : undefined}
+      aria-description={
+        opensClaudeParentConversation(agent)
+          ? translate(
+              'auto.lib.claudeAgentRowView.openParentConversation',
+              'Open parent conversation'
+            )
+          : undefined
+      }
       data-agent-send-target={sendTargetStatus}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
@@ -292,15 +323,22 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
             isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
             // Why: the selected-row fill washes out muted text — keep it readable.
-            isFocusedPane && !isUnvisited && 'text-foreground/90'
+            highlighted && !isUnvisited && 'text-foreground/90'
           )}
           title={displayLabel}
         >
           {displayLabel}
         </span>
-        {model && (
+        {showModel && model && (
           <span
-            className="max-w-24 shrink-0 truncate font-mono text-[10px] text-muted-foreground/70"
+            className={cn(
+              'max-w-24',
+              // Why: only shrink when the in-flow Send button would otherwise overflow the row.
+              sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
+                ? 'min-w-0'
+                : 'shrink-0',
+              'truncate font-mono text-3xs text-muted-foreground/70'
+            )}
             title={model}
           >
             {model}
@@ -308,11 +346,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         )}
         {/* Why: "+N" badge shows the hidden child count when collapsed; redundant once children are expanded below. */}
         {hasChildDisclosure && !childAgentsExpanded && (
-          <span
-            className="shrink-0 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums"
-            aria-hidden
-          >
-            +{childAgentCount}
+          <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums">
+            {collapsedChildAgentsState && (
+              <AgentStateDot state={collapsedChildAgentsState} size="sm" tooltipSide="right" />
+            )}
+            <span aria-hidden>+{childAgentCount}</span>
           </span>
         )}
         <DashboardAgentRowTrailingControls

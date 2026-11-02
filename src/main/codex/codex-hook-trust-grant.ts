@@ -1,9 +1,9 @@
+import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import {
-  isCodexAppServerUnsupportedError,
   runCodexHookTrustGrantSession,
   type CodexHookTrustGrantRequest,
   type CodexHookTrustGrantSessionResult
-} from './codex-app-server-client'
+} from './app-server/codex-app-server-client'
 import {
   classifyCodexTrustGrantError,
   emitCodexTrustGrantTelemetry,
@@ -15,7 +15,7 @@ import {
   codexAppServerCapabilityCache,
   getCodexAppServerHostKey,
   type CodexAppServerHostKey
-} from './codex-app-server-capability-cache'
+} from './app-server/codex-app-server-capability-cache'
 import {
   writeCodexTrustGrantLedgerHome,
   type CodexTrustGrantBinaryStamp,

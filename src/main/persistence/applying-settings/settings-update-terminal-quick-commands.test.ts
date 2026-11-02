@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
-import { MAX_QUICK_COMMANDS } from '../../../shared/terminal-quick-commands'
 import {
   getTerminalQuickCommandPromptMessageBytes,
   MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES,
   MAX_TERMINAL_QUICK_COMMANDS_SERIALIZED_BYTES
 } from '../../../shared/terminal-quick-command-prompt-limit'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../shared/remote-rpc-content-budget'
-import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { updateSettings, type SettingsMutationOperations } from './settings-update'
 import {
   CreateAgentSessionParams,
@@ -27,7 +26,6 @@ function makeOperations(): SettingsMutationOperations {
   }
 }
 
-// The largest prompt of one repeated character the message bound admits.
 function promptAtLimit(character: string): string {
   const overhead = getTerminalQuickCommandPromptMessageBytes('')
   const perCharacter = getTerminalQuickCommandPromptMessageBytes(character) - overhead
@@ -47,8 +45,21 @@ function agentCommand(id: string, prompt: string): TerminalQuickCommand {
   }
 }
 
-// Local saves and paired saves both reach the store here, so this is the one place the bound holds.
+// Local and paired saves enforce prompt bounds at this shared store entrypoint.
 describe('updateSettings terminalQuickCommands', () => {
+  it('stores every command in a list larger than forty, including missing projects', () => {
+    const commands = Array.from({ length: 100 }, (_, index) => ({
+      ...agentCommand(`command-${index}`, 'Review this project'),
+      scope: { type: 'repo' as const, repoId: `missing-project-${index}` }
+    }))
+    const operations = makeOperations()
+
+    const saved = updateSettings(operations, { terminalQuickCommands: commands })
+
+    expect(saved.terminalQuickCommands).toEqual(commands)
+    expect(operations.state.settings.terminalQuickCommands).toEqual(commands)
+  })
+
   it('stores a prompt at the limit whole', () => {
     const prompt = promptAtLimit('x')
     const saved = updateSettings(makeOperations(), {
@@ -73,8 +84,7 @@ describe('updateSettings terminalQuickCommands', () => {
   })
 
   it('refuses a list too large for one paired reply', () => {
-    // Forty prompts at the limit total about 10 MB of JSON.
-    const commands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) =>
+    const commands = Array.from({ length: 40 }, (_, index) =>
       agentCommand(`c${index}`, promptAtLimit('界'))
     )
 
@@ -85,7 +95,7 @@ describe('updateSettings terminalQuickCommands', () => {
 })
 
 describe('the quick-command storage bound against every prompt limit on the run path', () => {
-  // The worst character for each limit: a C0 control escapes to 6 bytes of JSON, CJK is 3 of UTF-8.
+  // C0 controls cost six JSON bytes; CJK characters cost three UTF-8 bytes.
   const worstForJson = promptAtLimit('\u0001')
   const worstForUtf8 = promptAtLimit('界')
 

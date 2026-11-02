@@ -1,14 +1,6 @@
-/**
- * An SSH host whose relay-era terminal named its shell only on the tab still converts while that
- * shell runs, on a real Docker SSH host, and the old tab keeps the same shell.
- *
- * A 1.4.224 relay runs detached with a live shell for this desktop's target. The profile names that
- * shell on the tab (row ptyId and relay session map) with no per-pane binding, as an older build
- * left it at quit. Loading such a tab records legacy pane-key aliases for its leaf; those name no
- * extra terminal, so the move must not refuse with "terminals waiting to reconnect".
- *
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
- */
+// Convert a live detached 1.4.224 relay whose shell is named only on the tab/session map, preserving the same shell.
+// Synthesized legacy pane-key aliases name no extra terminal and must not block conversion as waiting-to-reconnect.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 import { writeFileSync } from 'node:fs'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -114,6 +106,191 @@ async function mirroredTab(page: Page, tabId: string): Promise<{ id: string; key
   return found
 }
 
+/** Observe selection/catalog ownership without changing activation or retaining terminal bytes. */
+function observeRelayTabSelection(
+  page: Page,
+  args: {
+    targetId: string
+    sshHostId: ReturnType<typeof toSshExecutionHostId>
+    seededWorktreeId: string
+    terminalTabId: string
+  }
+) {
+  return page.evaluateHandle(({ targetId, sshHostId, seededWorktreeId, terminalTabId }) => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('Store unavailable for relay selection observation')
+    }
+    const snapshot = () => {
+      const state = store.getState()
+      const connection = state.sshConnectionStates.get(targetId)
+      const managed = connection?.managedServer
+      const environmentId = managed?.kind === 'managed' ? managed.environmentId : null
+      const runtimeHostId = environmentId
+        ? (`runtime:${encodeURIComponent(environmentId)}` as const)
+        : null
+      const relevantTabs = Object.entries(state.tabsByWorktree)
+        .flatMap(([key, tabs]) =>
+          (tabs ?? []).flatMap((tab) => {
+            const named = tab.id.startsWith('web-terminal-')
+              ? decodeURIComponent(tab.id.slice('web-terminal-'.length))
+              : tab.id
+            return named === terminalTabId || named.startsWith(`${terminalTabId}::`)
+              ? [{ key, id: tab.id }]
+              : []
+          })
+        )
+        .slice(0, 6)
+      return {
+        activeWorktreeId: state.activeWorktreeId,
+        activeWorkspaceKey: state.activeWorkspaceKey,
+        activeHostId: state.activeWorkspaceExecutionHostId,
+        activeTabId: state.activeTabId,
+        activeTabType: state.activeTabType,
+        sshStatus: connection?.status ?? null,
+        managedKind: managed?.kind ?? null,
+        managedPhase: managed?.kind === 'setting-up' ? managed.phase : null,
+        relayBridged: managed?.kind === 'relay' && managed.bridged === true,
+        environmentId,
+        visibleRelevantHosts:
+          state.visibleWorkspaceHostIds?.filter(
+            (id) => id === 'local' || id === sshHostId || id === runtimeHostId
+          ) ?? null,
+        runtimeCatalogPresent: state.runtimeEnvironments.some(
+          (entry) => entry.id === environmentId
+        ),
+        runtimeCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+        runtimeCatalogSettled: state.runtimeEnvironmentCatalogSettled,
+        startupScanFinished: state.startupWorktreeRefreshCompleted,
+        seedKnownOnSsh: Boolean(state.getKnownWorktreeById(seededWorktreeId, sshHostId)),
+        seedKnownOnRuntime: runtimeHostId
+          ? Boolean(state.getKnownWorktreeById(seededWorktreeId, runtimeHostId))
+          : false,
+        relevantRepos: state.repos
+          .filter(
+            (repo) =>
+              repo.connectionId === targetId ||
+              (runtimeHostId && repo.executionHostId === runtimeHostId)
+          )
+          .slice(0, 6)
+          .map((repo) => ({
+            id: repo.id,
+            hostId: repo.executionHostId ?? null,
+            connectionId: repo.connectionId ?? null
+          })),
+        relevantTabs
+      }
+    }
+    type Snapshot = ReturnType<typeof snapshot>
+    type Event = {
+      at: number
+      stage: string
+      before: Snapshot | null
+      after: Snapshot
+      stack?: string
+    }
+    const events: Event[] = []
+    let dropped = 0
+    let previous: Snapshot | null = null
+    let selectedMirrorId: string | null = null
+    let mirrored: { id: string; key: string } | null = null
+    let firstDeselection: Event | null = null
+    let firstMirrorRemoval: Event | null = null
+    const record = (stage: string) => {
+      const after = snapshot()
+      if (stage === 'store' && JSON.stringify(previous) === JSON.stringify(after)) {
+        return
+      }
+      const deselected = previous?.activeWorktreeId != null && after.activeWorktreeId === null
+      const removed =
+        selectedMirrorId !== null &&
+        previous?.relevantTabs.some((tab) => tab.id === selectedMirrorId) &&
+        !after.relevantTabs.some((tab) => tab.id === selectedMirrorId)
+      const event: Event = { at: performance.now(), stage, before: previous, after }
+      if ((deselected && !firstDeselection) || (removed && !firstMirrorRemoval)) {
+        event.stack = new Error('Relay tab selection loss').stack?.slice(0, 6_000)
+      }
+      if (deselected && !firstDeselection) {
+        firstDeselection = event
+      }
+      if (removed && !firstMirrorRemoval) {
+        firstMirrorRemoval = event
+      }
+      if (
+        after.relevantTabs.some(
+          (tab) => tab.id === after.activeTabId && tab.id.startsWith('web-terminal-')
+        )
+      ) {
+        selectedMirrorId = after.activeTabId
+      }
+      previous = after
+      if (events.length === 80) {
+        events.shift()
+        dropped++
+      }
+      events.push(event)
+    }
+    record('before-activation')
+    const unsubscribe = store.subscribe(() => record('store'))
+    return {
+      checkpoint: (input: {
+        stage: string
+        runtimeHostId?: string
+        mirrored?: { id: string; key: string }
+      }) => {
+        if (input.mirrored) {
+          mirrored = input.mirrored
+        }
+        record(input.stage)
+        return { ...input, seededWorktreeId, selected: previous }
+      },
+      finish: () => {
+        unsubscribe()
+        record('finish')
+        const tabId = mirrored?.id ?? selectedMirrorId ?? terminalTabId
+        const manager = window.__paneManagers?.get(tabId)
+        const panes = manager?.getPanes() ?? []
+        const hasMarker = (pane: (typeof panes)[number], marker: string): boolean => {
+          const buffer = pane.terminal.buffer.active
+          for (let row = 0; row < buffer.length; row++) {
+            if (buffer.getLine(row)?.translateToString(true).includes(marker)) {
+              return true
+            }
+          }
+          return false
+        }
+        const selector = `[data-terminal-tab-id="${CSS.escape(tabId)}"]`
+        return {
+          seededWorktreeId,
+          sshHostId,
+          terminalTabId,
+          mirrored,
+          events,
+          dropped,
+          firstDeselection,
+          firstMirrorRemoval,
+          dom: {
+            tabId,
+            managerCount: window.__paneManagers?.size ?? 0,
+            paneCount: panes.length,
+            tabInStrip: document.querySelector(`[data-tab-id="${CSS.escape(tabId)}"]`) !== null,
+            terminalDom: document.querySelector(selector) !== null,
+            accessibilityTree:
+              document.querySelector(`${selector} .xterm-accessibility-tree`) !== null,
+            panes: panes.slice(0, 4).map((pane) => ({
+              leafId: pane.leafId,
+              ptyId: pane.container.dataset.ptyId ?? null,
+              screenReaderMode: pane.terminal.options.screenReaderMode === true,
+              hasBeforeMoveMarker: hasMarker(pane, 'GOT:before-move'),
+              hasAfterMoveMarker: hasMarker(pane, 'GOT:after-move')
+            }))
+          }
+        }
+      }
+    }
+  }, args)
+}
+
 test('an SSH host converts while a relay shell named only on its tab runs, and the tab keeps it', async ({
   testRepoPath
 }, testInfo: TestInfo) => {
@@ -128,6 +305,7 @@ test('an SSH host converts while a relay shell named only on its tab runs, and t
 
   const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
   let app: ElectronApplication | null = null
+  let selectionObserver: Awaited<ReturnType<typeof observeRelayTabSelection>> | null = null
   try {
     // The first launch only establishes the profile, with a local project to land on.
     const first = await session.launch()
@@ -165,6 +343,12 @@ test('an SSH host converts while a relay shell named only on its tab runs, and t
     app = launched.app
     const page = launched.page
     await waitForSessionReady(page)
+    selectionObserver = await observeRelayTabSelection(page, {
+      targetId,
+      sshHostId,
+      seededWorktreeId: seeded.worktreeId,
+      terminalTabId
+    })
     await page.evaluate(
       ({ worktreeId, hostId, tabId }) => {
         const state = window.__store!.getState()
@@ -174,6 +358,9 @@ test('an SSH host converts while a relay shell named only on its tab runs, and t
         state.setActiveTabType('terminal', worktreeId)
       },
       { worktreeId: seeded.worktreeId, hostId: sshHostId, tabId: terminalTabId }
+    )
+    record.afterSshActivation = await selectionObserver.evaluate((observer) =>
+      observer.checkpoint({ stage: 'after-ssh-activation' })
     )
     await expect
       .poll(async () => (record.managedServer = await managedServer(page, targetId)), {
@@ -200,6 +387,11 @@ test('an SSH host converts while a relay shell named only on its tab runs, and t
       },
       { worktreeId: seeded.worktreeId, hostId: runtimeHostId }
     )
+    record.afterRuntimeActivation = await selectionObserver.evaluate(
+      (observer, runtimeHostId) =>
+        observer.checkpoint({ stage: 'after-runtime-activation', runtimeHostId }),
+      runtimeHostId
+    )
     const mirrored = await mirroredTab(page, terminalTabId)
     await page.evaluate(
       ({ worktreeId, hostId, tabId }) => {
@@ -209,6 +401,10 @@ test('an SSH host converts while a relay shell named only on its tab runs, and t
         state.setActiveTabType('terminal', worktreeId)
       },
       { worktreeId: mirrored.key, hostId: runtimeHostId, tabId: mirrored.id }
+    )
+    record.afterMirrorActivation = await selectionObserver.evaluate(
+      (observer, input) => observer.checkpoint({ stage: 'after-mirror-activation', ...input }),
+      { runtimeHostId, mirrored }
     )
     await expect
       .poll(() => page.evaluate((id) => window.__paneManagers?.has(id) ?? false, mirrored.id), {
@@ -227,6 +423,19 @@ test('an SSH host converts while a relay shell named only on its tab runs, and t
     expect(await listDockerRelayPtys(host, relay, ours.sockPath)).toEqual([ours.relayPtyId])
     record.bridged = await bridgedPanes(page)
   } finally {
+    if (selectionObserver) {
+      try {
+        const evidence = await selectionObserver.evaluate((observer) => observer.finish())
+        await testInfo.attach('tab-only-shell-selection', {
+          body: JSON.stringify(evidence),
+          contentType: 'application/json'
+        })
+      } catch (error) {
+        record.selectionCaptureError = String(error)
+      } finally {
+        await selectionObserver.dispose().catch(() => {})
+      }
+    }
     writeFileSync(testInfo.outputPath('tab-only-shell.json'), JSON.stringify(record, null, 2))
     if (app) {
       await session.close(app)

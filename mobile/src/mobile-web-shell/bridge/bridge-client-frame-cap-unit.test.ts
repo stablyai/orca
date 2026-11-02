@@ -18,34 +18,16 @@ function closeResources(): void {
   resources.clear()
 }
 
-/**
- * The unit the frame cap is counted in, which is UTF-8 bytes on every side of this bridge.
- *
- * Read off both shells rather than assumed: iOS gates the inbound frame on `json.utf8.count`
- * (`MobileWebShellView.swift`, through `MobileWebShellBridge.acceptsByteCount`), Android on
- * `json.toByteArray(Charsets.UTF_8).size` (`MobileWebShellView.kt`, through
- * `acceptsMobileWebShellBridgeByteCount`), and both caps are `640 * 1024`.
- *
- * A JavaScript string is counted in UTF-16 code units, and the two are only equal for ASCII. A
- * sender measuring `json.length` accepts a frame of 250,000 CJK characters — a quarter of the cap
- * in units, and over the cap in bytes — which the shell then drops without answering, leaving the
- * caller pending for the life of the page. The refusal exists to end exactly that.
- *
- * `raw.length > cap` inside the reader is not that mistake. It is a cheap first refusal in the safe
- * direction: every code unit encodes to at least one byte, so a string over the cap in units is over
- * it in bytes too, and the byte count decides everything it does not catch.
- */
+// Both native shells enforce 640*1024 UTF-8 bytes (Swift utf8.count, Kotlin UTF_8 size); JS UTF-16 length alone admits oversized CJK requests that never receive replies.
+// raw.length > cap is still a safe cheap rejection because each code unit costs at least one byte; byte length handles the remaining cases.
 
-/** Three bytes in UTF-8, one code unit in UTF-16, and not escaped by `JSON.stringify`. */
 const WIDE_CHARACTER = '漢'
-/** Comfortably under the cap in code units and comfortably over it in bytes. */
 const WIDE_CHARACTER_COUNT = 250_000
 
 describe('what the frame cap counts', () => {
   it('refuses a frame under the cap in code units and over it in bytes', async () => {
     const pad = WIDE_CHARACTER.repeat(WIDE_CHARACTER_COUNT)
-    // The precondition, without which this is just another oversized frame: a sender reading
-    // `json.length` sees room to spare here and posts it.
+    // Prove this fits by code units but not bytes, distinguishing the unit bug from ordinary oversize.
     expect(pad.length).toBeLessThan(BRIDGE_MAX_MESSAGE_BYTES)
     expect(new TextEncoder().encode(pad).byteLength).toBeGreaterThan(BRIDGE_MAX_MESSAGE_BYTES)
 
@@ -60,7 +42,6 @@ describe('what the frame cap counts', () => {
 
     expect(rejection).toBe('BridgeRequestOversizedError')
     expect(pair.toShell.slice(before)).toEqual([])
-    // And the reader agrees, so this is the shells' rule and not a stricter one the page invented.
     const frame = JSON.stringify({
       v: 1,
       type: 'request',

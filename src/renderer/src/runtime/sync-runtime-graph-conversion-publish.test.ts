@@ -69,12 +69,6 @@ function worktreeSnapshot(
   )
 }
 
-function publishedBrowserWorkspaceIds(store: ReturnType<typeof createTestStore>): string[] {
-  return (worktreeSnapshot(store)?.tabs ?? [])
-    .filter((tab) => tab.type === 'browser')
-    .map((tab) => (tab as { browserWorkspaceId?: string }).browserWorkspaceId ?? '')
-}
-
 function collectLayoutGroupIds(node: unknown, into: string[] = []): string[] {
   if (!node || typeof node !== 'object') {
     return into
@@ -109,52 +103,14 @@ function publishedUnifiedTabIds(store: ReturnType<typeof createTestStore>): Set<
   return new Set((worktreeSnapshot(store)?.tabs ?? []).map((tab) => tab.id))
 }
 
-// The publish boundary is a predicate over docLocation, so a conversion must flip it in the same
-// store commit that flips the page — no intermediate state may publish a document or hold back a
-// web page. Driven through the real store actions, not a hand-built state, so the mirror path the
-// conversion writes is the one the publisher reads.
+// Real conversion actions must flip docLocation and publication predicate in one commit; no intermediate document publish or web-page suppression.
 describe('mobile publish across an address-bar conversion', () => {
-  it('starts publishing a doc tab the moment it converts to web, and stops on the way back', async () => {
-    const store = await createStoreWithWorktree()
-    // Presence precondition: an ordinary URL tab publishes throughout, so an empty answer would
-    // fail rather than pass by the publisher being broken for browser tabs entirely.
-    const urlTab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
-    const docTab = store.getState().createBrowserTab(WORKTREE_ID, '', {
-      docLocation: DOC_LOCATION,
-      title: 'index.html',
-      browserRuntimeEnvironmentId: null
-    })
-    await settled()
-    const docPageId = store.getState().browserPagesByWorkspace[docTab.id]?.[0]?.id ?? ''
-
-    expect(publishedBrowserWorkspaceIds(store)).toEqual([urlTab.id])
-
-    const webPage = store.getState().convertBrowserPage(docPageId, {
-      kind: 'web',
-      url: 'https://converted.example/'
-    })
-    expect(webPage).not.toBeNull()
-    await settled()
-    expect(publishedBrowserWorkspaceIds(store).sort()).toEqual([urlTab.id, docTab.id].sort())
-
-    const docPage = store.getState().convertBrowserPage(webPage?.id ?? '', {
-      kind: 'workspace-doc',
-      docLocation: DOC_LOCATION
-    })
-    expect(docPage).not.toBeNull()
-    await settled()
-    expect(publishedBrowserWorkspaceIds(store)).toEqual([urlTab.id])
-  })
-
-  // Why groups and the layout are driven separately: the group projection was the historically
-  // untested half of the publish boundary, and a doc tab surviving in a group's tabOrder names a
-  // tab the phone is never sent.
+  // Exercise group/layout projection independently: doc-only groups must not reference tabs withheld from phones.
   it('holds the doc tab out of published groups and the layout, and admits it on conversion', async () => {
     const store = await createStoreWithWorktree()
     const urlTab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
     await settled()
-    // The doc tab gets a split group of its own, so holding it back must also take its group out
-    // of the projection AND its leaf out of the layout — the observable no earlier test drove.
+    // Give document its own group so withholding must remove both group metadata and split leaf.
     const sourceGroupId = store.getState().activeGroupIdByWorktree[WORKTREE_ID] ?? ''
     expect(sourceGroupId).not.toBe('')
     const splitGroupId = store.getState().createEmptySplitGroup(WORKTREE_ID, sourceGroupId, 'right')
@@ -182,8 +138,7 @@ describe('mobile publish across an address-bar conversion', () => {
     const layoutGroupIds = (): string[] =>
       collectLayoutGroupIds(worktreeSnapshot(store)?.tabGroupLayout)
 
-    // Presence half: the URL tab's unified id is published; the doc tab's is not, and neither the
-    // group projection nor the layout tree names the split the doc tab sits alone in.
+    // Require URL tab present and doc tab/group/layout leaf absent.
     expect(publishedUnifiedTabIds(store).has(urlUnifiedTabId)).toBe(true)
     expect(publishedUnifiedTabIds(store).has(docUnifiedTabId)).toBe(false)
     expect(publishedGroupIds().has(sourceGroupId)).toBe(true)

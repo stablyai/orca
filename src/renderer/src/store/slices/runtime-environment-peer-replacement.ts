@@ -33,8 +33,7 @@ function sameRegistration(
   before: CatalogEnvironment | undefined,
   after: CatalogEnvironment | undefined
 ): boolean {
-  // Why a hand-paired server counts only with both keys: main replaces its pairing in place only for
-  // the saved key, so the key check below is the whole proof; without one there is none.
+  // Hand-paired replacement requires both saved keys; without them identity cannot be proven.
   if (before && after && !before.orcadDeployment && !after.orcadDeployment) {
     return Boolean(before.hostKeyFingerprint && after.hostKeyFingerprint)
   }
@@ -56,15 +55,7 @@ function pairingRevisionOf(environment: CatalogEnvironment | undefined): number 
 export type SameHostPairingRotation = { id: string; fromRevision: number; toRevision: number }
 export type PendingPairingRotation = { id: string; fromRevision: number }
 
-/**
- * `retired`: ids that now name a different machine, whose workspaces and tabs are retired. A managed
- * server re-pairs on every update and is the same machine while the host's key digest, which its
- * pairing handshake proves, is unchanged under the same SSH target registration. A registration
- * alone is no proof (a reinstall or a target that resolves elsewhere keeps it), so a re-pair whose
- * key is not known yet is decided later, once a catalog carries it, rather than purged on a guess.
- * `sameHost`: re-pairs proven to be the same machine, with the pairing they continue. `pending`:
- * unresolved re-pairs that can still prove the same machine, with the pairing they would continue.
- */
+/** Retire changed machines; continue managed SSH re-pairs only with matching proven host keys and registration. Defer unknown keys: registration alone survives reinstalls/retargeting. sameHost/pending carry the prior pairing. */
 export function classifyPeerReplacements(
   previous: readonly CatalogEnvironment[],
   next: readonly CatalogEnvironment[],

@@ -10,13 +10,12 @@ import type { SshTarget } from '../../../shared/ssh-types'
 export const SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS = 750
 export const SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS = 50
 export const SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS = 2_000
-// Why short: SIGKILL is uncatchable, so a child that has not reported exit this long after it is
-// either already reaped or beyond anything teardown can do about it.
+// Bound teardown if runtime never reports exit after SIGKILL; expiry proves no child death.
 export const SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS = 500
 
 type SystemSshPortForwardProcess = {
   process: ChildProcess
-  /** The local port the forward listens on, chosen here when the caller asked for any (0). */
+  /** Chosen here when requested port is 0. */
   localPort: number
   waitForStartup: () => Promise<void>
   close: () => Promise<void>
@@ -37,8 +36,7 @@ export function spawnSystemSshPortForward(
     )
   }
   const args = buildSystemSshPortForwardArgs(target, localPort, remoteHost, remotePort, options)
-  // Why: port-forward ssh processes are not wired to Orca credential prompts;
-  // system SSH forwards must authenticate via OpenSSH config, agent, or control socket.
+  // No Orca credential prompts are wired here; forward authentication belongs to OpenSSH.
   return spawnProcess({
     program: sshPath,
     args,
@@ -55,9 +53,7 @@ export function buildSystemSshPortForwardArgs(
 ): string[] {
   const args = buildForwardProcessSshArgs(target, options)
   const destinationIndex = args.lastIndexOf('--')
-  // Why `no`: this second login re-reads the host's ssh_config, so a LocalForward/RemoteForward
-  // there collides with the one Orca's main connection already holds, and `yes` exits on it.
-  // ClearAllForwardings would also drop this -L; stopOnOwnListenFailure checks ours instead.
+  // Ignore collisions with configured forwards already held by the main login; ClearAllForwardings would drop our -L too. Probe ours instead.
   const forwardArgs = [
     '-N',
     '-o',
@@ -75,10 +71,7 @@ export function buildSystemSshPortForwardArgs(
   return args
 }
 
-/**
- * An `ssh -N` forward, already listening on the port it reports. Never asks a ControlMaster to
- * cancel a forward: any fixed port reaches here, so that is the managed tunnel's call alone.
- */
+/** Only managed tunnels may cancel a master's persisted forward; generic fixed-port callers never do. */
 export function startSystemSshPortForwardProcess(
   target: SshTarget,
   localPort: number,
@@ -258,14 +251,11 @@ export function waitForSystemSshForwardStop(process: ChildProcess): Promise<void
       // Why: update/reconnect callers must not rebind while a stubborn ssh -L
       // process still owns the local port.
       kill('SIGKILL')
-      // Why a second timer: SIGKILL is never acknowledged, so if the runtime never reports the exit —
-      // a reparented child, a lost handle — nothing else can settle this promise and quit waits on it
-      // forever. Resolving here bounds teardown; it does not claim the child is gone.
+      // Lost exit notification must not hang quit forever; this timer bounds teardown without proving death.
       postKillTimer = setTimeout(finish, SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS)
     }, SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
 
-    // Why before any signal: a child that already exited needs no SIGTERM, and signalling a reaped pid
-    // can land on whatever the OS reassigned it to.
+    // Never signal a reaped pid: the OS may have reassigned it.
     if (hasExited()) {
       finish()
       return

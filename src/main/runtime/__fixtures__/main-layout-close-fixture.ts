@@ -1,5 +1,3 @@
-// Switch-on stand-ins for close fixtures: main's `layout.apply` over a fake store's one session,
-// and what the desktop sees of a CLI pane close that main's layout carries.
 import { expect, type Mock } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
@@ -21,7 +19,6 @@ type SessionCell = {
   set: (session: WorkspaceSessionState) => void
 }
 
-/** Main's `layout.apply` on the session, applied at once. */
 export function sessionLayoutApply(cell: SessionCell) {
   return async (command: LayoutCommand, hostIds: readonly string[] = []) => {
     const change = applyCommandToSession(resolveHostId(hostIds[0]), cell.get(), command)
@@ -32,7 +29,7 @@ export function sessionLayoutApply(cell: SessionCell) {
   }
 }
 
-/** As the Store runs `layout.apply`: one durable write, and a close stands though it fails. */
+/** Match durable store mutation: failed writes still retain terminal closes. */
 export function durableSessionLayoutApply(
   store: {
     runDurableMutation: <V>(mutate: () => DurableProfileStateMutation<V>) => Promise<V>
@@ -58,7 +55,6 @@ export function durableSessionLayoutApply(
   }
 }
 
-/** A fake store as a profile's: its host list, and the Store's durable `layout.apply`. */
 export function withMainLayout<
   T extends { runDurableMutation: <V>(mutate: () => DurableProfileStateMutation<V>) => Promise<V> }
 >(store: T, cell: SessionCell) {
@@ -68,11 +64,7 @@ export function withMainLayout<
   })
 }
 
-/**
- * The desktop drops a pane a CLI close by handle ended. Switch-off the window is told to; switch-on
- * main's layout close carries it, so the window-era notice goes out only for a pane main had
- * already dropped, and never twice.
- */
+/** Window-owned close sends a notice; main-owned close updates layout with at most one legacy pane notice. */
 export function expectDesktopDropsPane(
   harness: {
     closeTerminalPane: Mock<(...args: unknown[]) => unknown>
@@ -94,10 +86,7 @@ export function expectDesktopDropsPane(
   }
 }
 
-/**
- * The desktop drops a tab a phone or CLI closed. Switch-off the window is told to close it;
- * switch-on main closes it in its own layout (#31571) and the window draws that, unasked.
- */
+/** Main-owned tab closes persist layout without a window close notice (#31571). */
 export function expectDesktopDropsTab(
   harness: {
     closeTerminal: Mock<(...args: unknown[]) => unknown>

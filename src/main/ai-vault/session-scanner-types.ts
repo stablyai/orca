@@ -32,6 +32,8 @@ export type AiVaultScanOptions = {
   cursorProjectsDir?: string
   opencodeStorageDir?: string
   opencodeDbPaths?: readonly string[]
+  /** Managed account OpenCode data directories; resolved by the host process. */
+  opencodeAccountDataDirs?: readonly string[]
   zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string

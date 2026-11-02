@@ -1,11 +1,5 @@
-/**
- * Layout rework P3 baseline: an old phone paired straight to the current `orca serve`. Not the
- * released app: a capability-list client that advertises mobile-android-v0.0.52's capabilities
- * and sends that release's request shapes. It creates, activates, renames, focuses and closes
- * terminals (one of them pinned on the host), opens a file, and reads its own selection again
- * after the server restarts. Each step records the phone's and
- * the server's tab lists; the shapes are compared with main's.
- */
+// P3 baseline: emulate mobile-android-v0.0.52 capabilities and request shapes against current serve, not a released app.
+// Record terminal/file operations, pin handling and selection across restart against main’s shapes.
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
@@ -189,8 +183,7 @@ test('old-phone-on-new-server: create, activate, rename, focus, close, open a fi
     })
     await record('phone closes the pinned tab', closedPinned)
 
-    // A windowless server's main opens the file itself and lists a markdown row; the rebuilt rows
-    // then name tab2 from the saved session ("Terminal 2"). A layout-owner build lists it at once.
+    // Windowless main opens a Markdown row; rebuilt session rows name tab2 Terminal 2. Layout-owner builds list it immediately.
     const opened = await reply(phone, 'files.open', { worktree, relativePath: 'README.md' })
     if (LAYOUT_OWNER_BUILD) {
       const listed = await phone.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {

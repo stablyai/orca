@@ -29,10 +29,7 @@ export type BundledSkillPlanInput = BundledSkillTargetRequest & {
   names?: readonly string[]
   /** Target paths the user chose to Replace; `all` is `--force`, every replaceable one. */
   force?: readonly string[] | 'all'
-  /**
-   * Update: plan only locations that already hold something, so an update never spreads a
-   * skill to another agent; a skill with no copy of Orca's anywhere is skipped.
-   */
+  /** Update existing locations only; never spread the skill to another agent. Skip skills with no Orca copy. */
   installedOnly?: boolean
   /** `<userData>/skill-installs`, where cloud installs keep receipts and journals. */
   stateDirectory: string
@@ -61,7 +58,7 @@ const WRITES_SHARED_CURRENT = new Set<BundledSkillOp['kind']>([
   'replace'
 ])
 
-/** One canonical serialisation: the plan is built by one code path, so key order is fixed. */
+/** Fixed plan construction order makes JSON serialization canonical. */
 export function bundledSkillDigestOf(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
@@ -149,8 +146,7 @@ async function planTarget(
   )
   const { observed } = classified
   let folderClass: BundledSkillFolderClass = classified.folderClass
-  // Why: a same-named skill installed through cloud sharing is that package, not Orca's copy.
-  // A `current` one is left as `keep`, so a Replace of a cloud copy settles instead of looping.
+  // Cloud receipts identify a different package; a current replaced copy must settle as keep.
   if (
     (folderClass === 'released' || folderClass === 'edited') &&
     (await hasCloudReceipt(stateDirectory, stateKeys))
@@ -167,7 +163,7 @@ async function planTarget(
     content: 'files',
     cleanup
   })
-  // Why `requires`: a link to a shared copy that failed to land would point at nothing.
+  // Do not link until the shared-copy operation succeeds.
   const linkToShared = (kind: 'link' | 'replace', target: SharedTarget): BundledSkillOp => ({
     ...base,
     kind,
@@ -276,8 +272,7 @@ async function planSkill(
   if (!targets.some((target) => target.holdsOrcaCopy)) {
     return null
   }
-  // Why: an empty shared slot is written only to repair an agent's existing link to it; any
-  // other plan (a Replace among them) must not add the skill there, so it plans without it.
+  // Only repair an existing agent link into an empty shared slot; other updates must not create a new shared copy.
   const keepShared =
     sharedTarget &&
     (isPresent(sharedTarget.op) ||
@@ -292,15 +287,12 @@ async function planSkill(
   return { name: source.name, digest: context.digest, ops }
 }
 
-/** Something is at the path, or an interrupted swap left a sibling to settle there. */
+/** Interrupted siblings count as presence even when the target is absent. */
 function isPresent(op: BundledSkillOp): boolean {
   return op.observed.kind !== 'absent' || op.restoreFrom !== undefined || op.cleanup.length > 0
 }
 
-/**
- * The only code that decides what a bundled-skill install does. Preview and execute both come
- * through here, and execute applies a plan only while it still hashes to what was previewed.
- */
+/** Preview and execute share planning; execution requires the same digest before applying it. */
 export async function buildBundledSkillPlan(
   input: BundledSkillPlanInput
 ): Promise<ResolvedBundledSkillPlan> {

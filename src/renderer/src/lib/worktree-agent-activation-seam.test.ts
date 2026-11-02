@@ -300,9 +300,7 @@ describe('worktree agent activation seam', () => {
     expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
   })
 
-  // A paired-runtime owner is always omitted from its own scoped census, and an SSH relay that
-  // never answered omits everything. Declining to mint is right; leaving the workspace with no
-  // surface at all is not — the user asked for a pane and must get one.
+  // Paired-runtime/never-answered relay inventories omit owners; decline minting but still provide the user a usable surface.
   it('still seeds a usable pane when the census cannot prove who owns a live PTY', async () => {
     const worktree = makeWorktree()
     const livePtyId = `${worktree.id}@@live-codex`

@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { makeGroup, makeUnifiedTab } from '../worktree-jump-palette-test-fixtures'
+import { makeGroup, makeUnifiedTab } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import { emptyNativeChatContextMenuActions } from './use-native-chat-context-menu'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
@@ -24,16 +24,21 @@ function Host({ index }: { index: number }) {
   renders++
   const rootRef = createRef<HTMLDivElement>()
   const { menu, ...commands } = useStructuredNativeChatPaneCommands({
-    tabId: `chat-${index}`,
-    groupId: 'group-owner',
+    pane: {
+      tabId: `chat-${index}`,
+      groupId: 'group-owner',
+      isVisible: index % 3 !== 1,
+      isFocusedGroup: true,
+      agent: 'codex',
+      contextMenuActions: index % 3 === 2 ? emptyNativeChatContextMenuActions : undefined,
+      sessionId: '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37',
+      target: { kind: 'local' }
+    },
+    handOff: { available: false, preparing: false, open: () => {}, reset: () => {}, dialog: null },
     ownerWorktreeId: 'owner',
-    isVisible: index % 3 !== 1,
-    terminalPaneActions: index % 3 === 2 ? emptyNativeChatContextMenuActions : undefined,
     rootRef,
     composerRef: createRef(),
-    questionAnswerInputRef: createRef(),
-    sessionId: '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37',
-    target: { kind: 'local' }
+    questionAnswerInputRef: createRef()
   })
   return (
     <div ref={rootRef} data-testid={`host-${index}`} {...commands}>

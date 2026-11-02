@@ -10,8 +10,16 @@ import {
 } from './wsl-availability'
 import { wslExeProcessSpec, wslExeStdout } from './wsl-exe-process'
 import {
+  isWslListOutputLost,
+  listedOrRegisteredWslDistros,
+  readRegisteredWslDistrosLater,
+  resetWslListOutputLost,
+  runningWhenListedNone
+} from './wsl-registered-distro-fallback'
+import {
   _resetRunningWslDistroCacheForTests,
-  resolveRunningWslDistros
+  resolveRunningWslDistros,
+  type RunningWslDistroReadOptions
 } from './wsl-running-distro-cache'
 import {
   getWslDirectoryProbeArgs,
@@ -32,6 +40,10 @@ export type WslPathInfo = {
 }
 
 const WSL_PROBE_TIMEOUT_MS = 5000
+// Measured on a slow PC: a cold systemd distro takes 4-11 s to answer its first exec, and killing
+// wsl.exe mid-boot leaves the distro failing every call with Wsl/Service/E_UNEXPECTED for 14+ s.
+// An async probe blocks nothing, so it waits out the boot.
+const WSL_HOME_PROBE_ASYNC_TIMEOUT_MS = 60_000
 
 function wslHomeProbeArgs(distro: string): string[] {
   return buildWslExecArgs(distro, ['bash', '-c', 'echo $HOME'])
@@ -132,7 +144,11 @@ export function listWslDistros(): string[] {
     const output = wslExeStdout(
       runProcessSync(wslExeProcessSpec(['--list', '--quiet'], WSL_PROBE_TIMEOUT_MS))
     )
-    return cacheWslDistroList(parseWslDistros(output), probeSequence)
+    const listed = parseWslDistros(output)
+    if (listed.length === 0) {
+      readRegisteredWslDistrosLater((found) => cacheWslDistroList(found, probeSequence))
+    }
+    return cacheWslDistroList(listed, probeSequence)
   } catch {
     armWslDistroListRetry()
     return wslDistroCache ?? []
@@ -164,7 +180,9 @@ export async function listWslDistrosAsync(): Promise<string[]> {
   // Catch before sharing the promise so all concurrent callers receive the same fallback.
   const probeSequence = ++wslDistroProbeSequence
   const probe = runWslExe(['--list', '--quiet'])
-    .then((output) => cacheWslDistroList(parseWslDistros(output), probeSequence))
+    .then(async (output) =>
+      cacheWslDistroList(await listedOrRegisteredWslDistros(parseWslDistros(output)), probeSequence)
+    )
     .catch(() => {
       armWslDistroListRetry()
       return wslDistroCache ?? []
@@ -180,19 +198,31 @@ export async function listWslDistrosAsync(): Promise<string[]> {
 }
 
 export async function listRunningWslDistrosAsync(
-  options: { requireConfirmed?: boolean } = {}
+  options: RunningWslDistroReadOptions = {}
 ): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
   }
   return resolveRunningWslDistros(
     () =>
-      runWslExe(['--list', '--running', '--quiet'], {
-        ...process.env,
-        WSL_UTF8: '1'
-      }).then((output) => filterUserWslDistros(parseWslDistros(output))),
+      // A host known to lose redirected list output goes straight to the console.
+      isWslListOutputLost()
+        ? runningFromList('')
+        : runWslExe(['--list', '--running', '--quiet'], {
+            ...process.env,
+            WSL_UTF8: '1'
+          }).then(runningFromList),
     options
   )
+}
+
+// Empty means "none running" unless this host loses list output; then only a console can tell.
+async function runningFromList(output: string): Promise<string[]> {
+  const listed = parseWslDistros(output)
+  if (listed.length > 0) {
+    return filterUserWslDistros(listed)
+  }
+  return runningWhenListedNone(await listWslDistrosAsync(), WSL_PROBE_TIMEOUT_MS)
 }
 
 export function hasCachedWslDistros(): boolean {
@@ -213,6 +243,10 @@ export function getWslHome(distro: string): string | null {
   const cachedHome = getCachedWslHome(distro)
   if (cachedHome !== undefined) {
     return cachedHome
+  }
+  // A second, 5 s-bounded probe would kill a boot the in-flight one is waiting out.
+  if (wslHomeProbeCache.has(distro)) {
+    return null
   }
 
   try {
@@ -242,7 +276,7 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
     return inflight
   }
 
-  const probe = runWslExe(wslHomeProbeArgs(distro))
+  const probe = runWslExe(wslHomeProbeArgs(distro), undefined, WSL_HOME_PROBE_ASYNC_TIMEOUT_MS)
     .then((output) => {
       const home = output.trim()
       if (!home || !home.startsWith('/')) {
@@ -261,6 +295,22 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
   return probe
 }
 
+/** Canonical guest path of a directory; Windows cannot follow guest symlinks over 9P. */
+export async function resolveWslGuestRealDirAsync(
+  distro: string,
+  guestDir: string
+): Promise<string | null> {
+  try {
+    // -m: a session's folder may not exist yet, but the profile symlink above it does.
+    const realDir = (
+      await runWslExe(buildWslExecArgs(distro, ['realpath', '-m', '--', guestDir]))
+    ).trim()
+    return realDir.startsWith('/') ? realDir : null
+  } catch {
+    return null
+  }
+}
+
 /** UNC home roots for distros that are running at discovery time. */
 export async function listRunningWslHomeDirsAsync(): Promise<string[]> {
   const homes = await Promise.all(
@@ -277,6 +327,7 @@ function resetWslDistroListState(): void {
   wslDistroListEmptyStreak = 0
   wslDistroProbeSequence = 0
   wslDistroCacheSequence = 0
+  resetWslListOutputLost()
 }
 
 export function _resetWslCachesForTests(): void {
@@ -301,6 +352,10 @@ export function _setWslCachesForTests(args: {
   }
 }
 
-async function runWslExe(args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
-  return wslExeStdout(await runProcess(wslExeProcessSpec(args, WSL_PROBE_TIMEOUT_MS, env)))
+async function runWslExe(
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  timeoutMs = WSL_PROBE_TIMEOUT_MS
+): Promise<string> {
+  return wslExeStdout(await runProcess(wslExeProcessSpec(args, timeoutMs, env)))
 }

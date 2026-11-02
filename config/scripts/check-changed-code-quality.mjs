@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
+import { scanAstGrep } from './ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
@@ -12,25 +13,39 @@ const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
 const CASTING_RULE = 'typescript/consistent-type-assertions'
 const CASTING_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*typescript\/consistent-type-assertions/
+// Interpolated so this line is not itself a casting directive the gate would scan.
+const CASTING_SUPPRESSION_FORM = `// oxlint-disable-next-line ${CASTING_RULE} -- SAFETY: <why this cast is sound>`
+const CASTING_HINT = `Use a type annotation, \`satisfies\`, or a type guard instead (\`as const\` is allowed). If a cast is unavoidable, put \`${CASTING_SUPPRESSION_FORM}\` on the line above it.`
 const ANTI_SLOP_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
 const REACT_DOCTOR_DISABLE_PATTERN =
   /^\s*\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+react-doctor\/[\w-]+(?:\s*,\s*react-doctor\/[\w-]+)*\s*(?:--(?:(?!\*\/).)*)?(?:\*\/)?\s*$/
+const JS_PLUGINS_CONFIG = 'config/oxlint-js-plugins.json'
+// The root scan no longer loads these plugins, so their suppressions belong to the JS plugins scan.
+const JS_PLUGIN_NAMES = JSON.parse(
+  readFileSync(new URL(`../../${JS_PLUGINS_CONFIG}`, import.meta.url), 'utf8')
+).jsPlugins.map((plugin) => plugin.name)
+const JS_PLUGIN_DISABLE_PATTERN = new RegExp(
+  String.raw`\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\b(?:${JS_PLUGIN_NAMES.join('|')})\/`
+)
 const EXPLICIT_DISABLE_RULE_PATTERN = /(?:-disable(?:-next-line|-line)?\s+|^)[\w-]+(?:\/[\w-]+)?/
 export const OXLINT_SCANS = [
   {
-    // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
-    // config would apply root rules to mobile/, whose .oxlintrc.json turns them off.
+    // Leave config discovery enabled so mobile’s nested config can disable root rules.
     label: 'code quality',
     args: ['--report-unused-disable-directives-severity', 'warn']
+  },
+  {
+    // Keep JS plugins in gates: transferring every AST to Node slows the default native scan.
+    label: 'JS plugins',
+    args: ['--config', JS_PLUGINS_CONFIG]
   },
   {
     label: 'casting code quality',
     args: ['--config', 'config/oxlint-code-quality-casting.json']
   },
   {
-    // Why the allow: CI's `audit:code-quality:native` runs before the mobile install, so it can
-    // never see a cycle inside mobile/ — locally, where mobile/node_modules exists, it would.
+    // CI native audit runs before mobile install and cannot see its cycles; keep local changed gate aligned.
     label: 'focused plugins',
     args: [
       '--config',
@@ -53,8 +68,7 @@ export const OXLINT_SCANS = [
     ]
   },
   {
-    // Why changed-lines only: the renderer carries ~4.7k pre-existing restyle/raw-color
-    // findings. Gating added lines holds the line without a repo-wide migration.
+    // Gate added lines against existing renderer design debt (~4.7k findings).
     label: 'design system',
     args: ['--config', 'config/oxlint-design-system.json']
   }
@@ -64,8 +78,8 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
   [
     'react-doctor(no-adjust-state-on-prop-change)',
     new Set([
-      'src/renderer/src/components/use-task-page-github-issue-draft.ts',
-      'src/renderer/src/components/use-task-page-jira-creation-state.ts'
+      'src/renderer/src/components/task-page/github/use-task-page-github-issue-draft.ts',
+      'src/renderer/src/components/task-page/jira/use-task-page-jira-creation-state.ts'
     ])
   ],
   [
@@ -77,12 +91,8 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
     ])
   ],
   [
-    // The rule wants one named handle cleared by name. Both startup effects arm a variable number
-    // of refresh timers, every one of them through addTimer into `timers`, which their cleanups
-    // clear -- a shape the rule reports whether the handles live in an array, a Set, or a nested
-    // helper. The finding predates this list; it surfaced when the effect body changed. This map
-    // keys on file, not line, so the entry covers both effects in it; nothing else in the file
-    // arms a timer, so widening it further is the only alternative, not a narrower option.
+    // Existing timer effects clean variable handle sets through addTimer; rule expects one named handle and falsely reports both.
+    // Exemption is per-file, covering those two effects; this file has no other timer effects.
     'react-doctor(effect-needs-cleanup)',
     new Set(['mobile/src/session/use-mobile-session-startup.ts'])
   ]
@@ -151,11 +161,8 @@ export function collectAddedLineRanges(
   requestedBase,
   { includePath = (file) => isRootCodeQualityPath(file) && SOURCE_FILE_PATTERN.test(file) } = {}
 ) {
-  // On a pull_request checkout HEAD is the merge commit, so its first parent is the base side and
-  // no merge base has to be computed. Resolving it first is what lets CI checkout shallowly: the
-  // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
-  // Off that ref (local runs) the requested base is an arbitrary branch tip, so the merge base is
-  // still what isolates this branch's own lines.
+  // PR checkout HEAD is the merge commit: first parent identifies base without shallow-clone missing payload ancestry.
+  // Local branch tips still need merge-base to isolate their changes.
   const comparisonBase =
     resolvePullRequestDiffBase(root, null) ??
     runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
@@ -189,6 +196,7 @@ export function collectAddedLineRanges(
     const source = renamedSources.get(file)
     const paths = source ? [source, file] : [file]
     const diff = runGit(root, [
+      '--literal-pathspecs',
       'diff',
       '--find-renames',
       '--unified=0',
@@ -242,12 +250,7 @@ function diagnosticLineRange(root, filename, span) {
   return { start: startLine, end: startLine + (highlighted.match(/\n/g)?.length ?? 0) }
 }
 
-// Why: a file-splitting refactor makes every line of the new module an "added"
-// line, so pre-existing lint debt in code that merely MOVED starts failing the
-// changed-lines gate. The only way to satisfy it is to edit the moved code,
-// which is exactly what a behavior-preserving refactor must not do. So a
-// diagnostic is exempt when its highlighted lines already existed, verbatim and
-// contiguous, somewhere in the base revision of the files this change touches.
+// Split files mark moved code added; exempt diagnostic blocks already verbatim/contiguous in touched base files to avoid demanding unrelated edits.
 function normalizeSourceLine(line) {
   return line.replace(/\s+/g, ' ').trim()
 }
@@ -302,10 +305,7 @@ function readBaseSourceBatch(root, comparisonBase, files) {
 }
 
 export function collectBaseLineBlocks(root, comparisonBase, files = null) {
-  // Why: in a split, the moved code's base text lives in the ORIGINAL file, which is
-  // often deleted or renamed away. Deleted paths never reach the changed-file list
-  // (it filters to ACMRTUB), so read every path the diff touches, deletions included.
-  // --no-renames: a rename otherwise lists only its new path, which the base lacks.
+  // Read all touched base paths including deletions/rename sources; split code may no longer exist under current paths.
   const paths =
     files ??
     splitNullDelimited(
@@ -357,13 +357,7 @@ function matchMovedCode(highlightedLines, baseBlocks, normalizedBlocks) {
   if (needle.length === 0) {
     return false
   }
-  // Why a near-match rather than an exact contiguous one: a split moves a block
-  // verbatim but a diagnostic's span often reaches past it — most commonly to a
-  // hook dependency array, which legitimately grows when closure variables become
-  // props. Requiring every line to match would report the moved body as new. So:
-  // the block must still start at the same line in the base and appear IN ORDER,
-  // and nearly all of it must be present. Genuinely new code shares neither the
-  // anchor nor the ordering, so it stays reported.
+  // Moved diagnostics can extend into changed dependency arrays; require same base anchor, preserved order and near-complete span rather than exact whole-block equality.
   const MIN_COVERAGE = 0.9
   return baseBlocks.some((block) => {
     let haystack = normalizedBlocks.get(block)
@@ -436,14 +430,18 @@ function printDiagnostic(diagnostic, root) {
   const file = normalizedDiagnosticPath(root, diagnostic.filename)
   const line = diagnostic.labels?.[0]?.span?.line ?? 1
   const code = diagnostic.code ?? 'oxlint'
+  const message =
+    code === 'typescript(consistent-type-assertions)'
+      ? `${diagnostic.message} ${CASTING_HINT}`
+      : diagnostic.message
   console.error(
-    `::error file=${annotationValue(file)},line=${line},title=${annotationValue(code)}::${annotationValue(diagnostic.message)}`
+    `::error file=${annotationValue(file)},line=${line},title=${annotationValue(code)}::${annotationValue(message)}`
   )
-  console.error(`${file}:${line} ${code}: ${diagnostic.message}`)
+  console.error(`${file}:${line} ${code}: ${message}`)
 }
 
 // Why: only the casting scan enforces `assertionStyle: never`, so under the root config an
-// `as` cast is legal and the SAFETY: directive AGENTS.md mandates reads as unused. The untyped
+// `as` cast is legal and the required SAFETY: directive reads as unused. The untyped
 // scan reports that as a warning, which the gate counts, so exempt exactly those directives.
 export function isCastingDirectiveUnusedWarning(diagnostic, root) {
   if (!/^Unused (?:oxlint|eslint)-disable/.test(diagnostic.message ?? '')) {
@@ -483,12 +481,15 @@ export function isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scanLab
   }
   return (diagnostic.labels ?? []).some((label) =>
     diagnosticHighlightedLines(root, diagnostic.filename, label.span).some(
-      (line) => ANTI_SLOP_DISABLE_PATTERN.test(line) || REACT_DOCTOR_DISABLE_PATTERN.test(line)
+      (line) =>
+        ANTI_SLOP_DISABLE_PATTERN.test(line) ||
+        REACT_DOCTOR_DISABLE_PATTERN.test(line) ||
+        JS_PLUGIN_DISABLE_PATTERN.test(line)
     )
   )
 }
 
-// Why: oxlint cannot see the AGENTS.md requirement that every casting suppression carry a
+// Why: oxlint cannot require that every casting suppression carry a
 // line-specific SAFETY: rationale, so the directive text itself is checked over added lines.
 export function findCastingDirectivesMissingSafety(root, rangesByFile) {
   const findings = []
@@ -509,7 +510,7 @@ export function findCastingDirectivesMissingSafety(root, rangesByFile) {
           findings.push({
             filename: file,
             code: `${CASTING_RULE} (missing SAFETY:)`,
-            message: `Suppressing ${CASTING_RULE} requires a line-specific "SAFETY:" explanation.`,
+            message: `Suppressing ${CASTING_RULE} requires a line-specific "SAFETY:" explanation, e.g. \`${CASTING_SUPPRESSION_FORM}\`.`,
             labels: [{ span: { line } }]
           })
         }
@@ -539,6 +540,24 @@ function runOxlintScan(root, scan, files) {
     throw new Error(`${scan.label} failed before producing diagnostics.`)
   }
   return parseOxlintOutput(result.stdout, scan.label).diagnostics ?? []
+}
+
+/** ast-grep matches as Oxlint-shaped diagnostics; `info` flaky-test rules are owned by their ratchet. */
+export function runAstGrepScan(root, files) {
+  return scanAstGrep(root, { minSeverity: 'warning', paths: files }).map((match) => ({
+    filename: match.file,
+    code: `ast-grep(${match.ruleId})`,
+    message: match.message,
+    labels: [
+      {
+        span: {
+          line: match.range.start.line + 1,
+          offset: match.range.byteOffset.start,
+          length: match.range.byteOffset.end - match.range.byteOffset.start
+        }
+      }
+    ]
+  }))
 }
 
 export function main(
@@ -574,6 +593,17 @@ export function main(
       `${scan.label}: ${diagnostics.length} new finding(s) across ${files.length} changed file(s).`
     )
   }
+
+  const astGrepFindings = runAstGrepScan(root, files).filter((diagnostic) =>
+    diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks, movedCodeMatcher)
+  )
+  for (const diagnostic of astGrepFindings) {
+    printDiagnostic(diagnostic, root)
+  }
+  failures += astGrepFindings.length
+  console.log(
+    `ast-grep: ${astGrepFindings.length} new finding(s) across ${files.length} changed file(s).`
+  )
 
   const missingSafety = findCastingDirectivesMissingSafety(root, rangesByFile)
   for (const diagnostic of missingSafety) {

@@ -12,7 +12,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { pinnedNodeRuntimeAsset } from '../../../shared/node-runtime-pin'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
   ensureRemoteOrcadNodeRuntime,
   posixNodeRuntimeExecutable,
@@ -31,14 +30,14 @@ import {
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand, which runs it in a local shell.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const host = getRemoteHostPlatform('linux-x64')
 const target = 'linux-x64-glibc'
 const pin = pinnedNodeRuntimeAsset(target).executableSha256

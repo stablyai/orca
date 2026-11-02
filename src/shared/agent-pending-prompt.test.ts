@@ -20,24 +20,23 @@ function waiting(interactivePrompt: string, toolName?: string) {
 
 describe('readAgentPromptAnswers', () => {
   it('reads an approval with the cards’ own allow and deny keys', () => {
-    const read = readAgentPromptAnswers(waiting(approval), 'claude', 'p1', true)
-    expect(read?.prompt).toEqual({
-      kind: 'approval',
-      promptId: 'p1',
-      tool: 'Bash',
-      summary: 'rm -rf build',
-      options: [
-        { id: 'allow_once', label: 'Allow once' },
-        { id: 'reject_once', label: 'Reject' }
-      ]
-    })
-    expect(Object.fromEntries(read!.keysByOption)).toEqual({
-      allow_once: '1',
-      reject_once: '\x1b'
-    })
-    expect(
-      readAgentPromptAnswers(waiting(approval), 'codex', 'p1', true)?.keysByOption.get('allow_once')
-    ).toBe('1')
+    for (const agent of ['claude', 'codex']) {
+      const read = readAgentPromptAnswers(waiting(approval), agent, 'p1', true)
+      expect(read?.prompt).toEqual({
+        kind: 'approval',
+        promptId: 'p1',
+        tool: 'Bash',
+        summary: 'rm -rf build',
+        options: [
+          { id: 'allow_once', label: 'Allow once' },
+          { id: 'reject_once', label: 'Reject' }
+        ]
+      })
+      expect(Object.fromEntries(read!.keysByOption)).toEqual({
+        allow_once: '1',
+        reject_once: '\x1b'
+      })
+    }
   })
 
   it('reads a one-question single choice with each option’s selector key', () => {
@@ -58,7 +57,10 @@ describe('readAgentPromptAnswers', () => {
   })
 
   it('leaves to Orca what one keystroke cannot answer', () => {
-    const unsupported = { kind: 'unsupported', promptId: 'p' }
+    const unsupported = {
+      prompt: { kind: 'unsupported', promptId: 'p' },
+      keysByOption: new Map()
+    }
     const cases = [
       waiting(question({}, 2)),
       waiting(question({ multiSelect: true })),
@@ -66,18 +68,29 @@ describe('readAgentPromptAnswers', () => {
       waiting('not json'),
       { state: 'blocked' as const }
     ]
-    for (const row of cases) {
-      expect(readAgentPromptAnswers(row, 'claude', 'p', true)?.prompt).toEqual(unsupported)
+    for (const agent of ['claude', 'codex']) {
+      for (const row of cases) {
+        expect(readAgentPromptAnswers(row, agent, 'p', true)).toEqual(unsupported)
+      }
     }
+    const asyncQuestion = JSON.stringify({
+      questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }]
+    })
+    expect(
+      readAgentPromptAnswers(waiting(asyncQuestion, 'request_user_input_async'), 'codex', 'p', true)
+    ).toEqual(unsupported)
   })
 
   it('leaves every prompt to Orca for an agent without hooks or known keys', () => {
-    expect(readAgentPromptAnswers(waiting(approval), 'claude', 'p', false)?.prompt.kind).toBe(
-      'unsupported'
-    )
-    expect(readAgentPromptAnswers(waiting(approval), 'aider', 'p', true)?.prompt.kind).toBe(
-      'unsupported'
-    )
+    const unsupported = {
+      prompt: { kind: 'unsupported', promptId: 'p' },
+      keysByOption: new Map()
+    }
+    expect(readAgentPromptAnswers(waiting(approval), 'claude', 'p', false)).toEqual(unsupported)
+    expect(readAgentPromptAnswers(waiting(approval), 'aider', 'p', true)).toEqual(unsupported)
+    expect(
+      readAgentPromptAnswers(waiting(question(), 'AskUserQuestion'), 'grok', 'p', true)
+    ).toEqual(unsupported)
   })
 
   it('reads nothing while the agent is not waiting on the user', () => {

@@ -93,10 +93,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('pins the list fetch to the local host when forceLocalOwner is set', async () => {
-    // Regression: a local `worktrees:changed` event for an unbound
-    // repo while a remote runtime is active must refresh against the local
-    // host, not the runtime — otherwise CLI-created local worktrees stay
-    // invisible in the sidebar until an app restart.
+    // Local change events for unbound repos must stay local despite runtime focus or CLI-created worktrees remain invisible until restart.
     const store = createTestStore()
     const local = makeWorktree({
       id: 'repo1::/local/wt1',
@@ -269,7 +266,7 @@ describe('fetchWorktrees', () => {
     store.setState({
       settings: { activeRuntimeEnvironmentId: null } as never,
       repos: []
-    } as Partial<AppState>)
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-missing-repo',
       ok: true,
@@ -427,7 +424,7 @@ describe('fetchWorktrees', () => {
           executionHostId: 'runtime:env-1'
         }
       ]
-    } as Partial<AppState>)
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
@@ -538,7 +535,7 @@ describe('fetchWorktrees', () => {
           updatedAt: 1
         }
       ]
-    } as Partial<AppState>)
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-runtime-worktree',
       ok: true,

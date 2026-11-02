@@ -1,6 +1,10 @@
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
-import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoExecutionHostIdOrDefault,
+  getWorktreeExecutionHostId
+} from '../execution-host'
 import type { ExecutionHostId } from '../execution-host'
 import {
   getHostContextLabel,
@@ -61,23 +65,69 @@ export function getMixedHostContextLabels(
   return uniqueHostIds.size > 1 ? labelsByRepoId : undefined
 }
 
-/**
- * Host labels for the sidebar's notice rows, keyed by repo id.
- *
- * Why not getMixedHostContextLabels: a notice row can render outside its
- * project's own section (pinned fallback), and the ambiguity it resolves
- * belongs to the project — one project checked out on several hosts emits one
- * identical-looking row per host. So the mixed test runs per project.
- *
- * Two inputs, deliberately: `allRepoIds` is the unfiltered universe that decides
- * whether a project spans hosts, and `noticeRepoIds` is the host-filtered set
- * eligible for a label. Deriving both from the filtered set would make a label
- * appear and disappear with the sidebar's host filter.
- */
+/** Each host owning one of a project section's rows, with that host's own registration of the project.
+ * Undefined when the rows sit only where the single header already does. */
+export function getProjectHeaderHostRepos(args: {
+  group: WorktreeGroupEntry
+  repoMap: Map<string, Repo>
+  repoOf: RepoOfWorktree
+  /** Notice rows carry their own registration, which can differ from repoMap's for a shared repo id. */
+  noticeRepoOf: (repoId: string) => readonly Repo[]
+  hasPendingCreation: (repoId: string) => boolean
+  defaultHostId: ExecutionHostId
+}): Map<ExecutionHostId, Repo> | undefined {
+  const { group, defaultHostId } = args
+  const hostOf = (repo: Repo | undefined): ExecutionHostId =>
+    getRepoExecutionHostIdOrDefault(repo, defaultHostId)
+  const rowHostIds = new Set<ExecutionHostId>()
+  const registrations: Repo[] = group.repo ? [group.repo] : []
+  for (const worktree of group.items) {
+    const repo = args.repoOf(worktree)
+    rowHostIds.add(getWorktreeExecutionHostId(worktree, repo, defaultHostId))
+    if (repo) {
+      registrations.push(repo)
+    }
+  }
+  for (const repoId of group.repoIds) {
+    const repo = args.repoMap.get(repoId)
+    if (repo) {
+      registrations.push(repo)
+      // Pending rows resolve their repo by id, so they land on that registration's host.
+      if (args.hasPendingCreation(repoId)) {
+        rowHostIds.add(hostOf(repo))
+      }
+    }
+    for (const noticeRepo of args.noticeRepoOf(repoId)) {
+      registrations.push(noticeRepo)
+      rowHostIds.add(hostOf(noticeRepo))
+    }
+  }
+  if (rowHostIds.size === 0 || (rowHostIds.size === 1 && rowHostIds.has(hostOf(group.repo)))) {
+    return undefined
+  }
+  const projectRepoIds = new Set(group.repoIds)
+  if (group.repo) {
+    projectRepoIds.add(group.repo.id)
+  }
+  const hostRepos = new Map<ExecutionHostId, Repo>()
+  for (const hostId of rowHostIds) {
+    // Only this project's own registration on this host: another host's would act on that host,
+    // and another project's (a lineage child shown here) would act on that project.
+    const repo = registrations.find(
+      (candidate) => hostOf(candidate) === hostId && projectRepoIds.has(candidate.id)
+    )
+    if (repo) {
+      hostRepos.set(hostId, repo)
+    }
+  }
+  return hostRepos.size > 0 ? hostRepos : undefined
+}
+
+/** Label notice rows by project-wide host ambiguity, even when rendered in pinned fallback.
+ * allRepoIds decides ambiguity unfiltered; filtered noticeRepoIds gates eligibility so filters cannot make labels flicker. */
 export type NoticeHostContext = {
   label: string
-  /** Carried so the row can draw the same host glyph and "Project on …"
-   *  tooltip worktree cards use, which the label alone cannot select. */
+  /** Retain host identity for the card-compatible glyph/tooltip; label alone cannot select it. */
   hostId: ExecutionHostId
 }
 
@@ -92,9 +142,7 @@ export function getNoticeHostContextLabels(
   if (eligible.size === 0) {
     return undefined
   }
-  // Why host ids and not labels: two hosts can share one user-facing label, and
-  // that project spans hosts just the same — counting labels hides exactly the
-  // case where the rows are hardest to tell apart.
+  // Count host IDs, not labels: distinct hosts may deliberately share a display name.
   const hostIdsForProject = new Map<string, Set<string>>()
   const labelsByRepoId = new Map<string, NoticeHostContext>()
   const projectKeyByRepoId = new Map<string, string>()
@@ -147,10 +195,7 @@ export function getHostWorktreeCounts(
   if (worktrees.length === 0) {
     return undefined
   }
-  // Derived from the id map rather than repeating its dedupe walk: every caller asks for both,
-  // and a host's count is exactly the length of its id list by construction.
-  // Dedup by host, not by bare id: the same id on two hosts is two workspaces
-  // and has to be counted under each of them (STA-4343).
+  // Reuse the ID dedupe walk; same-ID workspaces on two hosts count under each host (STA-4343).
   const idsByHost = getHostWorktreeIds(worktrees, repoOf, defaultHostId)
   if (!idsByHost) {
     return undefined
@@ -173,7 +218,6 @@ export function getHostWorktreeIds(
   const idsByHost = new Map<ExecutionHostId, string[]>()
   const seenIdentities = new Set<string>()
   for (const worktree of worktrees) {
-    // Hoisted: the identity string was built twice per row, once to test and once to record.
     const identity = getWorktreeHostIdentity(worktree)
     if (seenIdentities.has(identity)) {
       continue
@@ -187,14 +231,7 @@ export function getHostWorktreeIds(
   return idsByHost
 }
 
-/**
- * Host counts for a lane that may contain folder workspaces as well as worktrees.
- *
- * Why not getHostWorktreeCounts alone: it returns undefined for an empty
- * worktree list, and a header with undefined counts is treated as global. A lane
- * whose only members are folder workspaces would therefore render outside its
- * host section (#15362).
- */
+/** Folder-only lanes still need host counts; undefined would render their headers globally (#15362). */
 export function getLaneHostWorktreeCounts(
   worktrees: readonly Worktree[],
   folderWorkspaces: readonly RenderableFolderWorkspace[],
@@ -212,14 +249,7 @@ export function getLaneHostWorktreeCounts(
   return counts
 }
 
-/**
- * Host-scoped worktree ids for a lane that may contain folder workspaces.
- *
- * Folder workspaces are not worktrees, so they contribute no ids — but their
- * host must still get an explicit empty array, or the host-section fallbacks
- * treat the missing key as "unscoped" and leak the global worktree ids into
- * that section.
- */
+/** Folder hosts need explicit empty worktree-ID arrays; missing keys trigger global-ID fallbacks into that host section. */
 export function getLaneHostWorktreeIds(
   worktrees: readonly Worktree[],
   folderWorkspaces: readonly RenderableFolderWorkspace[],

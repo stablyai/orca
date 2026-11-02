@@ -2,8 +2,8 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
-import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
-import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat-orca-stop-cut'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import {
   continuationDeps,
   RestartContinuationSupersededError,

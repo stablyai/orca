@@ -1,7 +1,6 @@
 import ExpoModulesCore
 
-// Synchronous on purpose: each call is a few ms per window, and only a sync call reads its
-// Uint8Array argument without a thread hop.
+// Sync avoids a thread hop when reading Uint8Array; each window takes only a few ms.
 public class OrcaGzipUtf8CodecModule: Module {
   public func definition() -> ModuleDefinition {
     Name("OrcaGzipUtf8Codec")

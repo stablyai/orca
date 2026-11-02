@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
-import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
+import { TerminalSessionTeardown } from './terminal-session-teardown'
+import {
+  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
+  SESSION_FORCE_KILL_RETRY_MS
+} from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import {
@@ -396,26 +400,28 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['\x1b[?1;2c'])
     })
 
-    // Precmd can precede raw mode; keep startup input ordered until the flush gate releases it.
-    it('defers flush past the shell-ready marker and preserves write order', () => {
+    // Precmd can precede raw mode; only startup commands wait for the flush gate.
+    it('holds the startup command while user input reaches the current reader', () => {
       createSession({ shellReadySupported: true })
       expect(session.shellState).toBe('pending')
 
-      session.write('first\n')
+      session.writeStartupCommand('first\n')
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
       session.write('second\n')
-      expect(subprocess.written).toEqual([])
+      expect(subprocess.written).toEqual(['second\n'])
 
       subprocess.simulateData('\r\nuser@host $ ')
       vi.advanceTimersByTime(30)
-      expect(subprocess.written).toEqual(['first\n', 'second\n'])
+      expect(subprocess.written).toEqual(['second\n', 'first\n'])
     })
 
-    it('contains live color replies without releasing queued startup input', async () => {
-      const reply = '\x1b[?997;1n'
+    it.each([
+      ['color', '\x1b[?997;1n'],
+      ['XTVERSION', '\x1bP>|xterm.js(6.1.0)\x1b\\']
+    ])('contains live %s replies without releasing queued startup input', async (_, reply) => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       session.write(reply)
       await vi.advanceTimersByTimeAsync(0)
@@ -427,7 +433,7 @@ describe('Session', () => {
 
     it('uses the short settle path when marker and prompt bytes arrive together', () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -440,7 +446,7 @@ describe('Session', () => {
 
     it('does not treat bytes before the marker as post-marker prompt output', () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('last login\r\n\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -488,7 +494,7 @@ describe('Session', () => {
       })
 
       subprocess.simulateData('\x1b]777;orca-shell-ready')
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
       vi.advanceTimersByTime(100)
 
       expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
@@ -531,7 +537,7 @@ describe('Session', () => {
 
     it('keeps held marker-prefix bytes during live take-with-snapshot', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready')
       const taken = session.takePendingOutput(true)
@@ -557,7 +563,7 @@ describe('Session', () => {
 
     it('cancels the post-ready flush gate when force-disposing the subprocess', async () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -571,7 +577,7 @@ describe('Session', () => {
 
     it('transitions to timed_out after 15 seconds', () => {
       createSession({ shellReadySupported: true })
-      session.write('waiting input')
+      session.writeStartupCommand('waiting input')
 
       vi.advanceTimersByTime(15_000)
 
@@ -603,7 +609,7 @@ describe('Session', () => {
           throw new Error('log sink unavailable')
         }
       })
-      session.write('waiting input')
+      session.writeStartupCommand('waiting input')
 
       vi.advanceTimersByTime(15_000)
 
@@ -611,9 +617,9 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['waiting input'])
     })
 
-    it('honors a shorter shell-ready timeout for Codex startup sessions', () => {
+    it('honors an injected shell-ready timeout', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 300 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       vi.advanceTimersByTime(299)
       expect(subprocess.written).toEqual([])
@@ -635,9 +641,23 @@ describe('Session', () => {
   })
 
   describe('kill', () => {
+    beforeEach(() => {
+      killWithDescendantSweepMock.mockImplementation((_pid: number, killRoot: () => void) => {
+        killRoot()
+      })
+    })
+
+    function gracefulClose(): void | Promise<void> {
+      return new TerminalSessionTeardown(new Map([['test-session', session]])).killSession(
+        'test-session',
+        session,
+        false
+      )
+    }
+
     it('kills the subprocess', () => {
       createSession()
-      session.kill()
+      void gracefulClose()
       expect(subprocess.killed).toBe(true)
       expect(session.isTerminating).toBe(true)
     })
@@ -652,52 +672,12 @@ describe('Session', () => {
       }
       createSession()
 
-      expect(() => session.kill()).toThrow('graceful kill rejected')
+      expect(() => gracefulClose()).toThrow('graceful kill rejected')
       expect(session.isTerminating).toBe(false)
-      expect(() => session.kill()).not.toThrow()
+      expect(() => gracefulClose()).not.toThrow()
 
       expect(attempts).toBe(2)
       expect(session.isTerminating).toBe(true)
-    })
-
-    it('non-agent kill stays synchronous and never routes through the descendant sweep', () => {
-      createSession()
-      session.kill()
-      expect(subprocess.killed).toBe(true)
-      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
-    })
-
-    it('agent kill routes through the descendant sweep with the subprocess as root', () => {
-      createSession({ launchAgent: 'claude' })
-      session.kill()
-      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
-        subprocess.pid,
-        expect.any(Function),
-        expect.objectContaining({ ownsRoot: expect.any(Function) })
-      )
-      expect(subprocess.killed).toBe(false)
-      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
-      killRoot()
-      expect(subprocess.killed).toBe(true)
-    })
-
-    it('agent kill hands the sweep the pty job, which outlives a reparented child', () => {
-      // Detached grandchildren may escape PID ancestry but remain owned by the PTY job.
-      createSession({ launchAgent: 'claude' })
-      session.kill()
-      const deps = killWithDescendantSweepMock.mock.calls[0][2] as {
-        terminateOwnedTree?: () => string
-      }
-      expect(deps.terminateOwnedTree?.()).toBe('terminated')
-    })
-
-    it('agent kill root callback is a no-op after the session already exited', () => {
-      createSession({ launchAgent: 'claude' })
-      session.kill()
-      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
-      subprocess.simulateExit(0)
-      killRoot()
-      expect(subprocess.killed).toBe(false)
     })
 
     it('notifies attached clients on exit after kill', async () => {
@@ -709,7 +689,7 @@ describe('Session', () => {
         onExit: (code) => exitCodes.push(code)
       })
 
-      session.kill()
+      void gracefulClose()
 
       await new Promise((r) => setTimeout(r, 20))
       expect(exitCodes).toEqual([0])
@@ -720,7 +700,7 @@ describe('Session', () => {
       subprocess.kill = () => {}
       const forceKillSpy = vi.spyOn(subprocess, 'forceKill')
 
-      session.kill()
+      void gracefulClose()
       expect(session.state).not.toBe('exited')
 
       vi.advanceTimersByTime(5_000)
@@ -752,6 +732,48 @@ describe('Session', () => {
       expect(session.state).toBe('exited')
     })
 
+    it('starts a joining caller’s exit budget only after the shared force kill is sent', async () => {
+      const signalsSent = Promise.withResolvers<void>()
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        return signalsSent.promise
+      }
+      createSession()
+
+      const first = session.forceKillAndWaitForExit()
+      const joined = session.forceKillAndWaitForExit()
+      let joinedSettled = false
+      void joined.then(
+        () => (joinedSettled = true),
+        () => (joinedSettled = true)
+      )
+      await vi.advanceTimersByTimeAsync(IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS)
+      expect(joinedSettled).toBe(false)
+
+      signalsSent.resolve()
+      subprocess.simulateExit(137)
+      await Promise.all([first, joined])
+      expect(forceKillAttempts).toBe(1)
+    })
+
+    it('lets dispose join an in-flight force kill instead of starting a second sweep', async () => {
+      const signalsSent = Promise.withResolvers<void>()
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        return signalsSent.promise
+      }
+      createSession()
+
+      // Dispose ends the session without a physical exit, so this waiter is not the subject here.
+      void session.forceKillAndWaitForExit().catch(() => {})
+      session.dispose()
+      signalsSent.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(forceKillAttempts).toBe(1)
+    })
+
     it('retries a rejected graceful-deadline force kill', async () => {
       subprocess.kill = () => {}
       let forceKillAttempts = 0
@@ -763,7 +785,7 @@ describe('Session', () => {
       }
       createSession()
 
-      session.kill()
+      void gracefulClose()
       await vi.advanceTimersByTimeAsync(5_000)
       expect(forceKillAttempts).toBe(1)
       expect(session.isTerminating).toBe(true)
@@ -782,7 +804,7 @@ describe('Session', () => {
       const onExit = vi.fn()
       session.attachClient({ onData, onExit })
 
-      session.kill()
+      void gracefulClose()
       vi.advanceTimersByTime(5_000)
 
       subprocess.simulateData('late output')

@@ -1,5 +1,4 @@
-// Layout-owner build (L286): main's layout load, given its views, drops the saved tabs the window's
-// restore drops (restoresSavedContentTab), so main never holds a tab no window draws.
+// Main’s load must match restoresSavedContentTab so its layout never retains a transient tab no window can draw (L286).
 
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
@@ -30,7 +29,6 @@ function entry(id: string, contentType: TabContentType, entityId: string, sortOr
   }
 }
 
-/** A saved session after a restart: two edit files, and tabs whose documents were never saved. */
 function savedSession(): WorkspaceSessionState {
   const tabs = [
     entry('ghost-diff', 'diff', '/w/gone.ts', 0),
@@ -81,8 +79,7 @@ describe("main's layout load of view-less saved editor tabs", () => {
     expect(load(saved).changes).toEqual([])
   })
 
-  // Main's own edits (a phone's browser tab, an agent tab) load without its views: they must not
-  // drop a live diff whose view only main's memory holds.
+  // Loads without main’s views must retain live diffs represented only in memory.
   it('keeps every saved tab in a load that carries no views', () => {
     const workspace = loadWorkspaceLayout(
       LOCAL_EXECUTION_HOST_ID,

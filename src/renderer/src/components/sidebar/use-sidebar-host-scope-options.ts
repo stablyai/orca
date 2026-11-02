@@ -1,3 +1,4 @@
+import { selectWslHostsServing } from './use-wsl-hosts-enabled'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -8,9 +9,7 @@ import {
   type SidebarHostScopeOption
 } from './sidebar-host-options'
 
-/** Shared host-scope derivation for the sidebar scope strip and the workspace
- * options menu so both surfaces consume the same live runtime status without
- * duplicating store wiring. */
+/** Share live host derivation between the scope strip and workspace options. */
 export function useSidebarHostScopeOptions(): {
   hostOptions: SidebarHostOption[]
   hostScopeOptions: SidebarHostScopeOption[]
@@ -36,7 +35,7 @@ export function useSidebarHostScopeOptions(): {
         runtimeStatusByEnvironmentId,
         hostLabelOverrides,
         wslHostStatuses,
-        wslHostsEnabled: settings?.experimentalWslHosts === true,
+        wslHostsEnabled: selectWslHostsServing({ settings, runtimeEnvironments }),
         wslHostServerFilesMissing
       }),
     [

@@ -76,8 +76,7 @@ for (const runtime of ['native', 'wsl'] as const) {
       const marker = 'WINDOWS_INLINE_IMAGES_DONE'
       const rawPayload = `${inlineImagePayload(true)}${marker}\r\n`
       const payload = Buffer.from(rawPayload).toString('base64')
-      // Why a file: this command is typed at PTY bind, before WSL bash reaches readline; a
-      // ~25 KB line in the kernel's cooked mode loses everything past 4095 bytes.
+      // Stage a file: the command is typed before WSL bash reaches readline, where cooked TTY input truncates ~25KB lines at 4095 bytes.
       const payloadFile = `.orca-inline-images-${randomUUID()}.bin`
       if (runtime === 'wsl') {
         writeFileSync(path.join(testRepoPath, payloadFile), rawPayload)

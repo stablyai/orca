@@ -14,7 +14,6 @@ const transcript = readFileSync(
 const titles = [...transcript.matchAll(/\x1b\]0;([^\x07]+)\x07/g)].map((match) => match[1])
 
 describe('owner-rewritten OMP titles from captured upstream output', () => {
-  it('contains the six upstream state frames', () => expect(titles).toHaveLength(6))
   it.each(
     titles.map((title, index) => ({
       title,

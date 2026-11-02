@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type WebSocket from 'ws'
 import type { PairedE2EEChannel } from '../../paired-e2ee-client-handshake'
 import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
-import { serializeRemoteRuntimeRpcRequest } from '../../remote-runtime-memory-limits'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
+import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limits'
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
 
@@ -15,11 +15,7 @@ type PendingRemoteRuntimeSubscriptionRequest = {
 
 const MAX_PENDING_SUBSCRIPTION_REQUESTS = 32
 
-/**
- * Requests the caller sends over an existing subscription socket rather than a socket of their
- * own. Why they ride this connection: a lease's requests must share its liveness, so a dead link
- * fails them instead of leaving them to time out against a socket nobody is watching.
- */
+/** Lease requests share the subscription’s socket/liveness so a dead link fails them promptly. */
 export class RemoteRuntimeSubscriptionRequestChannel {
   private readonly pending = new Map<string, PendingRemoteRuntimeSubscriptionRequest>()
 

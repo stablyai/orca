@@ -1,3 +1,4 @@
+import { hasControllingTty } from './posix-controlling-terminal'
 import type { ProcessTableRow } from './process-table-snapshot'
 
 export type TmuxHookPane = { socket: string; pane: string }
@@ -51,7 +52,7 @@ export function resolveTmuxClientAttachment(
 ): TmuxAttachedClient | null {
   const byPid = new Map(rows.map((row) => [row.pid, row]))
   const root = byPid.get(rootPid)
-  if (!root?.startTime || !root.tty || root.tty === '?' || !root.tpgid || root.tpgid <= 0) {
+  if (!root?.startTime || !hasControllingTty(root.tty) || !root.tpgid || root.tpgid <= 0) {
     return null
   }
   const attached = clients.filter((client) => {

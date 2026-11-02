@@ -1,3 +1,4 @@
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
@@ -9,6 +10,7 @@ import {
   reconcileHostWorktreeRemovals
 } from '../../hooks/ipc-events/background-worktree-removal-bridge'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeDeleteErrorToShow } from '../../components/sidebar/worktree-delete-error-display'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -206,13 +208,18 @@ describe('removing a worktree the host deletes in the background', () => {
 
   it('shows the host error on a row the host lists as a failed delete, until it leaves', () => {
     // A window that opened after the delete failed, or a restart after a failed startup finish.
-    seedRow(store, { removalError: 'Operation not permitted' })
+    const message =
+      '/path/wt1/profile/lockfile is open in another program. Close any program using it. You may need to delete the remaining folder at /path/wt1 manually to finish removing this workspace.'
+    seedRow(store, { removalError: message })
     reconcileHostWorktreeRemovals(store)
     expect(deleteState(store)).toMatchObject({
       isDeleting: false,
-      error: 'Operation not permitted',
+      error: message,
       canForceDelete: false
     })
+    expect(getWorktreeDeleteErrorToShow({ removalError: message }, deleteState(store))).toBe(
+      message
+    )
 
     // Forgotten, or the checkout deleted outside Orca: the host stops listing it.
     seedStore(store, { worktreesByRepo: { repo1: [] } })
@@ -269,4 +276,22 @@ describe('removing a worktree the host deletes in the background', () => {
     reconcileHostWorktreeRemovals(store)
     expect(deleteState(store)?.isDeleting).toBe(true)
   })
+  it.each(['removed', 'unmarked', 'unreadable'] as const)(
+    'lost-reply %s retires only with committed absence proof',
+    async (listing) => {
+      launchDrafts.clearNativeChatComposerDraftsForTests()
+      seedRow(store)
+      hostListsOnRefresh(listing === 'unreadable' ? new Error('unreadable') : listing)
+      const scope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(worktreeId, 'codex', 'local')
+      launchDrafts.updateNativeChatComposerDraft(scope, { text: 'pending task' }, 'immediate')
+      const attempt = launchDrafts.captureNativeChatComposerSubmission(scope)
+      mockApi.worktrees.remove.mockRejectedValue(new Error('Request timed out: worktree.rm'))
+      const result = await store
+        .getState()
+        .removeWorktree({ id: worktreeId, executionHostId: 'local' })
+      expect(result.ok).toBe(listing === 'removed')
+      expect(attempt.draft === undefined).toBe(listing === 'removed')
+      launchDrafts.clearNativeChatComposerDraftsForTests()
+    }
+  )
 })

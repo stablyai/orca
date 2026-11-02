@@ -31,11 +31,7 @@ export type ActiveDashboardWorkspace = {
   hostLabel?: string
 }
 
-/** With `includeMapMetadata: false`, `collectActiveDashboardWorkspaces` reads only
- *  `repos`, `worktreesByRepo`, `folderWorkspaces` and `projectGroups` — every other
- *  slice here sits behind a metadata gate. Callers memoize the result on exactly those
- *  four (see `build-dashboard-bucket-counts`), so widening the metadata-free read set
- *  means widening that key too. */
+/** Metadata-free reads use only repos/worktreesByRepo/folderWorkspaces/projectGroups; widen the bucket-count memo key whenever this ungated set grows. */
 export type DashboardWorkspaceState = Pick<AppState, 'repos' | 'worktreesByRepo'> &
   Partial<
     Pick<

@@ -1,6 +1,13 @@
-import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session-context-usage-schema'
+import { isInputContext, isInputLineage } from './journal-input-lineage'
+import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage-schema'
 
 export function dropUnusableRowAnnotations(record: Record<string, unknown>): void {
+  if (record.inputOrderContext !== undefined && !isInputContext(record.inputOrderContext)) {
+    delete record.inputOrderContext
+  }
+  if (record.inputOrderLineage !== undefined && !isInputLineage(record.inputOrderLineage)) {
+    delete record.inputOrderLineage
+  }
   dropUnusableProducerLinkage(record)
   dropUnusableTurnScope(record)
   dropUnusableOwnerFence(record)
@@ -10,6 +17,9 @@ export function dropUnusableRowAnnotations(record: Record<string, unknown>): voi
         dropUnusableProducerLinkage(mutation)
         dropUnusableTurnScope(mutation)
         dropUnusableOwnerFence(mutation)
+        if (mutation.observedAt !== undefined && !Number.isFinite(mutation.observedAt)) {
+          delete mutation.observedAt
+        }
       }
     }
   }
@@ -37,6 +47,7 @@ function dropUnusableTurnScope(record: Record<string, unknown>): void {
     !(
       isPlainObject(scope) &&
       (scope.kind === 'thread' ||
+        scope.kind === 'unknown' ||
         (scope.kind === 'turn' &&
           typeof scope.turnItemId === 'string' &&
           scope.turnItemId.length > 0))

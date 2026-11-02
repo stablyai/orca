@@ -43,6 +43,7 @@ export type ProcessPtyOutputOptions = {
   snapshotSeq?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
   snapshotCols?: number
   snapshotRows?: number
   carriesNormalBuffer?: boolean
@@ -72,8 +73,7 @@ export function createPtyOutputProcessor({
   const sideEffects = createPtyOutputSideEffectQueue({
     countWorkingTitles: titleObserver.countWorkingTitles,
     apply: (effect) => {
-      // Why seeded on replay: like replayed titles, restored bytes must not move live status, yet the
-      // tracker must still agree with the scanner, which only reports later changes.
+      // Replay seeds agreement with the change-only scanner without publishing restored bytes as live status.
       for (const activity of effect.programActivity ?? []) {
         if (effect.suppressAttentionEvents) {
           titleObserver.seedProgramActivity(activity)
@@ -203,6 +203,7 @@ export function createPtyOutputProcessor({
           ? { alternateScreen: options.alternateScreen }
           : {}),
         ...(options.terminalOwner ? { terminalOwner: options.terminalOwner } : {}),
+        ...(options.lastTitle !== undefined ? { lastTitle: options.lastTitle } : {}),
         ...(options.snapshotCols !== undefined && options.snapshotRows !== undefined
           ? { snapshotCols: options.snapshotCols, snapshotRows: options.snapshotRows }
           : {}),

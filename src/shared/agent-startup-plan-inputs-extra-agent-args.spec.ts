@@ -24,12 +24,13 @@ describe('resolveAgentStartupPlanInputs with extra agent args', () => {
       extraAgentArgs: '--model opus --add-dir "my docs"'
     })
     const plan = buildAgentStartupPlan({ ...inputs, prompt: 'go' })
+    expect(plan?.launchCommand).toContain("'--add-dir' 'my docs'")
     expect(plan?.launchCommand).toContain('opus')
     expect(plan?.launchCommand).not.toContain('sonnet')
     expect(plan?.launchCommand).toContain('--dangerously-skip-permissions')
   })
 
-  it('builds the same command the desktop path builds', () => {
+  it('matches explicitly composed launch defaults and extras', () => {
     const headless = resolveAgentStartupPlanInputs({
       agent: 'claude',
       settings: SETTINGS,

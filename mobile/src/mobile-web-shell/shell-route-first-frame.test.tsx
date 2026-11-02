@@ -3,7 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type SwitchDependencies = {
-  /** Committed mounts, not renders: what this file is about is what the user was shown. */
   refusals: number
   shells: string[]
   params: Record<string, string | string[] | undefined>
@@ -36,7 +35,6 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-// The workspace route reads the desktop's connection to decide whether a server is reachable.
 vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'disconnected' })
 }))
@@ -76,10 +74,6 @@ import ReviewRoute from '../../app/h/[hostId]/review/[worktreeId]'
 import SessionRoute from '../../app/h/[hostId]/session/[worktreeId]'
 import CatchAllRoute from './catch-all-page-route'
 
-/**
- * Every route switch, with params naming a route the shell could open and params naming none (which
- * get the refusal screen).
- */
 type SwitchCase = {
   readonly name: string
   readonly Route: ComponentType
@@ -177,7 +171,7 @@ afterEach(() => {
   })
 })
 
-/** A synchronous `act` commits the first frame and its mount effects, and nothing async after it. */
+// Synchronous act commits mount effects without draining async follow-up, isolating the first visible frame.
 function renderFirstFrame(Route: ComponentType): ReactTestRenderer {
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   act(() => {

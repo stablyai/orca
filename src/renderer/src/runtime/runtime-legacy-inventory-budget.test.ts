@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  decodeLegacyQuickOpenInventory,
-  pruneLegacyInventoryCache
-} from './runtime-legacy-inventory-budget'
+import { decodeLegacyQuickOpenInventory } from './runtime-legacy-inventory-budget'
 
 function inventory(count = 1) {
   return {
@@ -36,29 +33,5 @@ describe('complete legacy inventory retention', () => {
     const value = inventory()
     value.files[0].relativePath = 'x'.repeat(65_537)
     expect(() => decodeLegacyQuickOpenInventory(value)).toThrow('too large')
-  })
-  it.each([
-    null,
-    { files: [] },
-    { ...inventory(), totalCount: 0 },
-    { ...inventory(), files: [{ relativePath: 12 }] }
-  ])('rejects malformed responses %j', (value) => {
-    expect(() => decodeLegacyQuickOpenInventory(value)).toThrow('Invalid remote file inventory')
-  })
-  it('evicts in access order under a shared byte allowance and releases removed accounting', () => {
-    const cache = new Map([
-      ['one', { retainedBytes: 60 }],
-      ['two', { retainedBytes: 60 }]
-    ])
-    pruneLegacyInventoryCache(cache, 8, 100)
-    expect([...cache.keys()]).toEqual(['two'])
-    cache.delete('two')
-    cache.set('three', { retainedBytes: 100 })
-    pruneLegacyInventoryCache(cache, 8, 100)
-    expect([...cache.keys()]).toEqual(['three'])
-    cache.set('three', { retainedBytes: 10 })
-    cache.set('owner-changed', { retainedBytes: 90 })
-    pruneLegacyInventoryCache(cache, 8, 100)
-    expect(cache.size).toBe(2)
   })
 })

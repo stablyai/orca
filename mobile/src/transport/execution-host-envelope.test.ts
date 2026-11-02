@@ -97,7 +97,7 @@ describe('a server workspace call on the direct wire', () => {
     try {
       await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
       dispose = server.subscribe('terminal.subscribe', { terminal: 't1' }, () => {})
-      // What #26501 wrote with its own `executionHost` option; the desktop parses JSON, so key order is not read.
+      // Compare parsed wire frames; desktop dispatch ignores JSON key order.
       expect(socket.frames()).toStrictEqual([
         JSON.parse(
           '{"id":"rpc-1","deviceToken":"device-token","method":"worktree.ps","params":{"limit":1},"executionHost":"runtime:env-1"}'
@@ -177,7 +177,6 @@ describe('scopeRpcClientToExecutionHost', () => {
     expect(workspaceRouteExecutionHost(fakeClient(), relays, 'local')).toBeUndefined()
     expect(workspaceRouteExecutionHost(fakeClient(), relays, 'ssh:box')).toBeUndefined()
     expect(workspaceRouteExecutionHost(fakeClient(), relays, undefined)).toBeUndefined()
-    // A server's view answers as its client does, so a native one still reaches servers.
     expect(relaysToServers(scopeRpcClientToExecutionHost(fakeClient(), SERVER), relays)).toBe(true)
     expect(relaysToServers(scopeRpcClientToExecutionHost(fakeClient(false), SERVER), relays)).toBe(
       false

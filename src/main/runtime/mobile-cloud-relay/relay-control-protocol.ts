@@ -28,19 +28,15 @@ export const RelayHostChallengeMessageSchema = z
 
 const ConnectionKindSchema = z.enum(['invite', 'resume'])
 
-// Mirrors RELAY_HOST_CAPABILITIES_HEADER in the relay contract. It rides the
-// control upgrade rather than host-hello because the cell parses host-hello
-// strictly: a new hello key is refused by every already-deployed cell.
+// Strict deployed cells reject new hello keys; mirror contract capabilities in upgrade headers.
 export const RELAY_HOST_CAPABILITY_HEADERS = {
   'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1'
 } as const
 
-// Mirrors RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs in the relay contract: the
-// window the cell keeps a phone waiting for the host's data socket.
+// Mirror RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs, the phone's data-socket attach window.
 export const RELAY_HOST_ATTACH_DEADLINE_MS = 10_000
 
-// kind/relayDeviceId are accepted but not required: today's cells restate only
-// the identifiers, and a strict schema would make adding them a breaking change.
+// Older cells send only ids; optional kind/device fields allow additive evolution.
 const PendingConnectionSchema = z
   .object({
     connId: OpaqueIdSchema,
@@ -131,8 +127,7 @@ export const RelayDeviceResumeConfirmedMessageSchema = DeviceResumeConfirmedSche
   type: z.literal('device-resume-confirmed')
 }).strict()
 
-// Not strict: a relay that adds a field (e.g. a retry hint) must not make every
-// shipped desktop drop its control-error as unrecognized. Unknown keys are stripped.
+// Strip new fields instead of rejecting newer relay retry hints.
 export const RelayControlErrorMessageSchema = z.object({
   type: z.literal('control-error'),
   reqId: OpaqueIdSchema.optional(),
@@ -174,8 +169,7 @@ export type RelayHostHello = {
   controlResumeSecret?: string
 }
 
-// Optional members are omitted rather than sent as undefined: the cell parses
-// host-hello strictly and an explicit null is not the same as absent.
+// Strict hello parsers distinguish absent from null; omit optional members.
 export function encodeRelayHostHello(hello: RelayHostHello): string {
   return JSON.stringify({
     type: 'host-hello',

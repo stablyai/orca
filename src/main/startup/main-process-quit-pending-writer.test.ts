@@ -19,13 +19,16 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/pty/kill-all': { killAllPty },
   '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
+  './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
   '../agent-hooks/wsl-hook-relay-manager': { wslHookRelayManager: { disposeAll: idle() } },
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
-  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
-  '../runtime/structured-agent-session-runtime-teardown': {
+  '../runtime/agent-session/structured-agent-session-runtime': {
+    stopStructuredAgentSessionRuntime
+  },
+  '../runtime/agent-session/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
   '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
@@ -35,7 +38,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
   },
   '../ipc/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
   '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
-  '../browser/browser-manager': { browserManager: { setBrowserGuestStateChangedListener: idle() } },
+  '../browser/browser-manager': {
+    browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
+  },
   '../browser/browser-session-registry': { browserSessionRegistry: {} },
   '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
@@ -52,7 +57,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../terminal-history-gc': { cancelHistoryGc: idle() },
   './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },
   './configure-process': { isDevParentShutdownRequested: vi.fn(() => false) },
-  '../persistence': { getCanonicalUserDataPath: vi.fn(() => '/unused') }
+  '../persistence/loading-store/user-data-path': {
+    getCanonicalUserDataPath: vi.fn(() => '/unused')
+  }
 }
 
 afterEach(() => {
@@ -172,8 +179,7 @@ it('starts the SSH shutdown and the final save at once when no pane grid waits',
   expect(flushesByNextMicrotask).toBe(1)
 })
 
-// The chat teardown decides which chats to offer to resume from the hook server's status store,
-// and finishes after the hook server stops: that stop must leave the store readable.
+// Chat teardown reads hook status after server stop; retain it for background-only session resume offers.
 it('stops the hook server without clearing the status store the chat teardown reads', async () => {
   await startQuit(async () => {})
   expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })

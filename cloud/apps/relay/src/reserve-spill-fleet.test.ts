@@ -1,6 +1,6 @@
 import type { RelayRegion } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { CellReserveClient } from './cell-reserve-client.js'
 import type { RelayCellConfig, RelayConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
@@ -19,8 +19,7 @@ vi.mock('./relay-token-verifier.js', () => ({
 
 import { createRelayApp } from './app.js'
 
-// A fleet with no database-mode cell, through /v1/assign: the real plan and the real store,
-// with each reserve cell's own booking rule played by a ceiling of two seats.
+// Exercise real /v1/assign plan/store with no database-mode cells; booking fakes enforce two seats per cell.
 
 const CEILING = 2
 const CELLS: RelayCellConfig[] = [

@@ -1,12 +1,4 @@
-/**
- * Chunk-boundary-safe OSC 133;D (command finished) scanner.
- *
- * Why shared: terminal-side-effect-authority.md (slice 3) makes main emit
- * `command-finished` facts from its per-PTY tracker for local/SSH PTYs, while
- * the renderer keeps byte-parsing for remote-runtime PTYs and the
- * kill-switch-off path. The carry semantics (split prefixes, BEL/ST
- * terminators, best-effort exit codes) must be identical in both.
- */
+/** Share split-prefix, BEL/ST and best-effort exit semantics across main local/SSH facts and renderer remote-runtime/kill-switch scans. */
 
 import { ownRetainedString } from './own-retained-string'
 
@@ -50,11 +42,8 @@ function findPrefixCarry(data: string): string {
   return ''
 }
 
-/**
- * TUIs such as OMP end each prompt bubble with `B C D;0`, closing their own zone while they keep
- * running (#10923). A shell's `C` follows the typed command line, never its own prompt's `B`
- * directly. `adjacentMarkers` holds the markers seen back to back before this one, e.g. 'BC'.
- */
+/** OMP closes its own live prompt zones with adjacent B C D;0 (#10923); a shell’s C follows typed command text.
+ * adjacentMarkers holds preceding consecutive markers (for example BC). */
 export function closesAppOsc133Zone(adjacentMarkers: string, payload: string): boolean {
   const [sequence, exitCode] = payload.split(';')
   return sequence === 'D' && exitCode === '0' && adjacentMarkers.endsWith('BC')
@@ -69,11 +58,7 @@ export type Osc133CommandFinishedScanner = {
 
 export function createOsc133CommandFinishedScanner(
   onCommandFinished: (bestEffortExitCode: number | null) => void,
-  /**
-   * OSC 133;C — the shell exec'd a command; the pane's foreground changed.
-   * `endInChunk` is the index in the scanned chunk just past the sequence, where the command's own
-   * output begins.
-   */
+  /** OSC 133;C marks command start; endInChunk points just past the sequence, where command output begins. */
   onCommandStarted?: (endInChunk: number) => void
 ): Osc133CommandFinishedScanner {
   let carry = ''

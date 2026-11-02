@@ -3,7 +3,7 @@ import { LEGACY_MIXED_PARTITIONS } from './journal-lifecycle-batch-partition.tes
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   journalRowSchemaVersion
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   journalLifecycleMutationFitsOneBatch,
   partitionJournalLifecycleMutations
@@ -205,6 +205,7 @@ describe('journal lifecycle batch partitioning', () => {
       const state = createJournalReducerState('session', EPOCH)
       const mutation = (text: string): JournalLifecycleMutationInput => ({
         ...item(0, text),
+        observedAt: 123,
         body:
           kind === 'turn'
             ? { kind: 'turn', turnId: text, state: 'interrupted', outcome: 'cancellation' }

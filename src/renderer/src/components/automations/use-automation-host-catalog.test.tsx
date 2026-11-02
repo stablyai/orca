@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Drives the real partition context the hook builds, not a stand-in for it.
- *
- * The legacy path is where an old runtime's unscoped list is classified on this
- * client, so the evidence that classifies it has to be the answering authority's
- * own project table. A test that supplied its own context would pass while the
- * hook kept handing the desktop's table to every authority, so the only mocks
- * here are the transports.
- */
+/** Drive the real authority-specific legacy partition context; mock transports only so colliding desktop repo IDs cannot stand in for runtime evidence. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -177,8 +169,7 @@ describe('useAutomationHostCatalog orphan bootstrap', () => {
 
     await renderCatalog([])
 
-    // Only a committed answer can report it, so the catalog has to re-derive on
-    // the cache; nothing in the store changes when an orphan count arrives.
+    // Committed orphan counts arrive only through cache changes; rederive the catalog without requiring a store write.
     expect(view?.catalog.entries.map((entry) => entry.stableKey)).toContain('host:desktop:orphan')
   })
 })

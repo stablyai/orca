@@ -1,8 +1,4 @@
-/**
- * #13071: a project id can exist on several hosts. Removing one host's project must
- * never resolve the bare id to another host's row (the unique-candidate or
- * focused-host fallback), or the other host's live project is destroyed.
- */
+// Require exact host row on removal: unique-candidate/focused fallbacks can destroy the other host’s same-ID project (#13071).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -18,7 +14,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

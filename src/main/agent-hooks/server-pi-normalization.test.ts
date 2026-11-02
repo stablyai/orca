@@ -450,3 +450,44 @@ describe('a Pi cancel beside a live child row', () => {
     expect(row?.mainAgent).toBeUndefined()
   })
 })
+
+describe('a Pi compaction that tails a finished reply', () => {
+  const turn_completed_at = 1_700_000_005_000
+  let server: AgentHookServer
+
+  beforeEach(async () => {
+    server = new AgentHookServer()
+    await server.start({ env: 'production' })
+  })
+
+  afterEach(() => {
+    server.stop()
+  })
+
+  async function post(payload: Record<string, unknown>): Promise<void> {
+    const response = await postHookEvent(server, buildBody(payload), '/hook/pi')
+    expect(response.status).toBe(204)
+  }
+
+  it('keeps the reply finish time from the compaction rows through settle', async () => {
+    await post({ hook_event_name: 'before_agent_start', prompt: 'summarize' })
+    await post({ hook_event_name: 'message_end', role: 'assistant', text: 'Summary ready.' })
+    await post({ hook_event_name: 'compaction_start', turn_completed_at })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      prompt: 'summarize',
+      lastAssistantMessage: 'Summary ready.',
+      turnCompletedAt: turn_completed_at
+    })
+    await post({ hook_event_name: 'agent_end', turn_completed_at })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'done',
+      turnCompletedAt: turn_completed_at
+    })
+
+    // The same prompt again is a new turn, not the finished one.
+    await post({ hook_event_name: 'before_agent_start', prompt: 'summarize' })
+    expect(server.getStatusSnapshot()[0]?.state).toBe('working')
+    expect(server.getStatusSnapshot()[0]?.turnCompletedAt).toBeUndefined()
+  })
+})

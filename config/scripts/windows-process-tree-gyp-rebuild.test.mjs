@@ -18,7 +18,6 @@ import {
   nodeGypRebuildInvocation,
   nodeGypRebuildTimeoutMs,
   stageWindowsProcessTreeNodeAddonApiHeaders,
-  WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
 import { writeFakeWindowsProcessTreeWithNodeAddonApi } from './rebuild-native-deps-test-fixtures.mjs'
@@ -28,10 +27,7 @@ describe('windows-process-tree node-gyp rebuild', () => {
   it.runIf(process.platform === 'win32')(
     "resolves node-addon-api's gyp target from the rebuild cwd",
     () => {
-      // gyp probes node-addon-api with the package's physical directory as cwd,
-      // so the emitted target is store-relative; gyp then resolves that hop
-      // against the rebuild cwd. Rebuilding from pnpm's node_modules link sends
-      // the hop outside the store and configure fails (run 32999886072).
+      // Use physical cwd to resolve gyp’s store-relative node-addon-api hop; pnpm link cwd escapes store and fails configure (32999886072).
       const { cwd } = nodeGypRebuildInvocation('x64')
       const targets = execFileSync(process.execPath, ['-p', "require('node-addon-api').targets"], {
         cwd: realpathSync(WINDOWS_PROCESS_TREE_PACKAGE_DIR),
@@ -89,13 +85,14 @@ describe('windows-process-tree node-gyp rebuild', () => {
       mkdirSync(nodeAddonApiDir, { recursive: true })
       writeFileSync(join(packageDir, 'package.json'), '{"dependencies":{"node-addon-api":"*"}}\n')
       writeFileSync(join(nodeAddonApiDir, 'package.json'), '{"name":"node-addon-api"}\n')
-      for (const header of WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS) {
+      const headers = ['napi.h', 'napi-inl.h', 'napi-inl.deprecated.h']
+      for (const header of headers) {
         writeFileSync(join(nodeAddonApiDir, header), `// ${header}\n`)
       }
 
       const stagedDir = stageWindowsProcessTreeNodeAddonApiHeaders(packageDir)
       expect(stagedDir).toBe(join(packageDir, 'deps', 'node-addon-api'))
-      for (const header of WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS) {
+      for (const header of headers) {
         expect(readFileSync(join(stagedDir, header), 'utf8')).toBe(`// ${header}\n`)
       }
     } finally {
@@ -126,15 +123,13 @@ describe('inspecting a compiled windows-process-tree addon', () => {
     expect(inspectWindowsProcessTreeAddon(addonPath)).toBe('clean')
   })
 
-  // The whole point of the tri-state: absence is not evidence of safety, and a
-  // boolean made "there is no binary" indistinguishable from "checked, clean".
+  // Missing binary is not verified clean; tri-state prevents accidental safety verdict from boolean absence.
   it('reports an absent binary as missing rather than clean', () => {
     expect(inspectWindowsProcessTreeAddon(join(dir, 'windows_process_tree.node'))).toBe('missing')
   })
 
   it('inspects whatever path it is handed, including a relay-staged addon', () => {
-    // The relay loads `./windows-process-tree.node` beside its bundle, which is
-    // nowhere near a node_modules package directory.
+    // Relay addon lives beside bundle, outside any package, so check accepts binary path directly.
     const staged = join(dir, 'windows-process-tree.node')
     writeFileSync(staged, Buffer.from('MZ\0\0ReadProcessMemory\0', 'binary'))
     expect(inspectWindowsProcessTreeAddon(staged)).toBe('unpatched')
@@ -161,14 +156,22 @@ describe('windows-process-tree CreationTime patch assertion', () => {
     ).not.toThrow()
   })
 
-  it('rejects a package missing the process creation-time patch', () => {
-    writeFakeWindowsProcessTreeWithNodeAddonApi(dir, { creationTimePatchApplied: false })
+  it.each([
+    'src/process.h',
+    'src/process.cc',
+    'src/process_worker.cc',
+    'src/addon.cc',
+    'lib/index.js',
+    'lib/index.ts',
+    'typings/windows-process-tree.d.ts'
+  ])('rejects a package missing the process creation-time patch in %s', (relativePath) => {
+    writeFakeWindowsProcessTreeWithNodeAddonApi(dir)
+    const packageDir = join(dir, 'node_modules', '@vscode', 'windows-process-tree')
+    writeFileSync(join(packageDir, relativePath), '')
 
-    expect(() =>
-      assertWindowsProcessTreeCreationTimePatch(
-        join(dir, 'node_modules', '@vscode', 'windows-process-tree')
-      )
-    ).toThrow('process creation-time patch')
+    expect(() => assertWindowsProcessTreeCreationTimePatch(packageDir)).toThrow(
+      'process creation-time patch'
+    )
   })
 
   it('requires the runtime ProcessDataFlag.CreationTime enum', () => {

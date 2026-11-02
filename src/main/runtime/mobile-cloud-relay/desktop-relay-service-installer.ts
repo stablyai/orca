@@ -33,9 +33,7 @@ function pairingProviderFor(service: DesktopRelayService): MobileRelayPairingPro
   }
 }
 
-// Installs the Relay provider once, on demand: at launch, after a cloud auth
-// change, and before an automatic pairing mint. A construction that failed once
-// (or ran before the proxy landed) is retried by the next demand, not a restart.
+// Demand retries construction after proxy/auth readiness; one failed launch install must not require restart.
 export function createDesktopRelayServiceInstaller(
   options: DesktopRelayServiceInstallerOptions
 ): DesktopRelayServiceInstaller {

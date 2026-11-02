@@ -1,9 +1,4 @@
-// Why: pet bundles often ship a sprite sheet without manifest frame data, so
-// we can't grid-step it. The sheets we see in the wild leave magenta (chroma
-// keyed in pet-blob-cache) or transparent gutters between sprites.
-// After keying, find connected non-empty rows → bands; within the best band,
-// split on empty columns to get one frame per sprite. The result drives the
-// canvas-based animation in the overlay.
+// Without manifest grids, split keyed transparent gutters into bands/frames for canvas animation.
 
 export type DetectedFrame = { x: number; y: number; w: number; h: number }
 export type DetectedSprite = { frames: DetectedFrame[] }
@@ -87,9 +82,7 @@ export function detectFramesFromImageData(image: ImageData): DetectedSprite | nu
   if (bands.length === 0) {
     return null
   }
-  // Why: sheets are usually grids with the largest animation as the most-
-  // populated band. Pick the band yielding the most frames so the overlay
-  // shows a real walk/idle cycle rather than a single pose.
+  // Choose the band with most frames to prefer a full animation cycle over a single pose.
   let best: DetectedFrame[] = []
   for (const band of bands) {
     const candidate = framesInBand(data, width, band)

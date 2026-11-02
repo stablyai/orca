@@ -3,10 +3,7 @@ import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import type { CreateWebRuntimeSessionBrowserTabArgs } from './web-runtime-browser-creation-context'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 
-/**
- * The client group a runtime-hosted tab lands in. A requested split becomes a client-only group
- * the host never sees; runtime creation removes it again when the create fails.
- */
+/** Requested splits use client-only groups unknown to the host; failed creation removes them. */
 export function resolveWebRuntimeBrowserClientTargetGroup(
   state: Pick<AppState, 'createEmptySplitGroup'>,
   request: { workspaceId: string; targetGroupId?: string; split?: TabSplitTarget },

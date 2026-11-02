@@ -32,8 +32,7 @@ export default function BrowserAddressBarSuggestionList({
   onRemove
 }: BrowserAddressBarSuggestionListProps): React.ReactElement {
   return (
-    // Why the sentinel: cmdk selects its first row whenever the value is empty, and an empty bar
-    // has no row Enter would pick.
+    // cmdk auto-selects its first row for an empty value; use a sentinel when Enter has no target.
     <Command
       shouldFilter={false}
       value={selectedValue || NO_SELECTED_ROW}
@@ -67,8 +66,7 @@ export default function BrowserAddressBarSuggestionList({
               </div>
               {hasSwitchTarget(entry) ? (
                 <Button
-                  // Why a variant and not a ring: focus stays in the input, so :focus-visible never
-                  // applies; the filled button shows Tab has moved onto it.
+                  // Focus stays in the input, so show virtual button focus without relying on :focus-visible.
                   variant={entry.url === switchFocusedUrl ? 'default' : 'outline'}
                   size="xs"
                   tabIndex={-1}

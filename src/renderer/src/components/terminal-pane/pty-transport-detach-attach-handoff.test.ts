@@ -169,8 +169,7 @@ describe('createIpcPtyTransport', () => {
     expect(transport.getPtyId()).toBeNull()
   })
 
-  // A pane remounted mid-spawn is handed the same PTY by main's pane-spawn reservation, so a kill
-  // from the disposed transport lands on the successor's shell. The surface owner decides.
+  // Main can reserve the same PTY for a successor mount; only current surface ownership may authorize killing a disposed spawn.
   it('keeps a fresh spawn that resolves after destroy when the pane surface still owns it', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const kill = vi.mocked(window.api.pty.kill)

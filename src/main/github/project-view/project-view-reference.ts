@@ -111,12 +111,18 @@ async function resolveOwnerType(
     }
     const top = res.data[root]
     if (!top) {
-      return { ok: false, error: { type: 'not_found', message: 'Owner not found.' } }
+      return {
+        ok: false,
+        error: { type: 'not_found', message: 'Owner not found.', reason: 'owner_not_found' }
+      }
     }
     if (num) {
       const p = top.projectV2
       if (!p || typeof p.id !== 'string') {
-        return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
+        return {
+          ok: false,
+          error: { type: 'not_found', message: 'Project not found.', reason: 'project_not_found' }
+        }
       }
       return { ok: true, title: p.title ?? '' }
     }
@@ -153,7 +159,11 @@ async function resolveOwnerType(
   rememberOwnerType(owner, null, host)
   return {
     ok: false,
-    error: lastError ?? { type: 'not_found', message: 'Owner not found.' }
+    error: lastError ?? {
+      type: 'not_found',
+      message: 'Owner not found.',
+      reason: 'owner_not_found'
+    }
   }
 }
 
@@ -164,13 +174,17 @@ export async function resolveProjectRef(
   if (!input) {
     return {
       ok: false,
-      error: { type: 'validation_error', message: 'Input required.' }
+      error: { type: 'validation_error', message: 'Input required.', reason: 'input_required' }
     }
   }
   if (isGitHubProjectRefInputTooLarge(input)) {
     return {
       ok: false,
-      error: { type: 'validation_error', message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR }
+      error: {
+        type: 'validation_error',
+        message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
+        reason: 'input_too_large'
+      }
     }
   }
   const parsed = parseProjectPaste(input, args.host)
@@ -179,7 +193,8 @@ export async function resolveProjectRef(
       ok: false,
       error: {
         type: 'validation_error',
-        message: 'Could not parse input. Expected a GitHub project URL or `owner/number`.'
+        message: 'Could not parse input. Expected a GitHub project URL or `owner/number`.',
+        reason: 'input_unparseable'
       }
     }
   }
@@ -206,7 +221,10 @@ export async function resolveProjectRef(
   }
   const p = res.data[root]?.projectV2
   if (!p || typeof p.id !== 'string') {
-    return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Project not found.', reason: 'project_not_found' }
+    }
   }
   return {
     ok: true,

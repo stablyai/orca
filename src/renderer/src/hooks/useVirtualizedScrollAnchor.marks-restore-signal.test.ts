@@ -97,7 +97,6 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
 
   it('does not re-attempt restore on measurement churn when the signal is unchanged', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
-    // Row-1 already sits exactly at the anchored offset, so the first run confirms.
     const { el } = createScrollElement({
       rowElements: [anchoredRowElement('row-1', -3_358)],
       scrollTop: 746
@@ -129,7 +128,6 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     expect(el.querySelectorAll).toHaveBeenCalled()
     const attemptsAfterConfirm = el.querySelectorAll.mock.calls.length
 
-    // Measurement churn: totalSize changed, structural signal did not.
     render('signal-a', 31_500)
     expect(el.querySelectorAll.mock.calls.length).toBe(attemptsAfterConfirm)
     expect(virtualizer.scrollToIndex).not.toHaveBeenCalled()
@@ -153,8 +151,7 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     })
     const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
     const virtualizer = virtualizerWithRow1()
-    // Stable across rerenders, like the real caller: fresh objects would reset
-    // the marks and offset bookkeeping the first pass left behind.
+    // Keep object identities stable so rerenders retain marks and offset bookkeeping.
     const programmaticScrollMarks = createProgrammaticScrollMarks()
     const scrollElementRef = { current: el }
     const scrollOffsetRef = { current: 746 }
@@ -246,14 +243,12 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
     const { el } = createScrollElement({
       rowElements: [anchoredRowElement('row-1', -3_358)],
-      // The user (or compositor) scrolled beyond where the anchor was recorded.
       scrollTop: 906
     })
     const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
     const virtualizer = virtualizerWithRow1()
 
     harness.beginRender()
-    // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
     useVirtualizedScrollAnchor({
       anchorRef,
       getItemElementKey: (element: FakeRowElement) => element.key,
@@ -277,8 +272,7 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
 
   it('still restores when a browser clamp explains the divergence', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
-    // Content above shrank: the anchor points past the new max and the browser
-    // clamped the viewport to the bottom.
+    // Shrinking content clamps the browser below the anchor’s recorded offset.
     const { el } = createScrollElement({
       rowElements: [],
       scrollHeight: 2_000,
@@ -288,7 +282,6 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     const virtualizer = virtualizerWithRow1()
 
     harness.beginRender()
-    // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
     useVirtualizedScrollAnchor({
       anchorRef,
       getItemElementKey: (element: FakeRowElement) => element.key,
@@ -314,7 +307,6 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     const anchorRef = { current: null }
 
     harness.beginRender()
-    // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
     useVirtualizedScrollAnchor({
       anchorRef,
       getRowKey: (row: string) => row,
@@ -328,11 +320,9 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
       virtualizer: virtualizerWithRow1()
     } as never)
     harness.effects[0]?.effect()
-    // The mount write landed and was marked.
     expect(el.scrollTop).toBe(4_000)
 
-    // An unmarked scroll means the user took over — even without any wheel
-    // event reaching a direct-input tracker (the jank case).
+    // An unmarked scroll means user takeover even when jank hid the wheel event from input tracking.
     emitScroll(4_200)
     expect(el.scrollTop).toBe(4_200)
   })
@@ -371,15 +361,12 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     }
 
     render('signal-a')
-    // A virtualizer size-adjustment correction (marked) moves the viewport.
     marks.mark(946)
     emitScroll(946)
-    // Bookkeeping followed the marked write, so the divergence gate must not
-    // read it as user input.
+    // Marked-write bookkeeping must prevent a correction from looking like user input.
     expect(anchorRef.current.scrollTop).toBe(946)
     expect(scrollOffsetRef.current).toBe(946)
 
-    // A structural change now still restores instead of being dropped.
     const attemptsBefore = el.querySelectorAll.mock.calls.length
     render('signal-b')
     expect(el.querySelectorAll.mock.calls.length).toBeGreaterThan(attemptsBefore)
@@ -416,12 +403,10 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
       harness.effects[1]?.effect()
     }
 
-    // Signal changes while wheel input is active: restore is skipped.
     render('signal-a', 30_000)
     expect(el.querySelectorAll).not.toHaveBeenCalled()
 
-    // Input settled; a later measurement tick must still run the owed restore
-    // even though the signal did not change again.
+    // After input settles, retry the owed restore even though the structural signal is unchanged.
     directInput = false
     render('signal-a', 31_000)
     expect(el.querySelectorAll).toHaveBeenCalled()
@@ -456,13 +441,10 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
       harness.effects[1]?.effect()
     }
 
-    // Signal change arms a restore, but the anchor resolves to no row.
     render(['row-0', 'row-2'], 30_000)
     expect(el.querySelectorAll).not.toHaveBeenCalled()
 
-    // The arm must not leak: a later measurement tick with an unchanged
-    // signal stays out of restore even though the anchor is now resolvable
-    // (in production, resolvability changes always change the signal too).
+    // An unresolvable anchor must disarm; later resolvability changes require a new signal.
     render(['row-0', 'row-gone'], 31_000)
     expect(el.querySelectorAll).not.toHaveBeenCalled()
     expect(virtualizer.scrollToIndex).not.toHaveBeenCalled()
@@ -476,7 +458,6 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     const scrollOffsetRef = { current: 4_000 }
 
     harness.beginRender()
-    // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
     useVirtualizedScrollAnchor({
       anchorRef,
       getRowKey: (row: string) => row,
@@ -491,16 +472,12 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     } as never)
     harness.effects[0]?.effect()
 
-    // The mount write's own clamped landing is classified programmatic.
     emitScroll(2_120)
-    // Content above shrank further: the browser clamps again with no mark.
     el.scrollHeight = 2_000
     emitScroll(1_120)
-    // Not a takeover: no anchor was recorded for the clamped position.
     expect(anchorRef.current).toBeNull()
 
-    // Content finished loading; a marked correction wakes the restore and the
-    // persisted offset is finally reachable.
+    // A marked correction retries restoration once the persisted offset becomes reachable.
     el.scrollHeight = 30_000
     marks.mark(1_500)
     emitScroll(1_500)
@@ -515,7 +492,6 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     const anchorRef = { current: null }
 
     harness.beginRender()
-    // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
     useVirtualizedScrollAnchor({
       anchorRef,
       getRowKey: (row: string) => row,
@@ -530,8 +506,7 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     } as never)
     harness.effects[0]?.effect()
 
-    // A marked write (e.g. a virtualizer correction) landed elsewhere while
-    // restoring; the restore should push back toward its target.
+    // A marked write elsewhere during restore must not displace its target.
     marks.mark(3_500)
     emitScroll(3_500)
     expect(el.scrollTop).toBe(4_000)
@@ -539,7 +514,7 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
 
   it('lands a caller-supplied row index map on the same row as the internally built one', async () => {
     const runRestore = async (rowIndexByKey?: ReadonlyMap<string, number>) => {
-      // Why: each run needs its own hook module, or the second run inherits the first harness's refs.
+      // Reload the hook module per run so harnesses cannot inherit earlier refs.
       vi.resetModules()
       const { harness, useVirtualizedScrollAnchor } = await loadHook()
       const { el } = createScrollElement({ rowElements: [], scrollTop: 0 })

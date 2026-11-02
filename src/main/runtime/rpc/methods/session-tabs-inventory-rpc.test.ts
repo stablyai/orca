@@ -45,9 +45,7 @@ describe('session tabs inventory RPC methods', () => {
     expect(JSON.parse(messages[0]!).result).toEqual({ snapshots: [] })
   })
 
-  // Why: a census failure only invalidates the emptiness verdict — the runtime
-  // degrades to the same scan unlabeled, so a capable client keeps the list
-  // (e.g. one configured-but-disconnected SSH host) without a second collect.
+  // Failed census keeps the same scan without an emptiness verdict; clients must not pay for another collection.
   it('serves a capable client an unlabeled list when the census fails', async () => {
     const legacyListAll = vi.fn()
     const runtime = {

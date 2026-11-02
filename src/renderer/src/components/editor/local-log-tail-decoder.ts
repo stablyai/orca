@@ -18,8 +18,7 @@ export class LocalLogTailDecoder {
   constructor(snapshotContent: string, fileIdentity: string) {
     const lastCompleteLineEnd = snapshotContent.lastIndexOf('\n') + 1
     this.initialVisibleContent = snapshotContent.slice(0, lastCompleteLineEnd)
-    // Why: rewind to the last complete line, then re-read the trailing record as
-    // bytes. This preserves a UTF-8 code point split at the snapshot EOF.
+    // Reread the trailing record as bytes to preserve UTF-8 code points split at snapshot EOF.
     this.byteOffset = new TextEncoder().encode(this.initialVisibleContent).byteLength
     this.fileIdentity = fileIdentity
   }

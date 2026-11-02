@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync }
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
+import { createChromiumCookieTestDatabase } from './cookies/browser-cookie-import-test-database'
 import { createChromiumCookieSnapshot } from './chromium-cookie-snapshot'
 
 function sourceFiles(databasePath: string): Map<string, Buffer> {

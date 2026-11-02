@@ -12,9 +12,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 
 const WORKTREE_ID = 'repo::/worktree'
 const REPO_ID = 'repo'
-// Why: main's hydrateHeadlessMobileSessionTabsFromWorkspaceSession skips
-// `${repoId}::…` keys whose repo is missing from getRepos (PR #9343). Tests
-// that persist worktree sessions must advertise that repo as live.
+// #9343 hydration drops sessions for removed repos; persisted fixtures must advertise their live repo.
 const LIVE_REPO = {
   id: REPO_ID,
   path: '/worktree',
@@ -713,7 +711,6 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
 
     await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
-    // Why: the process is gone either way; a failed write is reported, not reinstated.
     expect((await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([
       expect.objectContaining({ id: 'tab::right' })
     ])
@@ -755,7 +752,6 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
 
     await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
-    // Why: the next profile write carries the staged retirement; nothing may reinstate the leaf.
     expect(session).not.toEqual(original)
     expect(session.terminalLayoutsByTabId.tab?.ptyIdsByLeafId).toEqual({ right: 'pty-right' })
     expect(setWorkspaceSession).toHaveBeenCalledOnce()

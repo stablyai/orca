@@ -7,7 +7,7 @@ import {
   JIRA_STATUS_FILTER_RUNTIME_CAPABILITY,
   JIRA_STATUS_FILTER_UPDATE_REQUIRED,
   type JiraQuickFilterState
-} from '../../../../shared/jira-quick-filters'
+} from '../../../../shared/jira/jira-quick-filters'
 import type { RuntimeCapability } from '../../../../shared/protocol-version'
 import type { JiraSavedFilterState } from '../../../../shared/jira/jira-saved-filters'
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'

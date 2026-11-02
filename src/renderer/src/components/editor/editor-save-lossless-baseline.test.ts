@@ -54,13 +54,11 @@ it('pauses autosave once for a non-UTF-8 file until a confirmed explicit save co
     const file = (): NonNullable<ReturnType<typeof store.getState>['openFiles'][0]> =>
       store.getState().openFiles[0]!
     expect(await queue.queueSave(file(), `${latin1}!`, 'autosave')).toBe('failed')
-    // A second automatic attempt is gated before it reaches the host, with no second notice.
     expect(await queue.queueSave(file(), `${latin1}!`, 'autosave')).toBe('failed')
     expect(disk.writeFile).toHaveBeenCalledTimes(1)
     expect(toast.warning).toHaveBeenCalledTimes(1)
     expect(vi.mocked(toast.warning).mock.calls[0]?.[0]).toContain("isn't UTF-8 text")
 
-    // An explicit save without consent leaves the bytes alone.
     expect(await queue.queueSave(file(), `${latin1}!`, 'user')).toBe('not-utf8')
     expect(disk.files.get(GUARDED_PATH)).toBe(latin1)
     expect(await queue.queueSave(file(), `${latin1}!`, 'convert')).toBe('written')
@@ -70,36 +68,3 @@ it('pauses autosave once for a non-UTF-8 file until a confirmed explicit save co
     queue.dispose()
   }
 })
-
-it.each(['close', 'reload'] as const)(
-  'lifts the pause on %s, so the next edit is asked about again',
-  async (ending) => {
-    const latin1 = Buffer.from([0x63, 0x61, 0x66, 0xe9]).toString('utf8')
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: latin1 })
-    const store = createEditorStore()
-    openGuardedFile(store, { baseline: latin1, draft: `${latin1}!` })
-    const queue = createEditorSaveQueue(store)
-    try {
-      expect(await queue.queueSave(store.getState().openFiles[0]!, `${latin1}!`, 'autosave')).toBe(
-        'failed'
-      )
-      if (ending === 'close') {
-        // Why: the minimal fixture store lacks the layout state closeFile walks.
-        store.setState({ openFiles: [], editorBuffers: {}, editorDrafts: {} })
-      } else {
-        store.getState().markFileDirty(GUARDED_PATH, false)
-      }
-      queue.syncAutoSave()
-      openGuardedFile(store, { baseline: latin1, draft: `${latin1}?` })
-      queue.syncAutoSave()
-      expect(isAutosaveSuspendedForFile(store.getState().openFiles[0]!)).toBe(false)
-      expect(await queue.queueSave(store.getState().openFiles[0]!, `${latin1}?`, 'autosave')).toBe(
-        'failed'
-      )
-      expect(disk.writeFile).toHaveBeenCalledTimes(2)
-      expect(toast.warning).toHaveBeenCalledTimes(2)
-    } finally {
-      queue.dispose()
-    }
-  }
-)

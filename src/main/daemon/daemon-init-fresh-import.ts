@@ -121,11 +121,10 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
     exit: () => {},
     getAppMetrics: () => []
   } as unknown as AppEnvironment)
-  const [init, restart, providerState, cleanup] = await Promise.all([
-    import('./daemon-provider-init'),
-    import('./daemon-provider-restart'),
-    import('./daemon-provider-state'),
-    import('./daemon-protocol-cleanup')
-  ])
+  // Why sequential: concurrent first imports can bypass Vitest's still-pending vi.mock registrations.
+  const init = await import('./daemon-provider-init')
+  const restart = await import('./daemon-provider-restart')
+  const providerState = await import('./daemon-provider-state')
+  const cleanup = await import('./daemon-protocol-cleanup')
   return { ...init, ...restart, ...providerState, ...cleanup }
 }

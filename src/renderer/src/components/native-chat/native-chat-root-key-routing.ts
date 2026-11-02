@@ -13,7 +13,6 @@ type NativeChatRootKeyEvent = KeyboardRedirectEvent & {
   stopPropagation: () => void
 }
 
-/** Routes a key pressed in the chat pane outside any input to the chat's input. */
 export function routeNativeChatRootKeyToInput(
   event: NativeChatRootKeyEvent,
   composer: NativeChatComposerHandle | null,
@@ -28,8 +27,7 @@ export function routeNativeChatRootKeyToInput(
   ) {
     return
   }
-  // Backspace/Delete outside an input focuses the composer (like typing)
-  // but inserts nothing — let the now-focused field handle the keystroke.
+  // Editing keys outside inputs focus the composer without inserting text.
   if (shouldFocusNativeChatComposerFromEditingKey(event)) {
     composer?.focus()
     return

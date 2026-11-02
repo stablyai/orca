@@ -166,9 +166,7 @@ function isIsoDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
-// Why: cross-field validators run even after an earlier type check flagged a
-// malformed field, so coerce to an array before `.includes` to report the error
-// instead of throwing on hand-edited manifests.
+// Cross-field validators still run after type errors; coerce malformed input to report instead of throwing.
 function asArray(value) {
   return Array.isArray(value) ? value : []
 }

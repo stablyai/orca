@@ -78,7 +78,6 @@ describe('OrcaRuntimeService project setup of an existing folder (#30663)', () =
       ).rejects.toThrow(/points at acme\/repo-b, not acme\/repo-a/)
     })
 
-    // No fabricated upstream and no row left under project A.
     expect(repos).toHaveLength(0)
   })
 

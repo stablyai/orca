@@ -3,8 +3,7 @@ import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-// Plain Node preserves the namespace import used by Expo Router and React Navigation.
-// Vitest's default-export interop can hide missing names in the overridden query-string 9.x.
+// Check named exports in plain Node: Vitest interop can hide missing query-string 9.x names used by Expo/React Navigation.
 describe('query-string, as expo-router resolves it', () => {
   it('exposes the named API the namespace import needs', () => {
     const requireFromHere = createRequire(import.meta.url)

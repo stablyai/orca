@@ -77,8 +77,7 @@ export function evictStaleJiraCacheEntries<T>(
 
 export function looksLikeJiraAuthError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  // Why: Jira echoes the query in a 400 (`key 'PROJ-1401' does not exist`), so wording is only
-  // a fallback for errors that carry no status.
+  // Jira query echoes can resemble errors; use wording only when status is absent.
   const status = parseJiraStatusError(message)
   if (status) {
     // Jira 403 commonly means endpoint/project access is denied while the token remains valid.

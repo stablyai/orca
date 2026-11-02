@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A disk rename of a file open in a workspace main lays out and in a twin, which main may route to
-// a paired server (host_not_owned), in a layout-owner build: the twin's refusal reaches only the
-// twin, whichever workspace the move lists first.
+// Local-main rename and paired twin host_not_owned refusal must isolate each workspace regardless of listing order.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
@@ -14,7 +12,6 @@ import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

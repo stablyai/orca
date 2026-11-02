@@ -74,10 +74,7 @@ export function closeSharedControlLogicalSubscription(args: {
     (args.subscription.sent || args.subscription.awaitingResubscribe) &&
     cleanupNeedsRemoteSubscriptionId(args.subscription.method)
   ) {
-    // Why: id-scoped server subscriptions can only be cleaned up after the
-    // server returns its concrete subscription id in the ready response. This
-    // also covers the reconnect replay window (sent===false, id cleared) where
-    // a resubscribe is in flight — finishing locally there would leak it.
+    // Wait for the server ID, including during reconnect replay, or leak the in-flight subscription.
     args.subscription.closeAfterReady = true
     return
   }
@@ -90,8 +87,7 @@ export function sendSharedControlCleanupRequest(args: {
   params: unknown
   send: (payload: unknown) => boolean
 }): string | null {
-  // Why: cleanup is best-effort and often runs during teardown; send it
-  // synchronously so close() cannot race the async request path.
+  // Send cleanup synchronously so socket close cannot race an async request.
   const requestId = randomUUID()
   const sent = args.send({
     id: requestId,
@@ -105,8 +101,7 @@ export function sendSharedControlCleanupRequest(args: {
 export function replaySharedControlSubscriptions(args: {
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
   send: (subscription: SharedControlLogicalSubscription<unknown>) => void
-  // Why: true only for a reconnect of a previously-ready connection; first
-  // connects deliver their initial snapshot through the normal gated path.
+  // Only reconnects tag replay; first connects use normal snapshot gates.
   tagReplayedResponses?: boolean
 }): void {
   for (const subscription of args.subscriptions.values()) {
@@ -115,9 +110,7 @@ export function replaySharedControlSubscriptions(args: {
     }
     subscription.sent = false
     subscription.remoteSubscriptionId = null
-    // Why: mark the id-less window so a close() racing this resubscribe defers
-    // to closeAfterReady instead of finishing locally and leaking the server
-    // subscription the resubscribe is about to create.
+    // Defer a racing close until the replay response supplies the new server ID.
     subscription.awaitingResubscribe = true
     if (args.tagReplayedResponses) {
       subscription.pendingReplayTag = true

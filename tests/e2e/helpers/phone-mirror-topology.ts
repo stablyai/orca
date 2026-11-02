@@ -16,10 +16,7 @@ export type PhoneMirrorTopology<TDesktop> = {
   /** Desktop paired to `host` as a client; null when the phone pairs with the host directly. */
   desktop: TDesktop
   phone: PairedMobileClient
-  /**
-   * Tears down phone, desktop, then host; every step runs even if an earlier one throws. Never
-   * throws, so it cannot replace a test failure: teardown errors become a `teardown-error` attachment.
-   */
+  // Run every teardown step; attach errors instead of replacing the test failure.
   dispose: () => Promise<void>
 }
 
@@ -28,10 +25,7 @@ type PhoneMirrorTopologyOptions = {
   pinnedServePort?: boolean
 }
 
-/**
- * The phone-mirror test topology: a serve host, optionally a desktop paired to it, and a phone
- * paired with the desktop (the mirror) or directly with the host.
- */
+// Pair the phone to either the optional desktop mirror or the serve host directly.
 export function launchPhoneMirrorTopology(
   options: PhoneMirrorTopologyOptions & { phoneTo: 'desktop' },
   testInfo: TestInfo

@@ -37,9 +37,7 @@ export const AUTOMATION_METHODS = [
     name: 'automation.show',
     permission: 'workspace',
     params: AutomationId,
-    // Why: the owner rides along so a client that cannot project one itself — the
-    // CLI — can echo it back on the mutation that follows. Optional: an older
-    // host omits it, and an older client ignores it.
+    // Return optional owner metadata for CLI mutations; older hosts omit it and older clients ignore it.
     handler: (params, { runtime }) => {
       const automation = runtime.showAutomation(params.id, params.expectedOwner)
       const owner = runtime.automationOwnerPrecondition(params.id)
@@ -61,7 +59,8 @@ export const AUTOMATION_METHODS = [
     handler: async (params, context) => ({
       automation: await context.runtime.updateAutomation(params.id, params.updates, {
         expectedOwner: mutationOwner(params.id, params.expectedOwner, context),
-        destination: params.destination
+        destination: params.destination,
+        expectedWorkspaceMode: params.expectedWorkspaceMode
       })
     })
   }),

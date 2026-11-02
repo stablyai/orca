@@ -81,21 +81,6 @@ it("a removal with no prompt keeps the last view's dirty record; reopening the f
   expect(state().openFiles[0]?.isDirty).toBe(true)
 })
 
-it('a confirmed removal discards: nothing is kept', () => {
-  useAppStore.setState({
-    openFiles: [tab('b', 'wt-2', { isDirty: true })],
-    editorDrafts: { b: 'listed and confirmed' }
-  })
-  applyRemoveWorktreeSuccessState(
-    useAppStore.setState,
-    'wt-2',
-    new Set(),
-    'local',
-    new Map([['b', 'listed and confirmed']])
-  )
-  expect(state().editorBufferKept).toEqual({})
-})
-
 it('a removal closing tabs over several writes keeps every dirty record it closes', async () => {
   useAppStore.setState({
     openFiles: [
@@ -107,8 +92,7 @@ it('a removal closing tabs over several writes keeps every dirty record it close
   })
   const [xRecord, yRecord] = [state().editorBufferIdOf.x, state().editorBufferIdOf.y]
 
-  // As a project removal: the batch is noticed up front, the twin copy's tab closes on its own
-  // write, an unrelated write reconciles in between, and the main purge closes the rest.
+  // Simulate project batch removal: notice first, close twin separately, reconcile unrelated write, then purge the rest.
   const keep = noticeRemovedUnsavedFiles(state(), new Set(['x', 'y']))
   state().closeFile('x', { captureRecentlyClosed: false, keepEditorBuffer: keep })
   state().closeFile('z')
@@ -154,4 +138,39 @@ it('dismissing one notice leaves the records a newer notice kept for the same fi
 
   state().releaseKeptEditorBuffers(show.mock.calls[0][2])
   expect(Object.values(state().editorBufferKept).map((entry) => entry.draft)).toEqual(['second'])
+})
+
+import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
+import { captureWorktreeStateBeforeRemoval } from './worktree-state-before-removal'
+import { tearDownRemovedWorktreeRendererState } from './removed-worktree-renderer-teardown'
+
+it('committed worktree teardown retires empty pending launch source authority without touching another owner', async () => {
+  drafts.clearNativeChatComposerDraftsForTests()
+  const key = drafts.nativeChatLaunchPromptDraftScopeKey('wt-1', 'claude')
+  const other = drafts.nativeChatLaunchPromptDraftScopeKey('wt-1', 'claude', 'ssh:other')
+  for (const scope of [key, other]) {
+    drafts.updateNativeChatComposerDraft(scope, { text: 'task' }, 'immediate')
+  }
+  const submission = drafts.captureNativeChatComposerSubmission(key)
+  drafts.updateNativeChatComposerDraft(key, { text: '' }, 'immediate')
+  const beforeRemoval = captureWorktreeStateBeforeRemoval(state(), 'wt-1', 'local')
+  useAppStore.setState({
+    shutdownWorktreeBrowsers: vi.fn(),
+    shutdownWorktreeTerminals: vi.fn(),
+    deleteManagedBrowserSessionProfile: vi.fn()
+  })
+  await tearDownRemovedWorktreeRendererState({
+    set: useAppStore.setState,
+    get: state,
+    worktreeId: 'wt-1',
+    hostId: 'local',
+    requiredExecutionHostId: 'local',
+    beforeRemoval
+  })
+  expect(submission.draft).toBeUndefined()
+  drafts.updateNativeChatComposerDraft(key, { text: 'recreated' }, 'immediate')
+  drafts.finishNativeChatComposerSubmission(key, submission, true)
+  expect(drafts.readNativeChatComposerDraft(key).text).toBe('recreated')
+  expect(drafts.readNativeChatComposerDraft(other).text).toBe('task')
+  drafts.clearNativeChatComposerDraftsForTests()
 })

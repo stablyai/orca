@@ -1,8 +1,10 @@
 import type { WorkspaceSparseActionsModel } from './use-mobile-tasks-workspace-sparse-actions'
 import { taskRepoClient } from './task-repo-host-routing'
+import { getDefaultSetupDecision } from '../../../src/shared/orca-hook-setup-config'
 import {
   normalizeSetupHookTrust,
   pickWorkspaceAgent,
+  readRepoHooksSetupCommand,
   resolveWorkspaceAgentSelection,
   useCallback,
   useEffect,
@@ -108,8 +110,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       return
     }
     if (workspaceCreateTargetRepo.connectionId && workspaceCreateSshStatus !== 'connected') {
-      // Why: remote agent detection runs on the SSH host through the relay; a
-      // disconnected repo would fail and cache an empty agent list.
+      // Do not cache empty remote-agent detection while SSH is disconnected; probes run on that host.
       setWorkspaceDetectedAgentIds(null)
       return
     }
@@ -200,7 +201,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       }
       const reply = await repoSetupHooksRead.request(client, { repo: `id:${repo.id}` })
       const result = repoSetupHooksRead.interpret(reply)
-      const setupCommand = result.hooks?.scripts?.setup?.trim()
+      const setupCommand = readRepoHooksSetupCommand(result)
       const setupTrust = normalizeSetupHookTrust(result.setupTrust) ?? undefined
       if (!setupCommand) {
         return { kind: 'decision', decision: 'inherit' }
@@ -208,15 +209,11 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       if (override) {
         return { kind: 'decision', decision: override, setupTrust }
       }
-      const setupRunPolicy = result.setupRunPolicy ?? 'run-by-default'
-      if (setupRunPolicy === 'ask') {
+      const decision = getDefaultSetupDecision(true, result.setupRunPolicy ?? 'run-by-default')
+      if (!decision) {
         return { kind: 'prompt', command: setupCommand, source: result.source, setupTrust }
       }
-      return {
-        kind: 'decision',
-        decision: setupRunPolicy === 'run-by-default' ? 'run' : 'skip',
-        setupTrust
-      }
+      return { kind: 'decision', decision, setupTrust }
     },
     [client, tasksSupported]
   )

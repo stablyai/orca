@@ -5,17 +5,7 @@ import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { isEditorContentUnchanged } from './editor-content-dirty-state'
 import { applyEditorBufferText } from './editor-buffer-adapter'
 
-/**
- * Builds the editor's content-change handler: record the draft, then reconcile
- * the dirty flag against the content the file was loaded with.
- *
- * Why the refs: depending on the loaded-content maps directly churned the
- * callback identity on every content load, pushing fresh props through the
- * whole memoized editor subtree. They are written in a layout effect rather
- * than during render because a render React discards must not move the
- * dirty-check baseline, and a committed one lands before any input event can
- * reach the handler.
- */
+/** Commit loaded-content refs in layout effects: stabilize handler identity without letting discarded renders advance dirty baselines. */
 export function useEditorContentChangeHandler({
   fileContents,
   diffContents

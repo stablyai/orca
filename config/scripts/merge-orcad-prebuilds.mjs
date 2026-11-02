@@ -1,11 +1,6 @@
 #!/usr/bin/env node
-/**
- * Merge per-runner `out/orcad-prebuilds` trees into one matrix, as release CI collects them.
- * Each CI lane builds only its own slot (build-orcad-prebuilds.mjs), so the desktop template
- * build needs their union before `--require-slots` can pass.
- *
- * Usage: node config/scripts/merge-orcad-prebuilds.mjs [--out <dir>] <tree> [<tree> ...]
- */
+// Union per-runner single-slot trees before desktop template --require-slots validation.
+// Usage: node config/scripts/merge-orcad-prebuilds.mjs [--out <dir>] <tree> [<tree> ...]
 import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'

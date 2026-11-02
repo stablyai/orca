@@ -55,10 +55,6 @@ const LINEAR_ITEM = {
   }
 } as const
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -106,17 +102,13 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * One task item's provider details. The hook keeps a `stale` guard between the request and the
- * state commit, so these families record that the guard still sits there rather than asserting it.
- */
+// Drive stale-response guards through the detail hook’s published state.
 export function taskItemDetailMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   function itemDetail(item: Record<string, unknown>) {
-    // Loaded on mount, not while the table is built: `task-mount-adapters.ts` mounts this same hook,
-    // and a mutant anchored in it would otherwise be applied by both modules' loaders at once.
+    // Load on mount so this and task-mount-adapters cannot both apply a mutant to the same module.
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(context, {
         useHook: (model) =>
@@ -145,8 +137,7 @@ export function taskItemDetailMountAdapters(
   return {
     'tasks.item-detail-github': itemDetail(GITHUB_PR_ITEM),
     'tasks.item-detail-gitlab': itemDetail(GITLAB_ISSUE_ITEM),
-    // The Linear arm with its issue leg answered. The b3 seed refuses that leg, so its matrix
-    // never reaches the comment leg's acceptance: the issue error is raised first either way.
+    // Answer the Linear issue leg so the matrix can reach comment acceptance; the b3 seed refuses that prerequisite.
     'tasks.item-detail-linear': itemDetail(LINEAR_ITEM)
   }
 }

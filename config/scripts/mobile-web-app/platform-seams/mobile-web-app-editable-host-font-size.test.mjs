@@ -1,12 +1,4 @@
-/**
- * The editable-host rule, over the tree it ships against and over fixtures of its own.
- *
- * Two halves, because an offender list is only evidence when the walk read something. The first
- * runs the rule over the rich Markdown editor's real modules and says which line carries the size;
- * the second drives the readings the real tree does not have — a size below the floor, a name that
- * merely spells the seam's, an editable with no id — against a fixture tree whose only reason to
- * exist is that those readings have to be observable somewhere.
- */
+// Require real editor hosts and drive below-floor, fake-seam and anonymous-host controls; empty offender list alone cannot prove census read anything.
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,7 +12,6 @@ import {
 
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
-/** The editor's own two modules, as a closure naming nothing else. */
 const EDITOR_CLOSURE = {
   local: [
     'src/components/rich-markdown/document-markup.ts',
@@ -28,12 +19,11 @@ const EDITOR_CLOSURE = {
   ]
 }
 
-/** The seam's web half, copied into a fixture tree so the floor is read rather than restated. */
+// Copy web seam so fixture reads real floor instead of restating it.
 const SEAM_SOURCE = `export const TEXT_INPUT_FONT_SIZE_FLOOR = 16\n`
 
 let fixtureDir = null
 
-/** A fixture tree with the seam in it, plus whatever markup and stylesheet a case needs. */
 async function fixture(name, markup, style) {
   const root = join(fixtureDir, name)
   await mkdir(join(root, 'src/platform'), { recursive: true })
@@ -44,15 +34,13 @@ async function fixture(name, markup, style) {
   return { root, closure: { local: ['src/doc/markup.ts', 'src/doc/style.ts'] } }
 }
 
-/** The same tree with a second stylesheet one directory down, and a closure that reads it first. */
 async function fixtureWithNested(name, markup, style, nestedStyle) {
   const { root } = await fixture(name, markup, style)
   await mkdir(join(root, 'src/doc/nested'), { recursive: true })
   await writeFile(join(root, 'src/doc/nested/style.ts'), nestedStyle, 'utf8')
   return {
     root,
-    // Nested first, which is what makes this a measurement: the closure's order is the bundler's,
-    // so a walk that accepted any file under the directory would stop here.
+    // Read nested sheet first to expose scans that wrongly accept any descendant directory.
     closure: { local: ['src/doc/nested/style.ts', 'src/doc/markup.ts', 'src/doc/style.ts'] }
   }
 }
@@ -69,8 +57,7 @@ afterAll(async () => {
 
 describe('the editable-host font-size rule', () => {
   it('finds the editor the TextInput census cannot see', () => {
-    // The precondition every verdict below needs: this walk reads the editor's real markup and
-    // names the surface the page mounts.
+    // Require census names real editor surface before interpreting empty offender list.
     expect(editableHostsIn(mobileDir, EDITOR_CLOSURE)).toContainEqual({
       file: 'src/components/rich-markdown/document-markup.ts',
       id: 'editor'
@@ -109,8 +96,7 @@ describe('the editable-host font-size rule', () => {
   })
 
   it('refuses a name that only spells the seam’s', async () => {
-    // A local `const TEXT_INPUT_FONT_SIZE = 14` two lines up is exactly the regression the seam
-    // exists to stop, wearing its name.
+    // Same-spelled local 14px constant must not impersonate seam import.
     const { root, closure } = await fixture(
       'local',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
@@ -121,9 +107,7 @@ describe('the editable-host font-size rule', () => {
   })
 
   it('counts a no-id editable beside a named one, rather than only the named one', async () => {
-    // The tag is what an editable is, and its id is optional: a walk that started from the id
-    // matched the named host and never saw the one beside it, so a file holding both reported the
-    // named one as clean and said nothing at all about the other.
+    // Require anonymous host reported even beside compliant named host; id-first matching silently missed it.
     const { root, closure } = await fixture(
       'mixed',
       'export const NAMED = \'<main id="editor" contenteditable="true"></main>\'\n' +
@@ -138,9 +122,7 @@ describe('the editable-host font-size rule', () => {
   })
 
   it('reads the sheet beside the markup, not one a directory down', async () => {
-    // The walk stops at the first file whose sheet opens `#editor`, and the closure's order is the
-    // bundler's rather than alphabetical, so a nested sheet could answer for a sibling that is the
-    // one the host actually gets.
+    // Nested sheet ordered first must not answer for sibling stylesheet actually applied to host.
     const { root, closure } = await fixtureWithNested(
       'nested',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
@@ -170,8 +152,7 @@ describe('the editable-host font-size rule', () => {
   })
 
   it('reads the declaration CSS uses, not the first one in the rule', async () => {
-    // Equal importance, so the last one wins. A walk that stopped at the first read 16 px and
-    // called a 14 px surface compliant.
+    // Last equal-importance declaration wins; first-safe lookup falsely approved 14px surface.
     const { root, closure } = await fixture(
       'repeated',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
@@ -190,9 +171,7 @@ describe('the editable-host font-size rule', () => {
     )
     expect(editableHostFontSizeOffenders(important.root, important.closure)).toEqual([])
 
-    // And an important declaration is still read as the size it sets, rather than as a shape the
-    // walk does not model: without stripping the flag, a compliant `!important` size on the seam
-    // would have been reported as an offender.
+    // Strip important flag so compliant seam value is recognized.
     const offending = await fixture(
       'important-offends',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
@@ -204,22 +183,19 @@ describe('the editable-host font-size rule', () => {
   })
 
   it('cannot judge an editable that declares no size, and says so', async () => {
-    // Inheritance is not a pass here. The value would come from a rule in a file this walk does not
-    // read — the host element's own, or the page's root — so "no declaration" is "cannot say" and
-    // belongs in the unresolved list, which the closure census holds at empty.
+    // Absent declaration inherits unknown external value; require unresolved, never clean.
     const { root, closure } = await fixture(
       'inherits',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
       'export function style() {\n  return `    #editor {\n      padding: 8px;\n    }`\n}\n'
     )
     expect(unresolvedEditableHostStyles(root, closure)).toEqual(['src/doc/style.ts:2'])
-    // Not an offender either: an offender is a size this walk read and found under the floor.
+    // Unknown value is unresolved, not a measured below-floor offender.
     expect(editableHostFontSizeOffenders(root, closure)).toEqual([])
   })
 
   it('reads every exact rule in the sheet, in source order, as the cascade does', async () => {
-    // Equal specificity, so the last rule wins. Reading only the first called a 14 px surface
-    // compliant because a compliant rule happened to sit above it.
+    // Last equal-specificity rule wins; earlier compliant rule cannot clear later 14px override.
     const later = await fixture(
       'later-exact',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
@@ -230,8 +206,7 @@ describe('the editable-host font-size rule', () => {
   })
 
   it('takes source order rather than the lowest exact rule in the sheet', async () => {
-    // The control the reading above needs: the same two rules the other way round are compliant,
-    // so the verdict is the cascade rather than "any rule under the floor anywhere in the sheet".
+    // Reversed-rule positive control proves cascade, rather than rejecting any sheet containing low value.
     const earlier = await fixture(
       'earlier-exact',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
@@ -242,8 +217,7 @@ describe('the editable-host font-size rule', () => {
   })
 
   it('cannot rank a higher-specificity subject rule, and says so rather than passing', async () => {
-    // `main#editor` outranks `#editor` and this census does no specificity arithmetic, so a rule
-    // like it declaring a size is a hole, named at its own line.
+    // More-specific main#editor outranks exact ID rule; report unresolved at unrankable selector line.
     const { root, closure } = await fixture(
       'subject-specificity',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
@@ -251,7 +225,7 @@ describe('the editable-host font-size rule', () => {
         '    main#editor {\n      font-size: 14px;\n    }`\n}\n'
     )
     expect(unresolvedEditableHostStyles(root, closure)).toEqual(['src/doc/style.ts:5'])
-    // Not an offender either: an offender is a size this walk read and could rank.
+    // Unrankable size is unresolved, not a ranked below-floor offender.
     expect(editableHostFontSizeOffenders(root, closure)).toEqual([])
   })
 
@@ -266,8 +240,7 @@ describe('the editable-host font-size rule', () => {
   })
 
   it('reads the host’s own id, not a longer one that starts with it', async () => {
-    // The selector list is now read whole, so `#editor` has to stop at an id boundary: without one,
-    // a rule for the element beside the host would have made the host unresolved.
+    // ID boundary prevents neighboring #editor-notes from invalidating #editor.
     const { root, closure } = await fixture(
       'neighbour-id',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
@@ -279,8 +252,7 @@ describe('the editable-host font-size rule', () => {
   })
 
   it('leaves a descendant rule and a pseudo-element rule out of the way', async () => {
-    // Neither one is the host: `#editor p` is about another element, and `::before` is a box the
-    // host generates. Counting either as a hole would report the shipped sheet unresolved.
+    // Descendants/pseudo-elements target other boxes and must not make shipped host stylesheet unresolved.
     const { root, closure } = await fixture(
       'not-the-host',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',

@@ -65,11 +65,12 @@ describe('browserManager', () => {
     vi.useRealTimers()
   })
 
-  it('does not forward ctrl/cmd+r or readline chords from browser guests', () => {
+  it('leaves readline and page editing chords to browser guests', () => {
     const rendererSendMock = vi.fn()
     const guest = {
       id: 405,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -94,6 +95,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about shortcut forwarding.
+    rendererSendMock.mockClear()
 
     const beforeInputHandler = guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-input-event'
@@ -144,6 +147,26 @@ describe('browserManager', () => {
         control: true,
         alt: false,
         shift: false
+      },
+      // Why: Orca binds these to sidebar and workspace-list actions, but in a page they are bold
+      // and select-to-start, so only tab chords cross over.
+      {
+        type: 'keyDown',
+        code: 'KeyB',
+        key: 'b',
+        meta: process.platform === 'darwin',
+        control: process.platform !== 'darwin',
+        alt: false,
+        shift: false
+      },
+      {
+        type: 'keyDown',
+        code: 'ArrowUp',
+        key: 'ArrowUp',
+        meta: process.platform === 'darwin',
+        control: process.platform !== 'darwin',
+        alt: false,
+        shift: true
       }
     ]
     for (const input of readlineChords) {
@@ -161,6 +184,7 @@ describe('browserManager', () => {
     const guest = {
       id: 406,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -185,6 +209,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about shortcut forwarding.
+    rendererSendMock.mockClear()
 
     const beforeInputHandler = guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-input-event'
@@ -251,6 +277,15 @@ describe('browserManager', () => {
       },
       {
         type: 'keyDown',
+        code: 'KeyT',
+        key: 't',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: true
+      },
+      {
+        type: 'keyDown',
         code: 'KeyP',
         key: 'p',
         meta: isDarwin,
@@ -302,25 +337,31 @@ describe('browserManager', () => {
       expect(preventDefault).toHaveBeenCalledTimes(1)
     }
 
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:newBrowserTab')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:newTerminalTab')
+    // Why: tab chords are replayed into the renderer's tab-shortcut owner as the pressed chord.
+    const replayed = (index: number): unknown[] => {
+      const { key, code, alt, meta, control, shift } = inputs[index]
+      return ['ui:browserPageTabShortcut', { key, code, alt, meta, control, shift }]
+    }
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, ...replayed(0))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, ...replayed(1))
     expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:closeActiveTab', {
       sourceId: 'browser-1'
     })
-    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTabAcrossAllTypes', 1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:switchTab', 1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:switchTerminalTab', 1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(7, 'ui:openQuickOpen')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:focusBrowserAddressBar', {
+    expect(rendererSendMock).toHaveBeenNthCalledWith(4, ...replayed(3))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(5, ...replayed(4))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(6, ...replayed(5))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(7, ...replayed(6))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:openQuickOpen')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:focusBrowserAddressBar', {
       browserPageId: 'browser-1'
     })
-    expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:reloadBrowserPage', {
+    expect(rendererSendMock).toHaveBeenNthCalledWith(10, 'ui:reloadBrowserPage', {
       browserPageId: 'browser-1'
     })
-    expect(rendererSendMock).toHaveBeenNthCalledWith(10, 'ui:hardReloadBrowserPage', {
+    expect(rendererSendMock).toHaveBeenNthCalledWith(11, 'ui:hardReloadBrowserPage', {
       browserPageId: 'browser-1'
     })
-    expect(rendererSendMock).toHaveBeenNthCalledWith(11, 'ui:showBrowserHistory', {
+    expect(rendererSendMock).toHaveBeenNthCalledWith(12, 'ui:showBrowserHistory', {
       browserPageId: 'browser-1'
     })
   })
@@ -332,6 +373,7 @@ describe('browserManager', () => {
     const guest = {
       id: 407,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -362,6 +404,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about shortcut forwarding.
+    rendererSendMock.mockClear()
 
     const beforeInputHandler = guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-input-event'
@@ -427,7 +471,13 @@ describe('browserManager', () => {
     )
     expect(customQuickOpenPreventDefault).toHaveBeenCalledTimes(1)
 
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:newBrowserTab')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:browserPageTabShortcut', {
+      key: 'b',
+      code: 'KeyB',
+      ...primary,
+      alt: true,
+      shift: false
+    })
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:openQuickOpen')
   })
 
@@ -436,6 +486,7 @@ describe('browserManager', () => {
     const guest = {
       id: 407,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -460,6 +511,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about shortcut forwarding.
+    rendererSendMock.mockClear()
 
     const beforeInputHandler = guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-input-event'
@@ -506,6 +559,7 @@ describe('browserManager', () => {
     const guest = {
       id: 408,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,

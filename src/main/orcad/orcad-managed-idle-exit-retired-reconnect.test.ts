@@ -29,7 +29,6 @@ vi.mock('./orcad-managed-idle-exit', async (importOriginal) => ({
   installOrcadManagedIdleExit: vi.fn(() => () => {})
 }))
 
-/** A router over one adapter whose own fence behaves like the daemon adapter's. */
 function freshRouter(retirements: Promise<DaemonIdleRetirementResult>[] = []): DaemonPtyRouter {
   const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
   let fenced = false
@@ -45,7 +44,7 @@ function freshRouter(retirements: Promise<DaemonIdleRetirementResult>[] = []): D
   vi.mocked(current.requestIdleRetirement).mockImplementation(async () => {
     fenced = true
     const result = await (retirements.shift() ?? { state: 'retiring' as const })
-    // A lost reply keeps the adapter fenced, as an accepted stop may be behind it.
+    // A lost reply may hide accepted retirement, so keep admission fenced.
     fenceHeld = result.state === 'retiring' || result.state === 'unverifiable'
     fenced = fenceHeld
     return result
@@ -74,6 +73,7 @@ async function stopWithReturningClient(
     agentStates: () => [],
     hasStagedMigration: () => false,
     automationsBusy: () => automationsBusy,
+    emulatorsBusy: async () => false,
     registerCleanup: () => {}
   })
   const installed = vi.mocked(installOrcadManagedIdleExit).mock.calls.at(-1)?.[0]
@@ -84,7 +84,6 @@ async function stopWithReturningClient(
   await vi.waitFor(() =>
     expect(getLocalPtyProvider().spawn({ cols: 80, rows: 24 })).rejects.toThrow('decommissioning')
   )
-  // The returning client may also start work an exit would end.
   activity.openConnections = 1
   automationsBusy = options.automationsBusy ?? false
   retire.resolve(retirementState)

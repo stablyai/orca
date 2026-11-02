@@ -12,8 +12,6 @@ describe('terminal WebView external mouse click', () => {
 
     mouse.mouseClick(40, 60)
 
-    // Default (non-SGR) encoding: press (32=' ') then release (35='#'), each
-    // ESC [ M btn col row. Cell bytes depend on the fit scale, not on routing.
     const bytes = mouse.terminalInputBytes()
     expect(bytes).toHaveLength(12)
     expect(bytes.slice(0, 4)).toBe(`${ESC}[M `)
@@ -86,19 +84,19 @@ describe('terminal WebView external mouse click', () => {
 
   it('lets the touch dispatcher own a gesture when touch events follow pointerdown', () => {
     mouse.boot()
+    mouse.writeLegacyMouseEncoding()
     mouse.activeTerminal().modes.mouseTrackingMode = 'vt200'
 
     mouse.dispatchPointer('pointerdown', { x: 40, y: 60, button: 0, buttons: 1 })
     const touchStart = new Event('touchstart', { bubbles: true })
-    // Why: the document tap dispatcher reads touches[0]; happy-dom's plain Event lacks it.
+    // Happy DOM plain events lack touches; provide the list read by the real dispatcher.
     Object.defineProperty(touchStart, 'touches', {
       value: [{ identifier: 7, clientX: 40, clientY: 60 }]
     })
     mouse.terminalSurface().dispatchEvent(touchStart)
     mouse.dispatchPointer('pointerup', { x: 40, y: 60, button: 0, buttons: 0 })
 
-    // Why: Android SOURCE_MOUSE injections can pair a mouse pointerdown with
-    // real touch events; double-handling would double the click report.
+    // Android may emit mouse-flavored pointerdown and real touches for one injected gesture; handle it only once.
     expect(mouse.terminalInputBytes()).toBe('')
   })
 })

@@ -20,12 +20,14 @@ export function useSourceControlRowOpening({
   activeWorktreeId,
   worktreePath,
   visibleSelectionEntries,
+  visibleBranchRowKeys,
   branchSummary
 }: {
   isMac: boolean
   activeWorktreeId: string | null
   worktreePath: string | null
   visibleSelectionEntries: FlatEntry[]
+  visibleBranchRowKeys: readonly string[]
   branchSummary: GitBranchCompareSummary | null
 }) {
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
@@ -37,7 +39,7 @@ export function useSourceControlRowOpening({
   const openFile = useAppStore((s) => s.openFile)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
 
-  // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
+  // Modifier-click opens a right split to preserve the current pane.
   const resolveSplitTargetGroupId = useCallback(
     (event?: SourceControlRowOpenEvent): string | undefined => {
       if (!event || !activeWorktreeId || !isSourceControlSplitOpenModifier(event, isMac)) {
@@ -53,7 +55,7 @@ export function useSourceControlRowOpening({
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
   )
 
-  // Why: a stable string signature keeps this selector referentially stable so the panel re-renders only when the active editor file changes; null when the tab isn't an editor.
+  // Use a primitive signature so unrelated store writes do not rerender; return null for non-editor tabs.
   const activeOpenFileSignature = useAppStore((s) => {
     if (!activeWorktreeId || s.activeTabTypeByWorktree?.[activeWorktreeId] !== 'editor') {
       return null
@@ -66,16 +68,21 @@ export function useSourceControlRowOpening({
       (file) => file.id === activeFileId && file.worktreeId === activeWorktreeId
     )
     return activeFile
-      ? buildActiveOpenFileSignature(activeFile.diffSource, activeFile.relativePath)
+      ? buildActiveOpenFileSignature(
+          activeFile.diffSource,
+          activeFile.relativePath,
+          activeFile.branchCompare,
+          branchSummary
+        )
       : null
   })
   const activeOpenAvailableRowKeys = useMemo(() => {
-    const keys = new Set<string>()
+    const keys = new Set(visibleBranchRowKeys)
     for (const entry of visibleSelectionEntries) {
       keys.add(entry.key)
     }
     return keys
-  }, [visibleSelectionEntries])
+  }, [visibleSelectionEntries, visibleBranchRowKeys])
   const activeOpenRowKeys = useMemo(
     () => buildActiveOpenRowKeys(activeOpenFileSignature, activeOpenAvailableRowKeys),
     [activeOpenAvailableRowKeys, activeOpenFileSignature]

@@ -14,8 +14,7 @@ export function reapUnboundCodexPty(ptyId: string, reason: string): void {
 }
 
 export function releaseReplacedCodexPanePty(ptyId: string): void {
-  // Why the disposal: a parked tab's exit sidecar treats an unlabeled exit as the pane
-  // dying — it would collapse the just-rebound leaf or close the whole tab.
+  // Dispose parked watchers before an unlabeled exit could collapse the rebound leaf or close its tab.
   disposeParkedTerminalWatchersForPtyIds([ptyId])
   for (const snapshot of unregisterPtyDataHandlers([ptyId])) {
     snapshot.commit()

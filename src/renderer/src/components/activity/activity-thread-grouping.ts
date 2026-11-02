@@ -14,8 +14,7 @@ import {
 } from './activity-thread-presentation'
 import type { ActivityGroupBy, ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
-// Attention-first. Exhaustive Record so an unranked dot state is a type error; ranks are
-// unique so header order never falls back to thread recency.
+// Use exhaustive, unique attention ranks so new states fail typecheck and recency cannot reorder headers.
 const ACTIVITY_STATUS_GROUP_RANK: Record<ActivityThreadStatusId, number> = {
   waiting: 0,
   blocked: 1,
@@ -103,9 +102,7 @@ function buildThreadSearchText(thread: AgentPaneThread): string {
   return `${thread.paneTitle} ${getActivityThreadWorkspaceTitle(thread.worktree)} ${thread.worktree.branch ?? ''} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
 }
 
-// Why: thread objects are rebuilt only when the underlying store data changes, so their
-// identity is a correct cache key; without this every keystroke re-lowercases a large
-// string per thread. WeakMap so dropped threads release their text.
+// Thread identity changes with its data, so cache lowercase search text across keystrokes; WeakMap releases dropped threads.
 const threadSearchTextCache = new WeakMap<AgentPaneThread, string>()
 function threadSearchText(thread: AgentPaneThread): string {
   const cached = threadSearchTextCache.get(thread)

@@ -44,10 +44,7 @@ export function useWebSessionTabsSync(): void {
   const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>
     mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
   )
-  // Keep this subscription dependency: a runtime reconnect can retain the same environment id
-  // while replacing its runtime instance, which must restart the scoped stream. Read the last
-  // identity the host answered with, not `entry.status` — an unverifiable probe nulls that and
-  // cold-rebuilt this stream for a host that was still delivering.
+  // Reconnect may replace runtime under the same environment ID; restart scoped streams from last answered identity. Probe-unverifiable status is null even while delivery continues.
   const activeWorktreeRuntimeId = useAppStore((state) => {
     const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
     return environmentId
@@ -61,8 +58,7 @@ export function useWebSessionTabsSync(): void {
       ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.connectionGeneration ?? 0)
       : 0
   })
-  // Restart trigger only, deliberately not passed to the installer: the scoped stream may have
-  // ended during the outage, but the frames it will resend still belong to the same connection.
+  // Reconnect trigger only, not stream identity: outage-ended streams resend frames for the same connection.
   const activeWorktreeRuntimeHostContactEpoch = useAppStore((state) => {
     const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
     return environmentId
@@ -118,9 +114,7 @@ export function useWebSessionTabsSync(): void {
     }
   }, [runtimeSessionMirrorEnvironmentKey, workspaceSessionReady])
 
-  // A regained host revives the streams that ended during the outage. Live ones are left alone:
-  // the mirror state they refill is stamped with the key, which has not moved, and a probe flap
-  // with no real outage must not cost a resubscribe.
+  // Regained contact revives only dead streams; stable mirror keys retain state, and probe flaps without outages must not resubscribe.
   useEffect(() => {
     globalSubscriptionsRef.current?.restartEnded()
   }, [resubscribeSignal])

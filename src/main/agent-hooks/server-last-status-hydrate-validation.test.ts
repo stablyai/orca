@@ -6,6 +6,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -164,14 +165,14 @@ describe('Last-status persistence', () => {
         entries: {
           'no-colon': {
             paneKey: 'no-colon',
-            receivedAt: 1_700_000_000_000,
-            stateStartedAt: 1_699_999_999_000,
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
             payload: { state: 'done', prompt: 'bad', agentType: 'claude' }
           },
           [PANE]: {
             paneKey: makePaneKey('tab-x', LEAF_2),
-            receivedAt: 1_700_000_000_000,
-            stateStartedAt: 1_699_999_999_000,
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
             payload: { state: 'done', prompt: 'mismatch', agentType: 'claude' }
           },
           [GOOD_PANE]: {
@@ -416,6 +417,7 @@ describe('Last-status persistence', () => {
         buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'first' })
       )
       server.flushStatusPersistSync()
+      utimesSync(lastStatusPath(), 1, 1)
       const firstMtime = statSync(lastStatusPath()).mtimeMs
 
       server.clearPaneState(makePaneKey('non-existent', LEAF_5))

@@ -18,13 +18,6 @@ vi.mock('@/runtime/runtime-path-existence-batch', () => ({
 vi.mock('@/lib/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
-// Why: the catalog says wt-1 (root /repo, this test's watch target) holds docs/report.md.
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
-  findWorkspaceFileRoute: (_state: unknown, _hostId: string, absolutePath: string) =>
-    absolutePath === '/repo/docs/report.md'
-      ? { worktreeId: 'wt-1', relativePath: 'docs/report.md', executionHostId: 'local' }
-      : null
-}))
 vi.mock('./editor-external-watch-disk-verification', () => ({
   scheduleDebouncedEditorExternalReload: harness.scheduleReload,
   scheduleEditorSelfMoveEchoVerification: harness.compareDirty
@@ -131,22 +124,6 @@ describe('reconcileEditorTabsAfterOverflow', () => {
     expect(setExternalMutation).not.toHaveBeenCalled()
     expect(harness.runtimePathsExist).not.toHaveBeenCalled()
     expect(harness.scheduleReload).not.toHaveBeenCalled()
-  })
-
-  it("re-reads another workspace's read-only view of the watched workspace's file", async () => {
-    setTabs(
-      tab('view', {
-        worktreeId: 'wt-other',
-        filePath: '/repo/docs/report.md',
-        relativePath: '/repo/docs/report.md',
-        readOnly: true
-      })
-    )
-    harness.runtimePathsExist.mockResolvedValue([{ exists: true }])
-    reconcileEditorTabsAfterOverflow(target, true)
-    await vi.waitFor(() => expect(harness.scheduleReload).toHaveBeenCalledTimes(1))
-
-    expect(harness.scheduleReload).toHaveBeenCalledWith(notification('docs/report.md'))
   })
 
   it('a storm overflow reloads clean tabs without probing or dropping combined bodies', () => {

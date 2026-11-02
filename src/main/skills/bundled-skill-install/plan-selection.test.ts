@@ -29,7 +29,6 @@ describe('installedOnly', () => {
       installedOnly: true
     })
     expect(plan.skills).toEqual([])
-    // Install (no flag) would write and link it.
     expect(opsOf(await previewBundledSkillInstall(serviceInput(home)))).toEqual([
       [home.shared, 'write', undefined],
       [home.claude, 'link', undefined]

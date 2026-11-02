@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { AgentSessionRewindResult } from '../../../../shared/agent-session-rewind'
+import type { AgentSessionRewindResult } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useStructuredAgentSessionHostRecoversRewindOnSend } from '@/runtime/structured-agent-session-host-capability'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
@@ -27,8 +27,7 @@ export function useStructuredAgentSessionRewind(
     target,
     write
   } = args
-  // An in-doubt rewind returns the prompt for the next send to settle; only a host that settles it
-  // on a send may offer one. Unknown hides it, as unresolved support does.
+  // Offer rewind only when the host can settle an uncertain result on the next send; unknown capability must hide it.
   const support = useStructuredAgentSessionHostRecoversRewindOnSend(target)
     ? args.support
     : undefined

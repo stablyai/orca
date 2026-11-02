@@ -100,10 +100,10 @@ export function DraftReviewActions({
             <DropdownMenuItem variant="destructive" onSelect={onCloseReview}>
               <GitPullRequestClosed className="size-3.5" />
               {translate(
-                'auto.components.right.sidebar.HostedReviewActions.closeDraft',
-                'Close'
-              )}{' '}
-              {shortLabel}
+                'auto.components.right.sidebar.HostedReviewActions.closeReview',
+                'Close {{review}}',
+                { review: shortLabel }
+              )}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -172,8 +172,6 @@ export function MergedReviewActions({
       type="button"
       variant="outline"
       size="xs"
-      // Why: outline matches the sibling Reopen control; destructive text signals danger
-      // without a solid red fill dominating the PR summary panel.
       className="cursor-pointer border-destructive/30 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50"
       onClick={onDeleteWorktree}
       disabled={isDeletingWorktree}

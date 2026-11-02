@@ -13,8 +13,7 @@ import { readJcodeTurnPrompt } from './jcode-turn-prompt'
 
 const PAYLOAD = { session_id: 'session_jc_9' }
 
-// Why this is worth a test: the read is a synchronous file scan and jcode blocks on
-// pre_tool, so one repeated per tool call is latency the user pays on every tool.
+// jcode blocks on pre_tool; repeated synchronous transcript scans add latency to every tool.
 describe('jcode turn prompt cache', () => {
   let state: HookListenerState
 

@@ -1,37 +1,12 @@
-/**
- * The mobile-view frame budget, held against Chromium's own JPEG encoder at representative phone, tablet and wide viewports.
- *
- * `WORST_CASE_JPEG_BYTES_PER_PIXEL` is the one number the budget cannot derive, and every other
- * check of it is circular: a case that encodes `noise(area * theConstant)` is measuring a byte
- * count the constant just produced, so it agrees with the constant whatever the constant says. This
- * encodes a real noise JPEG per viewport, at the scale the real budget picks, and posts it through
- * the real `BridgeHostSubscriptions`. It is the only thing here that can falsify the number.
- *
- * Chromium rather than a Node encoder, because the frames are CDP screencast frames: the bytes the
- * budget has to survive are the ones Chromium produces, not the ones another library would. And
- * `Page.startScreencast` rather than `canvas.toDataURL`, because that is the encoder the product
- * runs: the certification and the pane now go through one code path, so a drift in it cannot show
- * up in the product without showing up here.
- *
- * In `config/scripts` rather than the mobile suite for that reason — this is where a browser is
- * available — and it drives the mobile modules directly, so the budget, the scale and the host are
- * all the real ones.
- *
- * Named into the `mobile-web-app-` family so two things hold without anyone remembering them: the
- * `mobile_web_app` job's filter picks it up, and `pr-code-change-scope.mjs` fires that job when
- * this file changes. Both key off that prefix.
- */
+// Validate real frame budget against Chromium Page.startScreencast JPEGs, not an encoder model using the constant it claims to prove.
+// Noise at representative phone/tablet/wide viewports reaches real BridgeHostSubscriptions at product scale/quality.
+// Keep mobile-web-app- prefix: workflow selection and change-scope detector both key on it.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium, type Browser, type CDPSession, type Page } from 'playwright-core'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import type { BrowserScreencastFrame } from '../../../mobile/src/transport/browser-screencast-protocol'
 
-/**
- * The mobile modules load lazily, after the dependency check, never at the top of the file: vite
- * transforms anything under `mobile/` against `mobile/tsconfig.json`, which extends
- * `expo/tsconfig.base.json`, so a static import fails at load in the sharded `test` job before
- * `describe.skip` gets a say. Type-only imports are erased and stay static.
- */
+// Lazy-load mobile modules after dependency gate; static imports require absent Expo tsconfig before describe.skip runs in root shards. Type-only imports erase safely.
 async function loadSweepModules() {
   const [request, parameters, caps, fakes, harnessModule, protocol] = await Promise.all([
     import('../../../mobile/src/browser/browser-screencast-request.web.ts'),
@@ -85,24 +60,11 @@ let browser: Browser | null = null
 let page: Page | null = null
 let cdp: CDPSession | null = null
 
-/**
- * Skipped where the bundling tests skip, which is the sharded `test` job.
- *
- * Not because this needs react-native-web — it does not — but because that job has no browser to
- * launch, and this is the flag that tells the two jobs apart. In the `mobile_web_app` job the
- * required-env check turns a missing install into a failure, so it cannot skip there silently.
- */
+// Share bundling gate to distinguish browser-capable mobile job from root shards; required-env check makes a broken mobile install fail instead of skip.
 const describeSweep = mobileWebAppDependenciesPresent() ? describe : describe.skip
 
-/**
- * The floor under real noise, in bytes per pixel.
- *
- * It separates noise the encoder saw pixel-for-pixel from noise averaged away by a layout at
- * Chromium's default width: the averaged arm reads under 0.3, and the sweep's own minimum has read
- * 0.543986 on the pinned Chromium (2026-09-20) and 0.480898 on the runner's Chrome 152
- * (2026-09-21). A floor of 0.5 sat inside that encoder spread and failed the runner on a
- * measurement that was noise; 0.4 keeps a margin on both sides of it.
- */
+// Noise floor distinguishes full-resolution pixels from viewport-averaged noise (<0.3 B/px).
+// Chromium/Chrome measured minima 0.544/0.481 B/px; use 0.4, since 0.5 falsely failed valid runner encodes.
 const NOISE_FLOOR_BYTES_PER_PIXEL = 0.4
 
 beforeAll(async () => {
@@ -125,9 +87,7 @@ afterAll(async () => {
   await browser?.close()
 })
 
-/**
- * The page the noise is painted on. The viewport meta is the arm the guard case removes.
- */
+// Viewport-meta removal is the guard/control arm; it averages away canvas noise.
 function noiseDocument({ viewportMeta }: { viewportMeta: boolean }): string {
   const meta = viewportMeta
     ? '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -140,23 +100,8 @@ function noiseDocument({ viewportMeta }: { viewportMeta: boolean }): string {
 /** One screencast frame: its encoded size, and when the browser captured it. */
 type CapturedFrame = { bytes: number; stamp: number | null }
 
-/**
- * The frames this capture may be read from, which is the precondition the byte count needs.
- *
- * Two readings rather than an ordering. `rastered` is where the arrivals after the raster barrier
- * begin, and `paintedAt` is the page's own clock at the moment its second animation frame ran after
- * the noise was put on the canvas -- the clock `metadata.timestamp` is also on. A frame is admitted
- * only if the browser captured it at or after that moment.
- *
- * Arrival order cannot stand in for it: frames do not reach the client in capture order. Measured on
- * this rig at 20x CPU throttling, over six captures, every frame of the black canvas the resize left
- * and every frame still in flight from the previous viewport was stamped 86 to 161 ms before the
- * paint and yet arrived after the barrier, while every frame carrying the noise was stamped inside
- * 150 ms after it. Admitting one of those stale frames is both readings this sweep has flaked on: a
- * black 1400x1600 frame encodes to 13483 bytes, which is the 0.006 bytes/px of 2026-09-22, and a
- * full frame of the previous and smaller viewport is the ~447 KB whose posted envelope was the
- * 596462 that 2026-09-21 expected to be null.
- */
+// Admit only post-raster arrivals captured at/after paintedAt (page’s second rAF clock); arrival order does not preserve capture order.
+// Under 20× throttling, stale black/previous-viewport frames arrived after barrier but were stamped 86–161ms before paint, falsely understating budget cost.
 function framesCarryingTheNoise(
   frames: CapturedFrame[],
   rastered: number,
@@ -165,24 +110,9 @@ function framesCarryingTheNoise(
   return frames.slice(rastered).filter((one) => one.stamp !== null && one.stamp >= paintedAt)
 }
 
-/**
- * A noise JPEG at the quality the pane ships, encoded by Chromium's screencast, in bytes.
- *
- * `Emulation.setDeviceMetricsOverride` here sizes the surface and nothing else. Its
- * `deviceScaleFactor` is required by the command and inert to this measurement: headless Chromium
- * composites at the DIP surface size whatever the factor says, so the sweep returns the same
- * 0.543986 / 0.552964 to six decimals at a factor of 1 and at 3. Measured 2026-09-20; the frame is
- * therefore requested at one device pixel per CSS pixel and the canvas painted at that same size,
- * which is how every pixel of noise reaches the encoder unaveraged.
- *
- * What does guard the measurement is the document's viewport meta, without which the page lays out
- * at Chromium's 980 px default, the canvas is scaled into the frame and the noise averages away.
- * That is not left to this comment: the floor assertion in the sweep below is what catches it, and
- * `reads far under the floor without the viewport meta, which is what the floor guards` is what
- * proves the floor catches it.
- *
- * The quality is read, not retyped: at 90 every budgeted viewport posts over the cap.
- */
+// Capture noise with product screencast quality; read quality from source (90 would exceed cap at every budgeted viewport).
+// Headless CDP composites at DIP surface size despite deviceScaleFactor (identical ratios at 1×/3×); request one device pixel per CSS pixel.
+// Viewport meta prevents 980px-default layout averaging; floor/control assertions prove full-resolution noise reaches encoder.
 async function screencastNoiseJpegBytes(
   frame: { width: number; height: number },
   seed: number,
@@ -235,10 +165,7 @@ async function screencastNoiseJpegBytes(
       maxHeight: frame.height,
       everyNthFrame: 1
     })
-    // The noise is painted after the screencast is running, and through this same CDP session, so
-    // the reply orders it against the frame events. Two animation frames are awaited inside it, so
-    // when it resolves the paint has been committed to the compositor -- and it hands back the
-    // page's own clock at that moment, which is what says which frames carry this noise.
+    // Paint over same CDP session after screencast starts; two rAFs commit content and return page clock to identify matching captures.
     const painting = await session.send('Runtime.evaluate', {
       awaitPromise: true,
       returnByValue: true,
@@ -261,21 +188,12 @@ async function screencastNoiseJpegBytes(
     })
     paintedAt = Number(painting.result.value)
 
-    // A commit is not a raster. The screencast hands over whatever the compositor has drawn so far,
-    // so after a resize it emits frames at the full size carrying only the tiles rastered yet.
-    // Measured 2026-09-21 under CPU starvation: 87 of 444 post-commit frames at 1400x1600 read
-    // under the noise floor, one of them 447491 bytes against the full frame's 1221117 — bytes the
-    // shell posts inside the cap, which is this sweep reading a budget as fitting when it does not.
-    // `Page.captureScreenshot` returns only once a compositor frame of the current content exists,
-    // so it is the raster this wants rather than a longer wait, and over the same rounds with it
-    // none read under the floor. Quality 0 because nothing reads its bytes; 17 ms a call.
+    // Commit is not raster: CPU-starved resize produced 87/444 partial post-commit frames below noise floor, falsely fitting cap.
+    // captureScreenshot waits for current compositor raster; discard quality-0 bytes, using completion as barrier (~17ms).
     await session.send('Page.captureScreenshot', { format: 'jpeg', quality: 0 })
     rastered = frames.length
 
-    // Nudged until two frames the browser captured after this capture's own paint have landed. Two
-    // are taken and the larger is used, so a part-rastered frame cannot be the one this measures,
-    // and they are counted by `framesCarryingTheNoise` rather than by arrival for the reason it
-    // carries: a frame in flight from the previous viewport arrives here too.
+    // Wait for two browser-stamped post-paint frames and take larger to reject partial raster; ignore stale previous-viewport arrivals.
     const deadline = Date.now() + 20_000
     for (
       let nudge = 0;
@@ -293,10 +211,7 @@ async function screencastNoiseJpegBytes(
   }
   const afterPaint = framesCarryingTheNoise(frames, rastered, paintedAt)
   if (afterPaint.length === 0) {
-    // Never fall back to a frame from before the raster: that is the understatement this exists to
-    // rule out, and a silent one would look like a cheaper encoder. Every frame is printed with how
-    // long after the paint the browser captured it, so a window that held only stale ones is legible
-    // rather than inferred.
+    // Never fall back to pre-raster frames; print capture offset from paint so stale-only windows fail diagnostically instead of reporting a cheaper encoder.
     const seen = JSON.stringify(
       frames.map((one) => ({
         bytes: one.bytes,
@@ -346,8 +261,7 @@ function postThroughShell(
     })
   )
   const before = bridge.posted.length
-  // Same reason as the sibling pin: a subscribe that opened no binary lane would read here as a
-  // dropped frame, and this sweep's whole verdict is which frames were dropped.
+  // Require binary subscription open or a missing lane would masquerade as budget-driven frame drop.
   const emitBinary = bridge.client.streams[0]?.emitBinary
   if (emitBinary === null || emitBinary === undefined) {
     throw new Error('the subscribe opened no binary stream')
@@ -396,13 +310,9 @@ describeSweep('the frame budget at representative viewport sizes', () => {
         `min ${bestBytesPerPixel.toFixed(5)}`
     )
     expect(overCap).toEqual([])
-    // And the constant is above every cost that sweep just measured. Against the constant, not the
-    // 0.552964 measured on 2026-09-20 that its docstring records: the margin above that is what an
-    // encoder drift may spend, and a drift inside it is not a budget failure. Without this the
-    // assertion above passes by the budget being merely generous.
+    // Compare measured cost with production constant; historical encoder ratios consume margin without necessarily violating budget.
     expect(worstBytesPerPixel).toBeLessThanOrEqual(sweep().WORST_CASE_JPEG_BYTES_PER_PIXEL)
-    // The low end too, so a sweep that silently stopped encoding real images is visible: every
-    // frame here is noise, and noise never compresses to a tenth of a byte per pixel.
+    // Assert noise floor too or an encoder silently measuring empty images appears comfortably within budget.
     expect(bestBytesPerPixel).toBeGreaterThan(NOISE_FLOOR_BYTES_PER_PIXEL)
   }, 300_000)
 
@@ -417,10 +327,7 @@ describeSweep('the frame budget at representative viewport sizes', () => {
     if (browser === null) {
       throw new Error('the sweep has no browser')
     }
-    // The same frame, the same noise, the same encoder — one arm short of the meta. Chromium then
-    // lays the page out at its 980 px default and scales the canvas into the frame, so what the
-    // encoder sees is averaged noise rather than noise. Without a case saying so, the sweep could
-    // measure that and still pass every assertion above by being comfortably under the constant.
+    // Remove viewport meta as control: 980px default layout scales/averages noise, falsely passing upper-bound-only checks.
     const frame = { width: 768, height: 1133 }
     const context = await browser.newContext()
     try {

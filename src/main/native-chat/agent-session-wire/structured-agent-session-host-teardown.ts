@@ -1,7 +1,8 @@
 // Attempt every teardown phase despite earlier failures; drain conversation writes before closing
 // the shared database last. Queued sends recover on next open.
 
-import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
+import { closeStructuredAgentSessionHandovers } from './structured-agent-session-handing-over'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { SUPERVISED_GRACEFUL_EXIT_MS } from '../../claude/claude-child-exit-proof-ladder'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import { SNAPSHOT_DRAIN_TIMEOUT_MS } from './structured-agent-session-eviction'
@@ -148,6 +149,9 @@ export async function flushStructuredAgentSessionHost(
       trigger: AgentSessionResumeTrigger
     }
 ): Promise<void> {
+  for (const session of context.sessions.values()) {
+    closeStructuredAgentSessionHandovers(session.journal, 'hostRestarted')
+  }
   const retainSessionIds = new Set<string>()
   await tearDownStructuredAgentSessionHost({
     phases: structuredAgentSessionHostTeardownPhases({

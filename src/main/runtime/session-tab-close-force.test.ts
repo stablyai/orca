@@ -1,5 +1,4 @@
-// A paired desktop's confirmed close of a pinned server tab: session.tabs.close carries `force`,
-// which the server honours in both builds and advertises with a capability in both builds.
+// Confirmed pinned-tab closes carry force and advertise that capability in both layout builds.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY } from '../../shared/session-tabs-runtime-capabilities'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
@@ -56,7 +55,7 @@ async function pinnedServerTab(layoutOwnerIsMain: boolean) {
       }))
     }
   })
-  // The window's pin guard (mobile-terminal-close-ipc-bridge.ts): a pinned tab closes only forced.
+  // Model the window pin guard: pinned tabs require force.
   const windowClose = f.closeTerminalTab.getMockImplementation()!
   f.acknowledgement.resolve()
   f.closeTerminalTab.mockImplementation(async (_tabId?: unknown, options?: unknown) => {

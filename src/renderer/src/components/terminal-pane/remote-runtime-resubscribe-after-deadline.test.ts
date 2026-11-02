@@ -1,9 +1,4 @@
-/**
- * Regression for #9092: a remote pane whose resubscribe attempt was still in flight when the
- * auto-recovery deadline latched dropped the late (recoverable) failure, so nothing was parked
- * and system resume / network online had nothing to fire. The pane stayed disconnected until
- * the user clicked Reconnect, even after the host came back.
- */
+// Post-deadline resubscribe failure must park revival for online/resume; dropping it leaves recovery dependent on manual Reconnect (#9092).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,

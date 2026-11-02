@@ -80,7 +80,7 @@ export function createAutomationRun(
     return existing
   }
   const now = Date.now()
-  // Why: retention prunes old runs, so the retained count isn't the ordinal — carry the number forward from the newest survivor.
+  // Retention prunes history, so derive the next ordinal from the newest survivor rather than count.
   const runNumber = nextAutomationRunNumber(
     (operations.state.automationRuns ?? []).filter((run) => run.automationId === automation.id)
   )
@@ -151,12 +151,31 @@ export function recordRepeatedAutomationSkip(
     occurrenceCount: (latest.occurrenceCount ?? 1) + 1,
     lastOccurrenceAt: scheduledFor
   }
-  // Replaced, not patched in place: the list projection caches on array identity.
+  // Replace the array to invalidate identity-keyed list projections.
   operations.state.automationRuns = runs.map((run) => (run.id === latest.id ? updated : run))
   operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
   touchAutomation(operations.state, automationId, now)
   operations.flush()
   return updated
+}
+
+/** Rewrites of the same error (e.g. usage writes) keep its code; a different error drops a stale one. */
+function resultErrorCodeFields(
+  result: AutomationDispatchResult,
+  previous: AutomationRun
+): Pick<AutomationRun, 'errorCode' | 'errorParams'> {
+  const source = result.errorCode
+    ? result
+    : result.error && result.error === previous.error
+      ? previous
+      : null
+  if (!result.error || !source?.errorCode) {
+    return {}
+  }
+  return {
+    errorCode: source.errorCode,
+    ...(source.errorParams ? { errorParams: source.errorParams } : {})
+  }
 }
 
 export function updateAutomationRun(
@@ -170,7 +189,8 @@ export function updateAutomationRun(
     throw new Error('Automation run not found.')
   }
   const now = Date.now()
-  const current = operations.state.automationRuns[index]
+  const previous = operations.state.automationRuns[index]
+  const { errorCode: _code, errorParams: _params, ...current } = previous
   const workspaceId = result.workspaceId ?? current.workspaceId
   const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')
     ? normalizeAutomationRunWorkspaceDisplayName(result.workspaceDisplayName ?? null)
@@ -178,6 +198,10 @@ export function updateAutomationRun(
   const updated: AutomationRun = {
     ...current,
     status: result.status,
+    sessionKind: result.sessionKind ?? current.sessionKind,
+    chatSessionId: Object.hasOwn(result, 'chatSessionId')
+      ? (result.chatSessionId ?? null)
+      : current.chatSessionId,
     workspaceId,
     workspaceDisplayName:
       workspaceDisplayName ??
@@ -200,17 +224,18 @@ export function updateAutomationRun(
       : normalizeAutomationPrecheckResult(current.precheckResult),
     usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
     error: result.error ?? null,
+    ...resultErrorCodeFields(result, previous),
     startedAt: current.startedAt ?? now,
     dispatchedAt:
       result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
   }
-  // Replaced, not patched in place: the list projection caches on array identity.
+  // Replace the array to invalidate identity-keyed list projections.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>
     run.id === result.runId ? updated : run
   )
   operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
   if (!isFinalAutomationRunStatus(current.status) && isFinalAutomationRunStatus(updated.status)) {
-    // Why: only a non-final run pins its workspace, so finishing releases the claim (#17775).
+    // Final runs stop pinning workspace metadata (#17775).
     invalidateLocalWorktreeMetadataPruneInputs()
   }
   touchAutomation(operations.state, updated.automationId, now)
@@ -227,13 +252,13 @@ export function snapshotAutomationRunWorkspaceDisplayName(
   if (!normalizedDisplayName) {
     return 0
   }
-  // Folder ids are minted UUIDs (one row per id), and a run's project host may differ from it.
+  // Folder UUIDs are globally unique even when the run's project host differs.
   const hostScoped = parseWorkspaceKey(target.id)?.type !== 'folder'
   let updatedCount = 0
   operations.state.automationRuns = (operations.state.automationRuns ?? []).map((run) => {
     if (
       run.workspaceId !== target.id ||
-      // A same-id twin's run names its own host; a run from before host context has none.
+      // Match same-ID runs by host when their context provides proof.
       (hostScoped && run.runContext && run.runContext.hostId !== target.hostId) ||
       run.workspaceDisplayName === normalizedDisplayName
     ) {

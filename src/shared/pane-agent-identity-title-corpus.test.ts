@@ -37,8 +37,7 @@ describe('controlled title fixtures (always run)', () => {
     { name: 'a bare Pi title anchors as Pi', title: 'pi', expected: 'pi' },
     { name: 'an OMP status title anchors as OMP', title: 'omp ready', expected: 'omp' },
     {
-      // Wrapper-frame π/OMP separators are handled by the synthetic-title path, not this
-      // evidence parser; pinned so a parser change here is a deliberate decision.
+      // Synthetic-title parsing owns wrapper π/OMP separators; this evidence parser deliberately declines them.
       name: 'a π wrapper frame is declined by the evidence parser',
       title: 'π : ready',
       expected: null

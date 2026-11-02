@@ -51,9 +51,7 @@ function statusPill(status: SkillFreshnessDisplayStatus): React.JSX.Element {
   )
 }
 
-// Why: the setup rails' Installed pill is presence-only. The plan knows more — that an
-// update exists, that every copy is current, or that a copy is left for the user — and
-// green must never stand in for that last case.
+// Presence alone cannot imply freshness; copies the updater cannot reach need attention instead of green.
 export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): React.JSX.Element {
   const { plan, unsupported, loading, error } = useSkillFreshness(
     useActiveProjectSkillRuntime().bundledSkillTarget
@@ -116,8 +114,7 @@ export function SkillPlanStatusPill({
         (op) => op.kind === 'leave' && (op.reason === 'edited' || op.reason === 'other')
       )
     )
-  // Why: the dialog lists every location and what the update does there, so Details is
-  // offered whenever the plan has anything for this skill, including an agent to link.
+  // Offer Details for any planned location/action, including adding an agent link.
   const hasDetails = needsAttention || skillPlanHasDetails(plan, skillName)
   return (
     <span className="inline-flex items-center gap-2">
@@ -133,10 +130,7 @@ export function SkillPlanStatusPill({
       )}
       {hasDetails ? (
         <Button
-          // Why: ghost, not link — this sits in a header row rather than inside a
-          // paragraph, and its hover/focus background is what makes it read as a
-          // control. No chevron: it opens the review dialog, and the chevron already
-          // means an in-place expander on that dialog's own details section.
+          // A ghost button’s hover/focus surface makes Details read as a header control.
           variant="ghost"
           size="xs"
           className={cn(
@@ -147,9 +141,7 @@ export function SkillPlanStatusPill({
         >
           {needsAttention ? <AlertTriangle className="size-3" /> : null}
           {translate('auto.components.skills.SkillFreshnessStatusPill.details', 'Details')}
-          {/* Why: a chevron is what makes this read as a control at rest rather than a
-              label. It points right, not down — this opens the review dialog, and a
-              down chevron already means an in-place expander inside that dialog. */}
+          {/* Point right for dialog navigation; down chevrons disclose content within that dialog. */}
           <ChevronRight className="size-3" />
         </Button>
       ) : null}

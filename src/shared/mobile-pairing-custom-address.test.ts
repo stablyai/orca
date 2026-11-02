@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_MOBILE_PAIRING_CUSTOM_ADDRESSES,
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses,
@@ -32,13 +31,10 @@ describe('mobile pairing custom address collection', () => {
     ).toEqual(['first.example:6768', 'second.example:6768'])
   })
 
-  it('bounds persisted entries', () => {
-    const addresses = Array.from(
-      { length: MAX_MOBILE_PAIRING_CUSTOM_ADDRESSES + 5 },
-      (_, index) => `host-${index}.example:6768`
-    )
-    expect(normalizeMobilePairingCustomAddresses(addresses)).toHaveLength(
-      MAX_MOBILE_PAIRING_CUSTOM_ADDRESSES
+  it('keeps the first 50 valid persisted addresses', () => {
+    const addresses = Array.from({ length: 55 }, (_, index) => `host-${index}.example:6768`)
+    expect(normalizeMobilePairingCustomAddresses(addresses)).toEqual(
+      Array.from({ length: 50 }, (_, index) => `host-${index}.example:6768`)
     )
   })
 

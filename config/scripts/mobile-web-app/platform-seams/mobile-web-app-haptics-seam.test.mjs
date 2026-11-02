@@ -1,13 +1,5 @@
-/**
- * What a page's taps reach for a haptic, and the grant every page route needs to get one.
- *
- * Inside the shell's WebView `expo-haptics` fakes an iOS haptic by clicking a hidden checkbox it
- * appends to `document.head`, which is what killed a long press on the worktree list (C1.9). So the
- * page's seam posts `native.haptics.trigger` instead and the app plays the device's own — and a
- * route that imports the seam without declaring `haptics` is a page whose taps go quiet, because
- * grants are resolved once from the route the shell opened.
- *
- */
+// expo-haptics web fallback clicks hidden checkbox, once killing worktree-list long press; page must notify native.haptics.trigger.
+// Opening route grants persist through session, so every reachable haptics seam needs manifest grant or taps silently lose feedback.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -35,10 +27,9 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 
 const read = (file) => readFileSync(join(mobileDir, file), 'utf8')
 
-/** The route module behind each declared page route, shared with the screencast-lane census. */
 const ROUTE_MODULES = PAGE_ROUTE_MODULES
 
-// These cases read the same source tree; keep each route's real closure once.
+// Cache actual route closures; cases inspect same immutable source tree.
 const closures = new Map()
 async function closureOf(module) {
   const built = closures.get(module) ?? mobileWebAppRouteClosure(module)
@@ -48,7 +39,6 @@ async function closureOf(module) {
 
 const HAPTICS_GRANT = 'haptics'
 
-/** The shell's mapping from a notify kind to one of the app's own functions. */
 const SHELL_MAPPING = 'src/mobile-web-shell/page-haptics.ts'
 
 describe('the seam reader', () => {
@@ -68,8 +58,7 @@ describe('the seam reader', () => {
   })
 
   it('reads the binding the publisher assigns rather than a name called post', () => {
-    // Keyed on `post`, renaming the local would turn every posting site into a non-posting one and
-    // leave this census green on a page whose taps buzz for nothing.
+    // Renaming local notifier must not turn posting calls into a falsely clean no-op census.
     expect(
       hapticsPostedKinds(
         [
@@ -145,7 +134,6 @@ describe('the seam reader', () => {
     expect(bridgeHapticsKinds("export const BRIDGE_HAPTICS_KINDS = ['a', 'b'] as const\n")).toEqual(
       ['a', 'b']
     )
-    // A mention is not a declaration, which is why this is parsed rather than matched.
     expect(bridgeHapticsKinds("// BRIDGE_HAPTICS_KINDS = ['a']\n")).toEqual([])
   })
 })
@@ -158,13 +146,7 @@ describe('the two haptics siblings', () => {
     expect([...posted].sort()).toEqual([...kinds].sort())
   })
 
-  /**
-   * The third direction, which no type in the app states.
-   *
-   * The shell's table refuses a kind with no row and a row naming a function that does not exist,
-   * both at compile time. It says nothing about a haptic `haptics.ts` grows with no kind of its own,
-   * which would be one the page can never ask for however many rows the table has.
-   */
+  // Compile checks catch unknown kind/function, but only export comparison catches new native haptic lacking any page kind.
   it('maps every function the app exports from the shell side, so none is unreachable', () => {
     const exported = hapticsTriggerSites(read(HAPTICS_NATIVE), HAPTICS_NATIVE).map(
       (site) => site.name
@@ -224,18 +206,8 @@ describeClosure(
       }
     )
 
-    /**
-     * The grant list derived from the closures rather than written by hand.
-     *
-     * Grants are resolved once, from the route the shell opened, and carried for the life of the
-     * session. A route that imports the seam and declares nothing is a page whose taps are silent
-     * with nothing on screen to say why.
-     *
-     * The cost of the answer being every route: `implementedPageRoutes` filters on
-     * `grants.every(implementsGrant)`, so against a shell that does not carry the token no page
-     * route is served at all and the phone renders the native screens. The mechanism is pinned in
-     * `mobile/src/mobile-web-shell/page-route-policy.test.ts`.
-     */
+    // Derive grants from route closures: opening session fixes allowed haptics for its lifetime.
+    // Every route currently needs token; older shell without it falls back to native screens via implementedPageRoutes (page-route-policy.test.ts).
     it('declares haptics on exactly the routes whose closure reaches the seam', async () => {
       const reaching = []
       for (const [route, mod] of ROUTE_MODULES) {
@@ -252,7 +224,7 @@ describeClosure(
     })
 
     it('covers every declared page route, so a new one cannot be missed by this file', () => {
-      // The shared map is a hand list of route modules; this is what holds it to the declarations.
+      // Hold handwritten route map to manifest so unlisted routes cannot escape census.
       const { mapped, declared } = pageRouteModulesCoverTheManifest(MOBILE_WEB_PAGE_ROUTES)
       expect(mapped).toEqual(declared)
     })

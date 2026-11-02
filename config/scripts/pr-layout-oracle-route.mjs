@@ -49,7 +49,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/renderer/src/store/slices/recently-closed-tabs.ts',
   // The client the oracle reads every view through.
   'src/cli/runtime/client.ts',
-  'src/shared/remote-runtime-client.ts',
+  'src/shared/remote-runtime/remote-runtime-client.ts',
   'src/shared/remote-runtime/requests/remote-runtime-subscription-transport.ts',
   'src/shared/paired-runtime-connection.ts',
   'src/shared/pairing.ts',

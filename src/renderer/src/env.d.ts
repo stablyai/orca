@@ -18,8 +18,12 @@ declare module 'monaco-editor/esm/vs/basic-languages/markdown/markdown.js' {
   export const language: languages.IMonarchLanguage
 }
 
-// Monaco ships these contributions without public type declarations. We only
-// touch the paste-override surface, so declare the minimal shape we use.
+declare module 'monaco-editor/esm/vs/basic-languages/cpp/cpp.js' {
+  export const conf: languages.LanguageConfiguration
+  export const language: languages.IMonarchLanguage
+}
+
+// Monaco contributions lack public types; declare only Orca’s paste-override surface.
 declare module 'monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard.js' {
   type PasteImplementation = () => boolean | Promise<unknown>
   export const PasteAction:
@@ -146,6 +150,8 @@ declare global {
     __endLocalLayoutStreamE2E?: LocalLayoutStreamE2EEnd
     /** E2E builds only: whether a paired server's layout frames, not the mirror, draw the workspace. */
     __isFrameDrawnServerWorkspaceE2E?: (environmentId: string, worktreeId: string) => boolean
+    /** Chromium Local Font Access; not yet in TypeScript's DOM lib. */
+    queryLocalFonts?: () => Promise<{ family: string }[]>
   }
 }
 

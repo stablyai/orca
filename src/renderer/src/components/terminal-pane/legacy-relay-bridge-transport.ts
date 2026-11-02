@@ -45,8 +45,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   /** Issue order of this pane's attaches, and which one the held viewer came from. */
   const seqs = { issued: 0, viewer: 0 }
 
-  // Overlapping attaches (connect, attach, reattach) each get a viewer; the newest issued keeps
-  // its own, whichever answers last, and every other one is handed back.
+  // The newest issued attach retains its viewer regardless of reply order; release every other viewer.
   const adoptViewer = (seq: number, acquisitionId: number): void => {
     if (seq < seqs.viewer) {
       api?.detach({ ptyId, acquisitionId })
@@ -104,8 +103,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     const at = epoch
     const seq = ++seqs.issued
     try {
-      // The screen comes through onReplay in output order: applied from this reply instead, its
-      // clear would erase output the relay printed after it.
+      // Replay in stream order: applying the reply’s screen would erase relay output printed after it.
       const result = await api.attach({ ptyId, replayInStream: true })
       if (!stillWanted(at, result)) {
         return
@@ -113,6 +111,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       if (result.status === 'attached') {
         adoptViewer(seq, result.acquisitionId)
         clearUnreachable()
+        callbacks?.onConnect?.()
       } else if (result.status === 'exited' || result.status === 'not-bridged') {
         clearUnreachable()
         callbacks?.onExit?.(-1)
@@ -158,8 +157,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
         }
         if (!pane) {
           lastState = null
-          // A disconnect hangs the bridge up without an exit, and the next bridge serves only panes
-          // that attach to it. Ask again; it answers exited once the terminal is proven gone.
+          // Reconnect must reattach; a disconnected bridge proves no exit, and its replacement forwards only attached panes.
           dropViewer()
           void reattach()
           return
@@ -208,6 +206,10 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   }
 
   const bridged = (): boolean => mode === 'bridge'
+  const writeBridged = (data: string): boolean => {
+    api?.write({ ptyId, data })
+    return viewer !== null
+  }
   const innerRecoveryState = inner.getRecoveryState?.bind(inner)
   const innerSnapshotOutcome = inner.serializeBufferOutcome?.bind(inner)
 
@@ -234,6 +236,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     getConnectionId: () => (bridged() ? null : inner.getConnectionId?.()),
     ownsRecovery: () => (bridged() ? false : (inner.ownsRecovery?.() ?? false)),
     retryRecovery: () => (bridged() ? false : (inner.retryRecovery?.() ?? false)),
+    reopenAfterHostReturned: () => !bridged() && (inner.reopenAfterHostReturned?.() ?? false),
     setOutputPaused: (paused) => {
       if (!bridged()) {
         return inner.setOutputPaused?.(paused) ?? false
@@ -268,24 +271,12 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       }
       inner.disconnect()
     },
-    sendInput: (data, inputKind) => {
-      if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
-      }
-      return inner.sendInput(data, inputKind)
-    },
-    sendInputImmediate: (data) => {
-      if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
-      }
-      return inner.sendInputImmediate(data)
-    },
+    sendInput: (data, inputKind) =>
+      bridged() ? writeBridged(data) : inner.sendInput(data, inputKind),
+    sendInputImmediate: (data) => (bridged() ? writeBridged(data) : inner.sendInputImmediate(data)),
     sendInputAccepted: async (data, inputKind, options) => {
       if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
+        return writeBridged(data)
       }
       return inner.sendInputAccepted
         ? inner.sendInputAccepted(data, inputKind, options)

@@ -6,7 +6,7 @@ import {
   resolveViewedUnreadSubjectKey
 } from '@/attention/agent-attention-acknowledgement'
 import { createTestStore, makeTab, makeUnifiedTab } from '../store/slices/store-test-helpers'
-import type { RetainedAgentEntry } from '../store/slices/agent-status'
+import type { RetainedAgentEntry } from '../store/slices/agent-status/agent-status-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
@@ -15,7 +15,6 @@ const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 type TestStore = ReturnType<typeof createTestStore>
 
-/** Subject-keyed turn view the neutral acknowledgement policy reads. */
 function ackTargets(store: TestStore, tabId: string, leafId: string): string[] {
   const state = store.getState()
   return computeAgentAcknowledgementTargets(
@@ -28,19 +27,7 @@ function ackTargets(store: TestStore, tabId: string, leafId: string): string[] {
   )
 }
 
-// Why: regression coverage for the codex inline-agent row that stayed bold
-// after returning from another workspace (docs/codex-agent-row-bold-stuck.md).
-// The race: codex emits `Stop` (state=done), then its TUI title reverts to a
-// shell label; pty-connection.ts:onAgentExited fires removeAgentStatus before
-// the live `done` row could be auto-acked. The retention sync snapshots the
-// `done` row into retainedAgentsByPaneKey carrying a fresh stateStartedAt.
-// Pre-fix: useReadOnScreenAttention only walked the live map, so the retained
-// row's stateStartedAt > ackAt forever. Fix: walk both maps.
-//
-// We test the pure helper (computeAgentAcknowledgementTargets) rather than the hook so the
-// vitest 'node' environment doesn't need to mock document.visibilityState,
-// document.hasFocus, or the focus/visibilitychange event surface. The hook's
-// gate logic is unchanged by this fix — only the scan body was extended.
+// Codex Stop can migrate done state to retained rows before view acknowledgement; scan both live and retained maps or the row stays bold forever (codex-agent-row-bold-stuck.md). Test the pure target selector independently of DOM presence gates.
 
 describe('computeAgentAcknowledgementTargets — codex retain race regression', () => {
   afterEach(() => {
@@ -54,7 +41,6 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
     const activeTabId = 'tab-codex'
     const paneKey = makePaneKey(activeTabId, CODEX_LEAF_ID)
 
-    // 1. Codex starts working, user acks it (e.g. by clicking the row).
     store.getState().setAgentStatus(paneKey, {
       state: 'working',
       prompt: 'sleep 10 then say hi',
@@ -64,8 +50,6 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
     const workingAck = store.getState().acknowledgedAgentsByPaneKey[paneKey]
     expect(workingAck).toBeGreaterThan(0)
 
-    // 2. Time advances; codex Stop fires → state=done with a fresh
-    //    stateStartedAt (carry-forward only applies within the same state).
     vi.setSystemTime(new Date('2026-05-05T12:00:10.000Z'))
     store.getState().setAgentStatus(paneKey, {
       state: 'done',
@@ -75,9 +59,6 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
     const liveDone = store.getState().agentStatusByPaneKey[paneKey]
     expect(liveDone.stateStartedAt).toBeGreaterThan(workingAck)
 
-    // 3. The codex TUI title reverts to a plain shell label, so
-    //    onAgentExited → removeAgentStatus tears down the live entry AND
-    //    wipes the prior ack (per agent-status.ts cleanup contract).
     const retentionSnapshot: RetainedAgentEntry = {
       entry: liveDone,
       worktreeId: 'wt-1',
@@ -89,14 +70,9 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
     expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
     expect(store.getState().acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
 
-    // 4. The retention sync picks up the live→gone transition and stashes a
-    //    snapshot with the post-Stop stateStartedAt — same as
-    //    collectRetainedAgentsOnDisappear in useRetainedAgents.ts.
     store.getState().retainAgents([retentionSnapshot])
     expect(store.getState().retainedAgentsByPaneKey[paneKey]).toBeDefined()
 
-    // 5. The user is back on the codex tab. computeAgentAcknowledgementTargets must see
-    //    the retained row and surface it for ack — pre-fix this returned [].
     const targets = ackTargets(store, activeTabId, CODEX_LEAF_ID)
     expect(targets).toEqual([paneKey])
   })
@@ -125,14 +101,11 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
     ])
     store.getState().removeAgentStatus(paneKey)
 
-    // First scan: the retained row is unvisited.
     expect(ackTargets(store, activeTabId, CODEX_LEAF_ID)).toEqual([paneKey])
 
-    // Simulate the ack effect.
     vi.setSystemTime(new Date('2026-05-05T12:00:01.000Z'))
     store.getState().acknowledgeAgents([paneKey])
 
-    // Second scan: idempotent — nothing to ack.
     expect(ackTargets(store, activeTabId, CODEX_LEAF_ID)).toEqual([])
   })
 
@@ -156,9 +129,7 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
     ])
     store.getState().removeAgentStatus(paneKey)
 
-    // Active tab differs — the retained row must NOT be acked while the user
-    // is looking at a different tab; the bold-until-viewed signal must
-    // survive the tab switch.
+    // Hidden retained rows must keep unread/bold attention until their tab is viewed.
     expect(ackTargets(store, 'tab-codex', CODEX_LEAF_ID)).toEqual([])
   })
 
@@ -189,11 +160,7 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
     const activeTabId = 'tab-codex'
     const paneKey = makePaneKey(activeTabId, CODEX_LEAF_ID)
 
-    // Construct a (rare) state where retainedAgentsByPaneKey and
-    // agentStatusByPaneKey both contain the same paneKey — e.g. the
-    // retention sync hadn't observed the new live entry yet. The merged
-    // scan should report the paneKey at most twice (acknowledgeAgents
-    // collapses duplicates), never throw.
+    // Live and retained maps may temporarily share a paneKey; acknowledgement deduplicates safely.
     store.getState().setAgentStatus(paneKey, {
       state: 'done',
       prompt: 'p1',
@@ -211,8 +178,7 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
     ])
 
     const targets = ackTargets(store, activeTabId, CODEX_LEAF_ID)
-    // Two pushes, same paneKey — duplicates are intentional and harmless;
-    // acknowledgeAgents short-circuits per key.
+    // Duplicate pane keys are harmless because acknowledgement short-circuits by key.
     expect(targets.length).toBeLessThanOrEqual(2)
     expect(targets.every((k) => k === paneKey)).toBe(true)
     expect(targets.includes(paneKey)).toBe(true)
@@ -271,7 +237,6 @@ describe('agent completion pane unread store marker', () => {
 
 describe('resolveAutoAckTabTargets', () => {
   const FLOATING_TAB_ID = 'tab-floating'
-  /** One group per workspace showing `tabIds[worktreeId]`. */
   const withActiveTabs = (tabIds: Record<string, string>) => ({
     groupsByWorktree: Object.fromEntries(
       Object.entries(tabIds).map(([worktreeId, tabId]) => [
@@ -386,8 +351,7 @@ describe('computeLapsedManualUnreadProtections', () => {
   const otherPaneKey = makePaneKey('tab-1', OTHER_LEAF_ID)
 
   it('keeps an active pane whose status row has not arrived yet (startup race)', () => {
-    // Persisted UI (manual-unread stamps) hydrates before the agent-status snapshot; a focused
-    // scan in that window must not treat "no row yet" as "the agent moved on".
+    // Manual-unread hydration can precede status rows; missing evidence must not mean the agent moved on.
     const lapsed = computeLapsedManualUnreadProtections(
       {
         liveTurns: {},

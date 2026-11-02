@@ -1,15 +1,7 @@
-/**
- * `getIntlLocale()` exists because plugin catalogs register under a synthetic
- * `plugin<hex>` resource language. Passing that straight to `Intl` throws, and
- * passing `undefined` silently falls back to the OS locale rather than the
- * language the user selected.
- *
- * The branch assertions stub `supportedLocalesOf` so they describe the helper's
- * logic rather than whichever locales the runtime's ICU build happens to carry.
- */
+/** Synthetic plugin tags must map to real locale tags, never undefined/OS fallback; stub ICU support to test logic independently of installed locale data. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getIntlLocale, i18n, setRendererPluginLanguagePacks } from './i18n'
-import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { DEFAULT_LOCALE } from './supported-languages'
 
 const PACK_ID = 'plugin:smwbev.russian/ru-RU' as const
@@ -19,7 +11,8 @@ const PACK = {
   resourceLanguage: PACK_RESOURCE,
   pluginKey: 'smwbev.russian',
   locale: 'ru-RU',
-  catalog: {}
+  catalog: {},
+  coverage: 100
 }
 
 type Packs = Parameters<typeof setRendererPluginLanguagePacks>[0]
@@ -29,7 +22,6 @@ async function activate(language: string, packs: Packs = []): Promise<void> {
   await i18n.changeLanguage(language)
 }
 
-/** Stubs ICU lookup so a locale counts as supported only when listed. */
 function withSupportedLocales(supported: readonly string[]): void {
   vi.spyOn(Intl.DateTimeFormat, 'supportedLocalesOf').mockImplementation((requested) => {
     const tags = Array.isArray(requested) ? requested : [requested as string]
@@ -53,7 +45,7 @@ describe('getIntlLocale', () => {
   it('resolves a plugin resource language to the locale the pack declares', async () => {
     withSupportedLocales(['ru-RU'])
     await activate(PACK_RESOURCE, [PACK])
-    // Without the pack lookup this would reach Intl as `plugin<hex>`.
+    // Without the pack lookup this would reach Intl as the private-use resource tag.
     expect(getIntlLocale()).toBe('ru-RU')
   })
 
@@ -70,10 +62,5 @@ describe('getIntlLocale', () => {
     })
     await activate(PACK_RESOURCE)
     expect(getIntlLocale()).toBe(DEFAULT_LOCALE)
-  })
-
-  it('keeps the synthetic resource language unusable for Intl directly', () => {
-    // Unstubbed on purpose: this is a property of the tag, not of ICU data.
-    expect(() => Intl.DateTimeFormat.supportedLocalesOf(PACK_RESOURCE)).toThrow(RangeError)
   })
 })

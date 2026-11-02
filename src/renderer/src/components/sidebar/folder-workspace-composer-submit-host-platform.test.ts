@@ -13,7 +13,7 @@ vi.mock('@/lib/worktree-activation', async (importOriginal) => {
 import { useAppStore } from '@/store'
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
 
-// Why: a folder group on an Orca server runs its agents there, so the server's OS decides quoting.
+// The owning server’s OS determines agent command quoting.
 describe('submitFolderWorkspaceCreate on an Orca server', () => {
   afterEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReset()

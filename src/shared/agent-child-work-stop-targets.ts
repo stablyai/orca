@@ -1,6 +1,4 @@
-// What a background Stop reaches, read from the host's child records: the strip draws a row's Stop
-// by this rule, conversation-command admission asks for a stop by it, and the host resolves the
-// provider ids a Stop sends by it.
+// UI, command admission and host Stop resolution share the same child records and targeting rules.
 
 import type { AgentChildWorkOutcome } from './agent-status-child-work'
 import type { AgentChildWorkEvidence } from './agent-status-child-work-evidence'
@@ -14,14 +12,12 @@ export type AgentSessionBackgroundTaskStops = {
   supportsStopAll: boolean
 }
 
-/** The strip offers this child its own stop: it is live, stoppable, and addressable by the id a
- *  targeted stop names. The host's command admission asks the same question of the same views. */
+/** Offer targeted Stop only for live, stoppable children with provider IDs; admission uses the same rule. */
 export function agentChildWorkViewOffersStop(view: AgentChildWorkView): boolean {
   return view.membership !== 'settled' && view.stoppable && view.providerId !== undefined
 }
 
-/** What a background Stop reaches: the child `taskId` names, or, with none, every child the strip
- *  offers its own stop. Resolved from the same records the strip and admission read. */
+/** Target taskId, or all children offered targeted Stop when no taskId is given. */
 export function agentChildWorkStopTargets(
   views: readonly AgentChildWorkView[] | undefined,
   taskId?: string
@@ -35,15 +31,13 @@ export function agentChildWorkStopTargets(
   )
 }
 
-/** A child the provider accepted a Stop for. `outcome` is the run's own ending when the answer
- *  named one, as a stop of a child that had already finished does. */
+/** Provider-accepted Stop; outcome describes the captured run when reported, including already finished runs. */
 export type AgentChildWorkStopAcknowledgement = {
   taskId: string
   outcome?: AgentChildWorkOutcome
 }
 
-/** Each accepted Stop as evidence about the run the host sent it to, captured before it was sent,
- *  so an acknowledgement that lands after a new run started cannot end that one. */
+/** Bind acknowledgements to lifetimes captured before send so late replies cannot end a restarted run. */
 export function agentChildWorkStopEvidence(
   targets: readonly (AgentChildWorkView & { providerId: string })[],
   acknowledged: readonly AgentChildWorkStopAcknowledgement[] | undefined,

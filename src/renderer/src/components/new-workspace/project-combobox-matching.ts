@@ -1,5 +1,6 @@
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import { isNewWorkspaceProjectOptionQueryTooLarge } from '@/lib/new-workspace-project-options'
+import { translate } from '@/i18n/i18n'
 
 export type ScoredProjectOption = {
   option: NewWorkspaceProjectOption
@@ -13,10 +14,7 @@ function substringHits(text: string, query: string): number[] | null {
   return at === -1 ? null : Array.from({ length: query.length }, (_, offset) => at + offset)
 }
 
-/**
- * Verbatim run, else scattered subsequence. Only names get the loose pass —
- * a subsequence over a detail line matches "scr" against "3 hosts configured".
- */
+/** Allow loose subsequences only in names; detail text would create noisy matches such as scr in hosts configured. */
 function nameHitsFor(name: string, query: string): number[] | null {
   const verbatim = substringHits(name, query)
   if (verbatim) {
@@ -44,10 +42,7 @@ function nameScore(name: string, hits: readonly number[]): number {
   return base - name.length * 0.4
 }
 
-/**
- * Ranks options for a query, with recency breaking ties (and ordering the
- * unfiltered list). `recentIds` is most-recent-first.
- */
+/** Rank matches with most-recent-first IDs breaking ties and ordering empty queries. */
 export function rankProjectOptions(
   options: readonly NewWorkspaceProjectOption[],
   rawQuery: string,
@@ -95,10 +90,7 @@ export type ProjectOptionSection = {
 const SECTION_THRESHOLD = 6
 const RECENT_LIMIT = 4
 
-/**
- * While a query is live the ranking *is* the order, so sections would fight it:
- * everything collapses into one unlabelled result list.
- */
+/** Use one unlabelled list while searching so sections cannot reorder ranked results. */
 export function sectionProjectOptions(
   matches: readonly ScoredProjectOption[],
   query: string,
@@ -114,17 +106,23 @@ export function sectionProjectOptions(
     recentSet.has(id) ? matches.filter((m) => m.option.id === id) : []
   )
   const sections: ProjectOptionSection[] = [
-    { key: 'recent', heading: 'Recent', items: recent },
+    {
+      key: 'recent',
+      heading: translate('auto.components.new.workspace.projectCombobox.recentHeading', 'Recent'),
+      items: recent
+    },
     {
       key: 'projects',
-      heading: 'Projects',
+      heading: translate(
+        'auto.components.new.workspace.projectCombobox.projectsHeading',
+        'Projects'
+      ),
       items: matches.filter((m) => m.option.kind === 'project' && !recentSet.has(m.option.id))
     },
     {
       key: 'folders',
-      heading: 'Folders',
-      // Same recent exclusion as Projects: a row must appear in exactly one
-      // section, or arming and rendering see two rows for one option.
+      heading: translate('auto.components.new.workspace.projectCombobox.foldersHeading', 'Folders'),
+      // Exclude recent rows from folders too; duplicate options would desynchronize arming/rendering.
       items: matches.filter((m) => m.option.kind === 'project-group' && !recentSet.has(m.option.id))
     }
   ]

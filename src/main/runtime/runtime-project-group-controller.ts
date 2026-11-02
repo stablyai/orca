@@ -1,4 +1,5 @@
 import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachment-mutation'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
@@ -20,6 +21,7 @@ import {
   runtimeVisibleProjectGroups
 } from './runtime-visible-catalog'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
+import { createFolderWorkspaceWithPluginHooks } from '../plugins/hooks/workspace-create-plugin-hook'
 import {
   assertWslMoveProjectWritable,
   assertWslMoveRepoWritable,
@@ -34,6 +36,10 @@ type RuntimeProjectGroupDependencies = {
   notifyReposChanged: () => void
   resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
   teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
+  acquireFileWatcherRemoval: (
+    path: string,
+    connectionId?: string
+  ) => Promise<{ finish(removed: boolean): Promise<void> }>
   cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
   emitWorktreeLifecycle: (event: RuntimeWorktreeLifecycleEvent) => void
 }
@@ -168,6 +174,7 @@ export class RuntimeProjectGroupController {
     if (!store?.createFolderWorkspace) {
       throw new FolderWorkspaceCreateRefusedError('runtime_unavailable')
     }
+    const createFolder = store.createFolderWorkspace.bind(store)
     const projectGroups = store.getProjectGroups?.() ?? []
     const group = projectGroups.find((entry) => entry.id === input.projectGroupId)
     const folderPath =
@@ -176,6 +183,10 @@ export class RuntimeProjectGroupController {
         : group?.parentPath
     if (!group || !folderPath) {
       throw new FolderWorkspaceCreateRefusedError('folder_workspace_project_group_not_found')
+    }
+    if (folderPath === input.folderPath) {
+      // An explicit folder on a WSL host must not be a Windows drive; refused before any store write.
+      await refuseWslHostWindowsDrivePath(folderPath)
     }
     const status = await getFolderWorkspacePathStatusForPath({
       folderPath,
@@ -188,10 +199,12 @@ export class RuntimeProjectGroupController {
     if (pathRefusal) {
       throw new FolderWorkspaceCreateRefusedError(pathRefusal)
     }
-    const workspace = store.createFolderWorkspace({
-      ...input,
-      creatorProvenance: input.creatorProvenance ?? { kind: 'host' }
-    })
+    const workspace = await createFolderWorkspaceWithPluginHooks(input, (request) =>
+      createFolder({
+        ...request,
+        creatorProvenance: request.creatorProvenance ?? { kind: 'host' }
+      })
+    )
     this.deps.notifyReposChanged()
     return workspace
   }
@@ -258,33 +271,43 @@ export class RuntimeProjectGroupController {
     if (workspace && isLocalWslMoveRow(workspace)) {
       assertWslMoveProjectWritable(store, { folderWorkspaceId })
     }
-    if (workspace) {
-      const worktreeId = folderWorkspaceKey(folderWorkspaceId)
-      // Why: a mixed-host group has no single PTY target; forgetting the
-      // workspace must still succeed, so skip the sweep instead of failing.
-      let connectionId: string | null | undefined
-      try {
-        connectionId = this.deps.resolveFolderConnectionId(workspace)
-      } catch (error) {
-        console.warn(`[folder-workspace] skipping PTY teardown for ${worktreeId}:`, error)
-      }
-      if (connectionId !== undefined) {
-        await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
-      }
-      this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
-    }
-    const deleted = store.removeFolderWorkspace(folderWorkspaceId)
-    if (deleted) {
-      this.deps.notifyReposChanged()
-      // The same removal a worktree announces, so its consumers end work held there too.
+    let gate:
+      | Awaited<ReturnType<RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']>>
+      | undefined
+    try {
       if (workspace) {
-        this.deps.emitWorktreeLifecycle({
-          kind: 'removed',
-          worktreeId: folderWorkspaceKey(folderWorkspaceId),
-          path: workspace.folderPath
-        })
+        const worktreeId = folderWorkspaceKey(folderWorkspaceId)
+        // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
+        let connectionId: string | null | undefined
+        try {
+          connectionId = this.deps.resolveFolderConnectionId(workspace)
+        } catch (error) {
+          console.warn(`[folder-workspace] skipping PTY teardown for ${worktreeId}:`, error)
+        }
+        if (connectionId !== undefined) {
+          gate = await this.deps.acquireFileWatcherRemoval(
+            workspace.folderPath,
+            connectionId ?? undefined
+          )
+          await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
+        }
+        this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
       }
+      const deleted = store.removeFolderWorkspace(folderWorkspaceId)
+      if (deleted) {
+        this.deps.notifyReposChanged()
+        // The same removal a worktree announces, so its consumers end work held there too.
+        if (workspace) {
+          this.deps.emitWorktreeLifecycle({
+            kind: 'removed',
+            worktreeId: folderWorkspaceKey(folderWorkspaceId),
+            path: workspace.folderPath
+          })
+        }
+      }
+      return { deleted }
+    } finally {
+      await gate?.finish(false)
     }
-    return { deleted }
   }
 }

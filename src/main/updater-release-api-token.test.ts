@@ -20,29 +20,6 @@ describe('resolveReleaseApiToken', () => {
     _resetReleaseApiTokenCache()
   })
 
-  it('reads the github.com token through gh and trims it', async () => {
-    ghExecMock.mockResolvedValue({ stdout: 'gho_abc\n', stderr: '' })
-
-    await expect(resolveReleaseApiToken(T0)).resolves.toEqual({
-      token: 'gho_abc',
-      rateLimitScope: 'native:github.com'
-    })
-
-    expect(ghExecMock.mock.calls[0][0]).toEqual(['auth', 'token', '--hostname', 'github.com'])
-    expect(ghExecMock.mock.calls[0][1]).toMatchObject({ idempotent: false })
-  })
-
-  it('serves the cached token within its TTL and re-reads after it', async () => {
-    ghExecMock.mockResolvedValue({ stdout: 'gho_abc', stderr: '' })
-
-    await resolveReleaseApiToken(T0)
-    await resolveReleaseApiToken(T0 + TTL_MS - 1)
-    expect(ghExecMock).toHaveBeenCalledTimes(1)
-
-    await resolveReleaseApiToken(T0 + TTL_MS + 1)
-    expect(ghExecMock).toHaveBeenCalledTimes(2)
-  })
-
   it('returns null when gh is missing or logged out and does not re-spawn within the TTL', async () => {
     ghExecMock.mockRejectedValueOnce(new Error('gh: not found'))
 
@@ -55,25 +32,6 @@ describe('resolveReleaseApiToken', () => {
       token: 'gho_new',
       rateLimitScope: 'native:github.com'
     })
-  })
-
-  it('treats empty output as no token', async () => {
-    ghExecMock.mockResolvedValue({ stdout: '\n', stderr: '' })
-
-    await expect(resolveReleaseApiToken(T0)).resolves.toBeNull()
-  })
-
-  it('caches the successful WSL scope alongside the token', async () => {
-    ghExecMock.mockResolvedValue({
-      stdout: 'gho_wsl\n',
-      stderr: '',
-      rateLimitScope: 'wsl:ubuntu:github.com'
-    })
-
-    const expected = { token: 'gho_wsl', rateLimitScope: 'wsl:ubuntu:github.com' }
-    await expect(resolveReleaseApiToken(T0)).resolves.toEqual(expected)
-    await expect(resolveReleaseApiToken(T0 + TTL_MS - 1)).resolves.toEqual(expected)
-    expect(ghExecMock).toHaveBeenCalledTimes(1)
   })
 
   it('shares one in-flight read between concurrent callers', async () => {

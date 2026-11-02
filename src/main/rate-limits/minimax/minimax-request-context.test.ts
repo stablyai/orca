@@ -560,10 +560,7 @@ describe('logMiniMaxFetchFailure', () => {
   })
 
   it('stores cookies under the CN origin when endpointMode is "cn" (#14264 repro)', async () => {
-    // Why: the previous hardcoded origin (platform.minimax.io) caused CN
-    // users' cookies to be sent against the wrong host, so Electron's
-    // session never attached them. Cookies must be stored under
-    // www.minimaxi.com for a CN fetch to actually carry the auth.
+    // CN cookies need the CN origin; storing them under .io prevented Electron from attaching them.
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -576,7 +573,6 @@ describe('logMiniMaxFetchFailure', () => {
       signal: new AbortController().signal,
       endpointMode: 'cn'
     })
-    // The cookies must be stored under the CN origin, not overseas.
     const cnWrites = cookiesSetMock.mock.calls.filter((call) => {
       const [details] = call as unknown as [{ url: string }]
       return details.url === 'https://www.minimaxi.com'

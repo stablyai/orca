@@ -1,5 +1,4 @@
-// What main does with a split pane whose terminal ended, in a layout-owner build: the rule the
-// window applied to the panes it mounted, now decided where the exit is seen, window or none.
+// Apply the window's split-pane exit rule in main, including headless exits.
 
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import type { TerminalRunFactsRegister } from '../../terminal-run-facts'
@@ -15,12 +14,7 @@ export type ExitedSplitPaneFacts = {
   shown: boolean
 }
 
-/**
- * 'close' takes the pane out of its tab (a tab's last pane, the tab). 'keep' leaves it: a failed
- * process (its "Terminal exited" card stays), a newborn that died before anyone used it (a split
- * only while shown), or any negative code, as the window keeps it (pty-exit-hibernate's
- * isProvenProcessExit reads only the code, so a host-confirmed absence keeps its pane to recover).
- */
+/** Keep failed/negative-code panes and unused newborns (splits only while shown); close removes the last pane's tab. Negative codes remain recoverable even with host-confirmed absence. */
 export function exitedSplitPaneOutcome(
   facts: ExitedSplitPaneFacts,
   lastPane = false

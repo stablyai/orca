@@ -1,8 +1,8 @@
-// A paired client's sleep stops the host's PTYs; the host must keep the session to resume on open.
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const {
@@ -21,6 +21,14 @@ const SESSION_ID = 'slept-provider-session'
 
 type Verdict = 'exited' | 'unverifiable' | null
 
+/** A hook store row as the agent hook server records it. */
+function hookRow(
+  fields: Partial<AgentStatusIpcPayload> &
+    Pick<AgentStatusIpcPayload, 'paneKey' | 'agentType' | 'prompt' | 'receivedAt'>
+): AgentStatusIpcPayload {
+  return { state: 'done', stateStartedAt: fields.receivedAt, connectionId: null, ...fields }
+}
+
 function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
   let verdict = initialVerdict
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
@@ -33,8 +41,7 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
     live.add(id)
     return { id }
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook row reads only the fields the sleep capture uses.
-  const row = {
+  const row = hookRow({
     paneKey: PANE_KEY,
     agentType: 'claude',
     providerSession: { key: 'session_id', id: SESSION_ID },
@@ -43,10 +50,9 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
     receivedAt: 1,
     stateStartedAt: 1,
     connectionId: null
-  } as AgentStatusIpcPayload
+  })
   let rows: AgentStatusIpcPayload[] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-  const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(runtimeStore), undefined, {
     getAgentProviderSessionSnapshot: () => rows,
     checkHookAgentPresence: async (paneKey: string) =>
       paneKey === HOLDER_PANE_KEY ? holderVerdict : verdict
@@ -57,9 +63,7 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
     kill: () => true,
     stopAndWait: async (ptyId: string) => {
       live.delete(ptyId)
-      // A PTY's exit clears its hook row, as the host's teardown does.
       rows = []
-      // Why: stopAndWait resolves after the provider's exit; main's layout keeps the pane bound.
       runtime.onPtyExit(ptyId, 0)
       return true
     },
@@ -71,7 +75,6 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
   const reportAgent = (): void => {
     rows = [row]
   }
-  // The session resumed by hand in another pane whose shell outlived it; main's layout holds it.
   const reportHolder = (): void => {
     const [tabId = '', leafId = ''] = HOLDER_PANE_KEY.split(':')
     bindPaneFirst(runtime, { worktreeId: TEST_WORKTREE_ID, tabId, leafId, ptyId: 'holder-pty' })
@@ -114,7 +117,7 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
 
     expect(spawn).toHaveBeenCalledTimes(2)
     expect(spawnCommand(spawn, 1).includes(SESSION_ID)).toBe(resumes)
-    // A hand-typed `claude` recorded no recipe; the settings default bypass must not widen it.
+    // Hand-typed launches have no saved bypass recipe; defaults must not widen their permissions.
     expect(spawnCommand(spawn, 1)).not.toContain('--dangerously-skip-permissions')
   })
 
@@ -132,6 +135,7 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
 
     expect(spawnCommand(spawn, 1)).toContain('--dangerously-skip-permissions')
     expect(spawnCommand(spawn, 1)).toContain(SESSION_ID)
+    expect(spawn.mock.calls[1]?.[0]).toHaveProperty('resumeOrigin', 'saved')
   })
 
   it.each([
@@ -160,7 +164,6 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
       reportAgent()
       await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
       await userActivate(runtime)
-      // The resumed agent has not reported yet, so the host holds no row for the pane.
       setVerdict(v)
       await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
 
@@ -176,14 +179,13 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     ['codex', false]
   ] as const)('keeps a %s-launched PTY recipe: %s', async (launchAgent, kept) => {
     const config = { agentCommand: '/opt/claude-custom', agentArgs: '--x', agentEnv: {} }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the capture reads only these row fields.
-    const launchedRow = {
+    const launchedRow = hookRow({
       paneKey: PANE_KEY,
       agentType: 'claude',
       providerSession: { key: 'session_id', id: SESSION_ID },
       prompt: '',
       receivedAt: 1
-    } as AgentStatusIpcPayload
+    })
     const capture = await captureWorktreeSleepResumeRecords({
       worktreeId: TEST_WORKTREE_ID,
       paneKeysByPtyId: new Map([['pty', [PANE_KEY]]]),
@@ -196,13 +198,12 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
   })
 
   it('retires an older capture when the hook store names a non-resumable agent in the pane', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the capture reads only these row fields.
-    const row = {
+    const row = hookRow({
       paneKey: PANE_KEY,
       agentType: 'amp',
       prompt: '',
       receivedAt: 1
-    } as AgentStatusIpcPayload
+    })
     const capture = await captureWorktreeSleepResumeRecords({
       worktreeId: TEST_WORKTREE_ID,
       paneKeysByPtyId: new Map([['pty', [PANE_KEY]]]),
@@ -219,15 +220,14 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     ['wsl:Ubuntu', null],
     ['ssh-target', 'ssh-target']
   ] as const)('stamps hook connection %s as host %s', async (rowConnectionId, stamped) => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the capture reads only these row fields.
-    const row = {
+    const row = hookRow({
       paneKey: PANE_KEY,
       agentType: 'claude',
       providerSession: { key: 'session_id', id: SESSION_ID },
       prompt: '',
       receivedAt: 1,
       connectionId: rowConnectionId
-    } as AgentStatusIpcPayload
+    })
     const capture = await captureWorktreeSleepResumeRecords({
       worktreeId: TEST_WORKTREE_ID,
       paneKeysByPtyId: new Map([['pty', [PANE_KEY]]]),

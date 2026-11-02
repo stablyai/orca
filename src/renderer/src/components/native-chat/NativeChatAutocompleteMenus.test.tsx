@@ -3,9 +3,10 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
-import { buildNativeChatPickerItems } from '../../../../shared/native-chat-picker-items'
-import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
-import type { ComposerAutocomplete } from './native-chat-composer-state'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
+import { buildNativeChatPickerItems } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat/input/native-chat-slash-commands'
+import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
 
 function autocomplete(
   overrides: Partial<Extract<ComposerAutocomplete, { mode: 'slash' }>> = {}
@@ -179,11 +180,9 @@ describe('NativeChatPickerMenu', () => {
     const goal = screen.getByRole('option', { name: /goal/i })
     expect(goal.textContent).toContain('<objective>')
     expect(goal.textContent).toContain('Set a goal and keep working until it is met')
-    // A command the report left hintless renders its row unchanged.
     expect(screen.getByRole('option', { name: /clear/i }).textContent).toBe(
       '/clearClear conversation history'
     )
-    // A hint long enough to swamp the row is capped before it reaches the DOM.
     expect(screen.getByRole('option', { name: /wordy/i }).textContent).toBe(
       `/wordy<${'a'.repeat(79)}`
     )
@@ -204,6 +203,47 @@ describe('NativeChatPickerMenu', () => {
       />
     )
     expect(screen.getAllByText('No matching skills')).toHaveLength(2)
+  })
+})
+
+describe('NativeChatPickerMenu layering', () => {
+  afterEach(() => cleanup())
+
+  const menu = (
+    <NativeChatPickerMenu
+      autocomplete={autocomplete()}
+      activeIndex={0}
+      listboxId="picker"
+      onChoose={vi.fn()}
+      onRetry={vi.fn()}
+    />
+  )
+
+  it('keeps an ordinary chat list in its chat container at the chat layer', () => {
+    const { container } = render(<div className="native-chat-appearance">{menu}</div>)
+    const listbox = screen.getByRole('listbox')
+    expect(listbox.parentElement).toBe(container.querySelector('.native-chat-appearance'))
+    expect(listbox.className).toContain('z-50')
+    expect(listbox.className).not.toContain('z-[70]')
+  })
+
+  it('lifts a list opened inside a popover to the menu layer above that popover', () => {
+    render(
+      <Popover open>
+        <PopoverAnchor>
+          <span />
+        </PopoverAnchor>
+        <PopoverContent>{menu}</PopoverContent>
+      </Popover>
+    )
+    const listbox = screen.getByRole('listbox')
+    const popover = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
+    // Same fixed list in the document body, so the popover's clipping and transform don't apply.
+    expect(listbox.parentElement).toBe(document.body)
+    expect(popover.contains(listbox)).toBe(false)
+    expect(popover.className).toContain('z-[60]')
+    expect(listbox.className).toContain('z-[70]')
+    expect(listbox.className).not.toContain('z-50')
   })
 })
 

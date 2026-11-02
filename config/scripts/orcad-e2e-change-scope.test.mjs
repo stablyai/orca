@@ -38,7 +38,6 @@ const cases = {
   windows: {
     excluded: [
       'src/main/daemon/daemon-server.test.ts',
-      'src/main/orcad/orcad-native-preflight.test.ts',
       'src/main/orcad/nested/orcad-launch.test.ts',
       'src/cli/runtime/serve.test.ts',
       'src/cli/runtime/nested/serve.test.ts'
@@ -73,7 +72,7 @@ const cases = {
       'src/main/wsl/wsl-orcad-deploy.ts',
       'src/main/runtime/runtime-rpc.ts',
       'src/main/claude/claude-structured-session-state.ts',
-      'src/shared/agent-session-wire-refusals.ts',
+      'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
       'package.json',
       'pnpm-lock.yaml',
       'src/main/wsl/wsl-orcad-bridge-test-child.ts',
@@ -161,10 +160,19 @@ it('re-includes the real WSL distro root after excluding unit tests', () => {
   expect(paths.indexOf('src/main/wsl/wsl-orcad-real-distro-lane.test.ts')).toBeGreaterThan(exclude)
   const steps = workflows.wsl.jobs.wsl2.steps
   const phases = steps.filter((step) => step.env?.ORCA_RUN_WSL_ORCAD_LANE === '1')
-  expect(phases.map((step) => step.env.ORCA_WSL_ORCAD_LANE_PHASE)).toEqual(['launch', 'survive'])
+  expect(phases.map((step) => step.env.ORCA_WSL_ORCAD_LANE_PHASE)).toEqual([
+    'launch',
+    'survive',
+    'idle-release'
+  ])
   for (const phase of phases) {
-    expect(phase.run).toContain('src/main/wsl/wsl-orcad-real-distro-lane.test.ts')
+    expect(phase.run).toMatch(
+      /src\/main\/wsl\/wsl-orcad-real-distro-(idle-release-)?lane\.test\.ts/
+    )
   }
+  expect(
+    paths.indexOf('src/main/wsl/wsl-orcad-real-distro-idle-release-lane.test.ts')
+  ).toBeGreaterThan(exclude)
 })
 
 // Each remote host lane executes these sources, so a change to one must start the lane.
@@ -224,7 +232,7 @@ describe('WSL host coverage without UI-only admissions', () => {
     'src/main/wsl/wsl-orcad-deploy.ts',
     'src/main/runtime/runtime-rpc.ts',
     'src/main/claude/claude-structured-session-state.ts',
-    'src/shared/agent-session-wire-refusals.ts'
+    'src/shared/agent-session/failures/agent-session-wire-refusals.ts'
   ])('retains mixed UI and host changes, including renames: %s', (hostFile) => {
     expect(workflowIncludes(paths, uiFiles)).toBe(false)
     expect(workflowIncludes(paths, [...uiFiles, hostFile])).toBe(true)

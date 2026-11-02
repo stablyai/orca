@@ -18,6 +18,7 @@ const updateWorktreeMeta = vi.fn()
 const HOST_LABEL = 'gpu-vm'
 let worktreeCardProperties: WorktreeCardProperty[] = []
 let settings: Partial<GlobalSettings> | null = null
+let runtimeEnvironments: readonly object[] = []
 const WORKTREE_CARD_IMPORT_TIMEOUT_MS = 15_000
 
 vi.mock('@/store', () => {
@@ -33,6 +34,7 @@ vi.mock('@/store', () => {
     openModal,
     projectGroups: [],
     remoteBranchConflictByWorktreeId: {},
+    runtimeEnvironments,
     settings,
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),
@@ -116,7 +118,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
-// Imported per test so the mocked store is seeded before the module reads it.
+// Seed mocked store state before importing the card that reads it.
 async function renderCardMarkup(props: Partial<WorktreeCardProps> = {}): Promise<string> {
   const { default: WorktreeCard } = await import('./WorktreeCard')
   return renderToStaticMarkup(
@@ -134,6 +136,7 @@ describe('WorktreeCard host badge toggle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     worktreeCardProperties = []
+    runtimeEnvironments = []
     settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
   })
 
@@ -221,6 +224,32 @@ describe('WorktreeCard host badge toggle', () => {
         }
       }
     },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'shows a penguin named for its distro in place of a WSL host label',
+    async () => {
+      worktreeCardProperties = ['host']
+      runtimeEnvironments = [
+        {
+          id: 'env-wsl',
+          orcadDeployment: {
+            kind: 'wsl',
+            distro: 'orca-demo',
+            localPort: 1,
+            remotePort: 2
+          }
+        }
+      ]
+      const markup = await renderCardMarkup({
+        worktree: makeWorktree({ hostId: 'runtime:env-wsl' }),
+        hostContextLabel: 'orca-demo (WSL)'
+      })
+      expect(markup).not.toContain('orca-demo (WSL)')
+      expect(markup).toContain('aria-label="Runs on WSL: orca-demo (Linux)"')
+    },
+    // A filtered run imports WorktreeCard cold here, which can outlast the default timeout.
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )
 })

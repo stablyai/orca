@@ -8,12 +8,7 @@ import { setSecretStore } from '../../src/shared/secret-store'
 // The harness owns its directory even when a suite replaces the fs module.
 const { mkdtempSync, rmSync } = process.getBuiltinModule('fs')
 
-/**
- * Why: both host ports throw until an entrypoint installs them, which is the right
- * production behaviour but would fail ~70 suites that only ever needed *some* host.
- * Install benign defaults before every test so those suites stay unchanged; a suite
- * that asserts on host behaviour installs its own and wins, because this runs first.
- */
+// Install benign host ports before tests; production correctly throws before entry installs them, while suites can override defaults afterward.
 
 // Most suites never read a host data path; create its per-file directory only when needed.
 let userData: string | undefined
@@ -28,16 +23,10 @@ afterAll(() => {
   }
 })
 
-// Deliberately not a plaintext passthrough: encryptString must return something a
-// test can tell apart from its input, or a test that forgot to seal would pass.
+// Return ciphertext distinct from input so forgotten sealing cannot pass.
 const SEAL_PREFIX = 'vitest-sealed:'
 
-/**
- * Build a fake environment from just the members a suite cares about. Exported so
- * suites that need a specific path or metrics fixture state only that, instead of
- * restating all seven members — which is boilerplate, and pushed one suite past
- * the max-lines budget.
- */
+// Let suites specify only relevant fake-host members rather than duplicate entire environment.
 export function fakeAppEnvironment(overrides: Partial<AppEnvironment> = {}): AppEnvironment {
   return {
     getPath: (name) => (name === 'home' ? homedir() : name === 'temp' ? tmpdir() : userDataPath()),
@@ -51,7 +40,6 @@ export function fakeAppEnvironment(overrides: Partial<AppEnvironment> = {}): App
   }
 }
 
-/** Install a fake in one call — the common shape in suites that need one specific member. */
 export function installFakeAppEnvironment(overrides: Partial<AppEnvironment> = {}): void {
   setAppEnvironment(fakeAppEnvironment(overrides))
 }

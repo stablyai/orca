@@ -123,13 +123,13 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: fake.write,
+      updateSettingsOrThrow: fake.write,
       hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
     const view = render(<AccountsPane {...props} />)
     await act(async () => {})
-    // The invariant is identity, not a magic number: the matched section keeps the same DOM
-    // node across every query edit, so editing the query cannot cost an extra read or watcher.
+    // Assert DOM identity across query edits so search cannot remount sections and add reads/watchers.
     const mountedHeading = screen.getByText('Grok (xAI)', { exact: true })
     const watchersAfterMount = fake.watcher.mock.calls.length
     const statusReadsAfterMount = fake.status.mock.calls.length
@@ -148,6 +148,7 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: fake.write,
+      updateSettingsOrThrow: fake.write,
       hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
@@ -182,6 +183,7 @@ it('preserves explicit Grok refresh and real hide/reopen status reads', async ()
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: fake.write,
+    updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
   const view = render(<AccountsPane {...props} />)
@@ -204,6 +206,7 @@ it('keeps usage-driven Grok status refreshes while the section stays mounted', a
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: fake.write,
+    updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
   const view = render(<AccountsPane {...props} />)
@@ -223,6 +226,7 @@ it('keeps the login subscription until Codex genuinely hides', async () => {
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: fake.write,
+    updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
   const view = render(<AccountsPane {...props} />)
@@ -247,6 +251,7 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: fake.write,
+      updateSettingsOrThrow: fake.write,
       hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
@@ -269,6 +274,7 @@ it('keeps Cursor refresh driven by usage updates and genuine reopen', async () =
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: fake.write,
+    updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
   const view = render(<AccountsPane {...props} />)

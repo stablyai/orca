@@ -1,6 +1,7 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
 import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
+import { BROWSER_NETWORK_TUNNEL_MAX_STREAMS } from './browser-network-tunnel-stream-state'
 import { pipeUpstreamToClient } from './remote-browser-socks-upstream'
 
 const SOCKS_VERSION = 5
@@ -40,7 +41,7 @@ export class RemoteBrowserSocksServer {
   constructor(options: RemoteBrowserSocksServerOptions) {
     this.open = options.open
     this.server = createServer((socket) => this.accept(socket))
-    this.server.maxConnections = 128
+    this.server.maxConnections = BROWSER_NETWORK_TUNNEL_MAX_STREAMS
   }
 
   listen(): Promise<{ host: string; port: number }> {

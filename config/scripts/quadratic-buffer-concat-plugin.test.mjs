@@ -18,6 +18,11 @@ function lintSources(sources) {
 
 const violations = [
   [
+    'escaped computed concat',
+    String.raw`let acc = Buffer.alloc(0); for (const chunk of chunks) { acc = Buffer['con\x63at']([acc, chunk]) }`,
+    'acc'
+  ],
+  [
     'self accumulator',
     'let acc = Buffer.alloc(0); for (const chunk of chunks) { acc = Buffer.concat([acc, chunk]) }',
     'acc'

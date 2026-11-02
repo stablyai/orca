@@ -1,6 +1,4 @@
-// Single source of truth for telemetry event names, schemas, and enums.
-// Zod-first: `EventMap` is `z.infer`-derived from the same `eventSchemas` record the runtime validator consumes — no parallel union to drift.
-// `.strict()` on every object schema is the runtime "no extra keys"; free-form strings carry an explicit `.max(N)` cap.
+// Infer event types from the runtime schema registry to prevent drift; strict objects reject extra keys and strings have explicit caps.
 
 export {
   AGENT_KIND_VALUES,

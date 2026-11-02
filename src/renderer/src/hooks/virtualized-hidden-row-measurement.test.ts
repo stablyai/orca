@@ -62,7 +62,6 @@ function createViewport(measure: RowMeasurer): {
     scrollElement.appendChild(row)
     return row
   }
-  // The user scrolled through rows 0-6, so each has a real measured height.
   for (let index = 0; index <= 6; index++) {
     const row = rowElement(index)
     virtualizer.resizeItem(index, measure(row, sizeEntry(row, MEASURED_ROW_HEIGHT), virtualizer))
@@ -70,7 +69,6 @@ function createViewport(measure: RowMeasurer): {
   return { rowElement, scrollElement, virtualizer }
 }
 
-/** Hides the scroller, delivers the 0px ResizeObserver reports for the mounted rows, and re-shows it. */
 function runHideCycle(measure: RowMeasurer): { topKey: unknown; totalSize: number } {
   const { rowElement, scrollElement, virtualizer } = createViewport(measure)
   setHidden(scrollElement)
@@ -104,7 +102,6 @@ describe('measureVirtualRowRetainingHiddenSize', () => {
     const after = runHideCycle(measureElement)
 
     expect(before.topKey).toBe(4)
-    // Rows above the fold collapsed to 0px, so the same scrollTop now lands two files later.
     expect(after.topKey).toBe(6)
     expect(after.totalSize).toBe(before.totalSize - 2 * MEASURED_ROW_HEIGHT)
   })

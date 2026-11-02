@@ -36,8 +36,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       '/repo/src': { children: [] },
       '/repo/docs': { children: [] }
     }
-    // Why identities, not calls: React skips the re-render (and the row-projection rebuild) when a
-    // setState produces the same value, so only a new identity costs a full tree walk.
+    // Count committed identities: React skips equal state, while each new cache rebuilds the row projection.
     const committedCaches: Record<string, DirCache>[] = []
     const setDirCache = vi.fn((update: CacheUpdate) => {
       const next = typeof update === 'function' ? update(cache) : update
@@ -124,9 +123,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     }
     const readDirectory = vi.fn(async (dirPath: string) => {
       if (dirPath === '/repo/src') {
-        // Simulate a concurrent newer load (e.g. a watcher-driven refreshDir)
-        // superseding this directory while its refresh read is still in flight:
-        // bump the load token and commit fresher children.
+        // A concurrent watcher load supersedes this in-flight read by advancing its token and committing newer children.
         tracker.begin('/repo/src')
         setDirCache((prev) => ({
           ...prev,
@@ -150,12 +147,9 @@ describe('refreshFileExplorerExpandedDirs', () => {
       maxConcurrentReads: 16
     })
 
-    // Not every dir was still current, so the refresh reports partial completion.
     expect(refreshed).toBe(false)
-    // The superseded dir keeps the newer load state; the stale read is
-    // dropped from the batched commit instead of clobbering fresher data.
+    // Drop the superseded read instead of overwriting newer load state in the batched commit.
     expect(cache['/repo/src']).toEqual(newerSrcCache)
-    // The still-current dir is committed normally.
     expect(cache['/repo/docs']).toMatchObject({ children: [{ name: 'guide.md' }] })
   })
 
@@ -194,12 +188,10 @@ describe('refreshFileExplorerExpandedDirs', () => {
       maxConcurrentReads: 16
     })
 
-    // Let /repo/src resolve (and pass its resolve-time token check) while
-    // /repo/docs is still in flight — the batch commit is gated on docs.
+    // Let src pass resolve-time checks while docs still blocks the batched commit.
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    // A newer load (e.g. a watcher-driven refreshDir) supersedes /repo/src in
-    // the window between its resolved read and the final batched commit.
+    // Supersede src between its resolve-time check and final batched commit.
     tracker.begin('/repo/src')
     const newerSrcCache: DirCache = {
       children: [
@@ -218,7 +210,6 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const refreshed = await refreshPromise
 
     expect(refreshed).toBe(false)
-    // The stale /repo/src read must not clobber the newer committed cache.
     expect(cache['/repo/src']).toEqual(newerSrcCache)
     expect(cache['/repo/docs']).toMatchObject({ children: [{ name: 'guide.md' }] })
   })
@@ -300,9 +291,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     await Promise.resolve()
 
     expect(isLoading('/repo/d0')).toBe(true)
-    // A queued dir must already advertise loading:true, or FileExplorer's
-    // auto-load effect fans out an unbounded loadDir for it on the next
-    // `expanded` change — the reads this cap exists to bound.
+    // Mark queued dirs loading up front or expansion effects can bypass the concurrency cap with duplicate reads.
     expect(isLoading('/repo/d6')).toBe(true)
     expect(readDirectory).toHaveBeenCalledTimes(3)
 
@@ -459,15 +448,14 @@ describe('refreshFileExplorerExpandedDirs', () => {
       })
     ).rejects.toBe(commitError)
 
-    // A surviving worker must not commit past the failure: callers observing the rejection
-    // would otherwise still get setDirCache writes and staleness clears afterwards.
+    // Surviving workers must stop after rejection rather than commit later data/staleness writes.
     expect(onDirCommitted.mock.calls.map(([dirPath]) => dirPath).sort()).toEqual([
       '/repo/a',
       '/repo/b'
     ])
     // One up-front placeholder write plus the single failed batch's result write.
     expect(setDirCache).toHaveBeenCalledTimes(2)
-    // Why not still loading: no read was ever started for these, so a spinner would never clear.
+    // Unstarted reads cannot clear spinners later; clear their loading marks now.
     expect(isLoading('/repo/c')).toBe(false)
     expect(isLoading('/repo/d')).toBe(false)
   })
@@ -514,7 +502,6 @@ describe('refreshFileExplorerExpandedDirs', () => {
 
     expect(refreshed).toBe(false)
     expect(cache['/repo/a']).toMatchObject({ children: [{ name: 'x.ts' }] })
-    // The queued task must neither read nor commit the superseded dir.
     expect(readDirectory).toHaveBeenCalledTimes(1)
     expect(cache['/repo/b']).toEqual(newerBCache)
   })

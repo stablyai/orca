@@ -10,8 +10,8 @@ const { startForwardMock, waitForwardMock } = vi.hoisted(() => ({
   waitForwardMock: vi.fn()
 }))
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -33,7 +33,7 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
     await importOriginal()
   )
 )
-// Why: admission would otherwise run this machine's ssh -G and ssh-add.
+// Keep admission from invoking this machine's real ssh -G/ssh-add.
 vi.mock('../system-transport/system-ssh-loopback-route-admission', () => ({
   admitSystemSshLoopbackRoute: async () => ({
     admitted: true,

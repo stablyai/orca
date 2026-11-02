@@ -6,10 +6,6 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const HOST = 'host-1'
 const REPO = 'repo-1'
 
-/**
- * The workspace catalog reads: the Home card's per-host summary, the snapshot client the host
- * screen polls with, and the retired-name registry the create sheet asks for per repo.
- */
 export function worktreeCatalogMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -54,7 +50,7 @@ export function worktreeCatalogMountAdapters(
           snapshots.fetch(client, HOST).then((result) => {
             fetched = result
             // Admitting is what advances the snapshot token a later poll sends back.
-            admitted = snapshots.admit(result.kind === 'response' ? result.pending : null)
+            admitted = result.kind === 'response' ? snapshots.admit(result.pending) : null
             // The pending catalog carries the live client, which the recorder cannot observe.
             return projectObservable(result)
           }),

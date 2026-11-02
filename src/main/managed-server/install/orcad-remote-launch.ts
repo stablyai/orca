@@ -22,7 +22,8 @@ import {
   ORCAD_PID_MACHINE_FILENAME,
   ORCAD_READINESS_FILENAME,
   ORCAD_READINESS_MAX_BYTES,
-  posixProcessAliveShellFunction
+  posixProcessAliveShellFunction,
+  posixProcessArgsShellFunction
 } from './orcad-remote-host-support'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
@@ -69,6 +70,9 @@ export function orcadManagedLaunchEnv(
 export type OrcadLaunchDetach = 'nohup' | 'setsid'
 
 const ORCAD_SETSID_PID_WAIT_TRIES = 100
+
+/** Halving V8's 16 MB semi-spaces saves ~30 MB idle RSS; a CLI flag because the heap cannot be resized later. */
+export const ORCAD_RUNTIME_V8_FLAGS = '--max-semi-space-size=8'
 
 /** Pass bind explicitly so launch policy cannot change with installed-version defaults. */
 export function orcadLaunchCommand(
@@ -128,7 +132,7 @@ export function orcadLaunchCommand(
           '{ umask "$orcad_login_umask" &&',
           ...launchEnv,
           // exec keeps $! equal to runtime PID; in-place launcher loading also preserves older clients’ argv checks.
-          `exec nohup "$orcad_runtime" ${entry}`,
+          `exec nohup "$orcad_runtime" ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
           `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)};`,
           `} > ${readiness} 2>> ${log} < /dev/null &`,
           `echo $! > ${pidFile} &&`,
@@ -154,18 +158,29 @@ function setsidLaunchTail(
     ...launchEnv,
     // Only WSL setsid launches receive this marker.
     `${ORCAD_WSL_HOST_ENV}=1`,
-    ...hostEnv.map(([name, value]) => `${assertEnvName(name)}=${quotePosixShell(value)}`),
+    ...hostEnv.map(launchEnvAssignment),
     'sh -c \'orcad_detach() { if setsid -f true >/dev/null 2>&1; then setsid -f "$@"; ' +
       'else setsid "$@" & fi; }; orcad_detach "$@"\' orcad-detach',
     `sh -c 'echo $$ > "$1" && umask "$2" && shift 2 && exec "$@"' orcad-launch ${pidFile}`,
     '"$orcad_login_umask"',
-    `"$orcad_runtime" ${entry}`,
+    `"$orcad_runtime" ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
     `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &&`,
     `orcad_wait=0; while [ ! -s ${pidFile} ] && [ "$orcad_wait" -lt ${ORCAD_SETSID_PID_WAIT_TRIES} ];`,
     'do sleep 0.05; orcad_wait=$((orcad_wait + 1)); done;',
     `cat ${pidFile}`
   ]
+}
+
+function launchEnvAssignment([name, value, mode]: OrcadLaunchEnvEntry): string {
+  if (mode !== 'keep-existing') {
+    return `${assertEnvName(name)}=${quotePosixShell(value)}`
+  }
+  // Inside "${NAME:-default}" quotes are literal, so only quote-free defaults are expressible.
+  if (!/^[A-Za-z0-9._=:,/-]+$/.test(value)) {
+    throw new Error(`orcad_launch_env_default_invalid:${name}`)
+  }
+  return `${assertEnvName(name)}="\${${name}:-${value}}"`
 }
 
 function assertEnvName(name: string): string {
@@ -205,9 +220,13 @@ export function orcadLivenessProbeCommand(
   )
   return [
     posixProcessAliveShellFunction({ refuseUnverifiable: true }),
+    posixProcessArgsShellFunction(),
     // PID reuse needs argv identity; absent ps leaves conservative liveness checks to decide.
     `orcad_launcher=${launcher}; orcad_server=${server};`,
-    'orcad_reused() { args=$(ps -o args= -p "$1" 2>/dev/null) && [ -n "$args" ] && ' +
+    // The probe's own shell, or the shell wrapping it, carries the slot paths in its argv; after a
+    // restart either can hold the old PID. A shell elsewhere may be an older launcher's live parent.
+    'orcad_reused() { { [ "$1" = "$$" ] || [ "$1" = "$PPID" ]; } && return 0; ' +
+      'args=$(orcad_args "$1") && [ -n "$args" ] && ' +
       'case "$args" in *"$orcad_launcher"* | *"$orcad_server"*) return 1;; *) return 0;; esac; };',
     `pid=$(cat ${pidFile} 2>/dev/null);`,
     'case "$pid" in',

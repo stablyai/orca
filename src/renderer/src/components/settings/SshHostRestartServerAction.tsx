@@ -19,10 +19,7 @@ export function canRestartSshHostServer(status: SshManagedServerStatus | undefin
   return Boolean(getManagedOrcadApi() && status?.kind === 'managed' && status.launchSessionEnded)
 }
 
-/**
- * Restarts a macOS host's managed server from this connection, so its terminals get local network
- * access back (#25934). Main refuses while any terminal runs; it never ends them.
- */
+/** Restart macOS managed servers to restore local-network access (#25934); main refuses running terminals and never ends them. */
 export function SshHostRestartServerDialog({
   status,
   open,

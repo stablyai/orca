@@ -47,9 +47,7 @@ export function SkillsList({
   agentByRootPath: ReadonlyMap<string, string>
   selectedIds: ReadonlySet<string>
   selectionMode: 'share' | 'delete' | null
-  /** False while the runtime target is unresolved or the host predates
-   *  `skills.delete.v1`; the action disables with a reason rather than issuing
-   *  an RPC nothing answers. */
+  /** Disable deletion with a reason until the target resolves and advertises skills.delete.v1. */
   deleteSupported: boolean
   deleteUnsupportedReason: string | null
   onSelectedChange: (skillId: string, selected: boolean) => void
@@ -58,8 +56,7 @@ export function SkillsList({
   onDelete: (skill: DiscoveredSkill) => void
 }): React.JSX.Element {
   const listRef = useRef<HTMLDivElement>(null)
-  // Why: an id survives filtering; an index would silently anchor a shift-click
-  // range to whatever row later landed in that slot.
+  // Anchor ranges by stable skill ID so filtering cannot silently move the anchor to another row.
   const anchorIdRef = useRef<string | null>(null)
   const [detailSkill, setDetailSkill] = useState<DiscoveredSkill | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(null)
@@ -121,6 +118,7 @@ export function SkillsList({
       <SkillDetailDialog
         skill={detailSkill}
         agentByRootPath={agentByRootPath}
+        ownerHostId={ownerHostId}
         shareable={detailSkill ? isSkillShareEligible(detailSkill, local) : false}
         deletable={detailSkill ? deleteSupported && isSkillDeleteEligible(detailSkill) : false}
         deleteDisabledReason={detailSkill ? deleteReasonFor(detailSkill) : null}
@@ -175,9 +173,7 @@ export function SkillsList({
                   ? translate('auto.components.skills.SkillRow.notDeletable', 'Not deletable')
                   : translate('auto.components.skills.SkillRow.notShareable', 'Not shareable')
               }
-              // Why: on a remote runtime every row shares one *share* cause, so
-              // the page states it once above the list instead of on all 114
-              // rows. Delete is valid on a remote host, so it keeps its own.
+              // Remote sharing has one page-level cause; valid remote deletion keeps row-specific reasons.
               disabledReason={
                 deleting
                   ? skillDeleteEligibilityReason(skill)
@@ -192,6 +188,7 @@ export function SkillsList({
               onShare={() => onShare(skill)}
               onDelete={() => onDelete(skill)}
               onReveal={() => void revealSkill(skill)}
+              ownerHostId={ownerHostId}
               onKeyDown={onListKeyDown}
             />
           )

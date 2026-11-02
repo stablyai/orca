@@ -1,5 +1,4 @@
-// A windowless server (orca serve, orcad): a phone's split move and its create after a split tab
-// go through main's layout, so the rows main then lists keep them (layout-owner build).
+// Windowless phone split moves and subsequent creates must retain main-owned groups/order.
 import { describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 

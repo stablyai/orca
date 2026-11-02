@@ -1,6 +1,4 @@
-// Layout-owner builds write a terminal's pane binding before they register it (spawn-commit), so
-// main's layout answers which pane holds it from the first registration on. Tests and dev builds
-// fail loudly when a path registers first; shipped builds carry on with no pane.
+// Bind panes before registration so main can resolve them immediately; unbound registration throws in tests/dev and ships without a pane.
 
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 

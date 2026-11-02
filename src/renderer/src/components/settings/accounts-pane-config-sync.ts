@@ -1,7 +1,6 @@
 import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync-types'
 
-// Why: bounded so a permanently unreadable home cannot poll forever; ~5 minutes
-// total is long enough to outlast an antivirus scan or backup pass.
+// Bound retries to about five minutes: outlast antivirus/backups without polling permanently unreadable homes forever.
 const CODEX_CONFIG_SYNC_RETRY_MS = 30_000
 const CODEX_CONFIG_SYNC_RETRY_LIMIT = 10
 

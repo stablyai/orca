@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { Trans } from 'react-i18next'
 import type { AppState } from '@/store/types'
 import type { LocalBaseRefUpdateSuggestion } from '../../../../shared/worktree/base-ref-drift-types'
 import { Button } from '../ui/button'
@@ -6,7 +7,7 @@ import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
   getKeepLocalMainUpToDateTitle
 } from '../settings/keep-local-main-up-to-date-setting'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 type SuggestionToastDeps = {
   updateSettings: AppState['updateSettings']
@@ -21,11 +22,7 @@ function toastId(suggestion: LocalBaseRefUpdateSuggestion): string {
 
 const inspectSettingsDismissals = new Set<string>()
 
-// Why: sonner crams its built-in `action`/`cancel` buttons into the same
-// center-aligned flex row as the title + multi-line description, which pinches
-// the actions into a squished column. Rendering the body as a custom node lets
-// the buttons sit in a full-width footer below the text while still reusing
-// sonner's native frame (info icon, title, close X, swipe-to-dismiss).
+// Use a custom body/footer so long text does not squeeze Sonner’s native action row.
 function SuggestionToastBody({
   suggestion,
   deps
@@ -34,10 +31,6 @@ function SuggestionToastBody({
   deps: SuggestionToastDeps
 }): React.JSX.Element {
   const { updateSettings, getSettings, openSettingsPage, openSettingsTarget } = deps
-  const commitNoun =
-    suggestion.behind === 1
-      ? translate('auto.components.sidebar.local.base.ref.suggestion.toast.commit', 'commit')
-      : translate('auto.components.sidebar.local.base.ref.suggestion.toast.commits', 'commits')
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
 
   const turnOn = (): void => {
@@ -80,8 +73,7 @@ function SuggestionToastBody({
       repoId: null,
       sectionId: KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID
     })
-    // Why: opening Settings is informational, not a decline; Sonner still calls
-    // onDismiss for this programmatic close, so skip the one-time decline flag.
+    // Opening Settings is informational; suppress Sonner’s decline recording for this dismissal.
     inspectSettingsDismissals.add(id)
     toast.dismiss(id)
   }
@@ -89,30 +81,34 @@ function SuggestionToastBody({
   return (
     <div className="flex w-full flex-col gap-3">
       <p className="text-sm leading-5 text-popover-foreground/80">
-        {translate(
-          'auto.components.sidebar.local.base.ref.suggestion.toast.f15fd80989',
-          'Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in',
-          {
-            value0: suggestion.localBranch,
-            value1: suggestion.behind,
-            value2: commitNoun
-          }
-        )}{' '}
-        <button
-          type="button"
-          onClick={openSetting}
-          className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
-        >
-          {translate(
-            'auto.components.sidebar.local.base.ref.suggestion.toast.3d260e1a5d',
-            'Settings › {{value0}}',
-            { value0: keepLocalMainUpToDateTitle }
+        <Trans
+          i18n={i18n}
+          defaults={translate(
+            'auto.components.sidebar.local.base.ref.suggestion.toast.staleLocalBranch',
+            'Your new worktree is current, but local {{branch}} is {{count}} commits behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in <settings>Settings › {{setting}}</settings>',
+            {
+              count: suggestion.behind,
+              defaultValue_one:
+                'Your new worktree is current, but local {{branch}} is {{count}} commit behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in <settings>Settings › {{setting}}</settings>'
+            }
           )}
-        </button>
+          values={{
+            branch: suggestion.localBranch,
+            setting: keepLocalMainUpToDateTitle
+          }}
+          components={{
+            settings: (
+              <button
+                type="button"
+                onClick={openSetting}
+                className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
+              />
+            )
+          }}
+        />
       </p>
       <div className="flex justify-end">
-        {/* No explicit Dismiss: the toast is persistent and sonner's close (X)
-            already backs the user out and persists the decline. */}
+        {/* Sonner’s close button already persists decline; no additional dismiss action is needed. */}
         <Button size="sm" onClick={turnOn}>
           {translate(
             'auto.components.sidebar.local.base.ref.suggestion.toast.34a03a6565',
@@ -133,8 +129,7 @@ export function showLocalBaseRefUpdateSuggestionToast(
     return
   }
 
-  // Why (matches the sticky "Session restore failed" toast): stay on screen until
-  // the user acts, so a ~4s auto-expire can't bury this one-time, opt-in nudge.
+  // Keep this one-time opt-in prompt visible until the user acts.
   toast.info(
     translate(
       'auto.components.sidebar.local.base.ref.suggestion.toast.4a18052018',
@@ -146,8 +141,7 @@ export function showLocalBaseRefUpdateSuggestionToast(
       description: <SuggestionToastBody suggestion={suggestion} deps={deps} />,
       duration: Infinity,
       dismissible: true,
-      // Fires for the close (X) button and swipe; the in-body buttons handle their
-      // own dismissal since they are not sonner's native action/cancel controls.
+      // Close/swipe uses onDismiss; custom body actions handle their own dismissal.
       onDismiss: () => {
         if (inspectSettingsDismissals.delete(toastId(suggestion))) {
           return

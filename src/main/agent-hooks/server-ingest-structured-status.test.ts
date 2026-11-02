@@ -3,13 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-freshness'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer, _internals } from './server'
 import { PANE } from './server.test-fixtures'
 
@@ -116,6 +116,20 @@ describe('AgentHookServer ingestStructuredStatus', () => {
       })
     ])
     expect(server.getStatusSnapshot()[0]?.observation?.origin).toBe('structured')
+  })
+
+  it('keeps a logical start owned between physical children without changing the latest turn', () => {
+    const server = new AgentHookServer()
+    const starting = summary({ status: 'idle', hostExecutionPhase: 'starting' })
+    server.ingestStructuredStatus(starting, SUBJECT)
+    server.ingestStructuredStatus(starting, SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      structuredHost: 'owned',
+      state: 'done',
+      stateStartedAt: OBSERVED_AT
+    })
+    server.ingestStructuredStatus({ ...starting, hostExecutionPhase: 'ready' }, SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ structuredHost: 'owned', state: 'done' })
   })
 
   it('maps attention to blocked and idle to done', () => {

@@ -9,7 +9,11 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     }
   }
 }))
-import { rememberPushDismissal, wasPushDismissed } from './push-dismissal-watermarks'
+import {
+  rememberPushDismissal,
+  rememberPushDismissals,
+  wasPushDismissed
+} from './push-dismissal-watermarks'
 const payload = {
   hostFingerprint: 'host-a',
   notificationEpoch: 'epoch-a',
@@ -44,6 +48,29 @@ it('serializes concurrent dismissals and never lowers a watermark', async () => 
   expect(await wasPushDismissed({ ...payload, notificationId: 'other' })).toBe(true)
 })
 
+it('merges batched and concurrent fences without lowering duplicates or accepting invalid ones', async () => {
+  await rememberPushDismissal({ ...payload, notificationSeq: 5 })
+  await Promise.all([
+    rememberPushDismissals([
+      payload,
+      { ...payload, notificationSeq: 4 },
+      { ...payload, notificationId: 'other' },
+      { ...payload, notificationId: 'invalid', notificationSeq: -1 }
+    ]),
+    rememberPushDismissal({ ...payload, notificationSeq: 7 })
+  ])
+  expect(await wasPushDismissed({ ...payload, notificationSeq: 7 })).toBe(true)
+  expect(await wasPushDismissed({ ...payload, notificationSeq: 8 })).toBe(false)
+  expect(await wasPushDismissed({ ...payload, notificationId: 'other' })).toBe(true)
+  expect(await wasPushDismissed({ ...payload, notificationId: 'invalid' })).toBe(false)
+})
+
+it('does no storage work for an empty or entirely invalid batch', async () => {
+  await rememberPushDismissals([])
+  await rememberPushDismissals([{ ...payload, notificationEpoch: undefined }])
+  expect(AsyncStorage.getItem).not.toHaveBeenCalled()
+})
+
 it('expires retained metadata and ignores unversioned dismissals', async () => {
   vi.useFakeTimers()
   await rememberPushDismissal(payload)
@@ -63,7 +90,8 @@ it('joins an overtaking JavaScript write before retrying a delayed negative snap
     return snapshot
   })
   const pending = wasPushDismissed(payload)
-  await vi.waitFor(() => expect(finish).toBeDefined())
+  await Promise.resolve()
+  expect(finish).toBeDefined()
   await rememberPushDismissal(payload)
   finish()
   expect(await pending).toBe(true)

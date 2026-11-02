@@ -1,12 +1,12 @@
 // Eligibility permits requested startup; a released saved record alone must never trigger automatic respawn.
 
-import { agentSessionLeaseIsReleased } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionLeaseIsReleased } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { attachParamsForRecord } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionEndedChild } from './structured-agent-session-host-types'
-import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
+import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session/ownership/agent-session-surface-release-transition'
 
 /** Allow matching observed-ended children despite failed release; acquisition still requires death proof. */
 export function isResumableStructuredAgentSessionRecord(

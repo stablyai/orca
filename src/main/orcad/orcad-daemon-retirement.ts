@@ -1,10 +1,5 @@
-/**
- * Best-effort retirement of the terminal daemon when a managed stop asks for it.
- *
- * The daemon normally outlives orcad so terminals survive a restart (D7). Retirement happens
- * only when the daemon itself proves it owns no live session across every generation; a busy
- * or unanswering daemon stays up, and orcad's own stop never waits on that outcome.
- */
+// Daemons outlive orcad; retire only after their atomic cross-generation census proves no live sessions.
+// Busy/unresponsive daemons stay up, and orcad shutdown does not wait indefinitely.
 import {
   listLiveDaemonSessions,
   releaseDaemonRetirementFence,
@@ -19,14 +14,12 @@ export type OrcadDaemonRetirement = {
   retirement: OrcadDaemonRetirementVerdict
   liveSessions: number | null
   reason: string | null
-  /** After a timeout: whether the attempt still pending then went on to retire the daemon. */
+  /** Whether timed-out work eventually retired the daemon. */
   lateRetirement?: Promise<boolean>
 }
 
-/** Live sessions across every daemon generation, or `null` when any could not answer. */
 export async function countLiveOrcadDaemonSessions(): Promise<number | null> {
   try {
-    // The inventory lists live sessions only.
     return (await listLiveDaemonSessions())?.length ?? null
   } catch {
     return null
@@ -57,7 +50,7 @@ export async function retireOrcadDaemonIfIdle(
     timeoutMs,
     { state: 'timed-out' }
   )
-  // The fence cannot reopen while the attempt is pending; reopen it once a late refusal lands.
+  // Keep admission fenced while retirement is pending; reopen only after a definitive late refusal.
   const lateRetirement =
     result.state === 'timed-out'
       ? attempt.then((late) => {
@@ -70,7 +63,7 @@ export async function retireOrcadDaemonIfIdle(
   if (result.state === 'retiring') {
     return { retirement: 'retired', liveSessions: 0, reason: null }
   }
-  // A daemon that stays must not be left refusing new terminals.
+  // Surviving daemons must resume terminal admission.
   releaseFence()
   const liveSessions =
     result.state === 'busy' && result.liveSessions !== null

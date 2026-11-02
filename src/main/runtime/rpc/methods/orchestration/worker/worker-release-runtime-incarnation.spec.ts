@@ -59,8 +59,7 @@ export function registerWorkerReleaseRuntimeIncarnationTests(): void {
         if (scenario === 'read') {
           const readTerminal = vi.spyOn(runtime, 'readTerminal')
           const output = await harness.call('orchestration.workerRead', { dispatch: dispatchId })
-          // Pins the read to the reminted terminal: the handle it reached must resolve to the
-          // registered pane and incarnation, which the stale durable handle never does.
+          // Pin reads to the reminted handle that resolves the recorded pane/incarnation; the stale durable handle cannot.
           const [[readHandle]] = readTerminal.mock.calls
           expect(runtime.getTerminalPaneKey(readHandle)).toBe(makePaneKey('tab_worker', LEAF_ID))
           expect(runtime.getTerminalProcessIncarnation(readHandle)).toBe(`${PTY_ID}:1`)

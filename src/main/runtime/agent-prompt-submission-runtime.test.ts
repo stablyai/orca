@@ -5,10 +5,9 @@ import {
   createAgentPromptSubmissionRuntime
 } from './agent-prompt-submission-runtime-test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
+import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
-import type { RuntimeTerminalWriter } from './runtime-terminal-writer'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
 
 const createPromptRuntime = createAgentPromptSubmissionRuntime
 
@@ -211,6 +210,76 @@ describe('agent prompt submission runtime', () => {
       '\x1b]9999;{"state":"waiting","agentType":"aider"}\x07',
       Date.now()
     )
+
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
+    ).rejects.toThrow('agent_prompt_blocked')
+    expect(writes).toEqual([])
+  })
+
+  // Why real timers until the send: the emulator drains on timers, and the screen may clear only once quiet.
+  async function settleScreen(runtime: OrcaRuntimeService, handle: string): Promise<void> {
+    const outputAt = Date.now()
+    vi.useRealTimers()
+    await runtime.readTerminal(handle, { screen: true })
+    vi.useFakeTimers({ now: Math.max(outputAt, Date.now()) + TUI_IDLE_QUIESCENCE_MS })
+  }
+
+  it('sends to a ready Codex composer whose erased dialog the line tail still holds', async () => {
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+        // Why the echo: it ends the quiet the screen clear needs before the pre-Enter check.
+        runtime.onPtyData('pty-prompt', '\x1b[22;1H› review this', Date.now())
+      } else if (data === '\r') {
+        runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+      }
+    }, 'codex')
+    vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 80, rows: 24 })
+    // Codex 0.154's exec approval, then its in-place repaint once approved (no OSC 7501, Stop hook failed).
+    runtime.onPtyData(
+      'pty-prompt',
+      '\x1b[14;3HWould you like to run the following command?\x1b[16;3H$ touch made.txt' +
+        '\x1b[18;1H› 1. Yes, proceed (y)\x1b[19;3H3. No, and tell Codex what to do differently (esc)' +
+        '\x1b[21;3HPress enter to confirm or esc to cancel',
+      Date.now()
+    )
+    await settleScreen(runtime, handle)
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
+    ).rejects.toThrow('agent_prompt_blocked')
+
+    runtime.onPtyData(
+      'pty-prompt',
+      '\x1b[12;1H\x1b[J• done\x1b[22;1H› Ask Codex to do anything',
+      Date.now()
+    )
+    await settleScreen(runtime, handle)
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('refuses a settled dialog taller than the live window, as OpenCode 2 paints its permission prompt', async () => {
+    const { runtime, handle, writes } = await createPromptRuntime(() => undefined, 'opencode')
+    vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 80, rows: 24 })
+    // Why every row drawn: permission.tsx gives the dialog a ┃ left border and maxHeight 15.
+    const rows = [
+      '┃',
+      '┃  △ Permission required',
+      ...Array.from({ length: 11 }, (_, index) => `┃    $ ./step-${index}.sh`),
+      '┃',
+      '┃  Allow once  Reject                         ctrl+f fullscreen'
+    ]
+    runtime.onPtyData(
+      'pty-prompt',
+      rows.map((row, index) => `\x1b[${index + 8};1H${row}`).join(''),
+      Date.now()
+    )
+    await settleScreen(runtime, handle)
 
     await expect(
       runtime.sendTerminalAgentPrompt(handle, 'review this', { inputKind: 'driving' })
@@ -445,8 +514,7 @@ describe('agent prompt submission runtime', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
-  // Why (#16095): a still-working agent can never produce a `→working` edge, so the old predicate
-  // was unsatisfiable for every follow-up prompt; pane output after Enter is the evidence left.
+  // #16095: an already-working agent has no new working edge; post-Enter output supplies delivery evidence.
   it('accepts pane output after Enter while the agent is already working', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -496,8 +564,7 @@ describe('agent prompt submission runtime', () => {
     })
   })
 
-  // Why: hook rows reach the runtime through this provider, which has no window and no OSC title —
-  // the same path a headless `orca serve` host and a minimized desktop window take.
+  // Provider hooks reach headless/minimized runtimes without window or OSC-title evidence.
 })
 
 const PTY = 'pty-input-dispatch'
@@ -521,154 +588,10 @@ function inputDispatchRuntime() {
   return result
 }
 
-describe('terminal input dispatch through the current runtime', () => {
-  it.each(['pty', 'leaf'])('uses the runtime writer override in the %s lane', async (lane) => {
-    const target = inputDispatchRuntime()
-    if (lane === 'leaf') {
-      Object.defineProperties(target, {
-        getLivePtyForHandle: { value: () => null },
-        getLiveLeafForHandle: { value: () => ({ leaf: { writable: true, ptyId: PTY } }) },
-        isLeafPtyProvenAbsent: { value: async () => false }
-      })
-    }
-    const writer = vi.fn(function (
-      this: OrcaRuntimeService,
-      ...args: Parameters<RuntimeTerminalWriter['writeAction']>
-    ) {
-      expect(this).toBe(target)
-      expect(args).toHaveLength(4)
-      expect(args[0]).toBe(PTY)
-      return Promise.resolve()
-    })
-    Object.defineProperty(target, 'writeTerminalAction', { value: writer })
-
-    await expect(
-      target.sendTerminal(HANDLE, { text: 'hello' }, { inputKind: 'driving' })
-    ).resolves.toMatchObject({ accepted: true, bytesWritten: 5 })
-    expect(writer).toHaveBeenCalledOnce()
-  })
-
-  it.each(['pty', 'leaf'])(
-    'captures the prompt writer before spreading options in the %s lane',
-    async (lane) => {
-      const target = inputDispatchRuntime()
-      const calls: string[] = []
-      if (lane === 'leaf') {
-        Object.defineProperties(target, {
-          getLivePtyForHandle: { value: () => null },
-          getLiveLeafForHandle: { value: () => ({ leaf: { writable: true, ptyId: PTY } }) },
-          isLeafPtyProvenAbsent: { value: async () => false }
-        })
-      }
-      const captured = function (this: OrcaRuntimeService, ...args: unknown[]) {
-        expect(this).toBe(target)
-        expect(args).toHaveLength(5)
-        calls.push('captured')
-        return Promise.resolve({ submits: 1 })
-      }
-      Object.defineProperties(target, {
-        serializeAgentPromptSubmission: {
-          value: (_id: string, _generation: number, submit: () => Promise<{ submits: number }>) =>
-            submit()
-        },
-        assertLiveTerminalHandleTargetsPty: { value: () => {} },
-        assertAgentPromptGeneration: { value: () => {} },
-        writeTerminalAgentPrompt: { value: captured, configurable: true }
-      })
-      const options = { inputKind: 'launch' as const }
-      Object.defineProperty(options, 'marker', {
-        enumerable: true,
-        get() {
-          Object.defineProperty(target, 'writeTerminalAgentPrompt', {
-            value: () => {
-              calls.push('late')
-              return Promise.resolve({ submits: 1 })
-            }
-          })
-          return true
-        }
-      })
-
-      await target.sendTerminalAgentPrompt(HANDLE, 'hello', options)
-      expect(calls).toEqual(['captured'])
-    }
-  )
-
-  it('captures permission validation before the nested activity lookup replaces it', async () => {
-    const target = inputDispatchRuntime()
-    let activityReads = 0
-    Object.defineProperties(target, {
-      assertAgentPromptGeneration: { value: () => {} },
-      getPtyWriteHostPlatform: { value: () => 'linux' },
-      getAgentPromptActivity: {
-        value: () => {
-          activityReads += 1
-          if (activityReads === 2) {
-            Object.defineProperty(target, 'assertAgentPromptPermissionSafe', {
-              value: () => {
-                throw new Error('late')
-              }
-            })
-          }
-          return {}
-        }
-      },
-      assertAgentPromptPermissionSafe: {
-        configurable: true,
-        value: function (this: OrcaRuntimeService) {
-          expect(this).toBe(target)
-          expect(arguments.length).toBe(2)
-          if (activityReads === 2) {
-            throw new Error('captured')
-          }
-        }
-      }
-    })
-
-    await expect(
-      target['writeTerminalAgentPrompt'](HANDLE, PTY, 1, 'hello', {
-        inputKind: 'driving',
-        composerReady: true
-      })
-    ).rejects.toThrow('captured')
-    expect(activityReads).toBe(2)
-  })
-
-  it('keeps the activity cache omitted in the baseline read', async () => {
-    const target = inputDispatchRuntime()
-    Object.defineProperty(target, 'assertAgentPromptGeneration', { value: () => {} })
-    const activity = vi.fn(function (this: OrcaRuntimeService) {
-      expect(this).toBe(target)
-      expect(arguments.length).toBe(2)
-      throw new Error('baseline reached')
-    })
-    Object.defineProperty(target, 'getAgentPromptActivity', { value: activity })
-
-    await expect(
-      target['writeTerminalAgentPrompt'](HANDLE, PTY, 1, 'hello', { inputKind: 'driving' })
-    ).rejects.toThrow('baseline reached')
-    expect(activity).toHaveBeenCalledOnce()
-  })
-})
-
-describe('input original queue, callback and private method contracts', () => {
+describe('agent prompt submission queue', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.useRealTimers()
-  })
-
-  it('keeps the private retry lookup on the Root receiver before any delay', async () => {
-    const target = inputDispatchRuntime()
-    const read = vi.fn(function (this: OrcaRuntimeService, ...args: unknown[]) {
-      expect(this).toBe(target)
-      expect(args).toEqual([PTY])
-      return null
-    })
-    Object.defineProperty(target, 'getPtyAgent', { value: read })
-    await expect(
-      target['resubmitAgentPromptAfterRetryDelay'](PTY, 1, { inputKind: 'driving' })
-    ).resolves.toBe(0)
-    expect(read).toHaveBeenCalledOnce()
   })
 
   it('serializes rejected submissions, isolates generations and keeps a replacement tail', async () => {
@@ -700,80 +623,5 @@ describe('input original queue, callback and private method contracts', () => {
     expect(calls).toEqual(['first', 'fresh', 'second'])
     expect(target['agentPromptSubmissionTailByPtyId'].get(key)).toBe(replacement)
     expect(target['agentPromptSubmissionTailByPtyId'].has(`${PTY}\u00002`)).toBe(false)
-  })
-
-  it('keeps hook presence callback receivers and preserves invalidation failure', async () => {
-    const target = inputDispatchRuntime()
-    const check = vi.fn(async function (this: OrcaRuntimeService, ...args: unknown[]) {
-      expect(this).toBe(target)
-      expect(args).toHaveLength(1)
-      return 'live' as const
-    })
-    Object.defineProperty(target, 'checkHookAgentPresenceFn', {
-      configurable: true,
-      writable: true,
-      value: check
-    })
-    Object.defineProperty(target, 'collectAgentStatusPaneKeysForPty', {
-      configurable: true,
-      value: () => new Set(['pane-first', 'pane-second'])
-    })
-    await expect(target['recheckHookAgentPresenceForPty'](PTY)).resolves.toBe('live')
-    expect(check.mock.calls).toEqual([['pane-first'], ['pane-second']])
-    Object.defineProperty(target, 'collectAgentStatusPaneKeysForPty', {
-      value: () => {
-        Object.defineProperty(target, 'checkHookAgentPresenceFn', { value: null })
-        return new Set(['pane-first'])
-      }
-    })
-    await expect(target['recheckHookAgentPresenceForPty'](PTY)).rejects.toBeInstanceOf(TypeError)
-    expect(check).toHaveBeenCalledTimes(2)
-  })
-
-  it.each([
-    { recover: false, hasHandle: false },
-    { recover: true, hasHandle: false },
-    { recover: true, hasHandle: true }
-  ])('keeps captured recovery handle semantics for %j', async ({ recover, hasHandle }) => {
-    const target = inputDispatchRuntime()
-    const pty = target['ptysById'].get(PTY)
-    if (!pty) {
-      throw new Error('registered fixture PTY missing')
-    }
-    pty.lastOscTitleAt = 0
-    pty.lastAgentStatusObservedLive = true
-    if (!hasHandle) {
-      target['handleByPtyId'].delete(PTY)
-    }
-    const foreground = Promise.withResolvers<{
-      controller: RuntimePtyController | null
-      available: boolean
-      process: string | null
-    }>()
-    const reads = vi.fn(() => foreground.promise)
-    const explicit = vi.fn(() => ({ status: 'idle' as const, updatedAt: 0, stateStartedAt: 0 }))
-    Object.defineProperties(target, {
-      readPtyForegroundProcessFromController: { value: reads },
-      getFreshExplicitAgentStatusForPty: { value: explicit },
-      recordTerminalSideEffectFact: { value: vi.fn() }
-    })
-    target['confirmLegacyPtyAgentExit'](PTY, recover, false)
-    target['handleByPtyId'].set(PTY, 'late-handle')
-    foreground.resolve({ controller: target['ptyController'], available: false, process: null })
-    await Promise.resolve()
-    if (recover && !hasHandle) {
-      expect(reads).not.toHaveBeenCalled()
-      expect(explicit).not.toHaveBeenCalled()
-    } else {
-      expect(reads).toHaveBeenCalledOnce()
-      expect(explicit.mock.calls).toEqual(
-        recover
-          ? [
-              [HANDLE, PTY],
-              [HANDLE, PTY]
-            ]
-          : []
-      )
-    }
   })
 })

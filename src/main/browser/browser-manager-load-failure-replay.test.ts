@@ -80,6 +80,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'window'),
       setBackgroundThrottling: vi.fn(),
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: vi.fn(),
       on: vi.fn(),
       off: vi.fn(),
@@ -119,6 +120,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       off: guestOffMock,
@@ -165,7 +167,9 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
 
-    expect(rendererSendMock).toHaveBeenCalledTimes(1)
+    expect(
+      rendererSendMock.mock.calls.filter(([channel]) => channel === 'browser:guest-load-failed')
+    ).toHaveLength(1)
     expect(rendererSendMock).toHaveBeenCalledWith('browser:guest-load-failed', {
       browserPageId: 'browser-1',
       loadError: {
@@ -196,6 +200,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       off: guestOffMock,
@@ -248,6 +253,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       off: guestOffMock,
@@ -291,6 +297,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       off: guestOffMock,

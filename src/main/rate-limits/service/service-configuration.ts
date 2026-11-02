@@ -87,7 +87,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     const refreshOnResume = (): void => {
       void this.refreshIfWindowActive()
     }
-    // Why: attach() can replace windows; remove the previous closed listener too, not only the focus listeners.
+    // Replacing windows must also detach the old closed listener.
     const detachWindowListeners = (): void => {
       mainWindow.removeListener('focus', refreshOnResume)
       mainWindow.removeListener('show', refreshOnResume)
@@ -137,7 +137,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.pruneInactiveCodexState()
     return {
       ...this.state,
-      // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
+      // Filesystem-stored cookie presence keeps MiniMax visible across renderer reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),
       zcodePlanApiKeyConfigured: hasZcodePlanApiKey(),

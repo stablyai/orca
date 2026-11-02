@@ -1,10 +1,10 @@
-// Why: the request half of the Project IPC contract, consumed mainly by main
-// and preload; kept apart from the ProjectV2 data model in `./project-types`
-// so renderer components importing domain shapes don't pull in arg payloads.
+// Keep Project request payloads separate from ProjectV2 domain shapes so renderer domain imports do not pull IPC arguments.
 import type { GitHubProjectFieldMutationValue, GitHubProjectOwnerType } from './project-types'
 import type { GitHubIssueUpdate } from '../issue-mutation-types'
 
-// ─── IPC arg shapes (shared between main, preload, renderer) ──────────
+/** Set by a click: it may start the stopped WSL distro gh lives in (E9). Loads that also run
+ * unprompted (mount effects, restore) leave it unset. Local IPC only. */
+export type WakeWslDistroArg = { wakeWslDistro?: boolean }
 
 export type GetProjectViewTableArgs = {
   owner: string
@@ -12,19 +12,15 @@ export type GetProjectViewTableArgs = {
   projectNumber: number
   /** GitHub host (e.g. GHES); absent means github.com. */
   host?: string
-  /** View selection precedence: viewId > viewNumber > viewName > first
-   *  TABLE_LAYOUT view. */
+  /** View selection: viewId > viewNumber > viewName > first TABLE_LAYOUT. */
   viewId?: string
   viewNumber?: number
   viewName?: string
-  /** Ephemeral GitHub-search-syntax query that replaces the view's filter for
-   *  this fetch only. The view's stored filter on GitHub is not modified.
-   *  `undefined` uses the view's saved filter; `''` explicitly clears it for
-   *  this fetch and gets a distinct renderer cache key. */
+  /** Fetch-only GitHub search override; never mutates the saved view filter. Undefined uses the saved filter, while empty clears it and has a distinct cache key. */
   queryOverride?: string
 }
 
-export type ProjectWorkItemDetailsBySlugArgs = {
+export type ProjectWorkItemDetailsBySlugArgs = WakeWslDistroArg & {
   owner: string
   repo: string
   host?: string
@@ -32,7 +28,7 @@ export type ProjectWorkItemDetailsBySlugArgs = {
   type: 'issue' | 'pr'
 }
 
-export type UpdateProjectItemFieldArgs = {
+export type UpdateProjectItemFieldArgs = WakeWslDistroArg & {
   projectId: string
   host?: string
   itemId: string
@@ -40,14 +36,14 @@ export type UpdateProjectItemFieldArgs = {
   value: GitHubProjectFieldMutationValue
 }
 
-export type ClearProjectItemFieldArgs = {
+export type ClearProjectItemFieldArgs = WakeWslDistroArg & {
   projectId: string
   host?: string
   itemId: string
   fieldId: string
 }
 
-export type UpdateIssueBySlugArgs = {
+export type UpdateIssueBySlugArgs = WakeWslDistroArg & {
   owner: string
   repo: string
   host?: string
@@ -55,7 +51,7 @@ export type UpdateIssueBySlugArgs = {
   updates: GitHubIssueUpdate & { body?: string }
 }
 
-export type UpdatePullRequestBySlugArgs = {
+export type UpdatePullRequestBySlugArgs = WakeWslDistroArg & {
   owner: string
   repo: string
   host?: string
@@ -63,7 +59,7 @@ export type UpdatePullRequestBySlugArgs = {
   updates: { title?: string; body?: string; state?: 'open' | 'closed' }
 }
 
-export type AddIssueCommentBySlugArgs = {
+export type AddIssueCommentBySlugArgs = WakeWslDistroArg & {
   owner: string
   repo: string
   host?: string
@@ -71,7 +67,7 @@ export type AddIssueCommentBySlugArgs = {
   body: string
 }
 
-export type UpdateIssueCommentBySlugArgs = {
+export type UpdateIssueCommentBySlugArgs = WakeWslDistroArg & {
   owner: string
   repo: string
   host?: string
@@ -79,7 +75,7 @@ export type UpdateIssueCommentBySlugArgs = {
   body: string
 }
 
-export type DeleteIssueCommentBySlugArgs = {
+export type DeleteIssueCommentBySlugArgs = WakeWslDistroArg & {
   owner: string
   repo: string
   host?: string
@@ -105,7 +101,7 @@ export type ListIssueTypesBySlugArgs = {
   host?: string
 }
 
-export type UpdateIssueTypeBySlugArgs = {
+export type UpdateIssueTypeBySlugArgs = WakeWslDistroArg & {
   owner: string
   repo: string
   host?: string
@@ -114,19 +110,19 @@ export type UpdateIssueTypeBySlugArgs = {
   issueTypeId: string | null
 }
 
-export type ResolveProjectRefArgs = {
+export type ResolveProjectRefArgs = WakeWslDistroArg & {
   input: string
   host?: string
 }
 
-export type ListProjectViewsArgs = {
+export type ListProjectViewsArgs = WakeWslDistroArg & {
   owner: string
   ownerType: GitHubProjectOwnerType
   projectNumber: number
   host?: string
 }
 
-export type ListAccessibleProjectsArgs = {
+export type ListAccessibleProjectsArgs = WakeWslDistroArg & {
   /** GitHub host (e.g. GHES); absent means github.com. */
   host?: string
 }

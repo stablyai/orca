@@ -122,8 +122,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       await flushAsyncTicks(4)
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // Main starts the pane from its record; the window attaches, keeps the record, and shows
-        // no restored banner of its own.
+        // Main owns resume and record consumption; attach must not show a window-owned restored banner.
         await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
         await flushAsyncTicks(10)
         expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -138,7 +137,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           // The record holds no launch recipe, so the resume adds no permission bypass.
-          command: "codex 'resume' 'codex-session-1'",
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
           launchAgent: 'codex',
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
@@ -186,8 +185,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     })
 
     it('says the fresh-spawn resume started fresh when main declined it', async () => {
-      // Why: the primary #10757 path — the sidebar resumes a sleeping agent into a new tab,
-      // so there is no restored PTY and the spawn is fresh, not a cold restore.
+      // Sidebar resume creates a fresh tab without a restored PTY; it still needs a resume banner (#10757).
       const { connectPanePty } = await import('./pty-connection')
       const spawn = createDeferred<{ id: string; agentResumeUnavailable: true }>()
       const transport = createMockTransport()
@@ -274,8 +272,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     })
 
     it('lets a declined resume replace an already-shown restored banner', async () => {
-      // Why: the banner latch is one-shot per pane. A pane that showed "session restored"
-      // and then respawned into a session main declined must stop claiming the restore.
+      // A later declined resume must clear an earlier restored-banner latch.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
       let connectCount = 0

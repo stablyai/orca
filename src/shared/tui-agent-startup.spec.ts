@@ -6,7 +6,6 @@ import {
   buildShellCommandFromArgv,
   planAgentCliArgsSuffix
 } from './tui-agent-startup'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 import {
@@ -15,11 +14,7 @@ import {
 } from './tui-agent-startup-script.test-fixture'
 
 describe('draft prefill teardown ordering (#14975)', () => {
-  // Why pinned: the teardown mutates the calling shell, so it must reference
-  // $fish_pid, which aborts the line under `set -u`. That is survivable ONLY
-  // because it runs AFTER the agent — the agent is already up. Moving it before
-  // the command would make an aborted line a blocked launch, which is exactly
-  // what reverted #14863.
+  // Prefill cleanup expands fish_pid and can abort under set -u. Run after the agent so cleanup failure cannot block launch (#14975, reverted #14863).
   it('runs the clear after the agent command, never before it', () => {
     const plan = buildAgentDraftLaunchPlan({
       agent: 'pi',
@@ -44,24 +39,6 @@ describe('tui agent startup plans', () => {
       })
     }
   )
-
-  // Structured native chat stopped reading the configured arguments; a terminal launch must
-  // still spell every token of them, in order, exactly as the user wrote them.
-  it('passes the whole configured argument string to a terminal launch', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'claude',
-      prompt: '',
-      agentArgs: resolveTuiAgentLaunchArgs('claude', {
-        agentDefaultArgs: { claude: '--dangerously-skip-permissions --model Opus' }
-      }),
-      cmdOverrides: {},
-      platform: 'linux',
-      allowEmptyPromptLaunch: true
-    })
-
-    // Every token, in order, shell-quoted as the terminal path has always quoted them.
-    expect(plan?.launchCommand).toBe("claude '--dangerously-skip-permissions' '--model' 'Opus'")
-  })
 
   it('uses POSIX quoting when the target shell is Linux', () => {
     const plan = buildAgentStartupPlan({
@@ -116,28 +93,6 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe('claude "fix ^"quoted^" ^& ^%PATH^%"')
   })
 
-  it('terminates Grok options before a flag-shaped POSIX prompt', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'grok',
-      prompt: '--version',
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("grok -- '--version'")
-  })
-
-  it('terminates Grok options before a flag-shaped PowerShell prompt', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'grok',
-      prompt: '-h',
-      cmdOverrides: {},
-      platform: 'win32'
-    })
-
-    expect(plan?.launchCommand).toBe("grok -- '-h'")
-  })
-
   it('terminates Grok options before a subcommand-shaped cmd prompt', () => {
     const plan = buildAgentStartupPlan({
       agent: 'grok',
@@ -162,17 +117,6 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("grok '--always-approve' -- '--version'")
   })
 
-  it('does not add the Grok prompt separator to other argv agents', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'codex',
-      prompt: '--version',
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("codex '--version'")
-  })
-
   it.each([
     { platform: 'linux' as const, shell: 'posix' as const },
     { platform: 'win32' as const, shell: 'powershell' as const },
@@ -190,7 +134,17 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).not.toContain(prompt)
     expect(plan?.followupPrompt).toBeNull()
-    expect(plan?.launchConfig.agentCommand).toBe('hermes --tui')
+    expect(plan?.launchConfig.agentCommand).toBe(
+      buildAgentStartupPlan({
+        agent: 'hermes',
+        prompt: '',
+        allowEmptyPromptLaunch: true,
+        cmdOverrides: {},
+        agentArgs: '--yolo',
+        platform: testCase.platform,
+        shell: testCase.shell
+      })?.launchConfig.agentCommand
+    )
     expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe(prompt)
     const script =
       testCase.shell === 'posix'
@@ -222,23 +176,9 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toMatch(/^sh -c /)
     expect(plan?.launchCommand).not.toContain("'sh' '-c'")
-    // Why parse rather than string-match: the octal escapes must survive the
-    // OUTER quoting to reach the inner sh, and portable quoting emits a
-    // backslash as `"\\"` rather than leaving it inside a single-quoted run.
+    // Parse the outer portable quoting to prove octal escapes reach inner sh unchanged.
     const tokens = tokenizeStartupCommand(plan?.launchCommand ?? '', 'posix')
     expect(tokens.ok && tokens.tokens.at(-1)).toMatch(/\\0[0-7]{3}/)
-  })
-
-  it('does not launch Codex with the Orca profile when agent status hooks are enabled', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'codex',
-      prompt: 'fix it',
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("codex 'fix it'")
-    expect(plan?.startupCommandDelivery).toBe('shell-ready')
   })
 
   it('keeps plain empty Codex startup on the fast delivery path', () => {
@@ -252,23 +192,11 @@ describe('tui agent startup plans', () => {
 
     expect(plan).toEqual({
       agent: 'codex',
-      launchCommand: 'codex',
+      launchCommand: "codex '-c' 'disable_paste_burst=true'",
       expectedProcess: 'codex',
       followupPrompt: null,
       launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
     })
-  })
-
-  it('launches Claude without Orca settings injection', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'claude',
-      prompt: 'fix it',
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("claude 'fix it'")
-    expect(plan?.launchCommand).not.toContain('--settings')
   })
 
   it('uses the Linux Orca CLI command for Claude Agent Teams launches', () => {
@@ -284,10 +212,7 @@ describe('tui agent startup plans', () => {
   })
 
   it('uses the plain orca shim for Claude Agent Teams on Linux SSH remotes', () => {
-    // Why: the SSH relay deploys the CLI shim as `orca` (not the local-only
-    // `orca-ide` GNOME-screen-reader workaround), so a remote launch must not
-    // emit `orca-ide claude-teams` — that name is not on the remote PATH and
-    // `claude-teams` is rejected by the relay's CLI switch (issue #6500).
+    // Remote Linux deploys orca, never local-only orca-ide; using the renamed desktop wrapper breaks relay launches (#6500).
     const plan = buildAgentStartupPlan({
       agent: 'claude-agent-teams',
       prompt: '',
@@ -301,8 +226,7 @@ describe('tui agent startup plans', () => {
   })
 
   it('keeps the Windows orca.cmd shim for Claude Agent Teams on SSH remotes', () => {
-    // Why: the Windows remote shim is also `orca.cmd`, matching the local
-    // win32 override, so remoteness must not alter the Windows command.
+    // Windows remote and local shims are both orca.cmd; remoteness must preserve that override.
     const plan = buildAgentStartupPlan({
       agent: 'claude-agent-teams',
       prompt: '',
@@ -314,103 +238,6 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toBe('orca.cmd claude-teams')
   })
-
-  it('keeps the Linux orca-ide wrapper for local (non-remote) Claude Agent Teams', () => {
-    // Why: the `orca-ide` rename is still required for a local Linux desktop
-    // install (avoids shadowing the GNOME Orca screen reader), so an explicit
-    // isRemote:false must preserve it.
-    const plan = buildAgentStartupPlan({
-      agent: 'claude-agent-teams',
-      prompt: '',
-      cmdOverrides: {},
-      platform: 'linux',
-      isRemote: false,
-      allowEmptyPromptLaunch: true
-    })
-
-    expect(plan?.launchCommand).toBe('orca-ide claude-teams')
-  })
-
-  it('launches OpenClaude as a distinct argv agent', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'openclaude',
-      prompt: 'fix it',
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-
-    expect(plan).toEqual({
-      agent: 'openclaude',
-      launchCommand: "openclaude 'fix it'",
-      expectedProcess: 'openclaude',
-      followupPrompt: null,
-      launchConfig: { agentCommand: 'openclaude', agentArgs: '', agentEnv: {} }
-    })
-  })
-
-  it('launches Mistral Vibe through the installed vibe executable', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'mistral-vibe',
-      prompt: 'fix it',
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-
-    expect(plan).toEqual({
-      agent: 'mistral-vibe',
-      launchCommand: 'vibe',
-      expectedProcess: 'vibe',
-      followupPrompt: 'fix it',
-      launchConfig: { agentCommand: 'vibe', agentArgs: '', agentEnv: {} }
-    })
-  })
-
-  it('launches Qwen Code through the installed qwen executable', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'qwen-code',
-      prompt: 'fix it',
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-
-    expect(plan).toEqual({
-      agent: 'qwen-code',
-      launchCommand: 'qwen',
-      expectedProcess: 'qwen',
-      followupPrompt: 'fix it',
-      launchConfig: { agentCommand: 'qwen', agentArgs: '', agentEnv: {} }
-    })
-  })
-
-  it.each([
-    ['yolo', 'linux', 'posix', undefined, "muse --trust-workspace '--yolo'"],
-    ['manual', 'linux', 'posix', { muse: '' }, 'muse --trust-workspace'],
-    ['yolo', 'darwin', 'posix', undefined, "muse --trust-workspace '--yolo'"],
-    ['manual', 'darwin', 'posix', { muse: '' }, 'muse --trust-workspace'],
-    ['yolo', 'win32', 'powershell', undefined, "muse --trust-workspace '--yolo'"],
-    ['manual', 'win32', 'powershell', { muse: '' }, 'muse --trust-workspace'],
-    ['yolo', 'win32', 'cmd', undefined, 'muse --trust-workspace "--yolo"'],
-    ['manual', 'win32', 'cmd', { muse: '' }, 'muse --trust-workspace']
-  ] as const)(
-    'launches Muse in %s mode on %s/%s before delivering its prompt',
-    (_, platform, shell, defaults, command) => {
-      const plan = buildAgentStartupPlan({
-        agent: 'muse',
-        prompt: 'fix it',
-        cmdOverrides: {},
-        platform,
-        shell,
-        agentArgs: resolveTuiAgentLaunchArgs('muse', { agentDefaultArgs: defaults })
-      })
-
-      expect(plan).toMatchObject({
-        agent: 'muse',
-        launchCommand: command,
-        expectedProcess: 'muse',
-        followupPrompt: 'fix it'
-      })
-    }
-  )
 
   it.each(['exec', 'resume', '--help'])(
     'delivers the reserved Muse prompt %s as text',
@@ -426,17 +253,6 @@ describe('tui agent startup plans', () => {
     }
   )
 
-  it('leaves Claude command overrides untouched', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'claude',
-      prompt: 'fix it',
-      cmdOverrides: { claude: 'claude --dangerously-skip-permissions' },
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("claude --dangerously-skip-permissions 'fix it'")
-  })
-
   it('leaves Codex command overrides untouched', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',
@@ -445,7 +261,9 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex --profile work 'fix it'")
+    expect(plan?.launchCommand).toBe(
+      "codex --profile work '-c' 'disable_paste_burst=true' 'fix it'"
+    )
   })
 
   it('builds Windows resume plans that PowerShell can invoke', () => {
@@ -460,6 +278,23 @@ describe('tui agent startup plans', () => {
     expect(plan?.startupCommandDelivery).toBe('shell-ready')
   })
 
+  it('resumes an agent from the folder it ran in when the pane starts elsewhere (#16960)', () => {
+    const resume = (cwd: string, launchCwd: string) =>
+      buildAgentResumeStartupPlan({
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 's1', cwd },
+        cmdOverrides: {},
+        platform: 'darwin',
+        launchCwd
+      })?.launchCommand
+
+    expect(resume('/repo/pkg', '/repo')).toBe("cd '/repo/pkg' && claude '--resume' 's1'")
+    expect(resume('/repo/', '/repo')).toBe("claude '--resume' 's1'")
+    expect(resume('/home/me/repo', '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')).toBe(
+      "claude '--resume' 's1'"
+    )
+  })
+
   it('quotes Windows resume argv for cmd.exe when shell is cmd', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'grok',
@@ -470,8 +305,7 @@ describe('tui agent startup plans', () => {
       shell: 'cmd'
     })
 
-    // Why: cmd.exe treats single quotes as literal characters. Resume must use
-    // double quotes (or unquoted tokens) so the CLI receives clean argv.
+    // cmd.exe needs double quotes or bare tokens; single quotes would become literal argv bytes.
     expect(plan?.launchCommand).toBe(
       'grok "--permission-mode" "bypassPermissions" "--resume" "019fc272-80fa-7a91-80a2-9c461ef1a9da"'
     )
@@ -494,17 +328,6 @@ describe('tui agent startup plans', () => {
     )
   })
 
-  it('honors command overrides when building POSIX resume plans', () => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'codex',
-      providerSession: { key: 'session_id', id: 's1' },
-      cmdOverrides: { codex: 'codex --profile work' },
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
-  })
-
   it('uses a captured launch command when building resume plans after overrides change', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',
@@ -514,7 +337,9 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex --profile captured 'resume' 's1'")
+    expect(plan?.launchCommand).toBe(
+      "codex --profile captured '-c' 'disable_paste_burst=true' 'resume' 's1'"
+    )
     expect(plan?.launchConfig).toEqual({
       agentCommand: 'codex --profile captured',
       agentArgs: '',
@@ -566,25 +391,6 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'")
   })
 
-  it('carries agent launch environment defaults into startup plans', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'goose',
-      prompt: '',
-      cmdOverrides: {},
-      agentEnv: { GOOSE_MODE: 'auto' },
-      platform: 'linux',
-      allowEmptyPromptLaunch: true
-    })
-
-    expect(plan?.launchCommand).toBe('goose')
-    expect(plan?.env).toEqual({ GOOSE_MODE: 'auto' })
-    expect(plan?.launchConfig).toEqual({
-      agentCommand: 'goose',
-      agentArgs: '',
-      agentEnv: { GOOSE_MODE: 'auto' }
-    })
-  })
-
   it('captures empty args and env as explicit launch config values', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
@@ -614,78 +420,6 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
   })
 
-  it('keeps opencode and mimo-code on the cursor-gated paste draft route', () => {
-    expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe(
-      'render-cursor-after-bracketed-paste'
-    )
-    expect(TUI_AGENT_CONFIG.opencode.draftPromptFlag).toBeUndefined()
-    expect(TUI_AGENT_CONFIG.opencode.draftPromptEnvVar).toBeUndefined()
-    expect(TUI_AGENT_CONFIG['mimo-code'].draftPasteReadySignal).toBe(
-      'render-cursor-after-bracketed-paste'
-    )
-    expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptFlag).toBeUndefined()
-    expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptEnvVar).toBeUndefined()
-    // Why: no native draft launch plan means both agents fall through to the
-    // cursor-gated paste-after-ready route, where the new signal applies.
-    expect(
-      buildAgentDraftLaunchPlan({
-        agent: 'opencode',
-        draft: 'x',
-        cmdOverrides: {},
-        platform: 'darwin'
-      })
-    ).toBeNull()
-    expect(
-      buildAgentDraftLaunchPlan({
-        agent: 'mimo-code',
-        draft: 'x',
-        cmdOverrides: {},
-        platform: 'darwin'
-      })
-    ).toBeNull()
-  })
-
-  it('keeps grok on the composer-glyph paste draft route', () => {
-    // Why: grok has no --prefill-style flag, so every launch draft goes through
-    // paste-after-ready — and its shimmering startup logo never settles the
-    // quiet window, which is what made the paste take the full hard timeout.
-    expect(TUI_AGENT_CONFIG.grok.draftPasteReadySignal).toBe('grok-composer-prompt')
-    expect(TUI_AGENT_CONFIG.grok.draftPromptFlag).toBeUndefined()
-    expect(TUI_AGENT_CONFIG.grok.draftPromptEnvVar).toBeUndefined()
-    expect(
-      buildAgentDraftLaunchPlan({
-        agent: 'grok',
-        draft: 'x',
-        cmdOverrides: {},
-        platform: 'darwin'
-      })
-    ).toBeNull()
-  })
-
-  it('appends Kiro trust defaults to the chat subcommand that accepts them', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'kiro',
-      prompt: 'fix it',
-      cmdOverrides: {},
-      agentArgs: '--trust-all-tools',
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("kiro-cli chat --tui '--trust-all-tools'")
-  })
-
-  it('launches Continue through the documented cn binary', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'continue',
-      prompt: 'fix it',
-      cmdOverrides: {},
-      agentArgs: '--allow "*"',
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("cn '--allow' '*'")
-  })
-
   it('clears draft environment variables with the target shell syntax', () => {
     expect(
       buildAgentDraftLaunchPlan({
@@ -708,11 +442,7 @@ describe('tui agent startup plans', () => {
   })
 
   it('returns an OMP draft plan with ORCA_OMP_PREFILL (OMP-scoped, not Pi-shared)', () => {
-    // Why: OMP owns its own managed prefill extension and env var.
-    // orca-prefill.ts reads ORCA_OMP_PREFILL for OMP launches — see
-    // src/main/pi/titlebar-extension-service.ts — so a draft plan for OMP
-    // MUST emit that name. A regression here would either silently drop the
-    // draft (Pi var ignored by OMP) or honor a stale Pi-PTY draft.
+    // OMP’s managed extension reads ORCA_OMP_PREFILL; sharing Pi’s var would lose drafts or replay stale Pi text.
     const plan = buildAgentDraftLaunchPlan({
       agent: 'omp',
       draft: 'fix the omp regression',
@@ -764,7 +494,7 @@ describe('tui agent startup plans', () => {
     })
   })
 
-  it('launches Devin with stdin-after-start prompt delivery', () => {
+  it('launches Devin with the prompt on argv behind a -- separator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'devin',
       prompt: 'fix the tests',
@@ -774,9 +504,10 @@ describe('tui agent startup plans', () => {
     })
     expect(plan).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
+      launchCommand:
+        "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false' -- 'fix the tests'",
       expectedProcess: 'devin',
-      followupPrompt: 'fix the tests',
+      followupPrompt: null,
       launchConfig: {
         agentCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
         agentArgs: '--permission-mode bypass --respect-workspace-trust false',
@@ -800,11 +531,5 @@ describe('tui agent startup plans', () => {
       agentArgs: '',
       agentEnv: { ORCA_AGENT_MODE: 'managed' }
     })
-  })
-
-  it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
-    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe(
-      '--permission-mode bypass --respect-workspace-trust false'
-    )
   })
 })

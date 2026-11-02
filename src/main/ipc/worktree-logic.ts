@@ -114,6 +114,33 @@ export async function computeWorkspaceRootAsync(
   )
 }
 
+/**
+ * For authorization: never waits more than `deadlineMs` for a WSL home. Past it the root falls back
+ * as if the home were unknown, while the probe keeps running and fills the cache for later checks.
+ */
+export async function computeWorkspaceRootWithin(
+  repoPath: string,
+  settings: { workspaceDir: string; wslMirrorDistro?: string },
+  deadlineMs: number,
+  // Injected by main so this shared module stays free of main-only gate imports.
+  readHome: (distro: string) => Promise<string | null> = getWslHomeAsync
+): Promise<string> {
+  const distro = mirrorDistroForWorkspaceRoot(repoPath, settings)
+  if (!distro) {
+    return workspaceRootForMirrorHome(repoPath, settings.workspaceDir, null)
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), deadlineMs)
+  })
+  try {
+    const home = await Promise.race([readHome(distro), deadline])
+    return workspaceRootForMirrorHome(repoPath, settings.workspaceDir, home)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export function computeWorkspaceRoot(
   repoPath: string,
   settings: { workspaceDir: string; wslMirrorDistro?: string }
@@ -124,6 +151,14 @@ export function computeWorkspaceRoot(
     settings.workspaceDir,
     distro ? getWslHome(distro) : null
   )
+}
+
+/** Whether the workspace root mirrors into a WSL home, which only a wsl.exe probe can resolve. */
+export function workspaceRootMirrorsIntoWsl(
+  repoPath: string,
+  settings: { workspaceDir: string; wslMirrorDistro?: string }
+): boolean {
+  return mirrorDistroForWorkspaceRoot(repoPath, settings) !== undefined
 }
 
 function mirrorDistroForWorkspaceRoot(

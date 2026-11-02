@@ -1,4 +1,7 @@
-import { getMarkdownTokenizerStartMarker } from './markdown-tokenizer-start'
+import {
+  createMarkdownTokenizerStartCursor,
+  getMarkdownTokenizerStartMarker
+} from './markdown-tokenizer-start'
 import {
   Hooks,
   Lexer,
@@ -34,8 +37,7 @@ function getItemContentIndent(item: RegExpExecArray): number {
   return contentStart - markerEnd > 4 ? markerEnd + 1 : contentStart
 }
 
-// Like Marked's list, end at a quote line shallower than the current item's content;
-// Tiptap's tokenizer would absorb the outer quote's lines and nest them in the item.
+// Stop before shallower quote lines or Tiptap incorrectly nests the outer quote in the current list item.
 function sliceBeforeOuterQuote(source: string): string {
   const lines = source.split('\n')
   let contentIndent = 0
@@ -58,8 +60,7 @@ function isListToken(token: Tokens.Generic | undefined): token is Tokens.List {
 }
 
 class BlockquoteListTokenizer extends Tokenizer {
-  // Why: Marked's blockquote() lazy continuation calls `this.list(newText)!` (still so in v18),
-  // skipping the registered tokenizer that also reads `1.` + no-break space, then reads `.raw`.
+  // Marked v18 lazy quotes call list directly then read raw, bypassing Tiptap’s no-break-space list tokenizer.
   list(source: string): Tokens.List | undefined {
     const token = super.list(source)
     if (token || !TIPTAP_LIST_ITEM.test(source)) {
@@ -79,8 +80,7 @@ class BlockquoteListTokenizer extends Tokenizer {
 export function createTiptapMarkedFacade(): typeof marked {
   const registry = new Marked()
 
-  // Why: Tiptap 3.22.5 registers on the injected instance but parses with
-  // `new instance.Lexer()`, so the constructor must retain the private registry.
+  // Tiptap 3.22.5 parses via new instance.Lexer, so that constructor must retain the injected private registry.
   class RegistryLexer extends Lexer {
     private readonly registeredExtensions = this.options.extensions
     blockTokens(source: string, tokens?: TokensList, lastParagraphClipped?: boolean): TokensList
@@ -91,10 +91,12 @@ export function createTiptapMarkedFacade(): typeof marked {
       if (!extensions?.startBlock) {
         return super.blockTokens(source, tokens, lastParagraphClipped)
       }
-      const startBlock = extensions.startBlock.filter((start) => {
-        const marker = getMarkdownTokenizerStartMarker(start)
-        return !marker || source.includes(marker)
-      })
+      const startBlock = extensions.startBlock
+        .filter((start) => {
+          const marker = getMarkdownTokenizerStartMarker(start)
+          return !marker || source.includes(marker)
+        })
+        .map(createMarkdownTokenizerStartCursor)
       this.options.extensions = { ...extensions, startBlock }
       try {
         return super.blockTokens(source, tokens, lastParagraphClipped)

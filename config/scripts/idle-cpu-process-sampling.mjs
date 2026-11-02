@@ -55,8 +55,7 @@ function readUnixProcesses() {
   return parseUnixProcesses(stdout)
 }
 
-// `Win32_Process` times are 100 ns counts. Not `Number(value)`: that turns a missing
-// field into a real-looking 0, so the CPU delta would silently go kernel-only.
+// Win32_Process times use 100ns units; Number(missing) produces plausible zero and silently discards user CPU.
 function cimTimeSeconds(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value / 10_000_000 : null
 }
@@ -70,8 +69,7 @@ export function cimCpuSeconds(entry) {
 }
 
 function readWindowsProcesses() {
-  // Why UTF-8: the default OEM code page best-fits characters such as `•` or `→` in any
-  // process's command line to raw control bytes (0x07, 0x1A), which JSON.parse rejects.
+  // Use UTF-8: OEM best-fit maps command-line •/→ to controls (0x07/0x1A), breaking JSON.parse.
   const script =
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
     'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize,UserModeTime,KernelModeTime,CommandLine | ConvertTo-Json -Compress'

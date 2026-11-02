@@ -12,7 +12,6 @@ import { isFloatingTerminalDragTarget } from './floating-terminal-titlebar-drag-
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -69,7 +68,6 @@ function makeDropEvent(
       ? {
           id: overData.visibleTabId,
           data: { current: overData },
-          // Tabs sit in a 100px-wide strip slot starting at x=200; midpoint is 250.
           rect: { left: 200, top: 0, width: 100, height: 32 }
         }
       : null,
@@ -112,8 +110,7 @@ function dropTab(from: string, over: string, pointerX: number): void {
   })
 }
 
-/** The reorder the user sees: a layout-owner build sends it to main, whose frame draws it
- *  (tab-moves-drawn-from-frames.test.ts); otherwise the window reorders the group itself. */
+/** Assert the main-owned command or local mutation according to the build’s layout owner. */
 function expectReorder(tabId: string, order: string[]): void {
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     expect(layoutApplyTestTransport.sentOfType('moveTab')).toEqual([
@@ -189,7 +186,6 @@ describe('floating workspace tab reorder', () => {
     dropTab('tab-a', 'tab-c', 290)
     await layoutApplyTestTransport.settle()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main's frame draws the order, sortOrder included.
       expectReorder('tab-a', ['tab-b', 'tab-c', 'tab-a'])
       return
     }

@@ -9,7 +9,7 @@ import {
 } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type WebSocket from 'ws'
-import type { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayStoreError, type RelayCredentialStore } from './credential-store.js'
 import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from './control-renewal-batch.js'
@@ -354,10 +354,7 @@ describe('host session cleanup races', () => {
     })!
     session.activeSplices.set('conn-a', () => session.activeSplices.delete('conn-a'))
 
-    // POST /v1/admin/drain has no idempotency guard, and SIGTERM then SIGINT both
-    // reach drain(), so a retry re-sends to every session. It must re-arm the pending
-    // teardown rather than stack a second one: across a paced cell that is 800 orphaned
-    // timers per retry, each one holding the loop open for the rest of the window.
+    // Drain retries/signals must re-arm, not stack teardown; a paced 800-host cell otherwise leaks 800 timers holding exit open each retry.
     registry.drain(0)
     const scheduled = vi.getTimerCount()
     registry.drain(0)
@@ -366,8 +363,7 @@ describe('host session cleanup races', () => {
     expect(vi.getTimerCount()).toBe(scheduled)
     vi.advanceTimersByTime(1)
 
-    // Asserting registry state, not the log line: FakeSocket closes synchronously, so
-    // the line is already emitted before the second teardown runs and would pass either way.
+    // Check state: synchronous FakeSocket close logs before second teardown, so log-only assertions miss corruption.
     expect(session.closingCounts).toEqual({ splices: 1, pending: 0 })
   })
 
@@ -557,8 +553,7 @@ describe('host session cleanup races', () => {
     )
   })
 
-  // The root of a seat c34's feed listed for hours: a rebind whose database activation outlived
-  // the orphan grace revived the removed session outside the map, still listed and unreachable.
+  // c34 ghost seat came from activation outliving orphan grace and reviving a removed session outside the map.
   it('refuses a rebind whose session left the map while its activation was in flight', async () => {
     const blocked = deferred<string>()
     const activateControl = vi

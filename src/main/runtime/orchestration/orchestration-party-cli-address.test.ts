@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { injectedSessionAddress } from '../../../shared/agent-session-caller-env'
+import { injectedSessionAddress } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import {
   mintStructuredWorkerHandle,
@@ -9,8 +9,7 @@ import {
 } from '../structured-worker-identity'
 import { resolveOrcaSessionParty } from './orchestration-party'
 
-// The CLI spells its own address without the host resolver (it runs before the codec's module
-// graph), so it must land on the one mailbox address the resolver gives the same session.
+// The CLI formats its address before host resolution; both paths must name the same mailbox.
 const CHAT = testOrcaSessionId('f7a1c0de-1111-4222-8333-444455556666')
 const WORKER = testOrcaSessionId('a0b1c2d3-0000-4000-8000-00000000abcd')
 

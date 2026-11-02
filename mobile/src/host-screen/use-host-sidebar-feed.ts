@@ -25,21 +25,17 @@ export type HostSidebarFeedRead = {
 export type HostSidebarFeed =
   | { kind: 'loading' }
   | { kind: 'ready'; domains: SidebarFeedDomains }
-  /** The host lacks the feed or means other things by it: only reopening the page can match it. */
   | { kind: 'reopen' }
 
 export type HostSidebarFeedControls = {
   feed: HostSidebarFeed
-  /** Stable for the screen's life, so the refresh lifecycle never restarts for them. */
   triggers: HostSidebarFeedTriggers
 }
 
 const NOTHING_READ: HostSidebarFeedRead = { snapshot: null, unavailable: false }
 
-/** Each paired host's last installed feed, for this document's next list of it. */
 const rememberedFeeds = new RememberedSidebarFeeds(20)
 
-/** The host's last installed feed while a fresh read is out: the desktop's list, if not its newest. */
 function rememberedRead(hostId: string | undefined): HostSidebarFeedRead {
   const snapshot = hostId ? rememberedFeeds.recall(hostId) : null
   // One this page cannot read would flash "Reopen" for a host whose fresh read may be fine.
@@ -48,7 +44,6 @@ function rememberedRead(hostId: string | undefined): HostSidebarFeedRead {
     : NOTHING_READ
 }
 
-/** Test seam: a fresh document remembers nothing. */
 export function forgetRememberedSidebarFeeds(): void {
   rememberedFeeds.forgetAll()
 }
@@ -68,10 +63,7 @@ export function readHostSidebarFeed({
     : { kind: 'reopen' }
 }
 
-/**
- * The connected host's installed sidebar feed; a new client is a new host, read from scratch.
- * Until that read installs, the host's last installed feed stands in for it.
- */
+// A new client reads from scratch; keep that host’s last installed feed visible until the new read installs.
 export function useHostSidebarFeed(
   client: RpcClient | null,
   hostId: string | undefined
@@ -125,7 +117,6 @@ export function useHostSidebarFeed(
   return { feed, triggers }
 }
 
-/** Switch point: a page built without the feed reads none. */
 export const useSwitchedHostSidebarFeed: (
   client: RpcClient | null,
   hostId: string | undefined

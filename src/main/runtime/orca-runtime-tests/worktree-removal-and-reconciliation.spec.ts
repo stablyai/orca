@@ -256,7 +256,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('stamps createdAt alongside lastActivityAt so CLI-created worktrees get the Recent-sort grace window', async () => {
-    // Why: without createdAt, ambient PTY bumps in other worktrees can push the new one below them in Recent sort.
+    // Stamp createdAt so ambient activity cannot push a new worktree down Recent sort.
     const runtime = new OrcaRuntimeService(store)
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -295,7 +295,7 @@ describe('OrcaRuntimeService', () => {
     expect(result.worktree.createdAt).toBeDefined()
     expect(result.worktree.createdAt).toBeGreaterThanOrEqual(before)
     expect(result.worktree.createdAt).toBeLessThanOrEqual(after)
-    // Both fields must share the same now so grace-window math (max(lastActivityAt, createdAt + GRACE_MS)) is well-defined.
+    // Use the same timestamp for createdAt and lastActivityAt so grace-window math stays consistent.
     expect(result.worktree.createdAt).toBe(result.worktree.lastActivityAt)
   })
 
@@ -387,8 +387,7 @@ describe('OrcaRuntimeService', () => {
         { wslDistro: 'Ubuntu' },
         expect.any(Function)
       )
-      // Why: the lazy adoption callback is only invoked when the conflict probe
-      // sees a local ref, so drive it here to prove adoption also routes via WSL.
+      // Drive the local-ref conflict that invokes lazy adoption to verify its WSL routing.
       const adoptLocalBranch = vi
         .mocked(getBranchConflictKind)
         .mock.calls.findLast((call) => call[1] === 'runtime-wsl')?.[4]
@@ -423,10 +422,7 @@ describe('OrcaRuntimeService', () => {
           wslDistro: 'Ubuntu'
         }
       )
-      // Why: a fork remote is deferred to first push/pull/fetch/fast-forward
-      // (#17828) instead of being added/fetched at create time, so the create
-      // path must not run check-ref-format, the fork fetch, or set-upstream-to
-      // -- the metadata is persisted untouched for on-demand materialization.
+      // Defer fork remote creation/fetch/upstream wiring to the first network operation (#17828).
       expect(gitSpy).not.toHaveBeenCalledWith(
         ['check-ref-format', '--branch', 'contributor/runtime-wsl'],
         expect.anything()
@@ -565,7 +561,6 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = createWorktreeRemovalRuntime(orphanStore)
 
-    // Nothing left the disk, so non-desktop callers must be able to tell "forgotten" from "deleted".
     await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({
       warning: expect.stringContaining(TEST_WORKTREE_PATH)
     })
@@ -576,12 +571,10 @@ describe('OrcaRuntimeService', () => {
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
-    // Nothing is deleted on disk here, so the surviving directory's watchers must still be released.
     expect(closeLocalWatcherForWorktreePathMock).toHaveBeenCalledWith(
       TEST_WORKTREE_PATH,
       expect.objectContaining({ remainingMs: expect.any(Function) })
     )
-    // Regression: the directory survives, so its watchers must be restored rather than forgotten.
     expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
     expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
   })
@@ -625,8 +618,7 @@ describe('OrcaRuntimeService', () => {
       unregisterLocalPtyMemoryRow('local-pty-1')
     }
 
-    // Regression: `repoId::path` collides across hosts, so a runtime-owned orphan
-    // must never kill the live PTYs of a same-id LOCAL workspace.
+    // Host-fence orphan cleanup because repoId::path can also name a live local workspace.
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
     expect(localProvider.shutdown).not.toHaveBeenCalled()
     expect(stopAndWait).not.toHaveBeenCalled()
@@ -729,8 +721,7 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
-    // Regression: the gate must finish(false) — forgetting watchers would silently deafen a
-    // folder workspace or File Explorer pane rooted at this still-present directory.
+    // The directory survives; finishing the watcher gate with false restores its watchers.
     expect(closeLocalWatcherForWorktreePathMock).toHaveBeenCalledWith(
       TEST_WORKTREE_PATH,
       expect.objectContaining({ remainingMs: expect.any(Function) })
@@ -740,8 +731,7 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktree).not.toHaveBeenCalled()
   })
 
-  // A headless host has no window notifier, so the removal itself must move the generation the
-  // runtime listing witnesses; otherwise a listing the delete overtook publishes the removed row.
+  // Headless removal must bump the witnessed scan generation before yielding or stale listings can publish deleted rows.
   it('moves the scan generation the runtime listing witnesses once the worktree is removed', async () => {
     const runtime = createWorktreeRemovalRuntime()
     vi.mocked(removeWorktree).mockResolvedValue({})
@@ -760,7 +750,7 @@ describe('OrcaRuntimeService', () => {
       witness.during = getLocalWorktreeScanGeneration(TEST_REPO_ID)
       return {}
     })
-    // Why the watcher gate: releasing it is the first awaited step after the git removal.
+    // Watcher gate release is the first await after Git removal.
     vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({
       finish: vi.fn(async () => {
         witness.after ??= getLocalWorktreeScanGeneration(TEST_REPO_ID)

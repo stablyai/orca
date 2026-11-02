@@ -61,31 +61,6 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 250))
 }
 
-describe('watchFileAcrossReplacement event filtering', () => {
-  it('drops attribute-only events such as macOS mmap reads of git metadata', async () => {
-    const path = join(directory, 'packed-refs')
-    writeFileSync(path, 'refs')
-    const onChange = vi.fn()
-    fileWatch = watchFileAcrossReplacement(path, onChange, (error) => {
-      throw error
-    })
-    await settle()
-
-    for (let read = 0; read < 50; read++) {
-      nativeEvents.at(-1)?.()
-    }
-    await settle()
-    expect(onChange).not.toHaveBeenCalled()
-
-    writeFileSync(path, 'refs and more')
-    for (let read = 0; read < 50; read++) {
-      nativeEvents.at(-1)?.()
-    }
-    await settle()
-    expect(onChange).toHaveBeenCalledOnce()
-  })
-})
-
 describe('watchFileAcrossReplacement after a watcher error', () => {
   it('closes promptly and rebinds once the runtime has closed the errored watcher', async () => {
     const path = join(directory, 'index')

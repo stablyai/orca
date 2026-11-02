@@ -5,7 +5,7 @@ import {
 } from './feature-interactions'
 
 export type FeatureTipId =
-  | 'native-chat-upgrade'
+  | 'chat-ui-here'
   | 'voice-dictation'
   | 'orca-cli'
   | 'cmd-j-palette'
@@ -14,7 +14,7 @@ export type FeatureTipId =
 export type FeatureTipPriority = 'new' | 'unseen'
 
 export type FeatureTipAction =
-  | 'learn-native-chat-upgrade'
+  | 'use-chat-ui'
   | 'enable-voice'
   | 'setup-cli'
   | 'learn-cmd-j-palette'
@@ -28,7 +28,6 @@ export type FeatureTip = {
   description: string
   action: FeatureTipAction
   ctaLabel: string
-  /** Feature interactions that mean this tip is no longer useful to show. */
   completedByFeatureInteractions?: readonly FeatureInteractionId[]
 }
 
@@ -37,22 +36,21 @@ export type CompletedFeatureTipState = {
   voiceDictationEnabled: boolean
   /** Search is on, or this client cannot turn it on. */
   sessionSearchTipCompleted: boolean
-  /** Main's once-decided record; only profiles with Chat UI on before the chat upgrade are in it. */
-  inNativeChatUpgradeTipAudience: boolean
+  /** Main's once-decided record leaves this profile out, or this client has no such profile. */
+  chatUiLaunchTipCompleted: boolean
   featureInteractions?: FeatureInteractionState
 }
 
 export const FEATURE_TIPS = [
   {
-    // Why: first so its audience sees it on the first launch after the upgrade.
-    id: 'native-chat-upgrade',
+    // First, so upgraded profiles meet it on their first launch after Chat UI left Experimental.
+    id: 'chat-ui-here',
     priority: 'new',
     eyebrow: 'New',
-    title: 'Native chat got an upgrade',
-    description:
-      'New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open Agent Session History in the right sidebar:',
-    action: 'learn-native-chat-upgrade',
-    ctaLabel: 'Got it',
+    title: 'Chat UI is here',
+    description: 'Agents can now open as a chat, with rich messages, visuals and images.',
+    action: 'use-chat-ui',
+    ctaLabel: 'Use Chat UI',
     completedByFeatureInteractions: []
   },
   {
@@ -80,8 +78,7 @@ export const FEATURE_TIPS = [
     id: 'cmd-j-palette',
     priority: 'new',
     eyebrow: 'Tip',
-    // Why: "<shortcut>" is a placeholder token; the cmd-j dialog splits the
-    // title on it and inlines the live, platform-correct keybinding as a <kbd>.
+    // The dialog replaces <shortcut> with a live platform-aware <kbd>.
     title: 'Jump to a worktree with <shortcut>',
     description:
       'Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.',
@@ -132,8 +129,8 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   if (state.sessionSearchTipCompleted) {
     completedIds.add('agent-session-search')
   }
-  if (!state.inNativeChatUpgradeTipAudience) {
-    completedIds.add('native-chat-upgrade')
+  if (state.chatUiLaunchTipCompleted) {
+    completedIds.add('chat-ui-here')
   }
   for (const tip of FEATURE_TIPS) {
     if (

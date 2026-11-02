@@ -26,6 +26,8 @@ describe('createAgentStatusEpochClock', () => {
     expect(clock(2)).toBe(200)
     expect(clock(2)).toBe(200)
     expect(clock(3)).toBe(300)
+    expect(clock(1)).toBe(400)
+    expect(clock(1)).toBe(400)
   })
 })
 
@@ -36,8 +38,7 @@ describe('getAgentStatusEpochNow', () => {
   })
 
   it('reads the clock at call time so timers faked after creation still apply', () => {
-    // The shipped singleton is built at module load, long before any suite
-    // installs fake timers — so the default must call through, not capture.
+    // Call Date.now at sample time so fake timers installed after module loading still apply.
     const clock = createAgentStatusEpochClock()
     vi.useFakeTimers()
     vi.setSystemTime(1_700_000_000_000)

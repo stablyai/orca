@@ -61,8 +61,7 @@ export function resolveSetupRunnerCommand(
         shell: 'posix'
       }
     }
-    // Why: `shell` is the shell that types the command; the runner file's own extension decides
-    // what can execute it. A batch runner never goes to bash even from a Git Bash pane.
+    // Runner extension decides its interpreter; a POSIX terminal still sends batch files to cmd.
     const cmdRunnerFile = isWindowsCmdRunnerPath(runnerScriptPath)
     if (!cmdRunnerFile && (shell?.family === 'posix' || /\.sh$/i.test(runnerScriptPath))) {
       // Why: WSL shells need /mnt/... paths, while Git Bash expects /c/... when replaying deferred setup scripts.
@@ -83,11 +82,8 @@ export function resolveSetupRunnerCommand(
       }
     }
     return {
-      // Why: some path characters survive no amount of quoting on a cmd command line, and a Git
-      // Bash pane rewrites the bare `/c` switch itself into a drive path (issue #6896) so cmd
-      // opens interactively and the runner never starts. Both take the delayed-expansion
-      // launcher, which passes the switch through a PowerShell ProcessStartInfo instead. Every
-      // other case keeps the plain form.
+      // Guard hostile cmd path characters and Git Bash’s rewriting of bare /c (#6896) with delayed expansion
+      // through PowerShell ProcessStartInfo; retain plain invocation for other cases.
       command:
         shell?.family === 'posix' || windowsRunnerPathNeedsCmdGuard(runnerScriptPath)
           ? buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath)

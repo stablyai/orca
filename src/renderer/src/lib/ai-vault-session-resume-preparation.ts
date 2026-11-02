@@ -11,10 +11,15 @@ import {
   isPerAccountManagedCodexHome
 } from '../../../shared/ai-vault-resume-preparation'
 import {
-  getSshTargetIdForExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
+  parseExecutionHostId,
+  parseRoutableExecutionHostId
 } from '../../../shared/execution-host'
+import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import type { FilesystemPathFlavor } from '../../../shared/filesystem-entry-types'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { readIpcErrorMessage } from './ipc-error'
 import type { AiVaultResumeCommandSession } from './ai-vault-resume-command'
 import { agentForksThroughChat } from '../../../shared/agent-resume-argv'
@@ -83,12 +88,7 @@ function isMissingPairedResumePreparation(error: unknown): boolean {
   )
 }
 
-/**
- * The conversation "Switch to Terminal" opens. Most agents' fork command makes the copy, so this
- * only picks the Codex home it runs under, as a resume does (`copied: false`). An agent whose chat
- * makes the copy (`agentForksThroughChat`) has the chat's host make it here; the result is that
- * copy, which a plain resume opens and no chat owns (`copied: true`).
- */
+/** Prepare Switch to Terminal under the chosen account. CLI-forking agents copy at launch (copied:false); chat-forking agents need a host-created independent copy first (copied:true). */
 type ForkPreparationRequest = (
   args: AiVaultPrepareSessionResumeRequest
 ) => Promise<AiVaultPrepareSessionResumeResult>
@@ -188,38 +188,97 @@ export function aiVaultSessionNeedsResumePreparation(
   if (isLegacySharedCodexHome(session.codexHome)) {
     return true
   }
-  // Why: per-account repinning reads the LOCAL account selection, so only
-  // local sessions ask; remote sessions keep their recorded home untouched.
+  // Only local sessions may repin from this client’s account selection; remote sessions retain their recorded home.
   return (
     isPerAccountManagedCodexHome(session.codexHome) &&
     (!session.executionHostId || session.executionHostId === LOCAL_EXECUTION_HOST_ID)
   )
 }
 
-// Why: these sessions are keyed by their folder. Elsewhere Kimi rejects the resume or (1.52+) opens
-// a new empty session under the same id, so the visible `cd` failure is the honest outcome.
+// Kimi is folder-keyed: wrong cwd rejects resume or silently opens an empty same-ID session (1.52+).
 const RESUMES_ONLY_IN_RECORDED_CWD: ReadonlySet<AiVaultSession['agent']> = new Set(['kimi', 'muse'])
 
-/**
- * Drops an SSH session's recorded folder once its host confirms the folder is gone, so the resume
- * opens at the target workspace root, as local resumes already do (#17745). Also drops the
- * scanner-built command, whose `cd` into that folder would stop the agent from starting.
- */
-export async function dropDeletedSshResumeCwd(
+/** After the session's remote host confirms missing cwd, drop it and its prebuilt cd command so resume starts at the workspace root (#17745, #26509). */
+export async function dropDeletedRemoteResumeCwd(
   session: AiVaultResumeCommandSession
 ): Promise<AiVaultResumeCommandSession> {
-  const connectionId = getSshTargetIdForExecutionHost(session.executionHostId)
-  if (!connectionId || !session.cwd || RESUMES_ONLY_IN_RECORDED_CWD.has(session.agent)) {
+  const host = parseRoutableExecutionHostId(session.executionHostId)
+  const cwd = session.cwd
+  if (
+    (host?.kind !== 'ssh' && host?.kind !== 'runtime') ||
+    !cwd ||
+    RESUMES_ONLY_IN_RECORDED_CWD.has(session.agent)
+  ) {
     return session
   }
+  let hostFlavor: FilesystemPathFlavor | null = null
   try {
-    if (await window.api.fs.pathExists({ filePath: session.cwd, connectionId })) {
-      return session
+    if (host.kind === 'ssh') {
+      if (await window.api.fs.pathExists({ filePath: cwd, connectionId: host.targetId })) {
+        return session
+      }
+    } else {
+      hostFlavor = await runtimeServerFolderMissingFlavor(host.environmentId, cwd)
+      if (!hostFlavor) {
+        return session
+      }
     }
   } catch {
     // Why: only a definite ENOENT proves the folder is gone; losing the host proves nothing.
     return session
   }
   const { resumeCommand: _scannerCommand, ...rest } = session
-  return { ...rest, cwd: null }
+  // The rebuilt command must quote for the host's shell; an unstamped row would otherwise build POSIX.
+  return hostFlavor === 'win32' && !rest.executionHostPlatform
+    ? { ...rest, cwd: null, executionHostPlatform: 'win32' }
+    : { ...rest, cwd: null }
+}
+
+/** The host's path flavor when it proves `cwd` is gone, else null. files.stat needs the deleted workspace, so browse instead. */
+async function runtimeServerFolderMissingFlavor(
+  environmentId: string,
+  cwd: string
+): Promise<FilesystemPathFlavor | null> {
+  // The browser trims, expands `~` and resolves relative paths, so it would probe another folder; keep those.
+  if (cwd.trim() !== cwd || (!cwd.startsWith('/') && !isWindowsAbsolutePathLike(cwd))) {
+    return null
+  }
+  try {
+    await browseRuntimeServerDirectory(environmentId, cwd)
+    return null
+  } catch (error) {
+    if (!isDefiniteMissingPathError(error)) {
+      throw error
+    }
+  }
+  // A WSL session on a Windows host records a Linux cwd the host cannot stat; absence there proves nothing.
+  const flavor = await runtimeServerPathFlavor(environmentId)
+  return flavor === aiVaultCwdPathFlavor(cwd) ? flavor : null
+}
+
+function isDefiniteMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof RuntimeRpcCallError &&
+    error.code === 'runtime_error' &&
+    /^(?:ENOENT|ENOTDIR):/.test(error.message)
+  )
+}
+
+const runtimeServerPathFlavors = new Map<string, Promise<FilesystemPathFlavor>>()
+
+function runtimeServerPathFlavor(environmentId: string): Promise<FilesystemPathFlavor> {
+  // Keyed by pairing: a same-id re-pair may name a machine with another OS.
+  const key = `${environmentId}:${getRuntimeEnvironmentRevision(environmentId) ?? ''}`
+  let flavor = runtimeServerPathFlavors.get(key)
+  if (!flavor) {
+    flavor = browseRuntimeServerDirectory(environmentId, '~').then((listing) => listing.pathFlavor)
+    // A failed probe must not pin its verdict; the next resume asks again.
+    flavor.catch(() => runtimeServerPathFlavors.delete(key))
+    runtimeServerPathFlavors.set(key, flavor)
+  }
+  return flavor
+}
+
+function aiVaultCwdPathFlavor(cwd: string): FilesystemPathFlavor {
+  return isWindowsAbsolutePathLike(cwd) ? 'win32' : 'posix'
 }

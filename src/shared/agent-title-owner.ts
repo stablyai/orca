@@ -1,16 +1,17 @@
 import { rebrandPiStateTitle } from './pi-state-title-marker'
 import { detectAgentStatusFromTitle, getAgentLabel } from './agent-detection'
+import { STRONG_IDLE_KEYWORDS_RE } from './agent-title-core'
 import type { AgentStatusEntry, AgentType } from './agent-status-types'
 import {
   getSyntheticAgentTitleProfile,
   SYNTHETIC_AGENT_TITLE_PROFILES,
   type SyntheticAgentTitleProfile
 } from './synthetic-agent-title'
-import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import {
+  isLegacyPiCompatibleTitle,
+  rebrandPiCompatibleTitle
+} from './pi-compatible-synthetic-title'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
-
-/** The π brand a Pi/OMP title leads with; the owner's label replaces it in place. */
-const LEGACY_PI_BRAND = 'π'
 
 type TitleProfileMatch = {
   profile: SyntheticAgentTitleProfile
@@ -24,11 +25,6 @@ export type CompatibleAgentOwnerOptions = {
   ownerIsLaunch?: boolean
 }
 
-const COMPATIBLE_IDLE_TITLE_RE = /(?<![\w./\\-])(?:ready|idle|done)(?![\w-])/i
-
-/**
- * Resolves the synthetic title profile matching a given agent label.
- */
 function getProfileForTitleLabel(label: string | null): TitleLabelProfileMatch | null {
   if (!label) {
     return null
@@ -42,9 +38,6 @@ function getProfileForTitleLabel(label: string | null): TitleLabelProfileMatch |
   return null
 }
 
-/**
- * Resolves the synthetic title profile matching a given terminal title.
- */
 function getProfileForTitle(title: string): TitleProfileMatch | null {
   // Why each segment: a wrapper prefix must not hide the inner compatible agent identity.
   const candidates = getWrapperTitleSegments(title)
@@ -67,18 +60,11 @@ function getProfileForTitle(title: string): TitleProfileMatch | null {
   return fallback
 }
 
-/**
- * Why: unknown-launch remote sessions need to wait for foreground ownership
- * before publishing title frames whose identity can be re-owned.
- */
+/** Unknown-launch remote sessions need foreground ownership before emitting titles whose identity can be re-owned. */
 export function hasCompatibleAgentTitleIdentity(title: string): boolean {
   return Boolean(getProfileForTitle(title)?.profile.titleIdentityGroup)
 }
 
-/**
- * Detects the agent status (working, permission, idle) from a terminal title,
- * accounting for legacy Pi titles.
- */
 function getSourceTitleStatus(title: string): 'working' | 'permission' | 'idle' | null {
   const detectedStatus = detectAgentStatusFromTitle(title)
   if (detectedStatus) {
@@ -90,9 +76,6 @@ function getSourceTitleStatus(title: string): 'working' | 'permission' | 'idle' 
   return null
 }
 
-/**
- * Checks if a title indicates an agent is waiting for permissions or input.
- */
 function hasPermissionSuffix(title: string, sourceProfile: SyntheticAgentTitleProfile): boolean {
   const normalizedTitle = title.trim().toLowerCase()
   return (
@@ -103,21 +86,14 @@ function hasPermissionSuffix(title: string, sourceProfile: SyntheticAgentTitlePr
   )
 }
 
-/**
- * Checks if a title indicates an agent is idle or ready.
- */
 function hasIdleSuffix(title: string, sourceProfile: SyntheticAgentTitleProfile): boolean {
   const normalizedTitle = title.trim().toLowerCase()
   return (
-    normalizedTitle === sourceProfile.idleLabel.toLowerCase() ||
-    COMPATIBLE_IDLE_TITLE_RE.test(title)
+    normalizedTitle === sourceProfile.idleLabel.toLowerCase() || STRONG_IDLE_KEYWORDS_RE.test(title)
   )
 }
 
-/**
- * Why: remote OMP surfaces may report Pi as the live status identity, while
- * launch ownership still identifies the user-selected agent.
- */
+/** Remote OMP may report Pi live status; launch ownership preserves the selected agent. */
 export function resolveCompatibleAgentTypeForOwner(
   incomingAgentType: AgentType | null | undefined,
   ownerAgentType: AgentType | null | undefined,
@@ -138,10 +114,7 @@ export function resolveCompatibleAgentTypeForOwner(
   return ownerAgentType as AgentType
 }
 
-/**
- * Why: Pi-compatible title frames can come from the wrapped harness during
- * active work, so render them through the stable owner profile.
- */
+/** Wrapped Pi harness frames retain the stable launch-owner profile during work. */
 export function normalizeCompatibleAgentTitleForOwner(
   title: string,
   ownerAgentType: AgentType | null | undefined,
@@ -162,16 +135,10 @@ export function normalizeCompatibleAgentTitleForOwner(
   if (stateTitle !== null) {
     return stateTitle
   }
-  // Why: a π-branded title is the agent's own semantic session title (`π > <session> - <cwd>`;
-  // Orca's injected extension writes the same shape). Swap only the BRAND for the owner's label
-  // so the pane still reads as its launch owner (#6689, #7633, #9077) without discarding the
-  // session name and cwd, which collapsing to a bare profile label threw away (#16093).
-  if (isLegacyPiCompatibleTitle(source.sourceTitle)) {
-    // Why scoped to the matched segment: a multiplexer prefix could itself contain the brand,
-    // and a whole-string replace would rewrite that instead of the pane's own identity. Note the
-    // scoping is only as good as the segment match — a prefix that itself parses as a π title
-    // makes the whole string the match, and then the prefix's brand is what gets swapped.
-    const ownedSegment = source.sourceTitle.replace(LEGACY_PI_BRAND, ownerProfile.workingLabel)
+  // Replace only the leading brand with launch ownership; retain the agent's session/cwd instead of collapsing its semantic title (#16093).
+  // Replace within the matched segment so multiplexer prefixes retain their brand; a prefix parsing as a π title remains an ambiguous match.
+  const ownedSegment = rebrandPiCompatibleTitle(source.sourceTitle, ownerProfile.workingLabel)
+  if (ownedSegment !== null) {
     const segmentAt = title.lastIndexOf(source.sourceTitle)
     return segmentAt === -1 ? ownedSegment : title.slice(0, segmentAt) + ownedSegment
   }
@@ -194,10 +161,7 @@ export function normalizeCompatibleAgentTitleForOwner(
   return ownerProfile.workingLabel
 }
 
-/**
- * Why: mirrored remote status entries must keep the owner and title in sync
- * or later snapshots repaint the same tab under the wrapper agent.
- */
+/** Keep mirrored owner/title aligned so later snapshots cannot repaint the tab under its wrapper agent. */
 export function normalizeCompatibleAgentStatusEntryForOwner(
   entry: AgentStatusEntry,
   ownerAgentType: AgentType | null | undefined,

@@ -1,3 +1,8 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import { randomUUID } from 'node:crypto'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionSendBody } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type {
   AgentLaunchIntent,
   AgentLaunchPromptDisposal,
@@ -9,6 +14,28 @@ import type { CreatedSurface } from './agent-launch-executor'
 import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
 import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
 
+function structuredLaunchSubmitText(intent: Pick<AgentLaunchIntent, 'prompt'>): string | undefined {
+  return intent.prompt?.delivery === 'submit' && intent.prompt.text.trim().length > 0
+    ? intent.prompt.text
+    : undefined
+}
+
+export function launchPromptCreateInputs(
+  intent: Pick<AgentLaunchIntent, 'prompt'>,
+  signal?: AbortSignal
+): { firstMessage?: StructuredAgentSessionFirstMessage; signal?: AbortSignal } {
+  const text = structuredLaunchSubmitText(intent)
+  return text !== undefined
+    ? {
+        firstMessage: {
+          clientMessageId: createStructuredAgentSessionOperationId(randomUUID),
+          body: structuredAgentSessionSendBody(text, [])
+        },
+        ...(signal ? { signal } : {})
+      }
+    : {}
+}
+
 export const HANDED_TO_TERMINAL: AgentLaunchPromptDisposal = { outcome: 'handed-to-terminal' }
 const NOT_DELIVERED: AgentLaunchPromptDisposal = { outcome: 'not-delivered' }
 const UNCONFIRMED: AgentLaunchPromptDisposal = { outcome: 'unconfirmed' }
@@ -16,8 +43,14 @@ const UNCONFIRMED: AgentLaunchPromptDisposal = { outcome: 'unconfirmed' }
 /** Persist owed submits as unconfirmed: a crash during delivery must not invite duplicate turns. */
 export function settledAtCreation(
   intent: Pick<AgentLaunchIntent, 'prompt'>,
-  created: { promptRodeLaunchCommand?: boolean }
+  created: { promptRodeLaunchCommand?: boolean; structured?: AgentLaunchStructuredSurface }
 ): AgentLaunchPromptDisposal {
+  if (created.structured?.firstMessage) {
+    return { outcome: 'journaled', messageId: created.structured.firstMessage.clientMessageId }
+  }
+  if (created.structured) {
+    return structuredLaunchSubmitText(intent) === undefined ? NOT_DELIVERED : UNCONFIRMED
+  }
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
@@ -29,38 +62,25 @@ export async function settleLaunchPromptDisposal(
   created: CreatedSurface
 ): Promise<AgentLaunchPromptDisposal> {
   if (created.structured) {
-    const messageId = await deliverStructuredLaunchPrompt(execution, created.structured)
-    return messageId ? { outcome: 'journaled', messageId } : NOT_DELIVERED
+    return settledAtCreation(execution.intent, created)
   }
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
-  return deliverTerminalLaunchPrompt(execution, created.outcome.handle, { freshLaunch: true })
-}
-
-/** Drafts belong in the client composer, so only submits reach the transcript. */
-async function deliverStructuredLaunchPrompt(
-  execution: AgentLaunchSurfaceExecution,
-  structured: AgentLaunchStructuredSurface
-): Promise<string | null> {
-  const { intent, surfaces } = execution
-  if (!intent.prompt || intent.prompt.delivery !== 'submit' || execution.signal?.aborted) {
-    return null
-  }
-  return (
-    (await surfaces.deliverStructuredPrompt?.({
-      sessionId: structured.sessionId,
-      fence: structured.fence,
-      prompt: intent.prompt
-    })) ?? null
-  )
+  return deliverTerminalLaunchPrompt(execution, created.outcome.handle, {
+    freshLaunch: true,
+    terminalCreation: created.terminalCreation
+  })
 }
 
 /** PTY writes prove handoff, not consumption; drafts remain undelivered because acceptance is unobservable. */
 export async function deliverTerminalLaunchPrompt(
   execution: AgentLaunchSurfaceExecution,
   handle: string,
-  { freshLaunch }: { freshLaunch: boolean }
+  {
+    freshLaunch,
+    terminalCreation
+  }: { freshLaunch: boolean; terminalCreation?: RuntimeTerminalCreate }
 ): Promise<AgentLaunchPromptDisposal> {
   const { intent, surfaces, signal } = execution
   if (!intent.prompt || intent.prompt.delivery !== 'submit' || signal?.aborted) {
@@ -70,6 +90,7 @@ export async function deliverTerminalLaunchPrompt(
     handle,
     agent: intent.agent,
     freshLaunch,
+    terminalCreation,
     prompt: intent.prompt,
     ...(signal ? { signal } : {})
   })

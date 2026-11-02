@@ -7,11 +7,12 @@ import {
   flushRemovalPendingEdits,
   lastViewUnsavedFiles
 } from '@/components/editor/removal-unsaved-editor-files'
+import { runAfterEditorFramesFlush } from '@/components/editor/editor-pending-flush'
 import { discardedUnsavedFilesLabel, moreUnsavedFilesLabel } from './removal-unsaved-files'
 
 const MAX_LISTED_FILES = 5
 
-/** Lists editor files whose unsaved edits a removal of `targets` (memoized) would discard. */
+/** Memoize targets so the removal notice observes a stable set of affected editor files. */
 export function RemovalUnsavedFilesNotice({
   targets,
   enabled
@@ -24,9 +25,12 @@ export function RemovalUnsavedFilesNotice({
 
   useEffect(() => {
     if (enabled) {
-      // Why: delayed views hold recent typing; the flushed drafts re-run the list below.
+      // Flush delayed typing so this list includes the latest unsaved drafts.
       const state = useAppStore.getState()
-      flushRemovalPendingEdits(state, worktreePurgeClosedFileIds(state, targets))
+      const fileIds = worktreePurgeClosedFileIds(state, targets)
+      flushRemovalPendingEdits(state, fileIds)
+      // Custom editor frames answer asynchronously; the list re-renders when their edits land.
+      runAfterEditorFramesFlush(state, fileIds, () => {})
     }
   }, [enabled, targets])
 

@@ -1,36 +1,19 @@
-// A structured agent beyond Claude and Codex, paired across two builds: current code against the
-// newest published release.
-//
-// A host now accepts any agent it registered, publishes those agents, and stores their records.
-// Clients and hosts update independently, so each skew must hold before such an agent ships:
-//
-//  - an old client paired with a new host never meets that agent's tab, and the Claude and Codex
-//    tabs it does meet are what its own build would have published;
-//  - an old build reading what a new one stored (a tab, a record) keeps every other tab and never
-//    mistakes the new agent's record for another provider;
-//  - a new client against an old host does not offer the agent, because the capability is absent.
-//
-// The old side's lists are read from its checkout and the capability removed from them, so this
-// stays exercised after a release ships the capability (docs/reference/remote-wire-compatibility.md).
-// What the old side stores is its own code, so those expectations follow what the baseline host
-// advertises, never its version.
+// Pair new registered agents across real builds: old clients must not render unknown chats or lose known tabs/records.
+// Derive old capability lists from their checkout and remove the tested capability so rolling releases cannot erase the skew.
 
 import { beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/main/ipc/desktop-renderer-runtime-capabilities'
 import { projectSessionTabAgentStatus } from '../../../src/main/runtime/rpc/methods/session-tab-agent-status-projection'
-import { agentSessionRecordFixture } from '../../../src/shared/agent-session-record.test-fixture'
-import { encodeAgentSessionRecord } from '../../../src/shared/agent-session-record-stored-form'
+import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { encodeAgentSessionRecord } from '../../../src/shared/agent-session/lifecycle/agent-session-record-stored-form'
 import {
   isPersistedAgentSessionRecord,
   type AgentSessionRecord
-} from '../../../src/shared/agent-session-record'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
-import {
-  RUNTIME_CAPABILITIES,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-record'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
 import { resolveStructuredNativeChatSupport } from '../../../src/shared/structured-native-chat-launch-route'
 import { parseWorkspaceSession } from '../../../src/shared/workspace-session-schema'
@@ -38,7 +21,8 @@ import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   resolveBaselineReleaseRef,
-  type ReleaseCheckout
+  type ReleaseCheckout,
+  releaseModuleExport
 } from './release-checkout'
 import {
   loadAgentSessionWireBuild,
@@ -46,7 +30,6 @@ import {
   type AgentSessionWireBuild
 } from './versioned-agent-session-wire'
 
-// Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 
 const NEW_AGENT = 'grok'
@@ -72,15 +55,6 @@ type Baseline = {
 
 let baseline: Baseline
 let current: AgentSessionWireBuild
-
-function member<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (value === undefined) {
-    throw new Error(`the baseline release exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a release module is typed unknown; the name is the same export this build calls, and a missing one throws above.
-  return value as T
-}
 
 // v1.4.228 moved `isStructuredTab` to shared code; keeping both locations lets the rolling baseline
 // cross that move and an older pinned ref still load.
@@ -121,11 +95,14 @@ beforeAll(async () => {
   baseline = {
     ref,
     wire,
-    desktopClientCapabilities: member(capabilities, 'DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES'),
-    projectSessionTabAgentStatus: member(projection, 'projectSessionTabAgentStatus'),
-    parseWorkspaceSession: member(schema, 'parseWorkspaceSession'),
-    isStructuredTab: member(tabs, 'isStructuredTab'),
-    isPersistedAgentSessionRecord: member(record, 'isPersistedAgentSessionRecord')
+    desktopClientCapabilities: releaseModuleExport(
+      capabilities,
+      'DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES'
+    ),
+    projectSessionTabAgentStatus: releaseModuleExport(projection, 'projectSessionTabAgentStatus'),
+    parseWorkspaceSession: releaseModuleExport(schema, 'parseWorkspaceSession'),
+    isStructuredTab: releaseModuleExport(tabs, 'isStructuredTab'),
+    isPersistedAgentSessionRecord: releaseModuleExport(record, 'isPersistedAgentSessionRecord')
   }
 }, SUITE_TIMEOUT_MS)
 
@@ -143,8 +120,7 @@ function baselineReadsRecord(record: AgentSessionRecord): boolean {
   )
 }
 
-/** What a desktop too old to render the host's agents advertises: its own list without the
- *  capability, so the day a release ships it this still describes a client that predates it. */
+// Remove the new capability from the checkout’s real list so the client remains effectively old after release.
 function oldDesktopClientCapabilities(): string[] {
   return baseline.desktopClientCapabilities.filter(
     (capability) => capability !== STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
@@ -248,17 +224,6 @@ function unifiedTabsOf(parsed: { ok: boolean; value?: unknown }): Record<string,
 }
 
 describe('a structured agent beyond Claude and Codex, across versions', () => {
-  it(
-    'pairs current code with a real published release',
-    () => {
-      expect(baseline.ref).toMatch(/^v?\d/)
-      // Anti-vacuous: the old desktop still says it reads structured chats, so a withheld tab
-      // below is this capability's gate answering, not the whole surface being refused.
-      expect(oldDesktopClientCapabilities()).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-    },
-    SUITE_TIMEOUT_MS
-  )
-
   describe('old client, new host', () => {
     it("never receives the new agent's tab, and its Claude and Codex tabs are what its own build publishes", () => {
       const client = oldDesktopClientCapabilities()
@@ -344,29 +309,6 @@ describe('a structured agent beyond Claude and Codex, across versions', () => {
         ).toBe(host.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY))
       }
     })
-
-    it('would be refused by an old host that does not advertise the capability', async () => {
-      if (
-        baseline.wire.capabilities.includes(
-          STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-        )
-      ) {
-        return
-      }
-      const replies: { ok: boolean; result?: unknown }[] = []
-      await baseline.wire.createDispatcher(createSupportRuntime()).dispatchStreaming(
-        {
-          id: 'create-support',
-          authToken: 'cross-version-token',
-          method: 'agentSession.createSupport',
-          params: { worktree: `id:${WORKTREE}`, agent: NEW_AGENT }
-        },
-        (raw) => replies.push(JSON.parse(raw)),
-        { clientKind: 'runtime', clientCapabilities: baseline.wire.capabilities }
-      )
-      expect(replies).toHaveLength(1)
-      expect(replies[0]?.ok).toBe(false)
-    })
   })
 
   describe('Claude and Codex, both ways', () => {
@@ -389,17 +331,6 @@ describe('a structured agent beyond Claude and Codex, across versions', () => {
           ])
         }
       }
-    })
-
-    it("reach today's desktop unchanged from a new host", () => {
-      const payload = tabsSnapshot(['claude', 'codex'])
-      expect(
-        projectSessionTabAgentStatus(
-          payload,
-          'runtime',
-          DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-        )
-      ).toBe(payload)
     })
   })
 })

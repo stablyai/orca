@@ -33,11 +33,7 @@ describePostgres('PostgreSQL statement deadline', () => {
     expect(result).toBe(2)
   }, 15_000)
 
-  // Why: relay_invites carries a CREATE INDEX IF NOT EXISTS, which (unlike CREATE TABLE IF NOT
-  // EXISTS) really does queue behind an ACCESS EXCLUSIVE lock on the table. The catalog pre-check
-  // asks pg_class whether that index is already there, and the read takes no lock on relay_invites,
-  // so a boot on a migrated database no longer joins the queue at all. It used to, and every writer
-  // queued behind it in lock order.
+  // CREATE INDEX IF NOT EXISTS still queues table locks before checking existence; pg_class precheck avoids blocking writers on migrated databases.
   it('boots without queueing behind a held ACCESS EXCLUSIVE lock', async () => {
     let releaseTable!: () => void
     const tableReleased = new Promise<void>((resolve) => {

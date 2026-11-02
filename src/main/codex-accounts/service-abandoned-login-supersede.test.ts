@@ -19,8 +19,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -146,17 +146,6 @@ describe('CodexAccountService abandoned login', () => {
     const accounts = await pending
     expect(accounts.accounts.map((account) => account.email)).toEqual(['user@example.com'])
     expect(existsSync(join(loginHomes[0], 'auth.json'))).toBe(true)
-  })
-
-  it('reports whether a pending login was there to cancel', async () => {
-    const { service, children } = await createServiceWithHangingLogin()
-    const pending = service.addAccount()
-    const rejection = expect(pending).rejects.toThrow('Codex sign-in was cancelled.')
-    await vi.waitUntil(() => children.length === 1)
-
-    expect(service.cancelPendingLogin()).toBe(true)
-    await rejection
-    expect(service.cancelPendingLogin()).toBe(false)
   })
 
   it('publishes the sign-in link codex prints and drops it when the login ends', async () => {

@@ -1,16 +1,5 @@
-/**
- * Keeps the transcript in pty-startup-reply-echo-shapes.test.ts honest.
- *
- * That file asserts against echo bytes recorded by hand, which is exactly how the two
- * shapes this PR corrected went wrong in the first place: the projection and the test both
- * encoded the same guess. This one writes a reply to a real PTY master, reads what bash
- * actually echoes, and feeds it to the projection — so a shell or libc change that moves
- * the shape fails here instead of silently disarming suppression.
- *
- * Two line disciplines, because they echo differently and both are reachable:
- *   readline — tty raw at a prompt, readline echoes in software
- *   cooked   — under `read`, the kernel echoes via ECHOCTL
- */
+/** Capture actual bash PTY echoes to independently validate hand-transcribed projection fixtures. Exercise both raw readline
+ * software echoes and cooked read/kernel ECHOCTL; guessed fixtures previously mirrored the implementation’s errors. */
 import { existsSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
 import { locateEcho, replyEchoProjections } from './pty-startup-reply-echo-shapes'
@@ -40,10 +29,7 @@ async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<voi
   }
 }
 
-/**
- * Writes `reply` to the master once bash is settled, and returns what came back.
- * `discipline: 'cooked'` parks bash in `read` first, which restores ICANON+ECHO.
- */
+/** Capture settled bash’s echo after a master write; cooked parks it in read (ICANON+ECHO). */
 async function echoOf(reply: string, discipline: 'readline' | 'cooked'): Promise<string> {
   const { spawn } = await import('node-pty')
   let output = ''
@@ -72,8 +58,7 @@ async function echoOf(reply: string, discipline: 'readline' | 'cooked'): Promise
 }
 
 describe('replyEchoProjections against a real bash pty', () => {
-  // The reachable fix: a latched mode-2031 push echoed at a readline prompt had no
-  // projection at all before this, so it always painted `997;1n` on the prompt (#9993).
+  // Readline mode-2031 echoes previously lacked any projection and leaked 997;1n onto the prompt (#9993).
   itWithBash(
     'matches what readline echoes for a mode-2031 reply',
     async () => {
@@ -96,8 +81,7 @@ describe('replyEchoProjections against a real bash pty', () => {
     30_000
   )
 
-  // The ST form is what every in-tree OSC reply uses, so this is the shape that must never
-  // regress — the BEL form is only reachable from a foreign or older emulator.
+  // In-tree OSC replies use ST; BEL is only reachable from older/foreign emulators.
   itWithBash(
     'matches what the kernel echoes for an ST-terminated OSC reply',
     async () => {

@@ -19,6 +19,7 @@ const fixture = vi.hoisted(() => {
     const editor = {
       getOriginalEditor: () => ({}),
       getModifiedEditor: () => modifiedEditor,
+      getModel: () => null,
       onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
       onDidUpdateDiff: () => ({ dispose: disposeUpdate }),
       getLineChanges: () => [{}],

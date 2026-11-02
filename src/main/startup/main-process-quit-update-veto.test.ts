@@ -11,9 +11,12 @@ const dependencyExports: [string, string[]][] = [
   ['../agent-hooks/server', ['agentHookServer']],
   ['../agent-hooks/wsl-hook-relay-manager', ['wslHookRelayManager']],
   ['../agent-hooks/managed-agent-hook-controls', ['removeManagedAgentHooksAsync']],
-  ['../runtime/structured-agent-session-runtime', ['stopStructuredAgentSessionRuntime']],
   [
-    '../runtime/structured-agent-session-runtime-teardown',
+    '../runtime/agent-session/structured-agent-session-runtime',
+    ['stopStructuredAgentSessionRuntime']
+  ],
+  [
+    '../runtime/agent-session/structured-agent-session-runtime-teardown',
     ['setStructuredAgentSessionTeardownTrigger']
   ],
   ['../runtime/files/watch/file-watcher-leases', ['awaitRuntimeFileWatcherUnsubscribes']],
@@ -42,7 +45,7 @@ const dependencyExports: [string, string[]][] = [
   ['../terminal-history-gc', ['cancelHistoryGc']],
   ['./window-all-closed-quit-policy', ['shouldQuitWhenAllWindowsClosed']],
   ['./configure-process', ['isDevParentShutdownRequested']],
-  ['../persistence', ['getCanonicalUserDataPath']]
+  ['../persistence/loading-store/user-data-path', ['getCanonicalUserDataPath']]
 ]
 
 it('keeps startup services live when the updater has vetoed before-quit', async () => {

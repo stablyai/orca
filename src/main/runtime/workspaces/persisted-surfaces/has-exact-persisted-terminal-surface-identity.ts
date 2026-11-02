@@ -70,8 +70,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     tabId: string,
     leafId: string
   ): boolean {
-    // Why own partition: emptying a rotated runtime partition re-routes reads to an older copy
-    // that can still list a surface retirement just removed.
+    // Emptying a rotated partition reroutes reads to an older copy that may still list the retired surface.
     const layout = this.getPersistedSessionListingTerminalTab(
       worktreeId,
       tabId,
@@ -94,6 +93,44 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
       session.terminalLayoutsByTabId[expected.tabId]?.ptyIdsByLeafId?.[expected.leafId] ===
         expected.ptyId &&
       session.terminalPtyIncarnationsByPaneKey?.[paneKey] === expected.incarnationId
+    )
+  }
+
+  protected hasExactTerminalSurfaceIdentity(expected: {
+    worktreeId: string
+    tabId: string
+    leafId: string
+    ptyId: string
+    terminalHandle: string
+    incarnationId: string
+  }): boolean {
+    if (this.graphStatus !== 'ready') {
+      return false
+    }
+    const pty = this.ptysById.get(expected.ptyId)
+    if (
+      !pty?.connected ||
+      pty.incarnationId !== expected.incarnationId ||
+      this.paneOfPty(pty).tabId !== expected.tabId ||
+      this.paneOfPty(pty).paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
+      !worktreeIdsEqual(pty.worktreeId, expected.worktreeId) ||
+      this.handleByPtyId.get(expected.ptyId) !== expected.terminalHandle
+    ) {
+      return false
+    }
+    const tab = this.tabs.get(expected.tabId)
+    const leaf = this.leaves.get(this.getLeafKey(expected.tabId, expected.leafId))
+    const ptyLeaves = this.getLeavesForPty(expected.ptyId)
+    return (
+      Boolean(tab && worktreeIdsEqual(tab.worktreeId, expected.worktreeId)) &&
+      Boolean(
+        leaf &&
+        leaf.ptyId === expected.ptyId &&
+        worktreeIdsEqual(leaf.worktreeId, expected.worktreeId)
+      ) &&
+      ptyLeaves.length === 1 &&
+      ptyLeaves[0]?.tabId === expected.tabId &&
+      ptyLeaves[0]?.leafId === expected.leafId
     )
   }
 
@@ -121,9 +158,9 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
       leaf?.ptyId === candidate.ptyId &&
       worktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
     ) {
-      this.leaves.delete(leafKey)
+      this.terminalIdentity.removeLeaf(leafKey)
       const surfaceHandle = this.handleByLeafKey.get(leafKey)
-      this.handleByLeafKey.delete(leafKey)
+      this.terminalIdentity.unbindLeaf(leafKey)
       const handleRecord = surfaceHandle ? this.handles.get(surfaceHandle) : undefined
       if (
         surfaceHandle &&
@@ -131,15 +168,15 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
         handleRecord.leafId === candidate.leafId &&
         handleRecord.ptyId === candidate.ptyId
       ) {
-        this.handles.delete(surfaceHandle)
+        this.terminalIdentity.removeHandle(surfaceHandle)
       }
       this.rebuildLeafPtyIndex()
       if (![...this.leaves.values()].some((entry) => entry.tabId === candidate.tabId)) {
-        this.tabs.delete(candidate.tabId)
+        this.terminalIdentity.removeTab(candidate.tabId)
       }
     }
     if (pty && this.paneOfPty(pty).tabId === candidate.tabId) {
-      forgetPtySurface(pty)
+      forgetPtySurface(this.terminalIdentity, pty)
     }
     this.notifier?.resolveLegacyWorkerTerminalRecovery?.(
       candidate.paneKey,

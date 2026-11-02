@@ -13,11 +13,9 @@ class MobileWebShellCspTest {
     assertTrue(directives.contains("script-src 'self'"))
     // React Native Web injects runtime styles with no nonce; see MobileWebShellCsp.
     assertTrue(directives.contains("style-src 'self' 'unsafe-inline'"))
-    // A file preview is a `data:` URI; `https:` is the favicon, project icon and avatar the
-    // page already renders, and the sealed preview frame. See MobileWebShellCsp.
+    // data: previews and https: icons/srcdoc images need image-only access; see MobileWebShellCsp.
     assertTrue(directives.contains("img-src 'self' data: blob: https:"))
-    // The bootstrap page reads ./manifest.json from its own origin, which is one read-only
-    // directory behind the manifest map, so 'self' reaches nothing it cannot already read.
+    // Bootstrap reads manifest.json from the same read-only manifest-mapped directory.
     assertTrue(directives.contains("connect-src 'self'"))
     assertTrue(directives.contains("worker-src 'none'"))
     assertTrue(directives.contains("frame-src 'none'"))
@@ -30,8 +28,7 @@ class MobileWebShellCspTest {
 
   @Test
   fun `grants nothing the build rules say the bundle never needs`() {
-    // 'unsafe-inline' is granted to style-src and to nothing else: the page's code still has to
-    // arrive as a fetched same-origin script, which is the directive that matters.
+    // Inline styling must never grant inline script execution.
     val directives = MOBILE_WEB_SHELL_CSP.split("; ")
     assertEquals(
       listOf("style-src 'self' 'unsafe-inline'"),
@@ -48,8 +45,7 @@ class MobileWebShellCspTest {
       listOf("img-src 'self' data: blob: https:", "media-src blob:"),
       directives.filter { it.contains("blob:") }
     )
-    // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
-    // this still refuses a cleartext source anywhere in the header.
+    // Admit https: only for images; http: is not a substring and remains forbidden.
     assertEquals(
       listOf("img-src 'self' data: blob: https:"),
       directives.filter { it.contains("https:") }
@@ -66,8 +62,7 @@ class MobileWebShellCspTest {
   @Test
   fun `denies only what the native layer cannot see, with a shape the page cannot restore`() {
     val blocker = MOBILE_WEB_SHELL_NETWORK_API_BLOCKER
-    // Whole definitions, not `contains("writable:false")`: one property's descriptor could lose a
-    // flag and still match because another property still carries it.
+    // Check every descriptor: a surviving flag on one property must not mask another’s removal.
     assertTrue(
       blocker.contains("globalThis,'WebSocket',{value:deny,configurable:false,writable:false}")
     )
@@ -79,8 +74,7 @@ class MobileWebShellCspTest {
     assertTrue(
       blocker.contains("navigator,'serviceWorker',{value:undefined,configurable:false,writable:false}")
     )
-    // CSP is the fence for fetch and XMLHttpRequest; a script that replaced them would put one
-    // policy in two places and hide which one is actually holding.
+    // CSP owns fetch/XHR; replacing them would duplicate policy.
     assertFalse(blocker.contains("fetch"))
     assertFalse(blocker.contains("XMLHttpRequest"))
   }

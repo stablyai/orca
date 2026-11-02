@@ -1,6 +1,4 @@
-// Layout-owner build: a layout command that changes a pane's terminal (an adopt bind, say) raises
-// that pane's binding generation, as a spawn's binding does, and so does its undo. Commands that
-// move or drop a pane change no pane's terminal, so they raise nothing.
+// Layout-owner commands and rollback advance generations only for changed bindings, excluding moves/removals.
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -22,7 +20,7 @@ function bindingsOf(session: WorkspaceSessionState): Map<string, string | undefi
   )
 }
 
-/** Panes still held after the write whose terminal it changed; a new pane counts when bound. */
+/** Changed/new bindings on panes retained after the write. */
 export function reboundLeafIds(
   before: WorkspaceSessionState,
   after: WorkspaceSessionState
@@ -34,14 +32,12 @@ export function reboundLeafIds(
   })
 }
 
-/** Wraps a layout command's write so the panes it rebinds raise their generation. */
 export function raisingBindingGenerations<T>(
   runtime: Pick<StoreRuntimeState, 'ptyBindingGenerations'>,
   hostIds: readonly ExecutionHostId[],
   getSession: (hostId: ExecutionHostId) => WorkspaceSessionState,
   mutate: () => DurableProfileStateMutation<T>
 ): () => DurableProfileStateMutation<T> {
-  // Switch point: only the layout-owner build publishes binding generations.
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     return mutate
   }

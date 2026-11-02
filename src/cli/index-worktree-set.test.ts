@@ -512,13 +512,13 @@ describe('orca cli worktree awareness', () => {
   it.each([
     ['id:repo::/tmp/repo/child', '--unread', true],
     ['id:repo::/tmp/repo/child', '--read', false],
-    ['id:folder-repo::/tmp/notes', '--unread', true],
-    ['id:folder-repo::/tmp/notes', '--read', false]
+    ['id:folder:folder-1', '--unread', true],
+    ['id:folder:folder-1', '--read', false]
   ])('passes %s %s through worktree.set as isUnread', async (selector, flag, isUnread) => {
     queueFixtures(
       callMock,
       okFixture('req_set_unread', {
-        worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), isUnread }
+        worktree: { id: selector.slice('id:'.length), isUnread }
       })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -549,8 +549,14 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock.mock.calls[0]?.[1]).toHaveProperty('isUnread', undefined)
-    expect(JSON.stringify(callMock.mock.calls[0]?.[1])).not.toContain('isUnread')
+    expect(callMock).toHaveBeenCalledExactlyOnceWith(
+      'worktree.set',
+      expect.objectContaining({
+        worktree: 'id:repo::/tmp/repo/child',
+        comment: 'hi',
+        isUnread: undefined
+      })
+    )
   })
 
   it.each([

@@ -1,5 +1,7 @@
+import type * as PtySpawnValidationTypes from '../providers/working-directory-validation'
 import { describe, expect, it, vi } from 'vitest'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import { setImmediate as nextNativeTurn } from 'node:timers/promises'
+import type * as LocalPtyUtils from '../providers/local-pty/local-pty-executable-spawn'
 
 const {
   spawnMock,
@@ -43,11 +45,18 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+vi.mock('../providers/local-pty/local-pty-executable-spawn', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
-    resolveUnixShellPath: resolveUnixShellPathMock,
+    resolveUnixShellPath: resolveUnixShellPathMock
+  }
+})
+
+vi.mock('../providers/working-directory-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidationTypes>()
+  return {
+    ...actual,
     validateWorkingDirectory: validateWorkingDirectoryMock,
     validateWorkingDirectoryAsync: validateWorkingDirectoryMock
   }
@@ -68,7 +77,11 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
-import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import {
+  createPtyProcessEventEmitter,
+  mockPtyProcess,
+  useDaemonPtySubprocessEnv
+} from './pty-subprocess-test-harness'
 
 const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
@@ -80,6 +93,64 @@ describe('createPtySubprocess', () => {
     resolveUnixShellPathMock,
     resolveAgentForegroundProcessMock,
     validateWorkingDirectoryMock
+  })
+
+  it('delivers output and exit that land while ConPTY startup is still being confirmed', async () => {
+    const proc = { ...mockPtyProcess(), ...createPtyProcessEventEmitter() }
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      let published = false
+      const pending = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 }).then(
+        (handle) => {
+          published = true
+          return handle
+        }
+      )
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+      await nextNativeTurn()
+      expect(published).toBe(false)
+      proc._simulateData('\x1b[1t')
+      proc._simulateExit(7)
+      const handle = await pending
+      const data: string[] = []
+      const exitCode = new Promise<number>((resolve) => handle.onExit((code) => resolve(code)))
+      handle.onData((chunk) => data.push(chunk))
+      expect(await exitCode).toBe(7)
+      expect(data[0]).toBe('\x1b[1t')
+      expect(spawnMock).toHaveBeenCalledOnce()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('never respawns a dead ConPTY pane whose user shell args may run a command', async () => {
+    const proc = mockPtyProcess()
+    proc.onData.mockImplementationOnce((cb: (data: string) => void) => {
+      queueMicrotask(() => cb('Microsoft Windows\r\n'))
+      return { dispose: vi.fn() }
+    })
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { COMSPEC: CMD_ABS },
+        terminalShellArgs: ['/c', 'deploy.cmd']
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+    expect(spawnMock).toHaveBeenCalledOnce()
+    expect(proc.kill).not.toHaveBeenCalled()
   })
 
   it('keeps powershell.exe when the inbox PowerShell implementation is selected on Windows', async () => {

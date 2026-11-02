@@ -1,9 +1,6 @@
 import type { ProcessTableRow } from './process-table-snapshot'
 
-/**
- * Correlation indexes over a process-table capture, generic over the row shape so the POSIX
- * `ps` snapshot and the Windows process table share one pass instead of parallel ones.
- */
+/** Share generic process-table indexes between POSIX and Windows capture shapes. */
 
 export type ProcessTableIndexStats = {
   captures?: number
@@ -25,15 +22,8 @@ export type ProcessTableIndexOf<Row extends ProcessIdentityRow> = {
 /** POSIX process-table index shape used by foreground-process resolvers. */
 export type ProcessTableIndex = ProcessTableIndexOf<ProcessTableRow>
 
-/**
- * Build the correlation indexes in one linear pass over a capture. Only the
- * indexes a resolver actually reads are materialized: group indexes would cost
- * two more maps plus a per-row array allocation on every capture, and foreground
- * membership is derived from each row's own `pgid` against the root's `tpgid`.
- *
- * Generic over the row shape so the Windows snapshot (`pid`/`ppid`/`name`/
- * `command`) shares this pass rather than carrying a parallel one.
- */
+/** Build only byPid/children indexes in one pass; unused group maps add allocations while foreground membership
+ * comes directly from row pgid/root tpgid. Generic rows share this work across POSIX and Windows. */
 export function buildProcessTableIndex<Row extends ProcessIdentityRow>(
   rows: readonly Row[],
   stats?: ProcessTableIndexStats
@@ -58,13 +48,7 @@ export function buildProcessTableIndex<Row extends ProcessIdentityRow>(
   return { rows, byPid, childrenByPpid, stats }
 }
 
-/**
- * Depth-first descendants of `rootPid`, deepest-last, off a prebuilt index.
- *
- * Each row is copied with its depth, so callers may not mutate the index's rows
- * through the result. Ordering matches a per-call `childrenByPpid` walk exactly:
- * children keep capture order and the stack pops last-pushed first.
- */
+/** Depth-first descendants copied with depth so callers cannot mutate indexed rows; retain capture child order and LIFO traversal. */
 export function collectDescendantsFromIndex<Row extends ProcessIdentityRow>(
   index: ProcessTableIndexOf<Row>,
   rootPid: number,
@@ -110,19 +94,8 @@ export function lookupProcessTableIndex<Row extends ProcessIdentityRow, T>(
 // for, so the one cast below cannot hand a caller another row type's index.
 const processTableIndexes = new WeakMap<readonly ProcessIdentityRow[], unknown>()
 
-/**
- * Memoize one index per snapshot identity, so the panes that share a TTL-cached
- * capture walk its rows once instead of once each. Keyed weakly by the rows
- * array, so an index dies with the snapshot that produced it. The shared build
- * materializes only `byPid` and `childrenByPpid`, so a one-pane relay pays for
- * two maps per capture rather than four indexes no resolver queries.
- *
- * Deliberately stats-free: `buildProcessTableIndex` mutates the caller's counter
- * bag and stores it on the index, so a shared index would hand one caller's bag
- * to an unrelated later caller and let a cache hit satisfy an `indexBuilds`
- * measurement without building anything. Measured callers keep calling
- * `buildProcessTableIndex(rows, stats)` directly.
- */
+/** Weakly memoize per-snapshot identity so panes sharing a TTL capture build two indexes only once. Never share stats:
+ * that would expose another caller’s counter bag and count cache hits as builds; measured callers build directly. */
 export function getProcessTableIndex<Row extends ProcessIdentityRow>(
   rows: readonly Row[]
 ): ProcessTableIndexOf<Row> {

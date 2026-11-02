@@ -11,17 +11,16 @@ import {
   identityFor
 } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  CodexAppServerRequestError,
-  type openCodexAppServerConnection
-} from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredLaunch,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredLaunch,
+  CodexStructuredSessionEvent
+} from './codex-structured-session-state'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
@@ -41,11 +40,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-saved',
       effort: 'low',
-      serviceTier: 'priority'
+      serviceTier: 'priority',
+      reportedPermissionMode: null
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
       'thread/start',
+      'config/read',
       'skills/list'
     ])
   })
@@ -108,14 +109,16 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-live',
-      effort: 'medium'
+      effort: 'medium',
+      reportedPermissionMode: null
     })
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
-      current: { model: 'gpt-live', effort: 'medium' },
+      current: { model: 'gpt-live', effort: 'medium', reportedPermissionMode: null },
       models: [
         {
           id: 'gpt-live',
-          label: 'gpt-live',
+          label: 'GPT Live',
+          description: 'gpt-live',
           isDefault: false,
           efforts: [],
           effortsKnown: false
@@ -148,7 +151,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       resolveLaunch: createCodexStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => '/work/repo',
-        resolveCommand: () => 'codex',
+        resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
         resolveLaunchArgs: () => []
       })
     })
@@ -164,7 +167,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       params: {
         cwd: '/work/repo',
         approvalPolicy: 'on-request',
-        sandbox: 'workspace-write',
+        sandbox: 'read-only',
         approvalsReviewer: 'user',
         // Explicit values survive inherit = core.
         config: {
@@ -260,6 +263,54 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].closeCount).toBe(0)
     expect(await adapter.closeSession('session-1')).toBe(true)
     expect(codex.connections[0].closeCount).toBe(1)
+  })
+
+  it('replays warnings and errors from a successful startup', async () => {
+    const codex = fakeCodex()
+    const rows: AgentJournalItemBody[] = []
+    codex.routes['thread/start'] = () => {
+      codex.connections[0].handlers.onNotification?.('configWarning', {
+        threadId: THREAD_ID,
+        summary: 'An optional Codex integration is unavailable.'
+      })
+      codex.connections[0].handlers.onNotification?.('error', {
+        threadId: THREAD_ID,
+        willRetry: false,
+        error: { message: 'An optional Codex service failed.' }
+      })
+      return { thread: { id: THREAD_ID } }
+    }
+    const adapter = adapterFor(codex)
+    try {
+      await acquireReadyCodexForTest(adapter, {
+        identity: identityFor('session-1'),
+        fence: 7,
+        spawnToken: 'spawn-9',
+        events: {
+          appendItem: (_identity, body) => {
+            rows.push(body)
+          },
+          appendTombstone: () => {},
+          publish: () => {}
+        }
+      })
+      expect(rows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'status',
+            text: 'An optional Codex integration is unavailable.',
+            tone: 'warning'
+          }),
+          expect.objectContaining({
+            kind: 'status',
+            text: 'An optional Codex service failed.',
+            tone: 'error'
+          })
+        ])
+      )
+    } finally {
+      await adapter.closeAll()
+    }
   })
 
   it('keeps the traffic Codex sends before the session is published', async () => {
@@ -473,6 +524,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       {
         threadId: THREAD_ID,
         clientUserMessageId: 'client-1',
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        sandboxPolicy: { type: 'readOnly' },
         input: [
           { type: 'text', text: 'ship it' },
           { type: 'localImage', path: '/tmp/shot.png' },

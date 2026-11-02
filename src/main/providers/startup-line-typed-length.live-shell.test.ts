@@ -1,12 +1,5 @@
-/**
- * Real-zsh proof for the typed launch lines `startup-line-prompt-carry.ts` lets a prompt ride: a
- * multi-line line whose every line fits the per-line budget, up to the whole-line budget, reaches
- * zsh intact through Orca's own wrapper, ready marker and startup write.
- *
- * Why a slow user config too: the write is released 1.5 s after spawn even without the marker, and
- * then lands while the terminal is still line-buffered, where macOS keeps at most MAX_CANON bytes of
- * one line. The per-line budget is what survives that; a single 1.1 KB line did not.
- */
+/** Prove multiline typed launch budgets survive zsh wrapper/readiness/startup delivery.
+ * Slow rc files exercise the 1.5s fallback write in cooked mode, where macOS MAX_CANON limits each line. */
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -26,7 +19,7 @@ import {
 import {
   restoreUserDataPathAfterEach,
   setTestUserDataPath
-} from './local-pty-shell-ready-test-harness'
+} from './local-pty/local-pty-shell-ready-test-harness'
 
 function findZsh(): string {
   if (process.platform === 'win32') {
@@ -37,7 +30,6 @@ function findZsh(): string {
 
 const ZSH_PATH = findZsh()
 
-/** Lines of prompt text, each `perLine` bytes. */
 function promptLines(lineCount: number, perLine: number): string {
   const words = 'Fix the failing checks on this branch, then explain what changed and why.'
   return Array.from({ length: lineCount }, (_unused, index) => {
@@ -62,17 +54,17 @@ afterEach(() => {
 
 restoreUserDataPathAfterEach()
 
-/** Types `printf '%s' '<text>' > out` the way a local pane types a launch line; returns what ran. */
 async function typeIntoZsh(text: string, userConfigSeconds: number): Promise<string | null> {
   if (userConfigSeconds > 0) {
     writeFileSync(join(home, '.zshrc'), `sleep ${userConfigSeconds}\n`)
   }
   const out = join(home, 'out.txt')
   const done = join(home, 'done.txt')
-  const { ensureShellReadyWrappers } = await import('./local-pty-shell-ready-wrapper-generation')
-  const { getShellLaunchConfig } = await import('./local-pty-shell-ready')
+  const { ensureShellReadyWrappers } =
+    await import('./local-pty/local-pty-shell-ready-wrapper-generation')
+  const { getShellLaunchConfig } = await import('./local-pty/local-pty-shell-ready')
   const { writeStartupCommandWhenShellReady, STARTUP_COMMAND_READY_MAX_WAIT_MS } =
-    await import('./local-pty-shell-ready-startup-command')
+    await import('./local-pty/local-pty-shell-ready-startup-command')
   ensureShellReadyWrappers()
   const env: Record<string, string> = { PATH: '/usr/bin:/bin', HOME: home }
   const launch = getShellLaunchConfig(
@@ -91,7 +83,7 @@ async function typeIntoZsh(text: string, userConfigSeconds: number): Promise<str
     cols: 200,
     rows: 40,
     cwd: home,
-    // Why ORCA_ORIG_ZDOTDIR: the user's config is read from the sandbox home, not the real one.
+    // Keep user config inside the fixture home.
     env: { ...env, ...launch.env, ORCA_ORIG_ZDOTDIR: home, TERM: 'xterm-256color' }
   })
   const scan = createShellStartupOutputScanState()
@@ -99,7 +91,7 @@ async function typeIntoZsh(text: string, userConfigSeconds: number): Promise<str
   const ready = new Promise<{ postMarkerBytesObserved: boolean }>((resolve) => {
     resolveReady = resolve
   })
-  // The provider's cap (local-pty-shell-readiness-session.ts): a later marker releases the write.
+  // Match the provider readiness cap; later markers still release the write.
   const cap = setTimeout(() => {
     resolveReady?.({ postMarkerBytesObserved: false })
     resolveReady = null
@@ -135,7 +127,6 @@ async function typeIntoZsh(text: string, userConfigSeconds: number): Promise<str
 }
 
 describe.skipIf(!ZSH_PATH)('a multi-line launch line typed into zsh', () => {
-  // Lines at the per-line budget, as many as the whole-line budget leaves room for.
   const perLine = TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES - 1
   const text = promptLines(
     Math.floor((ZSH_MULTI_LINE_STARTUP_LINE_BUDGET_BYTES - 200) / (perLine + 1)),

@@ -6,15 +6,7 @@ const REPO = 'repo-1'
 const WORKTREE = `${REPO}::/work/feature`
 const ROUTE_NAME_HINT = 'feature'
 
-/**
- * The two consumers of the runtime client-event stream.
- *
- * The session header's live title subscribes inside its focus effect, reads `worktree.show` beside
- * the subscribe, and re-reads it on every invalidation the stream pushes. The host catalog
- * refresher subscribes to the same method and returns a disposer instead of a hook cleanup; the two
- * fetches it calls are its own parameters, so when it calls them and with what is its whole output,
- * and the recording observes exactly that rather than reconstructing either fetch.
- */
+// Observe real event consumers and their refresh callbacks; do not rebuild the reads those callbacks represent.
 export function clientEventStreamMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -27,7 +19,6 @@ export function clientEventStreamMountAdapters(
       const screen = hookScreenMount(() => {
         value = useLiveWorktreeName({
           client,
-          // The screen reads this off the client it was handed, so the client is the source here too.
           connState: client.getState(),
           routeName: ROUTE_NAME_HINT,
           worktreeId: WORKTREE
@@ -57,9 +48,7 @@ export function clientEventStreamMountAdapters(
       >('mobile/src/worktree/host-worktree-refresh.ts').startHostWorktreeRefresh
       const counts = { fetchWorktrees: 0, fetchRepoMetadata: 0 }
       let stop: (() => void) | null = null
-      // The effect carries the options as handed over, so an absent one stays distinct from an
-      // empty object. State counts instead of restating that list: the order and the options are
-      // already observed once, and a second copy would cost bytes and add no signal.
+      // Keep absent options distinct from empty objects; record counts because ordering/options are already captured on the wire.
       const fetching = (fetch: 'fetchWorktrees' | 'fetchRepoMetadata') => (options?: unknown) => {
         counts[fetch]++
         effect(fetch, { options })
@@ -72,9 +61,7 @@ export function clientEventStreamMountAdapters(
               client,
               fetchWorktrees: fetching('fetchWorktrees'),
               fetchRepoMetadata: fetching('fetchRepoMetadata'),
-              // The view-settings family records its own reads.
               syncViewSettings: () => Promise.resolve(),
-              // As the native substitutes stand AppState in: foregrounded, no transitions.
               appState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
             })
             return

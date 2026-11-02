@@ -323,8 +323,7 @@ describe('shareElectronDistFromCache', () => {
     const entry = makeEntry(root)
     mkdirSync(entry.cacheRoot, { recursive: true })
     writeDist(entry.entryPath)
-    // Injected rather than provoked: what counts as an unshareable destination differs per
-    // mechanism, and a byte-copy fallback here would defeat the point of the cache.
+    // Stub mechanism-dependent sharing failures; byte-copy fallback would defeat cache’s storage purpose.
     const stagePath = path.join(root, 'stage')
     const share = () => {
       throw new Error('no shareable storage')

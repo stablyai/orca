@@ -1,6 +1,4 @@
-// Test hook on the window's frame apply: `installLayoutFrameApplyCheck` (installed by the frame
-// tests) checks after every flush that the store shows what the full build shows for the same
-// cache, view and facts. Release and dev builds install none.
+// Tests install an after-flush store/reference-build observer (installLayoutFrameApplyCheck); release/dev builds install none.
 
 import type { AppState } from '@/store/types'
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
@@ -8,11 +6,9 @@ import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 export type LayoutFrameApplyObservation = {
-  /** The store before and after the flush. */
   before: AppState
   after: AppState
   cache: WorkspaceLayoutCache
-  /** Workspaces whose frames the flush showed. */
   changed: readonly string[]
   /** Of those, the ones built in full and the ones built from the store's view. */
   fullBuilt: readonly string[]
@@ -30,7 +26,6 @@ type LayoutFrameApplyObserver = (observation: LayoutFrameApplyObservation) => vo
 
 let observer: LayoutFrameApplyObserver | null = null
 
-/** Null removes the observer. */
 export function observeLayoutFrameApply(next: LayoutFrameApplyObserver | null): void {
   observer = next
 }

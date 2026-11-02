@@ -9,11 +9,7 @@ export function createBrowserClientPageRetainedRoot(document: Document): HTMLDiv
   return root
 }
 
-/**
- * `browserPageId` is stamped because the guest never enters its pane's subtree -- the host is a
- * fixed-position overlay tracking the pane's rect -- so DOM containment cannot say which row a
- * `<webview>` belongs to. The id is invariant across rekeys, unlike the generation.
- */
+/** The fixed host lives outside its pane, so stamp the stable page ID; DOM containment and rekeyed generations cannot identify its row. */
 export function createBrowserClientPageRetainedHost(
   document: Document,
   browserPageId: string
@@ -34,11 +30,7 @@ export function createBrowserClientPageRetainedHost(
   return host
 }
 
-/**
- * The guest's `load-commit` listener that hides its host on a blank page. Why the host and not the
- * guest: the host is a click target above the pane, so a blank tab must drop both its paint and its
- * hit testing for the New Tab page underneath.
- */
+/** Hide host paint and hit testing on blank guests so the New Tab page beneath remains usable. */
 export function hideRetainedHostWhileGuestIsBlank(
   host: HTMLDivElement
 ): (event: Electron.LoadCommitEvent) => void {

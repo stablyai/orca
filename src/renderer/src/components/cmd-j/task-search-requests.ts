@@ -3,7 +3,7 @@ import { linearSearchIssuesForTarget, linearStatusForTarget } from '@/runtime/ru
 import { jiraSearchIssuesForTarget, jiraStatusForTarget } from '@/runtime/runtime-jira-client'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
-import { resolveJiraSourceHostId } from '@/lib/jira-source-host'
+import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
 import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import {
   getRepoExecutionHostId,
@@ -21,9 +21,9 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PaletteFilterState } from './palette-filter'
 import { getTaskEligibleRepos } from '../task-page/task-page-default-repo-selection'
 import { getRepoBackedProviderAvailability } from '../task-source-provider-availability'
-import { getTaskPageRepoSourceContext } from '../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
 import { searchJiraIssuesByKeyOrText } from '../jira-key-or-text-search'
-import { bindTaskPageJiraItemSourceContext } from '../task-page-jira-item-source-context'
+import { bindTaskPageJiraItemSourceContext } from '../task-page/jira/task-page-jira-item-source-context'
 import { makeCmdJTaskSearchResult, type CmdJTaskSearchResult } from './task-search-results'
 
 const RESULT_LIMIT = 12
@@ -88,8 +88,9 @@ export function createCmdJTaskSearchRequests(args: {
               `is:issue is:open ${query}`,
               { sourceContext: source, requireComplete: true }
             )
+            // Open-only is applied to what Cmd-J shows, after pending edits (a reopen) are added.
             return items
-              .filter((issue) => issue.type === 'issue' && issue.state === 'open')
+              .filter((issue) => issue.type === 'issue')
               .map((issue) =>
                 makeCmdJTaskSearchResult({ provider, issue }, source, repo.id, hostLabel)
               )

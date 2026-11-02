@@ -3,6 +3,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { registerBoundPty } from './bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp'), isPackaged: false },
@@ -31,10 +32,9 @@ function getPty(runtime: OrcaRuntimeService, ptyId: string): RuntimePtyLaunchIde
   )
 }
 
-/** Switch-on, main's layout answers which pane holds a terminal, so the runtime needs a store. */
+// Main-owned layout requires a store to resolve pane/PTY bindings.
 function createRuntime(): OrcaRuntimeService {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration reads only the session bindPaneFirst adds to this store.
-  return new OrcaRuntimeService(ORCA_LAYOUT_OWNER_IS_MAIN ? ({} as never) : null)
+  return new OrcaRuntimeService(ORCA_LAYOUT_OWNER_IS_MAIN ? partialRuntimeStore() : null)
 }
 
 function paneKeyOf(runtime: OrcaRuntimeService, ptyId: string): string | null {

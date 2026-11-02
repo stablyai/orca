@@ -5,6 +5,7 @@ import {
 } from '@/runtime/runtime-jira-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { JiraComment, JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
+import { translate } from '@/i18n/i18n'
 
 export function useJiraIssueRemoteDetails(
   target: RuntimeClientTarget,
@@ -40,7 +41,14 @@ export function useJiraIssueRemoteDetails(
         setComments(fetched)
       } catch (error) {
         if (requestId === requestIdRef.current && readId === commentReadIdRef.current) {
-          setCommentsError(error instanceof Error ? error.message : 'Failed to load comments.')
+          setCommentsError(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.jiraIssue.loadCommentsFailed',
+                  'Failed to load comments.'
+                )
+          )
         }
       } finally {
         if (requestId === requestIdRef.current && readId === commentReadIdRef.current) {
@@ -72,7 +80,12 @@ export function useJiraIssueRemoteDetails(
       } catch (error) {
         if (requestId === requestIdRef.current && readId === transitionReadIdRef.current) {
           setTransitionsError(
-            error instanceof Error ? error.message : 'Failed to load status changes.'
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.jiraIssue.loadStatusChangesFailed',
+                  'Failed to load status changes.'
+                )
           )
         }
       } finally {

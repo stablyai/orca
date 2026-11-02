@@ -1,44 +1,42 @@
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 // Store CAS and idempotency rows make retried create/ensure replay instead of reserving another owner.
 
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type {
   StructuredAgentId,
   AgentSessionProviderHandle,
   AgentSessionProviderHandleLink
-} from '../../../shared/agent-session-provider-handle'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   agentSessionProviderHandleBelongsTo,
   agentSessionProviderHandleFromWire,
   type AgentSessionWireProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
-  AgentSessionAccountHome,
   AgentSessionExecutionLocation,
   AgentSessionLaunchArgs,
   AgentSessionLaunchEnv,
   AgentSessionRecord
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   AgentSessionRefusalError,
   agentSessionRefusalFromReference,
   agentSessionRefusalReference,
   isAgentSessionWireRefusalCode,
   refuse,
-  type AgentSessionMutationEnvelope,
   type AgentSessionRefusalReference,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
-} from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+} from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { reconcileJournalSubmissionsAgainstHistory } from '../agent-session-journal/journal-restart-reconciliation'
-import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type { AdoptedTranscriptSource } from '../agent-session-journal/adopted-transcript-source'
 import { structuredAgentSessionRefusalMessage } from './structured-agent-session-refusal-message'
 
 /** Clients cannot assert spawn tokens, claim keys or owner death; only host observations grant authority. */
@@ -62,7 +60,7 @@ export type AgentSessionAttachParams = {
     providerHandle: AgentSessionProviderHandle
     /** Omit only for exact replay of an already-imported journal. */
     transcriptPath?: string
-    source?: { providerSessionId: string; workspaceCwd: string }
+    source?: AdoptedTranscriptSource
   }
 }
 
@@ -131,7 +129,7 @@ export function admitAttachOrRefuse(
 }
 
 export function journalIdentityFor(
-  record: AgentSessionRecord,
+  record: Pick<AgentSessionRecord, 'sessionId' | 'providerHandleChain' | 'providerContextBoundary'>,
   params: AgentSessionAttachParams
 ): AgentSessionJournalIdentity {
   const active = activeProviderContext(record)
@@ -152,79 +150,27 @@ export function journalIdentityFor(
 
 export type AttachedJournal = {
   journal: AgentSessionJournal
+  /** Submissions the crash boundary left `unknown`; kept on the wire for older peers. */
   unconfirmedClientMessageIds: string[]
 }
 
-/** Reconcile pre-spawn history under the won lease; never resend or touch unhanded queues. */
+/** Open settles the crash boundary; missing provider history cannot turn unknown delivery into proven refusal. */
 export async function attachJournal(input: {
   record: AgentSessionRecord
-  params: AgentSessionAttachParams
-  adapter: StructuredAgentSessionAdapter
+  /** The host's open conversation, whose journal the attach adopts. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
-  /** Pre-spawn history; null means unavailable, omitted permits lazy reads for direct callers. */
-  providerHistoryWindow?: ProviderHistoryWindow | null
 }): Promise<AttachedJournal> {
-  const identity = journalIdentityFor(input.record, input.params)
-  const fence = input.record.lease.runtimeFence
   const journal = await input.openConversation(input.record)
-  const settled = await reconcileAgainstProviderHistory({
-    adapter: input.adapter,
-    identity,
-    journal,
-    fence,
-    accountHome: input.record.accountHome,
-    ...(Object.hasOwn(input, 'providerHistoryWindow')
-      ? { history: input.providerHistoryWindow }
-      : {})
-  })
   return {
     journal,
     unconfirmedClientMessageIds: journal
       .submissions()
-      .filter(
-        (entry) =>
-          entry.dispatchState === 'unknown' &&
-          entry.recovered === true &&
-          !settled.includes(entry.clientMessageId)
-      )
+      .filter((entry) => entry.dispatchState === 'unknown' && entry.recovered === true)
       .map((entry) => entry.clientMessageId)
   }
 }
 
-/** History reads are best effort; journal write failures must propagate to the handle owner. */
-async function reconcileAgainstProviderHistory(input: {
-  adapter: StructuredAgentSessionAdapter
-  identity: AgentSessionJournalIdentity
-  journal: AgentSessionJournal
-  fence: number
-  accountHome: AgentSessionAccountHome
-  history?: ProviderHistoryWindow | null
-}): Promise<string[]> {
-  let history = input.history
-  if (history === undefined) {
-    if (!input.adapter.providerHistoryWindow) {
-      return []
-    }
-    try {
-      history = await input.adapter.providerHistoryWindow({
-        identity: input.identity,
-        accountHome: input.accountHome
-      })
-    } catch {
-      return []
-    }
-  }
-  if (!history) {
-    return []
-  }
-  return reconcileJournalSubmissionsAgainstHistory({
-    journal: input.journal,
-    fence: input.fence,
-    history
-  })
-}
-
-/** Adoption starts at fence 1; resumed links may be elided when identical proof is replayed. */
+/** Adopted conversations start with adopted, never created; provider proof appends resumed unless identical handle/fence makes it a retry. */
 const ADOPTED_HANDLE_FENCE = 1
 
 function adoptedProviderHandleLink(

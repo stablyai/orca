@@ -125,16 +125,10 @@ export function LinearAgentSkillSetupDialog({
                 'auto.components.skills.SkillInstallDialog.39acb9e8f4',
                 'Install skill'
               )}
-              // Why: Install is this modal's sole CTA, so make it the filled primary —
-              // matching the other setup surfaces (filled primary + muted dismiss).
               installVariant="default"
               onRecheck={onRecheck}
             />
-            {/* Why: permanent opt-out as a quiet EyeOff icon next to the × — matching
-                SetupGuideModal's "hide this setup surface" affordance — instead of a
-                footer button that competes with (or gets reflex-clicked over) Install.
-                Rendered last so the dialog's initial focus lands on Install, not here —
-                otherwise Enter-on-open would permanently dismiss. */}
+            {/* Place permanent opt-out last so initial focus/Enter reaches Install rather than dismissing forever. */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -147,8 +141,7 @@ export function LinearAgentSkillSetupDialog({
                       "Don't show again"
                     )}
                     onClick={onDismissPermanently}
-                    // Why: top-3 (not top-3.5) so this icon-xs button's centered 16px icon
-                    // lines up with the bare × close icon (top-4) — verified pixel-aligned.
+                    // Align this button’s centered icon with the adjacent bare close icon.
                     className="absolute top-3 right-10 text-muted-foreground"
                   >
                     <EyeOff className="size-4" />

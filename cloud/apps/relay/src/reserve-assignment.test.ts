@@ -127,8 +127,7 @@ describe('reserve assignment on a director', () => {
     expect(await tripped.assignment.plan(HOST, { reconnect: false, region: US })).toEqual({ kind: 'database' })
     const leasing = setup({ feeds: [feed('c1', { admitMode: 'db', admitModeEffective: 'reserve' }), feed('c2')] })
     expect(leasing.directory.admitModeOf('c1')).toBe('reserve')
-    // A tripped cell still re-registering reports reserve as effective but db as raw: placement
-    // treats it as a database cell at once, books nothing there and paces nobody for it.
+    // Raw db must immediately stop booking/pacing even while effective mode stays reserve during re-registration.
     const reregistering = setup({
       feeds: [
         feed('c1', { admitModeEffective: 'reserve', admitModeRaw: 'db' }),
@@ -150,7 +149,6 @@ describe('reserve assignment on a director', () => {
       row: async (identity) =>
         identity.relayHostId === onUnheard.relayHostId ? { cellId: 'c2', assignmentEpoch: 3 } : null
     })
-    // A fresh host goes to today's path, with no booking yet.
     expect(await gated.assignment.plan(HOST, { reconnect: false, region: US })).toEqual({
       kind: 'database',
       epochFloor: 0
@@ -180,7 +178,6 @@ describe('reserve assignment on a director', () => {
     const { assignment, directory, reserved, now } = setup({
       feeds: [feed('c1', { full: [seated(7)] }), feed('c2')]
     })
-    // The cell restarted: its full snapshot no longer holds the seat.
     directory.apply('c1', feed('c1', { incarnation: 'c1-incarnation-2' }), now.value, now.value)
     const plan = await assignment.plan(HOST, { reconnect: true, region: US })
     expect(reserved[0]).toEqual({ cellId: 'c1', epoch: 7, sticky: true, dryRun: false })
@@ -201,7 +198,6 @@ describe('reserve assignment on a director', () => {
     })
     expect(reserved.length).toBeGreaterThan(0)
     expect(reserved.every((call) => !call.sticky && call.epoch === 9)).toBe(true)
-    // The floor lapses, so a host it no longer protects answers from memory again.
     now.value += RESERVE_ROW_FLOOR_TTL_MS + 1
     for (const response of [feed('c1', { seq: 2, full: [seated(7)] }), feed('c2', { seq: 2 })]) {
       directory.apply(response.cellId, response, now.value, now.value)
@@ -266,7 +262,6 @@ describe('reserve assignment on a director', () => {
     expect(
       await assignment.plan({ ...HOST, relayHostId: 'qrstuvwxyzabcdef' }, { reconnect: true, region: US })
     ).toMatchObject({ kind: 'database', epochFloor: 5 })
-    // A cell that rolled back to an image without the feed takes no placement.
     directory.markNoFeed('c1', now.value)
     expect(directory.cellState('c1')?.ceiling).toBeUndefined()
     expect(assignment.placementCells().find((cell) => cell.cellId === 'c1')?.general).toBe(false)
@@ -317,7 +312,6 @@ describe('reserve assignment on a director', () => {
       assignment: { assignmentEpoch: 9 }
     })
     expect(row).toHaveBeenCalledTimes(1)
-    // The database down: placed as before the read existed, above what the map knows.
     const down = leftWrongCell(async () => Promise.reject(new Error('timeout')))
     expect(await down.assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({
       kind: 'answer',
@@ -331,7 +325,6 @@ describe('reserve assignment on a director', () => {
       assignment: { assignmentEpoch: 8 }
     })
     expect(busyRow).not.toHaveBeenCalled()
-    // A stalled database: the read gives up after its bound and places as before.
     vi.useFakeTimers()
     try {
       const stalled = leftWrongCell(() => new Promise(() => undefined))
@@ -372,7 +365,6 @@ describe('reserve assignment on a director', () => {
       expect(reserved).toEqual([])
       await expect(regionReserve?.()).resolves.toMatchObject({ cellId: 'c1', region: ASIA })
       expect(reserved.map((call) => call.cellId)).toEqual(['c1'])
-      // A full reserve cell is not offered, and the US reserve cell never is.
       const full = feed('c1', { counts: { seats: 500, controls: 500, bookings: 0, units: 500, ceiling: 500 } })
       directory.apply('c1', full, now.value, now.value)
       expect(await regionReserveOf(assignment, OTHER)).toBeUndefined()
@@ -426,7 +418,6 @@ describe('reserve assignment on a director', () => {
       expect(plan).toEqual({ kind: 'database', reserveSpill: expect.any(Function) })
       expect(row).not.toHaveBeenCalled()
       expect(reserved).toEqual([])
-      // The database lane read the row: the spill mints above it.
       await expect(
         plan.kind === 'database' ? plan.reserveSpill?.({ skipOwnRegion: false, rowEpoch: 3 }) : null
       ).resolves.toMatchObject({ assignmentEpoch: 4 })
@@ -610,7 +601,6 @@ describe('reserve assignment on a director', () => {
       })
     })
 
-    // Jinwoo's condition: no move into a region without real room. Asia at 98% full gets none.
     it('moves no one into Asia at 98% full, or anywhere under 10% free', async () => {
       for (const share of [0.98, 0.91]) {
         const { assignment, reserved, warm } = setupRehome({ asia: asiaFull(share) })
@@ -622,14 +612,12 @@ describe('reserve assignment on a director', () => {
         })
         expect(reserved.filter((call) => call.cellId === 'asia-r')).toEqual([])
       }
-      // 10% free is the line: the host moves.
       const { assignment, warm } = setupRehome({ asia: asiaFull(0.9) })
       await warm()
       expect(await assignment.plan(HOST, ask)).toMatchObject({ lane: 'rehome' })
     })
 
-    // Room under 10% still takes placements (and B's spill, which books down to 0%), but C does
-    // not move anyone into it: the gap that keeps a spilled host from bouncing back.
+    // 10% rehome headroom above the 0% spill line prevents spilled hosts bouncing back.
     it('keeps a gap above the spill line: 5% free takes placements, not rehomes', async () => {
       const { assignment, warm } = setupRehome({ asia: asiaFull(0.95) })
       await warm()
@@ -652,7 +640,6 @@ describe('reserve assignment on a director', () => {
       await closed.warm()
       expect(await closed.assignment.plan(HOST, ask)).toMatchObject(sticky)
       const cold = setupRehome()
-      // No minute has passed: the US cell's move budget is still empty.
       expect(await cold.assignment.plan(HOST, ask)).toMatchObject(sticky)
       const sameRegion = setupRehome()
       await sameRegion.warm()
@@ -662,9 +649,7 @@ describe('reserve assignment on a director', () => {
     it('never runs for a fresh ask, an unknown host, a database-mode source, or an incomplete map', async () => {
       const fresh = setupRehome()
       await fresh.warm()
-      // A fresh ask is placed as today (the share draw), not rehomed.
       expect(await fresh.assignment.plan(HOST, { ...ask, reconnect: false })).toMatchObject({ lane: 'placement' })
-      // Never seen: placed fresh in its own region by the share draw, not rehomed.
       expect(await fresh.assignment.plan(OTHER, ask)).toMatchObject({ kind: 'answer', lane: 'placement' })
       const onDatabase = setup({
         cells: [...cellList(['us-db']), ...cellList(['asia-r'], ASIA)],
@@ -698,7 +683,6 @@ describe('reserve assignment on a director', () => {
       })
       await warm()
       expect(await assignment.plan(HOST, ask)).toMatchObject({ kind: 'answer', lane: 'sticky' })
-      // The booking was asked for and refused on intake: the pace path ran.
       expect(reserved.map((call) => call.cellId)).toEqual(['asia-r'])
     })
 
@@ -741,7 +725,6 @@ describe('reserve assignment on a director', () => {
       expect(await assignment.plan(OTHER, ask)).toMatchObject({ lane: 'sticky' })
       now.value += 60_000
       await assignment.plan({ ...HOST, relayHostId: 'flushflushflush1' }, ask)
-      // The warm-up minute, then this one.
       expect(lines.filter((line) => line.event === 'orca_relay_reserve_rehome')).toEqual([
         { event: 'orca_relay_reserve_rehome', fromRegion: US, toRegion: ASIA, count: 0, skippedByRule: { 'source-budget': 1 } },
         { event: 'orca_relay_reserve_rehome', fromRegion: US, toRegion: ASIA, count: 1, skippedByRule: { 'source-budget': 1 } }
@@ -760,7 +743,6 @@ describe('reserve assignment on a director', () => {
   it('tells the old reserve seat to go when it books the host elsewhere, naming that seat exactly', async () => {
     const { assignment, directory, demoted, now } = setup({
       feeds: [feed('c1', { full: [seated(5, 1_000)] }), feed('c2')],
-      // c1 is full, so the host lands on c2.
       reserve: (cellId) => (cellId === 'c1' ? { outcome: 'full' } : { outcome: 'ok' })
     })
     // The host left c1 for a reason that moves it: its next placement is fresh, above 5.
@@ -779,8 +761,7 @@ describe('reserve assignment on a director', () => {
     expect(demoted).toEqual([{ cellId: 'c1', epoch: 5, joinedAt: 1_000 }])
   })
 
-  // The booking map had not seen the c1 seat (half-open, joined within a poll lag): the feed
-  // demotes it once both joins are in the map, instead of the 75 s silence close.
+  // A half-open seat missed by the booking map must be demoted by the feed, before its 75s silence close.
   it('tells an old reserve seat the booking missed to go once a newer join shows in the feed', () => {
     const { assignment, directory, demoted, now } = setup()
     directory.onOutranked = (seat) => assignment.supersedeOutranked(seat)
@@ -794,7 +775,6 @@ describe('reserve assignment on a director', () => {
     const { assignment, reserved } = setup({
       feeds: [feed('c1', { full: [seated(6, 1_000)] }), feed('c2', { full: [seated(5, 3_000)] })]
     })
-    // c2's seat joined later but at an older epoch: a stale rebind, never the answer.
     expect(await assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({
       kind: 'answer',
       lane: 'sticky',
@@ -851,7 +831,6 @@ describe('reserve assignment on a director', () => {
         .map((line) => JSON.parse(line))
         .filter((entry) => entry.event === 'orca_relay_reserve_demote_outcome')
 
-    // The map follows the cell's feed: a refusing cell repairs that feed itself.
     it('logs the answer by host digest and leaves the seat to the feed', async () => {
       const lines: string[] = []
       const logged = Promise.withResolvers<void>()
@@ -1007,7 +986,6 @@ describe('reserve assignment on a director', () => {
         log: (line) => lines.push(line)
       })
       await assignment.plan(HOST, { reconnect: true, region: US })
-      // The host came back to the restarted c1, which drains again.
       directory.apply(
         'c1',
         feed('c1', { incarnation: 'c1-incarnation-2', draining: true, full: [seated(20)] }),
@@ -1034,7 +1012,6 @@ describe('reserve assignment on a director', () => {
     it('leaves every other host as today: no drain count, and a plain pace', async () => {
       const lines: string[] = []
       const { assignment } = setup({ feeds: [feed('c1', { full: [seated(7)] }), feed('c2')], log: (line) => lines.push(line) })
-      // A seat on another draining cell than the newest one does not count either.
       const paced = setup({
         feeds: [feed('c1', { full: [seated(7)] }), feed('c2', { draining: true, full: [seated(6)] })],
         reserve: () => ({ outcome: 'intake' })

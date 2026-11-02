@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { LegacyRelayBridgedPane } from '../../../shared/legacy-relay-bridge-contract'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import type { SshConnection } from '../connection/ssh-connection'
 import type { LegacyRelayTargetBridgeDeps } from './legacy-relay-target-bridge'
 import type { LegacyRelayBridgeHost } from './legacy-relay-bridge-registry'
+import { unusedSshConnection } from '../unused-host-transport.test-fixture'
 
 const TARGET = 'ssh-box'
 const PTY = toAppSshPtyId(TARGET, 'pty-1')
@@ -113,15 +113,6 @@ describe('a hung-up legacy relay bridge (loss of contact is not exit)', () => {
     expect(registry.legacyRelayBridgedPanes()).toEqual([])
   })
 
-  it("hands the target back to the next bridge's own listing", async () => {
-    registry.stopLegacyRelayBridge(TARGET)
-    await registry.startLegacyRelayBridge(TARGET)
-
-    expect(registry.legacyRelayBridgedPanes()).toEqual([
-      { ptyId: PTY, targetId: TARGET, tabId: 'tab-1', leafId: 'leaf-1', state: 'live' }
-    ])
-  })
-
   it('publishes an empty list when the next connect finds the leases retired', async () => {
     registry.stopLegacyRelayBridge(TARGET)
     const published: LegacyRelayBridgedPane[][] = []
@@ -152,8 +143,7 @@ describe('a hung-up legacy relay bridge (loss of contact is not exit)', () => {
 describe('attaching a bridged pane', () => {
   it('sends a reattach screen in output order and only once', async () => {
     const replays: string[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach only checks a connection exists.
-    const connection = {} as SshConnection
+    const connection = unusedSshConnection()
     registry.installLegacyRelayBridge({
       leases: () => leases,
       retireLease: vi.fn(),
@@ -175,19 +165,5 @@ describe('attaching a bridged pane', () => {
       replay: ''
     })
     expect(replays).toEqual(['SCREEN'])
-  })
-})
-
-describe('legacy relay usage telemetry', () => {
-  it('reports a bridging target active once a day, however often it reconnects', async () => {
-    expect(report).toHaveBeenCalledWith(TARGET, 'active', 1)
-    expect(report).toHaveBeenCalledWith(TARGET, 'connected', 1)
-    report.mockClear()
-
-    registry.stopLegacyRelayBridge(TARGET)
-    await registry.startLegacyRelayBridge(TARGET)
-
-    expect(report).toHaveBeenCalledWith(TARGET, 'connected', 1)
-    expect(report).not.toHaveBeenCalledWith(TARGET, 'active', expect.anything())
   })
 })

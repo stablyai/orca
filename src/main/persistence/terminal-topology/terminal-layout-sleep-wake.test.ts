@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Store } from '../loading-store/store'
 import { WindowSession } from './terminal-topology-window-session-fixture'
 import {
@@ -46,7 +46,6 @@ function record(leafId: string, id: string): SleepingAgentSessionRecord {
   }
 }
 
-/** One tab split into two bound panes; the right pane already sleeps. */
 async function storeWithSplitTab(hostId?: string): Promise<{ store: Store; directory: string }> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-layout-sleep-'))
   directories.push(directory)

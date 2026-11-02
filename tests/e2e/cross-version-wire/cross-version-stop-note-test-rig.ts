@@ -7,25 +7,30 @@ import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-sessio
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
-import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalCursor,
   type AgentJournalItemBody,
+  type AgentJournalRenderItem,
   type AgentJournalTurnLifecycle
-} from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
+import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../../src/shared/agent-session-wire'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+} from '../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   attachParams,
   NOW,
@@ -130,6 +135,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     setStructuredAgentSessionHost(null)
     await host.flushAllStreamedEvents()
     await journal.close()
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   })
   function call(method: string, params: unknown) {
@@ -145,6 +151,14 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
       port.runtimeStub()
     )
   }
+  /** The released client's schema decides admission; this build's guard types what it kept. */
+  function admit(item: unknown): AgentJournalRenderItem {
+    const admitted = client.AgentJournalRenderItemSchema.parse(item)
+    if (!isAdmissibleAgentJournalRenderItem(admitted)) {
+      throw new Error('released client admitted an item this build cannot read')
+    }
+    return admitted
+  }
   async function page(params: Record<string, unknown>): Promise<AgentSessionHistoryPage> {
     const reply = (await call('agentSession.history', { sessionId: SESSION, ...params }))[0]
     expect(reply?.ok).toBe(true)
@@ -155,7 +169,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     }
     return {
       ...result.page,
-      items: result.page.items.map((item) => client.AgentJournalRenderItemSchema.parse(item))
+      items: result.page.items.map(admit)
     }
   }
   async function subscribe(
@@ -173,9 +187,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
             ...event,
             batch: {
               ...event.batch,
-              items: event.batch.items.map((item) =>
-                client.AgentJournalRenderItemSchema.parse(item)
-              )
+              items: event.batch.items.map(admit)
             }
           }
         : event

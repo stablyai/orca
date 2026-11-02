@@ -86,7 +86,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       return
     }
     // Why: automated checks must honor the endpoint's Retry-After even when live display is available.
-    if (!options?.force && this.shouldSkipAutomatedClaudeFetch(this.state.claude)) {
+    if (!options?.force && this.shouldSkipAutomatedFetch('claude', this.state.claude)) {
       return
     }
     const claudeTarget = this.claudeFetchTarget

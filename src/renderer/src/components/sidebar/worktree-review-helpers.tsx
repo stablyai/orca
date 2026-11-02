@@ -25,11 +25,7 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
   return 'GitHub'
 }
 
-// Why: checks only gate a review that is actually open; draft/closed/merged keep
-// their state tone so the glyph agrees with its tooltip. A stateless row (folder
-// cards render one while a linked review is loading or its details failed) has no
-// state glyph to contradict, so it still flags problems — but never claims success,
-// since emerald would assert an open review we have not confirmed.
+// Open reviews take check tones; draft/closed/merged keep state tones, and unconfirmed stateless rows flag problems only.
 export function getReviewChecksTone(status: WorktreeCardPrDisplay['status']): string | null {
   if (status === 'failure') {
     return 'text-rose-500/85'

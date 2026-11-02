@@ -7,7 +7,6 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
-// Mock sonner (imported transitively by other slices)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
@@ -245,7 +244,6 @@ describe('updateDiffComment', () => {
     expect(ok).toBe(true)
     const saved = store.getState().getDiffComments(WT)[0]
     expect(saved.body).toBe('new body')
-    // identity-preserving fields untouched
     expect(saved.id).toBe('c1')
     expect(saved.lineNumber).toBe(10)
     expect(saved.createdAt).toBe(1000)
@@ -757,7 +755,7 @@ describe('worktree diff comment rollback convergence', () => {
     const removed = store.getState().deleteDiffComment(WT, 'c1')
     const marked = store.getState().markDiffCommentsSent(WT, ['c2'], 3000)
 
-    // Why: deleteDiffComment has no boolean contract, so its absent return must not hide the failure.
+    // deleteDiffComment returns no boolean; absent return must not hide write failures.
     await expect(removed).resolves.toBeUndefined()
     await expect(marked).resolves.toBe(false)
     expect(store.getState().getDiffComments(WT)).toBe(comments)

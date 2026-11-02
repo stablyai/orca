@@ -5,6 +5,7 @@ import {
 } from '../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
+import { retryFailedGeneration } from './first-work-generation-backoff'
 
 export async function runFolderWorkspaceTitleAutoRename(
   worktreeId: string,
@@ -54,10 +55,7 @@ export async function runFolderWorkspaceTitleAutoRename(
     return retry('a WSL move started during generation')
   }
   if (!generated.success) {
-    if (!generated.canceled) {
-      deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
-    }
-    return retry(`generation failed: ${generated.error}`)
+    return retryFailedGeneration(worktreeId, generated, deps, retry)
   }
 
   const newDisplayName = humanizeBranchSlug(generated.slug)

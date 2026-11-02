@@ -38,11 +38,7 @@ function watchReopenDuringSleep(worktreeId: string): () => void {
   return unsubscribe
 }
 
-/**
- * The window's side of a sleep main runs, whoever asked: on `started` it hides the workspace and
- * guards its panes before any terminal exits (the notice arrives ahead of every exit), and on
- * `ended` it commits or rolls back those panes and wakes the workspace if the sleep failed.
- */
+/** On main’s started notice, guard panes before exits; on ended, commit teardown or restore failed sleeps. */
 export function followWorkspaceSleep(
   notice: WorkspaceSleepNotice,
   options: { keepBrowserTabs?: boolean; reportTeardownFailure?: boolean } = {}
@@ -53,7 +49,6 @@ export function followWorkspaceSleep(
     return
   }
   if (notice.phase === 'started') {
-    // A newer sleep of the same workspace replaces an unfinished one.
     const previous = followed.get(worktreeId)
     previous?.stopWatchingReopen()
     previous?.settle({ failed: true, stoppedPtyIds: [] })

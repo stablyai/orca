@@ -95,7 +95,7 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     ])
   })
 
-  it('maps question.asked attention to Waiting after restart', async () => {
+  it('maps question.asked attention in a fresh session to Waiting after authority retirement', async () => {
     const { server, post } = await setup()
     await post({ hook_event_name: 'SessionBusy', sessionID: 'old' }, 'old-token')
     server.retirePaneAuthority(PANE)

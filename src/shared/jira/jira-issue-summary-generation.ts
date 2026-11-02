@@ -1,3 +1,5 @@
+import type { TextGenerationFailureFields } from '../text-generation-failure-copy'
+
 /** Jira rejects summaries longer than 255 characters. */
 export const JIRA_ISSUE_SUMMARY_MAX_LENGTH = 255
 
@@ -20,7 +22,7 @@ export type JiraIssueSummaryGenerationCancellation = Pick<
 
 export type JiraIssueSummaryGenerationResult =
   | { success: true; summary: string; agentLabel?: string }
-  | { success: false; error: string; canceled?: boolean }
+  | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
 
 function escapeJiraPromptTagValue(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

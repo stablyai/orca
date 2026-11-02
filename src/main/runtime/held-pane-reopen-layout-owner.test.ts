@@ -1,5 +1,4 @@
-// Layout-owner build: a paired desktop's Reopen of a pane main holds for a newer build's terminal
-// service stops that service, then starts the pane; its published status clears as it binds.
+// Reopen replaces a newer terminal service, then binds the held pane and clears its published status.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../shared/newer-daemon-hold'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
@@ -13,11 +12,12 @@ vi.mock('../daemon/daemon-newer-protocol-hold', async (importOriginal) => ({
   reopenNewerDaemonTerminals: daemonHold.reopen
 }))
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
+  makeDeferred,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
@@ -25,7 +25,6 @@ const {
 
 const PANE = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }
 
-/** A windowless host whose first start of the pane is held for a newer build. */
 async function heldPaneRuntime() {
   const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
@@ -35,7 +34,6 @@ async function heldPaneRuntime() {
       getWorkspaceSessionHostIds: (): ExecutionHostId[] => [LOCAL_EXECUTION_HOST_ID]
     })
   )
-  // A paired desktop's layout stream: what main publishes is what it reads.
   const desktopStream = runtime.subscribeWorkspaceLayouts(() => {})
   const spawn = vi.fn(
     committingSpawn(
@@ -64,7 +62,6 @@ async function heldPaneRuntime() {
   return { runtime, spawn, getSession, setSession, desktopStream }
 }
 
-/** The pane's start status as main publishes it to a paired desktop. */
 function publishedStatus(runtime: InstanceType<typeof OrcaRuntimeService>) {
   const { snapshot, unsubscribe } = runtime.subscribeWorkspaceLayouts(() => {})
   unsubscribe()
@@ -84,7 +81,22 @@ describe("a paired desktop's Reopen of a held pane (layout-owner build)", () => 
     const { runtime, spawn } = await heldPaneRuntime()
     expect(publishedStatus(runtime)).toBe('held')
 
-    await expect(runtime.reopenHeldTerminalPanes([PANE])).resolves.toEqual({ reopened: true })
+    const stopStarted = makeDeferred()
+    const stopFinished = makeDeferred()
+    daemonHold.reopen.mockImplementationOnce(async () => {
+      stopStarted.resolve()
+      await stopFinished.promise
+      return { reopened: true }
+    })
+    const reopening = runtime.reopenHeldTerminalPanes([PANE])
+    await stopStarted.promise
+    try {
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(publishedStatus(runtime)).toBe('held')
+    } finally {
+      stopFinished.resolve()
+    }
+    await expect(reopening).resolves.toEqual({ reopened: true })
 
     expect(daemonHold.reopen).toHaveBeenCalledOnce()
     expect(spawn).toHaveBeenCalledTimes(2)
@@ -117,7 +129,6 @@ describe("a paired desktop's Reopen of a held pane (layout-owner build)", () => 
         }
       }
     })
-    // The stream re-projects from the rebound session, as a write notification would make it.
     desktopStream.unsubscribe()
 
     await expect(runtime.reopenHeldTerminalPanes([PANE])).resolves.toEqual({ reopened: true })

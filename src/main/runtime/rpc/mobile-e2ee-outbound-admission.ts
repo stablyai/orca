@@ -6,11 +6,23 @@ import {
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-} from '../../../shared/remote-runtime-memory-limits'
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import type {
   MobileE2EEOutboundMemoryBudget,
   MobileE2EEOutboundSocketMemory
 } from './mobile-e2ee-outbound-memory-budget'
+import type { EventProps } from '../../../shared/telemetry-events'
+import { track } from '../../telemetry/client'
+
+export type MobileE2EEOutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']
+
+export function trackMobileE2EEOutboundBudgetClose(emitter: MobileE2EEOutboundBudgetEmitter): void {
+  try {
+    track('remote_outbound_budget_close', { emitter })
+  } catch {
+    // Telemetry is best-effort; closing the unsafe socket remains authoritative.
+  }
+}
 
 export function mobileE2EETextPayloadAdmissionBytes(value: string): number {
   const bytes = Buffer.byteLength(value, 'utf8')

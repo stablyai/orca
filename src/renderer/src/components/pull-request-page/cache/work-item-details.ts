@@ -6,7 +6,7 @@ import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-it
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
 
-// SWR cache: reopening a drawer paints cached data instantly while a background refetch reconciles. See docs/gh-work-item-drawer-cache.md.
+// Paint cached details on reopen while refetching in the background; see docs/gh-work-item-drawer-cache.md.
 const WORK_ITEM_DETAILS_CACHE_MAX = 50
 export const WORK_ITEM_DETAILS_FRESH_MS = 30_000
 export const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for this GitHub item.'
@@ -18,7 +18,7 @@ export type WorkItemDetailsCacheEntry = {
 }
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
-// Why: useSyncExternalStore snapshot stability relies on every cache write replacing the entry object identity (delete+set).
+// Cache writes replace entry identity so Map.get stays a stable useSyncExternalStore snapshot.
 const workItemDetailsCacheListeners = new Set<() => void>()
 export function subscribeWorkItemDetailsCache(listener: () => void): () => void {
   workItemDetailsCacheListeners.add(listener)
@@ -48,7 +48,7 @@ export function getWorkItemDetailsCacheKey(args: {
 }
 
 export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
-  // Why: re-insert moves the key to MRU; Map insertion order keeps the oldest key first when evicting.
+  // Reinsert to mark MRU; insertion order identifies the oldest eviction candidate.
   workItemDetailsCache.delete(key)
   workItemDetailsCache.set(key, entry)
   while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
@@ -61,10 +61,10 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
   notifyWorkItemDetailsCache()
 }
 
-// Why: object (not a number export) so cross-module readers always see later bumps after the split.
+// A mutable object keeps generation bumps visible across modules.
 export const workItemDetailsCacheGeneration = { current: 0 }
 
-// Exposed so mutation handlers can drop a stale entry after a local mutation (cross-window invalidation arrives via the `gh:workItemMutated` listener below).
+// Local mutations invalidate exact keys; cross-window events invalidate matching tuples.
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
   // Why: bump generation so an in-flight fetch launched before this invalidation won't write its stale result back.
   workItemDetailsCacheGeneration.current += 1
@@ -170,7 +170,7 @@ export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
   })
 }
 
-// Install once at module load (all dialogs share the cache); track the unsubscribe so Vite HMR doesn't accumulate listeners across reloads.
+// Share module listeners across dialogs and unsubscribe on HMR to avoid duplicates.
 let workItemMutatedUnsub: (() => void) | undefined
 let workItemDetailsCacheEventUnsub: (() => void) | undefined
 if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {

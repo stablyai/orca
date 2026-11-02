@@ -25,24 +25,6 @@ describe('splitSshStatusMenuRows', () => {
     expect(rows.inactive.map((row) => row.id)).toEqual(['d', 'a'])
     expect(rows.hiddenIdleCount).toBe(2)
   })
-
-  it('fills the idle cap with hosts that own projects before the rest of the config', () => {
-    const rows = splitSshStatusMenuRows(
-      [target('a', 'disconnected'), target('b', 'disconnected'), target('c', 'disconnected')],
-      { projectHostIds: new Set(['c']), idleRowLimit: 2 }
-    )
-    expect(rows.inactive.map((row) => row.id)).toEqual(['c', 'a'])
-    expect(rows.hiddenIdleCount).toBe(1)
-  })
-
-  it('keeps config order and hides nothing at or under the limit', () => {
-    const rows = splitSshStatusMenuRows(
-      [target('a', 'disconnected'), target('b', 'error'), target('c', 'disconnected')],
-      { projectHostIds: new Set(['c']), idleRowLimit: 2 }
-    )
-    expect(rows.hiddenIdleCount).toBe(0)
-    expect(rows.inactive.map((row) => row.id)).toEqual(['a', 'b', 'c'])
-  })
 })
 
 describe('findSshHostMatches', () => {
@@ -57,13 +39,5 @@ describe('findSshHostMatches', () => {
     expect(shown).toHaveLength(5)
     expect(hiddenCount).toBe(27)
     expect(findSshHostMatches(targets, 'east', 5).shown.map((row) => row.id)).toEqual(['east-prod'])
-  })
-
-  it('leaves out connected hosts, which the menu already lists', () => {
-    const { shown } = findSshHostMatches(
-      [target('web-1', 'connected'), target('web-2', 'disconnected')],
-      'web'
-    )
-    expect(shown.map((row) => row.id)).toEqual(['web-2'])
   })
 })

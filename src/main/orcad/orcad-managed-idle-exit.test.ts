@@ -10,7 +10,9 @@ import {
 } from './orcad-managed-idle-exit'
 import {
   ORCAD_E2E_IDLE_TIMEOUT_ENV,
-  ORCAD_IDLE_EXIT_TIMEOUT_MS
+  ORCAD_IDLE_EXIT_TIMEOUT_MS,
+  ORCAD_IDLE_TIMEOUT_ENV,
+  WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS
 } from '../../shared/orcad-idle-exit'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 
@@ -26,6 +28,7 @@ function idlePorts(): OrcadManagedIdleExitPorts {
     hasChatProviders: () => false,
     hasStagedMigration: () => false,
     automationsBusy: () => false,
+    emulatorsBusy: async () => false,
     activationFenceExists: async () => false
   }
 }
@@ -68,6 +71,35 @@ describe('resolveOrcadManagedIdleExit', () => {
   })
 })
 
+describe('client-chosen idle timeout', () => {
+  const resolve = (env: NodeJS.ProcessEnv) =>
+    resolveOrcadManagedIdleExit({ [ORCAD_MANAGED_ACTIVATION_ROOT_ENV]: '/f', ...env })?.timeoutMs
+
+  it('honours the WSL launch value', () => {
+    expect(resolve({ [ORCAD_IDLE_TIMEOUT_ENV]: String(WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS) })).toBe(
+      5 * 60_000
+    )
+    expect(resolve({ [ORCAD_IDLE_TIMEOUT_ENV]: '60000' })).toBe(60_000)
+  })
+
+  it.each(['', '59999', '0', '-1', '1.5', 'abc', String(ORCAD_IDLE_EXIT_TIMEOUT_MS + 1)])(
+    'keeps the default for an unset, invalid, too short or longer value (%j)',
+    (raw) => {
+      expect(resolve({ [ORCAD_IDLE_TIMEOUT_ENV]: raw })).toBe(ORCAD_IDLE_EXIT_TIMEOUT_MS)
+    }
+  )
+
+  it('lets a test timeout win over it', () => {
+    expect(
+      resolve({ [ORCAD_IDLE_TIMEOUT_ENV]: '300000', [ORCAD_E2E_IDLE_TIMEOUT_ENV]: '3000' })
+    ).toBe(3_000)
+  })
+
+  it('stays off for a server the user started, whatever the value', () => {
+    expect(resolveOrcadManagedIdleExit({ [ORCAD_IDLE_TIMEOUT_ENV]: '300000' })).toBeNull()
+  })
+})
+
 describe('createOrcadIdleProbes', () => {
   it('reads an unused host as idle on every probe', async () => {
     expect(await verdicts(idlePorts())).toEqual({
@@ -77,6 +109,7 @@ describe('createOrcadIdleProbes', () => {
       'chat-providers': 'idle',
       migration: 'idle',
       automations: 'idle',
+      emulators: 'idle',
       activation: 'idle'
     })
   })
@@ -102,6 +135,7 @@ describe('createOrcadIdleProbes', () => {
     ['a loaded chat provider', { hasChatProviders: () => true }, 'chat-providers'],
     ['a staged migration', { hasStagedMigration: () => true }, 'migration'],
     ['an enabled or running automation', { automationsBusy: () => true }, 'automations'],
+    ['an Orca-started emulator', { emulatorsBusy: async () => true }, 'emulators'],
     ['a held activation fence', { activationFenceExists: async () => true }, 'activation']
   ])('reads %s as busy', async (_label, override, probe) => {
     expect((await verdicts({ ...idlePorts(), ...override }))[probe]).toBe('busy')

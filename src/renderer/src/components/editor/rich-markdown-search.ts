@@ -146,11 +146,7 @@ export function createRichMarkdownSearchPlugin(): Plugin<RichMarkdownSearchState
           }
         }
 
-        // Why: when meta carries pre-computed matches from the React layer,
-        // build decorations directly without re-walking the document. When the
-        // doc changes without new meta (user edits while searching), remap
-        // existing decorations until the React layer recomputes and dispatches
-        // fresh matches. This avoids the old double-walk that froze the UI.
+        // Reuse supplied matches; remap decorations during edits until React recomputes, avoiding a second full document walk.
         if (meta) {
           return {
             activeIndex,

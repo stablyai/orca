@@ -21,7 +21,6 @@ import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
 import { buildFrameDrawnWorkspaceStatusPatch } from './frame-drawn-workspace-status-patch'
 import { indexMirroredTerminalSurfaces } from './mirrored-terminal-handle-index'
 
-/** Reconcile one host frame through the staged terminal/browser/layout pipeline. */
 export function applyWebSessionTabsSnapshotWithContext(
   state: WebSessionTabsSyncState,
   rawSnapshot: RuntimeMobileSessionTabsResult,
@@ -50,8 +49,7 @@ export function applyWebSessionTabsSnapshotWithContext(
       ? previousSnapshotTabIds
       : null
   if (frameDrawnPreviousTabIds) {
-    // Its tabs, ids and focus are the server frames'; this desktop's writes to it name the server's
-    // ids and keep no close or focus intent, so none of the mirror's ledgers below are kept for it.
+    // Server frames own tabs/IDs/focus and writes use server IDs; skip mirror intent ledgers for these workspaces.
     return buildFrameDrawnWorkspaceStatusPatch(
       state,
       rawSnapshot,

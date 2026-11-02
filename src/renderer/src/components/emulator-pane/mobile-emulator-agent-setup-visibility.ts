@@ -14,12 +14,10 @@ export function shouldShowMobileEmulatorAgentSetupGuide({
   if (!isActive || dismissed) {
     return false
   }
-  // Why: only gate the first paint on probe readiness; in-panel Re-check and focus
-  // refresh briefly set loading again and must not collapse the guide.
+  // Gate only initial paint on readiness so rechecks/focus refreshes cannot collapse an already visible guide.
   if (!initialProbeComplete && !statusReady) {
     return false
   }
-  // Why: when setup is already complete, keep a compact "ready" banner with Done
-  // until the user explicitly dismisses it.
+  // Keep the ready banner until explicit dismissal, including after setup completes.
   return true
 }

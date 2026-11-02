@@ -12,7 +12,6 @@ export type AgentSessionHistoryModalRequest = {
   agent?: AiVaultAgent
 }
 
-/** Opens Session History in the app's modal slot, scoped to `workspace`. */
 export function openAgentSessionHistoryModal(request: AgentSessionHistoryModalRequest): void {
   useAppStore.getState().openModal('agent-session-history', {
     worktreeId: request.workspace.worktreeId,

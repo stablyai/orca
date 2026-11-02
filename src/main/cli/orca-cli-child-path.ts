@@ -59,7 +59,10 @@ export function prependOrcaCliDirToChildPath(
         .split(pathDelimiter)
         .filter((entry) => entry.length > 0 && entry !== shimDir)
       env.PATH = [shimDir, ...inheritedEntries].join(pathDelimiter)
-      return join(shimDir, 'orca')
+      const launcher = join(shimDir, 'orca')
+      env.ORCA_CLI_COMMAND = launcher
+      env.ORCA_USER_DATA_PATH = opts.userDataPath
+      return launcher
     }
   } else if (opts.resourcesPath && (platform === 'darwin' || platform === 'win32')) {
     const bundledCliBin = join(opts.resourcesPath, 'bin')

@@ -1,27 +1,32 @@
 import type { DiffSource } from '@/store/slices/editor'
+import type { BranchCompareSnapshot } from '../../../../../../shared/editor-tab-view-types'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
+import { getCompareVersion } from '@/store/slices/editor/git/git-status-reconciliation'
 
 const EMPTY_OPEN_ROW_KEYS: ReadonlySet<string> = new Set()
 
 const SIGNATURE_SEPARATOR = '::'
 
-/**
- * Build the stable string that identifies the active editor file for highlight
- * matching: `${diffSource}::${relativePath}`. Kept as a primitive so the zustand
- * selector that produces it stays referentially stable across unrelated store
- * updates.
- */
+/** Use a primitive diffSource::relativePath signature so selectors stay stable across unrelated store updates. */
 export function buildActiveOpenFileSignature(
   diffSource: DiffSource | undefined,
-  relativePath: string
-): string {
+  relativePath: string,
+  branchCompare?: BranchCompareSnapshot,
+  branchSummary?: GitBranchCompareSummary | null
+): string | null {
+  if (
+    diffSource === 'branch' &&
+    (!branchCompare ||
+      !branchSummary ||
+      branchCompare.baseRef !== branchSummary.baseRef ||
+      branchCompare.compareVersion !== getCompareVersion(branchSummary))
+  ) {
+    return null
+  }
   return `${diffSource ?? 'edit'}${SIGNATURE_SEPARATOR}${relativePath}`
 }
 
-/**
- * Expand an active-open-file signature into the `${area}::${path}` row keys used
- * by the Source Control tree/list. Staged/unstaged diffs match their side; plain
- * edit tabs prefer working-tree rows and fall back to staged-only rows.
- */
+/** Match diffs to their staging side; plain editors prefer working-tree rows with staged-only fallback. */
 export function buildActiveOpenRowKeys(
   signature: string | null,
   availableRowKeys?: ReadonlySet<string>
@@ -41,8 +46,8 @@ export function buildActiveOpenRowKeys(
     return EMPTY_OPEN_ROW_KEYS
   }
 
-  if (diffSource === 'staged') {
-    return filterAvailableRowKeys([`staged::${path}`], availableRowKeys)
+  if (diffSource === 'staged' || diffSource === 'branch') {
+    return filterAvailableRowKeys([`${diffSource}::${path}`], availableRowKeys)
   }
 
   const workingTreeKeys = [`unstaged::${path}`, `untracked::${path}`]

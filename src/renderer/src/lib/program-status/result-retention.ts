@@ -1,7 +1,4 @@
-// OSC 7501 says a program's done/error outlives its exit until the user has seen it, so the
-// command-finished drop that clears a real agent's frozen Done keeps these rows instead, and the
-// user's next keypress or command dismisses them. Why stateless: the row itself says it is a kept
-// result, so a pane move, remount or reload cannot strand it.
+// OSC 7501 done/error survives program exit until user input, unlike agents’ frozen Done. Derive retention from the row so moves/remounts/reloads cannot strand results.
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 

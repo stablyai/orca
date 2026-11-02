@@ -12,9 +12,7 @@ import {
   registerAstroLanguage
 } from './register-astro'
 
-// Driven through the real `MonarchTokenizer`: a rule-table walk cannot tell a
-// working grammar from one that throws on every `{expr}`, which is how broken
-// Astro highlighting shipped green.
+// Use real Monarch tokenization; a valid rule table can still throw on every expression.
 function tokenizeAstro(source: string) {
   return tokenizeMonarchDocument('astro', astroMonarchLanguage, source)
 }
@@ -25,8 +23,7 @@ function languagesPerLine(source: string): string[][] {
 }
 
 describe('registerAstroLanguage registration', () => {
-  // Structural by necessity: covers the registration call itself (ids,
-  // extensions, idempotence), which tokenizing cannot observe.
+  // Registration IDs/extensions/idempotence require structural checks; tokenizing cannot observe them.
   it('registers the astro language, Monarch tokenizer, and configuration once', () => {
     const languages: { id: string }[] = [{ id: 'typescript' }]
     const register = vi.fn((entry: { id: string }) => {
@@ -103,8 +100,7 @@ const title = 'Home'
     ).toEqual(['typescript', 'typescript', null, 'html'])
   })
 
-  // Pins monaco-editor#1127: the pop rule's `^` survives Monaco's regex
-  // rebuild, so an indented or trailing `---` must not close the fence early.
+  // Only a standalone column-zero --- may close frontmatter under Monaco’s rebuilt pop regex (#1127).
   it('keeps the frontmatter fence open past a --- that is not at column 0', () => {
     expect(endEmbeddedLanguages(tokenizeAstro('---\n// ---\n  ---\n---\n<h1>hi</h1>'))).toEqual([
       'typescript',
@@ -115,9 +111,7 @@ const title = 'Home'
     ])
   })
 
-  // Regression (verified live in the Electron app): an expression in the first
-  // markup line popped the html embed before any push, and Monarch threw
-  // "cannot pop embedded language if not inside one".
+  // The first markup expression must not pop HTML before its first push; Monarch rejects that stack state.
   it('highlights an expression in the first markup line', () => {
     const [line] = tokenizeAstro('<p>a {title} b</p>')
 
@@ -125,8 +119,7 @@ const title = 'Home'
   })
 
   it('opens a file on an expression without popping a missing embed', () => {
-    // A file with no frontmatter that starts on `{expr}`: no html embed exists
-    // yet, so the entry rule must not pop one.
+    // An opening expression has no HTML embed to pop yet.
     expect(tokenLanguages(tokenizeAstro('{title}')[0])).toEqual(['astro', 'typescript', 'astro'])
   })
 
@@ -139,8 +132,7 @@ const title = 'Home'
   })
 
   it('does not enter typescript for an empty expression', () => {
-    // `{}` pops html on entry but never pushes typescript; the close must unwind
-    // only the state, or the tokenizer pops an embed that is not there.
+    // Empty expressions never push TypeScript; close must unwind only state, not a nonexistent embed.
     expect(tokenLanguages(tokenizeAstro('<p>{}</p>')[0])).toEqual(['html', 'astro', 'html'])
   })
 })
@@ -181,9 +173,7 @@ describe('astro embedded language attributes', () => {
 })
 
 describe('astro root state invariant', () => {
-  // Structural on purpose: behaviour can only reach the root rules some fixture
-  // happens to exercise, and a root rule that pops an embed throws on the very
-  // first character of a file. Guard every root rule, exercised or not.
+  // Check every root rule for illegal embed pops, including paths no current behavioral fixture happens to exercise.
   it('has no root rule that pops an embedded language', () => {
     const rootRules = (astroMonarchLanguage.tokenizer as Record<string, unknown[]>).root
     const popRules = rootRules.filter(

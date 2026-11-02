@@ -1,6 +1,4 @@
-// R3 gate (docs/reference/node-runtime-design.html, D7.1): swapping the process that hosts orcad
-// or the daemon is not a daemon protocol change, so one PR must not do both. A bump riding along
-// with a runtime swap would strand every live terminal on upgrade and rollback at once.
+// R3/D7.1: never combine runtime-host swaps with daemon protocol bumps; together they strand live terminals on upgrade and rollback.
 // Usage: node check-runtime-launcher-protocol-ratchet.mjs --base <ref>
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'

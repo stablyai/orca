@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { ACCOUNT_METHODS } from './accounts'
+import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import type {
   HostAccountSignInChannel,
   HostAccountSignInStatus
@@ -117,7 +118,6 @@ describe('account RPC methods', () => {
       const started = await call('accounts.hostSignInStart', { provider: 'claude' })
       const waiting = await call('accounts.hostSignInWait', { flowId: started.flowId })
       expect(waiting).toMatchObject({ phase: 'waiting', prompt: { needsCode: true } })
-      // Another paired device cannot answer it.
       await expect(
         call(
           'accounts.hostSignInSubmitCode',
@@ -161,7 +161,7 @@ describe('account RPC methods', () => {
       throw new Error('accounts.list must be a request method')
     }
 
-    // Why: clients that send no params (mobile, web) must keep the forced lane.
+    // Omitted params from mobile/web must retain forced refresh.
     await expect(list.handler(list.params?.parse({}), { runtime })).resolves.toBe(snapshot)
     expect(runtime.refreshAccountsForMobile).toHaveBeenCalledOnce()
   })
@@ -274,31 +274,65 @@ describe('account RPC methods', () => {
   })
 
   it('uses a stale-aware refresh when a connection replays the subscription', async () => {
-    const snapshot = { claude: null, codex: null }
+    type AccountStreamContext = {
+      runtime: Pick<
+        OrcaRuntimeService,
+        | 'getAccountsStreamSnapshot'
+        | 'onAccountsChanged'
+        | 'registerSubscriptionCleanup'
+        | 'cleanupSubscription'
+        | 'refreshAccountsForMobileSubscriber'
+      >
+      connectionId?: string
+      signal?: AbortSignal
+    }
+    type AccountStreamHandler = {
+      handler(
+        params: unknown,
+        context: AccountStreamContext,
+        emit: (frame: unknown) => void
+      ): Promise<void>
+    }
+    const snapshot = {
+      claude: { accounts: [], activeAccountId: null },
+      codex: { accounts: [], activeAccountId: null },
+      rateLimits: createEmptyRateLimitState()
+    }
     let cleanup: (() => void) | undefined
     const runtime = {
-      getAccountsSnapshot: vi.fn(() => snapshot),
+      getAccountsStreamSnapshot: vi.fn(() => snapshot),
       onAccountsChanged: vi.fn(() => vi.fn()),
       registerSubscriptionCleanup: vi.fn((_id: string, nextCleanup: () => void) => {
         cleanup = nextCleanup
       }),
+      cleanupSubscription: vi.fn(() => {
+        const release = cleanup
+        cleanup = undefined
+        release?.()
+      }),
       refreshAccountsForMobile: vi.fn().mockResolvedValue(undefined),
       refreshAccountsForMobileSubscriber: vi.fn().mockResolvedValue(undefined)
-    } as unknown as OrcaRuntimeService
+    }
     const subscribe = method('accounts.subscribe')
     if (!isStreamingMethod(subscribe)) {
       throw new Error('accounts.subscribe must be a streaming method')
     }
+    const stream: AccountStreamHandler = subscribe
     const emit = vi.fn()
 
-    const running = subscribe.handler(undefined, { runtime, connectionId: 'connection-1' }, emit)
+    const controller = new AbortController()
+    const running = stream.handler(
+      undefined,
+      { runtime, connectionId: 'connection-1', signal: controller.signal },
+      emit
+    )
     await vi.waitFor(() => {
       expect(runtime.refreshAccountsForMobileSubscriber).toHaveBeenCalledOnce()
     })
 
     expect(runtime.refreshAccountsForMobile).not.toHaveBeenCalled()
     expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'ready', snapshot }))
-    cleanup?.()
+    controller.abort()
     await running
   })
 })

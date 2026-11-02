@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { realpathSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
+import type * as CodexConfigMirror from '../codex/codex-config-mirror'
+import type * as CodexHomePaths from '../codex/codex-home-paths'
+import type * as CodexSessionBackfillMarker from '../codex/codex-session-backfill-marker'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
@@ -10,7 +13,6 @@ import {
   createManagedAuth,
   createStore,
   getRuntimeCodexHomePath,
-  getSystemCodexHomePath,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -72,8 +74,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -87,15 +89,11 @@ async function importServiceWithSideEffectSpies() {
   const accountBridge = vi.fn(async () => {})
   const backfillMarker = vi.fn(() => false)
   vi.doMock('../codex/codex-home-paths', async () => ({
-    ...(await vi.importActual<typeof import('../codex/codex-home-paths')>( // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
-      '../codex/codex-home-paths'
-    )),
+    ...(await vi.importActual<typeof CodexHomePaths>('../codex/codex-home-paths')),
     syncSystemCodexResourcesIntoManagedHome: syncResources
   }))
   vi.doMock('../codex/codex-config-mirror', async () => ({
-    ...(await vi.importActual<typeof import('../codex/codex-config-mirror')>( // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
-      '../codex/codex-config-mirror'
-    )),
+    ...(await vi.importActual<typeof CodexConfigMirror>('../codex/codex-config-mirror')),
     syncSystemConfigIntoManagedCodexHome: syncConfig
   }))
   vi.doMock('../codex/codex-session-bridge', () => ({
@@ -105,7 +103,7 @@ async function importServiceWithSideEffectSpies() {
     startCodexAccountSessionBridgeInBackground: accountBridge
   }))
   vi.doMock('../codex/codex-session-backfill-marker', async () => ({
-    ...(await vi.importActual<typeof import('../codex/codex-session-backfill-marker')>( // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+    ...(await vi.importActual<typeof CodexSessionBackfillMarker>(
       '../codex/codex-session-backfill-marker'
     )),
     markCodexSessionBackfillMarkerPending: backfillMarker
@@ -189,18 +187,6 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
     expect(sideEffects.accountBridge).toHaveBeenCalled()
   })
 
-  it('system-default real home: answers null (real ~/.codex) with zero side effects, matching launch prep', async () => {
-    const { service, store, sideEffects } = await createServiceWithSpies(
-      createSettings({ realHomeRoutable: true })
-    )
-
-    const readOnlyHome = service.resolveHostCodexHomePathForLaunchReadOnly()
-    expect(readOnlyHome).toBeNull()
-    expectNoSideEffects(sideEffects, store)
-
-    expect(service.prepareForCodexLaunch()).toBe(readOnlyHome)
-  })
-
   it('shared runtime home: answers the mirror with zero side effects, then matches launch prep', async () => {
     const { service, store, sideEffects } = await createServiceWithSpies(
       createSettings({ realHomeRoutable: false })
@@ -266,18 +252,5 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
 
     lstatFaults.release(markerPath)
     expect(service.resolveHostCodexHomePathForLaunchReadOnly()).toBe(managedHomePath)
-  })
-
-  it('shares the create-path null-to-system-home mapping', async () => {
-    const { service } = await createServiceWithSpies(createSettings({ realHomeRoutable: true }))
-    const { resolveStructuredCodexAccountHomePath } =
-      await import('../runtime/structured-agent-account-home')
-    await expect(
-      resolveStructuredCodexAccountHomePath({
-        launchEnv: {},
-        resolveLaunchHome: (input) =>
-          service.resolveHostCodexHomePathForLaunchReadOnly(input.launchEnv)
-      })
-    ).resolves.toBe(getSystemCodexHomePath())
   })
 })

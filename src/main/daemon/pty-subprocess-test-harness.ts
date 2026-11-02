@@ -7,7 +7,7 @@ import { join } from 'node:path'
 
 const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_OPENCODE_CONFIG_DIR',
-  'ORCA_MIMOCODE_HOME',
+  'ORCA_MIMOCODE_CONFIG_DIR',
   'ORCA_PI_CODING_AGENT_DIR',
   'ORCA_OMP_CODING_AGENT_DIR',
   'ORCA_OMP_STATUS_EXTENSION',
@@ -47,9 +47,73 @@ export type MockPtyProcess = {
   _simulateExit: (code: number) => void
 }
 
+export function createPtyProcessEventEmitter(): Pick<
+  MockPtyProcess,
+  'onData' | 'onExit' | '_simulateData' | '_simulateExit'
+> {
+  const dataListeners = new Set<(data: string) => void>()
+  const exitListeners = new Set<(event: { exitCode: number }) => void>()
+  return {
+    onData: vi.fn((callback: (data: string) => void) => {
+      dataListeners.add(callback)
+      return {
+        dispose: vi.fn(() => {
+          dataListeners.delete(callback)
+        })
+      }
+    }),
+    onExit: vi.fn((callback: (event: { exitCode: number }) => void) => {
+      exitListeners.add(callback)
+      return {
+        dispose: vi.fn(() => {
+          exitListeners.delete(callback)
+        })
+      }
+    }),
+    _simulateData: (data: string) => {
+      const listeners = [...dataListeners]
+      for (const listener of listeners) {
+        listener(data)
+      }
+    },
+    _simulateExit: (exitCode: number) => {
+      const listeners = [...exitListeners]
+      for (const listener of listeners) {
+        listener({ exitCode })
+      }
+    }
+  }
+}
+
+const CONPTY_MOCK_PRELUDE = '\x1b[c'
+// Captured before tests fake timers; spawn awaits the prelude, so it must always fire.
+const realSetImmediate = globalThis.setImmediate
+
+/** Windows spawns wait for the DA1 query bundled ConPTY writes once it reads input. */
+export function createConptyPreludeSender(): (cb: (data: string) => void) => void {
+  let sent = false
+  const listeners = new Set<(data: string) => void>()
+  return (cb) => {
+    if (process.platform === 'win32' && !sent) {
+      listeners.add(cb)
+      if (listeners.size === 1) {
+        // A macrotask, like real ConPTY output, reaches every listener subscribed during spawn.
+        realSetImmediate(() => {
+          sent = true
+          for (const listener of listeners) {
+            listener(CONPTY_MOCK_PRELUDE)
+          }
+          listeners.clear()
+        })
+      }
+    }
+  }
+}
+
 export function mockPtyProcess(pid = 12345): MockPtyProcess {
   const onDataListeners: ((data: string) => void)[] = []
   const onExitListeners: ((e: { exitCode: number }) => void)[] = []
+  const sendConptyPrelude = createConptyPreludeSender()
   return {
     pid,
     write: vi.fn(),
@@ -58,6 +122,7 @@ export function mockPtyProcess(pid = 12345): MockPtyProcess {
     process: 'zsh',
     onData: vi.fn((cb: (data: string) => void) => {
       onDataListeners.push(cb)
+      sendConptyPrelude(cb)
       return { dispose: vi.fn() }
     }),
     onExit: vi.fn((cb: (e: { exitCode: number }) => void) => {

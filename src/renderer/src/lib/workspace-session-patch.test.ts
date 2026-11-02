@@ -231,9 +231,7 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.keys(patch).sort()).toEqual(
       [
-        // Why: the reconnect list derives from remote session ids, so any
-        // patch that rewrites remoteSessionIdsByTabId must carry it too —
-        // otherwise a crash between patches strands a stale target on disk.
+        // Remote-session patches must carry derived reconnect targets too, or crash between writes strands stale target IDs.
         'activeConnectionIdsAtShutdown',
         'activeWorktreeIdsOnShutdown',
         'localOnlyScrollbackByTabId',
@@ -243,8 +241,7 @@ describe('buildWorkspaceSessionPatch', () => {
       ].sort()
     )
     expect('pendingActivationSpawn' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
-    // Why: the recovery ledger describes a mounted pane's in-flight heal; a
-    // persisted one would refuse the first legitimate recovery after restart.
+    // Recovery ledgers describe live mounted heals; persisting them blocks legitimate post-restart recovery.
     expect('recovery' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
     expect(patch.terminalLayoutsByTabId?.['tab-local'].buffersByLeafId).toBeUndefined()
     expect(patch.terminalLayoutsByTabId?.['tab-local'].scrollbackRefsByLeafId).toBeUndefined()
@@ -290,8 +287,7 @@ describe('buildWorkspaceSessionPatch', () => {
       ['localOnlyScrollbackByTabId']
     )
 
-    // Why not terminalLayoutsByTabId: the two homes change independently; a park that only wrote
-    // the local-only home must not re-send every layout.
+    // Local-only and remote layouts change independently; do not resend all layouts after local-only parks.
     expect(Object.keys(patch)).toEqual(['localOnlyScrollbackByTabId'])
     expect(patch.localOnlyScrollbackByTabId).toEqual({ 'tab-remote': { 'pane:1': 'remote-park' } })
   })
@@ -411,14 +407,14 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.defaultTerminalTabsAppliedByWorktreeId).toBeUndefined()
   })
 
-  it('keeps sleeping agent session clearing keys in patches', () => {
+  it('clears the last sleeping agent session with an empty map the host split keeps', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({ sleepingAgentSessionsByPaneKey: {} }),
       ['sleepingAgentSessionsByPaneKey']
     )
 
-    expect(Object.hasOwn(patch, 'sleepingAgentSessionsByPaneKey')).toBe(true)
-    expect(patch.sleepingAgentSessionsByPaneKey).toBeUndefined()
+    // undefined would be dropped before the write, leaving the record on disk until quit.
+    expect(patch.sleepingAgentSessionsByPaneKey).toEqual({})
   })
 
   it('keeps a staged browser tab out of incremental patches too', () => {
@@ -450,8 +446,7 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.activeBrowserTabIdByWorktree).toEqual({ 'wt-1': null })
   })
 
-  // Why: adoption can leave every browser row byte-identical and only clear the staged flag, so
-  // the handle map is the sole signal that the tab just became persistable.
+  // Clearing staged flags can leave row bytes unchanged; handle-map changes alone can make tabs persistable.
   it('persists an adopted browser tab when only the handle map changed', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({
@@ -501,8 +496,7 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.unifiedTabs?.['wt-1']).toHaveLength(1)
   })
 
-  // Why: the incremental writer is the one that runs on quit, so a remote page identity the full
-  // payload stamps but the patch drops never reaches disk in the case this exists for.
+  // Quit uses incremental writes; preserving remote-page identity only in full payloads still loses it on actual shutdown.
   it('stamps the remote page identity onto incrementally patched browser page rows', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({

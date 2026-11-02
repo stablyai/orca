@@ -9,7 +9,7 @@ import { clearNativeWindowsConptyPty } from '../../../runtime/terminal-model-que
 import {
   clearHiddenRendererPtyDeliveryState,
   isHiddenRendererPty
-} from '../../pty-hidden-delivery-gate'
+} from '../delivery/pty-hidden-delivery-gate'
 import { agentSessionOwners } from '../pane/agent-session-owners'
 import { paneKeyPtyId, paneKeyTeardownListeners, ptyPaneKey } from '../pane/key-state'
 import { getPtyIdsForConnection, ptyIncarnationById, ptyOwnership } from './ownership-state'

@@ -1,7 +1,10 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
-import { buildPaletteDocument, type PaletteDocument } from './palette-match/palette-document'
-import type { PaletteComposedEvidence } from './palette-match/evidence-composer'
+import {
+  buildPaletteDocument,
+  type PaletteDocument
+} from '../../../shared/palette-match/palette-document'
+import type { PaletteComposedEvidence } from '../../../shared/palette-match/evidence-composer'
 import {
   buildWorktreeAttachmentEvidence,
   buildWorktreeAutomationEvidence,
@@ -64,15 +67,13 @@ function resolveReviewSource(
   if (checksReview) {
     return checksReview
   }
-  // Why: an explicit null entry means the hosted-review index already answered
-  // for this worktree, so falling back to the raw caches would contradict it.
+  // Explicit null means the hosted index answered; raw-cache fallback would contradict it.
   if (checksReview === null) {
     return null
   }
 
   const branch = resolveWorktreeBranchLabel(worktree)
-  // Why: legacy cache keys have no host identity, so only the local owner can
-  // consume them without borrowing another host's review metadata.
+  // Legacy hostless caches are safe only for local owners; remote rows would borrow another host’s review.
   const cached =
     repo && sources.prCache && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
       ? sources.prCache[`${repo.path}::${branch}`]?.data
@@ -177,10 +178,8 @@ export function buildWorktreePaletteDocument(
       {
         id: WORKTREE_PALETTE_HOST_FIELD_ID,
         profile: 'structured-label',
-        // Why conditional: the host chip only renders for active remote hosts, and
-        // an unrendered match would be unexplainable on the row.
-        // Why both keys: the palette keys this map by host identity so two same-id
-        // workspaces keep distinct chips, but a bare-id map is still a valid input.
+        // Only rendered active-remote chips can explain a host match.
+        // Host keys distinguish same-ID twins; bare-ID maps remain supported.
         text:
           sources.hostLabelByWorktreeId?.get(getPaletteWorktreeIdentity(worktree)) ??
           sources.hostLabelByWorktreeId?.get(worktree.id) ??
@@ -206,9 +205,7 @@ export function buildWorktreePaletteDocuments(
 ): Map<string, PaletteDocument> {
   const documents = new Map<string, PaletteDocument>()
   for (const worktree of worktrees) {
-    // Why the host identity (STA-4343): `repoId::path` repeats across hosts, so keying on
-    // the bare id lets the second host overwrite the first and one workspace becomes
-    // unsearchable by its own name.
+    // Bare repoId::path repeats across hosts; host identity prevents twins overwriting searchable names (STA-4343).
     documents.set(
       getPaletteWorktreeIdentity(worktree),
       buildWorktreePaletteDocument(worktree, sources)

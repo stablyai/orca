@@ -31,6 +31,7 @@ function gitLabHydrationUnchanged(
     current.failed === summary.failed &&
     current.pending === summary.pending &&
     current.neutral === summary.neutral &&
+    current.scope === summary.scope &&
     (status.mergeable === undefined || source.mergeable === status.mergeable) &&
     (status.reviewDecision === undefined || source.reviewDecision === status.reviewDecision) &&
     (status.reviewerCount === undefined || source.reviewerCount === status.reviewerCount)
@@ -136,7 +137,10 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             assignees: details.assignees ?? [],
             pipelineJobs: details.pipelineJobs ?? []
           })
-          const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
+          const checksSummary = buildGitLabCheckSummary(
+            details.pipelineJobs ?? [],
+            details.pipeline
+          )
           const reviewDecision: Exclude<HostedReviewDecision, null> | undefined =
             details.approvalState?.approvalsRequired && details.approvalState.approvalsLeft === 0
               ? 'approved'
@@ -208,7 +212,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             ) {
               return current
             }
-            // Keep identity stable so hydrating details does not fetch them again.
+            // Keep identity stable so detail hydration cannot fetch itself again.
             const alreadyHydrated =
               current.title === issue.title &&
               current.status === issue.status.name &&
@@ -221,9 +225,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
         return
       }
 
-      // Interpretation is deferred past the group on purpose: this Promise.all rejects as soon as
-      // one leg's transport does, and interpreting only after both settled is what makes the issue
-      // error win over the comments error. startRpcOperation would wait for the slower peer.
+      // Interpret after Promise.all to preserve fail-fast transport and issue-before-comment policy precedence; startRpcOperation would await slower peers.
       const [issueReply, commentsReply] = await Promise.all([
         linearIssueRead.request(
           client,

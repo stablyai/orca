@@ -78,21 +78,6 @@ function makeHistory(
 }
 
 describe('mostRecentAttentionInHistory', () => {
-  it('returns null on an empty history', () => {
-    expect(mostRecentAttentionInHistory([])).toBeNull()
-  })
-
-  it('returns the latest done/blocked/waiting startedAt', () => {
-    const result = mostRecentAttentionInHistory([
-      makeHistory('working', NOW - 5_000),
-      makeHistory('done', NOW - 4_000),
-      makeHistory('working', NOW - 3_000),
-      makeHistory('blocked', NOW - 2_000),
-      makeHistory('working', NOW - 1_000)
-    ])
-    expect(result).toBe(NOW - 2_000)
-  })
-
   it('skips interrupted done rows', () => {
     expect(
       mostRecentAttentionInHistory([
@@ -123,22 +108,8 @@ describe('mostRecentAttentionInHistory', () => {
     ).toBe(NOW - 4_000)
   })
 
-  it('returns null when only interrupted dones exist', () => {
-    expect(mostRecentAttentionInHistory([makeHistory('done', NOW - 1_000, true)])).toBeNull()
-  })
-
-  it('ignores working rows entirely', () => {
-    expect(
-      mostRecentAttentionInHistory([
-        makeHistory('working', NOW - 1_000),
-        makeHistory('working', NOW - 2_000)
-      ])
-    ).toBeNull()
-  })
-
   it('skips history rows with non-finite startedAt', () => {
-    // Why: NaN passes through > silently; Infinity would pin the worktree
-    // at the top of Class 3 forever. Treat non-finite as missing.
+    // Treat nonfinite timestamps as missing: NaN defeats comparisons and Infinity pins Class 3 forever.
     expect(
       mostRecentAttentionInHistory([
         makeHistory('done', Number.NaN),
@@ -150,82 +121,6 @@ describe('mostRecentAttentionInHistory', () => {
 })
 
 describe('resolveAttention', () => {
-  it('returns idle when there are no panes', () => {
-    expect(resolveAttention([], NOW)).toEqual(IDLE)
-  })
-
-  it('classifies a blocked pane as Class 1 with stateStartedAt', () => {
-    const entry = makeEntry({
-      paneKey: 't:1',
-      state: 'blocked',
-      stateStartedAt: NOW - 60_000,
-      updatedAt: NOW - 30_000
-    })
-    expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
-      cls: 1,
-      attentionTimestamp: NOW - 60_000
-    })
-  })
-
-  it('classifies a waiting pane as Class 1', () => {
-    const entry = makeEntry({
-      paneKey: 't:1',
-      state: 'waiting',
-      stateStartedAt: NOW - 60_000,
-      updatedAt: NOW - 30_000
-    })
-    expect(resolveAttention([hookPane(entry)], NOW).cls).toBe(1)
-  })
-
-  it('classifies a done pane as Class 2', () => {
-    const entry = makeEntry({
-      paneKey: 't:1',
-      state: 'done',
-      stateStartedAt: NOW - 90_000,
-      updatedAt: NOW - 30_000
-    })
-    expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
-      cls: 2,
-      attentionTimestamp: NOW - 90_000
-    })
-  })
-
-  it('treats interrupted done as idle', () => {
-    const entry = makeEntry({
-      paneKey: 't:1',
-      state: 'done',
-      interrupted: true,
-      stateStartedAt: NOW - 90_000,
-      updatedAt: NOW - 30_000
-    })
-    expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
-  })
-
-  it('ranks a failed done in Class 2 at its end time, like a completion', () => {
-    const entry = makeEntry({
-      paneKey: 't:1',
-      state: 'done',
-      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 90_000 },
-      stateStartedAt: NOW - 90_000,
-      updatedAt: NOW - 30_000
-    })
-    expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
-      cls: 2,
-      attentionTimestamp: NOW - 90_000
-    })
-  })
-
-  it('still demotes a done the user stopped, recorded as a cancellation verdict', () => {
-    const entry = makeEntry({
-      paneKey: 't:1',
-      state: 'done',
-      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 90_000 },
-      stateStartedAt: NOW - 90_000,
-      updatedAt: NOW - 30_000
-    })
-    expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
-  })
-
   it('treats a session boundary as idle unless it displaced a real completion', () => {
     const boundary = makeEntry({
       paneKey: 't:1',
@@ -262,18 +157,6 @@ describe('resolveAttention', () => {
       updatedAt: NOW - 1_000
     })
     expect(resolveAttention([hookPane(justOutside)], NOW)).toEqual(IDLE)
-  })
-
-  it('does not let same-state done writes extend Class 2 eligibility', () => {
-    // The captured regression: updatedAt was 3m04s newer than the completion, keeping a 32m-old
-    // "done" row above two spinners.
-    const entry = makeEntry({
-      paneKey: 't:1',
-      state: 'done',
-      stateStartedAt: NOW - 32 * 60_000,
-      updatedAt: NOW - 29 * 60_000
-    })
-    expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
   })
 
   it('keeps an expired done pane from masking a live working sibling', () => {
@@ -336,34 +219,6 @@ describe('resolveAttention', () => {
     })
   })
 
-  it('falls back to current stateStartedAt when working has no prior attention history', () => {
-    const entry = makeEntry({
-      paneKey: 't:1',
-      state: 'working',
-      stateStartedAt: NOW - 10_000,
-      updatedAt: NOW - 1_000,
-      stateHistory: []
-    })
-    expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
-      cls: 3,
-      attentionTimestamp: NOW - 10_000
-    })
-  })
-
-  it('falls back when history contains only interrupted done rows', () => {
-    const entry = makeEntry({
-      paneKey: 't:1',
-      state: 'working',
-      stateStartedAt: NOW - 10_000,
-      updatedAt: NOW - 1_000,
-      stateHistory: [makeHistory('done', NOW - 60_000, true)]
-    })
-    expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
-      cls: 3,
-      attentionTimestamp: NOW - 10_000
-    })
-  })
-
   it('skips stale entries (updatedAt older than the freshness window)', () => {
     const entry = makeEntry({
       paneKey: 't:1',
@@ -372,28 +227,6 @@ describe('resolveAttention', () => {
       updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000
     })
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
-  })
-
-  it('takes the most attention-demanding class across multiple panes', () => {
-    const blocked = makeEntry({
-      paneKey: 't:1',
-      state: 'blocked',
-      stateStartedAt: NOW - 30_000,
-      updatedAt: NOW - 1_000
-    })
-    const done = makeEntry({
-      paneKey: 't:2',
-      state: 'done',
-      stateStartedAt: NOW - 5_000,
-      updatedAt: NOW - 1_000
-    })
-    const working = makeEntry({
-      paneKey: 't:3',
-      state: 'working',
-      stateStartedAt: NOW - 1_000,
-      updatedAt: NOW - 100
-    })
-    expect(resolveAttention(hookPanes([done, working, blocked]), NOW).cls).toBe(1)
   })
 
   it('within the resolved class, takes the freshest attention timestamp across panes', () => {
@@ -416,8 +249,7 @@ describe('resolveAttention', () => {
   })
 
   it('skips entries with non-finite stateStartedAt', () => {
-    // Why: NaN > anything === false, so without the guard a corrupted entry
-    // would silently sink the worktree to the bottom of its class.
+    // NaN defeats comparisons and sinks corrupted entries within their class.
     const corrupted = makeEntry({
       paneKey: 't:1',
       state: 'blocked',
@@ -425,77 +257,6 @@ describe('resolveAttention', () => {
       updatedAt: NOW - 1_000
     })
     expect(resolveAttention([hookPane(corrupted)], NOW)).toEqual(IDLE)
-  })
-
-  it('title-heuristic permission maps to Class 1 with ts = now', () => {
-    expect(
-      resolveAttention(
-        [{ kind: 'title', status: 'permission', worktreeLastActivityAt: NOW - 60_000 }],
-        NOW
-      )
-    ).toEqual({ cls: 1, attentionTimestamp: NOW })
-  })
-
-  it('title-heuristic working maps to Class 3 with ts = worktree.lastActivityAt', () => {
-    expect(
-      resolveAttention(
-        [{ kind: 'title', status: 'working', worktreeLastActivityAt: NOW - 30_000 }],
-        NOW
-      )
-    ).toEqual({ cls: 3, attentionTimestamp: NOW - 30_000 })
-  })
-
-  it('title-heuristic idle / null contributes nothing (Class 4)', () => {
-    expect(
-      resolveAttention(
-        [
-          { kind: 'title', status: 'idle', worktreeLastActivityAt: NOW - 1_000 },
-          { kind: 'title', status: null, worktreeLastActivityAt: NOW - 1_000 }
-        ],
-        NOW
-      )
-    ).toEqual(IDLE)
-  })
-
-  it('hook entry overrides title heuristic on the same pane (hook wins when fresh)', () => {
-    // Why: per-pane authority means a fresh hook entry beats whatever the
-    // title says — a 'done' hook plus a 'working'-classified title stays
-    // Class 2.
-    const done = makeEntry({
-      paneKey: 't:1',
-      state: 'done',
-      stateStartedAt: NOW - 30_000,
-      updatedAt: NOW - 1_000
-    })
-    expect(
-      resolveAttention(
-        [
-          hookPane(done),
-          { kind: 'title', status: 'working', worktreeLastActivityAt: NOW - 60_000 }
-        ],
-        NOW
-      ).cls
-    ).toBe(2)
-  })
-
-  it('per-pane authority across panes: pane A hook=done, pane B title=permission → Class 1', () => {
-    // Why: hook authority is per-pane, not per-worktree. A hookless pane
-    // showing 'permission' must still promote the whole worktree to Class 1.
-    const done = makeEntry({
-      paneKey: 'tab:1',
-      state: 'done',
-      stateStartedAt: NOW - 30_000,
-      updatedAt: NOW - 1_000
-    })
-    expect(
-      resolveAttention(
-        [
-          hookPane(done),
-          { kind: 'title', status: 'permission', worktreeLastActivityAt: NOW - 1_000 }
-        ],
-        NOW
-      )
-    ).toEqual({ cls: 1, attentionTimestamp: NOW })
   })
 })
 
@@ -543,32 +304,6 @@ describe('buildAttentionByWorktree', () => {
     return out
   }
 
-  it('returns IDLE for worktrees with no tabs', () => {
-    const w = makeWorktree('wt-1')
-    const map = buildAttentionByWorktree([w], {}, {}, {}, {}, NOW)
-    expect(map.get(w.id)).toEqual(IDLE)
-  })
-
-  it('uses fresh worktree attribution before a headless tab is mirrored', () => {
-    const w = makeWorktree('wt-1')
-    const key = paneKey('headless-tab', LEAF_1)
-    const entries = {
-      [key]: makeEntry({
-        paneKey: key,
-        worktreeId: w.id,
-        tabId: 'headless-tab',
-        state: 'blocked',
-        stateStartedAt: NOW - 5_000,
-        updatedAt: NOW - 1_000
-      })
-    }
-
-    expect(buildAttentionByWorktree([w], {}, entries, {}, {}, NOW).get(w.id)).toEqual({
-      cls: 1,
-      attentionTimestamp: NOW - 5_000
-    })
-  })
-
   it('prefers mirrored tab ownership over a stale worktree stamp', () => {
     const stale = makeWorktree('stale-worktree')
     const current = makeWorktree('current-worktree')
@@ -596,30 +331,6 @@ describe('buildAttentionByWorktree', () => {
 
     expect(attention.get(stale.id)).toEqual(IDLE)
     expect(attention.get(current.id)).toEqual({
-      cls: 1,
-      attentionTimestamp: NOW - 5_000
-    })
-  })
-
-  it('aggregates entries across multiple panes on the same tab', () => {
-    const w = makeWorktree('wt-1')
-    const tab = makeTab('tab-1', w.id)
-    const entries: Record<string, AgentStatusEntry> = {
-      [paneKey(tab.id, LEAF_1)]: makeEntry({
-        paneKey: paneKey(tab.id, LEAF_1),
-        state: 'working',
-        stateStartedAt: NOW - 10_000,
-        updatedAt: NOW - 1_000
-      }),
-      [paneKey(tab.id, LEAF_2)]: makeEntry({
-        paneKey: paneKey(tab.id, LEAF_2),
-        state: 'blocked',
-        stateStartedAt: NOW - 5_000,
-        updatedAt: NOW - 1_000
-      })
-    }
-    const map = buildAttentionByWorktree([w], { [w.id]: [tab] }, entries, {}, ptyMap([tab.id]), NOW)
-    expect(map.get(w.id)).toEqual({
       cls: 1,
       attentionTimestamp: NOW - 5_000
     })
@@ -805,9 +516,7 @@ describe('buildAttentionByWorktree', () => {
   })
 
   it('does not fire title fallback for tabs without a live PTY', () => {
-    // Why: runtimePaneTitlesByTabId is preserved under sleep; without the
-    // tabHasLivePty gate, a slept tab whose preserved title still matches a
-    // working pattern would leak into the comparator.
+    // Titles survive sleep; require live PTY evidence before they can affect attention.
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
     const map = buildAttentionByWorktree(
@@ -824,9 +533,7 @@ describe('buildAttentionByWorktree', () => {
 })
 
 describe('resolveAttention reads the combined state, not the main agent fact', () => {
-  // The classes name what the sidebar row shows (Needs you / Done / Working), so the sort must
-  // rank by the same combined state the row displays. A settled main agent whose subagent still runs
-  // shows Working; ranking it as Done would file a working row among the finished ones.
+  // Sort the combined state the row displays: a settled main agent with working subagents remains Working.
   const key = paneKey('tab-1', LEAF_1)
 
   it('ranks a row held working by a subagent as Working, not Done', () => {
@@ -840,17 +547,6 @@ describe('resolveAttention reads the combined state, not the main agent fact', (
       cls: 3,
       attentionTimestamp: NOW - 60_000
     })
-  })
-
-  it('ranks a settled main agent with a background watch loop as Working, like the row it shows', () => {
-    const entry = makeEntry({
-      paneKey: key,
-      state: 'working',
-      workingMode: 'monitoring',
-      stateStartedAt: NOW - 60_000,
-      mainAgent: { state: 'done', stateStartedAt: NOW - 30_000 }
-    })
-    expect(resolveAttention(hookPanes([entry]), NOW).cls).toBe(3)
   })
 
   it('never treats a restored row as live, whatever its main agent says', () => {

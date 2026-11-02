@@ -1,10 +1,13 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
 
 vi.mock('react-native', () => ({
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
+  StyleSheet: { create: <Styles>(styles: Styles) => styles, hairlineWidth: 1 },
   Text: 'Text',
   View: 'View'
 }))
@@ -12,20 +15,40 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({
   ChevronLeft: 'ChevronLeft',
   ExternalLink: 'ExternalLink',
+  MoreHorizontal: 'MoreHorizontal',
   RefreshCw: 'RefreshCw',
   X: 'X'
 }))
 
-vi.mock('./mobile-source-control-styles', () => ({ styles: new Proxy({}, { get: () => ({}) }) }))
+// The real menu measures its anchor in a native Modal; list its items as plain pressables instead.
+vi.mock('../components/nav-bar/PullDownMenu', async () => {
+  const { createElement: h } = await import('react')
+  return {
+    PullDownMenu: ({
+      visible,
+      groups
+    }: {
+      visible: boolean
+      groups: readonly (readonly ActionSheetAction[])[]
+    }) =>
+      visible
+        ? h(
+            'Menu',
+            null,
+            groups.flat().map((action) =>
+              h('MenuItem', {
+                key: action.id ?? action.label,
+                accessibilityLabel: action.label,
+                disabled: action.disabled,
+                onPress: action.onPress
+              })
+            )
+          )
+        : null
+  }
+})
 
-/**
- * The dock closes and the route goes back, and only one of them is a Back control.
- *
- * Nothing else pins this: no golden names this component and no parity census covers
- * `src/source-control`. The Back census reads what a control is called, so a single control
- * serving both modes has to be named "Back" in a mode where it dismisses a dock — which satisfies
- * the rule by making the wording wrong.
- */
+// Dock dismissal and route Back need distinct controls; the dock never pops a route.
 describe('the source-control header control', () => {
   let tree: ReactTestRenderer | null = null
 
@@ -36,8 +59,9 @@ describe('the source-control header control', () => {
 
   function render(
     embedded: boolean,
-    handlers: { onBack: () => void; onClose: () => void },
-    ioBusy = false
+    handlers: { onBack: () => void; onClose: () => void; onOpenPrWeb?: () => void },
+    ioBusy = false,
+    onRefresh: () => void = () => {}
   ) {
     let rendered: ReactTestRenderer | null = null
     act(() => {
@@ -46,7 +70,8 @@ describe('the source-control header control', () => {
           embedded,
           worktreeLabel: 'wt',
           ioBusy,
-          onRefresh: () => {},
+          onRefresh,
+          prNumber: 12,
           ...handlers
         })
       )
@@ -59,7 +84,13 @@ describe('the source-control header control', () => {
   }
 
   const labelled = (rendered: ReactTestRenderer, label: string) =>
-    rendered.root.findAll((node) => node.props.accessibilityLabel === label)
+    rendered.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.accessibilityLabel === label
+    )
+
+  function openMenu(rendered: ReactTestRenderer) {
+    act(() => labelled(rendered, 'More source control actions').at(0)?.props.onPress())
+  }
 
   it('goes back from the route, named as a Back and pressing onBack', () => {
     const calls: string[] = []
@@ -95,9 +126,34 @@ describe('the source-control header control', () => {
       0
     )
     expect(navigation?.props.disabled).not.toBe(true)
+    openMenu(rendered)
     expect(labelled(rendered, 'Refresh source control').at(0)?.props.disabled).toBe(true)
     act(() => navigation?.props.onPress())
     expect(embedded ? onClose : onBack).toHaveBeenCalledTimes(1)
     expect(embedded ? onBack : onClose).not.toHaveBeenCalled()
+  })
+
+  it('refreshes and opens the pull request on the web from the ⋯ menu', () => {
+    const onRefresh = vi.fn()
+    const onOpenPrWeb = vi.fn()
+    const rendered = render(
+      false,
+      { onBack: () => {}, onClose: () => {}, onOpenPrWeb },
+      false,
+      onRefresh
+    )
+    expect(labelled(rendered, 'Refresh source control')).toHaveLength(0)
+    openMenu(rendered)
+    act(() => labelled(rendered, 'Refresh source control').at(0)?.props.onPress())
+    act(() => labelled(rendered, 'Open pull request #12 on the web').at(0)?.props.onPress())
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+    expect(onOpenPrWeb).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers no web link when there is no pull request to open', () => {
+    const rendered = render(false, { onBack: () => {}, onClose: () => {} })
+    openMenu(rendered)
+    expect(labelled(rendered, 'Refresh source control')).toHaveLength(1)
+    expect(labelled(rendered, 'Open pull request #12 on the web')).toHaveLength(0)
   })
 })

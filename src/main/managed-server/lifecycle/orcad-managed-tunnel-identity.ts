@@ -9,7 +9,7 @@ import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
 } from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment

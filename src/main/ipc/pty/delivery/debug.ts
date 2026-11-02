@@ -1,4 +1,4 @@
-import { getPtyPower } from '../../pty-host-bindings'
+import { getPtyPower } from '../pty-host-bindings'
 import {
   type PtyMainDeliveryDiagnostics,
   EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,

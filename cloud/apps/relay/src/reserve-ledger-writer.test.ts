@@ -64,7 +64,6 @@ describe('reserve ledger writer', () => {
     writer.enqueue({ ...HOST, cellId: 'c1', epoch: 5 })
     await writer.flush()
     expect(writer.pending()).toBe(1)
-    // Backoff: no retry before it is due.
     await writer.flush()
     expect(query).toHaveBeenCalledTimes(1)
     now += 1_000
@@ -86,7 +85,6 @@ describe('reserve ledger writer', () => {
 
   it('reconciles the map’s seats and never lowers an epoch', async () => {
     const { database: db, writer } = await setup()
-    // Another path wrote a higher epoch on c7: the mirror leaves it, whatever the map says.
     writer.enqueue({ ...HOST, cellId: 'c7', epoch: 9 })
     await writer.flush()
     writer.enqueue({ ...HOST, cellId: 'c1', epoch: 9 })
@@ -98,14 +96,12 @@ describe('reserve ledger writer', () => {
       seats: () => [
         { ...HOST, cellId: 'c1', epoch: 8, joinedAt: 0 },
         { ...other, cellId: 'c1', epoch: 2, joinedAt: 0 },
-        // Too young: it may still be superseded.
         { userId: 'user-3', relayHostId: 'dddddddddddddddd', cellId: 'c1', epoch: 2, joinedAt: 990_000 }
       ],
       demote: (seat) => demoted.push(seat),
       now: 1_000_000
     })
     await writer.flush()
-    // The row is ahead of the c1 seat: the row stays, and that seat is told to go.
     expect(result).toEqual({ upserted: 1, demoted: 1 })
     expect(demoted).toEqual([{ ...HOST, cellId: 'c1', epoch: 8, joinedAt: 0 }])
     expect(await row(db)).toMatchObject({ cell_id: 'c7', assignment_epoch: 9 })
@@ -123,7 +119,6 @@ describe('reserve ledger writer', () => {
       writer,
       seats: () => [
         { ...HOST, cellId: 'c1', epoch: 9, joinedAt: 0 },
-        // Level with its own row: nothing to do.
         { ...HOST, relayHostId: 'eeeeeeeeeeeeeeee', cellId: 'c7', epoch: 9, joinedAt: 0 }
       ],
       demote: (seat, found) => demoted.push({ seat: seat.cellId, row: found }),

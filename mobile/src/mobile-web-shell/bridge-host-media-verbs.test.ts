@@ -1,13 +1,5 @@
 import { Buffer } from 'node:buffer'
-/**
- * The media verbs over the real pair: a page that picks, reads to `eof` and releases, and every
- * refusal it gets for a handle it no longer has.
- *
- * Through `createFakeBridgePortPair` rather than the host alone, because a chunk is the one reply
- * this seam produces that is within a rounding error of the frame cap: a case that called the
- * server directly would never serialize one, and serializing is where a reply that fits and a
- * reply that splits part ways.
- */
+// Use the real bridge pair and serialization: media chunks approach the frame cap, where a direct handler call cannot reveal reply splitting.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
@@ -17,6 +9,7 @@ import {
 } from './bridge/bridge-media-verbs'
 import {
   createFakeBridgePortPair,
+  fillFreeDesktopSlots,
   type BridgePortPair
 } from './bridge/bridge-port-pair-test-harness'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../session/mobile-clipboard-image-upload-chunk'
@@ -26,10 +19,8 @@ import { createNativeMediaVerbServer, type NativeMediaFile } from '../platform/n
 import type { FakeRpcClient } from './bridge-host-test-fakes'
 
 const CACHE = 'file:///cache'
-/** The largest item the design's picked image reaches, which is what a real pick has to carry. */
 const FIXTURE_BYTES = 18 * 1024 * 1024
 
-/** A deterministic body, cheap to build and cheap to compare a chunk of. */
 function fixtureByte(index: number): number {
   return (index * 31 + 7) % 251
 }
@@ -101,8 +92,7 @@ function pairWith(options: { grants?: readonly string[]; byteLength?: number } =
     stageBase64: () => `${CACHE}/pasted.png`,
     openFile: () => fakeFile(byteLength),
     ownsStagedUri: (uri) => uri.startsWith('file:'),
-    // The pair's fixtures all answer a `file:` uri, so this is never reached; it is here because
-    // a dep the harness leaves out is one the suite cannot say anything about.
+    // Fixtures use file: URIs; keep an explicit dependency so an unexpected non-file path cannot go unobserved.
     copyIntoCache: (uri) => {
       throw new Error(`nothing in this suite picks a uri needing a copy: ${uri}`)
     },
@@ -120,6 +110,18 @@ function pairWith(options: { grants?: readonly string[]; byteLength?: number } =
 async function ready(pair: BridgePortPair<FakeRpcClient>): Promise<void> {
   pair.drainNow()
   await pair.flush()
+}
+
+async function pickedHandle(probe: Pair): Promise<string> {
+  const picked = mediaPickResultSchema.parse(
+    (
+      await probe.pair.client.callNativeVerb('native.media.pick', {
+        source: 'library',
+        multiple: false
+      })
+    ).result
+  )
+  return picked.items[0]?.handle ?? ''
 }
 
 describe('a granted page moving a picked image across the bridge', () => {
@@ -175,8 +177,7 @@ describe('a granted page moving a picked image across the bridge', () => {
     expect(eof).toBe(true)
     expect(decodedBytes).toBe(FIXTURE_BYTES)
     expect(chunks).toBe(Math.ceil(FIXTURE_BYTES / BRIDGE_MEDIA_READ_MAX_BYTES))
-    // Not one frame of this crossed as a forwarded request: a `native.` method never reaches the
-    // desktop, and a chunked reply would say so here as a split the page had to reassemble.
+    // Native media never forwards to desktop or uses split replies; inspect both paths to prove the serialized chunk fits.
     expect(probe.pair.rpc.requests).toEqual([])
 
     await expect(
@@ -198,25 +199,12 @@ describe('a page that was not granted the verbs', () => {
     expect(probe.registry.liveCount()).toBe(0)
     expect(probe.picker).not.toHaveBeenCalled()
     expect(probe.pair.rpc.requests).toEqual([])
-    // A frame did leave — the page side of these verbs is C7.6's — so the oracle is the code,
-    // and that the host decided it rather than a handler.
+    // The frame left the page; assert the host’s refusal code rather than only lack of a handler call.
     expect(probe.pair.toShell.length).toBeGreaterThan(before)
   })
 })
 
 describe('a handle the page no longer has', () => {
-  async function pickedHandle(probe: Pair): Promise<string> {
-    const picked = mediaPickResultSchema.parse(
-      (
-        await probe.pair.client.callNativeVerb('native.media.pick', {
-          source: 'library',
-          multiple: false
-        })
-      ).result
-    )
-    return picked.items[0]?.handle ?? ''
-  }
-
   it('refuses a chunk of one the page released', async () => {
     const probe = pairWith({ byteLength: 4096 })
     await ready(probe.pair)
@@ -263,5 +251,32 @@ describe('a handle the page no longer has', () => {
       probe.pair.client.callNativeVerb('native.media.pick', { source: 'library', multiple: false })
     ).rejects.toMatchObject({ code: 'native_media_handle_cap' })
     warn.mockRestore()
+  })
+})
+
+// Desktop calls can sit unanswered through a whole reconnect; they take every slot they may, and photos must still attach and clean up.
+describe('a page whose desktop calls are all waiting on the desktop', () => {
+  async function answerDesktopCalls(pair: BridgePortPair<FakeRpcClient>): Promise<void> {
+    for (const request of pair.rpc.requests.splice(0)) {
+      request.resolve({ id: 'wire', ok: true, result: [], _meta: { runtimeId: 'desktop' } })
+    }
+    await pair.flush()
+  }
+
+  it('still picks, reads and releases, so later picks are not refused once the desktop answers', async () => {
+    const probe = pairWith({ byteLength: 64 })
+    await ready(probe.pair)
+    for (let round = 0; round <= BRIDGE_MEDIA_MAX_LIVE_HANDLES; round += 1) {
+      await fillFreeDesktopSlots(probe.pair)
+      const handle = await pickedHandle(probe)
+      await probe.pair.client.callNativeVerb('native.media.read', { handle, offset: 0, length: 64 })
+      // Like the page’s releaseStagedMedia: a refused release is logged, never thrown.
+      await probe.pair.client
+        .callNativeVerb('native.media.release', { handle })
+        .catch(() => undefined)
+      await answerDesktopCalls(probe.pair)
+    }
+    expect(probe.picker).toHaveBeenCalledTimes(BRIDGE_MEDIA_MAX_LIVE_HANDLES + 1)
+    expect(probe.registry.liveCount()).toBe(0)
   })
 })

@@ -23,7 +23,15 @@ env:
 jobs:
   seed:
     if: github.ref == 'refs/heads/main'
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    # Blacksmith and GitHub keep separate cache stores; seed the same key in both for either consumer pool.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [blacksmith-4vcpu-ubuntu-2404-arm, ubuntu-24.04-arm]
+    concurrency:
+      group: xterm-cache-seed-${{ github.ref }}-${{ matrix.runner }}
+      cancel-in-progress: true
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6

@@ -1,6 +1,9 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { aiVaultScanIssueText } from '../../../src/shared/ai-vault-scan-issue-copy'
+import { activateMobileUiLocale } from '../i18n/mobile-i18n'
+import es from '../i18n/locales/es.json'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -9,13 +12,7 @@ import type {
   RpcClientContextValue
 } from '../transport/rpc-client-context-contract'
 
-/**
- * The panel's Retry while the host is unreachable, mounted under the page's own provider.
- *
- * `client-context` and `route-handoff` resolve to their `.web` siblings, as the page bundle does.
- * `useForceReconnect` forwards to the provider this suite mounts rather than re-exporting the real
- * hook: the sibling imports the hooks back, and an awaited mock of it deadlocks.
- */
+// Mount Retry under page web provider with .web handoff/client context; forward useForceReconnect to provider, since awaiting real hooks cyclic import deadlocks.
 
 const doubles = vi.hoisted(
   (): {
@@ -33,24 +30,62 @@ vi.mock('expo-router', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), canGoBack: () => false }),
   usePathname: () => '/'
 }))
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
+  ScrollView: 'ScrollView',
   SectionList: 'SectionList',
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
+  Dimensions: { get: () => ({ width: 390, height: 844 }) },
+  Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => {} },
   Platform: { OS: 'web', select: (choices: Record<string, unknown>) => choices.web },
   AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
+  StyleSheet: { absoluteFill: {}, create: (value: unknown) => value, hairlineWidth: 1 }
 }))
 vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Play: 'Icon', RefreshCw: 'Icon' }))
+vi.mock('react-native-svg', () => ({
+  default: 'Svg',
+  Defs: 'Defs',
+  LinearGradient: 'LinearGradient',
+  Path: 'Path',
+  Rect: 'Rect',
+  Stop: 'Stop'
+}))
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
+  ChevronLeft: 'Icon',
+  CircleAlert: 'Icon',
+  History: 'Icon',
+  RefreshCw: 'Icon',
+  Search: 'Icon',
+  SearchX: 'Icon',
+  TriangleAlert: 'Icon',
+  WifiOff: 'Icon',
+  X: 'Icon'
+}))
+// Reanimated needs native modules; the eased height is not under test.
+vi.mock('../components/AutoHeight', () => ({
+  AutoHeight: ({ children, open = true }: { children: unknown; open?: boolean }) =>
+    open ? children : null
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
+}))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../navigation/route-handoff', async () => await import('../navigation/route-handoff.web'))
@@ -74,12 +109,36 @@ doubles.read = useRpcClientContext
 
 let tree: ReactTestRenderer | null = null
 
-afterEach(() => {
+afterEach(async () => {
   act(() => tree?.unmount())
   tree = null
   doubles.nativeRedial = undefined
   doubles.connection = { client: null, state: 'reconnecting' }
+  await activateMobileUiLocale('en')
 })
+
+const HOST_A_SESSION: AiVaultSession = {
+  id: 'claude:host-a',
+  executionHostId: 'local',
+  agent: 'claude',
+  sessionId: 'host-a-session',
+  title: 'Host A session',
+  cwd: '/host-a/workspace',
+  branch: null,
+  model: null,
+  filePath: '/host-a/session.jsonl',
+  codexHome: null,
+  createdAt: null,
+  updatedAt: null,
+  modifiedAt: '2026-10-21T00:00:00.000Z',
+  messageCount: 2,
+  totalTokens: 10,
+  previewMessages: [],
+  queuedMessageCount: 0,
+  subagentTranscriptCount: 0,
+  resumeCommand: '',
+  subagent: null
+}
 
 function panel(pair: ReturnType<typeof createFakeBridgePortPair>) {
   return (
@@ -108,7 +167,7 @@ function retryControls(rendered: ReactTestRenderer): ReactTestInstance[] {
     .filter((node) =>
       node
         .findAll((text) => String(text.type) === 'Text')
-        .some((text) => text.props.children === 'Retry')
+        .some((text) => text.props.children === 'Reconnect')
     )
 }
 
@@ -116,7 +175,7 @@ describe("the agent-history panel's Retry while the host is unreachable", () => 
   it('is absent on the page, where nothing can re-dial', async () => {
     const rendered = await mountPanel()
     expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for host…')
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
     ).not.toHaveLength(0)
     expect(retryControls(rendered)).toHaveLength(0)
   })
@@ -132,8 +191,7 @@ describe("the agent-history panel's Retry while the host is unreachable", () => 
   })
 
   it('loads again when the shell reconnects, which is what the missing Retry relies on', async () => {
-    // The premise of hiding it: nothing on the page re-dials, so the load has to re-run on the
-    // client and state the shell's own reconnect delivers.
+    // Page never redials itself; rerun load against client/state delivered by shell reconnect.
     const pair = createFakeBridgePortPair()
     const rendered = await mountPanel(pair)
     expect(retryControls(rendered)).toHaveLength(0)
@@ -154,28 +212,6 @@ it.each([
   async (hostId, retainedLists, alreadyScanning) => {
     const pair = createFakeBridgePortPair()
     await pair.flush()
-    const session: AiVaultSession = {
-      id: 'claude:host-a',
-      executionHostId: 'local',
-      agent: 'claude',
-      sessionId: 'host-a-session',
-      title: 'Host A session',
-      cwd: '/host-a/workspace',
-      branch: null,
-      model: null,
-      filePath: '/host-a/session.jsonl',
-      codexHome: null,
-      createdAt: null,
-      updatedAt: null,
-      modifiedAt: '2026-10-21T00:00:00.000Z',
-      messageCount: 2,
-      totalTokens: 10,
-      previewMessages: [],
-      queuedMessageCount: 0,
-      subagentTranscriptCount: 0,
-      resumeCommand: '',
-      subagent: null
-    }
     const reply = (result: unknown): RpcResponse => ({ id: 'history', ok: true, result })
     const previous = new FakeSession('connected')
     previous.sendRequest.mockImplementation(async (method) =>
@@ -184,7 +220,7 @@ it.each([
           ? { capabilities: ['aiVault.v1'], hostPlatform: 'darwin' }
           : method === 'worktree.ps'
             ? { worktrees: [{ worktreeId: 'wt-1', repoId: 'repo', path: '/host-a/workspace' }] }
-            : { sessions: [session], issues: [] }
+            : { sessions: [HOST_A_SESSION], issues: [] }
       )
     )
     doubles.connection = { client: previous, state: 'connected' }
@@ -230,3 +266,67 @@ it.each([
     )
   }
 )
+
+async function mountReadyPanel(issues: unknown[]) {
+  const host = new FakeSession('connected')
+  host.sendRequest.mockImplementation(async (method) => ({
+    id: 'history',
+    ok: true,
+    result:
+      method === 'status.get'
+        ? { capabilities: ['aiVault.v1'], hostPlatform: 'darwin' }
+        : method === 'worktree.ps'
+          ? { worktrees: [{ worktreeId: 'wt-1', repoId: 'repo', path: '/host-a/workspace' }] }
+          : { sessions: [HOST_A_SESSION], issues }
+  }))
+  doubles.connection = { client: host, state: 'connected' }
+  const rendered = await mountPanel()
+  const texts = () =>
+    rendered.root.findAll((node) => String(node.type) === 'Text').map((node) => node.props.children)
+  return { rendered, texts }
+}
+
+it('shows no skipped notice for a readable session without issues', async () => {
+  const { rendered, texts } = await mountReadyPanel([])
+
+  expect(rendered.root.findAll((node) => String(node.type) === 'SectionList')).toHaveLength(1)
+  expect(texts()).not.toContain('1 transcript skipped')
+  expect(texts()).not.toContain('Show details')
+})
+
+it('counts a too-large transcript and shows its path and English reason on demand', async () => {
+  const path = '/host-a/too-large.jsonl'
+  const reason =
+    'A Claude conversation is too large to load in Session History. Try resuming it in Claude directly.'
+  const { rendered, texts } = await mountReadyPanel([
+    {
+      executionHostId: 'local',
+      agent: 'claude',
+      path,
+      ...aiVaultScanIssueText('transcriptTooLarge', { params: { label: 'Claude' } })
+    }
+  ])
+
+  expect(texts()).toContain('1 transcript skipped')
+  expect(texts()).not.toContain(path)
+  const showDetails = rendered.root
+    .findAll((node) => String(node.type) === 'Pressable')
+    .find((node) => node.findAll((text) => text.props.children === 'Show details').length > 0)
+  act(() => {
+    showDetails?.props.onPress()
+  })
+  // The phone shows the host's English message verbatim, not a translation by code.
+  expect(texts()).toEqual(expect.arrayContaining([path, reason]))
+
+  await act(async () => {
+    await activateMobileUiLocale('es')
+  })
+  expect(texts()).toEqual(
+    expect.arrayContaining([
+      es.agentHistory.panel.skipped_one.replace('{{count}}', '1'),
+      path,
+      reason
+    ])
+  )
+  expect(texts()).not.toContain('1 transcript skipped')
+})

@@ -1,6 +1,11 @@
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
+import { linearIssueReadError } from '@/lib/linear-read-error'
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import { translate } from '@/i18n/i18n'
 import type { TaskPageLinearInOrcaEffectsModel } from './use-task-page-linear-in-orca-effects'
 import { useEffect } from 'react'
-import { TASK_SEARCH_DEBOUNCE_MS, LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
+import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
 import { clampLinearIssueListLimit } from '../../../../../shared/linear/issue-read-limits'
 import { useTaskPageLinearCustomViewEffects } from './use-task-page-linear-custom-view-effects'
 
@@ -31,20 +36,17 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     setLinearProjectDetailError,
     linearProjectTab,
     setLinearProjectIssuesResult,
+    linearProjectIssueResult: { read: consumeLinearRead, setLoading: finishLinearLoading },
     linearProjectIssueLimit,
     setLinearProjectIssuesLoading,
     setLinearProjectIssuesError,
     setLinearProjectParentView
   } = model
-  useEffect(() => {
-    if (!taskResumeApplied) {
-      return
-    }
-    const timeout = window.setTimeout(() => {
-      setAppliedLinearProjectSearch(linearProjectSearchInput)
-    }, TASK_SEARCH_DEBOUNCE_MS)
-    return () => window.clearTimeout(timeout)
-  }, [linearProjectSearchInput, taskResumeApplied, setAppliedLinearProjectSearch])
+  useTaskSearchDebouncedApply(
+    linearProjectSearchInput,
+    taskResumeApplied,
+    setAppliedLinearProjectSearch
+  )
   useEffect(() => {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'projects') {
       return
@@ -75,16 +77,13 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
       })
       .catch((error) => {
         if (!cancelled) {
-          setLinearProjectsError(
-            error instanceof Error ? error.message : 'Failed to load projects.'
-          )
+          setLinearProjectsError(taskProviderErrorText(linearIssueReadError(error)))
           setLinearProjectsLoading(false)
         }
       })
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskResumeApplied,
     taskSource,
@@ -95,7 +94,11 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     appliedLinearProjectSearch,
     linearRefreshNonce,
     getCachedLinearProjects,
-    linearTaskSourceContext
+    listLinearProjectsFromStore,
+    linearTaskSourceContext,
+    setLinearProjectsError,
+    setLinearProjectsLoading,
+    setLinearProjectsResult
   ])
   useEffect(() => {
     if (!selectedLinearProject?.workspaceId) {
@@ -117,7 +120,9 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
             setSelectedLinearProject(null)
             setLinearProjectParentView(null)
             setLinearProjectDetailError(null)
-            setLinearProjectsError('Project was not found.')
+            setLinearProjectsError(
+              translate('taskProviders.linear.projectNotFound', 'Project was not found.')
+            )
             setTaskResumeState({
               linearContext: undefined
             })
@@ -126,9 +131,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
       })
       .catch((error) => {
         if (!cancelled) {
-          setLinearProjectDetailError(
-            error instanceof Error ? error.message : 'Failed to load project.'
-          )
+          setLinearProjectDetailError(taskProviderErrorText(linearIssueReadError(error)))
           setLinearProjectDetailLoading(false)
         }
       })
@@ -156,7 +159,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     setLinearProjectIssuesLoading(true)
     setLinearProjectIssuesError(null)
     const effectiveLimit = clampLinearIssueListLimit(linearProjectIssueLimit)
-    void listLinearProjectIssues(
+    const request = listLinearProjectIssues(
       selectedLinearProject.id,
       selectedLinearProject.workspaceId,
       effectiveLimit,
@@ -165,24 +168,35 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
         sourceContext: linearTaskSourceContext
       }
     )
-      .then((result) => {
-        if (!cancelled) {
-          setLinearProjectIssuesResult(result)
-          setLinearProjectIssuesLoading(false)
+    const release = observeLinearIssueRead(
+      request,
+      () => !cancelled,
+      (lease, view) => {
+        if (view.kind === 'abandoned') {
+          if (!cancelled) {
+            finishLinearLoading(false)
+          }
+          return
         }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setLinearProjectIssuesError(
-            error instanceof Error ? error.message : 'Failed to load project issues.'
-          )
-          setLinearProjectIssuesLoading(false)
-        }
-      })
+        consumeLinearRead(lease, view, {
+          ...(view.data ? { data: view.data } : {}),
+          error:
+            view.kind === 'error'
+              ? taskProviderErrorText(linearIssueReadError(view.error))
+              : view.data?.errors?.length
+                ? taskProviderErrorText(linearIssueReadError(view.data.errors[0].message))
+                : null,
+          loading: view.kind === 'loading'
+        })
+      }
+    )
     return () => {
       cancelled = true
+      release()
     }
   }, [
+    consumeLinearRead,
+    finishLinearLoading,
     linearProjectIssueLimit,
     linearProjectTab,
     linearRefreshNonce,

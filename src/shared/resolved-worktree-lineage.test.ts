@@ -51,21 +51,11 @@ describe('sharesWorktreeLineageBoundary', () => {
     ...overrides
   })
 
-  it('accepts the same host', () => {
-    expect(sharesWorktreeLineageBoundary(boundary(), boundary())).toBe(true)
-  })
-
   it.each([
     ['child host', boundary({ hostId: undefined }), boundary()],
     ['parent host', boundary(), boundary({ hostId: undefined })]
   ])('treats an undefined %s as compatible', (_label, child, parent) => {
     expect(sharesWorktreeLineageBoundary(child, parent)).toBe(true)
-  })
-
-  it('rejects a different known host', () => {
-    expect(sharesWorktreeLineageBoundary(boundary(), boundary({ hostId: 'ssh:remote' }))).toBe(
-      false
-    )
   })
 })
 

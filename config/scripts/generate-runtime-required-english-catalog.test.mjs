@@ -37,8 +37,7 @@ describe('runtime-required English catalog rule', () => {
     ])
   })
 
-  // The generated file is committed, so a walk-order difference between a
-  // contributor's machine and CI would make the gate flap forever.
+  // Committed output must not vary with filesystem walk order or CI drift checks flap.
   it('produces byte-identical output whatever order the call sites are visited in', () => {
     const shuffled = references.toReversed()
     const forward = JSON.stringify(

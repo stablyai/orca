@@ -1,8 +1,4 @@
-/**
- * Persisted-state fixtures for the startup benchmark: the git repos, GitHub
- * remotes, restored terminal tabs, and unreachable SSH targets that `orca-data.json`
- * must contain for a run to exercise the corresponding startup path.
- */
+// Seed startup paths in orca-data.json: git/GitHub repos, restored terminals and unreachable SSH targets.
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,11 +14,7 @@ function initFixtureGitRepo(repoDir) {
   return realpathSync(repoDir)
 }
 
-/**
- * Seed repos whose hydration reaches the `gh` login probe: a GitHub `origin`
- * remote and no github.user/user.username config (the bench also points
- * GIT_CONFIG_GLOBAL away from the developer's real config at launch).
- */
+// Seed GitHub origin without local username config to reach gh login probe; the launcher also isolates GIT_CONFIG_GLOBAL.
 function buildGithubRepoFixtures(fixtureDir, githubRepos) {
   const repos = []
   for (let i = 0; i < githubRepos; i++) {
@@ -55,11 +47,7 @@ function buildGithubRepoFixtures(fixtureDir, githubRepos) {
   return repos
 }
 
-/**
- * SSH targets on TEST-NET-3 (RFC 5737). The address is guaranteed unroutable,
- * so the TCP handshake never completes and never gets a reset — the wire
- * behaviour of a host that is asleep or behind a dropped VPN.
- */
+// Use TEST-NET-3 (RFC 5737) to model an unreachable asleep/VPN host; connection behavior still depends on local routing/firewall.
 function buildUnreachableSshTargets(count) {
   const targets = []
   for (let i = 0; i < count; i++) {

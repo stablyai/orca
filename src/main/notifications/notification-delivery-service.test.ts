@@ -17,6 +17,7 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
   return {
     enabled: true,
     agentTaskComplete: true,
+    agentNeedsInput: true,
     terminalBell: true,
     suppressWhenFocused: false,
     customSoundId: 'system',
@@ -51,7 +52,6 @@ type Harness = {
 
 let now = 1_000
 
-/** The delivery policy only asks a window whether it is focused. */
 function makeFocusedWindowStub(): BrowserWindow {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only isFocused(); a full BrowserWindow cannot be constructed outside Electron.
   return { isFocused: () => true } as unknown as BrowserWindow
@@ -118,6 +118,25 @@ describe('createNotificationDeliveryService', () => {
     expect(harness.order).toEqual(['tray', 'mobile'])
   })
 
+  it('gates agent questions on needs-input and finished turns on task-complete', () => {
+    const harness = makeHarness(makeSettings({ agentTaskComplete: false }))
+    const service = createNotificationDeliveryService(harness.deps)
+    expect(service.dispatch(makeRequest({ agentState: 'blocked' }))).toEqual({ delivered: true })
+    expect(
+      service.dispatch(
+        makeRequest({ agentState: 'done', worktreeId: 'wt-2', worktreeLabel: 'wt-2' })
+      )
+    ).toEqual({ delivered: false, reason: 'source-disabled' })
+
+    const quiet = makeHarness(makeSettings({ agentNeedsInput: false }))
+    expect(
+      createNotificationDeliveryService(quiet.deps).dispatch(makeRequest({ agentState: 'waiting' }))
+    ).toEqual({ delivered: false, reason: 'source-disabled' })
+    expect(quiet.dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ desktopAllowed: false, agentState: 'waiting' })
+    )
+  })
+
   it('keeps the desktop source gates distinct per source', () => {
     const harness = makeHarness(makeSettings({ terminalBell: false }))
     const service = createNotificationDeliveryService(harness.deps)
@@ -143,7 +162,6 @@ describe('createNotificationDeliveryService', () => {
     )
     expect(harness.deliverNative).not.toHaveBeenCalled()
 
-    // Other machines, and requests whose machine is unknown, still notify.
     expect(
       service.dispatch(
         makeRequest({ notificationSourceId: 'local', worktreeId: 'wt-2', worktreeLabel: 'wt-2' })

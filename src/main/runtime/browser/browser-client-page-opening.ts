@@ -14,7 +14,7 @@ import {
 } from '../runtime-browser-client-page-creation'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 
-// Why no Electron import: a Node host with no browser engine places pages on a paired desktop too.
+// Engine-free Node hosts also place pages on paired desktops.
 export type BrowserClientPageOpeningHost = Pick<
   RuntimeBrowserCommandHost,
   | 'getAgentBrowserBridge'
@@ -44,7 +44,6 @@ export const DEFAULT_BROWSER_PROFILE_ID = 'default'
 export const BROWSER_HOST_UNAVAILABLE_MESSAGE =
   "No paired Orca desktop is hosting browser pages for this server. On a desktop paired with it, open a browser tab in one of this server's workspaces, then retry. The desktop needs an Orca version that hosts this server's pages."
 
-/** Creates a page that renders on a paired desktop; this runtime owns its placement and rows. */
 export async function createBrowserClientPage(
   host: BrowserClientPageOpeningHost,
   params: BrowserClientPageCreateParams,
@@ -120,7 +119,6 @@ export async function createBrowserClientPage(
   return { browserPageId }
 }
 
-/** `orca open-url`: opens the page on the one paired desktop hosting this runtime's pages. */
 export function openBrowserUrlOnClient(
   host: BrowserClientPageOpeningHost,
   params: { url: string; worktree: string }
@@ -133,7 +131,6 @@ export function openBrowserUrlOnClient(
   )
 }
 
-/** `orca open-url` opens only web pages, wherever the page ends up rendering. */
 export function assertClientOpenableUrl(url: string): void {
   const protocol = new URL(url).protocol
   if (protocol !== 'http:' && protocol !== 'https:') {
@@ -141,7 +138,6 @@ export function assertClientOpenableUrl(url: string): void {
   }
 }
 
-/** A page its caller did not place goes to the one paired desktop hosting this runtime's pages. */
 export async function createBrowserPageOnPairedHost(
   host: BrowserClientPageOpeningHost,
   params: Omit<BrowserClientPageCreateParams, 'placement'> & { worktree?: string },
@@ -160,7 +156,7 @@ export async function createBrowserPageOnPairedHost(
   )
 }
 
-/** True when a paired desktop could take a page now; an ambiguous pick still has a host. */
+/** Ambiguous selection still counts as an available paired host. */
 export function hasPairedPageHost(
   host: Pick<BrowserClientPageOpeningHost, 'getBrowserHostLeaseRegistry'>
 ): boolean {
@@ -183,7 +179,7 @@ function selectPairedPageHost(
         BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY
       ])
   } catch (error) {
-    // Why reword only this code: the bare code names no action, the others name their own.
+    // Other error codes already name their action.
     if (error instanceof Error && error.message === 'browser_host_unavailable') {
       throw new BrowserError('browser_host_unavailable', BROWSER_HOST_UNAVAILABLE_MESSAGE)
     }

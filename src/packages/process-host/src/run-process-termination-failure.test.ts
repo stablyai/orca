@@ -1,5 +1,6 @@
-import { EventEmitter } from 'node:events'
-import type { ChildProcess } from 'node:child_process'
+import { ChildProcess } from 'node:child_process'
+import type * as ChildProcessModule from 'node:child_process'
+import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { forceTerminateProcessTreeMock, signalProcessTreeMock, spawnMock } = vi.hoisted(() => ({
@@ -8,7 +9,11 @@ const { forceTerminateProcessTreeMock, signalProcessTreeMock, spawnMock } = vi.h
   spawnMock: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({ spawn: spawnMock, spawnSync: vi.fn() }))
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChildProcessModule>()),
+  spawn: spawnMock,
+  spawnSync: vi.fn()
+}))
 vi.mock('./process-tree-termination', () => ({
   forceTerminateProcessTree: forceTerminateProcessTreeMock,
   signalProcessTree: signalProcessTreeMock
@@ -16,14 +21,17 @@ vi.mock('./process-tree-termination', () => ({
 
 import { runProcess } from './run-process'
 
-function mockChild(): ChildProcess {
-  const child = new EventEmitter() as EventEmitter & Record<string, unknown>
-  child.pid = 1234
-  child.kill = vi.fn(() => true)
-  child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  return child as unknown as ChildProcess
+class FakeProcess extends ChildProcess {
+  override pid = 1234
+  override kill = vi.fn(() => true)
+  override unref = vi.fn()
+  override stdin = new PassThrough()
+  override stdout = new PassThrough()
+  override stderr = new PassThrough()
+}
+
+function mockChild(): FakeProcess {
+  return new FakeProcess()
 }
 
 describe('runProcess termination failure', () => {

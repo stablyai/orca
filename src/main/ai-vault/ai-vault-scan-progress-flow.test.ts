@@ -113,7 +113,7 @@ function startScan(): {
   return { child, client, scan, published }
 }
 
-describe('Session History scan progress, scanner child to window', () => {
+describe('Session History scanner totals and service-client progress state', () => {
   it('counts distinct files while walking, then reads, and publishes the finished totals', async () => {
     const { reports, final } = await scanInChild()
     expect(reports.some((work) => work.stage === 'finding')).toBe(true)

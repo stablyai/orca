@@ -82,9 +82,7 @@ export function isCodexStartupCommand(command: string | null | undefined): boole
 export function shouldUseShellReadyStartupDelivery(args: {
   command: string | null | undefined
   startupCommandDelivery?: StartupCommandDelivery
-  /** The shell that will run the command, when the deciding side knows it. Plain Codex
-   *  waits for the handshake on shells that publish the marker from their line editor:
-   *  there the wait ends at the prompt, while an early write double-echoes the launch. */
+  /** Plain Codex waits for line-editor handshake markers to avoid an early launch write echoing twice; use the deciding side’s shell when known. */
   shellPath?: string
 }): boolean {
   return (

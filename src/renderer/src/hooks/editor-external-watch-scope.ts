@@ -16,7 +16,7 @@ function mostRecent(
     .slice(0, count)
 }
 
-/** Workspaces whose open tabs keep a native watch: the active one, the most recently visited, and a few showing a deleted/renamed tab. */
+/** Watch active/recent workspaces plus bounded deleted/renamed-tab pins. */
 export function selectWatchEligibleWorkspaceIds(args: {
   activeWorktreeId: string | null
   lastVisitedAtByWorktreeId: Readonly<Record<string, number>> | undefined

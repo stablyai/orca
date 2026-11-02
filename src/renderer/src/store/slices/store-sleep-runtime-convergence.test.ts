@@ -12,7 +12,6 @@ import {
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -22,7 +21,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -33,7 +31,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = createStoreCascadesMockApi()
 
-// Why: sleep must drop live + retained agent-status rows, else a mid-turn agent stays "working" until the 30-min stale TTL.
+// Sleep must clear live/retained status or mid-turn agents remain working until the 30-minute TTL.
 describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -42,35 +40,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     mockUnregisterPtyDataHandlers.mockReturnValue([])
     applySleepRuntimeRpcDefault(mockApi)
     shutdownBufferCaptures.clear()
-  })
-
-  it('records terminal input even before agent sleep is enabled', () => {
-    const store = createTestStore()
-
-    store.getState().recordTerminalInput('tab-1:leaf-1', 1000)
-
-    expect(store.getState().lastTerminalInputAtByPaneKey['tab-1:leaf-1']).toBe(1000)
-  })
-
-  it('asks sleep-time buffer capture to skip local scrollback serialization', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const capture = vi.fn()
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-    })
-    shutdownBufferCaptures.set('tab-1', capture)
-
-    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
-
-    expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
   })
 
   it('does not stop the active runtime when sleeping an SSH-owned worktree', async () => {

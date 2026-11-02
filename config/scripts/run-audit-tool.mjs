@@ -50,6 +50,7 @@ export function runAuditTool(
     args: [entry, ...args],
     cwd: root,
     stdio,
+    maxOutputBytes: 64 * 1024 * 1024,
     timeoutMs: null
   })
 }

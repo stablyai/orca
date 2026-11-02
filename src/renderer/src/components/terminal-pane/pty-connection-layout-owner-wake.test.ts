@@ -1,17 +1,17 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   leafIdForPane,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -22,6 +22,7 @@ import {
   mainLayoutApplyTransport,
   mainStartsPaneAs
 } from './pty-connection-test-main-pane-start-fixtures'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const mocks = vi.hoisted(() => ({ wake: vi.fn() }))
 
@@ -98,10 +99,7 @@ describe('wake through main in a layout-owner build', () => {
       'sess-other'
     )
     mockStoreState.suppressedPtyExitIds['tab-pty'] = true
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const args = [createPane(2), createManager(1), deps] as unknown as Parameters<
-      typeof connectPanePty
-    >
+    const args = mockPanePtyArgs(createPane(2), createManager(1), deps)
     // Main's real wake must find the pane still sleeping: the window's record drop follows it.
     let recordHeldAtWake: boolean | undefined
     mocks.wake.mockImplementation(() => {

@@ -1,13 +1,5 @@
-/**
- * A phone paired with a desktop lists the projects on that desktop's SSH host once the host runs
- * a managed Orca server (#29456): the reporter's path of relay-era SSH projects converted on
- * upgrade. The desktop's own list hides the converted host's retained rows, so the phone must get
- * them from the desktop's server listing (mobileRelay.hosts.*) and open them through the relay.
- *
- * The oracle is the phone's wire, as in paired-mobile-desktop-mirror.spec.ts: how the phone page
- * renders these rows and tags its calls is pinned by host-server-workspaces-wiring.test.ts and
- * workspace-route.test.tsx under mobile/src.
- */
+// #29456: phone listings must reach converted SSH projects through mobileRelay.hosts.*, while desktop retains hidden relay rows.
+// Pin the real phone wire here; mobile host-server-workspaces-wiring/workspace-route tests cover rendered rows and call tags.
 import { z } from 'zod'
 import { expect, test } from './helpers/orca-app'
 import {

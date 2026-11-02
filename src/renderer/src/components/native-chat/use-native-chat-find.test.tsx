@@ -25,7 +25,6 @@ vi.mock('../../store', () => ({
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.web }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
-/** `element` is the rendered composer field, set when it mounts. */
 type Composer = NativeChatComposerHandle & { element: HTMLElement }
 
 function composerHandle(): Composer {
@@ -38,6 +37,7 @@ function composerHandle(): Composer {
       handle.element.focus()
       return true
     }),
+    insertAgentReferences: () => false,
     insertTypedText: vi.fn(() => true),
     appendText: vi.fn(),
     acceptsText: () => true,
@@ -48,7 +48,6 @@ function composerHandle(): Composer {
   return handle
 }
 
-/** The real composer key handling, wired as the composer field wires it (onKeyDownCapture). */
 function ComposerField({
   composer,
   interrupt,
@@ -115,7 +114,6 @@ function PromptCard({ field }: { field: boolean }): React.JSX.Element {
   )
 }
 
-/** Mirrors a chat root: pointer focus, root key routing, the find bar over the transcript. */
 function Chat({
   composer,
   transcript,
@@ -189,7 +187,6 @@ function press(target: EventTarget, key: string, init: KeyboardEventInit = {}): 
   return event
 }
 
-/** The focused find input when two chats have one open, else the only one. */
 function findInput(): HTMLInputElement | null {
   const inputs = screen
     .queryAllByRole('textbox', { name: 'Find in chat' })
@@ -532,7 +529,6 @@ describe('native chat find', () => {
       />
     )
     await nextFrame()
-    // Not "4/6": that index now points at an unrelated row.
     expect(status()).toBe('1/6')
   })
 

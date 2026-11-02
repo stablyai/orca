@@ -1,8 +1,4 @@
-/**
- * `buildSshArgs` is shared with the sftp client, and three of its flags mean something else there.
- * Every case below is a silent wrong-target rather than an error if the translation is skipped,
- * which is why the fallback is "refuse and use another transport", never "pass it through".
- */
+/** SSH flags can silently change meaning in SFTP; unknown translations must decline to another transport. */
 import { describe, expect, it } from 'vitest'
 import {
   SftpArgTranslationError,
@@ -18,8 +14,7 @@ describe('translateSshArgsToSftpArgs', () => {
   })
 
   it('sends the login name as an option, since sftp has no -l', () => {
-    // `buildSshArgs` emits `-l` for a config alias no Host block claims. Throwing here would send
-    // exactly those hosts to the transport this PR exists to stop using, silently.
+    // Unclaimed aliases use -l; rejecting it would unnecessarily choose and cache the unreliable fallback.
     const args = translateSshArgsToSftpArgs(['-l', 'neil', '--', 'awin'])
 
     expect(args).toEqual(['-o', 'User=neil', '--', 'awin'])
@@ -109,8 +104,7 @@ describe('translateSshArgsToSftpArgs', () => {
   })
 
   it('refuses an unknown flag rather than guessing what sftp would do with it', () => {
-    // The point of the throw: a flag added to buildSshArgs later must degrade to another
-    // transport, not reach sftp carrying a different meaning.
+    // Future SSH flags must fall back safely instead of inheriting SFTP's different meaning.
     expect(() => translateSshArgsToSftpArgs(['-A', '--', 'host'])).toThrow(SftpArgTranslationError)
   })
 

@@ -1,14 +1,4 @@
-/**
- * Memory-leak regression: `warnedLostHandlerPtyIds` outlived the buffered data it
- * describes when the LRU cap evicted that data.
- *
- * The set is cleaned in `drainPreHandlerPtyData` and `clearPreHandlerPtyState`,
- * which both mean "a pane took this PTY's bytes". `evictOldestPtyIfAtCap` drops
- * the oldest data entry without either, so a PTY that warned and was then evicted
- * left its id behind for the life of the renderer — and, because the warn is
- * once-per-id, silently suppressed the warning for a fresh accumulation on that
- * same id, which is the exact signal the breadcrumb exists to emit.
- */
+/** Evicting buffered bytes must also evict their warn-once ID, or repeated loss under the reused ID stays silent and the warning set leaks. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bufferPreHandlerPtyData, clearPreHandlerPtyState } from './pty-pre-handler-buffer'
 

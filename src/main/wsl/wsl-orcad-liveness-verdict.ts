@@ -1,17 +1,4 @@
-/**
- * Liveness of a WSL distro's orcad (design D2c), in the execution-host vocabulary.
- *
- * Why WSL can prove exits when SSH cannot: an SSH host that stops answering may still be running
- * everything, so loss of contact is never death. A WSL distro runs on this machine, and
- * `wsl --list --running` is a positive answer from the local WSL service, not silence: a distro it
- * confirms stopped has no processes left, and a distro whose `(boot id, pid 1 start ticks)`
- * changed was restarted, which ends every process of the old incarnation. Only those two answers
- * mark terminals `exited`. A probe that failed, timed out or could not be read is `unverifiable`.
- *
- * Exit codes are triggers and corroboration, never proof: `wsl.exe` exits 1 both when its distro
- * stops (measured ~40 ms after `wsl --terminate`) and when the WSL service hiccups, and a bridge
- * exits 0 whenever orcad closes its socket.
- */
+/** D2c: only a confirmed stopped distro or changed boot/PID1 incarnation proves all old terminals exited. Failed/unreadable probes remain unverifiable, as with SSH silence. Bridge/holder exit codes trigger checks but never prove death: WSL exit 1 also means service hiccups and bridge exit 0 means socket close. */
 
 export type WslLivenessTrigger =
   /** The held watch bridge or the holder `wsl.exe` exited with this code. */

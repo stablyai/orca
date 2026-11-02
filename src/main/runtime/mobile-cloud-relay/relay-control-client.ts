@@ -28,7 +28,6 @@ type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' 
 const RELAY_CONTROL_CONNECT_DEADLINE_MS = 15_000
 
 export class RelayControlClient {
-  private readonly options: RelayControlClientOptions
   private readonly relayOrigin: string
   private readonly controlUrl: string
   private readonly createSocket: NonNullable<RelayControlClientOptions['createSocket']>
@@ -39,11 +38,9 @@ export class RelayControlClient {
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
   private connectReject: ((error: Error) => void) | null = null
   private connectTimer: ReturnType<typeof setTimeout> | null = null
-  // The relay's own reason for the close that usually follows an unanswered control-error.
   private controlErrorCode: string | null = null
 
-  constructor(options: RelayControlClientOptions) {
-    this.options = options
+  constructor(private readonly options: RelayControlClientOptions) {
     const endpoint = controlWebSocketUrl(options.cellUrl)
     this.relayOrigin = endpoint.origin
     this.controlUrl = endpoint.url
@@ -91,10 +88,7 @@ export class RelayControlClient {
       }
     })
     socket.once('close', (code) => this.handleClose(code))
-    // Recovery cannot advance while an upgrade/proof promise remains pending forever.
-    // Armed in the same tick as the socket and expiring from 'opening' as well as
-    // 'proving', so it also bounds a black-holed connect that never opens; a
-    // transport-level handshakeTimeout here would be a second bound on that phase.
+    // Arm with the socket to bound both opening/proving; a handshakeTimeout would duplicate opening's deadline.
     this.connectTimer = setTimeout(
       () => this.expireConnect(),
       this.options.connectDeadlineMs ?? RELAY_CONTROL_CONNECT_DEADLINE_MS
@@ -194,7 +188,7 @@ export class RelayControlClient {
       return
     }
     const controlError = RelayControlErrorMessageSchema.safeParse(message)
-    // Why every state: in proving it used to fail the proof (4401, blaming the credential).
+    // Control errors in proving must retain their cause instead of becoming credential failure 4401.
     if (controlError.success) {
       if (!this.requests.resolveMessage(message)) {
         this.controlErrorCode = /^[a-z0-9_]{1,48}$/.test(controlError.data.code)
@@ -218,9 +212,7 @@ export class RelayControlClient {
     }
     const connection = RelayConnectionOpenMessageSchema.safeParse(message)
     if (connection.success) {
-      // Also while draining: a drain-only cell refuses new phones, so a conn-open
-      // arriving after drain was issued before it and only this cell holds that
-      // pending connection. Dropping it stranded the phone until its attach deadline.
+      // Drain refuses new phones but still owns conn-opens issued earlier; dropping them strands pending attaches.
       this.options.onConnectionOpen(connection.data)
       return
     }
@@ -233,16 +225,8 @@ export class RelayControlClient {
     if (this.requests.resolveMessage(message)) {
       return
     }
-    // Drop a well-formed control message we do not recognize, matching how every
-    // other Orca decoder treats an unknown frame (see the silent-drop convention
-    // in docs/reference/remote-wire-compatibility.md). The control channel has no
-    // opcode negotiation step, so this reaches either a newer relay's message
-    // this build predates, or a reply whose request already timed out and has no
-    // waiter (relay control ops run DB transactions that can exceed the request
-    // deadline under load). Self-closing here was strictly worse than ignoring:
-    // it orphaned the relay session, which answered the phone with HOST_OFFLINE
-    // for the orphan-grace window plus the director's reconnect throttle — minutes
-    // of outage from a single stray frame.
+    // Remote-wire compatibility requires dropping unknown well-formed frames and late replies.
+    // Closing control would orphan every phone through reconnect throttling.
     const messageType = typeof message.type === 'string' ? message.type : 'unknown'
     console.warn(`[relay] ignoring unrecognized control message type=${messageType}`)
   }
@@ -250,7 +234,7 @@ export class RelayControlClient {
   private handleProofMessage(message: Record<string, unknown>): void {
     const challenge = RelayHostChallengeMessageSchema.safeParse(message)
     if (challenge.success) {
-      let invalidReason = 'unknown'
+      const invalid: { reason: string | Error } = { reason: 'unknown' }
       const proofB64 = answerRelayHostChallenge(challenge.data, {
         relayOrigin: this.relayOrigin,
         ...this.options.identity,
@@ -260,13 +244,17 @@ export class RelayControlClient {
         assignmentEpoch: this.options.assignmentEpoch,
         previousGeneration: this.options.previousGeneration,
         resumeRequested: Boolean(this.options.controlResumeSecret),
-        onInvalid: (reason) => {
-          invalidReason = reason
+        onInvalid: (reason, error) => {
+          invalid.reason = error ?? reason
         }
       })
       if (!proofB64) {
-        // Reason names the failing check only; field values never surface here.
-        this.failProtocol(`invalid host challenge: ${invalidReason} origin=${this.relayOrigin}`)
+        // Report failing check names, never challenge field values.
+        this.failProtocol(
+          invalid.reason instanceof Error
+            ? invalid.reason
+            : `invalid host challenge: ${invalid.reason} origin=${this.relayOrigin}`
+        )
         return
       }
       this.socket?.send(
@@ -296,10 +284,10 @@ export class RelayControlClient {
     this.socket.send(JSON.stringify(payload))
   }
 
-  private failProtocol(reason: string): void {
-    this.connectReject?.(new Error(reason))
+  private failProtocol(reason: string | Error): void {
+    this.connectReject?.(reason instanceof Error ? reason : new Error(reason))
     this.clearConnectPromise()
-    this.socket?.close(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, reason)
+    this.socket?.close(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, String(reason))
   }
 
   private handleClose(code: number): void {

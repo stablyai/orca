@@ -1,8 +1,4 @@
-/**
- * Shared chrome for the full-width list tables (automations, artifacts, …).
- * Each list owns only its own column template; everything else lives here so
- * the tables cannot drift apart.
- */
+// Share list-table chrome to prevent drift; lists supply only column templates.
 export const LIST_TABLE_CONTAINER_CLASS = 'rounded-md border border-border/50 bg-muted/20'
 
 // Why: z-30 and opaque wash ensure scrolled rows cannot show through the sticky header.
@@ -15,10 +11,7 @@ export const LIST_TABLE_ROW_CLASS =
 
 export const LIST_TABLE_ROW_SELECTED_CLASS = 'bg-accent text-accent-foreground'
 
-// Why: sticky cells must paint opaquely, so they carry the container tint flattened
-// against the page instead of the alpha wash the scrolled columns would show through.
-// The before:/after: strips fill the row's px-3 gutter and the gap-3 column gap, which
-// the cell itself cannot reach, so scrolled columns slide fully out of sight.
+// Flatten tint for opaque sticky cells; pseudo-element strips cover gutters/gaps so scrolled columns cannot show through.
 const LIST_TABLE_STICKY_CELL_BASE_CLASS =
   'sticky left-3 flex min-w-0 self-stretch items-center before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit after:absolute after:-right-3 after:top-0 after:bottom-0 after:w-3 after:bg-inherit'
 
@@ -27,8 +20,5 @@ export const LIST_TABLE_STICKY_HEADER_CELL_CLASS = `${LIST_TABLE_STICKY_CELL_BAS
 // Why: hover/selection ride variants, not props, so the frozen cell tracks the row's own wash.
 export const LIST_TABLE_STICKY_ROW_CELL_CLASS = `${LIST_TABLE_STICKY_CELL_BASE_CLASS} z-20 bg-[color-mix(in_srgb,var(--muted)_20%,var(--background))] transition-colors group-hover/list-table-row:bg-accent group-data-[current=true]/list-table-row:bg-accent`
 
-// Why: virtualized rows are absolutely positioned, so a parent `divide-y` would only ever see the
-// single virtual container; each row draws its own separator instead. Bottom edge, like `divide-y`:
-// the semi-transparent rule composites over the row it belongs to, so a selected row keeps its
-// accent wash under its own hairline rather than tinting the one above it.
+// Absolute virtual rows need individual bottom separators; compositing over each row preserves its selection wash beneath the hairline.
 export const LIST_TABLE_ROW_DIVIDER_CLASS = 'border-b border-border/50'

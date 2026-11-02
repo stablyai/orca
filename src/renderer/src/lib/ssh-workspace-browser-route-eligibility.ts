@@ -26,8 +26,7 @@ export function resolveSshWorkspaceBrowserRouteEligibility(
     parsed?.kind === 'runtime'
       ? environments?.find((candidate) => candidate.id === parsed.environmentId)
       : undefined
-  // Why a WSL deployment is not an SSH route: its pages egress through the paired runtime's
-  // network tunnel over the wsl.exe bridge, never through WSL localhost forwarding.
+  // WSL pages use the paired-runtime tunnel over wsl.exe, never SSH/localhost-forwarded routing.
   const deployment = environment && getOrcadSshDeployment(environment)
   const targetId = parsed?.kind === 'ssh' ? parsed.targetId : deployment?.sshTargetId
   // Why: runtime-owned ephemeral SSH targets belong to the paired runtime's browser route.

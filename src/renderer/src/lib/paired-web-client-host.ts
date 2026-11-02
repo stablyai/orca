@@ -7,10 +7,7 @@ import { isPairedWebClientWindow } from './desktop-window-chrome'
 
 type HostRouteState = { runtimeEnvironments?: readonly { id: string }[] }
 
-/**
- * The paired server is a web client's only host: a browser tab has no PTYs, files or browser of its
- * own, so an owner this client would call "local" can only be reached through that server.
- */
+/** Browser clients own no PTYs/files/browser runtime; their sole paired server serves even routes called local. */
 export function getPairedWebClientEnvironmentId(state: HostRouteState): string | null {
   if (!isPairedWebClientWindow()) {
     return null

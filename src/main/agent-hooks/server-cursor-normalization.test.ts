@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('Cursor hook normalization', () => {
-  it('publishes the conversation identity through the owning hook store', () => {
+  it('normalizes the Cursor conversation identity', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({

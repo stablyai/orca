@@ -35,14 +35,12 @@ function okResponse(subscriptionId: string): RuntimeRpcResponse<unknown> {
 describe('closeSharedControlLogicalSubscription — replay-window leak', () => {
   it('sends the unsubscribe when closed after an established subscribe replay completes', () => {
     const { subscriptions, subscription } = makeSubscriptions()
-    // First establishment: server assigned a concrete subscription id.
     subscription.sent = true
     subscription.remoteSubscriptionId = 'server-sub-1'
 
     const request = vi.fn()
     closeSharedControlLogicalSubscription({ subscriptions, subscription, request })
 
-    // Established subscription cleans up immediately by its known id.
     expect(request).toHaveBeenCalledWith('runtime.clientEvents.unsubscribe', {
       subscriptionId: 'server-sub-1'
     })
@@ -51,12 +49,10 @@ describe('closeSharedControlLogicalSubscription — replay-window leak', () => {
 
   it('does NOT leak a server subscription when close races the replay resubscribe window', () => {
     const { subscriptions, subscription } = makeSubscriptions()
-    // Subscription was previously established on the server.
     subscription.sent = true
     subscription.remoteSubscriptionId = 'server-sub-1'
 
-    // Reconnect replay: sent flips false and the old id is cleared right before
-    // the resubscribe frame goes out. The server WILL assign a fresh id.
+    // Replay clears the old ID before the server assigns a fresh one.
     const sent: SharedControlLogicalSubscription<unknown>[] = []
     replaySharedControlSubscriptions({
       subscriptions,
@@ -68,18 +64,14 @@ describe('closeSharedControlLogicalSubscription — replay-window leak', () => {
     expect(subscription.sent).toBe(false)
     expect(subscription.remoteSubscriptionId).toBeNull()
 
-    // close() arrives during the window: no remoteSubscriptionId yet, so a
-    // naive close finishes locally and never unsubscribes — leaking the server
-    // subscription that the in-flight resubscribe is about to create.
+    // Closing before resubscribe returns its ID must defer cleanup or leak the server subscription.
     const request = vi.fn()
     closeSharedControlLogicalSubscription({ subscriptions, subscription, request })
 
-    // The close must be deferred, not finished with no cleanup.
     expect(subscriptions.size).toBe(1)
     expect(request).not.toHaveBeenCalled()
 
-    // When the resubscribe's ready response arrives with the new server id, the
-    // deferred close fires the unsubscribe and only then finishes.
+    // The ready response supplies the new ID for deferred unsubscribe.
     handleSharedControlLogicalResponse({
       subscriptions,
       subscription,
@@ -95,7 +87,7 @@ describe('closeSharedControlLogicalSubscription — replay-window leak', () => {
 
   it('finishes locally without an unsubscribe for a never-sent subscription', () => {
     const { subscriptions, subscription } = makeSubscriptions()
-    // Brand new: never sent, no server subscription exists.
+    // No frame was sent, so there is no remote subscription to clean up.
     const request = vi.fn()
     closeSharedControlLogicalSubscription({ subscriptions, subscription, request })
 

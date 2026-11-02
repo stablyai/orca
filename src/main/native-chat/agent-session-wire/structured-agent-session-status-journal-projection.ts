@@ -1,9 +1,13 @@
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from '../../../shared/structured-agent-session-command-entry'
+import {
+  latestNativeChatUsageLimitCut,
+  type NativeChatUsageLimitCut
+} from '../../../shared/native-chat/native-chat-usage-limit-cut'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/structured-agent-session-command-entry'
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   structuredAgentSessionCurrentWork,
@@ -18,6 +22,7 @@ export type StructuredAgentSessionStatusState = ReturnType<
 
 export type StructuredAgentSessionJournalProjection = {
   epoch: string
+  contextId: string | null
   sequence: number
   fence: number | undefined
   /** Live authority may change without a journal row. */
@@ -26,6 +31,7 @@ export type StructuredAgentSessionJournalProjection = {
   workRevision: number
   /** Stop settlement edges write no row and need an independent cache key. */
   stopRevision: number
+  usageLimitCut: NativeChatUsageLimitCut | null
   state: StructuredAgentSessionStatusState
   acceptedSendKey: string
   firstInputSubmissionKey: string | null
@@ -48,7 +54,7 @@ export class StructuredAgentSessionJournalProjections {
 
   read(
     journal: AgentSessionJournal,
-    record: AgentSessionRecord | null,
+    record: AgentSessionConversationView | null,
     seen?: {
       lastEndedChild?: StructuredAgentSessionWorkEvidence['ended']
       operationalRevision?: number
@@ -56,7 +62,8 @@ export class StructuredAgentSessionJournalProjections {
     }
   ): StructuredAgentSessionJournalProjection {
     const cursor = journal.cursor()
-    const fence = record?.lease.runtimeFence
+    const contextId = record?.providerContextBoundary?.operationId ?? null
+    const fence = record?.currentFence
     const ended = seen?.lastEndedChild
     const work = structuredAgentSessionCurrentWork(journal, {
       record,
@@ -70,6 +77,7 @@ export class StructuredAgentSessionJournalProjections {
     if (
       !projection ||
       projection.epoch !== cursor.epoch ||
+      projection.contextId !== contextId ||
       projection.sequence !== cursor.sequence ||
       projection.fence !== fence ||
       projection.liveFence !== work.liveFence ||
@@ -78,9 +86,13 @@ export class StructuredAgentSessionJournalProjections {
     ) {
       // Journal sequence captures sends; lease/live-work/Stop keys capture row-free changes.
       const snapshot = journal.snapshot()
-      let firstInputSubmissionKey =
-        projection?.epoch === cursor.epoch ? projection.firstInputSubmissionKey : null
-      const start = projection?.epoch === cursor.epoch ? projection.submissionCount : 0
+      const sameContext =
+        projection?.epoch === cursor.epoch && projection.contextId === contextId
+          ? projection
+          : undefined
+      let firstInputSubmissionKey = sameContext?.firstInputSubmissionKey ?? null
+      const start = sameContext?.submissionCount ?? 0
+      const floor = sameContext ? 0 : (journal.context.floor()?.sequence ?? 0)
       const submissions =
         !firstInputSubmissionKey && snapshot.submissions.length !== start
           ? journal.submissions()
@@ -91,7 +103,9 @@ export class StructuredAgentSessionJournalProjections {
           journal.item(agentJournalSubmissionKey(submission.clientMessageId)) ??
           (submission.providerItemId ? journal.item(submission.providerItemId) : null)
         if (
-          item?.body.kind === 'message' &&
+          item &&
+          item.sequence > floor &&
+          item.body.kind === 'message' &&
           item.body.role === 'user' &&
           isRootAgentJournalItem(item) &&
           !isStructuredAgentSessionCommandEntry(item.body)
@@ -101,6 +115,12 @@ export class StructuredAgentSessionJournalProjections {
       }
       projection = {
         ...cursor,
+        contextId,
+        usageLimitCut: latestNativeChatUsageLimitCut(
+          snapshot.items,
+          snapshot.submissions,
+          journal.itemBody
+        ),
         firstInputSubmissionKey,
         submissionCount: snapshot.submissions.length,
         fence,

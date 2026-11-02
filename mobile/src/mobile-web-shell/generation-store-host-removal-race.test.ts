@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   createFakeGenerationFileSystem,
@@ -67,7 +67,7 @@ function failure(hostId: string): MobileWebShellUpdateFailure {
   }
 }
 
-/** Hold the first read until host removal has queued its cleanup behind this operation. */
+// Hold the first read until host removal queues cleanup behind it.
 function slowReadsOf(
   fileSystem: FakeGenerationFileSystem,
   file: string,
@@ -113,7 +113,6 @@ function requireFileSystem(): FakeGenerationFileSystem {
   return fake.fileSystem
 }
 
-/** A commit for one host with a removal of another landing inside it. */
 async function removeDuringCommit(sides: Sides): Promise<FakeGenerationFileSystem> {
   const fileSystem = requireFileSystem()
   const session = sides.session()
@@ -125,7 +124,6 @@ async function removeDuringCommit(sides: Sides): Promise<FakeGenerationFileSyste
   return fileSystem
 }
 
-/** A failure recorded for one host with a removal of another landing inside it. */
 async function removeDuringRecord(sides: Sides): Promise<FakeGenerationFileSystem> {
   const fileSystem = requireFileSystem()
   const session = sides.session()

@@ -14,8 +14,7 @@ import {
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
 
-// Narrows repos, project groups, and folder workspaces to the hosts (and devices) the
-// current host filter admits.
+// Apply host/device scope consistently to repos, project groups and folder workspaces.
 export function useSidebarHostVisibleScope(args: {
   filterState: SidebarWorktreeFilters['filterState']
   defaultHostId: ExecutionHostId

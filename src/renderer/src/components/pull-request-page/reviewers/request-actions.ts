@@ -3,7 +3,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
-} from '@/components/github-pr-reviewer-display'
+} from '../../../../../shared/github/pr-reviewer-display'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { buildRequestedReviewUsers } from '@/components/github/work-item-state-presentation'
 import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
@@ -15,6 +15,7 @@ import type {
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 const MAX_REQUESTED_REVIEWERS = 15
 
@@ -110,7 +111,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       }
       if (!result.ok) {
         toast.error(
-          result.error ??
+          codeHostErrorText(result) ??
             translate('auto.components.PullRequestPage.2560588245', 'Failed to request reviewer')
         )
         return
@@ -211,7 +212,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       }
       if (!result.ok) {
         toast.error(
-          result.error ??
+          codeHostErrorText(result) ??
             translate('auto.components.PullRequestPage.c798fa0ec7', 'Failed to remove reviewer')
         )
         return

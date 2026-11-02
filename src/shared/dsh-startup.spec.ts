@@ -4,7 +4,7 @@ import { TUI_AGENT_CONFIG } from './tui-agent-config'
 
 describe('DSH first launch', () => {
   it.each(['darwin', 'linux', 'win32'] as const)(
-    'selects the current workspace before pasting the task on %s',
+    'plans the current workspace with task input deferred on %s',
     (platform) => {
       const plan = buildAgentStartupPlan({
         agent: 'dsh',

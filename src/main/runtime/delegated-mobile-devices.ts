@@ -8,13 +8,16 @@ export type DelegatedMobileDeviceEntry = DeviceEntry & {
   token: string
 }
 
-/** The registry after making `parent`'s children cover `phones`, and those children in `phones` order. */
 export function planDelegatedMobileDevices(
   devices: DeviceEntry[],
   parent: DeviceEntry,
   phones: readonly DelegatedPhone[],
   now = Date.now()
 ): { nextDevices: DeviceEntry[]; entries: DelegatedMobileDeviceEntry[] } {
+  // A parent removed meanwhile (e.g. on disk) must not mint children nobody can revoke with it.
+  if (!devices.some((device) => device.deviceId === parent.deviceId)) {
+    return { nextDevices: devices, entries: [] }
+  }
   let nextDevices = devices
   const entries = phones.map((phone) => {
     const existing = nextDevices.find(
@@ -34,7 +37,7 @@ export function planDelegatedMobileDevices(
       name: phone.name,
       scope: 'mobile',
       pairedAt: now,
-      // Why: never pending — the QR lookups select lastSeenAt === 0 and must not hand out or rotate a child.
+      // QR rotation targets lastSeenAt === 0; delegated children must never be pending offers.
       lastSeenAt: now,
       pairingReach: parent.pairingReach ?? 'network',
       parentDeviceId: parent.deviceId,

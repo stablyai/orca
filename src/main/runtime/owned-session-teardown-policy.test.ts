@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import {
   OWNED_SESSION_KINDS,
   OWNED_SESSION_TEARDOWN,
@@ -79,7 +79,6 @@ describe('owned-session teardown policy', () => {
 
     await runtime.sleepManagedWorktree(`id:${TEST_WORKTREE_ID}`)
 
-    // Settled: the host now refuses an automatic spawn into the slept worktree.
     expect(sleepPhases()[0]).toBe('started')
     await expect(
       runtime.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(TEST_WORKTREE_ID, null), {
@@ -190,8 +189,7 @@ describe('owned-session teardown policy', () => {
   })
 })
 
-// Every exported or method-level stop/close/teardown of a workspace's sessions in src/main/runtime,
-// and the owned-session kinds it ends. A new one fails here until someone classifies it.
+// Classify every exported/method workspace teardown and owned kind; new entry points must update this policy.
 const TEARDOWN_FUNCTIONS: Readonly<Record<string, readonly OwnedSessionKind[]>> = {
   closeClientHostedBrowserPagesForWorktree: ['host-browser'],
   closeStructuredSessionsForProject: ['structured-chat'],

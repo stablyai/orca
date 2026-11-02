@@ -1,4 +1,4 @@
-/* GitLab-specific shared types, split from `./types` to avoid merge conflicts on upstream syncs; re-exported from `./types` for import stability. */
+/** GitLab-specific types re-export through ./types for import compatibility. */
 import type { ClassifiedError } from './classified-error'
 import type { ExecutionHostId } from './execution-host'
 import type {
@@ -11,8 +11,7 @@ import type { HostedReviewDecision } from './hosted-review'
 // Why: flat owner/repo is inadequate — projects nest (`group/subgroup/project`) and self-hosted hosts must travel with the path for URL/glab targeting.
 export type GitLabProjectRef = { host: string; path: string }
 
-// ── GitLab MR / issue / work-item shapes ────────────────────────────
-// Why: preserve native GitLab state strings (`opened`, not gh `open`) so values are never ambiguously mapped.
+// Retain GitLab-native opened state rather than ambiguously mapping to GitHub open.
 
 export type MRState = 'opened' | 'closed' | 'merged' | 'locked' | 'draft'
 export type GitLabIssueState = 'opened' | 'closed'
@@ -211,7 +210,7 @@ export type GitLabMRInlineCommentInput = {
   headSha: string
 }
 
-// Why: mirrors GitHubProjectSettings. `pinned` is reserved for a future UI affordance — defined now to keep settings migrations simple.
+// Reserve pinned alongside recents, matching GitHub settings without another migration for a future picker.
 export type GitLabProjectSettings = {
   pinned: { host: string; path: string }[]
   recent: { host: string; path: string; lastOpenedAt: string }[]
@@ -254,17 +253,27 @@ export type GitLabPipelineJob = {
   duration: number | null
 }
 
-// Why: aggregated detail for GitLabItemDialog; flattens discussions into one comments list (inline positioning is v1.5 work).
+// The MR's own pipeline; its status is the pipeline verdict even when its job list is partial or empty.
+export type GitLabPipeline = {
+  id: number
+  status: string
+  /** Pipeline-level verdict, settled by the MR status rule from the same reply. */
+  checkStatus?: CheckStatus
+  webUrl?: string | null
+}
+
+// Flatten discussions into the work-item details comment list.
 export type GitLabWorkItemDetails = {
   /** repoId is stamped by the renderer's caller — the main process doesn't know Orca's Repo.id. */
   item: Omit<GitLabWorkItem, 'repoId'>
   body: string
   comments: MRComment[]
-  /** MR head/base SHAs — MRs only. Reserved for a future Files tab. */
+  /** MR-only head/base SHAs used for per-file content retrieval. */
   headSha?: string
   baseSha?: string
   startSha?: string
   files?: GitLabMRFile[]
+  pipeline?: GitLabPipeline
   /** MR-only — populated when the MR's head_pipeline exists. */
   pipelineJobs?: GitLabPipelineJob[]
   /** MR-only reviewers and approval status. */

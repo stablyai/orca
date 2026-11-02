@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveJiraSourceHostId } from './jira-source-host'
+import { resolveJiraSourceHostId } from '../../../shared/jira/jira-source-host'
 
 describe('resolveJiraSourceHostId', () => {
   it('keeps local and paired-runtime Jira ownership', () => {

@@ -13,10 +13,7 @@ export const RepoIconDataUrlsParams = /* @__PURE__ */ (() =>
     ids: z.array(z.string().min(1).max(64)).max(MAX_REPO_ICON_IDS_PER_READ)
   }))()
 
-/**
- * One entry per requested id, in request order. `dataUrl` is null when the host has no image for
- * the id or could not make one within the caps; the client then draws its own fallback.
- */
+/** Return one icon per requested ID in order; null means missing/over-budget and lets clients draw fallbacks. */
 export type RepoIconDataUrlsReply = {
   icons: { id: string; dataUrl: string | null }[]
 }

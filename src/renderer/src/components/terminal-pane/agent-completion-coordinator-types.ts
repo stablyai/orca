@@ -38,6 +38,8 @@ export type AgentCompletionCoordinatorOptions = {
     ptyId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>
+  /** Rechecks a local exit candidate without trusting the inspection's cached process name. */
+  confirmForegroundProcess?: (ptyId: string) => Promise<string | null>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
   dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void
   dispatchHookLifecycle?: (payload: AgentCompletionStatusSnapshot) => void
@@ -49,8 +51,7 @@ export type AgentCompletionCoordinatorOptions = {
   /** Fired once per confirmed exit (settled local absence, or the host's `exited` verdict). */
   onForegroundAgentExited?: (exited: RecognizedAgentProcess) => void
   isLive: () => boolean
-  /** How the hook lane identified the turn end a title edge (null: no title known) would announce:
-   *  `identified` it announces it; `ambiguous` the title lane keeps main's role; null not hook-owned. */
+  /** Identified ends belong to hooks; ambiguous ends retain title-lane authority; null means no hook ownership. */
   titleTurnEndEvidence?: (
     title: string | null,
     foregroundAgent: RecognizedAgentProcess['agent'] | null
@@ -60,16 +61,9 @@ export type AgentCompletionCoordinatorOptions = {
   /** Whether a hook snapshot's end is hook-owned on this pane (else main's behavior exactly). */
   usesHookTurnEnds?: (snapshot: AgentCompletionStatusSnapshot) => boolean
   shouldPollProcessCadence?: () => boolean
-  // Why: a host that publishes foreground evidence with its inventory lets a
-  // pane without agent evidence stay push-driven instead of scheduling
-  // redundant host process-table reads while idle. Wire a producer only once
-  // this renderer CONSUMES that evidence and can tell "no evidence published"
-  // from "host too old to publish it" — mixed-version hosts omit the field.
+  // Disable idle polling only after consuming host inventory evidence and distinguishing absent evidence from older hosts that cannot publish it.
   shouldPollNoEvidenceProcessCadence?: () => boolean
-  // Why: where one inspection is a whole-process-table scan (local Windows
-  // PowerShell/CIM) or a host round trip plus a host-side scan (remote/SSH),
-  // panes without agent evidence relax to a slow cadence and re-arm from
-  // output/title/hook activity. See agent-process-inspection-cost.ts.
+  // Relax costly no-evidence scans (Windows or remote host reads); output/title/hooks re-arm hot cadence.
   isProcessInspectionCostly?: () => boolean
 }
 

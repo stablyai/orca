@@ -1,12 +1,6 @@
-/**
- * After quiesce, proof that no terminal of a moved workspace still runs on this desktop's daemon
- * (mover design, section 3.3). The local daemon can prove exit, so only a census it answered can
- * say `exited`; one it could not answer is `unverifiable`, never a guess (AGENTS.md: SSH Use Case).
- *
- * Precondition: the move's fence is up, so no new terminal can start in scope while this reads.
- */
+// Require a complete daemon census under the move fence; unavailable evidence cannot prove exit.
 import { parsePtySessionId, WORKTREE_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
-import { foldWslUncPathCaseInsensitiveParts, toWindowsWslUncPath } from '../../../shared/wsl-paths'
+import { comparableWslPath, isAtOrUnder, isLinuxSpelled } from './wsl-move-comparable-path'
 import type { SessionInfo } from '../../daemon/types'
 
 export type WslMoveExitProof =
@@ -17,20 +11,18 @@ export type WslMoveExitProof =
 type CensusSession = Pick<SessionInfo, 'sessionId' | 'isAlive' | 'cwd' | 'wslDistro'>
 
 export type WslMoveExitProofSources = {
-  /** `listLiveDaemonSessions`: null unless every daemon generation answered. */
+  /** Null unless every daemon generation answered. */
   listSessions: () => Promise<readonly CensusSession[] | null>
-  /** In-process fallback PTYs from degraded mode, which no daemon census lists. */
+  /** Degraded-mode PTYs absent from daemon censuses. */
   countFallbackSessions: () => number
-  /** The precondition: new terminals in scope are refused. */
   isScopeFenced: () => boolean
 }
 
 export type WslMoveExitProofScope = {
-  /** The moving distro; Linux-spelled paths are read inside it. */
   distro: string
-  /** Workspace keys as session ids mint them: `<repoId>::<path>` or `folder:<id>`. */
+  /** Session workspace keys: <repoId>::<path> or folder:<id>. */
   workspaceKeys: ReadonlySet<string>
-  /** The ids the moved panes recorded; covers a session whose id predates the minted format. */
+  /** Cover sessions whose IDs predate the minted workspace format. */
   sessionIds: ReadonlySet<string>
 }
 
@@ -114,7 +106,7 @@ function attributeSession(
   return attributeByCwd(session, scope.distro, roots)
 }
 
-// A session whose id names no workspace: its folder is the only evidence of where it runs.
+// Without workspace identity, cwd is the only attribution evidence.
 function attributeByCwd(
   session: CensusSession,
   distro: string,
@@ -128,16 +120,13 @@ function attributeByCwd(
   const path = comparableWslPath(cwd, distro)
   const underRoot = path !== null && roots.some((root) => isAtOrUnder(path, root))
   // A POSIX folder is a Linux path only inside WSL. A Git Bash `/c/...` is not, but a native-tagged
-  // `wsl.exe` shell's may be, so only a folder clear of the move rules it out.
+  // or untagged `wsl.exe` shell's may be, so only one in a moved folder stays unknown.
   if (isLinuxSpelled(cwd) && !inDistro) {
-    return wslDistro === undefined || (wslDistro === null && underRoot) ? 'unknown' : 'elsewhere'
+    return typeof wslDistro !== 'string' && underRoot ? 'unknown' : 'elsewhere'
   }
-  if (underRoot) {
-    return 'in-scope'
-  }
-  const distroRoot = comparableWslPath('/', distro)
-  const pathInDistro = path !== null && distroRoot !== null && isAtOrUnder(path, distroRoot)
-  return inDistro || pathInDistro ? 'unknown' : 'elsewhere'
+  // A known folder outside the move is outside it, even in the moving distro: other projects there
+  // keep their terminals open through a move.
+  return underRoot ? 'in-scope' : 'elsewhere'
 }
 
 function keyPath(key: string): string | null {
@@ -145,7 +134,7 @@ function keyPath(key: string): string | null {
   return separator <= 0 ? null : key.slice(separator + WORKTREE_ID_SEPARATOR.length)
 }
 
-// One spelling per workspace across UNC aliases, distro case, Linux spelling, and trailing separators.
+// Canonicalize distro case, UNC aliases, Linux spelling and trailing separators.
 function comparableKey(key: string, distro: string): string {
   const path = keyPath(key)
   const comparable = path === null ? null : comparableWslPath(path, distro)
@@ -153,19 +142,6 @@ function comparableKey(key: string, distro: string): string {
     return key
   }
   return `${key.slice(0, key.indexOf(WORKTREE_ID_SEPARATOR))}${WORKTREE_ID_SEPARATOR}${comparable}`
-}
-
-function comparableWslPath(path: string, distro: string): string | null {
-  const unc = isLinuxSpelled(path) ? toWindowsWslUncPath(path, distro) : path
-  return foldWslUncPathCaseInsensitiveParts(unc)?.replace(/\/+$/, '') ?? null
-}
-
-function isLinuxSpelled(path: string): boolean {
-  return /^\/(?!\/)/.test(path)
-}
-
-function isAtOrUnder(path: string, root: string): boolean {
-  return path === root || path.startsWith(`${root}/`)
 }
 
 function sameDistro(left: string, right: string): boolean {

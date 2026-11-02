@@ -1,46 +1,38 @@
 import { describe, expect, it } from 'vitest'
+import { handleMsg } from './document/host-message-router'
 import { createTerminalDocumentScope } from './document/document-scope'
 import {
   enqueueTerminalDataReplyBoundary,
   forwardTerminalDataReply,
-  resetTerminalDataReplyAuthority,
-  resumeTerminalDataReplyAuthority
+  resetTerminalDataReplyAuthority
 } from './document/query-reply'
 
 type QueryReplyGate = {
   forward: (data: string) => void
   queueBoundary: (generation: number) => void
   reset: () => void
-  resume: () => void
+  clear: () => void
   setGeneration: (generation: number) => void
 }
 
-/**
- * The gate over a scope the case owns.
- *
- * The module is imported and handed a scope, so the two things the gate reaches outside itself are
- * seam fields: the notify goes to `postToHost`, and the write-queue boundary the gate enqueues is
- * read off the scope's own queue rather than intercepted.
- */
+// Drive the real gate with scope-owned notify and queue fields; execute its enqueued boundary to model replay drain.
 function createQueryReplyGate(notify: (message: unknown) => void): {
   gate: QueryReplyGate
-  queuedBoundaries: Array<() => void>
+  queuedBoundaries: (() => void)[]
 } {
-  const queuedBoundaries: Array<() => void> = []
+  const queuedBoundaries: (() => void)[] = []
   const scope = createTerminalDocumentScope({ postToHost: notify })
   const gate: QueryReplyGate = {
     forward: (data) => forwardTerminalDataReply(scope, data),
     queueBoundary: (generation) => {
       enqueueTerminalDataReplyBoundary(scope, generation)
-      // The boundary the gate enqueued, taken off the document's own queue: the cases run it to
-      // stand for the replay draining.
       const queued = scope.writeQueue[scope.writeQueue.length - 1]
       if (typeof queued === 'function') {
         queuedBoundaries.push(queued)
       }
     },
     reset: () => resetTerminalDataReplyAuthority(scope),
-    resume: () => resumeTerminalDataReplyAuthority(scope),
+    clear: () => handleMsg(scope, { type: 'clear' }),
     setGeneration: (next) => {
       scope.terminalGeneration = next
     }
@@ -59,7 +51,8 @@ describe('mobile terminal query replies', () => {
     gate.forward('\x1b[1;1R')
     expect(messages).toEqual([])
 
-    queuedBoundaries[0]?.()
+    expect(queuedBoundaries).toHaveLength(1)
+    queuedBoundaries[0]!()
     gate.forward('\x1b[2;2R')
     expect(messages).toEqual([{ type: 'terminal-data', bytes: '\x1b[2;2R' }])
   })
@@ -72,7 +65,8 @@ describe('mobile terminal query replies', () => {
     gate.setGeneration(2)
     gate.reset()
 
-    queuedBoundaries[0]?.()
+    expect(queuedBoundaries).toHaveLength(1)
+    queuedBoundaries[0]!()
     gate.forward('\x1b[1;1R')
     expect(messages).toEqual([])
   })
@@ -84,9 +78,9 @@ describe('mobile terminal query replies', () => {
     gate.reset()
     gate.queueBoundary(1)
 
-    // A clear drops all queued writes, including the replay boundary.
-    queuedBoundaries.length = 0
-    gate.resume()
+    expect(queuedBoundaries).toHaveLength(1)
+    gate.clear()
+    queuedBoundaries[0]!()
     gate.forward('\x1b[3;4R')
 
     expect(messages).toEqual([{ type: 'terminal-data', bytes: '\x1b[3;4R' }])

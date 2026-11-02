@@ -1,3 +1,4 @@
+import type { AgentSessionCloseObserver } from '../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import {
@@ -22,31 +23,51 @@ export type CodexStructuredSessionTeardownDeps = {
 export class CodexStructuredSessionTeardown {
   constructor(private readonly deps: CodexStructuredSessionTeardownDeps) {}
 
-  close = async (sessionId: string): Promise<boolean> => {
+  close = async (sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean> => {
     const connection =
       this.deps.sessions.get(sessionId)?.connection ??
       this.deps.acquisitions.get(sessionId)?.window.connection
-    const closed = this.settled(
-      sessionId,
-      await closeCodexSession(
+    try {
+      const closed = this.settled(
         sessionId,
-        this.deps.sessions,
-        this.deps.acquisitions,
-        this.deps.onEvent,
-        this.deps.logger,
-        true
+        await closeCodexSession(
+          sessionId,
+          this.deps.sessions,
+          this.deps.acquisitions,
+          this.deps.onEvent,
+          this.deps.logger,
+          true
+        )
       )
-    )
-    if (closed && connection?.processTreeUnproven) {
-      // Root exit settles the close; report unproven descendants separately.
-      throw new AgentSessionAcquisitionRootExitObservedError(
-        new Error('codex app-server exited, but its process tree was not proven gone')
+      if (
+        closed &&
+        connection?.closeResult?.killDelivered &&
+        connection.closeResult.root !== 'exited'
+      ) {
+        throw new AgentSessionAcquisitionRootExitObservedError(
+          new Error('codex writer killed'),
+          'kill-delivered'
+        )
+      }
+      if (closed && connection?.processTreeUnproven) {
+        // Root exit settles the close; report unproven descendants separately.
+        throw new AgentSessionAcquisitionRootExitObservedError(
+          new Error('codex app-server exited, but its process tree was not proven gone')
+        )
+      }
+      return closed
+    } finally {
+      const result = connection?.closeResult
+      observeClose?.(
+        result ? { root: result.root, workload: result.tree ?? 'unverifiable' } : undefined
       )
     }
-    return closed
   }
 
   forceClose = async (sessionId: string): Promise<boolean> => {
+    const connection =
+      this.deps.sessions.get(sessionId)?.connection ??
+      this.deps.acquisitions.get(sessionId)?.window.connection
     const closed = await closeCodexSession(
       sessionId,
       this.deps.sessions,
@@ -55,7 +76,18 @@ export class CodexStructuredSessionTeardown {
       this.deps.logger,
       false
     )
-    return this.settled(sessionId, closed)
+    this.settled(sessionId, closed)
+    if (
+      closed &&
+      connection?.closeResult?.killDelivered &&
+      connection.closeResult.root !== 'exited'
+    ) {
+      throw new AgentSessionAcquisitionRootExitObservedError(
+        new Error('codex writer killed'),
+        'kill-delivered'
+      )
+    }
+    return closed
   }
 
   /** Ownership checks prevent stale callers from killing replacement children. */

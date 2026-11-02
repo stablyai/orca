@@ -3,10 +3,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 import { resolveAgentTypeFromTerminalTitle } from './worktree-title-derived-agent-rows'
 
-/**
- * Resolves the sidebar row agent type, prioritizing launch agent configuration
- * and normalizing compatible agent kinds.
- */
+/** Prefer launch ownership and normalize compatible agent kinds. */
 export function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): AgentType {
   const launchOwner = { ownerIsLaunch: Boolean(tab?.launchAgent) }
   const entryAgentType = resolveCompatibleAgentTypeForOwner(

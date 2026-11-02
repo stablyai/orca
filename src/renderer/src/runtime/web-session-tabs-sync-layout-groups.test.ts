@@ -71,9 +71,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
-    // Why no layout write: a ref is this client's only pointer to a local scrollback file, so the
-    // rebuild carries it for every leaf the host still names. The rebuilt layout then equals the
-    // stored one and the write bails out instead of dropping the ref.
+    // Carry each surviving leaf’s local scrollback ref; unchanged rebuilt layouts then bail without dropping the only disk pointer.
     expect(patch.terminalLayoutsByTabId).toBeUndefined()
   })
 

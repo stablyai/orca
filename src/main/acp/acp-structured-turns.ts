@@ -4,12 +4,12 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
-} from '../../shared/agent-session-failure-words'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
@@ -35,6 +35,8 @@ export type AcpStructuredTurnsDeps = {
   agentName: string
   now: () => number
   settle: (settlement: AcpDispatchSettlement) => void
+  /** Replace the child so the next send reopens the session. */
+  sessionLost: (error: Error) => void
 }
 
 export class AcpStructuredTurns {
@@ -236,7 +238,13 @@ export class AcpStructuredTurns {
     } else {
       lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
     }
+    const lost = lane.translator.sessionLost(error)
+    // Held steers must not reach the dead session.
+    this.ended ||= lost
     this.finish(send)
+    if (lost) {
+      this.deps.sessionLost(error)
+    }
   }
 
   private finish(send: Send): void {

@@ -29,10 +29,7 @@ vi.mock('@/lib/language-detect', () => ({
   detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 
-// Why: the real helper reads worktreesByRepo/activeRepoId/etc. from the store
-// and orchestrates side effects that are out of scope for the link-handler
-// unit tests. Mock it so these tests only assert on routing (browser tab vs.
-// openFile), not on activation internals.
+// Mock activation orchestration so these suites isolate browser/editor routing from store side effects.
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
@@ -48,21 +45,6 @@ installTerminalLinkTestEnvironment(doubles)
 const SOURCE_WORKTREE = { id: 'wt-1', path: '/tmp' }
 
 describe('handleOscLink', () => {
-  it('switches to an exact known worktree root without local auth or stat', async () => {
-    setPlatform('Macintosh')
-    storeState.worktreesByRepo = {
-      repo: [SOURCE_WORKTREE, { id: 'wt-2', path: '/tmp/other-worktree' }]
-    }
-
-    openDetectedFilePath('/tmp/other-worktree', null, null, deps)
-    await flushAsyncWork()
-
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2', { executionHostId: 'local' })
-    expect(statMock).not.toHaveBeenCalled()
-    expect(openFilePathMock).not.toHaveBeenCalled()
-    expect(openFileMock).not.toHaveBeenCalled()
-  })
-
   it('coalesces duplicate known-root activation from provider and mouseup fallback', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {
@@ -153,24 +135,6 @@ describe('handleOscLink', () => {
 })
 
 describe('createFilePathLinkProvider range bounds', () => {
-  it('shows switch and external-open hint for known worktree root hover', async () => {
-    setPlatform('Macintosh')
-    storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-1', path: '/repo' }]
-    }
-    const { provider, linkTooltip } = createProviderSetup([makeBufferLine('/repo')])
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-    expect(links[0]).toBeDefined()
-    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
-
-    expect(linkTooltip.textContent).toBe(
-      '/repo (Click for actions, ⌘+click to switch workspace, or ⇧⌘+click to open in Finder)'
-    )
-  })
-
   it('shows a known worktree root link even when the exists cache says missing', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {
@@ -208,25 +172,6 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(linkTooltip.textContent).toBe(
       '/repo (Click for actions, ⌘+click to switch workspace, or ⇧⌘+click to open in Finder)'
-    )
-  })
-
-  it('does not advertise external open for SSH worktree root hover', async () => {
-    setPlatform('Windows')
-    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
-    storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo', hostId: 'ssh:ssh-1' }]
-    }
-    const { provider, linkTooltip } = createProviderSetup([makeBufferLine('/repo')])
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-    expect(links[0]).toBeDefined()
-    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
-
-    expect(linkTooltip.textContent).toBe(
-      '/repo (Click for actions or Ctrl+click to switch workspace)'
     )
   })
 

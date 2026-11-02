@@ -95,6 +95,19 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+B'])
   },
   {
+    id: 'tab.newBrowserSplitRight',
+    title: 'New browser tab in right split',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'browser', 'new', 'split', 'right', 'side', 'pane'],
+    // Why: macOS only — Ctrl+Alt+letter is AltGr text input on Windows/Linux.
+    defaultBindings: {
+      darwin: ['Mod+Alt+B'],
+      linux: [],
+      win32: []
+    }
+  },
+  {
     id: 'tab.newSimulator',
     title: 'New mobile emulator tab',
     group: 'Tabs',
@@ -226,7 +239,7 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     title: 'Select Tab 1–9',
     group: 'Tab Navigation',
     scope: 'tabs',
-    // Why: no shared conflictGroup with workspace.selectByIndex so swapping their modifiers isn't a false conflict; safe because resolveWindowShortcutAction checks the workspace range first.
+    // Separate workspace/tab digit conflict groups allow modifier swaps; resolveWindowShortcutAction checks workspace ranges first.
     searchKeywords: ['shortcut', 'tab', 'select', 'switch', 'number', 'digit', '1-9', 'index'],
     // Why: representative chord for the 1-9 range (see workspace.selectByIndex); each platform avoids the workspace-jump chord (Mod+1-9).
     defaultBindings: {

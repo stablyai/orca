@@ -2,12 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHandleProvider } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { acpChildWorkStatusSink } from '../../acp/acp-structured-child-work.test-support'
@@ -21,7 +21,7 @@ import {
   statusFeedChildView as childView
 } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'status-session'
 const USER_IDENTITY = {
@@ -78,7 +78,7 @@ async function feedWithChildren(provider: AgentSessionHandleProvider = 'codex') 
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, indexedStatusFeedSession({ journal, provider })]]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => (now += 1),
     statusSink: () => sink,
     onChildWorkChanged: (sessionId) => changed.push(sessionId)
@@ -355,7 +355,7 @@ describe('structured status feed over the real child-record store', () => {
     const feed = new StructuredAgentSessionStatusFeed({
       logger: createStructuredAgentSessionLogger(),
       sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1_000,
       statusSink: () => sink
     })

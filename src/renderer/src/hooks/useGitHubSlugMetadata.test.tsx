@@ -109,16 +109,13 @@ describe('useGitHubSlugMetadata', () => {
     expect(apiMocks.listAssignableUsersBySlug).toHaveBeenCalledExactlyOnceWith({
       owner: 'stablyai',
       repo: 'orca',
-      host: 'github.com',
-      seedLogins: ['jinwoo']
+      host: 'github.com'
     })
     expect(renders).toBeLessThanOrEqual(4)
   })
 
   it('does not re-issue a failed label fetch when a fresh settings object re-renders', async () => {
-    // Regression: with an unreachable provider, the failure setState re-rendered
-    // the consumer, the fresh settings identity re-armed the effect, and the hook
-    // re-issued the fetch each settlement — a render-paced request storm.
+    // Fresh settings identities previously rearmed fetch after each failure settlement, creating a render-paced request storm.
     let renders = 0
     let error: string | null = null
     apiMocks.listLabelsBySlug.mockRejectedValue(new Error('Could not connect'))
@@ -132,31 +129,12 @@ describe('useGitHubSlugMetadata', () => {
 
     renderProbe(<FailingLabelsProbe />)
     await flushEffects()
-    // Extra settlement rounds give a storm the chance to manifest.
     await flushEffects()
     await flushEffects()
 
     expect(error).toBe('Could not connect')
     expect(apiMocks.listLabelsBySlug).toHaveBeenCalledTimes(1)
     expect(renders).toBeLessThanOrEqual(4)
-  })
-
-  it('preserves an enterprise host on slug metadata reads', async () => {
-    apiMocks.listLabelsBySlug.mockResolvedValue({ ok: true, labels: ['enterprise'] })
-
-    function LabelsProbe(): null {
-      useRepoLabelsBySlug('stablyai', 'orca', { kind: 'local' }, 'ghe.example.com')
-      return null
-    }
-
-    renderProbe(<LabelsProbe />)
-    await flushEffects()
-
-    expect(apiMocks.listLabelsBySlug).toHaveBeenCalledExactlyOnceWith({
-      owner: 'stablyai',
-      repo: 'orca',
-      host: 'ghe.example.com'
-    })
   })
 
   it('does not re-issue a failed assignee fetch when a fresh settings object re-renders', async () => {

@@ -40,8 +40,7 @@ export function useAutomationsPageRefresh({
     isLoading,
     automationHostTargetKey,
     setRelativeNow,
-    runHistoryReloadToken,
-    workspaceNameCacheRef
+    runHistoryReloadToken
   } = local
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
@@ -51,8 +50,7 @@ export function useAutomationsPageRefresh({
     async (options?: { awaitExternalManagers?: boolean }): Promise<void> => {
       setIsLoading(true)
       const pendingNavigation = useAppStore.getState().pendingAutomationRunNavigation
-      // Until a navigation names a host, the desktop is the only authority the
-      // legacy unscoped arm can address without guessing.
+      // Until navigation names a host, only the desktop’s legacy unscoped arm can be addressed without guessing.
       const target = pendingNavigation
         ? getAutomationListedTargetFromHostId(pendingNavigation.hostId, useAppStore.getState())
         : { kind: 'local' as const }
@@ -135,20 +133,15 @@ export function useAutomationsPageRefresh({
     refresh,
     runtimeEnvironments
   ])
-  useEffect(() => {
-    for (const [workspaceId, worktree] of store.worktreeMap) {
-      const displayName = worktree.displayName.trim()
-      if (displayName) {
-        workspaceNameCacheRef.current.set(workspaceId, displayName)
-      }
-    }
-  }, [store.worktreeMap, workspaceNameCacheRef])
   useSelectedAutomationRunHistory({
     selected: selectedRow,
+    selection: { automationId: store.selectedId, rowKey: local.selectedRowKey },
+    retained: local.selectedAutomationRuns,
     context: destination.automationDispatchContext,
     legacyTarget: automationHostTargetFor,
     navigation: pendingAutomationRunNavigation,
     reloadToken: runHistoryReloadToken,
+    acquisitionToken: local.runHistoryAcquisitionToken,
     onSettled: local.setSelectedAutomationRuns
   })
   useEffect(() => {

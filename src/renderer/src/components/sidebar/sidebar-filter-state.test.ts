@@ -62,12 +62,12 @@ describe('isDefaultBranchWorkspace', () => {
     expect(isDefaultBranchWorkspace(detached, gitRepo)).toBe(false)
   })
 
-  it('returns true for a folder project root, which has no branch', () => {
+  it('returns false for a folder project root, which has no branch', () => {
     const folder = makeWorktree('folder')
     folder.isMainWorktree = true
     folder.branch = ''
     folder.head = ''
-    expect(isDefaultBranchWorkspace(folder, { kind: 'folder' })).toBe(true)
+    expect(isDefaultBranchWorkspace(folder, { kind: 'folder' })).toBe(false)
   })
 
   it('returns false for non-main worktrees even on the default branch', () => {
@@ -89,9 +89,7 @@ describe('sidebarHasActiveFilters', () => {
   })
 
   it('returns true when only hideDefaultBranchWorkspace is active', () => {
-    // Why: regression guard for the empty-sidebar escape hatch. If hide is
-    // omitted from the filter union, a user whose only worktree is the
-    // default-branch row sees "No workspaces found" with no way back.
+    // Default-branch-only accounts still need Clear Filters as an escape hatch.
     expect(sidebarHasActiveFilters(filterState({ hideDefaultBranchWorkspace: true }))).toBe(true)
   })
 
@@ -139,7 +137,6 @@ describe('sidebarHasActiveFilters', () => {
   })
 })
 
-// The setters Clear filters calls, in order.
 function clearedSetters(state: FilterState): string[] {
   const called: string[] = []
   const record = (name: string) => () => void called.push(name)

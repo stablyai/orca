@@ -1,10 +1,9 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import type { Tab } from '../../../../../shared/tab-types'
 
-// Which markers still count for a workspace: only those on a tab it still owns, so a marker
-// orphaned by a closed tab or a superseded session can neither light nor hold its dot.
+// Only markers owned by live tabs count; closed tabs and superseded sessions cannot light or hold workspace dots.
 
 type MarkerRecord = Readonly<Record<string, StoredAgentAttentionUnread>>
 

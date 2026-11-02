@@ -156,8 +156,7 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
                 )}
               />
             </div>
-            {/* Why: a third column would squeeze all three; a full-width row
-                below keeps the pair's divider and reads as one list. */}
+            {/* Put the third benefit below at full width so it cannot squeeze the existing pair. */}
             <AccountBenefit
               icon={BookOpen}
               className="border-t border-border/60 pt-5"

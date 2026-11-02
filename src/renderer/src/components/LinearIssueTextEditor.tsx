@@ -1,3 +1,5 @@
+import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
@@ -24,7 +26,6 @@ import { defaultScopeSource } from '@/lib/default-creation-host'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue
-  onIssueChange: (patch: Pick<LinearIssue, 'title'> | Pick<LinearIssue, 'description'>) => void
   density?: 'page' | 'drawer'
   fields?: 'all' | 'title' | 'description'
   sourceContext?: TaskSourceContext | null
@@ -32,14 +33,12 @@ type LinearIssueTextEditorProps = {
 
 export function LinearIssueTextEditor({
   issue,
-  onIssueChange,
   density = 'page',
   fields = 'all',
   sourceContext
 }: LinearIssueTextEditorProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
-  const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
   const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
   const lastIssueIdRef = useRef(issue.id)
@@ -47,8 +46,7 @@ export function LinearIssueTextEditor({
   const resolvedDraftState = resolveLinearIssueTextDraftState(draftState, issue)
   const issueChanged = draftState.issueId !== issue.id
   if (resolvedDraftState !== draftState) {
-    // Why: Linear can push updated title/description while another field has
-    // unsaved edits; reconcile only untouched drafts before the next paint.
+    // Reconcile untouched drafts before paint without clobbering unsaved fields when Linear pushes changes.
     setDraftState(resolvedDraftState)
     if (issueChanged && savingField !== null) {
       setSavingField(null)
@@ -98,38 +96,23 @@ export function LinearIssueTextEditor({
 
       const { patch } = savePlan
       setSavingField(field)
-      onIssueChange(patch)
-      patchLinearIssue(issue.id, patch)
       try {
-        const result = await linearUpdateIssue(providerSettings, issue.id, patch, issue.workspaceId)
+        const result = await writeLinearIssue(issue, patch, providerSettings, () =>
+          linearUpdateIssue(providerSettings, issue.id, patch, issue.workspaceId)
+        )
         if (!result.ok) {
-          throw new Error(result.error)
+          throw new Error(taskProviderErrorMessage(result))
         }
       } catch (error) {
-        const revert =
-          field === 'title'
-            ? ({ title: issue.title } as const)
-            : ({ description: issue.description ?? '' } as const)
-        const stillEditingIssue = mountedRef.current && lastIssueIdRef.current === issue.id
-        if (stillEditingIssue) {
-          onIssueChange(revert)
-        }
-        patchLinearIssue(issue.id, revert)
-        if (stillEditingIssue) {
-          if (field === 'title') {
-            updateTitleDraft(issue.title)
-          } else {
-            updateDescriptionDraft(issue.description ?? '')
-          }
-        }
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
-                'auto.components.LinearIssueTextEditor.e8ff595db3',
-                'Failed to update {{value0}}',
-                { value0: field }
-              )
+            : field === 'title'
+              ? translate('taskProviders.linear.titleUpdateFailed', 'Failed to update title')
+              : translate(
+                  'taskProviders.linear.descriptionUpdateFailed',
+                  'Failed to update description'
+                )
         )
       } finally {
         if (mountedRef.current && lastIssueIdRef.current === issue.id) {
@@ -137,20 +120,7 @@ export function LinearIssueTextEditor({
         }
       }
     },
-    [
-      descriptionDraft,
-      issue.description,
-      issue.id,
-      issue.title,
-      issue.workspaceId,
-      mountedRef,
-      onIssueChange,
-      patchLinearIssue,
-      providerSettings,
-      titleDraft,
-      updateDescriptionDraft,
-      updateTitleDraft
-    ]
+    [descriptionDraft, issue, mountedRef, providerSettings, titleDraft, updateTitleDraft]
   )
 
   const handleDescriptionKeyDown = useCallback(
@@ -203,8 +173,7 @@ export function LinearIssueTextEditor({
               'auto.components.LinearIssueTextEditor.04d73b72dc',
               'Issue title'
             )}
-            // field-sizing:content grows the title with its text and re-wraps on
-            // container resize without a JS measure pass.
+            // CSS field sizing grows and rewraps titles without JS measurement.
             className={cn(
               'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0 text-foreground outline-none transition hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
               '[field-sizing:content]',

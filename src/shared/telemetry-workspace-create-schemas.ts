@@ -9,9 +9,7 @@ import {
   type WorktreeCreatePhase
 } from './worktree/create-timing-vocabulary'
 
-// Why numbers and closed enums only: these fields explain where create time went on real
-// machines; a path, branch, ref or error string would identify the repo, so none may appear.
-// Every field is optional: folder workspaces and creates outside the timed paths omit them.
+// Numbers and closed enums exclude repo-identifying paths/branches/refs/errors. Fields are optional for folder workspaces and untimed creates.
 
 const durationMsSchema = z.number().int().nonnegative().optional()
 
@@ -25,8 +23,7 @@ export const WORKTREE_COUNT_BUCKETS = [
   '1001+'
 ] as const
 
-/** Files the main repo tracks (its index entry count); checkout cost grows with it, and these split
- *  small projects, typical apps, kernel-sized repos, large monorepos and the very largest. */
+/** Tracked index-entry buckets separate repo sizes that drive checkout cost. */
 export const REPO_FILE_COUNT_BUCKETS = ['<1k', '1k-10k', '10k-100k', '100k-500k', '500k+'] as const
 
 export const POST_CHECKOUT_HOOK_PRESENCE_VALUES = [
@@ -55,7 +52,6 @@ const phaseDurationProperties = {
   spawn_startup_terminal_ms: durationMsSchema
 }
 
-// Compile-time: one duration key per timed phase, no more and no fewer.
 type _PhaseKeys = `${WorktreeCreatePhase}_ms`
 type _PhaseDurationKeys = keyof typeof phaseDurationProperties
 type _PhaseDurationSync = [_PhaseKeys] extends [_PhaseDurationKeys]
@@ -68,7 +64,6 @@ void _phaseDurationSyncCheck
 
 const countSchema = z.number().int().nonnegative().optional()
 
-/** Fields both events carry: which entry point ran, where Git ran, and what competed for the disk. */
 const workspaceCreateContextProperties = {
   create_entry_point: z.enum(WORKSPACE_CREATE_ENTRY_POINTS).optional(),
   execution_host: z.enum(WORKTREE_CREATE_EXECUTION_HOSTS).optional(),
@@ -79,7 +74,6 @@ const workspaceCreateContextProperties = {
   concurrent_preparations: countSchema
 }
 
-/** The prepared-checkout outcome, sent on success and failure alike. */
 const preparedCheckoutProperties = {
   prepared_checkout: z.enum(['hit', 'miss']).optional(),
   /** Hit only: the reset the prepared checkout needed before it was handed over. */

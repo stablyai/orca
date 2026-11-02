@@ -1,15 +1,4 @@
-/**
- * Memory-leak + correctness regression: `ambiguousOwnerWarnedWorktreeIds` is a
- * module-scope map that had no `delete` anywhere.
- *
- * `warnAmbiguousOwnerOnce` adds a worktree id so the "identity is ambiguous
- * across hosts" warning is emitted once per workspace rather than on every PTY
- * activity bump. Both removal paths prune ~20 other per-worktree collections and
- * skipped this one, so ids accumulated for the life of the renderer — and, because
- * membership is what suppresses the warning, a workspace whose id came back (paths
- * are recreated, so worktree ids are recycled) could never warn again even when it
- * was genuinely ambiguous a second time.
- */
+/** Purge module-level ambiguous-owner warning keys on both removal paths. Otherwise IDs leak forever and recreated workspaces cannot report newly ambiguous ownership. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 

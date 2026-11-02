@@ -17,7 +17,7 @@ import {
   unqualifyOrcadMigrationOwnerKey
 } from './orcad-source-scope'
 
-/** On a copy of the profile only: the client state an earlier migration moved. */
+/** Mutate a delta-view copy only. */
 export function subtractOrcadMigrationClientState(
   state: PersistedState,
   manifest: OrcadMigrationManifest
@@ -89,7 +89,7 @@ function subtractCloseIntents(
     const destinationEntries = next[destinationEnvironmentId] ?? []
     const existing = destinationEntries.find(samePage)
     if (sourceIndex === -1) {
-      // A retry after the moving write flushed: the identical intent already sits at the destination.
+      // A flushed retry may already have installed the identical destination intent.
       if (existing && serializeOrcadMigrationValue(existing) === expected) {
         continue
       }

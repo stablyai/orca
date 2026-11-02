@@ -1,56 +1,70 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import {
-  getAiVaultWslHomeDirs,
-  invalidateAiVaultSessionListCache
-} from '../ai-vault/cached-session-list'
-import { deleteAiVaultSessionFile } from '../ai-vault/session-delete'
-import { invalidateSessionParseCacheEntry } from '../ai-vault/session-scanner-parse-cache'
-import { invalidateAiVaultBackgroundCache } from '../ai-vault/session-scanner-background'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+  configureRemoteAiVaultSessionDelete,
+  deleteHostAiVaultSession
+} from '../ai-vault/host-session-delete'
+import { parseRoutableExecutionHostId } from '../../shared/execution-host'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
 } from '../../shared/ai-vault-session-deletion'
 
+export type RuntimeAiVaultSessionDeleter = (
+  environmentId: string,
+  args: AiVaultDeleteSessionArgs
+) => Promise<AiVaultDeleteSessionResult>
+
 // Inject invalidation because ai-vault.ts owns the multi-host cache choice.
 type AiVaultDeleteDeps = {
   invalidateMultiHostListCache: () => void
   invalidateBackgroundCache?: (paths: string[]) => Promise<void>
+  deleteRuntimeSession?: RuntimeAiVaultSessionDeleter
 }
+
+let runtimeSessionDeleter: RuntimeAiVaultSessionDeleter | undefined
+
+/** Main wires the saved-server transport here; without it a server-hosted row cannot be deleted. */
+export function configureRuntimeAiVaultSessionDelete(
+  deleter: RuntimeAiVaultSessionDeleter | undefined
+): void {
+  runtimeSessionDeleter = deleter
+}
+
+const moveToTrash = (removal: { path: string }): Promise<void> => shell.trashItem(removal.path)
 
 export function registerAiVaultDeleteHandler(deps: AiVaultDeleteDeps): void {
   ipcMain.handle('aiVault:deleteSession', (_event, args?: AiVaultDeleteSessionArgs) =>
     deleteAiVaultSession(args, deps)
   )
+  // A paired client deleting on this desktop gets the same Trash and cache fencing as a local delete.
+  configureRemoteAiVaultSessionDelete({
+    removePath: moveToTrash,
+    invalidateMultiHostListCache: deps.invalidateMultiHostListCache,
+    invalidateBackgroundCache: deps.invalidateBackgroundCache
+  })
 }
 
-/** Adapt IPC input for the validating executor and invalidate caches only after deletion. */
+/** Delete on the session's own host: this computer's Trash, or the owning runtime's RPC. */
 export async function deleteAiVaultSession(
   args: AiVaultDeleteSessionArgs | undefined,
   deps: AiVaultDeleteDeps
 ): Promise<AiVaultDeleteSessionResult> {
-  // Default absent payload fields because the validator destructures its input.
-  const wslHomeDirs = await getAiVaultWslHomeDirs()
-  const result = await deleteAiVaultSessionFile({
-    agent: args?.agent as AiVaultAgent,
-    sessionId: args?.sessionId,
-    filePath: args?.filePath ?? '',
-    executionHostId: args?.executionHostId,
-    wslHomeDirs
-  })
-
-  if (result.outcome === 'deleted') {
-    // Invalidate desktop, shared runtime/mobile and raw-path parse caches to prevent resurrection.
-    deps.invalidateMultiHostListCache()
-    invalidateAiVaultSessionListCache()
-    // Use the scanner's raw key; path normalization could miss its parse-cache entry.
-    invalidateSessionParseCacheEntry(args?.filePath ?? '')
-    await (deps.invalidateBackgroundCache ?? invalidateAiVaultBackgroundCache)([
-      args?.filePath ?? ''
-    ]).catch((error) => {
-      console.warn('[ai-vault] background cache invalidation failed:', error)
-    })
+  const host = parseRoutableExecutionHostId(args?.executionHostId)
+  if (args && host?.kind === 'runtime') {
+    const deleteRuntimeSession = deps.deleteRuntimeSession ?? runtimeSessionDeleter
+    if (!deleteRuntimeSession) {
+      return { outcome: 'rejected', agent: args.agent, reason: 'non-local-host' }
+    }
+    const result = await deleteRuntimeSession(host.environmentId, args)
+    if (result.outcome === 'deleted') {
+      // Full invalidation also fences scans already in flight from re-caching the deleted row.
+      deps.invalidateMultiHostListCache()
+    }
+    return result
   }
-
-  return result
+  return deleteHostAiVaultSession(args, {
+    removePath: moveToTrash,
+    invalidateMultiHostListCache: deps.invalidateMultiHostListCache,
+    invalidateBackgroundCache: deps.invalidateBackgroundCache
+  })
 }

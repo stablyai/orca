@@ -66,7 +66,7 @@ describe('paired browser creation placement', () => {
   it('stages each background link after its source before any await and keeps source, 3, 2, 1', async () => {
     const creates = [openLinkFromSource(), openLinkFromSource(), openLinkFromSource()]
     const staged = pendingCreates.map((create) => create.params.page ?? '')
-    // Why no await above: the rows exist off the synchronous part of each call.
+    // Rows must exist synchronously, before either call is awaited.
     const stagedIds = staged.map((pageId) => wrapperForRemotePage(pageId)!.id)
     expect(groupOrder(G1)).toEqual([
       SOURCE.unifiedTabId,

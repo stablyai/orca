@@ -1,20 +1,19 @@
 import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
 import { hookRowAgentPhase } from './agent-transitions'
-import { parseAskFromStatus } from './native-chat-ask'
-import { buildAskAnswerKeys, buildCodexAskAnswerKeys } from './native-chat-ask-answer'
-import { parseNativeChatApprovalEnvelope } from './native-chat-approval-envelope'
+import { parseAskFromStatus } from './native-chat/input/native-chat-ask'
+import {
+  buildAskAnswerKeys,
+  buildCodexAskAnswerKeys
+} from './native-chat/input/native-chat-ask-answer'
+import { parseNativeChatApprovalEnvelope } from './native-chat/input/native-chat-approval-envelope'
 import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
-} from './native-chat-agent-support'
+} from './native-chat/native-chat-agent-support'
 
 export type PendingPromptOption = { id: string; label: string; description?: string }
 
-/**
- * What a hook-reported terminal agent is waiting on, as one outside the window can answer it.
- * Readers must treat a kind they do not know as `unsupported`: more kinds (free text, several
- * questions) may come.
- */
+/** Remote-answerable terminal prompts; treat unknown future kinds as unsupported. */
 export type PendingPrompt =
   | {
       kind: 'approval'

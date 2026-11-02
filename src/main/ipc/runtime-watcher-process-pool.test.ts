@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
-import type { WatcherProcessSubscribeOptions } from './parcel-watcher-process-protocol'
+import { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
+import type { WatcherProcessSubscribeOptions } from './filesystem/watcher-process/parcel-watcher-process-protocol'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
   WatcherProcessSubscription
-} from './parcel-watcher-process-subscription'
+} from './filesystem/watcher-process/parcel-watcher-process-subscription'
 import { RuntimeWatcherProcessPool } from './runtime-watcher-process-pool'
 
 type InstalledSubscription = {

@@ -22,6 +22,7 @@ describe('nodeModulesAboveStore', () => {
   it('reports node_modules above the store root, not the slot-local ones', () => {
     const present = new Set([
       join('/', 'home', 'dev', 'node_modules'),
+      join('/', 'home', 'node_modules'),
       join(
         '/',
         'home',
@@ -38,7 +39,8 @@ describe('nodeModulesAboveStore', () => {
       )
     ])
     expect(nodeModulesAboveStore(slot, (path) => present.has(path))).toEqual([
-      join('/', 'home', 'dev', 'node_modules')
+      join('/', 'home', 'dev', 'node_modules'),
+      join('/', 'home', 'node_modules')
     ])
   })
 

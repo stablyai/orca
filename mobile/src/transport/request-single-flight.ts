@@ -8,11 +8,8 @@ type Deferred = {
 }
 
 type SingleFlightEntry = {
-  // The request currently on the wire for this (client, host, kind).
   current: Promise<RpcResponse>
-  // At most one trailing follow-up: every trigger that arrives while `current` is in flight coalesces
-  // here so a refresh requested mid-read still re-reads the latest state (latest params win) instead of
-  // being silently answered by the older in-flight response.
+  // Keep one trailing read with latest params so mid-flight refreshes do not receive the older response.
   followUp: { deferred: Deferred; params: unknown } | null
 }
 
@@ -55,8 +52,7 @@ export function sendSingleFlightRequest(
 
   const existing = requestsByKind.get(requestKind)
   if (existing) {
-    // A read is already on the wire: don't fire a duplicate now, but don't drop this trigger either.
-    // Record (or refresh) a single trailing follow-up that runs once the current read settles.
+    // Coalesce this trigger into one follow-up instead of duplicating or dropping it.
     if (existing.followUp) {
       existing.followUp.params = params
     } else {
@@ -81,9 +77,7 @@ export function sendSingleFlightRequest(
     }
   }
 
-  // Chain each settled request into either its queued follow-up (delivering the fresh result to every
-  // caller that awaited it) or entry teardown. Recurses so triggers arriving during a follow-up queue
-  // the next one.
+  // Deliver queued fresh results to waiting callers; triggers during a follow-up may queue another.
   const onSettled = (): void => {
     const followUp = entry.followUp
     if (!followUp) {

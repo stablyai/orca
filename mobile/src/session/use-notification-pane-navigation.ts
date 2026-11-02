@@ -1,49 +1,49 @@
+import { structuredSessionIdFromNotificationPane } from '../../../src/shared/structured-session-notification-pane'
+import type { StructuredSessionOpenSource } from '../../../src/shared/open-structured-agent-session'
 import { useEffect, useRef, useState } from 'react'
+import { useLocalSearchParams, useRouter } from 'expo-router'
+import { firstParam } from '../navigation/route-param-reader'
 import { usePageBridgeClient } from '../transport/client-context.web'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { notificationPaneTab } from './notification-pane-tab'
 
-/**
- * The pane a notification tap asked for, read off the shell rather than off a router.
- *
- * The page has no route to read `paneKey` from and no param to write back: it is one document
- * served at `/`, and `setParams` here would rewrite the document's own history entry while the
- * app's route kept the spent tap. The shell delivers the request as a
- * re-sent `init` for the session this page already holds, and tracks nothing about whether it
- * arrived — the reader erases (ruling 34), so this hook is what spends the tap.
- *
- * Two things follow from that, and both are here rather than in the shell. The erase is asked for
- * on every `init` that carries a pane, not only on the one that changed something: a clear that
- * never reached the shell leaves the param in place, and the next `init` carrying it is the repair.
- * The switch happens once per value: a re-asked `ready` is answered with the route the shell still
- * holds, and applying that again would drag the page back off a tab the user has since moved to.
- *
- * The request waits in a ref and a counter wakes the effect, rather than the request living in
- * state: a tap can arrive before the terminals have loaded, and an effect that adjusted state on
- * every delivery would render the stale selection first.
- */
+// The document at / receives pane requests through shell init, except the opening tap of a session reached by an in-page hop.
+// Erase every arrival to repair lost clears, but switch once per value so replay cannot undo a later tab pick.
+// Keep pending requests in a ref until terminal inventory arrives, avoiding a stale selection render.
 export function useNotificationPaneNavigation({
   sessionTabs,
   terminalsLoaded,
-  switchSessionTab
+  connState,
+  switchSessionTab,
+  worktreeId,
+  openNativeSession
 }: {
   sessionTabs: MobileSessionTab[]
   terminalsLoaded: boolean
+  connState?: string
   switchSessionTab: (tab: MobileSessionTab) => void
+  worktreeId?: string
+  openNativeSession?: (source: StructuredSessionOpenSource) => Promise<void>
 }) {
   const client = usePageBridgeClient()
-  // Seeded from the route this page was opened on: a tap that opened the session arrives in the
-  // first `init` and never as an update, so a hook that only listened would lose it.
-  const opened = client.getShellSession()?.route?.params?.paneKey ?? null
-  const pending = useRef(opened)
-  /** The pane this hook last acted on, so one request is not served twice. Cleared by the erase. */
+  const router = useRouter()
+  // An in-page hop (an agent row, a sender jump) carries the tap only in the page URL; the shell route never names it.
+  const urlPaneKey =
+    firstParam(useLocalSearchParams<{ paneKey?: string | string[] }>().paneKey) || null
+  // The shell's pane wins: the URL copied it at bootstrap and can be older than a later notification tap.
+  const pending = useRef(client.getShellSession()?.route?.params?.paneKey || urlPaneKey)
   const applied = useRef<string | null>(null)
   const [asked, setAsked] = useState(0)
 
   useEffect(() => {
-    // The route this page opened on is erased once, here: it arrived in the first `init`, which
-    // is not an update, so nothing below would ever name it back. Read from the client rather
-    // than from the render above, which keeps this effect keyed on the client alone.
+    // Spend the URL's tap so a remount of this screen cannot replay it over a later tab pick.
+    if (urlPaneKey !== null) {
+      router.setParams({ paneKey: undefined })
+    }
+  }, [router, urlPaneKey])
+
+  useEffect(() => {
+    // Acknowledge the initial init separately; read from the client to keep the effect keyed only on client.
     const seed = client.getShellSession()?.route?.params?.paneKey ?? null
     if (seed !== null && seed !== '') {
       client.clearRouteParam('paneKey', seed)
@@ -51,13 +51,11 @@ export function useNotificationPaneNavigation({
     return client.onRouteUpdate((route) => {
       const paneKey = route?.params?.paneKey ?? ''
       if (paneKey === '') {
-        // The shell's own erase, and every `ready` answered after it. Not a request, and what
-        // releases the next tap for the pane this one named.
+        // An erased route permits a later tap for the same pane.
         applied.current = null
         return
       }
-      // Asked for on arrival rather than on the switch below: the shell holds the request until
-      // it hears, so a clear that was lost has to be re-asked by the frame that repeats it.
+      // Retry clear on every arrival so a lost acknowledgement is repaired even when switching is deduped.
       client.clearRouteParam('paneKey', paneKey)
       if (paneKey === applied.current) {
         return
@@ -72,12 +70,43 @@ export function useNotificationPaneNavigation({
     if (paneKey === null || paneKey === '' || !terminalsLoaded) {
       return
     }
-    applied.current = paneKey
     const tab = notificationPaneTab(sessionTabs, paneKey)
-    // Held while missing: a list loaded before a reconnect can predate the agent the push names.
+    if (
+      openNativeSession &&
+      connState !== undefined &&
+      connState !== 'connected' &&
+      (tab?.type === 'agent-session' || structuredSessionIdFromNotificationPane(paneKey))
+    ) {
+      return
+    }
+    applied.current = paneKey
+    // A pre-reconnect inventory can predate the pane named by the push.
     if (tab) {
       pending.current = null
-      switchSessionTab(tab)
+      if (tab.type === 'agent-session' && openNativeSession && worktreeId) {
+        void openNativeSession({
+          kind: 'notification',
+          sessionId: tab.sessionId,
+          worktreeId,
+          agent: tab.agent
+        })
+      } else {
+        switchSessionTab(tab)
+      }
+    } else if (openNativeSession && worktreeId) {
+      const sessionId = structuredSessionIdFromNotificationPane(paneKey)
+      if (sessionId) {
+        pending.current = null
+        void openNativeSession({ kind: 'notification', sessionId, worktreeId })
+      }
     }
-  }, [asked, sessionTabs, switchSessionTab, terminalsLoaded])
+  }, [
+    asked,
+    connState,
+    sessionTabs,
+    switchSessionTab,
+    terminalsLoaded,
+    worktreeId,
+    openNativeSession
+  ])
 }

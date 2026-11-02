@@ -270,8 +270,7 @@ export function useWorktreeCardSecondaryDetails({
     })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
-  // Why: derived from the settings the card already subscribes to — a third store
-  // subscription for this one field costs a listener per card on every store write.
+  // Reuse subscribed card settings to avoid another per-card listener on every store write.
   const cacheTtlMs = showAggregateCacheTimer ? (settings?.promptCacheTtlMs ?? 0) : 0
 
   return {

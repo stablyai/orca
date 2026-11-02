@@ -1,5 +1,4 @@
-// Layout-owner builds: a phone's close of a terminal row in a workspace main owns is main's own
-// layout close, window or not, as the CLI's close by handle is.
+// In main-owned layouts, phone row closes use main's pane/tab close with or without a window.
 import { OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose } from './refuse-unattributed-mobile-session-tab-close'
 import type {
   RuntimeMobileSessionTerminalTab,
@@ -19,10 +18,7 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
     addressedPtyId: string
   ): Promise<ExplicitCloseStop>
 
-  /**
-   * Closes the row's pane (wire id `parent::leaf`) or its tab (`parent`) in main's layout. Null for
-   * a workspace main does not own and for a row its layout does not hold: today's path closes those.
-   */
+  /** Close parent::leaf as a pane or parent as a tab; null falls back for workspaces/rows main does not own. */
   protected async closeMobileRowInMainLayout(
     worktreeId: string,
     tabId: string,
@@ -51,7 +47,7 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
         leafId: row.leafId,
         wholeTab: row.id !== tabId,
         force: options.force,
-        // A lifecycle echo ("terminal gone") is no authority to stop a terminal, as today.
+        // A terminal-gone lifecycle echo does not authorize termination.
         stopEnded:
           options.localPtyTeardownOwnedExternally !== true &&
           (options.reason === undefined || options.reason === 'user')
@@ -63,12 +59,7 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
     return close
   }
 
-  /**
-   * Drops the closed rows from the phones' snapshot now. A window's rows carry main's panes only
-   * when it next publishes, so until then a closed tab would still list (and its exiting SSH
-   * terminal's registration show it again). `leafId` null: every row of the tab.
-   * Interim (ledger L260): goes once main merges its layout into the rows after each commit.
-   */
+  /** Retire rows immediately: window snapshots and exiting SSH registrations lag main's close. leafId=null retires the tab. Interim until main merges layout per commit (L260). */
   private retireMainClosedRows(worktreeId: string, tabId: string, leafId: string | null): void {
     let snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const rows = (snapshot?.tabs ?? []).filter(

@@ -83,7 +83,7 @@ function hasLiveListedTerminal(value: unknown): boolean | null {
     ) {
       return null
     }
-    // Why: old runtimes retain disconnected/null renderer placeholders; only a connected physical PTY proves liveness.
+    // Legacy disconnected/null renderer placeholders cannot prove physical PTY liveness.
     if (terminal.connected === true && typeof terminal.ptyId === 'string' && terminal.ptyId) {
       return true
     }
@@ -122,7 +122,7 @@ async function waitForLegacySleepConvergence(
         return
       }
       if (hasLiveTerminal === true) {
-        // Why: a fresh legacy list can hydrate a PTY the first graph-based stop did not know about; stop again after discovery.
+        // Legacy listing can discover a PTY the graph-based stop missed; stop again after discovery.
         await call('terminal.stop', { worktree: worktreeSelector }, legacySleepRpcTimeout(deadline))
         lastFailure = null
       } else {
@@ -147,8 +147,7 @@ function legacySleepRpcTimeout(
   return Math.min(maxTimeoutMs, remainingMs)
 }
 
-/** A paired server's terminal sleep, verified; an older server without `terminal.sleep` is stopped
- *  and polled until no terminal is live. Returns the server's own PTY handles it stopped. */
+/** Use verified terminal.sleep, or stop and poll older servers until no PTY is live; return their stopped handles. */
 export async function requestRemoteWorktreeSleep(
   call: RemoteWorkspaceCall,
   worktreeId: string
@@ -164,7 +163,7 @@ export async function requestRemoteWorktreeSleep(
     }
   }
 
-  // Why: previous runtimes lack host-authoritative discover/stop/verify; fresh polling prevents legacy stop acknowledgement from becoming a false sleeping commit.
+  // Legacy stop acknowledgements lack host verification; fresh polling must prove sleep.
   const legacyDeadline = Date.now() + LEGACY_SLEEP_TIMEOUT_MS
   await call(
     'terminal.stop',

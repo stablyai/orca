@@ -1,9 +1,9 @@
-import type { CodexAppServerConnection } from './codex-app-server-connection'
-import { isCodexAppServerRequestError } from './codex-app-server-request-error'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import {
   CodexAppServerTimeoutError,
   isCodexAppServerUnsupportedError
-} from './codex-app-server-session'
+} from './app-server/codex-app-server-session'
 import type { CodexTerminalStopSupport } from './codex-background-task-tracker'
 import { readRecord } from './codex-item-field-readers'
 import type {

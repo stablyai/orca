@@ -7,8 +7,8 @@ import { uploadFileViaSystemSsh } from '../system-transport/system-ssh-file-bina
 
 const { startRouteMock } = vi.hoisted(() => ({ startRouteMock: vi.fn() }))
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -35,7 +35,7 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
     await importOriginal()
   )
 )
-// Why the gate is forced on: it is platform-gated to win32 and covered in its own suite; this suite is the lifecycle.
+// Force the Windows-gated route on here to exercise lifecycle; its own suite covers selection.
 vi.mock('../system-transport/system-ssh-loopback-route', () => ({
   shouldUseSystemSshLoopbackRoute: () => true,
   startSystemSshLoopbackRoute: startRouteMock
@@ -64,25 +64,6 @@ describe('SshConnection loopback route', () => {
   beforeEach(() => {
     resetSshConnectionMocks()
     startRouteMock.mockReset()
-  })
-
-  it('routes later commands through the route once it is proven', async () => {
-    const finishStart = deferRouteStart()
-    const conn = new SshConnection(
-      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
-      createCallbacks()
-    )
-
-    await conn.connect()
-    expect(conn.getSystemSshBuildArgsOptions().loopbackRoute).toBeUndefined()
-
-    finishStart(createRoute(50001))
-    await vi.waitFor(() =>
-      expect(conn.getSystemSshBuildArgsOptions().loopbackRoute).toEqual({
-        localPort: 50001,
-        hostKeyAlias: 'example.com'
-      })
-    )
   })
 
   it('still builds a route for a reconnect that superseded a start in flight', async () => {

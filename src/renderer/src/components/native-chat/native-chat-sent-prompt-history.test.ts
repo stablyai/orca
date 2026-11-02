@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   nativeChatSentPrompts,
   stepNativeChatPromptRecall
@@ -51,7 +51,6 @@ describe('nativeChatSentPrompts', () => {
     expect(nativeChatSentPrompts({ messages, withoutImageMarkers: true })).toEqual([
       { id: '2', prompt: 'fix' }
     ])
-    // A marker the user typed, with no image of that number, is their text.
     const typed = [
       message('3', 'user', '[Image #1]'),
       message('4', 'user', '', { blocks: [image, { type: 'text', text: 'not [Image #2]' }] })

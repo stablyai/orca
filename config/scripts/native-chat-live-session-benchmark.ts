@@ -1,19 +1,16 @@
-/**
- * Synthetic benchmark for native chat's post-incremental renderer hot paths.
- * Run: pnpm exec tsx config/scripts/native-chat-live-session-benchmark.ts
- *
- * This excludes transcript parsing, IPC/remote latency, React, and DOM work. The
- * 2 KB/message fixtures intentionally stress fallback-key normalization and are
- * not estimates of average production message size or end-to-end frame latency.
- */
+// Run pnpm exec tsx config/scripts/native-chat-live-session-benchmark.ts. Synthetic 2KB messages stress fallback-key normalization.
+// Excludes parsing, IPC/remote latency, React/DOM; results are not average production size or end-to-end frame latency.
 
 import { deepStrictEqual, strictEqual } from 'node:assert'
 import { performance } from 'node:perf_hooks'
-import type { NativeChatMessage, NativeChatSession } from '../../src/shared/native-chat-types'
-import { getVerifiedNativeChatCommands } from '../../src/shared/native-chat-agent-profiles'
+import type {
+  NativeChatMessage,
+  NativeChatSession
+} from '../../src/shared/native-chat/native-chat-types'
+import { getVerifiedNativeChatCommands } from '../../src/shared/native-chat/native-chat-agent-profiles'
 import { surfaceSkillInvocationUserTurns } from '../../src/shared/native-chat/native-chat-command-envelope'
 import { prepareNativeChatLiveMessages } from '../../src/renderer/src/components/native-chat/native-chat-live-message-preparation'
-import { mergeNativeChatLiveSession } from '../../src/renderer/src/components/native-chat/native-chat-live-status'
+import { mergeNativeChatLiveSession } from '../../src/shared/native-chat/native-chat-live-status'
 import { assembleNativeChatSession } from '../../src/renderer/src/components/native-chat/native-chat-session-assembler'
 
 type Operation = (index: number) => number

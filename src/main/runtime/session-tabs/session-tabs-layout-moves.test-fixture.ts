@@ -1,5 +1,4 @@
-// Three saved tabs in one group, and the reorder plus Move to Split a desktop routes to main as
-// layout commands: what session.tabs readers must then list as main's groups and order.
+// Model desktop reorder/split layout commands; session.tabs must list the resulting main-owned groups/order.
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import { TEST_WORKTREE_ID } from '../orca-runtime-test-fixtures.spec'
 import {

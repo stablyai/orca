@@ -55,10 +55,6 @@ export function normalizeTerminalFileUriAuthorityPath(
   return pathText
 }
 
-export function provenancePathCandidate(pathText: string, absolutePath: string): string {
-  return pathText.startsWith('//') ? pathText : absolutePath
-}
-
 export function isLoopbackFileUriHostname(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
 }

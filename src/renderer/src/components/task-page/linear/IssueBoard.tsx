@@ -1,17 +1,17 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
 import {
   resolveLinearIssueEmptyKind,
   shouldOfferLinearIssueFetchMore
 } from './task-page-linear-issue-empty-state'
 import { Button } from '@/components/ui/button'
-import { LinearIcon } from '@/components/task-page-localized-options'
+import { LinearIcon } from '@/components/task-page/task-page-localized-options'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
 import {
   clampLinearIssueListLimit,
   LINEAR_ISSUE_LIST_MAX
 } from '../../../../../shared/linear/issue-read-limits'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import { TaskPageLinearIssueBoardColumns } from './IssueBoardColumns'
 import { TaskPageLinearIssueTable } from './IssueTable'
 export function TaskPageLinearIssueBoard({

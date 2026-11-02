@@ -84,7 +84,7 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
     addedAt: Date.UTC(2026, 4, 24),
     externalWorktreeVisibility: 'hide',
     externalWorktreeVisibilityPromptDismissedAt: 1,
-    // Why: the inbox already stopped announcing this path; recovery must not depend on it.
+    // Recovery must work after the inbox has stopped announcing this path.
     externalWorktreeInboxBaselinePaths: [SCRATCH_PATH],
     ...overrides
   }
@@ -187,7 +187,7 @@ function deferred<T>() {
 }
 
 function buttonWithText(text: string): HTMLButtonElement {
-  // Why: the source rows' own Show / Hide segments share their text with the recovery rows.
+  // Recovery buttons share labels with source segments; exclude source controls.
   const button = [...document.querySelectorAll('button:not([data-visibility])')].find(
     (candidate) => (candidate.textContent ?? '').trim() === text
   )
@@ -207,7 +207,6 @@ function sourceSegment(label: string, visibility: 'show' | 'hide'): HTMLButtonEl
   return control
 }
 
-/** The Show segment, whose aria-checked mirrors whether the source is shown. */
 const sourceSwitch = (label = 'Claude Code'): HTMLButtonElement => sourceSegment(label, 'show')
 
 function sourceRow(label: string): HTMLElement {
@@ -218,7 +217,6 @@ function sourceRow(label: string): HTMLElement {
   return row
 }
 
-/** A project with no opinion of its own, under a global default that shows only Claude Code. */
 function inheritEverythingFromGlobal(): void {
   mocks.state.repos = [makeRepo({ externalWorktreeVisibility: undefined })]
   mocks.state.settings = {
@@ -322,7 +320,6 @@ describe('WorktreeVisibilityDialog', () => {
   })
 
   it('recovers a hidden worktree per path through the existing import exception', async () => {
-    // Why: individual recovery remains available while the repo-wide policy is off.
     await renderDialog()
 
     await click(buttonWithText('Show'))
@@ -370,7 +367,6 @@ describe('WorktreeVisibilityDialog', () => {
       "Could not list this repo's worktrees."
     )
 
-    // Why: a successful authoritative refetch also writes the trusted snapshot.
     mocks.state.fetchWorktrees.mockImplementation(async () => {
       mocks.state.detectedWorktreesByRepo = { 'repo-1': makeDetected() }
       return true
@@ -382,8 +378,7 @@ describe('WorktreeVisibilityDialog', () => {
   })
 
   it('keeps rows visible but not actionable until the open-time scan settles', async () => {
-    // Why: a Show clicked mid-scan could join the pre-write refetch and read
-    // success off a list computed before the import landed — a silent no-op.
+    // Mid-scan writes must not reuse a pre-write confirmation fetch and falsely report successful recovery.
     mocks.state.fetchWorktrees.mockImplementation(() => new Promise(() => {}))
     await renderDialog()
 
@@ -393,7 +388,7 @@ describe('WorktreeVisibilityDialog', () => {
   })
 
   it('locks the repo-wide toggle until the open-time scan settles', async () => {
-    // Why: its post-write refresh must not coalesce onto a list started before the visibility write.
+    // Post-write refresh must not coalesce onto scans started before the visibility write.
     mocks.state.fetchWorktrees.mockImplementation(() => new Promise(() => {}))
     await renderDialog()
 
@@ -401,8 +396,7 @@ describe('WorktreeVisibilityDialog', () => {
   })
 
   it('reports a failed refresh even while an older trusted snapshot is on screen', async () => {
-    // Why: a warm snapshot must not present stale rows as current with no
-    // failure indication when the host has since become unreachable.
+    // Warm snapshots need failure indicators when the host has since become unreachable.
     mocks.state.fetchWorktrees.mockResolvedValue(false)
     await renderDialog()
 
@@ -413,8 +407,7 @@ describe('WorktreeVisibilityDialog', () => {
   })
 
   it('locks retry while a row import is in flight, so it cannot race the write', async () => {
-    // Why: a retry scan started before the import's write lands can absorb the
-    // import's own refetch and report success off a pre-import list.
+    // Retry must not start a pre-import scan that absorbs the import’s confirmation refresh.
     mocks.state.fetchWorktrees.mockResolvedValue(false)
     mocks.state.updateRepo.mockImplementation(() => new Promise(() => {}))
     await renderDialog()
@@ -630,7 +623,6 @@ describe('WorktreeVisibilityDialog', () => {
 
     await renderDialog()
 
-    // Why: a row that still follows Global Settings says nothing extra — the segment is the whole story.
     expect(sourceRow('Claude Code').textContent).not.toContain('Overriding global setting')
     expect(sourceRow('GSD').textContent).not.toContain('Overriding global setting')
     expect(sourceRow('Other locations').textContent).not.toContain('Overriding global setting')
@@ -694,7 +686,7 @@ describe('WorktreeVisibilityDialog', () => {
 
   it('migrates legacy Always show to both built-in source rows', async () => {
     mocks.state.repos = [makeRepo({ agentWorktreeVisibility: 'show' })]
-    // Why: global must also be Show here, or hiding one row would revert to it instead of overriding.
+    // Global must also show so hiding creates an override rather than reverting to inheritance.
     mocks.state.settings = {
       worktreeVisibilityDefaults: {
         external: 'hide',
@@ -717,7 +709,7 @@ describe('WorktreeVisibilityDialog', () => {
 
   it('keeps ordinary non-Orca visibility on its own source row', async () => {
     mocks.state.repos = [makeRepo({ externalWorktreeVisibility: 'show' })]
-    // Why: global must also be Show here, or hiding the row would revert to it instead of overriding.
+    // Global must also show so hiding creates an override rather than reverting to inheritance.
     mocks.state.settings = { worktreeVisibilityDefaults: { external: 'show' } }
     await renderDialog()
 

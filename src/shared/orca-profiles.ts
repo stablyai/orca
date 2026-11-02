@@ -79,8 +79,7 @@ export type OrcaProfileListState = {
 }
 
 export type OrcaProfileListResult = OrcaProfileListState & {
-  // Why: gates the full multi-profile switcher UI; default builds show a
-  // single-profile account menu instead.
+  // Gate the multi-profile switcher; default builds use one-profile account menus.
   multiProfileUi: boolean
 }
 
@@ -243,13 +242,11 @@ export type RefreshCurrentOrcaProfileAuthResult =
       error: string
     }
 
-// Why: organization roles are a fixed server-side enum; the desktop UI mirrors
-// exactly these three so role selects can't drift from what the API accepts.
+// Mirror the server’s fixed role enum so UI options cannot drift from accepted API values.
 export type OrcaOrgRole = 'owner' | 'admin' | 'member'
 
 export type OrcaOrgMember = {
-  // Why: null for teammates provisioned server-side who never signed into Orca;
-  // mutation actions are disabled for them since the API keys on a real userId.
+  // Provisioned teammates without sign-in have no userId; disable mutations requiring that key.
   userId: string | null
   email: string
   displayName?: string

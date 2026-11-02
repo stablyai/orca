@@ -1,23 +1,6 @@
-/**
- * Repro + recovery for the dead-push-delivery wedge (field snapshot,
- * v1.4.121-rc.0, 2026-07-06): every `pty:data` push event vanishes before the
- * renderer processes it while invoke IPC stays healthy — terminals go
- * literally blank (bytes sent, never consumed, never ACKed) and previously
- * only a renderer reload recovered.
- *
- * The `__terminalDeliveryWatchdog.blackhole` hook drops incoming pty:data at
- * the dispatcher exactly as the field failure does (no receive count, no ACK,
- * no handler). The watchdog must then confirm the wedge over invoke, write off
- * the lost bytes in main, and repaint the pane from the main-owned buffer
- * snapshot — all WITHOUT the push channel and WITHOUT a reload. The wedged
- * output becomes visible while the blackhole is still engaged: that is the
- * pull-recovery proof.
- *
- * Timing: the watchdog runs at 500ms ticks here, but main refuses a write-off
- * until it has seen 10s of ACK silence (PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS,
- * a deliberate prod constant) — so recovery lands at ~11-13s and the polls
- * below allow 30s.
- */
+// v1.4.121-rc.0 (2026-07-06): pty:data pushes vanished while invoke stayed healthy, leaving unconsumed/unACKed output.
+// Blackhole dispatcher receipt/ACK/handling; require invoke-based watchdog confirmation and main write-off/snapshot-restore without push or reload.
+// At 500ms ticks, production’s 10s minimum ACK silence yields ~11–13s healing; allow 30s.
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
 import {
@@ -61,14 +44,12 @@ test.describe('terminal push-delivery loss recovery', () => {
     await waitForActiveTerminalManager(orcaPage)
     const ptyId = await waitForActivePanePtyId(orcaPage)
 
-    // Live baseline: push delivery works. The $((…)) arithmetic keeps the
-    // asserted string out of the typed command's local echo.
+    // Arithmetic keeps the asserted baseline out of command echo.
     await execInTerminal(orcaPage, ptyId, 'echo live-before-$((41+1))')
     await expect
       .poll(async () => getTerminalContent(orcaPage), { timeout: 15_000 })
       .toContain('live-before-42')
 
-    // Engage the field wedge and speed the watchdog up for CI.
     await orcaPage.evaluate(() => {
       const watchdog = (window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog
       if (!watchdog) {
@@ -80,16 +61,11 @@ test.describe('terminal push-delivery loss recovery', () => {
 
     await execInTerminal(orcaPage, ptyId, 'echo wedged-$((100+23))')
 
-    // The wedge repro itself: output is swallowed, pane stays stale.
     await orcaPage.waitForTimeout(1_500)
     expect(await getTerminalContent(orcaPage)).not.toContain('wedged-123')
 
-    // Recovery proof: the watchdog confirms the wedge over invoke and heals
-    // (write-off + snapshot-restore request) without push or reload. We assert
-    // the heal, not 'wedged-123' in the pane: in headless e2e a desktop-only
-    // local pty has no main headless emulator, so getMainBufferSnapshot (the
-    // repaint source) falls back to the blackholed renderer xterm and cannot
-    // carry the wedged bytes (serializeHiddenOutputRecoveryBuffer fallback).
+    // Assert invoke heal/write-off/restore request, not wedged pane text: desktop-only local PTYs lack a main emulator in headless E2E.
+    // Their snapshot fallback serializes blackholed renderer xterm, which cannot contain the withheld bytes.
     await expect
       .poll(
         async () =>
@@ -102,7 +78,6 @@ test.describe('terminal push-delivery loss recovery', () => {
       )
       .toBeGreaterThan(0)
 
-    // Channel restored: live output flows again with no reload in between.
     await orcaPage.evaluate(() => {
       ;(window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog?.blackhole(false)
     })

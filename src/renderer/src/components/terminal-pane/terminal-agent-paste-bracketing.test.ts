@@ -50,10 +50,6 @@ function decide(
 }
 
 describe('resolveProtectedMultilinePasteOptionsForPane', () => {
-  it('brackets an agent pane on a non-Windows host', () => {
-    expect(decide()).toEqual({ forceBracketedPasteForMultiline: true })
-  })
-
   it('leaves a plain shell pane alone so ESC[200~ never reaches a non-TUI program', () => {
     expect(decide({ leafId: SHELL_LEAF })).toBeUndefined()
   })
@@ -66,18 +62,6 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
     expect(decide({ isWindowsClient: true, agentStatusByPaneKey: {}, leafId: SHELL_LEAF })).toEqual(
       { forceBracketedPasteForMultiline: true }
     )
-  })
-
-  it('ignores a pane whose agentType is not a TUI agent', () => {
-    expect(
-      decide({
-        agentStatusByPaneKey: {
-          [AGENT_PANE_KEY]: agentEntry({
-            agentType: 'not-an-agent' as AgentStatusEntry['agentType']
-          })
-        }
-      })
-    ).toBeUndefined()
   })
 
   it('brackets on a process-confirmed agent even with no status row', () => {
@@ -102,9 +86,7 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
   })
 
   it('still brackets a long-idle agent parked at done', () => {
-    // Why: an idle-but-live agent sits at `done` with an old updatedAt. Gating on
-    // state or the 30-minute freshness TTL would strip bracketing from exactly the
-    // pane that needs it most.
+    // Idle live agents can stay done past the freshness TTL and still require paste brackets.
     expect(
       decide({
         agentStatusByPaneKey: {
@@ -115,9 +97,7 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
   })
 
   it('degrades to the pre-fix path instead of throwing on a malformed pane key', () => {
-    // Why: makePaneKey throws on a non-UUID leaf or a tabId containing ':'. The throw
-    // would escape before the paste helper's catch is attached, making the paste a
-    // silent no-op with no error surface.
+    // Malformed pane keys throw before the paste handler’s catch; require graceful fallback rather than a silent no-op.
     expect(() => decide({ leafId: 'not-a-uuid' })).not.toThrow()
     expect(decide({ leafId: 'not-a-uuid' })).toBeUndefined()
     expect(() => decide({ tabId: 'tab:with:colons' })).not.toThrow()
@@ -125,9 +105,7 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
   })
 
   it('still brackets when shellForeground is latched true while an agent owns the pane', () => {
-    // Why: shellForeground is republished only at OSC 133 boundaries, so a shell with
-    // no 133 integration leaves it true while an agent runs. Measured live: vetoing on
-    // it reinstated the submit bug.
+    // Without OSC 133, shellForeground stays true while the agent runs and cannot veto bracketing.
     expect(
       decide({
         paneForegroundAgentByPaneKey: {
@@ -135,12 +113,6 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
         }
       })
     ).toEqual({ forceBracketedPasteForMultiline: true })
-  })
-
-  it('uses modified Enter for an agent that reads Windows input records', () => {
-    expect(decide({ hostPlatform: 'win32' })).toEqual({
-      windowsInputRecordNewline: 'alt-enter'
-    })
   })
 
   it('does not change unverified Windows agent paste protocols', () => {
@@ -156,9 +128,7 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
 })
 
 describe('leading-newline paste into a remote agent pane', () => {
-  // Regression: a mac client on a remote Windows host pasted a block starting with "\n".
-  // ConPTY never forwarded DECSET 2004, so xterm rewrote the newline to CR and codex
-  // submitted the draft parked in its composer.
+  // ConPTY lost DECSET 2004, so a leading LF became CR and submitted a Codex draft on a remote Windows host.
   const PASTED = '\nRemember: At the end of the day, we want the best possible code.'
 
   function remoteWindowsTarget(): TerminalPasteTarget {

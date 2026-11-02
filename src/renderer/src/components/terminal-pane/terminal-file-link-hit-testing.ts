@@ -1,10 +1,10 @@
-import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
 import {
   readTerminalPathExistence,
   type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
-import type { IBufferLine, IBufferRange } from '@xterm/xterm'
-import { extractTerminalFileLinkCandidates } from '@/lib/terminal-links'
+import type { IBufferLine } from '@xterm/xterm'
+import { findTerminalFileLinksAtBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
+import { terminalLogicalLinkHasOscLink } from '../../../../shared/terminal-osc-link-cells'
 import {
   getTerminalFileContext,
   openDetectedFilePath,
@@ -20,15 +20,8 @@ import {
   type FileLinkTarget
 } from './terminal-file-link-target'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
-import { terminalLogicalLinkHasOscLink } from './terminal-osc-link-cells'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import {
-  buildHardWrappedPathLogicalLineCandidates,
-  buildWrappedLogicalLine,
-  rangeForParsedFileLink,
-  type WrappedLogicalLine
-} from './wrapped-terminal-link-ranges'
 
 type FileLinkHitTestDeps = {
   startupCwd: string
@@ -49,6 +42,8 @@ type ClickedFileLink = FileLinkTarget & {
   pathText: string
   cachedExists: boolean | undefined
   hasOscLink: boolean
+  /** Opens only once the host has found its file. */
+  guess: boolean
 }
 
 // Why: a slow probe from an earlier click must not open its file after a later click.
@@ -61,42 +56,45 @@ export function openFilePathLinkAtBufferPosition(
   deps: FileLinkHitTestDeps
 ): boolean {
   const gesture = ++latestClickGesture
+  const host: FileLinkHost = { ...deps, cwd: deps.startupCwd, homePath: deps.terminalHomePath }
+  const readings = findTerminalFileLinksAtBufferPosition(buffer, position, terminalColumns)
   const links: ClickedFileLink[] = []
-  for (const logicalLine of buildCandidateLogicalLinesForBufferPosition(buffer, position.y)) {
-    for (const parsed of extractTerminalFileLinkCandidates(logicalLine.text)) {
-      const target = resolveFileLinkTarget(parsed, {
-        cwd: deps.startupCwd,
-        homePath: deps.terminalHomePath,
-        worktreeId: deps.worktreeId,
-        worktreePath: deps.worktreePath,
-        runtimeEnvironmentId: deps.runtimeEnvironmentId,
-        wslDistro: deps.wslDistro
-      })
-      if (!target) {
-        continue
-      }
-      const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
-      if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
-        continue
-      }
-      links.push({
-        ...target,
-        pathText: parsed.pathText,
-        cachedExists: deps.pathExistsCache
-          ? readTerminalPathExistence(deps.pathExistsCache, target.cacheKey)
-          : undefined,
-        hasOscLink: terminalLogicalLinkHasOscLink(
-          buffer,
-          logicalLine,
-          parsed.startIndex,
-          parsed.endIndex
-        )
-      })
+  for (const [parsed, guess] of [
+    ...readings.links.map((link) => [link, false] as const),
+    ...readings.guesses.map((link) => [link, true] as const)
+  ]) {
+    const target = resolveFileLinkTarget(parsed, host)
+    const cachedExists =
+      target && deps.pathExistsCache
+        ? readTerminalPathExistence(deps.pathExistsCache, target.cacheKey)
+        : undefined
+    // Why: a guess the host may not be asked about (an external share) can never be confirmed.
+    if (
+      !target ||
+      (guess && cachedExists !== true && !mayCheckFileLinkTargetUnprompted(target, host))
+    ) {
+      continue
     }
+    links.push({
+      ...target,
+      pathText: parsed.pathText,
+      cachedExists,
+      guess,
+      hasOscLink: terminalLogicalLinkHasOscLink(
+        buffer,
+        parsed.logicalLine,
+        parsed.startIndex,
+        parsed.endIndex
+      )
+    })
   }
 
-  // Why: a failure names the path the user sees, not a longer joined guess.
-  const shown = shortestPath(links)
+  // Why: only a written path or a confirmed guess takes the click; prose beside a path stays ordinary text.
+  if (!links.some((link) => !link.guess || link.cachedExists === true)) {
+    return false
+  }
+  // Why: a failure names the path the user sees, never a guess.
+  const shown = shortestPath(links.filter((link) => !link.guess))
   const open = (link: ClickedFileLink, verified = link.cachedExists === true): void => {
     const { onOpenFailure } = deps
     // Why: a bare dotted word (`console.log`, `example.com`) is not a claim that a file exists.
@@ -110,9 +108,7 @@ export function openFilePathLinkAtBufferPosition(
       onOpenFailure: reportsFailure ? (failure) => onOpenFailure(reportedPath, failure) : undefined
     })
   }
-  const host: FileLinkHost = { ...deps, cwd: deps.startupCwd, homePath: deps.terminalHomePath }
-  // Why: a share outside the workspace is never stat'ed unprompted; like a verified path, its
-  // guess opens as is and the host resolves it.
+  // Never stat external shares unprompted; open the path as written and let the host resolve it.
   const settled = (link: ClickedFileLink): boolean =>
     link.cachedExists === true ||
     link.isKnownWorktreeRoot ||
@@ -128,25 +124,21 @@ export function openFilePathLinkAtBufferPosition(
       !settled(link) &&
       (!best || link.pathText.length > best.pathText.length)
   )
-  if (toProbe.length === 0 || (!best && toProbe.length === 1)) {
-    // Why the visible path last: a click on a path already known missing still says so.
-    // An OSC 8 hyperlink there is xterm's to open.
-    const knownMissing =
-      shown && !shown.hasOscLink && /[\\/]/.test(shown.pathText) ? shown : undefined
-    const link = best ?? toProbe[0] ?? knownMissing
+  // Why the visible path last: a click on a missing path still says so. An OSC 8 hyperlink there is xterm's to open.
+  const visible = shown && !shown.hasOscLink && /[\\/]/.test(shown.pathText) ? shown : undefined
+  if (toProbe.length === 0 || (!best && toProbe.length === 1 && !toProbe[0].guess)) {
+    const link = best ?? toProbe[0] ?? visible
     if (link) {
       open(link)
     }
     return link !== undefined
   }
 
-  // Why: hard-wrap joining offers guesses like `a.txt/b.txt` that sort first; opening one
-  // before its hover probe answers (a host round-trip) fails and hides the real path.
+  // Probe before choosing a longer hard-wrap or spaced reading; otherwise a bad join can hide the real path.
   const isLatestOpen = reserveDetectedFilePathOpenTurn()
   const clickedHost = fileHostFingerprint(toProbe[0].fileContext)
   void probeClickedFileLinks(toProbe, deps).then((existing) => {
-    // Why: if the workspace's host or pairing changed meanwhile, a same-named file there is not
-    // the one clicked.
+    // A changed host/pairing cannot authorize opening a same-named file on the new host.
     const currentHost = fileHostFingerprint(
       getTerminalFileContext(deps.worktreeId, deps.worktreePath, deps.runtimeEnvironmentId)
     )
@@ -154,9 +146,8 @@ export function openFilePathLinkAtBufferPosition(
       return
     }
     const found = longestPath(existing)
-    // Why the shortest otherwise: opening it lets the open report the real failure instead of
-    // a probe guessing "missing" for a refusal.
-    const link = found ?? best ?? shortestPath(toProbe)
+    // Without a verified reading, opening the shortest unchecked path reports the real failure.
+    const link = found ?? best ?? shortestPath(toProbe.filter((link) => !link.guess)) ?? visible
     if (link) {
       open(link, link === found || link.cachedExists === true)
     }
@@ -196,27 +187,4 @@ function longestPath(links: ClickedFileLink[]): ClickedFileLink | undefined {
     (best, link) => (!best || link.pathText.length > best.pathText.length ? link : best),
     undefined
   )
-}
-
-export function buildCandidateLogicalLinesForBufferPosition(
-  buffer: { getLine(y: number): IBufferLine | undefined },
-  bufferLineNumber: number
-): WrappedLogicalLine[] {
-  const hardWrappedCandidates = buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber)
-  const softWrappedLogicalLine = buildWrappedLogicalLine(buffer, bufferLineNumber)
-  const candidates = softWrappedLogicalLine
-    ? [...hardWrappedCandidates, softWrappedLogicalLine]
-    : hardWrappedCandidates
-  return dedupeLogicalLines(candidates)
-}
-
-function rangeContainsBufferPosition(
-  range: IBufferRange,
-  position: { x: number; y: number },
-  terminalColumns: number
-): boolean {
-  const lower = range.start.y * terminalColumns + range.start.x
-  const upper = range.end.y * terminalColumns + range.end.x
-  const current = position.y * terminalColumns + position.x
-  return lower <= current && current <= upper
 }

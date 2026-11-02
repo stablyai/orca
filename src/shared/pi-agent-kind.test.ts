@@ -38,17 +38,13 @@ describe('detectPiAgentKindFromCommand', () => {
   })
 
   it('does not confuse "pi" with substrings like pip / mpi / python', () => {
-    // Why: regression guard for the word-boundary regex. Without
-    // boundary protection, any command containing the letters "pi"
-    // would be classified as a Pi launch.
     expect(detectPiAgentKindFromCommand('pip install foo')).toBe('pi')
     expect(detectPiAgentKindFromCommand('mpirun -n 4 ./app')).toBe('pi')
     expect(detectPiAgentKindFromCommand('python3 script.py')).toBe('pi')
   })
 
   it('does not confuse "omp" with substrings like comp / pomp', () => {
-    // Why: regression guard for the OMP boundary; falls back to 'pi'
-    // when no match, which matches the pre-launch default.
+    // No match retains the pre-launch pi default.
     expect(detectPiAgentKindFromCommand('compile this')).toBe('pi')
     expect(detectPiAgentKindFromCommand('pomp.exe')).toBe('pi')
   })

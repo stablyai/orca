@@ -1,6 +1,5 @@
-import type { MouseEvent, PointerEvent } from 'react'
+import { useId, type MouseEvent, type PointerEvent } from 'react'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react'
-import { CommandItem } from '@/components/ui/command'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
@@ -14,15 +13,18 @@ import { cn } from '@/lib/utils'
 type TabBarQuickCommandItemProps = {
   entry: HostedTerminalQuickCommand
   showHostLabel: boolean
+  selected?: boolean
+  position?: number
+  totalCount?: number
+  onHighlight?: () => void
+  onActiveElementChange?: (element: HTMLDivElement | null) => void
   onRun: () => void
   onEdit: () => void
   onDelete: () => void
 }
 
 function stopRowSelect(event: MouseEvent | PointerEvent): void {
-  // Why: cmdk selects the parent CommandItem on click; nested actions must not
-  // also run the quick command. preventDefault keeps focus in the search input
-  // so arrow/Enter navigation still works after Copy (Edit/Delete close the menu).
+  // Why: nested actions must preserve search focus without running the command.
   event.preventDefault()
   event.stopPropagation()
 }
@@ -30,10 +32,16 @@ function stopRowSelect(event: MouseEvent | PointerEvent): void {
 export function TabBarQuickCommandItem({
   entry,
   showHostLabel,
+  selected = false,
+  position,
+  totalCount,
+  onHighlight,
+  onActiveElementChange,
   onRun,
   onEdit,
   onDelete
 }: TabBarQuickCommandItemProps): React.JSX.Element {
+  const id = useId()
   const { command } = entry
   const body = getTerminalQuickCommandBody(command)
   const { canCopy, copyText, status } = useClipboardTextCopyFeedback(body)
@@ -55,10 +63,18 @@ export function TabBarQuickCommandItem({
             )
 
   return (
-    <CommandItem
-      value={entry.key}
-      onSelect={onRun}
-      className="group/qc mx-1 my-0.5 cursor-pointer items-center gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+    <div
+      ref={selected ? onActiveElementChange : undefined}
+      id={id}
+      role="option"
+      aria-selected={selected}
+      aria-posinset={position}
+      aria-setsize={totalCount}
+      data-selected={selected}
+      data-value={entry.key}
+      onPointerMove={onHighlight}
+      onClick={onRun}
+      className="group/qc mx-1 my-0.5 flex cursor-pointer items-center gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
     >
       {isTerminalAgentQuickCommand(command) ? (
         <span className="shrink-0 text-muted-foreground">
@@ -88,6 +104,11 @@ export function TabBarQuickCommandItem({
       </span>
       <span
         role="group"
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.stopPropagation()
+          }
+        }}
         aria-label={translate(
           'auto.components.tab.bar.TabBarQuickCommandsButton.192a4616a5',
           'Quick command actions'
@@ -145,6 +166,6 @@ export function TabBarQuickCommandItem({
           <Trash2 className="size-3" />
         </button>
       </span>
-    </CommandItem>
+    </div>
   )
 }

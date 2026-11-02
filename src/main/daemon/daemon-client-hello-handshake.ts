@@ -21,6 +21,8 @@ const REQUEST_BINARY_STREAM_BY_DEFAULT = process.env.ORCA_DAEMON_BINARY_STREAM !
 export type DaemonHelloOutcome = {
   identity: DaemonEndpointIdentity | null
   streamFraming: DaemonStreamFraming
+  /** Null for a daemon that predates reporting it, whose emulators resize as xterm does. */
+  resizeModel: string | null
   /** Preserve bytes after hello for the next reader, including partial binary frames. */
   remainder: Buffer
 }
@@ -98,7 +100,11 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
             requestBinaryStream && response.streamFraming === BINARY_STREAM_FRAMING
               ? BINARY_STREAM_FRAMING
               : 'ndjson'
-          finish(undefined, { identity, streamFraming, remainder })
+          const resizeModel =
+            typeof response.resizeModel === 'string' && response.resizeModel.length > 0
+              ? response.resizeModel
+              : null
+          finish(undefined, { identity, streamFraming, resizeModel, remainder })
         } else {
           finish(
             new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))

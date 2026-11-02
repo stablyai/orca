@@ -4,7 +4,7 @@ import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
-import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import {
   getDefaultSourceControlAiSettings,
@@ -46,6 +46,7 @@ it.each(['github', 'gitlab'] as const)(
       branch: 'user/alt-42-fix-login',
       provider,
       baseRef: null,
+      pinnedCopy: null,
       startedAt: 1
     }
     const eligibility: HostedReviewCreationEligibility = {

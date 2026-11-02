@@ -28,8 +28,7 @@ export function commitProjectHeaderDragDrop(args: {
 
   const sidebarRepoHeaderIds = args.session.sidebarRepoHeaderIds
   const sourceIndex = sidebarRepoHeaderIds.indexOf(draggedRepo.id)
-  // Why: both slots bordering the dragged header are visual no-ops. In
-  // particular, do not compact paired-host occurrences on an unchanged drop.
+  // Both slots beside the dragged header are no-ops; do not compact paired-host occurrences.
   if (
     sourceIndex === -1 ||
     args.sidebarDropIndex === sourceIndex ||
@@ -48,11 +47,7 @@ export function commitProjectHeaderDragDrop(args: {
       sourceIndex,
       siblingCount: siblings.length
     })
-    // Why: sourceIndex is the position in the original array (including the
-    // dragged item), but siblingDropIndex is the position in the filtered
-    // array. The equivalent position in the filtered array is the sourceIndex
-    // capped at siblings.length (since removing an item can only shift indices
-    // down by 1 when the removed item was before the insertion point).
+    // The original source slot is capped by the shorter sibling list after removing the dragged item.
     const sourceIndexInSiblings = Math.min(sourceIndex, siblings.length)
     if (siblingDropIndex === sourceIndexInSiblings) {
       return

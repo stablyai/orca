@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
 const execOrcadRemote = vi.hoisted(() => vi.fn())
@@ -7,23 +6,14 @@ vi.mock('../install/orcad-remote-runtime-control', () => ({ execOrcadRemote }))
 const resolveOrcadRemoteContext = vi.hoisted(() => vi.fn())
 vi.mock('../install/orcad-remote-context', () => ({ resolveOrcadRemoteContext }))
 
-import { orcadBoundPort, resolveManagedOrcadTunnelPort } from './orcad-managed-bound-port'
+import { resolveManagedOrcadTunnelPort } from './orcad-managed-bound-port'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 function readinessLine(boundEndpoint: string | null): string {
   return `${JSON.stringify({ type: 'orca_server_ready', runtimeId: 'runtime-1', boundEndpoint })}\n`
 }
-
-describe('orcadBoundPort', () => {
-  it('reads the port orcad actually bound', () => {
-    expect(orcadBoundPort({ boundEndpoint: 'ws://127.0.0.1:58520' })).toBe(58_520)
-  })
-
-  it.each([null, 'not a url', 'ws://127.0.0.1'])('returns null for %s', (boundEndpoint) => {
-    expect(orcadBoundPort({ boundEndpoint })).toBeNull()
-  })
-})
 
 describe('resolveManagedOrcadTunnelPort', () => {
   const link = {
@@ -38,8 +28,7 @@ describe('resolveManagedOrcadTunnelPort', () => {
       environment: { [kind]: link } as unknown as KnownRuntimeEnvironment,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: passed through to the mocked context.
       target: { id: 'ssh-1' } as SshTarget,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: passed through to the mocked context.
-      connection: {} as OrcadHostTransport
+      connection: unusedOrcadHostTransport()
     }
   }
 

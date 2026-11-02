@@ -1,22 +1,4 @@
-/**
- * Counts consecutive same-root commits that keep scheduling synchronous work,
- * and breadcrumbs the cascade before React #185 throws.
- *
- * This mirrors React's own accounting rather than approximating it with a time
- * window: react-dom resets its nested-update counter the moment a commit leaves
- * no sync lanes pending, and increments it otherwise. Reading `root.pendingLanes`
- * at commit time reproduces that reset exactly.
- *
- * Known over-count: React also requires the committed lanes to intersect its own
- * mask, which we cannot read from the devtools callback. Dropping that term can
- * only make us count a commit React would have skipped, so we fire early, never
- * late — the safe direction for a diagnostic that must beat the throw.
- *
- * Out of scope by construction: a passive-effect (useEffect) loop reports
- * pendingLanes 0 here, because passive effects flush after the commit callback.
- * That is correct — React tracks those in nestedPassiveUpdateCount, which only
- * console.errors in development and never throws #185.
- */
+/** Mirror React’s same-root synchronous pending-lane counter to report before #185. We cannot inspect committed lanes, so may overcount skipped commits and report early, never late. Passive-effect loops leave pendingLanes zero here; React tracks those separately and never throws #185 for them. */
 import { compactBreadcrumbData } from '@/lib/crash-breadcrumb-data'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
@@ -50,12 +32,7 @@ export const REACT_COMMIT_CASCADE_ARM_COMMITS = 20
 export const REACT_COMMIT_CASCADE_MIN_REPORT_INTERVAL_MS = 30_000
 
 export type ReactCommitCascadeState = {
-  /**
-   * Held strongly, and never dereferenced. The next commit that leaves no
-   * cascading lanes clears the slot — milliseconds away in a live renderer —
-   * so the only tree this pins is a React root unmounted mid-cascade, such as
-   * the per-decoration roots in useDiffCommentDecorator.
-   */
+  // Retain only the current root until the next noncascading commit; an unmounted mid-cascade decoration root can persist in this slot.
   cascadeRoot: unknown
   commits: number
   reported: boolean
@@ -157,8 +134,7 @@ function recordCommit(
 
   state.reported = true
   const nowMs = readNowMs()
-  // Why the renderer throttles too: nothing rate-limits this pipe, and every
-  // call is a structured clone plus an ipcRenderer.send.
+  // Throttle renderer sends too; every uncapped call pays structured clone plus ipcRenderer.send.
   const sinceReportMs = state.lastReportedAtMs === null ? null : nowMs - state.lastReportedAtMs
   if (sinceReportMs !== null && sinceReportMs >= 0 && sinceReportMs < minReportIntervalMs) {
     state.suppressed += 1

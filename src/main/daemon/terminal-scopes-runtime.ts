@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { userManagerEnv } from './daemon-cgroup-scope'
+import { warnWhenRealtimeTimeoutIsZero } from './daemon-rttime-limit'
 import { setPtyActiveProcessLimit } from '../windows/windows-pty-job'
 import { resolveTerminalScopes, type TerminalScopeRuntime } from './terminal-scopes'
 import type { PtyProcessCeilingState } from '../../shared/pty-process-ceiling-state'
@@ -33,6 +34,7 @@ export function initializeTerminalScopes(
     // Report requested limits even on hosts that cannot enforce them.
     log('terminal-memory-limits', { platform: process.platform, ...resolved.memory })
   }
+  warnWhenRealtimeTimeoutIsZero(log)
   return resolved.ceiling
 }
 

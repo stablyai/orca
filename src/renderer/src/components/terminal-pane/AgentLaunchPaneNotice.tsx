@@ -5,10 +5,7 @@ import { createPortal } from 'react-dom'
 import type { AgentLaunchPaneOutcome } from '../../../../shared/agent-launch-pane-verdict'
 import { agentLaunchPaneNoticeText } from './agent-launch-pane-notice-text'
 
-/**
- * What a pane an agent launch laid out shows when its agent is not running in it. Not dismissable:
- * it is the pane's state for this session, not a passing error.
- */
+/** Show a non-dismissible session state when a laid-out pane’s agent is not running. */
 export function AgentLaunchPaneNotice({
   refusal,
   agentId,

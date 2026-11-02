@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { pairedRuntimeBrowserClientHostsPage } from '../../browser/paired-runtime-browser-client-host-runtime'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import {
@@ -14,7 +13,13 @@ import type {
   MobileDesktopRelayHosts,
   MobileDesktopRelayHostWatch
 } from '../../runtime/mobile-desktop-relay/mobile-desktop-relay-hosts'
-import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
+import {
+  resolveManagedRuntimeEnvironment,
+  type ManagedRuntimeCallPreparation
+} from './runtime-environment-managed-tunnel'
+import { wslHostsGateOpen } from '../../wsl/wsl-host-gate'
+import type { WslHostPhoneReach } from '../../wsl/wsl-host-phone-reach'
+import { getWslHostPhoneGate } from '../../wsl/wsl-host-service-instance'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import {
   getRegisteredSshState,
@@ -25,11 +30,12 @@ import {
   callRuntimeEnvironment,
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentStatusPublished } from './runtime-environment-status-owner'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
 
 const retirementListeners = new Set<(environmentId: string) => void>()
 
@@ -39,32 +45,57 @@ export function retireMobileDesktopRelayEnvironment(environmentId: string): void
   }
 }
 
-/** Phones must not wake or route to WSL distros, which connect only for work open on this desktop. */
-function listRelayableEnvironments(userDataPath: string) {
-  return listEnvironments(userDataPath).filter(isRelayableToPhones)
+// Why: a WSL host is this desktop's own distro; a phone reaches it only while it already runs.
+const PHONE_CALL_PREPARATION: ManagedRuntimeCallPreparation = { wslStart: 'never' }
+
+/** Servers a phone may reach, each with its WSL host reach (null for any other server). */
+function listRelayableEnvironments(
+  userDataPath: string
+): { environment: KnownRuntimeEnvironment; reach: WslHostPhoneReach | null }[] {
+  // One records read per list: the phone polls it every few seconds.
+  const wslReaches = wslHostsGateOpen() ? getWslHostPhoneGate()?.reachAll() : undefined
+  const relayable: { environment: KnownRuntimeEnvironment; reach: WslHostPhoneReach | null }[] = []
+  for (const environment of listEnvironments(userDataPath)) {
+    const reach =
+      classifyRuntimeEnvironmentHost(environment).kind === 'wsl'
+        ? (wslReaches?.get(environment.id) ?? 'hidden')
+        : null
+    if (reach !== 'hidden') {
+      relayable.push({ environment, reach })
+    }
+  }
+  return relayable
 }
 
-function isRelayableToPhones(environment: KnownRuntimeEnvironment): boolean {
-  const host = classifyRuntimeEnvironmentHost(environment)
-  switch (host.kind) {
-    case 'network':
-      return true
-    case 'wsl':
-      return false
+// Why: a phone never starts a WSL host, so a host not ready here says where it can be started.
+function desktopWslHostFlags(reach: WslHostPhoneReach | null): {
+  stoppedOnDesktop?: true
+  unavailableOnDesktop?: true
+} {
+  if (reach === 'stopped') {
+    return { stoppedOnDesktop: true }
   }
+  return reach === 'unavailable' ? { unavailableOnDesktop: true } : {}
 }
 
 /** Relay requests use exact saved environment IDs. */
 export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHosts {
-  const userDataPath = app.getPath('userData')
+  const userDataPath = getRuntimeEnvironmentRegistryRoot()
   return {
     list: () => {
-      const environments = listRelayableEnvironments(userDataPath)
+      const relayable = listRelayableEnvironments(userDataPath)
+      const environments = relayable.map(({ environment }) => environment)
+      const reachById = new Map(relayable.map(({ environment, reach }) => [environment.id, reach]))
       const statusByEnvironmentId = new Map<string, RuntimeEnvironmentStatus>()
       for (const snapshot of getRuntimeEnvironmentStatusSnapshots()) {
         const environment = environments.find((entry) => entry.id === snapshot.environmentId)
         // Earlier pairings cannot establish the current server status.
-        if (environment && pairingRevision(environment) === snapshot.pairingRevision) {
+        if (
+          environment &&
+          pairingRevision(environment) === snapshot.pairingRevision &&
+          // A WSL host's last status counts only while the desktop holds it connected.
+          (reachById.get(environment.id) ?? 'ready') === 'ready'
+        ) {
           statusByEnvironmentId.set(environment.id, runtimeEnvironmentStatusFromSnapshot(snapshot))
         }
       }
@@ -86,16 +117,25 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
           orcadDeployment: environment.orcadDeployment,
           pairingRevision: pairingRevision(environment),
           runtimeId: environment.runtimeId,
-          ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {})
+          ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {}),
+          ...desktopWslHostFlags(reachById.get(environment.id) ?? null)
         })),
         statusByEnvironmentId
       }
     },
     resolve: async (environmentId) => {
-      if (!listRelayableEnvironments(userDataPath).some((entry) => entry.id === environmentId)) {
+      if (
+        !listRelayableEnvironments(userDataPath).some(
+          ({ environment }) => environment.id === environmentId
+        )
+      ) {
         return null
       }
-      const environment = await resolveManagedRuntimeEnvironment(userDataPath, environmentId)
+      const environment = await resolveManagedRuntimeEnvironment(
+        userDataPath,
+        environmentId,
+        PHONE_CALL_PREPARATION
+      )
       return {
         environmentId,
         fence: relayHostFence(environment),
@@ -111,9 +151,12 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
         options?.timeoutMs,
         options?.expected?.pairingRevision,
         undefined,
-        options?.expected?.runtimeId
-          ? { expectedEnvironmentRuntimeId: options.expected.runtimeId }
-          : undefined
+        {
+          preparation: PHONE_CALL_PREPARATION,
+          ...(options?.expected?.runtimeId
+            ? { expectedEnvironmentRuntimeId: options.expected.runtimeId }
+            : {})
+        }
       ),
     hostsBrowserPage: pairedRuntimeBrowserClientHostsPage,
     onEnvironmentRetired: (listener) => {
@@ -150,8 +193,8 @@ function watchRuntimeEnvironmentChanges(
     }
   }
   const environment = listRelayableEnvironments(userDataPath).find(
-    (entry) => entry.id === environmentId
-  )
+    (entry) => entry.environment.id === environmentId
+  )?.environment
   if (
     !environment ||
     isRuntimeEnvironmentManuallyDisconnected(environmentId) ||
@@ -183,7 +226,8 @@ function watchRuntimeEnvironmentChanges(
       onClose: end
     },
     current,
-    controller.signal
+    controller.signal,
+    PHONE_CALL_PREPARATION
   ).then((opened) => {
     subscription = opened
     if (controller.signal.aborted) {

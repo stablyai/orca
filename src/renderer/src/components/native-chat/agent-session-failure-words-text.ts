@@ -1,5 +1,4 @@
-// Desktop words for a failure fact: each piece of the shared sentence translated whole, with the
-// shared English as its fallback, so the host's row and desktop's notice never say it differently.
+// Translate shared failure sentence pieces whole with shared English fallbacks to keep host and desktop wording aligned.
 
 import { translate } from '@/i18n/i18n'
 import {
@@ -7,24 +6,20 @@ import {
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues,
   type AgentSessionFailureSay
-} from '../../../../shared/agent-session-failure-copy'
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 import { AVAILABILITY_PIECES } from './agent-session-availability-words-text'
 import { ATTACHMENT_FAILURE_PIECES } from './agent-session-failure-attachment-words-text'
 import { STOP_FAILURE_PIECES } from './agent-session-failure-stop-words-text'
 import { PROVIDER_EXIT_PIECES } from './agent-session-provider-exit-words-text'
 import { PROVIDER_RETRY_PIECES } from './agent-session-provider-retry-words-text'
 import { USAGE_LIMIT_PIECES } from './agent-session-usage-limit-words-text'
+import { START_FAILURE_PIECES } from './agent-session-start-failure-words-text'
 
 // The pieces a refusal notice says too keep the notice's keys, so each has one translation.
 const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> =
   {
     theAgent: () => translate('components.native-chat.failureWords.theAgent', COPY.theAgent),
-    providerStartFailed: (values) =>
-      translate(
-        'components.native-chat.failureWords.providerStartFailed',
-        COPY.providerStartFailed,
-        values
-      ),
+    ...START_FAILURE_PIECES,
     runCommandAgain: (values) =>
       translate(
         'components.native-chat.failureWords.runCommandAgain',
@@ -37,21 +32,6 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate(
         'components.native-chat.failureWords.sendAgainToTryOnceMore',
         COPY.sendAgainToTryOnceMore
-      ),
-    couldNotStart: (values) =>
-      translate('components.native-chat.failureWords.couldNotStart', COPY.couldNotStart, values),
-    couldNotRestart: (values) =>
-      translate(
-        'components.native-chat.failureWords.couldNotRestart',
-        COPY.couldNotRestart,
-        values
-      ),
-    startTimedOut: (values) =>
-      translate('components.native-chat.failureWords.startTimedOut', COPY.startTimedOut, values),
-    startTimedOutKeepsHappening: () =>
-      translate(
-        'components.native-chat.failureWords.startTimedOutKeepsHappening',
-        COPY.startTimedOutKeepsHappening
       ),
     argumentsUnsupportedOption: (values) =>
       translate(
@@ -150,6 +130,29 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.runtimeNotInstalled,
         values
       ),
+    fullAccessAsRoot: (values) =>
+      translate(
+        'components.native-chat.failureWords.fullAccessAsRoot',
+        COPY.fullAccessAsRoot,
+        values
+      ),
+    launchPreparationFailed: (values) =>
+      translate(
+        'components.native-chat.failureWords.launchPreparationFailed',
+        COPY.launchPreparationFailed,
+        values
+      ),
+    conversationOpenElsewhere: () =>
+      translate(
+        'components.native-chat.failureWords.conversationOpenElsewhere',
+        COPY.conversationOpenElsewhere
+      ),
+    conversationOpenInTerminal: (values) =>
+      translate(
+        'components.native-chat.failureWords.conversationOpenInTerminal',
+        COPY.conversationOpenInTerminal,
+        values
+      ),
     chooseClaudeAccount: () =>
       translate(
         'components.native-chat.failureWords.chooseClaudeAccount',
@@ -167,6 +170,11 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.chooseClaudeAccountThenSend
       ),
     ...PROVIDER_EXIT_PIECES,
+    claudeEffortInvalid: () =>
+      translate(
+        'components.native-chat.failureWords.claudeEffortInvalid',
+        COPY.claudeEffortInvalid
+      ),
     providerRejected: (values) =>
       translate(
         'components.native-chat.failureWords.providerRejected',

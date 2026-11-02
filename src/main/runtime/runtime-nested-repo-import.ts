@@ -18,6 +18,7 @@ import {
 } from '../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 import type { RuntimeStore } from './runtime-store-contract'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 
 type RuntimeNestedRepoImportDependencies = {
   getStore: () => RuntimeStore | null
@@ -38,6 +39,7 @@ export class RuntimeNestedRepoImport {
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
     }
+    await refuseWslHostWindowsDrivePath(path)
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
   }
@@ -48,6 +50,7 @@ export class RuntimeNestedRepoImport {
     projectPaths: string[]
     mode: ProjectGroupImportMode
   }): Promise<ProjectGroupImportResult> {
+    await refuseWslHostWindowsDrivePath(args.parentPath)
     await awaitWindowsHostGitEnvironmentReady({ cwd: args.parentPath })
     const store = this.deps.getStore()
     if (!store?.createProjectGroup || !store.moveProjectToGroup) {
@@ -93,8 +96,7 @@ export class RuntimeNestedRepoImport {
           })
           continue
         }
-        // Why not SSH: an SSH row can sit at the same path, and this import adds native rows. A
-        // paired host stamps its native rows `runtime:<env>`, so those still match.
+        // Import native rows only; SSH may share the path string. Paired hosts stamp native rows runtime:<env>, which still match.
         const existing = store
           .getRepos()
           .find(

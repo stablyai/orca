@@ -98,7 +98,7 @@ describe('Electron popup adapter API limits (not an admission safety gate)', () 
   it.each(creationPaths)(
     'records same-parent identical URLs with foreground, background and window intent: %s',
     async (path) => {
-      expect(status().electronVersion).toBe('43.8.1')
+      expect(status().electronVersion).toBe('43.8.4')
       const page = guest('probe-one')
       await configure(page, path)
       for (const modifier of [null, 'Shift', 'ControlOrMeta'] as const) {
@@ -254,7 +254,9 @@ describe('Electron popup adapter API limits (not an admission safety gate)', () 
     const before = receipts.length
     const tabs = status().tabOpens.length
     await installSandboxFrame(page, 'restricted', `${origin}/baseline-restricted`, 'script')
-    await page.frameLocator('#sandbox-probe').locator('#open').click()
+    const open = page.frameLocator('#sandbox-probe').locator('#open')
+    await waitForHiddenFrameInput(open)
+    await open.click()
     await expect.poll(() => status().tabOpens.length).toBe(tabs + 1)
     expect(status().tabOpens.at(-1)).toEqual({
       url: `${origin}/baseline-restricted`,

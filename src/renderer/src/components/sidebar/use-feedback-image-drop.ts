@@ -28,8 +28,7 @@ export function useFeedbackImageDrop(
     setIsDragActive(false)
   }, [])
 
-  // Why: DataTransfer.files is empty until the drop lands, so the highlight has
-  // to key off the drag types the OS advertises during the drag itself.
+  // Use advertised drag types for highlighting because DataTransfer.files stays empty until drop.
   const onDragEnter = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (!hasNativeFileDragTypes(event.dataTransfer.types)) {
       return
@@ -38,8 +37,7 @@ export function useFeedbackImageDrop(
     setIsDragActive(true)
   }, [])
 
-  // Why: the web client has no preload to preventDefault dragover for it, and
-  // without that the browser refuses the drop and navigates to the dropped file.
+  // Web clients lack preload drag guards; prevent navigation and enable browser drop delivery here.
   const onDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (!hasNativeFileDragTypes(event.dataTransfer.types)) {
       return
@@ -51,8 +49,7 @@ export function useFeedbackImageDrop(
   }, [])
 
   const onDragLeave = useCallback((event: React.DragEvent<HTMLElement>) => {
-    // Why: mirror the enter guard so internal drags can't decrement a counter
-    // enter never incremented.
+    // Ignore internal leaves that never incremented the file-drag enter count.
     if (!hasNativeFileDragTypes(event.dataTransfer.types)) {
       return
     }

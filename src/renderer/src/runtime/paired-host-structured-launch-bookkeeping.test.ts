@@ -1,7 +1,8 @@
+import { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
+import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(target: RuntimeClientTarget, method: string, params?: unknown) => Promise<unknown>>()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: vi.fn()
 }))
 vi.mock('./structured-agent-session-close', () => ({
@@ -30,10 +31,9 @@ vi.mock('./runtime-worktree-selector', () => ({
 import {
   getStructuredAgentSessionLaunchLifecycle,
   hasStructuredAgentSessionLaunchCancellationTombstone,
-  markStructuredAgentSessionLaunchCancelled,
   resetStructuredAgentLaunchRegistryForTests,
   retireAbsentStructuredAgentSessionLaunchCancellationTombstones
-} from '@/lib/structured-agent-session-launch-registry'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   resetStructuredAgentLaunchCancellationForTests,
@@ -42,7 +42,7 @@ import {
 import {
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
-} from '@/lib/structured-agent-session-launch-persistence'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { suppressCancelledStructuredSessionTabs } from './structured-agent-session-tab-retirement'
 import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
 const layoutOwner: StructuredLaunchSlotOwner = {

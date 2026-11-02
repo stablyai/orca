@@ -194,8 +194,7 @@ describe('native chat transcript visibility', () => {
 })
 
 describe('native chat transcript follow', () => {
-  // Folding a settled turn shrinks the content, and the browser clamps a reader
-  // parked just above the end onto it. That offset moves up, but toward the end.
+  // Folding can clamp a detached reader upward onto the new end.
   it('reattaches a detached reader that content shrinking clamps onto the end', () => {
     let scrollTop = 900
     let scrollHeight = 1_000
@@ -220,7 +219,7 @@ describe('native chat transcript follow', () => {
     fireEvent.scroll(scrollElement)
     scrollToEnd.mockClear()
     view.rerender(<TranscriptHarness {...props} itemCount={101} />)
-    // Anti-vacuous: detached 50px up, new content does not pull the reader down.
+    // Prove ordinary growth leaves the detached reader alone.
     expect(scrollToEnd).not.toHaveBeenCalled()
 
     scrollHeight = 700
@@ -242,7 +241,13 @@ describe('native chat transcript follow', () => {
     Object.defineProperties(scrollElement, {
       clientHeight: { configurable: true, get: () => 100 },
       scrollHeight: { configurable: true, get: () => scrollHeight },
-      scrollTop: { configurable: true, get: () => scrollTop, set: (value) => (scrollTop = value) }
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value) => {
+          scrollTop = value
+        }
+      }
     })
 
     scrollHeight = 700

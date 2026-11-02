@@ -1,23 +1,10 @@
-/**
- * macOS Local Network privacy pins a process's responsible process at spawn. orcad started over
- * SSH with `nohup` stays attributed to the launching `sshd-session`, and once that session ends,
- * non-platform binaries in its terminals get EHOSTUNREACH for LAN addresses (#25934). No launch
- * mode keeps both Full Disk Access and LAN access (Apple TN3179), so the launch records which SSH
- * session started it and a connect reports when that session is gone.
- *
- * The record is `<orcad pid> <sshd pid> <sshd start time>` in the data root, written only by a
- * macOS launch. Its orcad pid must match the slot's `.orcad-pid`: a launch by an older client
- * leaves no record of its own, and an earlier launch's record must not describe it. Terminals are
- * spawned by the daemon, which outlives orcad restarts and keeps the attribution it was spawned
- * with, so a launch that finds a live daemon carries the earlier session forward.
- */
+/** macOS pins Local Network attribution at spawn: SSH-launched terminals can lose LAN access after sshd-session exits (#25934; Apple TN3179). Record the nearest session plus start time and matching slot PID; preserve earlier attribution while a live terminal daemon survives orcad restarts. */
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
 
 export const ORCAD_LAUNCH_SSH_SESSION_FILENAME = '.orcad-launch-ssh-session'
 
-/** The first macOS with Local Network privacy. */
 const LOCAL_NETWORK_PRIVACY_MAJOR = 15
 // Bounds the ancestor walk; real chains are a few processes deep.
 const MAX_ANCESTOR_DEPTH = 32
@@ -26,10 +13,7 @@ export function recordsOrcadLaunchSshSession(host: RemoteHostPlatform): boolean 
   return host.os === 'darwin'
 }
 
-/**
- * Prints `<pid> <lstart>` of the nearest `sshd*` ancestor of `$1`. The nearest one is the
- * session's own process, which exits with it; a long-lived listener higher up never would.
- */
+/** Choose the nearest sshd ancestor, which exits with this session; a listener farther up would remain alive. */
 export function orcadSshSessionAncestorShellFunction(): string {
   return (
     'orcad_ssh_session() { orcad_sp=$1; orcad_si=0; ' +
@@ -45,7 +29,7 @@ export function orcadSshSessionAncestorShellFunction(): string {
   )
 }
 
-/** Runs in the launching shell, before the detached launch; never fails the launch. */
+/** Capture before detach without failing launch. */
 export function captureOrcadLaunchSshSessionCommand(): string {
   return (
     `${orcadSshSessionAncestorShellFunction()} ` +
@@ -57,12 +41,7 @@ function recordPath(host: RemoteHostPlatform, userDataDir: string): string {
   return quotePosixShell(joinRemotePath(host, userDataDir, ORCAD_LAUNCH_SSH_SESSION_FILENAME))
 }
 
-/**
- * Returns 0 when a terminal daemon this data root published is still running, 1 when none is,
- * and 2 when a live PID's command line can't be read. Like `commandLineMatchesDaemon`, a PID
- * counts only when its command line is this root's daemon: a stale PID file after a reboot can
- * name an unrelated process.
- */
+/** Return 0 for this root's live daemon, 1 for absence, 2 for unreadable argv; PID files alone may name recycled processes. */
 function liveDaemonShellFunction(host: RemoteHostPlatform, userDataDir: string): string {
   const daemonDir = quotePosixShell(joinRemotePath(host, userDataDir, 'daemon'))
   return (
@@ -77,31 +56,27 @@ function liveDaemonShellFunction(host: RemoteHostPlatform, userDataDir: string):
   )
 }
 
-/**
- * Runs after `$!` is recorded. With a live daemon, the earlier record's session carries over
- * (or none, when unknown); otherwise this launch's own session is recorded.
- */
+/** After recording $!, preserve the live daemon's earlier session; otherwise record this launch's session. */
 export function writeOrcadLaunchSshSessionCommand(
   host: RemoteHostPlatform,
   userDataDir: string
 ): string {
   const file = recordPath(host, userDataDir)
   return (
-    // Why mkdir: on a first deploy the detached server may not have created its data root yet.
+    // First-deploy detach may run before orcad creates its data root.
     `{ orcad_bg=$!; ( umask 077; mkdir -p ${quotePosixShell(userDataDir)} ); ` +
     `${liveDaemonShellFunction(host, userDataDir)} ` +
     'orcad_daemon_live; orcad_dl=$?; ' +
     'if [ "$orcad_dl" = 0 ]; then ' +
     `orcad_prev=$(cat ${file}); rm -f ${file}; set -- $orcad_prev; ` +
     `[ "$#" -lt 3 ] || { shift; ( umask 077; echo "$orcad_bg" "$@" > ${file} ); }; ` +
-    // An unreadable daemon leaves the attribution unknown, never this launch's.
+    // Unreadable daemon identity leaves attribution unknown, never assigned to this launch.
     `elif [ "$orcad_dl" = 2 ]; then rm -f ${file}; ` +
     `else rm -f ${file}; [ -z "$orcad_session" ] || ` +
     `( umask 077; echo "$orcad_bg" $orcad_session > ${file} ); fi; :; } 2>/dev/null`
   )
 }
 
-/** Answers LIVE, EXITED, UNVERIFIABLE, NOT_RECORDED or NOT_APPLICABLE. */
 export function orcadLaunchSshSessionProbeCommand(
   host: RemoteHostPlatform,
   remoteInstallDir: string,

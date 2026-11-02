@@ -1,27 +1,10 @@
-/**
- * The page the preview rig mounts, and the artifact it mounts into it.
- *
- * No assertion and no state of its own: every origin the fixture points at is passed in, so an arm
- * that changes where a subresource lives cannot change where a link goes by accident, and the rig
- * file keeps only the arms and what they read.
- */
+// Pass every origin per arm so moving asset source cannot accidentally move link target; fixture owns no state/assertions.
 
-/** The artifact fills itself with this, so one pixel says the frame parsed and painted. */
+// Solid artifact color lets one sampled pixel prove frame parsed and painted.
 export const ARTIFACT_RGB = '0,128,255'
 
-/**
- * The page under test: the real web sibling, mounted by react-native-web, with nothing else on it.
- *
- * The component is imported rather than reimplemented, and `resolveExtensions` puts `.web.tsx` first
- * so this is the file the bundle ships. `renderSource` is a marker the Source case looks for.
- *
- * Wrapped in the page's own provider because the preview asks the shell what it may do
- * (`use-html-preview-link-grant.web.ts` reads `init.grants.native`), and `usePageBridgeClient`
- * throws outside one. The client is the two members that read is made of and nothing else: a fuller
- * fake would be a second implementation of the bridge, and what an arm needs to vary is the grant
- * list. `grants` defaults to carrying `externalNavigation`, which is what the session route
- * declares, so an arm that does not mention it measures the shipped screen.
- */
+// Mount actual web component with minimal page bridge provider for init.grants.native; hook throws outside provider.
+// Default externalNavigation matches session manifest; arms vary grant list without duplicating bridge behavior. renderSource marks Source view.
 export const ENTRY_SOURCE = `
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -96,22 +79,11 @@ window.__mount = (html, sandboxOverride, grants) => {
 }
 `
 
-/**
- * One artifact, with every escape route a hostile one would try.
- *
- * `extra.head` and `extra.body` let a case add a `<meta refresh>` or a script without a second
- * fixture, so the thing under test is the only difference between the arms.
- */
+// Share hostile artifact across arms; extra head/body inject script/refresh without unrelated fixture differences.
 export function artifact({ links, assets, extra = {}, nonce = 'n0', doctype = '<!doctype html>' }) {
-  // Every foreign URL carries this arm's nonce, because a closed page's requests can still land and
-  // a hit list shared across arms would report the previous one's fetches as this one's.
+  // Nonce every foreign URL so requests arriving after prior page closes cannot contaminate next arm.
   const tag = `?n=${nonce}`
-  // Subresources move to `assets` and the links do not: a case about what the policy fetches should
-  // not also change which origin a tapped link navigates to.
-  //
-  // `doctype` is a parameter for one case's sake (C8.1 round 2): the hidden-link path reparses and
-  // reserialises the artifact, and the doctype is what an engine reads its rendering mode from, so
-  // an arm has to be able to hand the frame one that is not the bare name.
+  // Keep asset origin independent of link target; doctype override exercises parser round-trip preservation beyond bare name.
   return `${doctype}<html><head><title>ARTIFACT</title>
 <style>html,body{margin:0;height:100%;background:rgb(${ARTIFACT_RGB})}
 #bg{background-image:url("${assets}/css-bg.png${tag}")}
@@ -131,7 +103,6 @@ kept</pre>
 ${extra.body ?? ''}</body></html>`
 }
 
-/** The inline script every arm carries, so "it did not run" is about the fence and not the fixture. */
 const ARTIFACT_SCRIPT = `<script>
   // On the document element, never on a window global: a page init script owns the window of every
   // frame and runs at a moment this rig has to be able to measure rather than assume.
@@ -144,7 +115,6 @@ const ARTIFACT_SCRIPT = `<script>
   try { window.top.location.href = '${'${foreignOrigin}'}/by-script.html' } catch (error) { document.documentElement.dataset.threw = error.name }
 </script>`
 
-/** The inline script with the origin it reaches for, so a caller never re-does the substitution. */
 export function artifactScript(links) {
   return ARTIFACT_SCRIPT.replaceAll('${foreignOrigin}', links)
 }

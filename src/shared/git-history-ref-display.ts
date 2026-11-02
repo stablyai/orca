@@ -5,10 +5,7 @@ type DedupeRemoteTrackingRefsOptions = {
   preserveRefIds?: ReadonlySet<string> | readonly string[]
 }
 
-// Drops a remote-tracking ref (e.g. origin/feature) when the matching local
-// branch (feature) sits on the same commit. The two pills are redundant while
-// local and remote point at the same commit; when they diverge they land on
-// different commits and both still show.
+// Hide remote/local duplicate pills only on the same commit; divergent branches remain visible.
 export function dedupeRemoteTrackingRefs(
   refs: readonly GitHistoryItemRef[],
   options: DedupeRemoteTrackingRefsOptions = {}
@@ -35,15 +32,13 @@ export function dedupeRemoteTrackingRefs(
     if (!split || !localBranchNames.has(split.branchName)) {
       return true
     }
-    // Why: without the repo's configured upstream remote, multiple matching
-    // remotes (origin/main, upstream/main) are distinct context, not duplicates.
+    // Without configured upstream identity, multiple matching remotes remain distinct context.
     return matchingRemoteCounts.get(split.branchName) !== 1
   })
 }
 
 function isAmbiguousRemoteTrackingRef(refName: string): boolean {
-  // Why: without configured remote names, `foo/bar/main` could be remote
-  // `foo` branch `bar/main` or remote `foo/bar` branch `main`.
+  // Without configured remotes, foo/bar/main ambiguously splits as foo + bar/main or foo/bar + main.
   return refName.split('/').length > 2
 }
 

@@ -1,32 +1,13 @@
-/**
- * What the browser said about every request to one origin, for an arm that expected one and did not
- * get it.
- *
- * Every `at` recorded here is Node's `performance.now()`, so `asked` and `attached` can be read
- * against each other and the early-or-late question is answered on one clock. Readings taken inside
- * the frame are on the document's clock and belong beside these, never subtracted from them.
- *
- * Four sources, because each is blind where the others see. `request` fires for what the page asked
- * for at all, which separates a request the policy refused from one nothing ever made.
- * `requestfailed` carries the browser's own `errorText`. CDP's `Network.loadingFailed` adds
- * `blockedReason` and `corsErrorStatus`, which is the only place a refusal names itself when the
- * request never reached the asset listener. `Network.requestWillBeSent` records the resource type, the
- * initiator and the frame, which separates an image the parser found from one nothing asked for.
- *
- * CDP is Chromium's; WebKit has no session to open here, and the two page events carry that engine.
- *
- * Recorded into arrays and formatted only when asked, so an arm that passes pays for the
- * subscription and never for the reading.
- */
+// Use Node performance.now for asked/attached timestamps; frame resource clock is separate and must not be subtracted.
+// Page request/failure plus Chromium CDP sent/loadingFailed reveal attempts, blocked/CORS reason and parser initiator.
+// WebKit uses page events only. Collect arrays cheaply; format diagnostics only on failure.
 export async function recordRequestsTo(page, originPrefix) {
   const asked = []
   const failed = []
   const sent = []
   const loadingFailed = []
-  // Only this origin's ids, because `Network.loadingFailed` carries a request id and no URL, and an
-  // unfiltered list would report every other request on the page as this arm's evidence.
+  // Filter loadingFailed request IDs by origin: event has no URL and otherwise includes unrelated page traffic.
   const ours = new Set()
-  /** Every child target this session attached to, which says whether the frame is out of process. */
   const attached = []
 
   page.on('request', (request) => {
@@ -34,8 +15,6 @@ export async function recordRequestsTo(page, originPrefix) {
       asked.push({ url: request.url(), at: Math.round(performance.now()) })
     }
   })
-  // When this page first had any frame at all, so an attachment time has something to be early or
-  // late against.
   const frameAttached = []
   page.on('frameattached', (frame) => {
     frameAttached.push({ url: frame.url(), at: Math.round(performance.now()) })
@@ -52,16 +31,9 @@ export async function recordRequestsTo(page, originPrefix) {
     .catch(() => null)
   if (cdp) {
     await cdp.send('Network.enable').catch(() => {})
-    // Chromium isolates sandboxed iframes into their own process, srcdoc included, so the page's own
-    // session sees none of the frame's requests: `cdp sent` came back empty on CI even for a request
-    // Playwright did record. Flattened auto-attach puts each child target on this same connection,
-    // and `Network.enable` on the child is what makes its requests visible here.
+    // Chrome sandboxed frames use child processes, invisible to page CDP session; flattened auto-attach plus child Network.enable observes their requests.
     cdp.on('Target.attachedToTarget', (event) => {
-      // The moment, not just the fact. This and every `at` on `asked` come from the same Node
-      // clock, which is what makes them comparable: a request recorded before the frame's target
-      // was attached was issued while nothing was listening to that frame, and that is a different
-      // bug from a refusal. Nothing here is comparable to the frame's own resource timing, which
-      // counts from that document's navigation.
+      // Record exact child-attachment time on Node clock: request before listener attachment differs from policy refusal. Never compare frame resource timestamps.
       attached.push({
         type: event.targetInfo?.type ?? null,
         url: event.targetInfo?.url ?? null,

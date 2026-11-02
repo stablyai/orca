@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { presentGitHubPRMergeState, type GitHubPRMergeStateInput } from './github-pr-merge-state'
+import type { GitHubPRMergeStateInput } from '../../../shared/github/pull-request-merge-state'
+import { presentGitHubPRMergeState } from './github-pr-merge-state'
 
 function pr(overrides: Partial<GitHubPRMergeStateInput> = {}): GitHubPRMergeStateInput {
   return {
@@ -46,7 +47,6 @@ describe('presentGitHubPRMergeState', () => {
 
   it('offers enable auto-merge for open PRs that are waiting on requirements', () => {
     expect(presentGitHubPRMergeState(pr({ mergeQueueRequired: null })).autoMergeAction).toBeNull()
-    // Approval-required and required-check-blocked PRs are exactly when auto-merge helps.
     expect(
       presentGitHubPRMergeState(
         pr({ reviewDecision: 'REVIEW_REQUIRED', mergeStateStatus: 'BLOCKED' })
@@ -147,8 +147,7 @@ describe('presentGitHubPRMergeState', () => {
   })
 
   it('suppresses enable auto-merge but keeps disable when direct merge is available', () => {
-    // Why: enabling auto-merge on a directly-mergeable PR fails with GitHub's
-    // "clean status" error, so the dropdown must not offer it.
+    // GitHub rejects enabling auto-merge on directly mergeable PRs with a clean-status error.
     expect(
       presentGitHubPRMergeState({
         state: 'open',

@@ -4,13 +4,15 @@ import {
   resolveAgentRowParentPaneKey,
   type AgentLineageSourceRow
 } from '../dashboard/agent-row-lineage-model'
+import type { ActivityLiveAgentState } from './activity-thread-types'
 
 type ChildAgentLineageEntry = Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
 
-/** Minimal structural input: a full AgentPaneThread satisfies it (pinned by the
- *  classifier tests), and count/badge callers can feed synthetic rows uncast. */
+/** Accept full threads or synthetic structural rows without casts; classifier tests pin compatibility. */
 export type ChildAgentClassifiableThread = {
   paneKey: string
+  /** Non-null while the pane's own turn is live (working, monitoring or waiting on the user). */
+  currentAgentState?: ActivityLiveAgentState | null
   currentAgentEntry?: ChildAgentLineageEntry | null
   latestEvent?: { entry: ChildAgentLineageEntry } | null
   events?: readonly { entry: ChildAgentLineageEntry }[]
@@ -40,16 +42,8 @@ function firstReportedTerminalHandle(thread: ChildAgentClassifiableThread): stri
   return undefined
 }
 
-/**
- * Pane keys of threads that are children of another currently listed thread.
- * Delegates to the dashboard's lineage model so both surfaces classify the same
- * pane identically: a parent reference only counts while the parent thread is
- * still listed, so orphaned workers (their coordinator pane closed) and cycle
- * members are promoted to top level instead of staying hidden behind the
- * child-agent filter. Classification is sticky across a thread's older events:
- * the newest entry whose parent still resolves wins.
- */
-export function collectChildAgentPaneKeys(
+/** Reuse dashboard lineage classification: the newest still-resolving parent wins across history. Orphans and cycles remain top-level rather than disappearing behind child filters. A live child is never hidden, whatever its ancestors are doing: a row's visibility depends only on that chat's own state. */
+export function collectHiddenChildAgentPaneKeys(
   threads: readonly ChildAgentClassifiableThread[]
 ): Set<string> {
   const baseRows: AgentLineageSourceRow[] = threads.map((thread) => ({
@@ -86,5 +80,14 @@ export function collectChildAgentPaneKeys(
     return base
   })
 
-  return buildAgentRowLineageTree(rows).childPaneKeys
+  const livePaneKeys = new Set(
+    threads.filter((thread) => thread.currentAgentState).map((thread) => thread.paneKey)
+  )
+  const hidden = new Set<string>()
+  for (const paneKey of buildAgentRowLineageTree(rows).childPaneKeys) {
+    if (!livePaneKeys.has(paneKey)) {
+      hidden.add(paneKey)
+    }
+  }
+  return hidden
 }

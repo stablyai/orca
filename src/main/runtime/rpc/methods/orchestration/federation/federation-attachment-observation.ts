@@ -49,18 +49,15 @@ export async function inspectRemoteAttachment(
   if (!exact) {
     return { terminal, exact, status: 'identity_changed' }
   }
-  // Why: transport loss clears `connected` for every remote PTY; only the execution host can certify exit.
+  // Transport loss clears connected on every remote PTY; only its execution host can prove exit.
   const agentWait = terminal.agentWait
   const verdict = runtime.getTerminalLivenessVerdict?.(attachment.terminal_handle) ?? null
   if (verdict?.status === 'unverifiable') {
     return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
   }
   if (!verdict) {
-    // Why: the verdict register only fills on the first inventory sweep or exit frame, so a PTY
-    // this host just spawned has none for minutes and every fleet row read host_indeterminate.
-    // The host owns a connected local pane, so its own connected flag is host evidence of life,
-    // exactly as worker-show reads it. Nothing weaker earns a claim: a disconnected pane or an
-    // SSH-scoped one (contact, not the process) stays unverifiable, never `exited`.
+    // New local PTYs lack register verdicts until inventory arrives; host-owned connected state can prove life.
+    // Disconnected or SSH-scoped contact still proves neither life nor exit.
     const currentHostScope = runtime.getOrchestrationDispatchAuthority?.(
       attachment.terminal_handle
     )?.hostScope
@@ -102,11 +99,10 @@ export async function observeRemoteAttachmentLiveness(
   }
   if (
     (observation.status === 'missing' || observation.status === 'identity_changed') &&
-    // Why: a legacy `${runtimeId}:${ptyId}:${generation}` fence never matches the process table,
-    // so its absence there proves nothing.
+    // Legacy runtimeId:ptyId:generation fences never match the process table, so absence proves nothing.
     !incarnation.startsWith(`${attachment.runtime_epoch}:`)
   ) {
-    // Why: a host reboot takes the PTY and its handle with it; the process table proves it gone.
+    // After reboot, process-table absence proves the PTY and handle are gone.
     const liveness = await runtime
       .inspectTerminalProcessIncarnationLiveness(
         incarnation,
@@ -118,8 +114,7 @@ export async function observeRemoteAttachmentLiveness(
   if (observation.status !== 'live') {
     return observation
   }
-  // Why: the PTY outlives a killed agent (the shell takes the prompt back), so ask the hook store.
-  // An exit it proved before this Dispatch attached belongs to an earlier agent in the pane.
+  // PTY shells outlive killed agents; accept only hook-proven exits after this dispatch attached.
   const agent = await (
     runtime.checkTerminalAgentPresence?.(
       attachment.terminal_handle,

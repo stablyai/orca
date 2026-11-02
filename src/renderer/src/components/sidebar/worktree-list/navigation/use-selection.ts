@@ -12,14 +12,12 @@ import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
 const getSidebarContainer = (): Element | null =>
   document.querySelector('[data-worktree-sidebar-container]')
 
-// Multi-select over the rows the sidebar actually rendered, so gestures, context menus, and
-// the Cmd+1–9 shortcut cache all agree on one order.
 export function useSidebarWorktreeSelection(args: {
   sectionRows: HostSectionRow[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 }) {
   const { sectionRows, pinnedDisplayPolicy } = args
-  // Why: derive order from the built rows, not the flat worktrees array, so Cmd+1–9 match visual positions when grouping reorders cards.
+  // Built rows include grouping/pinning reorder; use their order for selection and Cmd+1–9 parity.
   const renderedWorktrees = useMemo(
     () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
     [pinnedDisplayPolicy, sectionRows]

@@ -30,9 +30,7 @@ async function readHostPtySize(
   return size
 }
 
-// Parking closes the client's stream, the last viewer of the PTY. A windowless host has no pane
-// to hand the size back to, so the PTY must keep the viewer's grid instead of its spawn grid,
-// or every reveal replays a snapshot at a foreign grid (#15997).
+// Parking removes the last viewer; a windowless host must retain its grid or reveal replays at the wrong size (#15997).
 test('a headless host keeps a parked terminal at its last viewer grid', async ({
   testRepoPath
 }) => {

@@ -29,13 +29,7 @@ runs:
         # Why: force TLS 1.2 so gallery downloads work on older hosted images.
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-        # Why: on some hosted Windows images `Register-PSRepository -Default`
-        # fails inside the legacy nuget.exe provider with "Missing option value
-        # for: '-source'", so PSGallery is never registered and the install
-        # below dies with "No repository with the name 'PSGallery'". PSResourceGet
-        # (bundled with PowerShell 7.4+) has PSGallery registered by default and
-        # avoids that code path, so prefer it and fall back to PowerShellGet only
-        # when it is absent.
+        # Prefer PSResourceGet (PowerShell 7.4+): legacy nuget Register-PSRepository can fail with “Missing option value for: -source” and leave PSGallery absent.
         $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
 
         try {
@@ -53,9 +47,7 @@ runs:
             Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           }
         } catch {
-          # Why: repository registration also talks to the gallery, so a gallery
-          # outage can fail here before a single install is attempted. The CDN
-          # fallback below does not need a registered repository, so keep going.
+          # Repository registration can fail during gallery outages; continue so the independent CDN fallback remains reachable.
           Write-Warning "PSGallery repository registration failed: $_"
         }
 
@@ -114,13 +106,8 @@ runs:
           }
         }
 
-        # Why: the gallery's package API (OData search + repository metadata) sits
-        # behind Azure Front Door and has returned 403/502/504 for every install
-        # attempt during gallery incidents, which hard-failed the whole Windows
-        # release job. The CDN that serves the nupkg itself is a separate origin
-        # and stays up through those incidents, so fall back to a pinned version
-        # fetched straight from it. The hash pin is mandatory: this route skips the
-        # gallery's package validation, so an unexpected payload must fail loudly.
+        # Gallery OData/metadata has returned 403/502/504 while the independent nupkg CDN stayed up.
+        # Fall back to a pinned version and mandatory hash because this bypasses gallery validation.
         if (-not $installed) {
           $version = $env:SIGNPATH_FALLBACK_VERSION
           $expectedHash = $env:SIGNPATH_FALLBACK_SHA256
@@ -131,9 +118,7 @@ runs:
             Remove-Item -LiteralPath $nupkg -Force
           }
 
-          # Why two URLs: the /api/v2/package route 302s to the CDN and can serve
-          # while the OData search endpoint is failing; the CDN URL is the same
-          # redirect target reached directly when the api host is down entirely.
+          # Try the API’s CDN redirect, then the CDN directly if the API host is down.
           $sources = @(
             "https://www.powershellgallery.com/api/v2/package/SignPath/$version",
             "https://cdn.powershellgallery.com/packages/signpath.$version.nupkg"
@@ -173,9 +158,7 @@ runs:
           }
 
           Remove-SignPathModuleDirectory
-          # Why a version-named subdirectory: PowerShell only treats a nested folder
-          # as a side-by-side module version when the name matches the manifest's
-          # ModuleVersion, which is what makes `Import-Module SignPath` resolve it.
+          # PowerShell resolves side-by-side modules only when the directory matches the manifest’s ModuleVersion.
           $versionRoot = Join-Path -Path $signPathModulePath -ChildPath $version
           New-Item -ItemType Directory -Path $versionRoot -Force | Out-Null
           Expand-Archive -LiteralPath $nupkg -DestinationPath $versionRoot -Force

@@ -7,10 +7,28 @@ import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
-import type { NormalizedLocalHook } from './server-types'
+import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
+import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
+  protected override applyNormalizedStatus(
+    ...args: Parameters<AgentHookServerTmuxStatus['applyNormalizedStatus']>
+  ): EnrichedAgentHookEventPayload | undefined {
+    const applied = super.applyNormalizedStatus(...args)
+    const [incoming, , origin = 'hook'] = args
+    // Claude can still block the prompt after this hook, and its idle may already have landed.
+    if (
+      applied?.payload.agentType === 'claude' &&
+      origin === 'hook' &&
+      incoming.hookEventName === 'UserPromptSubmit' &&
+      this.programStatusFacets.claimPrompt(applied.paneKey)
+    ) {
+      this.settleClaudePromptBlocked(applied)
+    }
+    return applied
+  }
+
   protected setClaudeBackgroundEvidence(
     paneKey: string,
     hasRunningTask: boolean,
@@ -69,6 +87,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)
+    const transcriptPath = event?.providerSession?.transcriptPath
+    if (transcriptPath) {
+      // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
+      getClaudeObservedConfigDirs()?.observeTranscriptPath(transcriptPath)
+    }
     const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
@@ -135,7 +158,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(event, normalized.onAccepted)
+    this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }

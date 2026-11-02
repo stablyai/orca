@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/utils'
 import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
 import { LinearStateCell } from './task-page-linear-issue-model'
-import { formatRelativeTime } from '../../task-page-source-context'
+import { formatRelativeTime } from '../task-page-source-context'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageLinearIssueBoardColumns({
   model
 }: {
@@ -158,7 +159,7 @@ export function TaskPageLinearIssueBoardColumns({
                         size="icon-xs"
                         onClick={(event) => {
                           event.stopPropagation()
-                          window.api.shell.openUrl(issue.url)
+                          openAppHttpLink(issue.url, { event })
                         }}
                         aria-label={translate(
                           'auto.components.TaskPage.246bd64aed',

@@ -66,7 +66,7 @@ async function launch(
       if (legacy) {
         legacyTimer = setTimeout(() => active.write(`${COMMAND}\n`), 300)
       } else {
-        active.write(`${COMMAND}\n`)
+        active.writeStartupCommand(`${COMMAND}\n`)
       }
     })
   } finally {

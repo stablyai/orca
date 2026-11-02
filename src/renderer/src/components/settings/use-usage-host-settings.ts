@@ -28,7 +28,6 @@ function pickUsageHostSettings(settings: Partial<GlobalSettings>): UsageHostSett
   }
 }
 
-/** This computer's settings locally; the selected host's through settings.get/update otherwise. */
 export function useUsageHostSettings(
   owner: RuntimeClientTarget,
   hostLabel: string | null,

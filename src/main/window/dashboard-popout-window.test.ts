@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setMainUiLanguage } from '../i18n/main-i18n'
+import es from '../../renderer/src/i18n/locales/es.json'
 
 type Display = { workArea: { x: number; y: number; width: number; height: number } }
 
@@ -29,6 +31,7 @@ const {
       id: created.length + 1,
       send: vi.fn(),
       isDestroyed: () => this.destroyed,
+      isCrashed: () => false,
       session: {
         setPermissionRequestHandler: vi.fn(),
         setPermissionCheckHandler: vi.fn()
@@ -47,6 +50,9 @@ const {
       }
     }
     bounds = { x: 100, y: 100, width: 960, height: 720 }
+    setTitle = vi.fn((title: string) => {
+      this.options.title = title
+    })
     focus = vi.fn()
     show = vi.fn()
     restore = vi.fn(() => {
@@ -116,8 +122,7 @@ const {
   }
 })
 
-// Static helpers live on the constructor; broadcastPopoutOpenChanged uses
-// BrowserWindow.getAllWindows(). Return the instances created in this test.
+// Expose constructor getAllWindows for broadcasting to this test's instances.
 ;(BrowserWindowMock as unknown as { getAllWindows: () => unknown[] }).getAllWindows = () =>
   instances
 
@@ -146,6 +151,8 @@ import {
   zoomDashboardPopoutIfFocused
 } from './dashboard-popout-window'
 import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
+import { hasWslHostsServeOnlyArgument } from '../../shared/wsl-host-internal-gate'
+import { configureWslHostsGate, resetWslHostsGateForTests } from '../wsl/wsl-host-gate'
 
 type FakeWindow = InstanceType<typeof BrowserWindowMock>
 
@@ -199,6 +206,39 @@ describe('createOrFocusDashboardPopout', () => {
     vi.clearAllMocks()
   })
 
+  it('updates the title after language initialization and unsubscribes when closed', async () => {
+    // SAFETY: The fixture implements the Store methods exercised by the popout.
+    createOrFocusDashboardPopout(makeStore() as never)
+    const win = instances[0]
+    try {
+      await setMainUiLanguage('es')
+      expect(win.options.title).toBe(es.native.dialog.dashboardTitle)
+      closeDashboardPopout()
+      win.setTitle.mockClear()
+      await setMainUiLanguage('en')
+      expect(win.setTitle).not.toHaveBeenCalled()
+    } finally {
+      await setMainUiLanguage('en')
+    }
+  })
+
+  it('lets its preload expose saved WSL hosts in serve-only, and passes nothing otherwise', () => {
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    createOrFocusDashboardPopout(makeStore() as never)
+    expect(instances[0].options.webPreferences?.additionalArguments).toBeUndefined()
+    closeDashboardPopout()
+
+    configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => false })
+    try {
+      createOrFocusDashboardPopout(makeStore() as never)
+      expect(
+        hasWslHostsServeOnlyArgument(instances[1].options.webPreferences?.additionalArguments ?? [])
+      ).toBe(true)
+    } finally {
+      resetWslHostsGateForTests()
+    }
+  })
+
   it('creates a native-frame window with the shared preload and no webview surface', () => {
     createOrFocusDashboardPopout(makeStore() as never)
 
@@ -210,13 +250,12 @@ describe('createOrFocusDashboardPopout', () => {
     // Native frame: neither a custom titleBarStyle nor frame:false is set.
     expect(opts.titleBarStyle).toBeUndefined()
     expect(opts.frame).toBeUndefined()
-    expect(opts.backgroundColor).toBe('#0a0a0a') // dark theme mock
+    expect(opts.backgroundColor).toBe('#0a0a0a')
     expect(opts.webPreferences?.sandbox).toBe(true)
     expect(opts.webPreferences?.partition).toBe('orca-dashboard-popout')
     expect(opts.webPreferences?.webviewTag).toBe(false)
     expect(opts.webPreferences?.preload).toMatch(/preload[\\/]index\.js$/)
-    // Why unstamped: no guest of ours can run here, so this renderer hosts no client-placed page
-    // and must keep mirroring what the host publishes for every one of them.
+    // No guests run here; omit host identity so every client-placed page stays mirrored.
     expect(
       readBrowserClientHostIdArgument(opts.webPreferences?.additionalArguments ?? [])
     ).toBeNull()
@@ -298,7 +337,6 @@ describe('createOrFocusDashboardPopout', () => {
   })
 
   it('discards off-screen persisted bounds and falls back to defaults', () => {
-    // Display does not overlap the saved rect at all.
     getAllDisplaysMock.mockReturnValue([{ workArea: { x: 0, y: 0, width: 800, height: 600 } }])
     const store = makeStore({
       dashboardPopoutBounds: { x: 5000, y: 5000, width: 1000, height: 800 }
@@ -325,7 +363,7 @@ describe('createOrFocusDashboardPopout', () => {
       })
 
       store.updateUI.mockClear()
-      win.bounds = { x: 10, y: 10, width: 100, height: 100 } // below minimum
+      win.bounds = { x: 10, y: 10, width: 100, height: 100 }
       win.emit('resize')
       vi.advanceTimersByTime(500)
       expect(store.updateUI).not.toHaveBeenCalled()
@@ -383,7 +421,7 @@ describe('createOrFocusDashboardPopout', () => {
     store.emitUIChanged({ uiZoomLevel: 2 })
     expect(win.webContents.setZoomLevel).toHaveBeenCalledWith(2)
 
-    // Unchanged level: no redundant reapply that would clobber a local zoom.
+    // An unchanged app zoom must preserve window-local zoom.
     win.webContents.setZoomLevel.mockClear()
     store.emitUIChanged({ uiZoomLevel: 2 })
     expect(win.webContents.setZoomLevel).not.toHaveBeenCalled()
@@ -408,7 +446,7 @@ describe('createOrFocusDashboardPopout', () => {
 
     win.zoomLevel = 5
     expect(zoomDashboardPopoutIfFocused('in')).toBe(true)
-    expect(win.zoomLevel).toBe(5) // clamped at max
+    expect(win.zoomLevel).toBe(5)
 
     expect(zoomDashboardPopoutIfFocused('reset')).toBe(true)
     expect(win.zoomLevel).toBe(0)

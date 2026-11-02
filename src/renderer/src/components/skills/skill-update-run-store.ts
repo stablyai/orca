@@ -14,7 +14,14 @@ import {
 
 export type SkillUpdateRun =
   | { state: 'idle' }
-  | { state: 'running'; targetKey: string; names: string[]; startedAt: number }
+  | {
+      state: 'running'
+      targetKey: string
+      names: string[]
+      startedAt: number
+      /** A silent update: it holds the target but never reports in the status bar. */
+      background?: boolean
+    }
   | {
       state: 'done'
       targetKey: string
@@ -70,10 +77,7 @@ function clearSuccessTimer(slot: RunSlot): void {
   }
 }
 
-/**
- * Why: a success needs to be *seen*, then get out of the way. Problems stay until the user
- * acts on them, and while the dialog is open closing it is what acknowledges the run.
- */
+/** Let visible success linger briefly; keep problems until acknowledged, and let an open dialog own acknowledgment. */
 function scheduleSuccessLinger(targetKey: string): void {
   const slot = slotFor(targetKey)
   clearSuccessTimer(slot)
@@ -108,14 +112,19 @@ export function getSkillUpdateRun(targetKey: string | null): SkillUpdateRun {
   return (targetKey && slots.get(targetKey)?.run) || IDLE
 }
 
-/** `targetKey` is `bundledSkillTargetKey` of the host; null reads idle. */
 export function useSkillUpdateRun(targetKey: string | null): SkillUpdateRun {
   const read = (): SkillUpdateRun => getSkillUpdateRun(targetKey)
   return useSyncExternalStore(subscribeSkillUpdateRun, read, read)
 }
 
+/** The status bar's run: the user's latest foreground run; silent updates never show. */
+export function getLatestSkillUpdateRun(): SkillUpdateRun {
+  const run = getSkillUpdateRun(latestTargetKey)
+  return run.state === 'running' && run.background ? IDLE : run
+}
+
 export function useLatestSkillUpdateRun(): SkillUpdateRun {
-  const read = (): SkillUpdateRun => getSkillUpdateRun(latestTargetKey)
+  const read = getLatestSkillUpdateRun
   return useSyncExternalStore(subscribeSkillUpdateRun, read, read)
 }
 
@@ -168,7 +177,41 @@ export async function startSkillUpdateRun(request: {
   notifyInstalledAgentSkillsChanged()
 }
 
-/** Clears a settled run so the status-bar segment can retire itself. */
+/**
+ * Runs a silent update under the target's single-run ownership, so a manual update cannot
+ * interleave with it and the dialog shows busy. Returns null without running while the target is busy or holds an unacknowledged result.
+ */
+export async function runAutomaticSkillUpdate<T>(
+  target: BundledSkillTarget,
+  names: string[],
+  run: () => Promise<T>
+): Promise<{ value: T } | null> {
+  const targetKey = bundledSkillTargetKey(target)
+  const slot = slotFor(targetKey)
+  // Never replace a running update or a result the user has not acknowledged yet.
+  if (slot.run.state !== 'idle') {
+    return null
+  }
+  const token = ++nextToken
+  slot.token = token
+  // Why no latestTargetKey: a silent update never claims the status bar.
+  setRun(targetKey, {
+    state: 'running',
+    targetKey,
+    names,
+    startedAt: Date.now(),
+    background: true
+  })
+  try {
+    return { value: await run() }
+  } finally {
+    if (slots.get(targetKey)?.token === token) {
+      slot.token = ++nextToken
+      setRun(targetKey, IDLE)
+    }
+  }
+}
+
 export function acknowledgeSkillUpdateRun(targetKey: string): void {
   const slot = slots.get(targetKey)
   if (!slot || slot.run.state === 'idle' || slot.run.state === 'running') {
@@ -179,7 +222,6 @@ export function acknowledgeSkillUpdateRun(targetKey: string): void {
   setRun(targetKey, IDLE)
 }
 
-/** Clears the status bar's run when it settled; a running one keeps it. */
 export function acknowledgeLatestSkillUpdateRun(): void {
   if (latestTargetKey) {
     acknowledgeSkillUpdateRun(latestTargetKey)

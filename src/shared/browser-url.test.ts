@@ -113,10 +113,7 @@ describe('browser-url helpers', () => {
     expect(normalizeExternalBrowserUrl('about:blank')).toBeNull()
   })
 
-  // Why: "Open Preview to the Side" on an HTML file loads the file via file://
-  // in the browser pane. The guest webview is sandboxed (see
-  // createMainWindow.ts will-attach-webview), so rendering local HTML cannot
-  // escalate privileges beyond what the editor already grants.
+  // Local HTML preview stays inside the sandboxed guest (createMainWindow will-attach-webview).
   it('allows file:// URLs so local HTML can be previewed', () => {
     expect(normalizeBrowserNavigationUrl('file:///Users/me/site/index.html')).toBe(
       'file:///Users/me/site/index.html'
@@ -150,9 +147,7 @@ describe('browser-url helpers', () => {
     )
   })
 
-  // Why: in-app preview is fine (sandboxed webview), but handing file:// to
-  // shell.openExternal would let a remote page drive Finder/Explorer to
-  // arbitrary paths. External-open paths must still refuse file://.
+  // Refuse file URLs externally: a remote page must not drive Finder/Explorer to arbitrary paths.
   it('rejects file:// for external opens even though it is allowed in-app', () => {
     expect(normalizeExternalBrowserUrl('file:///etc/passwd')).toBeNull()
     expect(normalizeExternalBrowserUrl('\\\\server\\share\\Example.ipynb')).toBeNull()

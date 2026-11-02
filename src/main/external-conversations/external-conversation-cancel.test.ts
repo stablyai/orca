@@ -122,7 +122,6 @@ describe('ExternalConversationSeam cancel', () => {
     fake.answer()
     expect(fake.writes).toEqual([])
     expect(fake.keys).toEqual(['\x1b'])
-    // Refusals leave no receipt, and a later send opens a fresh lane.
     hookRows.set(PANE, hookRow({ state: 'done' }))
     await expect(seam.send(host, KEY, 's1', 'held')).resolves.toEqual({ outcome: 'accepted' })
     expect(fake.writes).toEqual(['held'])
@@ -132,7 +131,7 @@ describe('ExternalConversationSeam cancel', () => {
     const h = harness()
     const fake = fakeTerminal()
     const launcher = fakeLauncher(async () => launchResult(null), undefined, false)
-    // As the real launcher: an abort before the surface is published throws.
+    // Match launcher refusal when aborted before surface publication.
     launcher.launch.mockImplementation(
       (_input, _onPublished, signal) =>
         new Promise((_resolve, reject) =>

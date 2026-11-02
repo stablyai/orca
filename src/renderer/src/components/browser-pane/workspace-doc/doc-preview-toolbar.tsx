@@ -11,10 +11,7 @@ import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity
 import type { DocPreviewHistory } from './doc-preview-webview-history'
 import { DocPreviewOverflowMenu } from './doc-preview-overflow-menu'
 
-/**
- * Binds the shared browser chrome to a workspace document: the address bar becomes a read-only
- * identity chip, because a preview shows a path the reader cannot retype into something else.
- */
+/** Use document identity until editing begins; committed addresses can convert the preview into a URL page. */
 export function DocPreviewToolbar({
   identity,
   previewId,
@@ -65,7 +62,7 @@ export function DocPreviewToolbar({
         goBack: history.goBack,
         goForward: history.goForward,
         reload: onReload,
-        // Why a no-op: the identity chip has nothing to submit, so nothing can reach this.
+        // The custom address slot owns submission; the shared chrome callback is unreachable.
         navigate: () => {}
       }}
       addressSlot={
@@ -84,17 +81,14 @@ export function DocPreviewToolbar({
           onHardReload={onHardReload}
         />
       }
-      // Cookie import is a browsing-session action; a preview reads workspace disk over a grant
-      // and has no session for cookies to land in.
+      // Preview grants read workspace disk without a browsing session to receive imported cookies.
       importControl={null}
       elementTools={elementTools}
       markup={{
         active: markupActive,
         disabled: markupDisabled,
         onToggle: onToggleMarkup,
-        // Why false on a surface that is plainly visible: the draw-tool nudge fires once per
-        // install, and it belongs to the browsing pane. A reader who opened a document should not
-        // be the one who spends it.
+        // Reserve the once-per-install draw hint for browsing panes.
         canShowDiscoveryHint: false
       }}
       shareControl={shareControl}

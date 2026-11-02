@@ -22,8 +22,7 @@ export function encodePairingOffer(offer: PairingOffer): string {
   if (base64url.length > PAIRING_CODE_MAX_CHARACTERS) {
     throw new Error('Pairing offer exceeds safe size')
   }
-  // Why: Android camera intents and Expo Router preserve query params more
-  // reliably than URL fragments when launching a custom-scheme app.
+  // Android camera intents and Expo Router retain custom-scheme query parameters more reliably than fragments.
   return `orca://pair?code=${base64url}`
 }
 
@@ -45,8 +44,7 @@ function extractPairingCodeFromUrl(url: string): string | null {
   } catch {
     return null
   }
-  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
-  // pairing deep-link host may carry runtime auth material.
+  // Exact pairing host prevents prefix matches such as orca://pairing from carrying runtime credentials.
   if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
     return null
   }
@@ -60,9 +58,7 @@ function extractPairingCodeFromUrl(url: string): string | null {
   return parsed.hash ? parsed.hash.slice(1) || null : null
 }
 
-// Why: accept either an `orca://pair?...` URL or the bare base64
-// string so the mobile paste-pair flow can take whichever the user
-// actually copied from desktop.
+// Mobile paste accepts either the copied deep link or bare base64 code.
 export function parsePairingCode(input: string): PairingOffer | null {
   if (input.length > PAIRING_INPUT_MAX_CHARACTERS) {
     return null

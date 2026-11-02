@@ -15,7 +15,6 @@ type BrowserHostLeaseFenceDependencies = {
   releaseFencedPage(retirement: BrowserPageRetirement): void
 }
 
-/** Retires one lease: its reconnect timer, reconciliation, pages, routes, and per-page state. */
 export function dispatchBrowserHostLeaseFence(
   state: BrowserHostLeaseState,
   reason: BrowserHostFenceReason,
@@ -33,15 +32,13 @@ export function dispatchBrowserHostLeaseFence(
   fenceBrowserHostLease(state, reason, dependencies.leasesByClientId, (route, routeReason) =>
     dependencies.fenceRoute(route, routeReason)
   )
-  // Why: a fenced page never completes retirement through the client, so complete it here or the
-  // placement and its capacity stay stranded for the runtime's life. The runtime page record is
-  // deliberately kept — retention is what lets a returning host of the same identity recover the
-  // tab — see retainRuntimeBrowserClientPageRecord for what that costs.
+  // Fenced clients cannot finish retirement; release placement/capacity here to avoid stranding it.
+  // Keep the runtime page record for same-identity recovery (retainRuntimeBrowserClientPageRecord).
   for (const retirement of fencedPages) {
     try {
       dependencies.releaseFencedPage(retirement)
     } catch (error) {
-      // One page's release must not abandon the rest of a lease already past the point of return.
+      // Continue releasing the fenced lease even if one page fails.
       console.warn('[browser-host-lease] fenced page release failed:', {
         browserPageId: retirement.browserPageId,
         error

@@ -28,8 +28,7 @@ import {
   splitPatchEntries
 } from './xterm-patch-text.mjs'
 
-// Only the tests need to slice the generated half out of a patch; the generator
-// reads `generatedPaths` directly where it compares against the pristine build.
+// Only tests slice generated patch section; generator compares manifest generatedPaths directly with pristine build.
 function generatedHunks(patchText, generatedPaths) {
   return splitPatchEntries(patchText)
     .filter((entry) => generatedPaths.some((prefix) => entry.path.startsWith(prefix)))
@@ -225,8 +224,7 @@ describe('round-trip stability', () => {
   })
 })
 
-// `--write` rewrites the source patch from the emitted patch, so a hunk the
-// emitted patch cannot name would delete itself on the next run.
+// --write derives source patch from emitted hunks; an unnameable hunk would delete itself next run.
 describe('source derivation agreement', () => {
   const publishedEntry = [
     'diff --git a/src/browser/Types.ts b/src/browser/Types.ts',
@@ -328,8 +326,7 @@ describe('manifest guards', () => {
 
   it('refuses a sourcemap policy it does not implement', () => {
     expect(assertSourcemapPolicy({ sourcemaps: { policy: 'include' } })).toBe('include')
-    // `delete` named a code path that no longer exists; accepting it would ship
-    // maps that do not match the bundle.
+    // Reject retired delete policy or source maps ship mismatched to bundle.
     expect(() => assertSourcemapPolicy({ sourcemaps: { policy: 'delete' } })).toThrow(
       /must be one of include, got "delete"/
     )
@@ -378,8 +375,7 @@ describe('lockfile coupling', () => {
     expect(updated.split('\n')).toHaveLength(lockfile.split('\n').length)
   })
 
-  // pnpm repeats the hash in every resolution key. Rewriting only patchedDependencies
-  // installs fine on a warm store and drifts on a cold one, so it fails in CI only.
+  // Rewrite every resolution hash: patchedDependencies alone passes warm installs but fails cold CI stores.
   it('rewrites the resolution keys as well as patchedDependencies', () => {
     const key = '@xterm/xterm@6.1.0-beta.287'
     expect(readLockfileResolutionHashes(lockfile, key)).toEqual(['0'.repeat(64), '0'.repeat(64)])
@@ -410,8 +406,7 @@ describe('lockfile coupling', () => {
   })
 
   it('reports a missing key without throwing, which is the state mid version bump', () => {
-    // A bump renames the key, so --write has nothing to rewrite until pnpm install
-    // creates it. Aborting there would strand the run before the later packages.
+    // Missing renamed key is normal mid-bump; let later pnpm install create it rather than aborting --write.
     expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.287')).toBe(true)
     expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.288')).toBe(false)
   })
@@ -438,8 +433,7 @@ describe('check-mode reporting', () => {
   })
 })
 
-// These run without network or a build, so ordinary `pnpm test` catches the two
-// desyncs that would otherwise only surface in the heavy xterm_patch_sync job.
+// Offline/build-free tests catch desync before costly xterm_patch_sync job.
 describe('committed xterm patch artifacts', () => {
   it('records the lockfile hash pnpm derives from the patch file', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))

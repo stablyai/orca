@@ -20,7 +20,6 @@ beforeEach(() => {
 const WT = 'repo-1::/Users/dev/orca'
 const FILE = '/Users/dev/orca/notes.ts'
 
-/** A persisted editor tab whose unified tab names its file by the owned id. */
 function ownedSession(): WorkspaceSessionState {
   return {
     activeRepoId: null,
@@ -54,51 +53,28 @@ function ownedSession(): WorkspaceSessionState {
   }
 }
 
-function activeOwnedSession(): WorkspaceSessionState {
-  return {
-    ...ownedSession(),
-    activeTabTypeByWorktree: { [WT]: 'editor' },
-    activeFileIdByWorktree: { [WT]: ownedEditorFileId(FILE, WT, undefined) }
-  }
-}
-
 describe('headless editor tabs under an owned id', () => {
-  it('lists and retires the unified tab with the layout-owner switch on', () => {
+  it('does not list a row mirrored from a paired host', () => {
     const session = ownedSession()
-    expect(buildHeadlessMobileSessionEditorTabs(WT, session)).toEqual([
-      expect.objectContaining({ id: 'tab-1', filePath: FILE, color: '#ff0000', isPinned: true })
-    ])
-    const retired = retireHeadlessEditorTab(session, WT, { id: 'tab-1', filePath: FILE })
-    expect(retired?.unifiedTabs?.[WT]).toEqual([])
-    expect(retired?.tabGroups?.[WT]?.[0]?.tabOrder).toEqual([])
-  })
-
-  it('shows it as the active file', () => {
-    expect(buildHeadlessMobileSessionEditorTabs(WT, activeOwnedSession())).toEqual([
-      expect.objectContaining({ id: 'tab-1', isActive: true })
-    ])
-  })
-
-  it('clears the active file when it retires', () => {
-    const retired = retireHeadlessEditorTab(activeOwnedSession(), WT, {
-      id: 'tab-1',
-      filePath: FILE
-    })
-
-    expect(retired?.activeFileIdByWorktree?.[WT]).toBeNull()
-  })
-
-  it('keeps matching by path alone with the switch off', () => {
-    mocks.layoutOwnerIsMain = false
-    expect(buildHeadlessMobileSessionEditorTabs(WT, ownedSession())).toEqual([
-      expect.objectContaining({ id: FILE, color: null, isPinned: false })
-    ])
+    session.openFilesByWorktree = {
+      [WT]: [
+        {
+          filePath: FILE,
+          relativePath: 'notes.ts',
+          worktreeId: WT,
+          language: 'typescript',
+          runtimeEnvironmentId: 'peer',
+          mirroredFromRuntimeSession: true
+        }
+      ]
+    }
+    expect(buildHeadlessMobileSessionEditorTabs(WT, session)).toEqual([])
   })
 })
 
 const ENV = 'env-1'
 
-/** A runtime-environment and a local file at one path: the runtime one listed first and owned. */
+// Distinct owners can hold the same path; list the owned runtime file first.
 function twoOwnerSession(): WorkspaceSessionState {
   const base = ownedSession()
   const file = { filePath: FILE, relativePath: 'notes.ts', worktreeId: WT, language: 'typescript' }

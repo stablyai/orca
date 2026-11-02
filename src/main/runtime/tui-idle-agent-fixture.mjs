@@ -1,5 +1,4 @@
-// Real agent-TUI stand-in for tui-idle-name-only-real-pty.integration.test.ts.
-// Emits a genuine name-only OSC title while streaming, then settles per mode.
+// Real-PTY stand-in streams under a name-only OSC title, then settles according to mode.
 const mode = process.argv[2]
 const workMs = Number(process.argv[3] ?? 6000)
 const osc = (title) => `]0;${title}`

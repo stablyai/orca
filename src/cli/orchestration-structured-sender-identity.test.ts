@@ -46,12 +46,32 @@ import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 const STRUCTURED_HANDLE = 'structworker_a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 // Cover distinct handler shapes that share sender resolution and liveness checks.
-const SENDER_VERBS: { argv: string[]; method: string }[] = [
-  { argv: ['orchestration', 'run-current'], method: 'orchestration.runCurrent' },
-  { argv: ['orchestration', 'run-create', '--objective', 'x'], method: 'orchestration.runCreate' },
-  { argv: ['orchestration', 'task-list'], method: 'orchestration.taskList' },
-  { argv: ['orchestration', 'gate-list'], method: 'orchestration.gateList' },
-  { argv: ['orchestration', 'dispatch-show', '--task', 't1'], method: 'orchestration.dispatchShow' }
+const SENDER_VERBS: {
+  argv: string[]
+  method: string
+  senderField: 'from' | 'callerTerminalHandle'
+}[] = [
+  {
+    argv: ['orchestration', 'run-current'],
+    method: 'orchestration.runCurrent',
+    senderField: 'from'
+  },
+  {
+    argv: ['orchestration', 'run-create', '--objective', 'x'],
+    method: 'orchestration.runCreate',
+    senderField: 'from'
+  },
+  {
+    argv: ['orchestration', 'task-list'],
+    method: 'orchestration.taskList',
+    senderField: 'callerTerminalHandle'
+  },
+  { argv: ['orchestration', 'gate-list'], method: 'orchestration.gateList', senderField: 'from' },
+  {
+    argv: ['orchestration', 'dispatch-show', '--task', 't1', '--preamble'],
+    method: 'orchestration.dispatchShow',
+    senderField: 'from'
+  }
 ]
 
 describe('a structured worker running orchestration commands as itself', () => {
@@ -74,32 +94,41 @@ describe('a structured worker running orchestration commands as itself', () => {
           _meta: { runtimeId: 'runtime-1' }
         }
       }
-      return { id: 'req', ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } }
+      const result =
+        method === 'orchestration.runCreate'
+          ? { run: { id: 'run-1', objective: 'x' } }
+          : method === 'orchestration.runCurrent'
+            ? { run: null }
+            : method === 'orchestration.taskList'
+              ? { tasks: [], count: 0 }
+              : method === 'orchestration.gateList'
+                ? { gates: [], count: 0 }
+                : { dispatch: null, preamble: 'preview' }
+      return { id: 'req', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
     })
   }
 
   it.each(SENDER_VERBS)(
     'resolves its own identity for $method with no --from',
-    async ({ argv, method }) => {
+    async ({ argv, method, senderField }) => {
       process.env.ORCA_TERMINAL_HANDLE = STRUCTURED_HANDLE
       answerCalls()
       vi.spyOn(console, 'log').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
       await expect(main(argv)).resolves.not.toThrow()
+      expect(process.exitCode).toBe(priorExitCode)
       const called = callMock.mock.calls.map((call) => call[0] as string)
-      expect(called).toContain(method)
+      expect(callMock).toHaveBeenCalledWith('terminal.resolveIdentity', {
+        terminal: STRUCTURED_HANDLE
+      })
+      expect(callMock).toHaveBeenCalledWith(
+        method,
+        expect.objectContaining({ [senderField]: STRUCTURED_HANDLE })
+      )
       // Structured workers lack writable PTYs; terminal.show must not validate them.
       expect(called).not.toContain('terminal.show')
     }
   )
-
-  it('sends the structured handle as the sender, not a guessed sibling', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = STRUCTURED_HANDLE
-    answerCalls()
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    await main(['orchestration', 'run-create', '--objective', 'x'])
-    const create = callMock.mock.calls.find((call) => call[0] === 'orchestration.runCreate')
-    expect((create?.[1] as { from?: string } | undefined)?.from).toBe(STRUCTURED_HANDLE)
-  })
 
   it('still refuses a handle the runtime reports dead, with no pane key to remint from', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale'

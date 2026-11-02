@@ -20,13 +20,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 let moveOperationCounter = 0
 
-/**
- * Coordinates an Orca-owned move as one editor transaction: quiesce affected
- * saves, register in-flight source suppression, run the on-disk rename, then
- * atomically rekey the open sessions in place (installing the content-verify
- * gate) and re-verify any destination echo that was latched before the rekey.
- * On failure the store is untouched — only the suppression scope is released.
- */
+/** Quiesce saves, suppress source events, rename disk, rekey sessions atomically and verify destination echoes. Failed rename leaves store state untouched and releases suppression. */
 export async function executeOpenEditorPathMove(args: {
   context: RuntimeFileOperationArgs
   fromPath: string
@@ -39,17 +33,14 @@ export async function executeOpenEditorPathMove(args: {
   const { context, fromPath, toPath, worktreeId, worktreePath } = args
   const operationId = `editor-move-${(moveOperationCounter += 1)}`
 
-  // Host-scoped: the same abs path on another host (2nd SSH connection, local vs
-  // runtime) is a distinct file the rename never touched — keep it out of the move.
+  // Scope by host: identical absolute paths on other SSH/runtime/local hosts name untouched files.
   const moveState = useAppStore.getState()
   const owner = editorMoveOwnerFromContext(context, worktreeId)
   const affected = moveState.openFiles.filter(
     (f) => isPathInsideOrEqual(fromPath, f.filePath) && isOpenFileOnMoveOwner(moveState, f, owner)
   )
 
-  // Suppress the move ROOT (prefix-matched) per scope, always including the
-  // initiating one, so a file opened UNDER a moving dir mid-rename is covered
-  // even though it wasn't in `affected`.
+  // Suppress the whole move root per scope, including files opened under a moving directory after planning.
   const ownerSubOps: string[] = []
   const scopes = new Map<string, { worktreeId: string; owner: string | null }>()
   const addScope = (wtId: string, owner: string | null): void => {
@@ -70,8 +61,7 @@ export async function executeOpenEditorPathMove(args: {
     })
   }
 
-  // Let any in-flight autosave settle so a trailing write can't recreate the old
-  // path after the rename.
+  // Wait for autosaves so a trailing write cannot recreate the old path after rename.
   await Promise.all(affected.map((f) => requestEditorSaveQuiesce({ fileId: f.id })))
 
   try {
@@ -82,25 +72,18 @@ export async function executeOpenEditorPathMove(args: {
       args.documentScoped ? documentFolderAccess(fromPath) : undefined
     )
   } catch (err) {
-    // Rename never landed — release the source suppression immediately.
     for (const subOperationId of ownerSubOps) {
       settleEditorPathMove(subOperationId)
     }
     throw err
   }
 
-  // The on-disk rename has committed. Guarantee the source suppression is
-  // released on every exit path, but only AFTER any rollback rename runs so a
-  // late forward-rename delete event stays suppressed during rollback.
+  // Release source suppression only after rollback, including on errors, so late forward-rename events stay suppressed.
   try {
-    // Capture host-close resolution from the PRE-rekey store (mirrored tab ids
-    // change on rekey), but don't send it yet — only a committed rekey should
-    // close the host's authoritative tab.
+    // Capture host-close IDs before rekey changes them, but send only after commit.
     const mirrorState = useAppStore.getState()
     const mirroredAffected = affected.filter((f) => f.mirroredFromRuntimeSession)
 
-    // Commit: retarget the live sessions in place (the rekey installs the gate +
-    // provenance on dirty destinations).
     let rekeyResult = remapOpenEditorTabsForPathChange({
       fromPath,
       toPath,
@@ -109,7 +92,6 @@ export async function executeOpenEditorPathMove(args: {
       owner,
       moveOperationId: operationId
     })
-    // Switch point: main renames the tabs; its frame rekeys the sessions, or main refused.
     if (
       ORCA_LAYOUT_OWNER_IS_MAIN &&
       rekeyResult.ok &&
@@ -118,9 +100,7 @@ export async function executeOpenEditorPathMove(args: {
       rekeyResult = { ok: false, reason: 'stale' }
     }
     if (!rekeyResult.ok) {
-      // The disk rename succeeded but the editor state couldn't be retargeted
-      // (a destination collision or stale plan). Undo the on-disk move so the
-      // still-open source session isn't stranded pointing at a vanished path.
+      // Undo disk rename if editor rekey fails, or the open source session would point to a vanished path.
       let rollbackError: unknown
       try {
         await renameRuntimePath(
@@ -142,8 +122,7 @@ export async function executeOpenEditorPathMove(args: {
       )
     }
 
-    // Rekey detached mirrored tabs to local; close the host's old-path tab so its
-    // snapshot can't resurrect the old path (the close intent suppresses re-mirroring).
+    // Close old mirrored host tabs after local rekey; close intent prevents snapshots resurrecting the old path.
     for (const file of mirroredAffected) {
       notifyHostOfMirroredEditorClose(mirrorState, file.worktreeId, file.id)
     }
@@ -153,8 +132,7 @@ export async function executeOpenEditorPathMove(args: {
     }
   }
 
-  // Proactively verify every gated tab so the autosave gate resolves even if the
-  // destination watcher event never arrives (down / dropped / coalesced).
+  // Verify gated destinations proactively so dropped/coalesced watcher events cannot leave autosave blocked.
   const gatedTabIds = useAppStore
     .getState()
     .openFiles.filter((f) => f.pendingSelfMoveEcho?.operationId === operationId)

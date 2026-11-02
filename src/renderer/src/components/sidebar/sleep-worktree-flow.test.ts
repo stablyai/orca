@@ -53,7 +53,7 @@ vi.mock('@/lib/worktree-sleep-intent', () => ({
   withWorktreeSleepTeardown: (_worktreeId: string, teardown: () => Promise<unknown>) => teardown()
 }))
 
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepTarget

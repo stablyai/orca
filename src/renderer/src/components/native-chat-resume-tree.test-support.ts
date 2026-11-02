@@ -1,5 +1,3 @@
-// Fixtures and DOM lookups shared by the resume tree's test files.
-
 import { vi, type Mock } from 'vitest'
 import { useAppStore } from '../store'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -57,7 +55,6 @@ export function lineage(child: Worktree, parent: Worktree): WorktreeLineage {
   }
 }
 
-/** A failure the host says a retry cannot fix. */
 export function unretryable(entry: ResumeCandidate): ResumeFailure {
   return {
     ...entry,
@@ -93,7 +90,6 @@ export function seedTree(hosts: { parent?: ExecutionHostId; child?: ExecutionHos
 
 export const onToggleSpy: Mock<(sessionId: string, checked: boolean) => void> = vi.fn()
 
-/** A group node's checkbox: workspace or project ("in"), machine ("on"). */
 export function nodeBox(name: string): HTMLElement {
   const box = document.querySelector<HTMLElement>(
     `[role="checkbox"][aria-label="Select all chats in ${name}"], [role="checkbox"][aria-label="Select all chats on ${name}"]`
@@ -122,7 +118,6 @@ export function itemOf(box: HTMLElement): HTMLElement {
   return box.closest<HTMLElement>('[role="treeitem"]')!
 }
 
-/** The group node's "x of y". */
 export function countOf(name: string): string | undefined {
   return itemOf(nodeBox(name)).querySelector('.tabular-nums')?.textContent ?? undefined
 }

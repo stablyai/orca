@@ -53,17 +53,14 @@ export async function requiresSystemSshForSecurityKey(
   resolved: Pick<SshResolvedConfig, 'identityFile'> | null
 ): Promise<boolean> {
   const resolvedPaths = resolveIdentityFilePaths(target, resolved)
-  // Why: `ssh -G` already echoes OpenSSH's built-in defaults, so its list is the real candidate
-  // set; guess at the defaults only when config resolution failed outright.
+  // Use ssh -G identity candidates, including built-in defaults; guess defaults only when config resolution failed.
   const identityPaths =
     resolvedPaths.length === 0 && !resolved && !target.identityFile
       ? listDefaultIdentityFilePaths()
       : resolvedPaths
   for (const keyPath of identityPaths) {
     if (await identityRequiresSystemSsh(keyPath)) {
-      // Why: scan every candidate — an earlier normal key never rules out a security key the host
-      // requires — but forcing system transport with no binary hard-fails a connection ssh2 could
-      // still have served over agent or password auth.
+      // Inspect all keys, but without system ssh leave agent/password auth available through ssh2.
       return findSystemSsh() !== null
     }
   }

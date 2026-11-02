@@ -12,8 +12,7 @@ export type PendingSafeFitContinuation = {
   continuation: () => void
   shouldContinue: () => boolean
   resolve: (completed: boolean) => void
-  // Why opt-in: only the reattach grid push is still owed after an indefinite hide. Every
-  // other caller keeps the bounded-degradation contract and is dropped when unmeasurable.
+  // Only reattach grid pushes survive indefinite hiding; other unmeasurable callers retain bounded completion.
   deferIfHidden: boolean
 }
 
@@ -64,8 +63,7 @@ export function registerPendingSafeFitContinuation(
   if (replaced) {
     settlePendingSafeFitContinuation(pane, operationKey, replaced, false)
   }
-  // Why: this registration owns the key now, so an earlier deferred twin must not survive to
-  // fire alongside it on the next fit.
+  // New ownership must disarm the older deferred twin or both fire on the next fit.
   clearDeferredFitContinuation(pane, operationKey)
   const currentOperations = pendingSafeFitContinuations.get(pane) ?? operations
   currentOperations.set(operationKey, pending)
@@ -73,9 +71,7 @@ export function registerPendingSafeFitContinuation(
 }
 
 export function flushPendingSafeFitContinuations(pane: ManagedPane): void {
-  // Why first: continuations deferred while the pane was display:none carry the reattach
-  // grid push, and the pane is measurable exactly now. Reading the pending map afterwards is
-  // what keeps a continuation that fits re-entrantly from re-running a settled entry.
+  // Drain deferred grid pushes now the pane measures, before reading pending entries that reentrant fits may settle.
   flushDeferredFitContinuations(pane)
   const operations = pendingSafeFitContinuations.get(pane)
   if (!operations) {
@@ -95,15 +91,13 @@ export function flushPendingSafeFitContinuations(pane: ManagedPane): void {
   }
 }
 
-// Why settle-then-defer rather than settle: the awaiting caller must be released now, but the
-// grid push the continuation carries is still owed to the PTY once the pane measures.
+// Release the awaiting caller now, but preserve the owed PTY grid push until the pane measures.
 export function releaseSafeFitContinuationUntilMeasurable(
   pane: ManagedPane,
   operationKey: string,
   pending: PendingSafeFitContinuation
 ): void {
-  // Why gate on the settle: a superseded entry is already owned by a newer registration, and
-  // re-parking it would resurrect work that caller deliberately replaced.
+  // A superseded entry belongs to its replacement; re-parking would resurrect stale work.
   if (
     settlePendingSafeFitContinuation(pane, operationKey, pending, false) &&
     pending.deferIfHidden
@@ -138,7 +132,7 @@ export function failPendingSafeFitContinuations(pane: ManagedPane): void {
 
 export function cancelPendingSafeFitContinuations(pane: ManagedPane): void {
   clearPaneFitContinuationRetry(pane)
-  // Why: this is pane teardown/rebuild — a grid push owed to the old pane is now meaningless.
+  // Teardown/rebuild invalidates grid pushes owed to the old pane.
   clearDeferredFitContinuations(pane)
   const operations = pendingSafeFitContinuations.get(pane)
   if (!operations) {
@@ -156,7 +150,6 @@ export function cancelPendingSafeFitContinuation(
   pending: PendingSafeFitContinuation
 ): void {
   settlePendingSafeFitContinuation(pane, operationKey, pending, false)
-  // Why identity-gated: a stale handle may cancel after a replacement with the same key parks;
-  // it must invalidate its own deferred work without deleting the newer grid push.
+  // Cancel only this owner’s deferred work; a same-key replacement may already be parked.
   clearDeferredFitContinuation(pane, operationKey, pending)
 }

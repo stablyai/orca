@@ -9,7 +9,6 @@ import {
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
-/** The line an Install leaves on every setup surface, with Retry when it needs attention. */
 export function BundledSkillInstallStatus(props: {
   install: Pick<BundledSkillInstall, 'state' | 'retry'>
   buttonSize?: 'xs' | 'sm'

@@ -28,6 +28,8 @@ export type SessionSearchFileRow = {
   failedMtimeMs: number | null
 }
 
+export type SessionSearchResumableCursor = { byteOffset: number; prefixHash: string }
+
 export type SessionSearchStateCounts = {
   current: number
   due: number
@@ -144,6 +146,39 @@ export class SessionSearchStore {
     }
   }
 
+  /** A current cursor with bytes past it, and the hash a replacement read must reproduce to append there. */
+  resumableCursor(candidate: SessionFileCandidate): SessionSearchResumableCursor | null {
+    const file = candidate.file
+    if (this.closed || typeof file.sizeBytes !== 'number') {
+      return null
+    }
+    const identity = fileIdentity(file)
+    try {
+      const row = asRecord(
+        this.db
+          .prepare(
+            `SELECT byte_offset AS byteOffset, prefix_hash AS prefixHash FROM files
+             WHERE path = ? AND state = 'current' AND prefix_hash IS NOT NULL
+             AND byte_offset > 0 AND byte_offset < ?
+             AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
+          )
+          .get(
+            file.path,
+            file.sizeBytes,
+            identity?.dev ?? null,
+            identity?.dev ?? null,
+            identity?.ino ?? null
+          )
+      )
+      return typeof row?.byteOffset === 'number' && typeof row.prefixHash === 'string'
+        ? { byteOffset: row.byteOffset, prefixHash: row.prefixHash }
+        : null
+    } catch (error) {
+      this.onError(error)
+      return null
+    }
+  }
+
   beginWrite(
     candidate: SessionFileCandidate,
     mode: 'replace' | 'append',
@@ -172,33 +207,30 @@ export class SessionSearchStore {
 
   files(): SessionSearchFileRow[] {
     return (
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The files schema and SELECT aliases define this row; REAL casts return numeric IDs or null.
-      (
-        this.db
-          .prepare(
-            // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
-            `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
+      this.db
+        .prepare(
+          // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
+          `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
                   mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
                   state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
            FROM files`
-          )
-          .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-          dev: number | null
-          ino: number | null
-        })[]
-      ).map((row) => ({
-        path: row.path,
-        identity:
-          typeof row.dev === 'number' && typeof row.ino === 'number'
-            ? { dev: row.dev, ino: row.ino }
-            : null,
-        mtimeMs: row.mtimeMs,
-        sizeBytes: row.sizeBytes,
-        state: row.state,
-        failCount: row.failCount,
-        failedMtimeMs: row.failedMtimeMs
-      }))
-    )
+        )
+        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
+        dev: number | null
+        ino: number | null
+      })[]
+    ).map((row) => ({
+      path: row.path,
+      identity:
+        typeof row.dev === 'number' && typeof row.ino === 'number'
+          ? { dev: row.dev, ino: row.ino }
+          : null,
+      mtimeMs: row.mtimeMs,
+      sizeBytes: row.sizeBytes,
+      state: row.state,
+      failCount: row.failCount,
+      failedMtimeMs: row.failedMtimeMs
+    }))
   }
 
   setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {

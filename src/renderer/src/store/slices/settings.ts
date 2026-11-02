@@ -1,4 +1,4 @@
-import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -44,7 +44,10 @@ export type SettingsSlice = SettingsSearchState & {
   fetchSettings: (options?: ownerHydration.FetchSettingsOptions) => Promise<void>
   awaitOwnerWorktreeVisibilityDefaultsHydration: () => Promise<void>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
-  updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => Promise<void>
+  updateSettingsOrThrow: (
+    updates: Partial<GlobalSettings>,
+    onAcknowledged?: (settings: GlobalSettings) => void
+  ) => Promise<void>
   setActiveRuntimeEnvironmentPreference: (environmentId: string | null) => Promise<boolean>
 }
 
@@ -131,7 +134,8 @@ async function persistSettingsUpdates(
   currentSettings: GlobalSettings | null,
   supportedRuntimeEnvironmentId: string | null,
   sourceDefaultsSupportedRuntimeEnvironmentId: string | null,
-  shouldPublish: () => boolean
+  shouldPublish: () => boolean,
+  onAcknowledged?: (settings: GlobalSettings) => void
 ): Promise<void> {
   const normalizedUpdates = normalizeSettingsUpdates(updates, currentSettings)
   await persistVisibilityAwareSettings({
@@ -140,6 +144,7 @@ async function persistSettingsUpdates(
     supportedRuntimeEnvironmentId,
     sourceDefaultsSupportedRuntimeEnvironmentId,
     shouldPublish,
+    onAcknowledged,
     set
   })
 }
@@ -165,8 +170,7 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
   })
   const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
   assertRuntimeStatusCompatible(status)
-  // Why: the switch probe already proved compatibility; avoid immediately
-  // re-probing through the heavier generic runtime RPC path during hydration.
+  // Switch already proved compatibility; avoid the heavier generic RPC re-probe during hydration.
   markRuntimeEnvironmentCompatible(environmentId)
 }
 
@@ -181,8 +185,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     await ownerHydration.fetchSettingsWithOwnerHydration({ options, set, get })
     const { runtimeEnvironmentCatalogHydrated, runtimeEnvironments, runtimeStatusByEnvironmentId } =
       get()
-    // Why: settings refreshes are frequent, but only incomplete host coverage needs
-    // the all-host boot probe. A recorded null still means the host was checked.
+    // Probe all hosts only for incomplete/stale coverage; a recorded null still counts as checked.
     if (
       !runtimeEnvironmentCatalogHydrated ||
       !hasCompleteRuntimeStatusCoverage(runtimeEnvironments, runtimeStatusByEnvironmentId) ||
@@ -218,7 +221,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     }
   },
 
-  updateSettingsOrThrow: async (updates) => {
+  updateSettingsOrThrow: async (updates, onAcknowledged) => {
     const shouldPublish = ownerHydration.createSettingsPublicationFence(
       'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
     )
@@ -229,7 +232,8 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       get().settings,
       get().worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId,
       get().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId,
-      shouldPublish
+      shouldPublish,
+      onAcknowledged
     )
     if ('worktreeVisibilityDefaults' in updates) {
       await get().fetchAllWorktrees({ visibilityOwnerHostId })
@@ -279,9 +283,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       } else {
         set({ settings: null })
       }
-      // Why: hydration is host-merged by downstream slices. Switching focus
-      // should add/update the selected host without discarding other hosts.
-      // Why: hydrate the newly chosen default host's catalog; other hosts keep theirs.
+      // Hydrate only the newly focused host’s catalog; downstream host merges preserve other hosts.
       await get().fetchRepos({ runtimeEnvironmentId: nextId })
       await get().fetchAllWorktrees()
       await get().fetchWorktreeLineage()

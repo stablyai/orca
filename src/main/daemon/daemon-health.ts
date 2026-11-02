@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { encodeNdjson } from './ndjson'
@@ -203,6 +204,7 @@ export function getMacDaemonSystemResolverHealth(
     }
     const removeSocketListeners = (): void => {
       sock?.off('error', onError)
+      sock?.off('close', onError)
       sock?.off('connect', onConnect)
       sock?.off('data', onData)
     }
@@ -212,7 +214,8 @@ export function getMacDaemonSystemResolverHealth(
         type: 'hello',
         version: protocolVersion,
         token,
-        clientId: 'resolver-health-check',
+        // Unique per probe: the daemon evicts an older control socket that reuses a clientId.
+        clientId: `resolver-health-check-${randomUUID()}`,
         role: 'control'
       }
       sock?.write(encodeNdjson(hello))
@@ -275,6 +278,7 @@ export function getMacDaemonSystemResolverHealth(
     }
     sock = connect({ path: socketPath })
     sock.on('error', onError)
+    sock.on('close', onError)
     sock.on('connect', onConnect)
 
     let buffer = ''

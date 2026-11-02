@@ -34,10 +34,7 @@ export function autosaveSubscriberInputsEqual(
   )
 }
 
-/**
- * The views a restart save writes: one dirty view per record, its first that may autosave when it
- * has one (a read-only or CSV preview view listed first must not refuse the restart).
- */
+/** Pick one dirty writable view per record for restart saves; read-only/preview siblings must not refuse the record’s save. */
 export function restartSaveTargets(
   state: Pick<AppState, 'openFiles'> & EditorBufferViewIndex
 ): OpenFile[] {

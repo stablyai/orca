@@ -219,7 +219,7 @@ export function createRepoUpdateActions(
         }
       }
       const previous = updateRepoChains.get(updateChainKey)
-      // Why: settings persist as full nested values, so preserve per-repo call order — a slower response mustn't overwrite newer state.
+      // Persisted nested settings replace whole values; serialize per repo so slow replies cannot overwrite newer edits.
       const next = previous
         ? previous.catch(() => undefined).then(applyRepoUpdate)
         : applyRepoUpdate()

@@ -57,7 +57,7 @@ export function getVisibleExternalWorktrees(
 }
 
 function isUserFacingExternalWorktree(worktree: DetectedWorktree): boolean {
-  // Why: agent plumbing stays outside the discovery inbox even when its separate visibility policy shows it.
+  // Agent plumbing stays outside discovery even when its separate visibility policy shows it.
   return (
     !worktree.selectedCheckout &&
     worktree.ownership !== 'orca-managed' &&
@@ -65,7 +65,7 @@ function isUserFacingExternalWorktree(worktree: DetectedWorktree): boolean {
   )
 }
 
-// Why: per-path recovery remains available while either repo visibility policy is off.
+// Keep per-path recovery available when either visibility policy is off.
 function isImportableExternalWorktree(worktree: DetectedWorktree): boolean {
   return !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
 }

@@ -4,19 +4,8 @@ import {
   needsCookedEchoSafeQueryReply
 } from './terminal-query-reply'
 
-/**
- * True when `delivery` wrote the WHOLE payload.
- *
- * Only a payload made entirely of cooked-echo-risk replies is taken. Those need their
- * echo shapes armed around the write, and they are what a program sits blocked on, so
- * they bypass the host's startup input gate. Everything else — CPR, DA, and any mixed
- * payload — stays on the host's own path and is written there in call order, which is
- * what keeps a CPR from passing the daemon's post-ready flush gate and splicing into the
- * buffered startup command.
- *
- * Ordering needs no machinery here: every reply is written the moment it is accepted, so
- * the pty sees them in the order the caller produced them.
- */
+/** Return true only after writing the whole payload. Cooked-echo-risk-only replies arm echo protection and bypass startup gating.
+ * Keep CPR/DA/mixed payloads on the host’s ordered path so replies cannot splice into buffered startup commands; accepted writes retain caller order. */
 export function deliverTerminalQueryReplyPayload(
   data: string,
   delivery: Pick<PtyStartupReplyDelivery, 'answer'>

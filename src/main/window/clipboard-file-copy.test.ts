@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
-import { writeFileToClipboard, type ClipboardFileDeps } from './clipboard-file-copy'
+import {
+  CLIPBOARD_FILE_RESOLUTION_TIMEOUT_MS,
+  writeFileToClipboard,
+  type ClipboardFileDeps
+} from './clipboard-file-copy'
 
 function exited(code: number | null): ProcessResult {
   return { code, signal: null, stdout: '', stderr: '', timedOut: false }
@@ -20,6 +24,7 @@ function makeDeps(overrides: Partial<ClipboardFileDeps> = {}): ClipboardFileDeps
 describe('writeFileToClipboard', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.useRealTimers()
   })
 
   it('rejects relative paths without touching the clipboard', async () => {
@@ -49,6 +54,15 @@ describe('writeFileToClipboard', () => {
     ).toEqual({ ok: false, reason: 'access-denied' })
   })
 
+  it('fails without publishing when path resolution never settles', async () => {
+    vi.useFakeTimers()
+    const deps = makeDeps({ resolveFilePath: () => new Promise(() => undefined) })
+    const result = writeFileToClipboard('/mnt/stale/file.txt', deps)
+    await vi.advanceTimersByTimeAsync(CLIPBOARD_FILE_RESOLUTION_TIMEOUT_MS)
+    await expect(result).resolves.toEqual({ ok: false, reason: 'clipboard-write-failed' })
+    expect(deps.writeBuffer).not.toHaveBeenCalled()
+  })
+
   it('writes a public.file-url buffer on macOS', async () => {
     const writeBuffer = vi.fn()
     const result = await writeFileToClipboard(
@@ -59,7 +73,6 @@ describe('writeFileToClipboard', () => {
     expect(writeBuffer).toHaveBeenCalledTimes(1)
     const [format, buffer] = writeBuffer.mock.calls[0]
     expect(format).toBe('public.file-url')
-    // spaces are percent-encoded into the file URL
     expect(buffer.toString('utf8')).toBe('file:///repo/a%20b.png')
   })
 
@@ -107,7 +120,7 @@ describe('writeFileToClipboard', () => {
       'Set-Clipboard -LiteralPath $env:ORCA_CLIPBOARD_FILE'
     ])
     expect(spec.env?.ORCA_CLIPBOARD_FILE).toBe("/repo/o'brien $(calc).png")
-    // PowerShell cannot start without the inherited environment.
+    // Preserve inherited environment or PowerShell cannot start.
     expect(spec.env?.ORCA_TEST_INHERITED).toBe('kept')
   })
 

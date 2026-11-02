@@ -1,6 +1,4 @@
-// A restored editor tab re-owned by the workspace that owns its file (F42), in a layout-owner
-// build: the window sends the move (a re-own inside its workspace is a rename) under the ids it
-// proposes, and the frame that shows main's move rekeys the file's content in the same update.
+// Restore reownership proposes IDs to main (same-workspace reownership is rename); move frames atomically rekey content (F42).
 
 import type { Tab } from '../../../../../../shared/tab-types'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
@@ -27,10 +25,7 @@ import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
 
 type TabMove = { tab: Tab; newTabId: string; newEntityId: string }
 
-/**
- * Each moved tab under the ids main's frame shows it with: a tab whose file the target group
- * already shows, or an earlier moved tab does, folds into that one, as main folds it.
- */
+/** Fold moved files into tabs already shown in target groups, including earlier moved tabs, matching main’s destination IDs. */
 function tabRekeysOf(
   state: AppState,
   to: string,
@@ -98,11 +93,7 @@ function moveCommand(
   }
 }
 
-/**
- * Sends the move and returns the result the window promises; null when main is not asked (the
- * move cannot be made, no tab shows the file, or a paired server owns a workspace), and the
- * caller moves it as today. `today` is that move, for a twin main routes to a paired server.
- */
+/** Send move and promise its result; return null when impossible/tabless/paired-owned for direct caller fallback. today handles twins main routes paired. */
 export function reparentRestoredEditorThroughLayoutOwner(
   set: EditorSet,
   get: EditorGet,

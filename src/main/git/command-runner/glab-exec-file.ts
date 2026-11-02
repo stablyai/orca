@@ -1,6 +1,7 @@
 import { addWslEnvKeys } from '../../wsl-env'
 import { extractExecError, parseRetryAfterMs } from '../exec-error'
-import { resolveCommand, resolveDefaultWslCli } from './wsl-command-resolution'
+import { resolveCommand } from './wsl-command-resolution'
+import { resolveDefaultWslCliFallback } from './default-wsl-cli-fallback'
 import { isHostCommandMissing } from './github-cli-host-fallback'
 import { execFileCaptureToTermination } from './exec-file-capture'
 import { logHostedCliDeadlineKill } from './hosted-cli-deadline-log'
@@ -84,7 +85,7 @@ export async function glabExecFileAsync(
         options.allowDefaultWslFallback !== false &&
         isHostCommandMissing(err, 'glab')
       ) {
-        const wslResolved = resolveDefaultWslCli('glab', args)
+        const wslResolved = await resolveDefaultWslCliFallback('glab', args)
         if (wslResolved) {
           resolved = wslResolved
           attemptedDefaultWslFallback = true

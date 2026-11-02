@@ -1,6 +1,6 @@
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   getAcceptedRuntimeEnvironmentCapabilityOutcome,
   resetRuntimeEnvironmentCapabilityEvidence,

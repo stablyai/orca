@@ -38,7 +38,6 @@ async function apply(store: Store, command: LayoutCommand): Promise<void> {
   expect(result.ok, command.type).toBe(true)
 }
 
-/** A terminal started in a pane: the spawn's binding, as main persists it. */
 async function bind(store: Store, tabId: string, leafId: string, ptyId: string): Promise<void> {
   await store.persistPtyBinding({
     worktreeId: WORKTREE,
@@ -49,7 +48,6 @@ async function bind(store: Store, tabId: string, leafId: string, ptyId: string):
   })
 }
 
-/** Everything a client is shown of the workspace's terminals. */
 function terminalsOf(session: WorkspaceSessionState) {
   return {
     rows: (session.tabsByWorktree[WORKTREE] ?? []).map((row) => [row.id, row.ptyId]),
@@ -70,7 +68,6 @@ describe('a windowless host reloaded in the layout-owner build', () => {
     directories.push(directory)
     const store = await openTopologyStore(directory, emptyTerminalSessionProfile())
 
-    // A split terminal.
     await apply(store, { ...on, type: 'createTerminalTab', tabId: 'tab-split', leafId: leaf(1) })
     await bind(store, 'tab-split', leaf(1), 'pty-1')
     await apply(store, {
@@ -82,11 +79,9 @@ describe('a windowless host reloaded in the layout-owner build', () => {
       newLeafId: leaf(2)
     })
     await bind(store, 'tab-split', leaf(2), 'pty-2')
-    // A terminal that is closed again.
     await apply(store, { ...on, type: 'createTerminalTab', tabId: 'tab-closed', leafId: leaf(3) })
     await bind(store, 'tab-closed', leaf(3), 'pty-3')
     await apply(store, { ...on, type: 'closeTabs', tabIds: ['tab-closed'] })
-    // An agent put to sleep.
     await apply(store, { ...on, type: 'createTerminalTab', tabId: 'tab-asleep', leafId: leaf(4) })
     await bind(store, 'tab-asleep', leaf(4), 'pty-4')
     const paneKey = makePaneKey('tab-asleep', leaf(4))
@@ -109,7 +104,6 @@ describe('a windowless host reloaded in the layout-owner build', () => {
         }
       ]
     })
-    // A terminal that was never started.
     await apply(store, {
       ...on,
       type: 'createTerminalTab',

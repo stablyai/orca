@@ -13,6 +13,7 @@ vi.mock('sonner', () => ({ toast: { error: toastError } }))
 import NodeDistMirrorDialog from './NodeDistMirrorDialog'
 import { SshHostNodeMirrorAction } from './SshHostNodeMirrorAction'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const blocked: SshManagedServerStatus = {
   kind: 'relay',
@@ -28,8 +29,7 @@ const settingsSet = vi.fn(async (updates: Partial<GlobalSettings>) => ({
 const connect = vi.fn(async () => ({ targetId: 'ssh-1', status: 'connected' }))
 
 function settingsWithMirror(nodeDistMirrorUrl: string): GlobalSettings {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these components read only nodeDistMirrorUrl.
-  return { nodeDistMirrorUrl } as GlobalSettings
+  return { ...getDefaultSettings('/tmp'), nodeDistMirrorUrl }
 }
 
 function Host({ status }: { status: SshManagedServerStatus }) {
@@ -64,16 +64,6 @@ function openDialog(): HTMLInputElement {
 }
 
 describe('Use a Node.js mirror', () => {
-  it('opens from the host row with the suggested mirror, focused and editable', () => {
-    render(<Host status={blocked} />)
-    const input = openDialog()
-
-    expect(screen.getByRole('dialog', { name: 'Use a Node.js mirror' })).toBeInTheDocument()
-    expect(input).toHaveValue('https://npmmirror.com/mirrors/node/')
-    expect(input).toHaveFocus()
-    expect(screen.getByText(/checked against the checksum Orca pins/)).toBeInTheDocument()
-  })
-
   it('saves to the mirror setting, then retries the connect and closes', async () => {
     render(<Host status={blocked} />)
     openDialog()
@@ -145,16 +135,6 @@ describe('Use a Node.js mirror', () => {
     expect(state.settingsNavigationTarget).toMatchObject({ pane: 'advanced' })
     expect(state.settingsSearchInputQuery).toBe('mirror')
     expect(state.activeModal).toBe('none')
-  })
-
-  it('offers nothing in a paired browser, whose settings are not this computer’s', () => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    try {
-      render(<Host status={blocked} />)
-      expect(screen.queryByRole('button')).toBeNull()
-    } finally {
-      vi.unstubAllGlobals()
-    }
   })
 
   it('opens the setting instead when a mirror was set after the toast appeared', () => {

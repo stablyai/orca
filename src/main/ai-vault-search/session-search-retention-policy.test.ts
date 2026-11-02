@@ -3,7 +3,7 @@ import { sessionSearchHistoryCutoffMs } from './session-search-retention-policy'
 
 const NOW = 1_740_000_000_000
 
-it('treats a fractional or non-positive day count as no bound at all', () => {
+it('treats sub-day or non-positive counts as unbounded and caps large counts', () => {
   expect(sessionSearchHistoryCutoffMs(0.4, NOW)).toBeNull()
   expect(sessionSearchHistoryCutoffMs(0, NOW)).toBeNull()
   expect(sessionSearchHistoryCutoffMs(-30, NOW)).toBeNull()

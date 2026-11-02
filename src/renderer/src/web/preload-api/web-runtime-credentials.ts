@@ -14,10 +14,7 @@ import type { StoredWebRuntimeEnvironment } from '../web-runtime-environment'
 let keyStore: WebDeviceKeyStore | null = null
 const sources = new Map<string, WebRuntimeCredentialSource>()
 
-/**
- * One credential source per pairing, shared by the primary client and its helper sockets so a
- * key registered by one is used by all. Keyed by pairing revision: a re-pair starts fresh.
- */
+/** Share credentials across primary/helper sockets; key by pairing revision so re-pair starts fresh. */
 export function webRuntimeCredentialFor(
   environment: StoredWebRuntimeEnvironment,
   callbacks: {

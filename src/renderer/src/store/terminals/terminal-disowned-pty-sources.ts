@@ -1,14 +1,6 @@
 import type { TerminalSlice, TerminalStoreSet } from './terminal-state'
 
-/**
- * Session-scoped record of PTY ids a reachable relay disowned.
- *
- * Main raises it solely on the branch where the relay replied about that exact id, never on a lost
- * link, a timeout or an identity mismatch (docs/reference/ssh-execution-boundary.md). It is not
- * `exited` — a restarted relay disowns ids it never minted — but it is the only signal strong
- * enough to let a reconnect retire the binding and respawn, which leaks the old process rather than
- * killing it. Every other absence signal the client holds is `unverifiable` and licenses nothing.
- */
+/** Only reachable relay’s exact-ID disown reply permits retiring binding/respawning; it is weaker than exited (restarted relays forget IDs) and may leak old processes. Lost links/timeouts/mismatches remain unverifiable (ssh-execution-boundary.md). Session-only. */
 export function createTerminalDisownedPtySourceActions(
   set: TerminalStoreSet
 ): Pick<TerminalSlice, 'markPtySourceDisowned'> {

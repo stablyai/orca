@@ -25,11 +25,14 @@ const cursorUsageSummarySchema = z
     billingCycleEnd: z.unknown(),
     membershipType: z.unknown(),
     isUnlimited: z.unknown(),
-    // Why nullish and not optional: this route is undocumented and sends `null`
-    // for an absent sub-object. With `.optional()` one null pool fails the parse
-    // for the whole body, discarding valid pools and the billing cycle with it.
+    // The dashboard sends null for absent pools; optional-only schemas would reject the entire valid response.
     individualUsage: z
-      .object({ plan: cursorPoolSchema.nullish(), onDemand: cursorPoolSchema.nullish() })
+      .object({
+        plan: cursorPoolSchema.nullish(),
+        // Team-limited accounts report the member's included allowance as `overall`.
+        overall: cursorPoolSchema.nullish(),
+        onDemand: cursorPoolSchema.nullish()
+      })
       .partial()
       .nullish()
   })
@@ -70,7 +73,7 @@ function finiteNumber(value: unknown): number | null {
 
 export function parseCursorTimestampMs(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
-    // Why: Cursor mixes epoch seconds and milliseconds across billing fields.
+    // Dashboard billing fields mix epoch seconds and milliseconds.
     return value > 1e12 ? value : value * 1000
   }
   if (typeof value !== 'string' || !value.trim()) {
@@ -106,6 +109,14 @@ function windowMinutesFor(startMs: number | null, endMs: number | null): number 
   return Math.max(1, Math.round((endMs - startMs) / 60_000))
 }
 
+// A disabled primary pool must not hide the fallback pool Cursor actually meters.
+function preferEnabledPool(
+  primary: CursorPool | null | undefined,
+  fallback: CursorPool | null | undefined
+): CursorPool | null | undefined {
+  return primary?.enabled === false && fallback?.enabled === true ? fallback : (primary ?? fallback)
+}
+
 // On-demand's raw allowance avoids rounding in its reported percentage.
 function poolPercent(
   pool: CursorPool | null | undefined,
@@ -134,9 +145,8 @@ export function mapCursorUsageSummary(summary: CursorUsageSummary): CursorUsageM
     resetDescription: description
   })
 
-  const plan = summary.individualUsage?.plan
-  // Why: a team-billed account still reports 0% pools it does not own. Publishing
-  // them as buckets would paint a healthy 0% meter and skip the legacy fallback.
+  const plan = preferEnabledPool(summary.individualUsage?.plan, summary.individualUsage?.overall)
+  // Team-owned zero pools must not imply healthy quota or suppress legacy fallback.
   const planEnabled = plan?.enabled !== false
   const buckets: RateLimitBucket[] = []
   const cursorModels = planEnabled ? finiteNumber(plan?.autoPercentUsed) : null
@@ -148,6 +158,7 @@ export function mapCursorUsageSummary(summary: CursorUsageSummary): CursorUsageM
     buckets.push({ name: CURSOR_OTHER_MODELS_BUCKET_NAME, ...toWindow(otherModels) })
   }
 
+  // teamUsage.onDemand is team-wide spend, not this member's allowance, so it stays unmapped.
   const onDemand = summary.individualUsage?.onDemand
   const onDemandPercent =
     onDemand?.enabled === true ? poolPercent(onDemand, 'totalPercentUsed') : null
@@ -196,10 +207,7 @@ export function mapCursorCurrentPeriodUsage(payload: unknown): CursorCurrentPeri
     : null
 }
 
-/**
- * Advances a cycle start by one month in UTC, clamping the day so a Jan 31 start
- * lands on Feb 28/29 instead of overflowing into March.
- */
+/** Clamp month-end in UTC so January 31 advances into February, not March. */
 function addOneMonthUtc(startMs: number): number {
   const start = new Date(startMs)
   const year = start.getUTCFullYear()
@@ -222,10 +230,7 @@ const legacyBucketSchema = z
 
 const legacyQuotaSchema = z.record(z.string(), z.union([legacyBucketSchema, z.unknown()]))
 
-/**
- * Request-quota plans predate spend-based billing and report a per-model ceiling
- * instead of a cents allowance, so those accounts still get a bar.
- */
+/** Older plans meter per-model requests instead of currency allowance. */
 export function mapCursorLegacyRequestQuota(payload: unknown): RateLimitWindow | null {
   const parsed = legacyQuotaSchema.safeParse(payload)
   if (!parsed.success) {
@@ -247,8 +252,7 @@ export function mapCursorLegacyRequestQuota(payload: unknown): RateLimitWindow |
   if (quotas.length === 0) {
     return null
   }
-  // Why: 'gpt-4' is the premium bucket on legacy plans; otherwise the largest
-  // ceiling is the headline quota on every shape seen so far.
+  // Legacy premium quota is gpt-4; otherwise use the largest reported ceiling.
   const quota =
     quotas.find((entry) => entry.name === 'gpt-4') ??
     quotas.sort((left, right) => right.limit - left.limit)[0]

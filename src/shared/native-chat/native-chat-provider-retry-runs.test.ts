@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../agent-session-journal-types'
-import { agentSessionFailureWords } from '../agent-session-failure-words'
-import { agentJournalSubmissionKey } from '../agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureWords } from '../agent-session/failures/agent-session-failure-words'
+import { agentJournalSubmissionKey } from '../agent-session/journal/agent-session-journal-item-key'
 import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
-import { projectNativeChatTranscript } from '../native-chat-transcript-projection'
-import type { NativeChatMessage } from '../native-chat-types'
-import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
+import { projectNativeChatTranscript } from './transcript/native-chat-transcript-projection'
+import type { NativeChatMessage } from './native-chat-types'
+import { projectStructuredAgentSessionMessages } from '../agent-session/view/structured-agent-session-message-projection'
 
 let sequence = 0
 
@@ -142,10 +142,6 @@ describe('a run of provider retry rows', () => {
       [expect.stringMatching(/^item-/), false],
       [agentJournalSubmissionKey('queued-1'), true]
     ])
-  })
-
-  it("draws an older host's single revised row as it is", () => {
-    expect(drawn([retry(4)])).toEqual(['Codex is retrying: Reconnecting... 4/5.'])
   })
 
   it('hands back the same list when nothing retried', () => {

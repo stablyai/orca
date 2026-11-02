@@ -1,9 +1,4 @@
-/**
- * E2E tests for leaf-keyed PTY bindings surviving pane close, remake, and move.
- *
- * User Prompt:
- * - closing panes works
- */
+// Require leaf-keyed PTY bindings across pane close, remake and move.
 
 import { test, expect } from './helpers/orca-app'
 import {
@@ -16,8 +11,7 @@ import {
 } from './helpers/terminal'
 import { registerTerminalPaneMountReadiness } from './helpers/terminal-pane-mount-readiness'
 
-// Why: keep the suite serial so the headful pane tests never ask Playwright to
-// open multiple visible Electron windows at once.
+// Serialize headful scenarios; visible-window runs require an isolated display.
 test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()

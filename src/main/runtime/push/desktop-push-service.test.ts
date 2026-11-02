@@ -55,7 +55,6 @@ function createService(
     getPushUnregisterOutbox: () => outbox,
     setOnPushUnregisterQueued: vi.fn()
   }
-  // A stub gateway keeps the suite on the service's own persistence decisions.
   const client = {
     registerDevice: vi.fn(async () =>
       options.registerFails
@@ -172,7 +171,7 @@ describe('DesktopPushService', () => {
     expect(
       await harness.service.register({ deviceId: harness.deviceId, ...REGISTER_INPUT })
     ).toEqual({ registered: false, reason: 'not_mobile' })
-    // register() kicks the flush off without awaiting it; join the same run.
+    // register starts a detached flush; join that same drain.
     await harness.service.flushUnregisterOutbox()
     expect(harness.deletes).toEqual(['reg-1'])
     expect(harness.outbox.pending()).toEqual([])
@@ -188,7 +187,6 @@ describe('DesktopPushService', () => {
     expect(
       await harness.service.register({ deviceId: harness.deviceId, ...REGISTER_INPUT })
     ).toEqual({ registered: false, reason: 'registration_storage_failed' })
-    // The gateway kept the token, so the delete stays queued until it lands.
     expect(harness.outbox.pending()).toEqual([
       expect.objectContaining({ registrationId: 'reg-1', deviceId: harness.deviceId })
     ])
@@ -257,7 +255,6 @@ describe('DesktopPushService', () => {
       registered: false,
       reason: 'throttled'
     })
-    // The registration it already made stands; only the new write is refused.
     expect(harness.registry.getDevice(harness.deviceId)?.pushRegistration?.registrationId).toBe(
       'reg-1'
     )

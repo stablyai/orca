@@ -3,7 +3,7 @@ import {
   type RuntimeRpcResponse,
   isKeepaliveFrame
 } from '../../runtime-rpc-envelope'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { assertJsonTextStructureWithinLimits } from '../../json-text-structure-limit'
 import type {
   PairedE2EEAuthReply,

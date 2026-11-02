@@ -1,5 +1,3 @@
-import { WINDOWS_HOOK_STDIN_DRAIN_LABEL } from './hook-stdin-contract'
-
 export function buildPosixGrokReplayGuardLines(): string[] {
   return [
     // Imported vendor hooks must not duplicate Grok's native hook event.
@@ -10,5 +8,6 @@ export function buildPosixGrokReplayGuardLines(): string[] {
 }
 
 export function buildWindowsGrokReplayGuardLines(): string[] {
-  return [`if not "%GROK_HOOK_EVENT%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`]
+  // Exit without owning stdin: more.com parks forever if the caller holds the pipe open (#24907).
+  return ['if not "%GROK_HOOK_EVENT%"=="" exit /b 0']
 }

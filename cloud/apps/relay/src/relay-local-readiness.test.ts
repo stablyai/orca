@@ -61,7 +61,7 @@ describe('local readiness verdict', () => {
   })
 })
 
-// E-dep-3 in miniature: the database is down from boot, so it never enters a grace window.
+// Boot-down database never earns a grace window (E-dep-3).
 describe('cell /ready with the database down', () => {
   const servers: Server[] = []
   afterEach(async () => {

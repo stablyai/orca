@@ -121,8 +121,7 @@ describe('getExplicitRuntimeOwnerEnvironmentId', () => {
     ).toBeNull()
   })
 
-  // Why: unlike getRuntimeEnvironmentIdForRepo, a no-owner repo must NOT fall
-  // back to the focused runtime — an owner-less repo is a local repo (#6957).
+  // An unstamped repo is local, never focused-runtime-owned as getRuntimeEnvironmentIdForRepo may imply (#6957).
   it('returns null for a legacy repo without an owner instead of the focused runtime', () => {
     expect(
       getExplicitRuntimeOwnerEnvironmentId(

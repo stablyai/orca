@@ -2,13 +2,7 @@ import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
-/**
- * Whether the host about to spawn a terminal can honour a requested Windows shell.
- *
- * The whole point of `--shell` is that the caller stops having to guess which shell it got. A host
- * that cannot apply the pick must say so: silently spawning its default shell returns a healthy
- * terminal running something else, which is the exact failure `--shell` exists to remove.
- */
+/** Refuse shell overrides the execution host cannot honor; silently substituting a shell also misquotes its startup command. */
 export function terminalShellOverrideRefusal(args: {
   shellOverride: string | undefined
   connectionId: string | null
@@ -39,15 +33,7 @@ export function terminalShellOverrideRefusal(args: {
   )
 }
 
-/**
- * The project's execution runtime decides which MACHINE the shell runs on, so it outranks a
- * per-terminal pick — and `resolveLocalWindowsTerminalRuntimeOptions` enforces that by rewriting
- * the value: a WSL project forces `wsl.exe`, and a Windows-host project discards a WSL name in
- * favour of the host shell. Either rewrite hands back a terminal running something the caller did
- * not ask for, and it also splits the startup-command quoting from the shell that receives it
- * (POSIX args typed into cmd, or cmd args typed into a WSL shell). Refusing the contradiction is
- * the only answer that keeps the request and the terminal describing the same thing.
- */
+/** Project runtime chooses the machine and can rewrite conflicting shell picks; refuse before startup arguments are quoted for a different shell. */
 function projectRuntimeShellConflict(
   shellOverride: string,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -70,13 +56,7 @@ function projectRuntimeShellConflict(
   )
 }
 
-/**
- * A `\\wsl$\<distro>\...` path only exists inside that distro, so the providers force `wsl.exe`
- * for it whatever shell was requested (`resolveWslSessionContext` keys off the cwd, then the
- * workspace path behind the session). That rewrite is right for the global shell setting and
- * wrong for `--shell`, which promised the caller the shell it named. This is the only check that
- * still fires for a folder workspace, which has no project runtime to disagree with.
- */
+/** WSL UNC cwd/workspace paths force their distro via resolveWslSessionContext, including folder workspaces without project runtime; refuse a conflicting explicit shell. */
 function wslUncPathShellConflict(
   shellOverride: string,
   cwd: string,

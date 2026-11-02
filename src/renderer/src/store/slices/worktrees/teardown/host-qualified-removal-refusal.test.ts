@@ -4,15 +4,8 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 
 const WORKTREE_ID = 'repo1::/shared/workspace/path'
 
-/**
- * Callers mark rows deleting up front for immediate sidebar feedback
- * (worktree-delete-execution.ts). These refusals return BEFORE removeWorktree's
- * try/catch, which is the only other place that clears the flag — so without an
- * explicit clear the workspace keeps its "Deleting…" spinner indefinitely, long
- * after the 10s failure toast has gone.
- */
-// Note: with a confirmed host the route resolves from the host id alone, so this refusal is
-// reached on the UNQUALIFIED path — a caller that names no host and has no resolvable owner.
+/** Early refusal bypasses removal’s clearing catch; clear optimistic deleting state here or its spinner outlives the 10-second toast. */
+// Confirmed hosts resolve directly; unresolved-owner refusal is reached only by hostless callers.
 describe('beginHostQualifiedRemoval refusals clear the delete state', () => {
   function makeGet(clearWorktreeDeleteState: ReturnType<typeof vi.fn>) {
     // Minimal store surface: no worktrees, so no route can resolve for MISSING_HOST.
@@ -43,9 +36,7 @@ describe('beginHostQualifiedRemoval refusals clear the delete state', () => {
     expect(clearWorktreeDeleteState).toHaveBeenCalledWith(WORKTREE_ID)
   })
 
-  // The store above is deliberately empty, which proves the clear but not that a real user can
-  // land here. These two cases route through populated state a user actually has, and still
-  // resolve to no route — the states that leave the row spinning in the product.
+  // Use populated unresolved-owner states too; an empty fixture proves clear but not real-user reachability.
   function makeRoutedGet(
     clearWorktreeDeleteState: ReturnType<typeof vi.fn>,
     overrides: Record<string, unknown>
@@ -68,8 +59,7 @@ describe('beginHostQualifiedRemoval refusals clear the delete state', () => {
       }) as never
   }
 
-  // The "Active Server" focus never names a removal's host: an unstamped repo row is a legacy
-  // local row (server rows are stamped as they land), whatever server is focused.
+  // Unstamped legacy repos are local regardless of runtime focus; server rows get host stamps at ingest.
   it('routes a hostless legacy worktree locally, never through the focused server', () => {
     const clearWorktreeDeleteState = vi.fn()
     const start = beginHostQualifiedRemoval(

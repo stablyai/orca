@@ -68,9 +68,9 @@ describe('shouldHandleAutomationDetailTabArrowKey', () => {
     expect(shouldHandleAutomationDetailTabArrowKey(makeEvent({ target: editable }))).toBe(false)
   })
 
-  it('ignores keys when target is inside a modal dialog, menu, or listbox', () => {
+  it.each(['dialog', 'menu', 'listbox'])('ignores keys inside a %s', (role) => {
     const dialog = document.createElement('div')
-    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('role', role)
     const childButton = document.createElement('button')
     dialog.appendChild(childButton)
     document.body.appendChild(dialog)
@@ -198,9 +198,9 @@ describe('shouldHandleAutomationDetailEscapeKey', () => {
     expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ target: clearsValue }))).toBe(false)
   })
 
-  it('ignores Escape when target is inside a modal dialog, menu, or listbox', () => {
+  it.each(['dialog', 'menu', 'listbox'])('ignores Escape inside a %s', (role) => {
     const dialog = document.createElement('div')
-    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('role', role)
     const childButton = document.createElement('button')
     dialog.appendChild(childButton)
     document.body.appendChild(dialog)

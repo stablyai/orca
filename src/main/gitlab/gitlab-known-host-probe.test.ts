@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { glabExecFileAsyncMock } = vi.hoisted(() => ({ glabExecFileAsyncMock: vi.fn() }))
 
@@ -10,12 +10,15 @@ import {
   getGlabKnownHosts,
   KNOWN_HOSTS_CACHE_MAX_ENTRIES,
   rememberGlabKnownHost,
-  rememberGlabKnownHosts
+  rememberGlabKnownHosts,
+  KNOWN_HOSTS_FAILURE_INITIAL_BACKOFF_MS
 } from './gitlab-known-host-probe'
 
 describe('getGlabKnownHosts', () => {
   // A locally-keyed probe must never answer from the default WSL distro.
   const LOCAL_PROBE_OPTIONS = { timeout: 10_000, allowDefaultWslFallback: false }
+
+  afterEach(() => vi.restoreAllMocks())
 
   beforeEach(() => {
     glabExecFileAsyncMock.mockReset()
@@ -235,6 +238,7 @@ describe('getGlabKnownHosts', () => {
   })
 
   it('does not permanently cache the failure fallback — a later probe can re-discover hosts', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     glabExecFileAsyncMock
       .mockRejectedValueOnce(new Error('ssh tunnel not ready'))
       .mockResolvedValueOnce({
@@ -242,8 +246,9 @@ describe('getGlabKnownHosts', () => {
         stderr: ''
       })
 
-    // Failed probes leave defaults uncached so recovery can discover the actual host.
+    // Failed probes only back off briefly so recovery can discover the actual host.
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com'])
+    clock.mockReturnValue(1_000 + KNOWN_HOSTS_FAILURE_INITIAL_BACKOFF_MS)
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
       'gitlab.com',
       'gitlab.example.com:8080'
@@ -252,6 +257,7 @@ describe('getGlabKnownHosts', () => {
   })
 
   it('removes a timed-out probe from in-flight state so a later call retries', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     let rejectProbe!: (error: Error) => void
     glabExecFileAsyncMock
       .mockImplementationOnce(
@@ -271,6 +277,7 @@ describe('getGlabKnownHosts', () => {
       ['gitlab.com'],
       ['gitlab.com']
     ])
+    clock.mockReturnValue(1_000 + KNOWN_HOSTS_FAILURE_INITIAL_BACKOFF_MS)
     await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
       'gitlab.com',
       'recovered.test'

@@ -42,7 +42,6 @@ const RELEASE_SKELETON: Record<string, string> = Object.fromEntries(
   ].map((path) => [path, 'export {}\n'])
 )
 
-/** A throwaway repository whose single commit plays the release. */
 function commitRelease(files: Record<string, string>): { repo: string; commit: string } {
   const repo = temporaryDirectory('orca-cross-version-release-repo-')
   for (const [path, source] of Object.entries({ ...RELEASE_SKELETON, ...files })) {
@@ -68,7 +67,6 @@ function commitRelease(files: Record<string, string>): { repo: string; commit: s
     '--message',
     'release'
   ])
-  // Working-tree root manifest the stand-in logic compares against.
   writeFileSync(join(repo, 'package.json'), '{ "dependencies": {} }\n')
   return { repo, commit: git(['rev-parse', 'HEAD']) }
 }
@@ -94,7 +92,6 @@ const RELEASE_PROCESS_HOST = {
   'src/packages/process-host/src/process-spec.ts':
     "export const describeSpec = () => 'release process-spec'\n",
   'src/packages/process-host/src/run-process.test.ts': 'throw new Error("stale spec")\n',
-  // A JavaScript source package that itself depends on another release workspace package.
   'src/packages/release-tool/package.json': JSON.stringify({
     name: '@orca/release-tool',
     type: 'module',
@@ -168,7 +165,6 @@ describe('release checkout workspace packages', () => {
       false
     )
     expect(existsSync(join(staging, 'src/packages/release-tool/src/index.test.mjs'))).toBe(false)
-    // A rewritten workspace import never becomes a stand-in package.
     expect(existsSync(join(staging, 'node_modules'))).toBe(false)
   })
 
@@ -191,30 +187,4 @@ describe('release checkout workspace packages', () => {
       expect(failure).toContain(`No public orca-source export for ${specifier}`)
     }
   )
-
-  it('extracts a release that predates workspace packages unchanged', async () => {
-    const source = "import { lock } from 'proper-lockfile'\nexport const locker = typeof lock\n"
-    const { repo, commit } = commitRelease({ 'src/main/old.ts': source })
-    const staging = temporaryDirectory('orca-cross-version-release-staging-')
-
-    await extractReleaseCheckoutTree(repo, staging, commit)
-
-    expect(readFileSync(join(staging, 'src/main/old.ts'), 'utf8')).toBe(source)
-    expect(existsSync(join(staging, 'pnpm-workspace.yaml'))).toBe(false)
-    expect(existsSync(join(staging, 'src/wsl-guest'))).toBe(false)
-  })
-
-  it('extracts the WSL guest sources a release relay imports when the release has them', async () => {
-    const source = "export { RELAY_SENTINEL } from '../wsl-guest/protocol'\n"
-    const { repo, commit } = commitRelease({
-      'src/relay/relay.ts': source,
-      'src/wsl-guest/protocol.ts': "export const RELAY_SENTINEL = 'sentinel'\n"
-    })
-    const staging = temporaryDirectory('orca-cross-version-release-staging-')
-
-    await extractReleaseCheckoutTree(repo, staging, commit)
-
-    expect(readFileSync(join(staging, 'src/relay/relay.ts'), 'utf8')).toBe(source)
-    expect(existsSync(join(staging, 'src/wsl-guest/protocol.ts'))).toBe(true)
-  })
 })

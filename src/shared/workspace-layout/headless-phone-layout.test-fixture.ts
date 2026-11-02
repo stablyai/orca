@@ -1,5 +1,4 @@
-// Stored partitions for comparing what a phone is sent from a host with no window against what
-// the desktop window shows, one worktree per case so a fix in one cannot leak into another.
+// Compare headless phone publication with desktop startup using separate workspaces per case to isolate effects.
 
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { LEGACY_WORKSPACE_LAYOUT_PROFILES } from './workspace-layout-legacy-profile.test-fixture'
@@ -10,8 +9,6 @@ const B = 'repo-1::/repos/b'
 const C = 'repo-1::/repos/c'
 const D = 'repo-1::/repos/d'
 
-/** Per worktree: each terminal pane in order as `tab terminal title`, the selected tab, and each
- * tab group's tabs and selected tab. */
 export type PhoneLayoutView = Record<
   string,
   { panes: string[]; active: string | null; groups: { tabs: string[]; active: string | null }[] }

@@ -1,9 +1,7 @@
 import { DESKTOP_AWAY_SECONDS } from '../../../shared/desktop-away-threshold'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
-// The one record of user presence, from trusted renderer input only: the on-screen scan's gate
-// and the marking guard both read it. Main's "not away" only answers the scan that asked — it
-// means idle under the threshold, so stamping it as now could stretch presence to twice that.
+// Only trusted renderer input stamps presence; main’s below-idle-threshold answer applies to that scan and must not extend the presence window again.
 let presenceGated = true
 let presentAt = Number.NEGATIVE_INFINITY
 
@@ -13,7 +11,6 @@ export function setPresenceGated(gated: boolean): void {
   presentAt = Number.NEGATIVE_INFINITY
 }
 
-/** Trusted renderer input. */
 export function notePresence(): void {
   presentAt = Date.now()
 }

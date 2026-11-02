@@ -25,6 +25,17 @@ import type {
 } from '../../shared/browser-guest-events'
 import type { BrowserGrabCancelReason } from '../../shared/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './browser-manager-viewport-scroll-state'
+import { BrowserGuestDevToolsDock } from './browser-guest-devtools-dock'
+
+/** A link a headless serve page asked to open as an Orca tab beside it. */
+export type OffscreenBrowserTabOpenRequest = {
+  worktreeId: string
+  profileId: string | null
+  url: string
+  activate: boolean
+  /** The paired client whose click or key press opened it, if one did. */
+  pairedDeviceId: string | null
+}
 
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
   protected abstract attachGuestPolicies(
@@ -75,6 +86,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     browserTabId: string,
     guest: Electron.WebContents
   ): void
+  protected abstract setupTargetUrlForwarding(
+    browserTabId: string,
+    guest: Electron.WebContents
+  ): void
   protected abstract cancelGrabOp(browserTabId: string, reason: BrowserGrabCancelReason): void
   protected abstract hasActiveGrabOp(browserTabId: string): boolean
   protected abstract unregisterGuest(
@@ -108,6 +123,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     error: string | null
   ): void
   protected abstract getDownloadReceivedBytes(item: Electron.DownloadItem): number
+  protected abstract isAwaitingDownloadFrom(
+    guestWebContentsId: number,
+    rootGuestWebContentsId: number
+  ): boolean
   protected abstract openLinkInOrcaTab(
     browserTabId: string,
     rawUrl: string,
@@ -141,15 +160,18 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   protected readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
   protected readonly mouseWheelZoomCleanupByTabId = new Map<string, () => void>()
+  protected readonly targetUrlCleanupByTabId = new Map<string, () => void>()
   protected readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   protected readonly worktreeIdByTabId = new Map<string, string>()
   protected readonly policyAttachedGuestIds = new Set<number>()
   protected readonly offscreenGuestIds = new Set<number>()
+  protected readonly devToolsDock = new BrowserGuestDevToolsDock()
   protected readonly policyCleanupByGuestId = new Map<number, () => void>()
   protected readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Restore the optimistically hidden error if navigation aborts.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
+  protected offscreenTabOpener: ((request: OffscreenBrowserTabOpenRequest) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null
   protected siteDisplayController: BrowserSiteDisplayController | null = null
   protected shouldForwardDictationShortcut: (() => boolean) | null = null
@@ -171,6 +193,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     this.browserGuestStateChangedListener = listener
   }
 
+  setOffscreenTabOpener(opener: ((request: OffscreenBrowserTabOpenRequest) => void) | null): void {
+    this.offscreenTabOpener = opener
+  }
+
   setCertificateTrustController(controller: BrowserCertificateTrustController): void {
     this.certificateTrustController = controller
   }
@@ -185,6 +211,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   removeCertificateRequestGuard(session: Electron.Session): void {
     this.certificateTrustController?.removeSessionRequestGuard(session)
+  }
+
+  /** Orca's shortcut overrides; extension commands yield to every Orca shortcut. */
+  getKeybindingOverrides(): KeybindingOverrides | undefined {
+    return this.settingsResolver?.().keybindings
   }
 
   setSettingsResolver(

@@ -1,9 +1,8 @@
 import { joinPath } from '@/lib/path'
-import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
 import type { OpenFile } from '@/store/slices/editor'
-import type { AppState } from '@/store/types'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
+import { externalChangePathKeyFor } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import {
   getLocalWindowsWslPathIdentity,
   normalizeRuntimePathForComparison,
@@ -11,8 +10,6 @@ import {
 } from '../../../../shared/cross-platform-path'
 
 type WatchScope = {
-  /** Where a read-only cross-workspace view's owner is looked up; without it, views are not matched. */
-  catalog?: AppState
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId: string | null
@@ -116,15 +113,18 @@ class IndexedOpenFileLookup {
   readonly indexedOpenFiles = new Map<string, IndexedOpenFile>()
   readonly hasCombinedDiffConsumer: boolean
 
+  private readonly directKey: (filePath: string) => string
+
   constructor(
     openFiles: OpenFile[],
     scope: WatchScope,
     private readonly allowAliases: boolean
   ) {
+    this.directKey = externalChangePathKeyFor(scope.worktreePath)
     let hasCombinedDiffConsumer = false
     for (const [index, file] of openFiles.entries()) {
       if (
-        openFileOwnerWorktreeId(file, scope.catalog) !== scope.worktreeId ||
+        file.worktreeId !== scope.worktreeId ||
         openFileRuntimeOwner(file) !== scope.runtimeEnvironmentId
       ) {
         continue
@@ -152,7 +152,7 @@ class IndexedOpenFileLookup {
       const identity = pathIdentity(file.filePath, allowAliases)
       const indexedFile = { file, index, identity }
       this.indexedOpenFiles.set(file.id, indexedFile)
-      addToListMap(this.directEditors, file.filePath, indexedFile)
+      addToListMap(this.directEditors, this.directKey(file.filePath), indexedFile)
       if (allowAliases) {
         addToListMap(this.aliasEditors, identity.aliasComparisonPath, indexedFile)
         if (identity.isWslUnc) {
@@ -170,7 +170,7 @@ class IndexedOpenFileLookup {
         ? (this.aliasEditors.get(change.identity.aliasComparisonPath) ?? [])
         : (this.wslAliasEditors.get(change.identity.aliasComparisonPath) ?? [])
     return collectMatchingFiles(
-      this.directEditors.get(change.absolutePath) ?? [],
+      this.directEditors.get(this.directKey(change.absolutePath)) ?? [],
       aliases,
       this.diffsByRelativePath.get(change.relativePath) ?? []
     )

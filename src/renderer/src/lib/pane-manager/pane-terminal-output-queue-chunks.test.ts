@@ -49,12 +49,9 @@ describe('pane terminal output queue chunks', () => {
     const data = `${firstFrame}${open}bbbbbbbbbbbb${close}`
     enqueueChunk(entry, data, { foreground: true })
 
-    // A limit landing inside the second frame must stop after the first one:
-    // xterm paints nothing while the latch is open, so stranding the close in
-    // the residual freezes the pane until a later drain or its 1000ms timeout.
+    // Stop after the first complete frame: a cut inside the next strands its close marker and freezes painting until drain/1000ms timeout.
     const taken = takeQueuedChunk(entry, firstFrame.length + 6)
     expect(taken?.data).toBe(firstFrame)
-    // The residual keeps the rest, byte-exact, with accounting still balanced.
     const rest = takeQueuedChunk(entry, data.length)
     expect(`${taken?.data ?? ''}${rest?.data ?? ''}`).toBe(data)
     expect(entry.queuedChars).toBe(0)

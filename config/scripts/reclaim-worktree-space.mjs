@@ -12,11 +12,15 @@ export async function reclaimWorktreeSpace({
   acquireLock = lock,
   commonDirectory,
   testsStopped = false,
+  generatedMinAgeDays = 30,
   excludeWorktree,
   releaseCacheMinAgeDays = 30
 } = {}) {
   if (!Number.isFinite(releaseCacheMinAgeDays) || releaseCacheMinAgeDays < 0) {
     throw new Error('--release-cache-min-age-days requires a non-negative number')
+  }
+  if (!Number.isFinite(generatedMinAgeDays) || generatedMinAgeDays < 0) {
+    throw new Error('--generated-min-age-days requires a non-negative number')
   }
   if (!commonDirectory) {
     const result = await runProcess({
@@ -46,13 +50,20 @@ export async function reclaimWorktreeSpace({
     const scripts = [
       'reclaim-electron-dists.mjs',
       'reclaim-dev-electron-bundles.mjs',
-      'reclaim-vite-caches.mjs'
+      'reclaim-vite-caches.mjs',
+      'reclaim-vitest-module-caches.mjs',
+      'reclaim-worktree-generated-files.mjs',
+      'reclaim-dev-worktree-profiles.mjs',
+      'reclaim-release-test-caches.mjs'
     ]
-    if (!automatic && testsStopped) {
-      scripts.unshift('reclaim-release-test-caches.mjs')
-    }
     for (const script of scripts) {
-      const args = [resolve(import.meta.dirname, script), '--repo', repoRoot]
+      // Children import src/shared/*.ts, which Node reparses as ESM with a noisy warning.
+      const args = [
+        '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
+        resolve(import.meta.dirname, script),
+        '--repo',
+        repoRoot
+      ]
       if (apply) {
         args.push('--apply')
       }
@@ -62,9 +73,12 @@ export async function reclaimWorktreeSpace({
       if (script === 'reclaim-release-test-caches.mjs') {
         args.unshift('--import', import.meta.resolve('tsx'))
         args.push('--min-age-days', String(releaseCacheMinAgeDays))
-        if (testsStopped) {
+        if (testsStopped && !automatic) {
           args.push('--tests-stopped')
         }
+      }
+      if (script === 'reclaim-worktree-generated-files.mjs') {
+        args.push('--generated-min-age-days', String(generatedMinAgeDays))
       }
       const result = await execute({
         program: process.execPath,

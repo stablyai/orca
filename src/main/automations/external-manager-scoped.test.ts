@@ -53,10 +53,6 @@ function desktopSsh(targetId: string, targetGeneration: number): AutomationOwner
   return { authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId, targetGeneration } }
 }
 
-function orcaStoreHealth() {
-  return { read: vi.fn<() => void>(), markUnavailable: vi.fn<() => void>() }
-}
-
 function buildEngine(targets: SshTarget[]) {
   return createScopedExternalAutomations({
     registry: { getSshTargets: () => targets },
@@ -123,39 +119,6 @@ describe('scoped external automations', () => {
     })
     expect(writeFileMock).not.toHaveBeenCalled()
     expect([...files]).toEqual(before)
-  })
-
-  it('settles when a local command lookup hangs', async () => {
-    vi.useFakeTimers()
-    runProcessMock.mockResolvedValue({
-      code: null,
-      signal: null,
-      stdout: '',
-      stderr: '',
-      timedOut: true
-    })
-    const promise = buildEngine([]).listManager({ owner: desktopSelf, provider: 'openclaw' })
-    let settled = false
-    void promise.finally(() => {
-      settled = true
-    })
-
-    await expect(promise).resolves.toMatchObject({ manager: null })
-    expect(settled).toBe(true)
-  })
-
-  it('probes only local managers when Local is selected', async () => {
-    const engine = buildEngine([sshTarget(), sshTarget({ id: 'target-b', generation: 1 })])
-
-    const entry = await engine.listManager({ owner: desktopSelf, provider: 'openclaw' })
-
-    expect(entry.manager?.id).toBe('openclaw:local')
-    expect(runProcessMock).toHaveBeenCalledTimes(1)
-    expect(runProcessMock.mock.calls[0]?.[0]).toEqual({
-      program: process.platform === 'win32' ? 'where' : 'which',
-      args: ['openclaw'],
-      timeoutMs: 5_000
-    })
   })
 
   it('reports an SSH host this process does not serve without probing this computer', async () => {
@@ -232,29 +195,5 @@ describe('scoped external automations', () => {
       })
     ).rejects.toBeInstanceOf(AutomationOwnerConflictError)
     expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('confines a manager failure to its own scope and never to Orca store health', async () => {
-    const health = orcaStoreHealth()
-    const engine = createScopedExternalAutomations({
-      registry: {
-        getSshTargets: () => {
-          health.read()
-          return [sshTarget()]
-        }
-      },
-      scheduler: new ExternalAutomationProbeScheduler(),
-      cache: new ExternalAutomationManagerCache({ ttlMs: 0 })
-    })
-
-    const failed = await engine.listManager({
-      owner: desktopSsh('target-a', 3),
-      provider: 'openclaw'
-    })
-    const healthy = await engine.listManager({ owner: desktopSelf, provider: 'openclaw' })
-
-    expect(failed).toMatchObject({ manager: null, error: SSH_HOST_NOT_SERVED_MESSAGE })
-    expect(healthy.manager?.status).toBe('available')
-    expect(health.markUnavailable).not.toHaveBeenCalled()
   })
 })

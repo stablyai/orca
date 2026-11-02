@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import { keptOnWriteFailure } from './terminal-close-write-failure'
 
-/** The Store's durable mutation: apply in memory, write, roll back what a failed write leaves. */
 function durableRun(write: () => void) {
   return async <V>(mutate: () => DurableProfileStateMutation<V>): Promise<V> => {
     const mutation = mutate()

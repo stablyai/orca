@@ -95,7 +95,7 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
     return null
   }
 
-  // Why: looser rollback guard than findLiveRegisteredPtyForRendererTab — a shell without a registered pane key is still a real terminal the timeout must not kill (#7718).
+  // Unregistered-pane shells are still real terminals rollback must not kill (#7718).
   protected hasLiveShellForRendererTab(worktreeId: string, tabId: string): boolean {
     for (const pty of this.ptysById.values()) {
       if (pty.worktreeId === worktreeId && this.paneOfPty(pty).tabId === tabId && pty.connected) {
@@ -115,13 +115,7 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
     )
   }
 
-  // Why: a create can settle over a renderer PTY that spawned without its
-  // startup command (the create's renderer stalled, #7587), silently binding
-  // the client to a plain shell under an agent tab forever — once the surface
-  // is ready, the activation-time materialize recovery (#7837) never runs
-  // (STA-3214). Spawn commands are recorded per PTY at spawn time, so a
-  // missing record on the locally registered live PTY proves the launch never
-  // ran; type it into the shell like the create would have.
+  // A stalled create may leave an agent tab bound to a plain shell (#7587, STA-3214), bypassing pending recovery; absent recorded startup proves it never ran, so deliver it now.
   protected deliverPendingStartupCommandToBareRendererPty(worktreeId: string, tabId: string): void {
     const pending = this.pendingMobileTerminalCreatesByKey.get(`${worktreeId}::${tabId}`)
     const command = pending?.startupCommand
@@ -133,7 +127,7 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
       return
     }
     if (this.ptyController?.write(pty.ptyId, command, 'launch')) {
-      // Why: Enter rides its own write so a long command cannot swallow it.
+      // Write Enter separately so long commands cannot swallow it.
       this.ptyController.write(pty.ptyId, '\r', 'launch')
       this.noteTerminalSpawnCommand(pty.ptyId, command)
     }
@@ -166,7 +160,7 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
         }
       }
       this.graphSyncCallbacks.push(check)
-      // Why: graph sync may have fired between the initial check and registration; re-check to avoid a missed wake-up.
+      // Recheck after registration: graph sync may have already fired.
       check()
     })
   }

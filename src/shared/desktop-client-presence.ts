@@ -1,5 +1,4 @@
-// Why: an older host answers notifications.reportDesktopPresence with method-not-found, so a desktop
-// reports only to a host advertising this; an older desktop never reports and reads as away.
+// Gate desktop presence reports on host capability; older hosts return method-not-found, and older silent desktops read as away.
 export const NOTIFICATIONS_DESKTOP_PRESENCE_RUNTIME_CAPABILITY =
   'notifications.desktop-presence.v1' as const
 

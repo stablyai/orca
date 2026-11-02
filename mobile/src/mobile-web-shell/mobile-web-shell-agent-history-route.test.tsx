@@ -5,8 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type RouteDependencies = {
   routes: { pathname: string; params?: Record<string, string> }[]
   refusals: string[]
-  /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
-   *  a prop update — and a remount is what drops the old session's bridge and its grants. */
   lifecycle: string[]
   params: Record<string, string | string[] | undefined>
 }
@@ -27,7 +25,6 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-// The workspace route reads the desktop's connection to decide whether a server is reachable.
 vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'disconnected' })
 }))
@@ -51,8 +48,7 @@ vi.mock('./MobileWebShellScreen', async () => {
       route: { pathname: string; params?: Record<string, string> }
     }) => {
       dependencies.routes.push(props.route)
-      // Empty deps on purpose: keyed on the pathname this would re-fire on a prop update and read
-      // exactly like a remount, which is the one thing it exists to tell apart.
+      // Keep deps empty: pathname-driven effects would also run on prop updates and falsely look like remounts.
       const mountedAs = React.useRef(props.route.pathname)
       React.useEffect(() => {
         const pathname = mountedAs.current
@@ -96,10 +92,7 @@ describe('the agent-history route that hands off to the shell', () => {
     expect(dependencies.routes).toEqual([{ pathname: '/h/host-1/agent-history/wt-1' }])
   })
 
-  /**
-   * The ids encoding cannot save: `encodeURIComponent('..')` is `'..'`, which the bridge's segment
-   * rule refuses, so the route refuses here rather than handing the page a route it would refuse.
-   */
+  // encodeURIComponent leaves dot segments intact; refuse them before constructing a route the bridge rejects.
   it('refuses a dot-segment id the bridge would refuse', async () => {
     for (const hostId of ['.', '..']) {
       dependencies.params = { hostId, worktreeId: 'wt-1', name: 'n' }
@@ -142,13 +135,7 @@ describe('the agent-history route that hands off to the shell', () => {
     expect(dependencies.refusals.at(-1)).toBe('host-1')
   })
 
-  /**
-   * A route change is a new session, and the old one's bridge must not outlive it.
-   *
-   * The host captures the grants its session was opened with, so a screen reused across a route
-   * change keeps authorising frames under the grants of the route the page has left. Only a remount
-   * drops it, and only a key guarantees one.
-   */
+  // Remount on route change to dispose the bridge that captured the previous route’s grants.
   describe('changing the route this screen stands for', () => {
     it('remounts the shell, so the bridge opened for the old route is disposed', async () => {
       const rendered: { tree: ReturnType<typeof create> | null } = { tree: null }
@@ -160,8 +147,7 @@ describe('the agent-history route that hands off to the shell', () => {
       await act(async () => {
         rendered.tree?.update(createElement(MobileAgentSessionHistoryScreen))
       })
-      // Unmount before mount: the old bridge is gone before the new session exists, rather than
-      // being updated in place with the new route's props.
+      // Dispose the previous bridge before mounting the replacement session.
       expect(dependencies.lifecycle).toEqual([
         'mount:/h/host-1/agent-history/wt-1',
         'unmount:/h/host-1/agent-history/wt-1',

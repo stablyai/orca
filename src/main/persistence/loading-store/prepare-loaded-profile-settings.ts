@@ -4,6 +4,7 @@ import type { ProjectGroup } from '../../../shared/project-group-types'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../shared/project-execution-runtime'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
+import { normalizePluginSystemEnabledDefaultOn } from '../../../shared/plugins/plugin-system-settings'
 import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
@@ -35,6 +36,7 @@ export type PreparedLoadedProfileSettings = {
     GlobalSettings,
     'autoRenameBranchFromWork' | 'autoRenameBranchFromWorkDefaultedOn'
   >
+  migratedPluginSystemEnabled: ReturnType<typeof normalizePluginSystemEnabledDefaultOn>
   migratedTerminalCursorStyle: Pick<
     GlobalSettings,
     'terminalCursorStyle' | 'terminalCursorStyleDefaultedToBlock'
@@ -51,7 +53,6 @@ export type PreparedLoadedProfileSettings = {
     GlobalSettings,
     'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'
   >
-  /** The same launch profile with permissions moved into the stored choice; this is what's saved. */
   migratedAgentPermission: ReturnType<typeof migrateAgentPermissionChoice>
   migratedWindowsRuntimeDefault: GlobalSettings['localWindowsRuntimeDefault']
   migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime']
@@ -78,16 +79,20 @@ export function prepareLoadedProfileSettings(
   }
   const experimentalActivityDefaultedOffForAllUsers =
     parsed.settings?.experimentalActivityDefaultedOffForAllUsers === true
-  // Why: preserve the legacy rollout boundary while loading profiles created before the Agents tab graduated.
+  // Preserve the pre-graduation Agents-tab rollout boundary.
   const migratedExperimentalActivity = experimentalActivityDefaultedOffForAllUsers
     ? (parsed.settings?.experimentalActivity ?? false)
     : false
   const autoRenameBranchFromWorkDefaultedOn =
     parsed.settings?.autoRenameBranchFromWorkDefaultedOn === true
-  // Why: default-on rollout activates old profiles once, but a later Settings opt-out survives reloads.
+  // Migrate default-on once so subsequent opt-outs survive.
   const migratedAutoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(
     parsed.settings
   )
+  const migratedPluginSystemEnabled = normalizePluginSystemEnabledDefaultOn(parsed.settings)
+  if (parsed.settings?.pluginSystemDefaultedOn !== true) {
+    markNeedsSave()
+  }
   const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
   if (
     parsed.settings?.terminalCursorStyle !== migratedTerminalCursorStyle.terminalCursorStyle ||
@@ -153,6 +158,7 @@ export function prepareLoadedProfileSettings(
   const migratedAgentPermission = migrateAgentPermissionChoice(
     {
       ...migratedAgentYoloDefaults,
+      agentLaunchChoices: parsed.settings?.agentLaunchChoices,
       agentPermissionDefault: parsed.settings?.agentPermissionDefault,
       agentPermissionOverrides: parsed.settings?.agentPermissionOverrides
     },
@@ -161,6 +167,9 @@ export function prepareLoadedProfileSettings(
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
     !hasTypedAgentPermission(parsed.settings) ||
+    parsed.settings?.agentLaunchChoices === undefined ||
+    JSON.stringify(parsed.settings.agentLaunchChoices) !==
+      JSON.stringify(migratedAgentPermission.agentLaunchChoices) ||
     parsed.settings?.agentDefaultArgs?.devin !==
       migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
@@ -184,7 +193,7 @@ export function prepareLoadedProfileSettings(
   ) {
     markNeedsSave()
   }
-  // Why (#9537): migrate the indistinguishable legacy host default once so WSL-default users follow their runtime.
+  // Replace the ambiguous legacy host default once so WSL users follow their selected runtime.
   const localAccountRuntimeAlreadyMigrated =
     parsed.settings?.localAccountRuntimeDefaultedToAutoForAllUsers === true
   const migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime'] =
@@ -240,8 +249,7 @@ export function prepareLoadedProfileSettings(
     markNeedsSave()
   }
   const normalizedNotifications = normalizeNotificationSettings(parsed.settings?.notifications)
-  // Why: a type-flipped notification field is repaired in memory only; without a dirty mark the
-  // bad value stays on disk and the repair reruns on every launch.
+  // Persist repaired notification fields so bad disk values do not recur on launch.
   if (
     persistedNotificationSettingsRepaired(parsed.settings?.notifications, normalizedNotifications)
   ) {
@@ -260,6 +268,7 @@ export function prepareLoadedProfileSettings(
     migratedPortugueseUiLanguage,
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
+    migratedPluginSystemEnabled,
     migratedTerminalCursorStyle,
     migratedTerminalLineHeight,
     terminalRightClickToPasteDefaultedForPlatform,

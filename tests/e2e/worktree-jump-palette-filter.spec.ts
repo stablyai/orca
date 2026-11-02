@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@stablyai/playwright-test'
 import type { ExecutionHostId } from '../../src/shared/execution-host'
 import { getPaletteWorktreeIdentity } from '../../src/renderer/src/lib/palette-repo-resolution'
-import { encodePaletteIdentity } from '../../src/renderer/src/lib/palette-match/palette-ranking'
+import { encodePaletteIdentity } from '../../src/shared/palette-match/palette-ranking'
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -9,7 +9,7 @@ const LOCAL_PROJECT = 'E2E Palette Local Project'
 const REMOTE_PROJECT = 'E2E Palette Remote Project'
 const REMOTE_WORKSPACE = 'E2E Palette Remote Workspace'
 const REMOTE_HOST = 'E2E Palette Builder'
-const SEARCH_PLACEHOLDER = 'Search chats, terminals, workspaces, settings, and actions...'
+const SEARCH_PLACEHOLDER = 'Search chats, terminals, workspaces, tasks, settings, and actions...'
 
 type PaletteFilterFixture = {
   localRepoId: string
@@ -153,9 +153,7 @@ async function openComposerFromTypedName(page: Page): Promise<Locator> {
 
   const createDialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(createDialog).toBeVisible()
-  // Why assert focus: the composer auto-focuses the name field, so Escape always
-  // lands on an input the user never chose. A page-style "blur the field first"
-  // handler reachable from here would silently cost a second press.
+  // Require autofocus: Escape must dismiss in one press even when the user never chose the name input.
   await expect(createDialog.locator('[data-workspace-name-input="true"]')).toBeFocused()
   return createDialog
 }
@@ -252,9 +250,7 @@ test.describe('Worktree jump-palette filters', () => {
   })
 
   test('Escape closes the composer opened over the Automations page', async ({ orcaPage }) => {
-    // Why this view: Cmd+J has no view guard, and a page mounted under the palette
-    // keeps its own capture-phase Escape listener registered. Window capture runs
-    // before Radix's document capture, so a preventDefault there vetoes dismissal.
+    // Keep an underlying page capture listener: it runs before Radix document capture, and preventDefault there can veto Cmd+J palette dismissal.
     await orcaPage.evaluate(() => window.__store?.getState().openAutomationsPage())
     const automationsHeading = orcaPage.getByRole('heading', { name: 'Automations', level: 1 })
     await expect(automationsHeading).toBeVisible()

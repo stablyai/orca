@@ -1,6 +1,6 @@
 import { lstat, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
-import { isDescendantOrEqual, isENOENT } from '../ipc/filesystem-path-containment'
+import { isDescendantOrEqual, isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { needsWslHostResolution } from './host-readable-transcript-path'
 

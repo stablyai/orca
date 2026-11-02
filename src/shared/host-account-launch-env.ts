@@ -1,9 +1,5 @@
-/**
- * The account env a desktop pushes to a host it owns the accounts of (a WSL distro's orcad, which
- * has no account services: WSL-via-orcad D10). Launches the host starts on its own (CLI,
- * orchestration, automations, structured chats, AI commit text, bare commands) take it, so they run
- * the account this desktop selected for that distro, as its own launches into the distro do.
- */
+/** Desktop-selected accounts are pushed to owned WSL orcad hosts without account services (D10).
+ * Host-originated CLI/orchestration/automation/chat/generation/bare launches use the same per-distro account environment as desktop-originated launches. */
 import { z } from 'zod'
 import { AgentLaunchAccountEnv } from './agent-launch-account-env'
 

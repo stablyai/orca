@@ -59,8 +59,7 @@ export function createUpdateWorktreeLineage(
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreeLineage'] {
   return async (worktreeId, args) => {
-    // Why: an unresolvable owner route (ambiguous or missing) rejects rather than skipping — this is a
-    // user-initiated action, and both callers toast the failure. Don't swallow it into a silent no-op.
+    // User-initiated unresolved routes must reject so both callers can toast, rather than silently skip.
     const ownerRoute = hostRouteForWorktreeOwner(get(), worktreeId)
     try {
       applyWorktreeLineageUpdate(

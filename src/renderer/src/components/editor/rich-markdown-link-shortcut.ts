@@ -42,9 +42,7 @@ export function handleRichMarkdownLinkShortcut({
     editor.commands.focus()
     return true
   }
-  // Why: NodeSelection on an HTML citation still has a bubble position, but
-  // markdown setLink/unsetLink cannot edit that atom — open the citation
-  // action bubble instead of the markdown edit field.
+  // Citation atoms support action bubbles but cannot be edited through Markdown setLink/unsetLink.
   const selectionBubble = getRichMarkdownSelectionLinkBubble(
     editor,
     root,

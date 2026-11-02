@@ -2,21 +2,17 @@ import type { ActiveBrowserScreencastSubscriber } from './browser/browser-screen
 import { recordScreencastSubscriberSend } from './browser-screencast-ghost-subscriber-eviction'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
 
-// Why 50: the frame pacer's own backpressure retry interval.
+// Match the frame pacer's backpressure retry interval.
 export const SCREENCAST_PENDING_FRAME_RETRY_MS = 50
 
-/**
- * Sends one frame to one viewer. A frame its socket did not take is kept as the viewer's newest
- * pending frame and retried until taken: an idle page produces no next frame, so without the retry
- * a viewer behind a briefly full socket keeps a stale picture until the page changes.
- */
+/** Retry the newest rejected frame: an idle page may never produce another to replace it. */
 export function deliverScreencastSubscriberFrame(
   subscriber: ActiveBrowserScreencastSubscriber,
   bytes: Uint8Array<ArrayBufferLike>
 ): void {
   const outcome = sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes)
   subscriber.pendingFrame = outcome === 'handled' ? null : bytes
-  // Why: a backlogged socket is alive and busy, so only a refusal is evidence of a ghost viewer.
+  // Backlog proves an active socket, not a ghost.
   if (outcome !== 'backlogged') {
     subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, outcome === 'handled')
   }
@@ -25,7 +21,6 @@ export function deliverScreencastSubscriberFrame(
   }
 }
 
-/** Paths that remove a viewer that may have received frames call this, so no retry outlives it. */
 export function cancelScreencastSubscriberFrameRetry(
   subscriber: ActiveBrowserScreencastSubscriber
 ): void {
@@ -46,7 +41,7 @@ function schedulePendingFrameRetry(subscriber: ActiveBrowserScreencastSubscriber
     if (!bytes) {
       return
     }
-    // Why a refused retry is not recorded: ghost eviction must advance only on produced frames.
+    // Count ghost refusals only on produced frames, never retries.
     if (sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes) === 'handled') {
       subscriber.pendingFrame = null
       subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, true)

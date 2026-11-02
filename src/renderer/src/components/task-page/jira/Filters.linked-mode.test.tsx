@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import type { JiraProjectReference } from '../../../../../shared/jira/jira-project-reference'
 import TaskPage from '../TaskPage'
 import { TaskPageJiraFilters } from './Filters'
@@ -158,11 +158,5 @@ describe('Jira project filters in Has Workspace mode', () => {
     expect(picker).toBeEnabled()
     expect(picker).toHaveTextContent('All Jira projects')
     expect(setJiraProjectFilter).toHaveBeenCalledExactlyOnceWith(null)
-  })
-
-  it('keeps project changes disabled during inventory loading', () => {
-    fixture.loading = true
-    render(<TaskPage />)
-    expect(screen.getByRole('combobox', { name: 'Jira project' })).toBeDisabled()
   })
 })

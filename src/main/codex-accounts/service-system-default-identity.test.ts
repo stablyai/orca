@@ -20,8 +20,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -141,7 +141,7 @@ describe('CodexAccountService config sync', () => {
 
       let thrown: Error | null = null
       try {
-        ;(
+        await (
           service as unknown as {
             readIdentityFromHome(managedHomePath: string, expectedAccountId: string): unknown
           }

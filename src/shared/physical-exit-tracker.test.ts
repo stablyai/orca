@@ -4,7 +4,7 @@ import { PhysicalExitTracker } from './physical-exit-tracker'
 describe('PhysicalExitTracker', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('removes timed-out waiters while later retries can still observe exit', async () => {
+  it('lets a later retry observe exit after an earlier wait times out', async () => {
     vi.useFakeTimers()
     const tracker = new PhysicalExitTracker()
     const first = tracker.waitForExit(10, () => new Error('first deadline'))

@@ -14,13 +14,13 @@ export function createEditorExternalChangeTabReset(store: AppStoreApi): (event: 
 
     const state = store.getState()
     // Why no sibling expansion: views of one file share a record, so each matches by path itself.
-    const matchingFiles = getOpenFilesForExternalFileChange(state.openFiles, detail, state)
+    const matchingFiles = getOpenFilesForExternalFileChange(state.openFiles, detail)
     if (matchingFiles.length === 0) {
       return
     }
 
-    // Why: keep dirty drafts on external writes (data-loss half of #7265); mark changed-on-disk as backstop for tabs turned dirty during the notify debounce.
-    // Why model-level: a clean tab of a model another tab is editing shows that unsaved text.
+    // Keep model-level dirty drafts on external writes (#7265); clean sibling tabs show the same unsaved model text.
+    // Mark changed-on-disk too for tabs becoming dirty during notify debounce.
     const modelDirty = new Set(
       matchingFiles.filter((file) => isEditorModelDirty(state, file)).map((file) => file.id)
     )

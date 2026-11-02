@@ -10,7 +10,7 @@ import {
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 
@@ -123,7 +123,6 @@ it.each(['paired-linux', 'local-bash', 'withheld', 'structured-withheld'] as con
       settings: {
         ...getDefaultSettings('/tmp/orca-workspaces'),
         defaultTuiAgent: 'claude',
-        experimentalNativeChat: true,
         nativeChatProviders: { claude: target === 'structured-withheld' },
         terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash.exe',
         agentDefaultArgs: { claude: '--append-system-prompt "don\'t edit"' },

@@ -75,8 +75,7 @@ describe('tab create entry history placement', () => {
     }
   )
 
-  // The phrase-query ordering: the classifier puts search first, and history
-  // still has to end up under the fuzzy files that follow it.
+  // Phrase queries promote search above fuzzy files; history must stay below both.
   it('sinks past fuzzy files the classifier ranked below web search', () => {
     const placed = placeHistoryRowsInEntryOptions(
       [searchOption, fileOption('docs/readme-notes.md', 'fuzzy'), newFileOption],

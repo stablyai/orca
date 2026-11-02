@@ -1,5 +1,5 @@
-import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
+import { newAgentLaunchesMayOpenChats } from '@/runtime/local-structured-chats'
 import { acquireAgentLaunchChoices } from './host-chat-program-acquisition'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -17,70 +17,70 @@ import { chosenAgentChatUnlearned, agentChoiceOpensAsChat } from '@/lib/host-cha
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import {
+  readAgentLaunchPreferencesForWorktree,
+  type AgentLaunchPreferences
+} from '@/components/settings/use-host-agent-launch-preferences'
 
-/**
- * The host whose agent list picks the default chat; undefined when the workspace opens a shell
- * whatever that list says. Shared by the wait and the open so they cannot drift.
- */
-function defaultChatDetectionTarget(
-  state: AppState,
-  worktreeId: string
-): AgentDetectionTarget | undefined {
-  // Why: a 'blank' default means the user wants workspaces to open without an agent.
-  if (!isNativeChatEnabled(state.settings) || state.settings?.defaultTuiAgent === 'blank') {
+type DefaultChatHost = { target: AgentDetectionTarget; preferences: AgentLaunchPreferences }
+
+/** Share the host between wait/open; undefined means the workspace opens a shell regardless of agent inventory. */
+function defaultChatHost(state: AppState, worktreeId: string): DefaultChatHost | undefined {
+  // Why the owner's copy: a paired host keeps its own default agent.
+  const preferences = readAgentLaunchPreferencesForWorktree(state, worktreeId)
+  const chosen = preferences.defaultTuiAgent
+  // Why: only a saved agent asks for a chat here; Auto must not turn catalog order into a launch (#36594).
+  if (!chosen || chosen === 'blank' || !newAgentLaunchesMayOpenChats(state.settings)) {
     return undefined
   }
   // Why: an unresolved owner is an unknown host, not the local machine.
-  return parseAgentDetectionTargetKey(getAgentDetectionTargetKeyForWorktree(state, worktreeId))
+  const target = parseAgentDetectionTargetKey(
+    getAgentDetectionTargetKeyForWorktree(state, worktreeId)
+  )
+  return target && { target, preferences }
 }
 
-/** True when the default chat could open here but its agent list or chat facts have not loaded. */
 export function emptyWorkspaceDefaultChatAwaitsDetection(worktreeId: string): boolean {
   const state = useAppStore.getState()
-  const target = defaultChatDetectionTarget(state, worktreeId)
-  const detected = target && readDetectedAgentsForTarget(state, target)
+  const host = defaultChatHost(state, worktreeId)
+  const detected = host && readDetectedAgentsForTarget(state, host.target)
   const workspace = worktreeLaunchWorkspace(worktreeId)
-  const chosen = state.settings?.defaultTuiAgent
   return (
     detected === null ||
-    (!!detected && chosenAgentChatUnlearned(state, chosen, detected, workspace))
+    (!!detected &&
+      chosenAgentChatUnlearned(state, host?.preferences.defaultTuiAgent, detected, workspace))
   )
 }
 
-/** Loads the workspace host's agent list and chat facts; resolves on success, failure, or timeout. */
 export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string): Promise<void> {
   const state = useAppStore.getState()
-  const target = defaultChatDetectionTarget(state, worktreeId)
-  if (!target) {
+  const host = defaultChatHost(state, worktreeId)
+  if (!host) {
     return
   }
   await acquireAgentLaunchChoices(
     worktreeLaunchWorkspace(worktreeId),
-    () => ensureDetectedAgentsForTarget(state, target),
+    () => ensureDetectedAgentsForTarget(state, host.target),
     undefined,
     true
   ).catch(() => undefined)
 }
 
-/**
- * When the user's new agent tabs open as chat, an empty workspace opens their default agent as a
- * chat instead of a bare shell. Null means nothing opened and the caller seeds the shell; so does
- * `seedShell` when the host declines the chat, since nobody asked for the agent's terminal.
- */
+/** Open the configured default chat for an empty workspace; null or host decline seeds a shell, never an unrequested agent TUI. */
 export function openDefaultAgentChatInEmptyWorkspace(
   worktreeId: string,
   seedShell: () => boolean
 ): { primaryTabId: string | null } | null {
   const state = useAppStore.getState()
-  const target = defaultChatDetectionTarget(state, worktreeId)
-  if (!target) {
+  const host = defaultChatHost(state, worktreeId)
+  if (!host) {
     return null
   }
-  const detected = readDetectedAgentsForTarget(state, target)
+  const detected = readDetectedAgentsForTarget(state, host.target)
   const agent = pickTuiAgent(
-    state.settings?.defaultTuiAgent,
+    host.preferences.defaultTuiAgent,
     detected ?? [],
-    state.settings?.disabledTuiAgents,
+    host.preferences.disabledTuiAgents,
     (chosen) => agentChoiceOpensAsChat(state, chosen, worktreeLaunchWorkspace(worktreeId), detected)
   )
   if (!agent) {

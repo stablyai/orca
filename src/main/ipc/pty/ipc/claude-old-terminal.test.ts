@@ -19,7 +19,7 @@ const mocks = vi.hoisted((): Mocks => ({
   wslRunsAnotherAccount: true,
   router: true
 }))
-vi.mock('../../pty-host-bindings', () => ({
+vi.mock('../pty-host-bindings', () => ({
   getPtyIpc: () => ({
     handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler)
   })

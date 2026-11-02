@@ -45,12 +45,7 @@ export function servingExecutionHostId(
   return server ? toRuntimeExecutionHostId(server.id.trim()) : hostId
 }
 
-/**
- * Where the agents run, never the client by default: null while the owning runtime is
- * unknown or the project runs in WSL. Pass the active workspace's owner
- * through `servingExecutionHostId`, so an SSH host with a managed server plans on that server.
- * An omitted owner means no active workspace; null means its owner is unresolved.
- */
+/** Plan where agents run; return null for unresolved owners or WSL. servingExecutionHostId routes SSH through its managed server; omitted means no active workspace, null means unresolved. */
 export function resolveBundledSkillTarget(
   runtimeTarget: RuntimeClientTarget | null,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined,

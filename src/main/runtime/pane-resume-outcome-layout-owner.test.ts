@@ -1,5 +1,4 @@
-// Layout-owner build: main's start of a pane publishes whether it resumed the pane's agent, so the
-// window that attaches can say so; nothing for a plain start, and nothing with the switch off.
+// Main publishes transient resume outcomes for attaching windows; plain starts and window-owned layouts publish none.
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
@@ -47,9 +46,8 @@ function resumablePaneRuntime(outcome: PaneResumeOutcome | undefined, recorded =
       getWorkspaceSessionHostIds: (): ExecutionHostId[] => [LOCAL_EXECUTION_HOST_ID]
     })
   )
-  // A paired desktop's layout stream: what main publishes is what it reads.
   const desktopStream = runtime.subscribeWorkspaceLayouts(() => {})
-  // A daemon start keeps the session id it was asked for, and reports its resume before binding.
+  // Report resume before committing the spawn binding.
   const spawn = vi.fn(
     async (args: {
       sessionId?: string
@@ -100,13 +98,11 @@ describe("main's start of a pane publishes its resume outcome", () => {
       const pane = publishedPane(runtime)
       expect(pane?.ptyId).toBe('persisted-pty')
       expect(pane?.resumeOutcome).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? outcome : undefined)
-      // Live state only: the session main saves never holds it.
       expect(JSON.stringify(getSession())).not.toContain('resumeOutcome')
     }
   )
 
   it('publishes it for any create into the pane that wakes its record, not only a restore', async () => {
-    // A window tab's start through main's create (PR-3a) names the wake itself.
     const { runtime } = resumablePaneRuntime('restored', false)
 
     await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
@@ -151,7 +147,7 @@ describe("main's start of a pane publishes its resume outcome", () => {
         }
       }
     })
-    // The stream re-projects from the rebound session, as a write notification would make it.
+    // Re-project the rebound session as a write notification would.
     desktopStream.unsubscribe()
 
     expect(publishedPane(runtime)).toMatchObject({ ptyId: 'pty-rebound' })

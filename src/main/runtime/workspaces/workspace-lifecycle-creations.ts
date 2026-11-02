@@ -12,7 +12,6 @@ export type WorkspaceCreationHandle = {
   close: () => void
 }
 
-/** How a create holds its named workspace's queue while it runs. */
 export type CreationQueuePort<Token> = {
   revision: ProducerRevision
   membership: () => LifecycleMembership
@@ -28,7 +27,6 @@ type Creation<Token> = WorkspaceCreation & {
   closed?: boolean
 }
 
-/** The creates in flight: listed from open, bound to the workspace's queue once named. */
 export class WorkspaceLifecycleCreations<Token> {
   private readonly creations = new Map<string, Creation<Token>>()
 
@@ -38,7 +36,6 @@ export class WorkspaceLifecycleCreations<Token> {
   open(start: {
     creationId?: string
     repoId: string
-    /** The named workspace's queue key; commands sent to it then wait behind the create. */
     keyOf?: (worktreeId: string) => string
   }): WorkspaceCreationHandle {
     const { port } = this
@@ -55,7 +52,7 @@ export class WorkspaceLifecycleCreations<Token> {
         }
         creation.worktreeId = worktreeId
         const key = start.keyOf?.(worktreeId)
-        // Why not behind a delete: that delete is the previous occupant's, never this new one's.
+        // A pending delete belongs to the previous occupant, so this new create must not queue behind it.
         if (key && !creation.key && !port.deletePending(key)) {
           creation.key = key
           creation.token = port.bind(key)
@@ -84,7 +81,7 @@ export class WorkspaceLifecycleCreations<Token> {
           finish()
           return
         }
-        // Why held: the creation shows until a listing shows the workspace, in the same revision.
+        // Keep the creation listed until a subsequent listing publishes the workspace in the same revision.
         creation.settling = true
         port.membership()(finish)
       }
@@ -99,7 +96,6 @@ export class WorkspaceLifecycleCreations<Token> {
     return { revision: this.port.revision.value, creations }
   }
 
-  /** Queue keys of finished creates still waiting for a listing to show them. */
   settlingKeys(): string[] {
     return [...this.creations.values()].flatMap(({ key, settling }) =>
       key && settling ? [key] : []

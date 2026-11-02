@@ -22,6 +22,8 @@ export const HOSTED_REVIEW_METHODS = [
         currentHeadOid: params.currentHeadOid ?? null,
         ...(params.active === true ? { active: true } : {}),
         ...(params.force === true ? { force: true } : {}),
+        ...(params.userRefresh === true ? { userRefresh: true } : {}),
+        ...(params.reportReadOutcome === true ? { reportReadOutcome: true } : {}),
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,
@@ -52,7 +54,8 @@ export const HOSTED_REVIEW_METHODS = [
         linkedGitLabMR: params.linkedGitLabMR ?? null,
         linkedBitbucketPR: params.linkedBitbucketPR ?? null,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
-        linkedGiteaPR: params.linkedGiteaPR ?? null
+        linkedGiteaPR: params.linkedGiteaPR ?? null,
+        wakeWslDistro: params.wakeWslDistro
       })
     }
   }),
@@ -61,8 +64,7 @@ export const HOSTED_REVIEW_METHODS = [
     permission: 'workspace',
     params: HostedReviewCreate,
     handler: async (params, { runtime }) => {
-      // The wire carries the host's own provider token, so this is where an arm this build does
-      // not know becomes a refusal instead of a params rejection the client cannot read.
+      // Refuse an unknown host-issued provider token here; schema rejection would be unreadable to the client.
       if (!supportsHostedReviewCreation(params.provider)) {
         return UNSUPPORTED_HOSTED_REVIEW_PROVIDER
       }

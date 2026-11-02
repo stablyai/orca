@@ -1,8 +1,11 @@
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { ScrollArea } from '../ui/scroll-area'
+import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
 import {
   filterTerminalThemeOptions,
@@ -21,8 +24,8 @@ type ThemePickerProps = {
   query: string
   onQueryChange: (value: string) => void
   onSelectTheme: (theme: string) => void
-  /** Bumps when themes are imported; scrolls the Imported group into view and
-   *  briefly highlights it so freshly-imported themes are easy to find. */
+  onDeleteImportedTheme?: (theme: TerminalThemeOption) => void
+  /** After import, reveal and briefly highlight the Imported group. */
   importedHighlightSignal?: number
 }
 
@@ -34,14 +37,14 @@ export function ThemePicker({
   query,
   onQueryChange,
   onSelectTheme,
+  onDeleteImportedTheme,
   importedHighlightSignal
 }: ThemePickerProps): React.JSX.Element {
   const importedGroupRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [highlightImported, setHighlightImported] = useState(false)
 
-  // Why: imported themes render below the built-in list inside a fixed-height
-  // scroll area, so after an import they sit off-screen. On each import signal,
-  // scroll the Imported group into view and flash a highlight so it's easy to spot.
+  // Imported themes sit below the fixed-height built-in list; reveal them after import.
   useEffect(() => {
     if (!importedHighlightSignal) {
       return
@@ -73,6 +76,10 @@ export function ThemePicker({
       themes: matchingThemes
         .filter((theme) => theme.group === 'imported')
         .slice(0, MAX_THEME_RESULTS)
+    },
+    {
+      label: translate('auto.components.settings.SettingsFormControls.plugin_themes', 'Plugins'),
+      themes: matchingThemes.filter((theme) => theme.group === 'plugin').slice(0, MAX_THEME_RESULTS)
     }
   ].filter((group) => group.themes.length > 0)
   const visibleThemeCount = groupedThemes.reduce((sum, group) => sum + group.themes.length, 0)
@@ -84,6 +91,7 @@ export function ThemePicker({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <Input
+        ref={searchInputRef}
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         placeholder={translate(
@@ -135,62 +143,102 @@ export function ThemePicker({
                     {group.label}
                   </p>
                   {group.themes.map((theme) => (
-                    <button
+                    <div
                       key={theme.value}
-                      onClick={() => onSelectTheme(theme.value)}
                       className={cn(
-                        'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        'group/theme-row flex items-center rounded-md transition-colors',
                         selectedTheme === theme.value
                           ? 'bg-accent font-medium text-accent-foreground'
                           : 'hover:bg-accent'
                       )}
                     >
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">{theme.label}</span>
-                        {theme.sourceLabel ? (
-                          <span className="block truncate text-[11px] font-normal text-muted-foreground">
-                            {translate(
-                              'auto.components.settings.SettingsFormControls.imported_from',
-                              'Imported from {{value0}}',
-                              { value0: theme.sourceLabel }
-                            )}
-                            {theme.mode && theme.mode !== 'unknown' ? ` · ${theme.mode}` : ''}
+                      <button
+                        onClick={() => onSelectTheme(theme.value)}
+                        className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{theme.label}</span>
+                          {theme.sourceLabel ? (
+                            <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                              {theme.group === 'plugin'
+                                ? translate(
+                                    'auto.components.settings.SettingsFormControls.from_plugin',
+                                    'From {{value0}}',
+                                    { value0: theme.sourceLabel }
+                                  )
+                                : translate(
+                                    'auto.components.settings.SettingsFormControls.imported_from',
+                                    'Imported from {{value0}}',
+                                    { value0: theme.sourceLabel }
+                                  )}
+                              {theme.mode && theme.mode !== 'unknown' ? ` · ${theme.mode}` : ''}
+                            </span>
+                          ) : null}
+                        </span>
+                        {/* Why: hide swatches on the current row so the color grid
+                        doesn't shift left to make room for the "Current" label. */}
+                        {theme.group !== 'built-in' &&
+                        theme.previewTheme &&
+                        selectedTheme !== theme.value ? (
+                          <span className="flex shrink-0 overflow-hidden rounded-sm border border-border/60">
+                            {[
+                              theme.previewTheme.black,
+                              theme.previewTheme.red,
+                              theme.previewTheme.green,
+                              theme.previewTheme.yellow,
+                              theme.previewTheme.blue,
+                              theme.previewTheme.magenta,
+                              theme.previewTheme.cyan,
+                              theme.previewTheme.white
+                            ].map((color, index) => (
+                              <span
+                                key={index}
+                                className="h-3 w-2"
+                                style={{ backgroundColor: color ?? 'transparent' }}
+                              />
+                            ))}
                           </span>
                         ) : null}
-                      </span>
-                      {/* Why: hide swatches on the current row so the color grid
-                        doesn't shift left to make room for the "Current" label. */}
-                      {theme.group === 'imported' &&
-                      theme.previewTheme &&
-                      selectedTheme !== theme.value ? (
-                        <span className="flex shrink-0 overflow-hidden rounded-sm border border-border/60">
-                          {[
-                            theme.previewTheme.black,
-                            theme.previewTheme.red,
-                            theme.previewTheme.green,
-                            theme.previewTheme.yellow,
-                            theme.previewTheme.blue,
-                            theme.previewTheme.magenta,
-                            theme.previewTheme.cyan,
-                            theme.previewTheme.white
-                          ].map((color, index) => (
-                            <span
-                              key={index}
-                              className="h-3 w-2"
-                              style={{ backgroundColor: color ?? 'transparent' }}
-                            />
-                          ))}
+                        {selectedTheme === theme.value ? (
+                          <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
+                            {translate(
+                              'auto.components.settings.SettingsFormControls.9119fb2268',
+                              'Current'
+                            )}
+                          </span>
+                        ) : null}
+                      </button>
+                      {theme.group === 'imported' && onDeleteImportedTheme ? (
+                        <span className="mr-1.5 flex shrink-0 text-muted-foreground opacity-0 group-focus-within/theme-row:opacity-100 group-hover/theme-row:opacity-100 [@media(hover:none)]:opacity-100">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                onClick={() => {
+                                  onDeleteImportedTheme(theme)
+                                  // The row unmounts with focus inside it; keep keyboard users in the picker.
+                                  searchInputRef.current?.focus()
+                                }}
+                                aria-label={translate(
+                                  'auto.components.settings.SettingsFormControls.delete_imported_theme',
+                                  'Delete {{value0}}',
+                                  { value0: theme.label }
+                                )}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" sideOffset={4}>
+                              {translate(
+                                'auto.components.settings.SettingsFormControls.delete_theme',
+                                'Delete theme'
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
                         </span>
                       ) : null}
-                      {selectedTheme === theme.value ? (
-                        <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
-                          {translate(
-                            'auto.components.settings.SettingsFormControls.9119fb2268',
-                            'Current'
-                          )}
-                        </span>
-                      ) : null}
-                    </button>
+                    </div>
                   ))}
                 </div>
               )

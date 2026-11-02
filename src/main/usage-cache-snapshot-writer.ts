@@ -47,7 +47,9 @@ export class UsageCacheSnapshotWriter {
       durableWriteTempPath(usageFile),
       usageFile,
       payload,
-      () => generation === this.generation
+      () => generation === this.generation,
+      // Usage caches hold session ids and project paths.
+      0o600
     )
   }
 }

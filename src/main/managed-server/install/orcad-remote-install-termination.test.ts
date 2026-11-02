@@ -17,7 +17,6 @@ vi.mock('./orcad-remote-node-runtime', () => ({
   ensureRemoteOrcadNodeRuntime: vi.fn().mockResolvedValue(undefined)
 }))
 
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
 import { installOrcadBundle } from './orcad-remote-install'
@@ -31,9 +30,9 @@ import {
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: All connection operations are mocked.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const mockExec = vi.mocked(execCommand)
 const mockUpload = vi.mocked(uploadRemoteInstallDirectory)
 const mockWrite = vi.mocked(writeRemoteInstallFile)
@@ -62,7 +61,7 @@ describe.each([
     { stage: 'version write', commands: completionCommandNumber - 1 },
     { stage: 'completion marker', commands: completionCommandNumber }
   ]
-  const install = (signal?: AbortSignal): Promise<void> =>
+  const install = (signal?: AbortSignal): Promise<unknown> =>
     installOrcadBundle(
       {
         conn,
@@ -117,7 +116,7 @@ describe.each([
       failStage(stage, commands, error)
 
       if (stage === 'locked recheck') {
-        await expect(install()).resolves.toBeUndefined()
+        await expect(install()).resolves.toBe('uploaded')
         expect(mockExec).toHaveBeenCalledTimes(completionCommandNumber + 1)
       } else {
         await expect(install()).rejects.toBe(error)
@@ -128,7 +127,7 @@ describe.each([
   )
 
   it('releases its lock once after successful completion', async () => {
-    await expect(install()).resolves.toBeUndefined()
+    await expect(install()).resolves.toBe('uploaded')
 
     expect(mockExec).toHaveBeenCalledTimes(completionCommandNumber + 1)
     expect(issuedCommands()[completionCommandNumber - 1]).toContain('.install-complete')
@@ -181,7 +180,7 @@ describe.each([
 
 describe('the install lock token', () => {
   const host = getRemoteHostPlatform('linux-x64')
-  const install = (): Promise<void> =>
+  const install = (): Promise<unknown> =>
     installOrcadBundle(
       {
         conn,

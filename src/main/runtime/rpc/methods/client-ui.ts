@@ -1,4 +1,4 @@
-import { normalizeJiraQuickFilterState } from '../../../../shared/jira-quick-filters'
+import { normalizeJiraQuickFilterState } from '../../../../shared/jira/jira-quick-filters'
 import { JiraQuickFilterStateParam } from '../../../../shared/rpc-contract/jira-quick-filter-params'
 import {
   normalizeJiraSavedFilterState,
@@ -10,6 +10,7 @@ import {
   type PairedUiState
 } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import { isWorkspaceHostScope } from '../../../../shared/orcad-migration/orcad-migration-client-state-value-validation'
 import { defineMethod, type RpcContext } from '../core'
 import { isHostOwnPhone } from '../host-own-phone'
 import {
@@ -21,20 +22,21 @@ import {
   FeatureInteractionIdParam,
   UiUpdate
 } from '../../../../shared/rpc-contract/client-ui-params'
-// Type-only side effect: keeps the schema/PersistedUIState parity assertions in
-// the typecheck graph so drift fails the build instead of a paired client.
+// Keep schema/PersistedUIState parity assertions in the typecheck graph so drift fails before reaching paired clients.
 
 import { TerminalQuickCommandsUpdate } from '../../../../shared/rpc-contract/terminal-quick-command-params'
 import { AgentLaunchSettingsMutation } from '../../../../shared/rpc-contract/agent-launch-settings-params'
-import { projectTerminalQuickCommandsForClient } from './terminal-quick-command-long-prompt-capability'
+import {
+  assertTerminalQuickCommandMutationReadableForClient,
+  projectTerminalQuickCommandsForClient
+} from './terminal-quick-command-client-capabilities'
 
 function uiForCaller(
   state: PersistedUIState,
   context: Pick<RpcContext, 'clientKind' | 'pairedDeviceParentId'>
 ): PairedUiState & Pick<PersistedUIState, 'hideWorkspacesFromOtherDevices'> {
   const ui = omitPairingLocalUiFields(state)
-  // Why always sent: its presence tells the phone this host shares the filter; an older host omits
-  // it, and the phone then keeps its local value.
+  // Presence tells the phone this host shares the filter; older hosts omit it, preserving the phone's local value.
   return isHostOwnPhone(context)
     ? { ...ui, hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices === true }
     : ui
@@ -107,8 +109,7 @@ export const CLIENT_UI_METHODS = [
     name: 'settings.getTerminalQuickCommands',
     permission: 'workspace',
     params: null,
-    // Why: command bodies can total ~240 KB, so keep unrelated settings reads
-    // from carrying them over every paired/relay connection.
+    // Keep command bodies (up to ~240 KB) out of unrelated settings reads over paired/relay links.
     handler: (_params, ctx) => ({
       terminalQuickCommands: projectTerminalQuickCommandsForClient(
         ctx.runtime.getClientTerminalQuickCommands(),
@@ -120,12 +121,19 @@ export const CLIENT_UI_METHODS = [
     name: 'settings.updateTerminalQuickCommands',
     permission: 'settings-write',
     params: TerminalQuickCommandsUpdate,
-    handler: (params, ctx) => ({
-      terminalQuickCommands: projectTerminalQuickCommandsForClient(
-        ctx.runtime.updateClientTerminalQuickCommands(params.mutation),
+    handler: (params, ctx) => {
+      assertTerminalQuickCommandMutationReadableForClient(
+        ctx.runtime.getClientTerminalQuickCommands(),
+        params.mutation,
         ctx
       )
-    })
+      return {
+        terminalQuickCommands: projectTerminalQuickCommandsForClient(
+          ctx.runtime.updateClientTerminalQuickCommands(params.mutation),
+          ctx
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'settings.updatePRBotAuthorOverride',
@@ -154,16 +162,18 @@ export const CLIENT_UI_METHODS = [
     name: 'ui.set',
     permission: 'workspace',
     params: UiUpdate,
-    // Why the fields are dropped here rather than removed from the schema: UiUpdate is strict, so
-    // an unlisted key would make the dispatcher reject an old client's ENTIRE payload.
+    // Keep pairing-local keys in the strict schema for older clients, then strip them here instead of rejecting their whole payload.
     handler: (params, context) => {
       const ownPhoneFilter =
         isHostOwnPhone(context) && params.hideWorkspacesFromOtherDevices !== undefined
           ? { hideWorkspacesFromOtherDevices: params.hideWorkspacesFromOtherDevices }
           : {}
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: UiUpdate is checked key-for-key against PersistedUIState (ui-state-schema-parity-checks.ts); only optionality differs.
+      // Why: the wire schema keeps workspaceHostScope a plain string for older clients; drop unknown scopes.
+      const { workspaceHostScope, ...uiUpdates } = omitPairingLocalUiFields(params)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: keys match PersistedUIState (ui-state-schema-parity-checks.ts); wider wire values such as host-id lists are not narrowed here.
       const updates = {
-        ...omitPairingLocalUiFields(params),
+        ...uiUpdates,
+        ...(isWorkspaceHostScope(workspaceHostScope) ? { workspaceHostScope } : {}),
         ...ownPhoneFilter
       } as Partial<PersistedUIState>
       return { ui: uiForCaller(context.runtime.updateUIState(updates), context) }

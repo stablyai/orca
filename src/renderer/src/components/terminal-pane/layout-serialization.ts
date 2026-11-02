@@ -3,6 +3,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
 } from '../../../../shared/terminal-tab-types'
+import { markTerminalShowsReplayedHistory } from './replayed-history-terminals'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
   POST_REPLAY_MODE_RESET,
@@ -64,7 +65,6 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
   let ratio: number | undefined
   if (first && second) {
     const r = readSplitRatio(first, second)
-    // Only store if meaningfully different from 0.5 (default equal split)
     if (Math.abs(r - 0.5) > SPLIT_RATIO_TOLERANCE) {
       ratio = Math.round(r * 1000) / 1000
     }
@@ -97,10 +97,7 @@ export function serializeTerminalLayout(
   }
 }
 
-/**
- * Write saved scrollback buffers into restored panes so the user sees prior
- * output after a restart. Exits alt-screen first if a buffer ended mid-TUI.
- */
+/** Restore saved output; leave captured alt-screen mode unless its TUI is still live on the host. */
 export function restoreScrollbackBuffers(
   manager: PaneManager,
   savedBuffers: Record<string, string> | undefined,
@@ -124,25 +121,23 @@ export function restoreScrollbackBuffers(
     if (!pane) {
       continue
     }
-    // Breadcrumb: writes into a disposed xterm are silent (no throw), the suspected source of startup zombie panes.
     if (isXtermInstanceDisposed(pane.terminal)) {
       recordRendererCrashBreadcrumb('terminal_restore_write_target_disposed', {
         paneId: pane.id
       })
       continue
     }
+    markTerminalShowsReplayedHistory(pane.terminal)
     try {
       const renderOptions = {
         shouldRefreshViewportSynchronously: () => !manager.hasWebglRenderer(pane.id)
       }
       let buf = buffer
-      // If the buffer ends in alt-screen (agent TUI at shutdown), exit it so the terminal is usable.
       const lastOn = buf.lastIndexOf(ALT_SCREEN_ON)
       const lastOff = buf.lastIndexOf(ALT_SCREEN_OFF)
       if (lastOn > lastOff) {
         if (liveAltScreenLeafIds?.has(oldLeafId)) {
-          // Why: stripping the frame would show the pre-TUI shell rows until the host
-          // snapshot repaints (#22087); the reattach replay leaves alt itself if needed.
+          // Keep the live frame until the host snapshot arrives; reattach leaves alt-screen mode if needed (#22087).
           replayIntoTerminal(
             pane,
             replayingPanesRef,
@@ -155,7 +150,7 @@ export function restoreScrollbackBuffers(
         buf = buf.slice(0, lastOn)
       }
       if (buf.length > 0) {
-        // replayIntoTerminal: buffer queries (DA1/DECRQM/CPR) would auto-reply into the new shell's stdin. See replay-guard.ts.
+        // Replay guards stop captured queries from auto-replying into the fresh shell (replay-guard.ts).
         replayIntoTerminal(
           pane,
           replayingPanesRef,
@@ -165,11 +160,10 @@ export function restoreScrollbackBuffers(
         // The grounded newline avoids both the prompt marker and background-color erase from the captured pen.
         // Clear mode bits the buffer replayed: the fresh shell has no TUI to consume them. See POST_REPLAY_MODE_RESET.
         replayIntoTerminal(pane, replayingPanesRef, POST_REPLAY_MODE_RESET, renderOptions)
-        // Why: connection resolution runs after layout replay; only fresh-shell paths move these rows into scrollback.
+        // Connection resolution follows replay; only fresh-shell paths move these rows into scrollback.
         restoredViewportBlankingPanesRef?.current.add(pane.id)
       }
     } catch (error: unknown) {
-      // Breadcrumb: this catch was silent while zombie panes went undiagnosed.
       recordRendererCrashBreadcrumb('terminal_restore_write_failed', {
         paneId: pane.id,
         errorName: error instanceof Error ? error.name : typeof error,

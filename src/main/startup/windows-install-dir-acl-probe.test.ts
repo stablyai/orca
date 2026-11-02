@@ -78,9 +78,7 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(data.matchesPoisonSignature).toBe(false)
   })
 
-  // A Program Files install inherits ALL APPLICATION PACKAGES by default, and an
-  // orphan alongside it launched clean on win32 10.0.26200 / Electron 43.4.1 — so
-  // it is not the reproduced state, however useless -1 is to an LPAC token.
+  // Orphan plus ALL APPLICATION PACKAGES launched clean on Windows 10.0.26200/Electron 43.4.1; it must not match the reproduced poison.
   it.each([
     ['the AC alias', ALL_PACKAGES_ACE],
     ['the raw SID form', '(A;OICI;0x1200a9;;;S-1-15-2-1)']
@@ -91,8 +89,7 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(data.matchesPoisonSignature).toBe(false)
   })
 
-  // The reproduced remedy was an additive *grant*; an ACE that grants nothing on
-  // the object cannot satisfy the orphan, so it must not clear the signature.
+  // Deny/inherit-only ACEs grant no access on this object and cannot satisfy the orphan.
   it.each([
     ['deny', '(D;OICI;FA;;;AC)'],
     ['inherit-only', '(A;OICIIO;GRGX;;;AC)'],
@@ -114,8 +111,7 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(data.matchesPoisonSignature).toBe(true)
   })
 
-  // Display listings localize package names (zh/ja/ko); SDDL never does, so a repaired
-  // tree must read clean whatever the UI language.
+  // SDDL SIDs stay stable across localized display names.
   it('reads a repaired tree as clean from SIDs alone', async () => {
     let verdict: CrashReportBreadcrumbData = {}
     installFakeDacls(() => [ORPHAN, RESTRICTED_GRANT])
@@ -147,7 +143,7 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(fake.calls).toEqual([INSTALL_DIR, join(INSTALL_DIR, 'ffmpeg.dll')])
   })
 
-  // Real DACLs captured on win32 10.0.26200, as the addon reads them (DACL-only SDDL).
+  // Real DACL-only SDDL from Windows 10.0.26200.
   it.each([
     [
       'a repaired module file',
@@ -188,7 +184,7 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(isInstallDirAclPoisonVerdict(verdict)).toBe(false)
   })
 
-  // A NULL DACL grants everyone everything, so it says nothing about which package grant applies.
+  // NULL DACL grants all access but proves no specific package grant.
   it('keeps a NULL DACL unreadable rather than reading it as clean', async () => {
     installFakeDacls(() => 'D:NO_ACCESS_CONTROL')
     const data = await probe({ fileExists: () => false })
@@ -223,7 +219,7 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(data.matchesPoisonSignature).toBeUndefined()
   })
 
-  // A missing addon is a packaging fault, not a clean tree: the probe records it and moves on.
+  // Missing addon proves probe failure, never a healthy tree.
   it('records a failure, not a verdict, when the addon cannot load', async () => {
     setWindowsSecurityForTests(null)
     let verdict: CrashReportBreadcrumbData = {}

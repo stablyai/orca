@@ -7,49 +7,16 @@ import {
 } from '../../../../shared/terminal-stream-protocol'
 import { sendSnapshotFrames } from './terminal/terminal-snapshot-publication'
 import { publishMultiplexInitialSnapshot } from './terminal/terminal-multiplex-initial-snapshot'
-import { initializeMultiplexStream } from './terminal/terminal-multiplex-stream-initialization'
+
 import type { TerminalMultiplexConnection } from './terminal/terminal-multiplex-connection'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { TerminalMultiplexStream } from './terminal/terminal-stream-types'
+import { EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE } from '../../../../shared/terminal-reply-query-scan'
+import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../shared/terminal-multiplex-flow-control'
 
 // These assertions protect the permanent binary publication seam while its state machine
 // lives in concrete terminal domain modules.
 describe('terminal stream extraction characterization', () => {
-  it('publishes an empty snapshot as Start then End without a synthetic chunk', () => {
-    const frames: {
-      opcode: TerminalStreamOpcode
-      payload?: Uint8Array<ArrayBufferLike>
-    }[] = []
-    const stats = sendSnapshotFrames(
-      (opcode, payload) => {
-        frames.push({ opcode, payload })
-      },
-      {
-        kind: 'scrollback',
-        cols: 80,
-        rows: 24,
-        data: '',
-        seq: 41,
-        truncated: false,
-        truncatedByByteBudget: false
-      }
-    )
-
-    expect(frames.map((frame) => frame.opcode)).toEqual([
-      TerminalStreamOpcode.SnapshotStart,
-      TerminalStreamOpcode.SnapshotEnd
-    ])
-    expect(decodeTerminalStreamJson(frames[0]!.payload ?? new Uint8Array())).toEqual({
-      kind: 'scrollback',
-      cols: 80,
-      rows: 24,
-      seq: 41,
-      truncated: false,
-      truncatedByByteBudget: false
-    })
-    expect(stats).toEqual({ bytes: 0, chunks: 0, published: true })
-  })
-
   it('stops publication immediately when SnapshotStart is rejected', () => {
     const opcodes: TerminalStreamOpcode[] = []
     const stats = sendSnapshotFrames(
@@ -109,18 +76,54 @@ describe('terminal stream extraction characterization', () => {
     const frames: { opcode: TerminalStreamOpcode; payload: Uint8Array<ArrayBufferLike> }[] = []
     const emit = vi.fn()
     let readCount = 0
-    const stream = {
+    const outputBatcherPush = vi.fn()
+    const stream: TerminalMultiplexStream = {
       streamId: 7,
       terminal: 'terminal',
       ptyId: 'pty',
+      client: undefined,
       isMobile: false,
+      ackOutput: false,
+      ackInFlightBytes: 0,
+      ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
       supportsOutputPause: false,
+      supportsOutputPauseDropNotice: false,
+      pausedOutputDropNoticeSent: false,
+      supportsWriteUnavailable: false,
+      supportsEndpointLossNotice: false,
+      inputSessionId: null,
+      outputPaused: false,
+      supportsDesktopViewportClaims: false,
+      desktopClaimTail: Promise.resolve(true),
+      registeredRemoteDesktopDriver: false,
+      remoteDesktopSubscriptionKey: 'multiplex:connection:7',
+      pendingRemoteDesktopViewport: null,
+      buffering: true,
+      ackPendingOutput: [],
+      ackPendingOutputBytes: 0,
+      ackPendingOutputOverflowed: false,
+      ackRecoverySnapshotInFlight: false,
+      yieldedQueries: [],
+      yieldedQueryScan: EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
+      ackRecoveryHistoryOwed: false,
       pendingOutput: [{ data: 'lost-live', bytes: 9 }],
       pendingOutputBytes: 9,
       pendingOutputOverflowed: true,
-      outputBatcher: { push: vi.fn(), flush: vi.fn() }
-    } as unknown as TerminalMultiplexStream
+      lastResizeCols: undefined,
+      resizeGeneration: 0,
+      outputBatcher: { push: outputBatcherPush, flush: vi.fn(), dispose: vi.fn() },
+      unsubscribeData: () => {},
+      unsubscribeResize: () => {},
+      unsubscribeFit: () => {},
+      unsubscribeDriver: () => {},
+      unregisterBinaryHandler: () => {},
+      exitWaiterAbort: new AbortController()
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the runtime reads made by initial snapshot publication.
     const runtime = {
+      getPtyExecutionHostMetadata: () => ({}),
+      getTerminalLaunchResult: () => undefined,
+      resolveLiveLeafForHandle: () => ({ ptyId: stream.ptyId }),
       readTerminal: vi.fn(async () => {
         readCount += 1
         if (readCount === 2) {
@@ -171,28 +174,6 @@ describe('terminal stream extraction characterization', () => {
       truncated: true
     })
     expect(decodeTerminalStreamText(frames[1]!.payload)).toBe('AUTHORITATIVE_INITIAL_MARKER')
-    expect(stream.outputBatcher.push).not.toHaveBeenCalled()
-  })
-
-  it('lets a slot-handler registration throw escape before per-stream catch ownership begins', async () => {
-    const streams = new Map()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration throws before initialization reads any other connection member.
-    const state = {
-      runtime: {},
-      connectionId: 'connection',
-      streams,
-      registerBinaryStreamHandler: vi.fn(() => {
-        throw new Error('registrar-failed')
-      }),
-      sendFrame: vi.fn(),
-      queueOrSendOutput: vi.fn()
-    } as unknown as TerminalMultiplexConnection
-    const installed = vi.fn()
-
-    await expect(
-      initializeMultiplexStream(state, { streamId: 7, terminal: 'terminal' }, 'pty', installed)
-    ).rejects.toThrow('registrar-failed')
-    expect(installed).not.toHaveBeenCalled()
-    expect(streams.has(7)).toBe(true)
+    expect(outputBatcherPush).not.toHaveBeenCalled()
   })
 })

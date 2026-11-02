@@ -1,23 +1,14 @@
 // @vitest-environment happy-dom
 
-/**
- * Pins the settling guarantee for every setState-in-effect path SortableTab owns
- * (rename shortcut, title churn mid-rename, store write storms, StrictMode double
- * invoke) under a real React root, where "Maximum update depth exceeded" throws.
- *
- * Written while triaging the React #185 crash cluster whose component_stack names
- * SortableTab: these paths settle, which matches shared/react-update-depth-attribution.ts
- * — #185 lands on whichever fiber dispatched next after a root-global counter tripped,
- * so that stack names a bystander. Keep this green so the tab stays exonerated.
- */
 import type { ReactElement, ReactNode } from 'react'
-import { cloneElement, isValidElement, StrictMode, useEffect, useState } from 'react'
-import { act, render, cleanup, fireEvent } from '@testing-library/react'
+import { cloneElement, isValidElement, StrictMode } from 'react'
+import { act, render, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
 import SortableTab from './SortableTab'
+import { ContextMenuContent } from '../ui/context-menu'
 import { requestTerminalTabRename } from './terminal-tab-rename-request'
 
 type ProbeState = {
@@ -80,25 +71,11 @@ vi.mock('@/components/ui/tooltip', () => ({
     )
 }))
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuContent: () => null,
-  DropdownMenuItem: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSeparator: () => null,
-  DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSub: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSubContent: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSubTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
-}))
-
 vi.mock('@/components/ui/input', () => ({
   Input: (props: Record<string, unknown>) => <input {...props} />
 }))
 
-// Counts SortableTab's own renders: it is rendered unconditionally inside the tab body, so one
-// stub render == one SortableTab render, which the Harness counter above cannot see.
+// Count this unconditional child because the harness counter cannot observe internal SortableTab renders.
 vi.mock('./TerminalTabLeadingIcon', () => ({
   TerminalTabLeadingIcon: () => {
     tabRenderCount += 1
@@ -109,16 +86,16 @@ vi.mock('./TerminalTabLeadingIcon', () => ({
 const menuCompletions: (() => void)[] = []
 vi.mock('./SortableTabContextMenu', () => ({
   SortableTabContextMenu: ({
-    open,
     onSessionSwitchComplete
   }: {
-    open: boolean
     onSessionSwitchComplete: () => void
   }) => {
-    if (open) {
-      menuCompletions.push(onSessionSwitchComplete)
-    }
-    return open ? <div data-testid="open-menu" /> : null
+    menuCompletions.push(onSessionSwitchComplete)
+    return (
+      <ContextMenuContent>
+        <div data-testid="open-menu" />
+      </ContextMenuContent>
+    )
   }
 }))
 
@@ -183,17 +160,6 @@ function Harness({ tab }: { tab: TerminalTab }): ReactElement {
   )
 }
 
-/** Re-renders the tab with a new tab object on every store write, like the tab strip does. */
-function ChurningHarness({ titles }: { titles: string[] }): ReactElement {
-  const [index, setIndex] = useState(0)
-  useEffect(() => {
-    if (index < titles.length - 1) {
-      setIndex(index + 1)
-    }
-  }, [index, titles.length])
-  return <Harness tab={makeTab({ title: titles[index] })} />
-}
-
 afterEach(() => {
   cleanup()
   probeStore.setState({ unreadTerminalTabs: {}, agentStatusEpoch: 0 })
@@ -209,14 +175,7 @@ describe('SortableTab update-depth probe', () => {
     expect(renderCount).toBeLessThan(20)
   })
 
-  it('settles under title churn while the rename editor is open', () => {
-    render(<ChurningHarness titles={['a', 'b', 'c', 'd', 'e', 'f']} />)
-    act(() => requestTerminalTabRename('terminal-tab-1'))
-    expect(renderCount).toBeLessThan(40)
-  })
-
-  // Regression: the shortcut used to arm a store field every tab subscribed to, so one rename
-  // re-rendered every mounted tab twice — once to notice the id, once when the tab cleared it.
+  // Address rename requests to one tab instead of broadcasting two store-driven renders to every tab.
   it('re-renders only the targeted tab, once, per rename request', () => {
     render(
       <>
@@ -242,17 +201,6 @@ describe('SortableTab update-depth probe', () => {
     expect(tabRenderCount).toBe(mountRenders)
   })
 
-  it('settles under a store write storm', () => {
-    render(<Harness tab={makeTab()} />)
-    const before = renderCount
-    act(() => {
-      for (let i = 0; i < 60; i += 1) {
-        probeStore.setState({ agentStatusEpoch: i, agentStatusByPaneKey: {} })
-      }
-    })
-    expect(renderCount - before).toBeLessThan(200)
-  })
-
   it('settles in StrictMode double-invoked effects', () => {
     const { container } = render(
       <StrictMode>
@@ -271,14 +219,14 @@ it('retires completion ownership for repeated gestures and batched blur/reopen',
   const first = menuCompletions.at(-1)!
   act(() => fireEvent.contextMenu(slot))
   act(first)
-  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  expect(screen.queryByTestId('open-menu')).not.toBeNull()
   const second = menuCompletions.at(-1)!
   act(() => {
     window.dispatchEvent(new Event('blur'))
     fireEvent.contextMenu(slot)
   })
   act(second)
-  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  expect(screen.queryByTestId('open-menu')).not.toBeNull()
   act(menuCompletions.at(-1)!)
-  expect(container.querySelector('[data-testid="open-menu"]')).toBeNull()
+  expect(screen.queryByTestId('open-menu')).toBeNull()
 })

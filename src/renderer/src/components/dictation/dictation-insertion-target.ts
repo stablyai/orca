@@ -11,9 +11,25 @@ import {
 import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
 export type DictationInsertionTarget =
+  | { kind: 'composer'; insert: (text: string) => void }
   | { kind: 'terminal'; tabId: string; paneId: number }
   | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
   | { kind: 'contentEditable'; element: HTMLElement }
+
+const composerTargets = new WeakMap<HTMLElement, (text: string) => void>()
+
+/** Capture a draft destination so a late transcript can follow an inline edit's hand-back. */
+export function registerDictationComposerTarget(
+  root: HTMLElement,
+  insert: (text: string) => void
+): () => void {
+  composerTargets.set(root, insert)
+  return () => {
+    if (composerTargets.get(root) === insert) {
+      composerTargets.delete(root)
+    }
+  }
+}
 
 export function captureInsertionTarget(): DictationInsertionTarget | null {
   const focused = readFocusedInsertionTarget()
@@ -29,6 +45,13 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
 
   if (!activeElement) {
     return null
+  }
+
+  for (let root: Element | null = activeElement; root; root = root.parentElement) {
+    const insert = root instanceof HTMLElement ? composerTargets.get(root) : undefined
+    if (insert) {
+      return { kind: 'composer', insert }
+    }
   }
 
   if (activeElement.classList.contains('xterm-helper-textarea')) {
@@ -54,6 +77,10 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
 }
 
 export function insertText(text: string, target: DictationInsertionTarget): void {
+  if (target.kind === 'composer') {
+    target.insert(text)
+    return
+  }
   if (target.kind === 'terminal') {
     document.dispatchEvent(
       new CustomEvent('dictation:insertText', {
@@ -112,8 +139,7 @@ async function insertTextIntoContentEditableTarget(
   }
 
   let textIndex = 0
-  // Why: dictation can produce paste-sized text; chunking avoids one large
-  // execCommand while keeping editor beforeinput/input semantics.
+  // Chunk paste-sized dictation while preserving editor beforeinput/input semantics.
   while (textIndex < text.length) {
     if (!isContentEditableDictationTargetCurrent(element)) {
       return

@@ -1,7 +1,7 @@
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _internals } from '../agent-hooks/server'
-import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat-types'
+import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat/native-chat-types'
 import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
@@ -416,7 +416,7 @@ describe('Grok roster evidence through the existing host child store', () => {
   })
 
   // Refusal proves no cancellation; a mismatched reply leaves the outcome unknown.
-  // unknown. The Stop is accepted either way, and its note says which.
+  // Stop is accepted in either case; its note reports the cancellation outcome.
   it.each([
     ['rpc-error', "The background task wasn't stopped."],
     ['mismatched-id', 'Cancellation was not confirmed.']

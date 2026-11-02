@@ -12,6 +12,8 @@ export type SshStoreMock = {
   updateTarget: Mock
   removeTarget: Mock
   importFromSshConfig: Mock
+  currentSshRouteSnapshot: Mock
+  refreshSshRouteSnapshot: Mock
   lastRepoReadoptions: { oldTargetId: string; newTargetId: string; repoIds: string[] }[]
 }
 
@@ -47,6 +49,7 @@ export type SshPortForwardManagerMock = {
   removeForwardAndWait: Mock
   listForwards: Mock
   removeAllForwards: Mock
+  closeStaleForwards: Mock
   closeAll: Mock
   dispose: Mock
   setCallbacks: Mock

@@ -111,11 +111,14 @@ export function useTerminalEditorCloseDialogActions(
     settleQueuedClose(fileId)
     advanceEditorCloseQueue()
     releaseCloseDialogGuardAfterDebounce()
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
   }, [
     advanceEditorCloseQueue,
+    inFlightSaveFileIdRef,
+    isClosingRef,
     releaseCloseDialogGuardAfterDebounce,
     saveDialogFileId,
+    setSaveDialogFileId,
+    settleQueuedClose,
     waitForFileClosed
   ])
 
@@ -130,8 +133,14 @@ export function useTerminalEditorCloseDialogActions(
     settleQueuedClose(fileId)
     advanceEditorCloseQueue()
     releaseCloseDialogGuardAfterDebounce()
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [advanceEditorCloseQueue, releaseCloseDialogGuardAfterDebounce, saveDialogFileId])
+  }, [
+    advanceEditorCloseQueue,
+    isClosingRef,
+    releaseCloseDialogGuardAfterDebounce,
+    saveDialogFileId,
+    setSaveDialogFileId,
+    settleQueuedClose
+  ])
 
   const handleSaveDialogCancel = useCallback(() => {
     if (isClosingRef.current) {
@@ -143,8 +152,14 @@ export function useTerminalEditorCloseDialogActions(
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
     releaseCloseDialogGuardAfterDebounce()
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [releaseCloseDialogGuardAfterDebounce])
+  }, [
+    closedReactionsRef,
+    isClosingRef,
+    pendingEditorCloseQueueRef,
+    releaseCloseDialogGuardAfterDebounce,
+    setSaveDialogFileId,
+    windowCloseAfterDirtyRef
+  ])
 
   useEffect(() => {
     const onRequestEditorClose = (event: Event): void => {

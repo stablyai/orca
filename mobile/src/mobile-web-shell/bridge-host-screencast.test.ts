@@ -1,18 +1,10 @@
-/**
- * The binary screencast lane at the host, which is the half `bridge-screencast-binary.ts` was
- * landed without.
- *
- * Read back through the page's own reader and its own decoder rather than against a literal: what
- * matters is that the frame a native listener would have been handed is the frame the page
- * reconstructs, and a shape assertion here could agree with itself while disagreeing with the page.
- */
+// Decode through the page’s real reader to prove the binary frame the host emits is one the page reconstructs; literals alone could agree on the wrong shape.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BrowserScreencastOpcode,
   type BrowserScreencastFrame
 } from '../transport/browser-screencast-protocol'
-/** The real encoder, wrapped so a case can count the passes it makes over an image. Wrapped rather
- *  than replaced: every other case here reads a frame back through the page's own decoder. */
+// Wrap the real encoder to count full-image passes while preserving decoder interoperability.
 const encodes = vi.hoisted(() => ({ count: 0 }))
 vi.mock('./bridge/bridge-screencast-encoder', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./bridge/bridge-screencast-encoder')>()
@@ -87,15 +79,13 @@ describe('a binary frame crosses as the event the page decodes', () => {
     expect(event).toMatchObject({ v: 1, type: 'event', id: ID, seq: 1 })
     const binary = 'binary' in event ? event.binary : null
     expect(binary).not.toBeNull()
-    // The decoded frame carries the wire's own base64 beside the bytes (C6.2's data-URI reuse).
     expect(binary === null ? null : decodeBridgeScreencastFrame(binary)).toEqual({
       ...frame(41, IMAGE),
       b64: binary?.b64
     })
   })
 
-  /** One ledger, not two: the page acks by the event seq, so a binary frame that restarted or
-   *  skipped it would ack frames the shell never sent. */
+  // JSON and binary share sequence numbers because the page acknowledges one event ledger.
   it('shares one seq sequence with the JSON events of the same stream', () => {
     const bridge = harness({ ready: true })
     bridge.host.receive(screencastSubscribe(ID, true))
@@ -123,17 +113,9 @@ describe('a binary frame crosses as the event the page decodes', () => {
   })
 })
 
-/**
- * The drop rule, and the JSON rule it is scoped away from, in one place.
- *
- * C0.3 ended a stream whose event would not fit, because a hole in a JSON stream is invisible to
- * its reader and a transcript with a gap is worse than one that stopped. A screencast hole is
- * neither: the next frame is one throttle interval away and the pane keeps the last one on screen.
- * So the two verdicts differ by the kind of event, and both are asserted here so neither can be
- * changed into the other by accident.
- */
+// Oversized JSON must end the stream because invisible gaps corrupt state; screencast may drop a frame and retain the last picture until the next.
 describe('an over-cap frame drops on the binary lane and ends the stream on the JSON one', () => {
-  /** Encoded, this exceeds `BRIDGE_MAX_MESSAGE_BYTES`: 500,000 bytes is 666,668 base64 chars. */
+  // 500,000 raw bytes encode to 666,668 base64 characters, exceeding the message cap.
   const OVERSIZED = new Uint8Array(500_000)
 
   function openBinary(): ReturnType<typeof harness> {
@@ -159,8 +141,7 @@ describe('an over-cap frame drops on the binary lane and ends the stream on the 
     expect(bridge.client.streams[0]?.unsubscribes).toBe(1)
   })
 
-  /** The page acks by this number, so a dropped frame must not consume one: a gap would have it
-   *  acking a frame the shell never posted. */
+  // Dropped frames must not consume a sequence number that the page could acknowledge as sent.
   it('does not spend a seq on a frame it dropped', () => {
     const bridge = openBinary()
     bridge.client.streams[0]?.emitBinary?.(frame(1, IMAGE))
@@ -183,7 +164,6 @@ describe('an over-cap frame drops on the binary lane and ends the stream on the 
       BRIDGE_MAX_UNACKED_FRAMES
     )
     expect(bridge.frames().filter((message) => message.type === 'end')).toEqual([])
-    // And the window reopens, which is what says the stream was left usable rather than merely open.
     bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: BRIDGE_MAX_UNACKED_FRAMES }))
     bridge.client.streams[0]?.emitBinary?.(frame(999, IMAGE))
     expect(bridge.frames().filter((message) => message.type === 'event')).toHaveLength(
@@ -198,8 +178,7 @@ describe('an over-cap frame drops on the binary lane and ends the stream on the 
     expect(bridge.droppedBinaryFrames).toEqual([1, 2])
   })
 
-  /** Per subscription for the diagnostic, total for the surface: a second stream must not restart
-   *  the number the dev facts show. */
+  // Keep diagnostics per-stream but dev-facts loss cumulative across resubscriptions.
   it('keeps counting across a second subscription on the same host', () => {
     const bridge = openBinary()
     bridge.client.streams[0]?.emitBinary?.(frame(1, OVERSIZED))
@@ -220,21 +199,9 @@ describe('an over-cap frame drops on the binary lane and ends the stream on the 
   })
 })
 
-/**
- * The lane is a grant, so the host serves it to a session whose route was given it and to no other.
- *
- * The refusal is the one every grant gets at the call site: nothing is answered, nothing is logged
- * back to the page, and the subscription itself proceeds — a page that asked for binary without the
- * grant gets the JSON stream it would have got before C6.1 existed. Ruling 5 means a page that
- * respects its own `init.grants.native` never reaches this state; this is what holds one that does
- * not.
- */
+// Without the binary grant, keep serving JSON and report locally; never silently grant a lane the route did not request.
 describe('the binary lane is served only to a route granted it', () => {
-  /**
-   * The same list a shell too old to implement the lane produces: `grantsForRoute` filters a route's
-   * declared grants through the implemented set, so granted-but-unimplemented and never-granted
-   * reach this host as the same absence. `page-route-policy.test.ts` pins that filter.
-   */
+  // The resolved grant list omits both unimplemented and unrequested capabilities; page-route-policy.test.ts pins that filter.
   it('hands it none when the route was not, and still opens the stream', () => {
     const bridge = harness({ ready: true, routeGrants: ['navigate', 'storage'] })
     expect(bridge.last()).toMatchObject({
@@ -244,7 +211,6 @@ describe('the binary lane is served only to a route granted it', () => {
     bridge.host.receive(screencastSubscribe(ID, true))
     expect(bridge.diagnostics).toEqual([{ kind: 'binary-lane-refused', id: ID }])
     expect(bridge.client.streams[0]?.emitBinary).toBeNull()
-    // Not a refusal: the stream is open and its JSON events cross as they always have.
     bridge.client.streams[0]?.emit({ type: 'ready' })
     expect(bridge.frames().filter((message) => message.type === 'event')).toHaveLength(1)
     expect(bridge.frames().filter((message) => message.type === 'error')).toEqual([])
@@ -257,14 +223,7 @@ describe('the binary lane is served only to a route granted it', () => {
   })
 })
 
-/**
- * What a stalled page costs the shell.
- *
- * The encode is a base64 pass over the whole image, and the window says whether the frame can be
- * posted at all — so deciding after encoding makes a page that has stopped acking pay for every
- * frame the shell then throws away. The size is knowable without encoding: base64 is ASCII, so JSON
- * escapes none of it and the frame is its envelope plus exactly the image's encoded length.
- */
+// Check the window before a full-image base64 pass; encoded size is exact from the ASCII base64 length plus envelope, so refused frames need no encoding.
 describe('a frame the window cannot carry is never encoded', () => {
   function openBinary(): ReturnType<typeof harness> {
     const bridge = harness({ ready: true })

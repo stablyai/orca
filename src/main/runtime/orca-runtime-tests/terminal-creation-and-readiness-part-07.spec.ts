@@ -214,11 +214,11 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => 'cursor-agent'
     })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    // Cursor's dismissed trust dialog stays in scrollback; the later idle prompt must clear that stale hit and satisfy idle.
+    // A later idle prompt must override a dismissed trust dialog retained in scrollback.
     runtime.onPtyData(
       'pty-bg',
       [
-        // Trust dialog mentions "Cursor Agent" before the ready banner; lastIndexOf must pick the later banner, not this hit.
+        // Pick the later ready banner, not Cursor Agent in the earlier trust dialog.
         'Cursor Agent\n',
         '⚠ Workspace Trust Required\n',
         'Do you trust the contents of this directory?\n',
@@ -251,7 +251,7 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData(
       'pty-bg',
       [
-        // Same earlier "Cursor Agent" hit as the idle case — banner must win.
+        // The later banner must win over the earlier trust-dialog title.
         'Cursor Agent\n',
         '⚠ Workspace Trust Required\n',
         'Do you trust the contents of this directory?\n',
@@ -262,7 +262,6 @@ describe('OrcaRuntimeService', () => {
       Date.now()
     )
 
-    // Busy Cursor is neither blocked nor idle, so the wait times out honestly instead of returning a stale trust block.
     await expect(
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 200 })
     ).rejects.toThrow('timeout')

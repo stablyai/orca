@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import { admitTranscriptPath } from '../native-chat/transcript-path-admission'
 import { dirname } from 'node:path'
 import { homedir } from 'node:os'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
 import {
   absoluteConversationStore,
@@ -31,7 +31,8 @@ function accountDatabase(
 }
 
 export const OPENCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
-  // The account's store is its exact database, which is the only one its chat can load from.
+  readableContext: { kind: 'container' },
+  // Restrict imports to the exact database the selected account’s chat can load.
   conversationStore: ({ accountHome, launchEnv }) => accountDatabase(accountHome, launchEnv),
   admitTranscriptPath: async ({ store: dbPath, transcriptPath }) => {
     const [expected, actual] = await Promise.all([
@@ -40,7 +41,6 @@ export const OPENCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
     ])
     return expected && actual && expected.path === actual.path ? actual.path : null
   },
-  // The selected account, then the unmanaged environment this chat would launch with.
   accountHomeCandidates: ({ selectedAccountHome }) => [
     selectedAccountHome,
     { kind: 'opencode', locator: { kind: 'unmanaged' } }

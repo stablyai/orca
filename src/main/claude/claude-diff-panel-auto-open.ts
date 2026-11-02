@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveClaudeGlobalConfigFile } from './claude-folder-trust-file'
 import { claudeVersionReaches } from './claude-hook-event-versions'
+import { isRecord } from '../../shared/agent-status-child-work-value-guards'
 
 export const CLAUDE_DIFF_PANEL_FIRST_VERSION = '2.1.260'
 
@@ -23,10 +24,7 @@ export function claudeDiffPanelStorePath(configDir: string): string {
 async function readJsonObject(path: string): Promise<Record<string, unknown> | null> {
   try {
     const parsed: unknown = JSON.parse(await readFile(path, 'utf8'))
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a parsed non-array object is a string-keyed record.
-        (parsed as Record<string, unknown>)
-      : null
+    return isRecord(parsed) ? parsed : null
   } catch {
     return null
   }

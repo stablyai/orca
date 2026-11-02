@@ -104,6 +104,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return mapped ? (mapped.hasPty?.(id) ?? true) : this.findProviderForExistingSession(id) !== null
   }
 
+  getPtyAvailability = (id: string): boolean | null =>
+    this.providerFor(id).getPtyAvailability?.(id) ?? null
+
   async probePtyLiveness(id: string): Promise<boolean | null> {
     const mapped = this.sessionProviders.get(id)
     if (mapped && (mapped.hasPty?.(id) ?? true)) {
@@ -185,9 +188,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   async getForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).getForegroundProcess(id)
   }
-  inspectProcess(id: string) {
+  // Foreground proof follows only an established route; other inspections keep their shipped unfenced shape.
+  supportsForegroundObservation = (id: string) => this.ownerRecovery.observesForeground(id)
+  inspectProcess(id: string, options?: Parameters<typeof inspectPtyProviderProcess>[2]) {
+    const forwarded = options?.foregroundOnly === true ? options : undefined
     return this.hasPty(id)
-      ? inspectPtyProviderProcess(this.providerFor(id), id)
+      ? inspectPtyProviderProcess(this.providerFor(id), id, forwarded)
       : Promise.reject(new Error('terminal_gone'))
   }
   async confirmForegroundProcess(id: string): Promise<string | null> {
@@ -307,8 +313,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     for (const id of this.getSessionIdsRoutedTo('current-daemon')) {
       this.ownerRecovery.forgetRoute(id)
       // Restart also kills listed sessions the adapter never tracked as active.
-      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-      for (const listener of [...this.exitListeners]) {
+      // Why: listeners may unsubscribe during iteration.
+      for (const listener of Array.from(this.exitListeners)) {
         listener({ id, code, ...exit })
       }
     }

@@ -1,11 +1,14 @@
+import { useNativeChatUsageLimitAutoContinue } from './use-native-chat-usage-limit-auto-continue'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
+import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
+import { useAppStore } from '@/store'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
   getStructuredAgentSessionPendingSends,
@@ -18,16 +21,16 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat-orca-stop-cut'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
 import {
   latestNativeChatUsageLimitCut,
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
-} from '../../../../shared/native-chat-usage-limit-cut'
-import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-continue-interrupted-capability'
+} from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-continue-interrupted-capability'
 import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { useStructuredAgentSessionHostLabel } from './use-structured-agent-session-host-label'
-import { useNativeChatRestartResuming } from '../native-chat-resume-on-restart-store'
+import { useNativeChatTargetRestartResuming } from '../native-chat-restart-runtimes'
 import { useNativeChatLaunchResumePending } from '../native-chat-launch-resume-decision'
 import type { NativeChatComposerNoticeContent } from './native-chat-composer-notice'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -35,19 +38,13 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 type ContinueAnswer = { outcome?: string }
 
 export type NativeChatInterruptedContinuation = {
-  /** Told to the chat's rows: the machine's name, whether it is remote, if it can continue, and the
-   *  cut row that carries Continue. */
+  /** Host identity and continuation availability for the cut’s transcript row. */
   view: NativeChatOrcaStopView
-  /** A Continue that did not go through, for the composer's notice card: shown while the chat
-   *  still sits on that cut and gone once it is continued from anywhere. */
+  /** Show a failed Continue until retry, dismissal or continuation from any client. */
   continueError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
 }
 
-/**
- * Continue, while the chat's latest turn is a reply an Orca stop cut off and nothing was sent since.
- * Offered only by a host that has the operation; an older host writes no row naming the stop, so it
- * never has a cut to offer it on, and the user continues by sending a message.
- */
+/** Offer continuation on the latest uncontinued stop cut; older hosts without this operation use ordinary sends. */
 export function useNativeChatInterruptedContinuation(input: {
   target: RuntimeClientTarget
   agent: AgentType
@@ -70,6 +67,7 @@ export function useNativeChatInterruptedContinuation(input: {
     latestTransport.current = transport
   }, [transport])
   const hostLabel = useStructuredAgentSessionHostLabel(target)
+  const wslDistro = useAppStore((s) => wslHostDistroForTarget(target, s.runtimeEnvironments))
   const capability = useStructuredAgentSessionHostCapabilityState(
     target,
     AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
@@ -78,10 +76,9 @@ export function useNativeChatInterruptedContinuation(input: {
     target,
     AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY
   )
-  // The restart prompt or the launch's own resume is carrying this chat on, or the launch may still
-  // decide to; it resumes only this machine's chats.
+  // Suppress continuation during local launch resume; paired servers own their own chats.
   const launchPending = useNativeChatLaunchResumePending() && target.kind === 'local'
-  const resuming = useNativeChatRestartResuming().includes(sessionId) || launchPending
+  const resuming = useNativeChatTargetRestartResuming(target).includes(sessionId) || launchPending
   const cut = useMemo(
     () => latestNativeChatOrcaStopCut(input.journalItems, input.submissions),
     [input.journalItems, input.submissions]
@@ -90,6 +87,11 @@ export function useNativeChatInterruptedContinuation(input: {
   const usageLimitCut = useMemo(
     () => latestNativeChatUsageLimitCut(input.journalItems, input.submissions),
     [input.journalItems, input.submissions]
+  )
+  const usageLimitAutoContinue = useNativeChatUsageLimitAutoContinue(
+    target,
+    sessionId,
+    usageLimitCut
   )
   // The cut this client already asked to continue: hidden until the journal shows what came of it.
   const [asked, setAsked] = useState<string | null>(null)
@@ -171,26 +173,31 @@ export function useNativeChatInterruptedContinuation(input: {
   }, [offered, target, sessionId, reportComposerError])
   // Unknown counts as able: a host that writes cause rows has Continue, and the words stay put.
   const continueAvailable = capability !== 'unsupported'
-  // One object per change, so the chat's rows re-render only when what they show changes.
   const remoteHost = target.kind === 'environment'
   const view = useMemo(
     () => ({
       hostLabel,
       remoteHost,
+      wslDistro,
       continueAvailable,
       offeredTurnItemId: offered,
       continueNow,
       usageLimitTurnItemId,
+      usageLimitAutoContinue,
+      onUsageLimitHandOffStarted:
+        usageLimitAutoContinue?.kind === 'scheduled' ? usageLimitAutoContinue.cancel : undefined,
       usageLimitContinueDisabled: usageCapability === 'unknown',
       continueUsageLimit
     }),
     [
       hostLabel,
       remoteHost,
+      wslDistro,
       continueAvailable,
       offered,
       continueNow,
       usageLimitTurnItemId,
+      usageLimitAutoContinue,
       usageCapability,
       continueUsageLimit
     ]
@@ -225,14 +232,15 @@ export function useNativeChatInterruptedContinuation(input: {
   }
 }
 
-/** Continue, on the row that says Orca stopped this reply: the one action that picks it back up. */
 export function NativeChatInterruptedContinueButton({
   onContinue,
   disabled,
+  label,
   explanation: shownExplanation
 }: {
   onContinue: (hadFocus?: boolean) => void
   disabled?: boolean
+  label?: string
   /** What Continue does here, when it is not picking up a reply Orca's stop cut off. */
   explanation?: string
 }): React.JSX.Element {
@@ -257,7 +265,7 @@ export function NativeChatInterruptedContinueButton({
             disabled={disabled}
           >
             <Play />
-            {translate('components.native-chat.interruptedContinue.continue', 'Continue')}
+            {label ?? translate('components.native-chat.interruptedContinue.continue', 'Continue')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>

@@ -78,8 +78,7 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
   }
 }
 
-// Why an explicit owner-only mode: the rename replaces Gemini's 0600 file, and orcad runs at the
-// login umask (#31125).
+// Atomic replacement must preserve owner-only credentials despite orcad's login umask (#31125).
 export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
   writeCredentialFileAtomic(OAUTH_CREDS_PATH, Buffer.from(JSON.stringify(creds, null, 2), 'utf-8'))
 }
@@ -145,9 +144,7 @@ export async function loadProjectId(accessToken: string): Promise<string> {
   return data.cloudaicompanionProject
 }
 
-// Why: accepts a plain refresh token string so both the oauth_creds.json path
-// (GeminiCredentials) and the auth.json path (pipe-split string) can share
-// the same bundle credential extraction without coupling to either struct.
+// A plain refresh token lets both credential-file formats share bundle extraction.
 export async function tryRefreshTokenFromBundle(
   refreshToken: string,
   allowCliOAuth = true

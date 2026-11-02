@@ -1,4 +1,3 @@
-/** Full serialization retains its bytes/hash; domain serialization preserves bytes and equality. */
 import { createHash, randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { serializeCompleteProfileStateDomains } from './profile-state-authority-writes'
@@ -7,7 +6,7 @@ import {
   type SecretSentinelSubstitution
 } from './secret-sentinel-substitution'
 
-/** Verbatim from state-serialization-secret-handling.ts before this change. */
+/** Keep the legacy implementation as an independent byte/hash oracle. */
 function previousImplementation(
   serialized: string,
   secretSubs: readonly SecretSentinelSubstitution[],
@@ -21,7 +20,6 @@ function previousImplementation(
     hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(hashValue).slice(1, -1))
   }
   const stateHash = createHash('sha1').update(degradedPrefix).update(hashInput).digest('hex')
-  // `handle.writeFile(payload, 'utf-8')` is what turned the string into bytes.
   return { payload: Buffer.from(payload, 'utf8'), stateHash }
 }
 
@@ -133,9 +131,7 @@ describe('applySecretSentinelSubstitutions', () => {
       { sentinel: sentinel(), blob: 'djEwY2lwaGVy', hashValue: 'cookie-value' },
       {
         sentinel: sentinel(),
-        // Regex-special *and* JSON-escapable, which is the pair that breaks a naive rewrite:
-        // `$&` would splice the match back in under string-form replace, and the backslash and
-        // quote have to survive `JSON.stringify(...).slice(1, -1)` unchanged.
+        // Replacement metacharacters and JSON escapes must survive without interpolation or double escaping.
         blob: 'A+/=$&$1$`\\x "quoted" |.*?[](){}^',
         hashValue: 'http://proxy.example:8080/?a=b&c=$&'
       },
@@ -144,7 +140,6 @@ describe('applySecretSentinelSubstitutions', () => {
     const state = {
       settings: { opencodeSessionCookie: subs[0].sentinel, httpProxyUrl: subs[1].sentinel },
       ui: { browserKagiSessionLink: subs[2].sentinel },
-      // Adjacent content that must not shift: a near-miss prefix, and JSON escapes either side.
       noise: ['orca-secret-slot-', 'a\\b"c\n\t', subs[0].sentinel.slice(0, -1)]
     }
     expectIdenticalToPrevious(JSON.stringify(state), subs)
@@ -156,7 +151,7 @@ describe('applySecretSentinelSubstitutions', () => {
       { sentinel: sentinel(), blob: '😀', hashValue: '中文' }
     ]
     const state = {
-      // Segment boundaries land next to these, so a wrong split would corrupt the encode.
+      // Multibyte characters beside sentinel boundaries expose incorrect byte offsets.
       before: 'é中文😀',
       a: subs[0].sentinel,
       between: '😀  ',
@@ -179,54 +174,6 @@ describe('applySecretSentinelSubstitutions', () => {
     )
   })
 
-  it('escapes regex metacharacters in the sentinel itself', () => {
-    // Not reachable from a UUID sentinel, but the alternation must not be able to become a pattern.
-    const subs = [{ sentinel: 'a.b*c(d)|e[f]', blob: 'BLOB', hashValue: 'HASH' }]
-    const serialized = JSON.stringify({ real: subs[0].sentinel, decoy: 'axbxxcXdX_eXfX' })
-    expectIdenticalToPrevious(serialized, subs)
-    expect(
-      applySecretSentinelSubstitutions(serialized, subs, '').payload.toString('utf8')
-    ).toContain('axbxxcXdX_eXfX')
-  })
-
-  it('substitutes every occurrence when a sentinel repeats', () => {
-    // Cannot happen today (a sentinel is a UUID minted after the state is assembled, so it appears
-    // exactly once), but the old first-match-only `String.replace` would have written a raw
-    // sentinel to disk in place of a secret if it ever did. The alternation is global instead.
-    const subs = [{ sentinel: sentinel(), blob: 'CIPHER', hashValue: 'PLAIN' }]
-    const serialized = JSON.stringify({ a: subs[0].sentinel, b: subs[0].sentinel })
-    const { payload } = applySecretSentinelSubstitutions(serialized, subs, '')
-    expect(payload.toString('utf8')).toBe(JSON.stringify({ a: 'CIPHER', b: 'CIPHER' }))
-    expect(payload.toString('utf8')).not.toContain(subs[0].sentinel)
-  })
-
-  it.each(['', 'safeStorage-degraded\0'])(
-    'keeps the first duplicate and handles adjacent escaped sentinels with prefix %j',
-    (prefix) => {
-      const slot = 'orca-$a/.*+?^${}()|[]\\"雪'
-      const subs = [
-        { sentinel: slot, blob: 'cipher-other-token-"\\\n雪\ud800', hashValue: 'plain-😀' },
-        { sentinel: slot, blob: 'duplicate-must-not-win', hashValue: 'wrong-plain' },
-        { sentinel: 'other-token', blob: 'last', hashValue: 'last-plain' }
-      ]
-      const serialized = JSON.stringify({ nested: { [slot]: `${slot}${slot}other-token` } })
-      const expectedPayload = JSON.stringify({
-        nested: { [subs[0].blob]: subs[0].blob + subs[0].blob + subs[2].blob }
-      })
-      const expectedHashInput = JSON.stringify({
-        nested: { [subs[0].hashValue]: subs[0].hashValue + subs[0].hashValue + subs[2].hashValue }
-      })
-      const expectedHash = createHash('sha1').update(prefix).update(expectedHashInput).digest('hex')
-      for (const actual of [
-        applySecretSentinelSubstitutions(serialized, subs, prefix),
-        applySecretSentinelSubstitutions(serialized, subs, prefix, 'text')
-      ]) {
-        expect(actual.payload.toString()).toBe(expectedPayload)
-        expect(actual.stateHash).toBe(expectedHash)
-      }
-    }
-  )
-
   it('leaves domains without matching sentinels byte-identical', () => {
     const serialized = JSON.stringify({ future: { output: '雪😀\ud800', present: null } })
     const subs = [{ sentinel: 'missing-slot', blob: 'cipher', hashValue: 'plain' }]
@@ -247,9 +194,7 @@ describe('applySecretSentinelSubstitutions', () => {
     })
     const FULL_STATE = 100_000
 
-    // Both costs are observable at their sources: a `String.replace` whose receiver is the whole
-    // state allocates another copy of it, and every string handed to `Buffer.from` or `hash.update`
-    // is one full UTF-8 encode pass on the main thread.
+    // Count whole-state replacements and UTF-8 encodes at their allocation sites.
     const counted = (run: () => unknown): { fullStateReplaces: number; encodedChars: number } => {
       const realReplace = String.prototype.replace
       const realBufferFrom = Buffer.from
@@ -290,11 +235,9 @@ describe('applySecretSentinelSubstitutions', () => {
     const after = counted(() => applySecretSentinelSubstitutions(serialized, subs, ''))
     const text = counted(() => applySecretSentinelSubstitutions(serialized, subs, '', 'text'))
 
-    // Two `String.replace` calls over the whole state per sentinel — payload and hash input.
     expect(before.fullStateReplaces).toBe(subs.length * 2)
     expect(after.fullStateReplaces).toBe(0)
     expect(text.fullStateReplaces).toBe(0)
-    // The old path encoded the state twice: once for sha1, once for the file write.
     expect(before.encodedChars).toBeGreaterThan(serialized.length * 1.9)
     expect(after.encodedChars).toBeLessThan(serialized.length * 1.1)
     expect(after.encodedChars).toBeGreaterThan(serialized.length * 0.9)

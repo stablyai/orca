@@ -1,11 +1,16 @@
 // Atomically accept Stop/withdrawals/receipt before acting on the captured target.
 // Queue session-ending wind-down in the mutation’s tick; saved failures answer from the receipt.
 
+import {
+  cancelAgentSessionUsageLimitContinue,
+  type UsageLimitContinueIdentity
+} from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
@@ -20,7 +25,7 @@ import {
   openForWrite,
   structuredAgentSessionFailureWordsContext
 } from './structured-agent-session-send-preparation'
-import { acceptChatStop, acceptStopTarget } from './structured-agent-session-stop-acceptance'
+import { acceptCapturedChatStop } from './structured-agent-session-stop-acceptance'
 import {
   noteStructuredAgentSessionStopUnconfirmed,
   writeStructuredAgentSessionStopNote
@@ -33,7 +38,12 @@ import {
 import { performCancel, type AcceptedChatStop } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
-import { structuredAgentSessionCommandWasStopped } from './structured-agent-session-command-turn'
+import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
+import {
+  isStructuredAgentSessionCommandTurnId,
+  structuredAgentSessionStopNoteIdentity,
+  structuredAgentSessionCommandWasStopped
+} from './structured-agent-session-command-turn'
 
 type ChatStopOutcome = TurnOutcome<AgentSessionCancelResult>
 
@@ -64,55 +74,16 @@ export function mutateWithChatStop<TValue>(
         stopChild: () => Promise<void>
       }
     | undefined
+  let withdrawnCut: UsageLimitContinueIdentity | undefined
   let reached = params.stoppedPrePrompt === true
   const named = turnId !== undefined ? { turnId } : {}
   const logChildEnd = (error: unknown) =>
     context.deps.logger.warn('ending the agent process on Stop failed', {
       scope: 'stop-child',
       sessionId,
+      operationId: envelope.clientOperationId,
       error
     })
-  // Failed durable acceptance must leave the agent running.
-  const accept = async (
-    ctx: AgentSessionTurnContext,
-    target: ChatStopTarget
-  ): Promise<TurnOutcome<{ settled: boolean; turnId: string | null }>> => {
-    if (!target.marks) {
-      const accepted = await acceptStopTarget(ctx)
-      return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
-    }
-    const sinceStop = ctx.journal.queuedMessages.userStopInForce()?.sequence
-    const handed = ctx.journal
-      .submissions()
-      .some(
-        (entry) =>
-          entry.fence === ctx.fence &&
-          (entry.handoverRecorded !== true || entry.handedOverAt !== undefined) &&
-          (entry.dispatchState === 'pending' ||
-            (entry.dispatchState === 'unknown' && !entry.recovered)) &&
-          (sinceStop === undefined || (entry.submittedSequence ?? -1) > sinceStop)
-      )
-    const accepted = await acceptChatStop(ctx, {
-      event: {
-        reason: 'user-stop',
-        caller: caller.callerKey,
-        ...(target.eventTurnId !== null ? { turnId: target.eventTurnId } : {})
-      },
-      fence: ctx.fence
-    })
-    return accepted.ok
-      ? {
-          ok: true,
-          value: {
-            settled:
-              (accepted.value.withdrawn?.length ?? (target.queued ? 1 : 0)) > 0 ||
-              handed ||
-              params.stoppedSend === true,
-            turnId: accepted.value.turnId
-          }
-        }
-      : accepted
-  }
   const act = async (
     ctx: AgentSessionTurnContext,
     target: ChatStopTarget,
@@ -121,18 +92,64 @@ export function mutateWithChatStop<TValue>(
   ): Promise<ChatStopOutcome> => {
     // Turns may advance during acceptance; only a replacement child escapes this Stop.
     const current = context.sessions.get(ctx.sessionId)?.child
-    if (target.reach === 'withdraw' || current !== target.child) {
+    if (target.reach === 'withdraw' || !target.child || current !== target.child) {
       return { ok: true, value: { ...named, cancelled: settled } }
     }
     const { child } = target
+    const feedbackId = `child:${child.fence}:${child.generation ?? 'unknown'}`
+    let stopOutcome = child.close?.stopOutcome
+    const observeClose: AgentSessionCloseObserver = (evidence) => {
+      if (stopOutcome && evidence) {
+        stopOutcome.root = evidence.root === 'exited' ? 'exited' : stopOutcome.root
+        stopOutcome.workload = evidence.workload === 'exited' ? 'exited' : stopOutcome.workload
+        if (evidence.deathEvidenceKind) {
+          stopOutcome.deathEvidenceKind = evidence.deathEvidenceKind
+        }
+      }
+    }
     const stopChild = async () => {
-      if (context.sessions.get(sessionId)?.child === child) {
-        await context.stopAgent(sessionId, { recorded: 'user-stop' })
+      try {
+        if (context.sessions.get(sessionId)?.child === child) {
+          await context.stopAgent(sessionId, {
+            recorded: 'user-stop',
+            observeClose
+          })
+        }
+      } finally {
+        const observed = child.exitObservation?.().close
+        observeClose({ ...observed?.processExit, deathEvidenceKind: observed?.deathEvidenceKind })
+        if (child.close) {
+          child.close.stopOutcome ??= stopOutcome
+        }
       }
     }
     if (target.reach === 'close') {
       // Join existing close and retry exit proof; the child already refuses input.
-      await stopChild().catch(logChildEnd)
+      if (ctx.agent === 'codex') {
+        stopOutcome ??= {
+          pause: 'unconfirmed',
+          interrupt: 'unconfirmed',
+          root: 'unproven',
+          workload: 'unproven',
+          errors: []
+        }
+        windDown = {
+          ctx,
+          stopChild,
+          owed: {
+            outcome: stopOutcome,
+            feedbackId,
+            operationId: envelope.clientOperationId,
+            noteFence: () =>
+              context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? ctx.fence,
+            waitsForProvider: false,
+            stoppedAt: Date.now(),
+            stopNote: structuredAgentSessionStopNoteIdentity(envelope.clientOperationId)
+          }
+        }
+      } else {
+        await stopChild().catch(logChildEnd)
+      }
       return { ok: true, value: { ...named, cancelled: settled } }
     }
     if (target.reach === 'starting') {
@@ -152,6 +169,8 @@ export function mutateWithChatStop<TValue>(
         // Host drops the child only after proven exit; no other work runs meanwhile.
         childReleased: () => context.sessions.get(sessionId)?.child !== child,
         endSession: (owed) => {
+          stopOutcome = owed.outcome
+          owed.feedbackId = feedbackId
           windDown = { owed, ctx, stopChild }
         },
         withdrewQueued: Promise.resolve(settled),
@@ -162,6 +181,10 @@ export function mutateWithChatStop<TValue>(
     )
   }
   const stop = async (ctx: AgentSessionTurnContext): Promise<ChatStopOutcome> => {
+    // Capture once on the lane; the acceptance receipt owns the exact-cut withdrawal.
+    if (turnId === undefined) {
+      withdrawnCut = latestUsageLimitContinueIdentity(ctx.journal.snapshot())
+    }
     const operations = context.acquireAborts.captureOperations(sessionId)
     const flight = context.startFlights.get(sessionId)
     const target = captureChatStopTarget(ctx, {
@@ -169,14 +192,22 @@ export function mutateWithChatStop<TValue>(
       ...named,
       endsSession: true,
       stoppedPrePrompt: reached || operations.length > 0 || flight !== undefined,
-      stoppedSend: params.stoppedSend
+      stoppedSend: params.stoppedSend,
+      withdrawsContinue: withdrawnCut !== undefined
     })
     if (!target) {
       return { ok: true, value: { ...named, cancelled: false } }
     }
     const previouslyStopped =
-      target.turnId !== null && structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId)
-    const accepted = await accept(ctx, target)
+      target.turnId !== null &&
+      isStructuredAgentSessionCommandTurnId(target.turnId) &&
+      structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId)
+    const accepted = await acceptCapturedChatStop(
+      ctx,
+      target,
+      caller.callerKey,
+      params.stoppedSend === true || withdrawnCut !== undefined
+    )
     if (!accepted.ok) {
       return accepted
     }
@@ -233,13 +264,15 @@ export function mutateWithChatStop<TValue>(
     envelope,
     {
       ...plan,
+      acceptanceRecord: (record) =>
+        withdrawnCut ? cancelAgentSessionUsageLimitContinue(record, withdrawnCut) : record,
       run: (ctx) =>
         run(ctx, async () => ({ outcome: await stop(ctx), endsSession: windDown !== undefined }))
     },
     openForWrite(context, envelope)
   )
   // Queue in the mutation’s tick so intervening sends wait behind child shutdown.
-  void context.serialize(sessionId, async () => {
+  const shutdown = context.serialize(sessionId, async () => {
     if (windDown) {
       const { owed, ctx, stopChild } = windDown
       await endStoppedStructuredAgentSession(
@@ -255,5 +288,6 @@ export function mutateWithChatStop<TValue>(
       )
     }
   })
+  void shutdown.catch(logChildEnd)
   return result
 }

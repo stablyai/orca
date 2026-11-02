@@ -14,10 +14,7 @@ const { assertNoDarkOutputOfOffSwitches } = createRequire(import.meta.url)(
   '../dark-build-switches.cjs'
 )
 
-/**
- * The built page (pnpm build:mobile-web) into an orcad package. Fatal when it is missing or stale,
- * as electron-builder's beforePack is: a server without it serves phones no page.
- */
+// Require a fresh built page as beforePack does: an orcad package without it cannot serve phones.
 export function stageOrcadMobileWebBundle(outputDir, bundleDir = MOBILE_WEB_BUNDLE_DIR) {
   // The release template refuses the variable itself.
   assertNoDarkOutputOfOffSwitches([bundleDir])
@@ -26,7 +23,6 @@ export function stageOrcadMobileWebBundle(outputDir, bundleDir = MOBILE_WEB_BUND
   cpSync(bundleDir, join(outputDir, ...ORCAD_MOBILE_WEB_DIR.split('/')), { recursive: true })
 }
 
-/** The asset half of a package's artifact list, read from the page it carries. */
 export function readOrcadMobileWebAssetFilenames(packageDir) {
   return orcadMobileWebAssetFilenames(
     readFileSync(join(packageDir, ...ORCAD_MOBILE_WEB_MANIFEST.split('/')), 'utf8')

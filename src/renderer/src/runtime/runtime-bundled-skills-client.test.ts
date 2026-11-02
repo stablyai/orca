@@ -78,7 +78,10 @@ describe('planBundledSkillsOnTarget', () => {
   })
 
   it('plans this machine over IPC', async () => {
-    await planBundledSkillsOnTarget({ kind: 'local' }, {})
+    expect(await planBundledSkillsOnTarget({ kind: 'local' }, {})).toEqual({
+      kind: 'plan',
+      plan: PLAN
+    })
 
     expect(bundledPlan).toHaveBeenCalledWith({})
   })

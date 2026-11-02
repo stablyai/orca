@@ -4,12 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ORCHESTRATION_CONTRACT_VERSION,
-  ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
@@ -17,6 +12,8 @@ import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { registerFederatedReleaseRecoveryScenarios } from './federation-release-recovery-scenarios.test-support'
+import { registerFederatedAutoReleaseScenarios } from './federation-auto-release-scenarios.test-support'
+import { olderPeerStatusResponse } from './federation-peer-capabilities.test-support'
 
 describe('orchestration federated worker output', () => {
   const databases: OrchestrationDb[] = []
@@ -34,6 +31,8 @@ describe('orchestration federated worker output', () => {
   let workerAdvertisesNewCapabilities: boolean
   let workerAdvertisesDurableRelease: boolean
   let workerTerminalAvailable: boolean
+  let workerAdvertisesAutoRelease: boolean
+  let homeOmitsAutoRelease: boolean
   let remoteCalls: string[]
 
   beforeEach(() => {
@@ -54,6 +53,8 @@ describe('orchestration federated worker output', () => {
     workerAdvertisesNewCapabilities = true
     workerAdvertisesDurableRelease = true
     workerTerminalAvailable = true
+    workerAdvertisesAutoRelease = true
+    homeOmitsAutoRelease = false
     remoteCalls = []
     const transport: OrchestrationEnvironmentTransport = {
       resolve: () => ({
@@ -64,28 +65,11 @@ describe('orchestration federated worker output', () => {
       call: async (_selector, method, params, _timeoutMs, envelope) => {
         remoteCalls.push(method)
         if (method === 'status.get') {
-          const status = workerRuntime.getStatus()
-          return {
-            id: 'status',
-            ok: true,
-            result: {
-              ...status,
-              capabilities: status.capabilities?.filter(
-                (capability) =>
-                  !(
-                    (!workerAdvertisesNewCapabilities &&
-                      [
-                        ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY,
-                        ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
-                        ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY
-                      ].includes(capability as never)) ||
-                    ((!workerAdvertisesNewCapabilities || !workerAdvertisesDurableRelease) &&
-                      capability === ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY)
-                  )
-              )
-            },
-            _meta: { runtimeId: workerRuntime.getRuntimeId() }
-          }
+          return olderPeerStatusResponse(workerRuntime, {
+            newCapabilities: workerAdvertisesNewCapabilities,
+            durableRelease: workerAdvertisesDurableRelease,
+            autoRelease: workerAdvertisesAutoRelease
+          })
         }
         if (method === 'orchestration.federationReadOutput' && !workerSupportsStructuredRead) {
           return {
@@ -123,7 +107,12 @@ describe('orchestration federated worker output', () => {
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
           method,
-          params,
+          params:
+            homeOmitsAutoRelease &&
+            method === 'orchestration.federationAck' &&
+            typeof params === 'object'
+              ? { ...params, autoRelease: undefined }
+              : params,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId
         })
@@ -160,6 +149,10 @@ describe('orchestration federated worker output', () => {
           coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
         })
     return homeDb.createTask({ spec: 'Read Windows worker output', runId: run.id })
+  }
+
+  function homeCall(id: string, method: string, params: Record<string, unknown>) {
+    return homeDispatcher.dispatch({ id, authToken: 'coordinator-token', method, params })
   }
 
   function startRequest(taskId: string): RpcRequest {
@@ -229,8 +222,7 @@ describe('orchestration federated worker output', () => {
         status: 'running'
       } as never
     })
-    // The execution host must publish a positive liveness verdict; a missing
-    // verdict is intentionally treated as unverifiable for old peers.
+    // Old peers without a positive host verdict remain unverifiable.
     vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
       status: 'live',
       ptyIds: ['term_windows_worker']
@@ -305,17 +297,12 @@ describe('orchestration federated worker output', () => {
   it('routes show and read by Dispatch without repeating the worker server', async () => {
     const dispatchId = await startRemoteWorker()
 
-    const shown = await homeDispatcher.dispatch({
-      id: 'rpc_remote_show',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerShow',
-      params: { dispatch: dispatchId }
+    const shown = await homeCall('rpc_remote_show', 'orchestration.workerShow', {
+      dispatch: dispatchId
     })
-    const read = await homeDispatcher.dispatch({
-      id: 'rpc_remote_read',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatchId, limit: 20 }
+    const read = await homeCall('rpc_remote_read', 'orchestration.workerRead', {
+      dispatch: dispatchId,
+      limit: 20
     })
 
     expect(shown).toMatchObject({
@@ -342,24 +329,17 @@ describe('orchestration federated worker output', () => {
     workerSupportsStructuredRead = false
     remoteCalls = []
 
-    const automatic = await homeDispatcher.dispatch({
-      id: 'rpc_remote_legacy_read',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatchId }
+    const automatic = await homeCall('rpc_remote_legacy_read', 'orchestration.workerRead', {
+      dispatch: dispatchId
     })
     const cursor = (automatic as { result: { cursor: string } }).result.cursor
-    const continued = await homeDispatcher.dispatch({
-      id: 'rpc_remote_legacy_continue',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatchId, cursor }
+    const continued = await homeCall('rpc_remote_legacy_continue', 'orchestration.workerRead', {
+      dispatch: dispatchId,
+      cursor
     })
-    const required = await homeDispatcher.dispatch({
-      id: 'rpc_remote_legacy_transcript',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatchId, source: 'transcript' }
+    const required = await homeCall('rpc_remote_legacy_transcript', 'orchestration.workerRead', {
+      dispatch: dispatchId,
+      source: 'transcript'
     })
 
     expect(automatic).toMatchObject({
@@ -386,8 +366,7 @@ describe('orchestration federated worker output', () => {
         data: { reason: 'remote_capability_unavailable' }
       }
     })
-    // The worker-start capability negotiation already populated this epoch's
-    // cache; mixed-version fallback must not issue a redundant status probe.
+    // Reuse this epoch's capability cache populated by worker-start.
     expect(remoteCalls.filter((method) => method === 'status.get')).toHaveLength(0)
     expect(
       remoteCalls.filter((method) => method === 'orchestration.federationReadOutput')
@@ -418,11 +397,8 @@ describe('orchestration federated worker output', () => {
     })
 
     try {
-      const response = await homeDispatcher.dispatch({
-        id: 'rpc_remote_transcript_read',
-        authToken: 'coordinator-token',
-        method: 'orchestration.workerRead',
-        params: { dispatch: dispatchId }
+      const response = await homeCall('rpc_remote_transcript_read', 'orchestration.workerRead', {
+        dispatch: dispatchId
       })
 
       expect(response).toMatchObject({
@@ -451,11 +427,8 @@ describe('orchestration federated worker output', () => {
     const firstDispatchId = await startRemoteWorker()
     remoteCalls = []
 
-    const healthy = await homeDispatcher.dispatch({
-      id: 'rpc_remote_fleet',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerList',
-      params: { includeRemote: true }
+    const healthy = await homeCall('rpc_remote_fleet', 'orchestration.workerList', {
+      includeRemote: true
     })
 
     expect(
@@ -471,11 +444,8 @@ describe('orchestration federated worker output', () => {
     })
 
     workerFleetUnavailable = true
-    const unavailable = await homeDispatcher.dispatch({
-      id: 'rpc_remote_fleet_unavailable',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerList',
-      params: { includeRemote: true }
+    const unavailable = await homeCall('rpc_remote_fleet_unavailable', 'orchestration.workerList', {
+      includeRemote: true
     })
     expect(unavailable).toMatchObject({
       ok: true,
@@ -494,6 +464,25 @@ describe('orchestration federated worker output', () => {
     ).result.workers.find((worker) => worker.dispatchId === firstDispatchId)
     expect(unavailableWorker?.projection).toMatchObject({
       liveness: { verdict: 'unverifiable', reason: 'host_unavailable' }
+    })
+  })
+
+  it('says to end the turn while a remote worker runs, since its stop or exit is relayed home', async () => {
+    const taskId = createHomeTask().id
+    const started = await homeDispatcher.dispatch(startRequest(taskId))
+    const checked = await homeDispatcher.dispatch({
+      id: 'rpc_check_remote',
+      authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'rpc_check_remote',
+      method: 'orchestration.check',
+      params: { terminal: 'term_coord' }
+    })
+
+    expect(started).toMatchObject({ ok: true, result: { state: 'ready' } })
+    expect(checked).toMatchObject({
+      ok: true,
+      result: { count: 0, next: expect.stringContaining('end your turn') }
     })
   })
 
@@ -555,18 +544,15 @@ describe('orchestration federated worker output', () => {
     })
     expect(workerRuntime.closeTerminal).toHaveBeenCalledWith('term_windows_worker')
 
-    // A confirmed remote release converges the home projection and is safe to
-    // replay after a response/relay race.
     expect(homeDb.getWorkerDispatch(dispatchId)).toMatchObject({
       stage: 'released',
       agent_terminal_handle: null
     })
-    const projected = await homeDispatcher.dispatch({
-      id: 'rpc_remote_release_projection',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerList',
-      params: {}
-    })
+    const projected = await homeCall(
+      'rpc_remote_release_projection',
+      'orchestration.workerList',
+      {}
+    )
     const projectedWorker = (
       projected as { result: { workers: { dispatchId: string; projection: unknown }[] } }
     ).result.workers.find((worker) => worker.dispatchId === dispatchId)
@@ -607,12 +593,11 @@ describe('orchestration federated worker output', () => {
       result: { state: 'released', archive: { source: 'terminal', status: 'captured' } }
     })
 
-    const afterRemoval = await homeDispatcher.dispatch({
-      id: 'rpc_remote_read_archive_after_removal',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatchId }
-    })
+    const afterRemoval = await homeCall(
+      'rpc_remote_read_archive_after_removal',
+      'orchestration.workerRead',
+      { dispatch: dispatchId }
+    )
     expect(afterRemoval).toMatchObject({
       ok: true,
       result: {
@@ -626,12 +611,11 @@ describe('orchestration federated worker output', () => {
     expect(JSON.stringify(afterRemoval)).not.toContain(capability)
 
     restartWorkerRuntime(true)
-    const afterRestart = await homeDispatcher.dispatch({
-      id: 'rpc_remote_read_archive_after_restart',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatchId }
-    })
+    const afterRestart = await homeCall(
+      'rpc_remote_read_archive_after_restart',
+      'orchestration.workerRead',
+      { dispatch: dispatchId }
+    )
     expect(afterRestart).toMatchObject({
       ok: true,
       result: {
@@ -660,6 +644,28 @@ describe('orchestration federated worker output', () => {
       }
     })
     expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  registerFederatedAutoReleaseScenarios({
+    startRemoteWorker: async () => {
+      const dispatchId = await startRemoteWorker()
+      homeRuntime.stopOrchestrationFederationRelay()
+      return dispatchId
+    },
+    dispatchHome: (request) => homeDispatcher.dispatch(request),
+    dispatchWorker: (request) => workerDispatcher.dispatch(request),
+    syncHome: (dispatchId) => homeRuntime.syncOrchestrationFederatedDispatch(dispatchId),
+    workerRuntime: () => workerRuntime,
+    homeRuntime: () => homeRuntime,
+    homeDb: () => homeDb,
+    workerDb: () => workerDb,
+    remoteCalls: () => remoteCalls,
+    setWorkerAdvertisesAutoRelease: (advertised) => {
+      workerAdvertisesAutoRelease = advertised
+    },
+    setHomeOmitsAutoRelease: (omitted) => {
+      homeOmitsAutoRelease = omitted
+    }
   })
 
   registerFederatedReleaseRecoveryScenarios({
@@ -696,22 +702,15 @@ describe('orchestration federated worker output', () => {
 
   it('keeps reads, fleet snapshots, and release on legacy fallbacks for an old peer', async () => {
     workerAdvertisesNewCapabilities = false
-    // A shipped host that does not advertise structured read still has to be asked; only its
-    // own method_not_found may downgrade the read to a terminal scrape.
+    // Ask shipped hosts directly for structured output; only method_not_found permits terminal fallback.
     workerSupportsStructuredRead = false
     const dispatchId = await startRemoteWorker()
     remoteCalls = []
-    const read = await homeDispatcher.dispatch({
-      id: 'rpc_old_peer_read',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatchId }
+    const read = await homeCall('rpc_old_peer_read', 'orchestration.workerRead', {
+      dispatch: dispatchId
     })
-    const fleet = await homeDispatcher.dispatch({
-      id: 'rpc_old_peer_fleet',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerList',
-      params: { includeRemote: true }
+    const fleet = await homeCall('rpc_old_peer_fleet', 'orchestration.workerList', {
+      includeRemote: true
     })
     const release = await homeDispatcher.dispatch({
       id: 'rpc_old_peer_release',
@@ -767,13 +766,7 @@ describe('orchestration federated worker output', () => {
     homeRuntime.stopOrchestrationFederationRelay()
     remoteCalls = []
 
-    await homeDispatcher.dispatch({
-      id: 'rpc_old_peer_cache_read',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatchId }
-    })
-    // The unadvertised capability never blocks the call; only method_not_found would.
+    await homeCall('rpc_old_peer_cache_read', 'orchestration.workerRead', { dispatch: dispatchId })
     expect(remoteCalls).toContain('orchestration.federationReadOutput')
 
     const oldEpoch = homeDb.getFederatedDispatch(dispatchId)?.remote_runtime_epoch
@@ -790,19 +783,12 @@ describe('orchestration federated worker output', () => {
     expect(homeDb.getFederatedDispatch(dispatchId)?.remote_runtime_epoch).not.toBe(oldEpoch)
     remoteCalls = []
 
-    const read = await homeDispatcher.dispatch({
-      id: 'rpc_restarted_peer_read',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatchId }
+    const read = await homeCall('rpc_restarted_peer_read', 'orchestration.workerRead', {
+      dispatch: dispatchId
     })
-    const fleet = await homeDispatcher.dispatch({
-      id: 'rpc_restarted_peer_fleet',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerList',
-      params: { includeRemote: true }
+    const fleet = await homeCall('rpc_restarted_peer_fleet', 'orchestration.workerList', {
+      includeRemote: true
     })
-    // Read and fleet negotiate through the methods themselves, so neither spends a probe.
     expect(remoteCalls.filter((method) => method === 'status.get')).toHaveLength(0)
     const release = await homeDispatcher.dispatch({
       id: 'rpc_restarted_peer_release',
@@ -816,7 +802,7 @@ describe('orchestration federated worker output', () => {
     expect(read).toMatchObject({ ok: true, result: { source: 'terminal' } })
     expect(fleet).toMatchObject({ ok: true })
     expect(release).toMatchObject({ ok: true, result: { state: 'released' } })
-    // Only release still probes: its capability asserts a durable archive, not method existence.
+    // Release still probes because its capability promises a durable archive, not merely method presence.
     expect(remoteCalls).toContain('orchestration.federationReadOutput')
     expect(remoteCalls).toContain('orchestration.federationFleetSnapshot')
     expect(remoteCalls).toContain('orchestration.federationRelease')

@@ -31,7 +31,7 @@ afterEach(() => {
   }
 })
 
-// Why /tmp: a Unix socket path under macOS's long tmpdir exceeds the 104-byte limit.
+// Short roots keep macOS Unix sockets below the 104-byte limit.
 function makeRoot(): string {
   const root = mkdtempSync('/tmp/orcad-reclaim-')
   roots.push(root)
@@ -40,7 +40,6 @@ function makeRoot(): string {
 
 const HOLDER_PID = 15698
 
-/** The issue's record: written on host `box` in boot-1, ten minutes ago, naming no machine id. */
 function holderRecord(overrides: Partial<OrcadLockRecord> = {}): OrcadLockRecord {
   return {
     pid: HOLDER_PID,
@@ -57,7 +56,6 @@ function holderRecord(overrides: Partial<OrcadLockRecord> = {}): OrcadLockRecord
   }
 }
 
-/** Host `box` after a reboot, with an empty machine id and its home on a network mount. */
 function rebootedBox(overrides: OrcadStaleLockReclaimHooks = {}): OrcadStaleLockReclaimHooks {
   return {
     hostname: () => 'box',
@@ -83,7 +81,7 @@ function writeLock(root: string, record: OrcadLockRecord): string {
   return lockPath
 }
 
-// POSIX ownership, modes and Unix sockets; the command only ever applies to Linux hosts.
+// Reclamation is Linux-only; these fixtures need POSIX modes and sockets.
 describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#32177)', () => {
   it('clears a lock from an earlier boot on this host once every check passes and --yes', async () => {
     const root = makeRoot()
@@ -240,7 +238,6 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
           incarnation: () => incarnation
         }
       })
-    // Another process now has that PID: its incarnation names this boot, not the record's.
     const reclaimed = await reclaimStaleOrcadInstanceLock(
       reused,
       { yes: true, hintRuntime: null },
@@ -265,7 +262,6 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
   it('never clears a record other than the one it checked', async () => {
     const root = makeRoot()
     const lockPath = writeLock(root, holderRecord())
-    // A different holder's record lands after the checks and before the reclaim.
     const swap = async (): Promise<'silent'> => {
       writeLock(root, holderRecord({ nonce: 'newer-holder' }))
       return 'silent'
@@ -278,7 +274,6 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
     )
     expect(result.status).toBe('refused')
     expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe('newer-holder')
-    // The refusal names `orca serve`, never the binary this command happens to run under.
     expect(result.message).not.toContain(process.execPath)
     if (process.platform === 'linux') {
       expect(result.message).toContain(`orca serve --reclaim-stale-lock --data-root ${root}`)
@@ -295,9 +290,24 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
     await expect(probeOrcadEndpoint('ws://[::1')).resolves.toBe('unknown')
   })
 
+  it('refuses a lock refreshed three minutes ago, which NFS caching can show for a live clone (#32918)', async () => {
+    const root = makeRoot()
+    const acquiredAt = '2026-01-01T00:00:00.000Z'
+    writeLock(root, holderRecord({ acquiredAt }))
+    const now = () => Date.parse(acquiredAt) + 3 * 60_000
+    const result = await reclaimStaleOrcadInstanceLock(
+      root,
+      { yes: true, hintRuntime: null },
+      rebootedBox({ now, bootStartedAtMs: () => Date.parse(acquiredAt) - 60_000 })
+    )
+    expect(result).toMatchObject({
+      status: 'refused',
+      message: expect.stringContaining('minutes old')
+    })
+  })
+
   it.each([
     ['another host', holderRecord({ host: 'other-box' }), 'not this host'],
-    // The same boot is this machine's to judge: a normal start does, by its PID.
     ['the same boot', holderRecord({ bootId: 'boot-2' }), 'judge this lock itself'],
     ['an older orcad that recorded no host', holderRecord({ host: undefined }), 'which host'],
     [

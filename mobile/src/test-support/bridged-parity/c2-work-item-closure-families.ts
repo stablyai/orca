@@ -1,18 +1,6 @@
 import type { PageClosurePins } from './page-closure'
 
-/**
- * The C2 closure families reached by opening one work item, and what each golden did at the bridge.
- *
- * Split from `c2-page-closure.ts` at the domain's own seam rather than at a line count: these are
- * the families a task item's own screen drives — its detail, metadata, checks, comments, review
- * threads and the writes that change its state — and the file next door is what chooses which item
- * to open. Both are data the composed table spreads; neither is meant to be read alone.
- *
- * Verdicts are C2's classification rule, which decides only the families this domain adds: a
- * `matrix-*` golden, or one whose scenario scripts `{ ok: true }` with no `result`, is
- * `result-absent-settlement`; the five families the design measured as wholly divergent are
- * `params-undefined`; everything else replays byte for byte.
- */
+// Classify only C2’s added work-item families; inherited C1 verdicts are pinned separately, not re-derived.
 export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
   'linear-detail-barrier': {
     b3: 'identical',

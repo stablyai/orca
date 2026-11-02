@@ -1,9 +1,11 @@
+import {
+  AGENT_LAUNCH_CHOICE_KEYS,
+  normalizeAgentLaunchChoices,
+  normalizeAgentModelOptionChoices
+} from './agent-launch-choices'
 import { agentPermissionHostPlatform, permissionEnvNameMatches } from './agent-permission-env'
-import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
 import type { GlobalSettings } from './global-settings-types'
 import {
-  agentPermissionArgs,
-  agentPermissionChoices,
   agentPermissionEnv,
   hasTypedAgentPermission,
   normalizeAgentPermissionOverrides,
@@ -11,7 +13,8 @@ import {
   resolveAgentPermission,
   type AgentPermissionChoice
 } from './tui-agent-permission-choice'
-import { permissionRecipeCut } from './agent-permission-args'
+import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
+import { planAgentCliArgsSuffix, type AgentStartupShell } from './tui-agent-startup-shell'
 export { agentArgsSetPermission } from './agent-permission-args'
 import type { TuiAgent } from './tui-agent'
 
@@ -19,24 +22,41 @@ import type { TuiAgent } from './tui-agent'
 export function liftAgentPermissionArgs(
   agent: TuiAgent,
   text: string | null | undefined
-): { choice: AgentChatPermissionMode | null; args: string } {
-  const original = text?.trim() ?? ''
-  for (const choice of agentPermissionChoices(agent)) {
-    if (choice === 'own') {
-      continue
-    }
-    const cut = permissionRecipeCut(agent, original, agentPermissionArgs(agent, choice))
-    if (cut) {
-      return { choice, args: cut.args }
-    }
-  }
-  return { choice: null, args: original }
+): { choice: AgentPermissionChoice | null; args: string } {
+  const result = reconcileAgentChoiceArgs({
+    agent,
+    userArgs: text?.trim() ?? '',
+    choices: {},
+    mode: 'load',
+    keys: new Set(['permissionMode'])
+  })
+  return { choice: result.choices.permissionMode ?? null, args: result.userArgs }
 }
 
-/**
- * Splits an env-driven bypass (Goose's `GOOSE_MODE=auto`) out of an environment record. Names
- * follow the execution host's identity; unknown browser caches preserve ambiguous spellings.
- */
+/** A recorded launch without Orca's permission flag; recorded text it cannot rebuild stays whole. */
+export function dropRecordedAgentPermissionArgs(
+  agent: TuiAgent,
+  recorded: { agentArgs?: string | null; agentCommand?: string | null },
+  shell: AgentStartupShell
+): { agentArgs?: string | null; agentCommand?: string | null } {
+  const lifted = liftAgentPermissionArgs(agent, recorded.agentArgs)
+  if (!lifted.choice) {
+    return recorded
+  }
+  const command = recorded.agentCommand?.trim()
+  if (!command) {
+    return { ...recorded, agentArgs: lifted.args }
+  }
+  const before = planAgentCliArgsSuffix(recorded.agentArgs, shell)
+  const after = planAgentCliArgsSuffix(lifted.args, shell)
+  if (!before.ok || !after.ok || !command.endsWith(` ${before.suffix}`)) {
+    return recorded
+  }
+  const head = command.slice(0, -before.suffix.length).trimEnd()
+  return { agentArgs: lifted.args, agentCommand: after.suffix ? `${head} ${after.suffix}` : head }
+}
+
+/** Lift env bypass with execution-host name casing; unknown browser caches retain ambiguous spellings. */
 export function liftAgentPermissionEnv(
   agent: TuiAgent,
   env: Record<string, string> | null | undefined,
@@ -71,25 +91,29 @@ export function liftAgentPermissionEnv(
 type AgentPermissionProfile = Required<
   Pick<
     GlobalSettings,
-    'agentDefaultArgs' | 'agentDefaultEnv' | 'agentPermissionDefault' | 'agentPermissionOverrides'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
+    | 'agentLaunchChoices'
+    | 'agentPermissionDefault'
+    | 'agentPermissionOverrides'
   >
 >
 
-/**
- * Moves each agent's permission out of its Arguments into a stored choice, once per profile.
- * Orca's own flags become the choice and leave the text; no flag means the agent's own settings
- * (those terminals passed none). Text that sets permissions some other way is left whole, on own.
- */
+/** Migrate exact Orca permission recipes once, preserving unrelated text on own; absent flags also mean own because those launches passed none. */
 export function migrateAgentPermissionChoice(
   settings: Partial<AgentPermissionProfile>,
   platform: NodeJS.Platform | null | undefined = agentPermissionHostPlatform()
 ): AgentPermissionProfile {
   const args = { ...settings.agentDefaultArgs }
   const env = { ...settings.agentDefaultEnv }
-  if (hasTypedAgentPermission(settings)) {
+  const typed = hasTypedAgentPermission(settings)
+  const agentLaunchChoices = normalizeAgentLaunchChoices(settings.agentLaunchChoices)
+  if (typed && settings.agentLaunchChoices !== undefined) {
     return {
+      ...settings,
       agentDefaultArgs: args,
       agentDefaultEnv: env,
+      agentLaunchChoices,
       agentPermissionDefault: settings.agentPermissionDefault ?? 'own',
       agentPermissionOverrides: normalizeAgentPermissionOverrides(settings.agentPermissionOverrides)
     }
@@ -97,14 +121,34 @@ export function migrateAgentPermissionChoice(
   const choices = new Map<TuiAgent, AgentPermissionChoice>()
   const counts = new Map<AgentPermissionChoice, number>()
   for (const agent of PERMISSION_CHOICE_AGENTS) {
-    const fromArgs = liftAgentPermissionArgs(agent, args[agent])
-    const fromEnv = fromArgs.choice ? null : liftAgentPermissionEnv(agent, env[agent], platform)
-    if (fromArgs.choice) {
-      args[agent] = fromArgs.args
-    } else if (fromEnv?.choice && env[agent]) {
+    const result = reconcileAgentChoiceArgs({
+      agent,
+      userArgs: args[agent] ?? '',
+      choices: {
+        ...agentLaunchChoices[agent],
+        ...(typed ? { permissionMode: resolveAgentPermission(agent, settings).choice } : {})
+      },
+      mode: 'load',
+      keys:
+        settings.agentLaunchChoices === undefined
+          ? AGENT_LAUNCH_CHOICE_KEYS
+          : new Set(['permissionMode'])
+    })
+    const model = normalizeAgentModelOptionChoices(result.choices)
+    if (model) {
+      agentLaunchChoices[agent] = model
+    }
+    if (args[agent] !== undefined || result.userArgs) {
+      args[agent] = result.userArgs
+    }
+    const fromEnv =
+      typed || result.choices.permissionMode
+        ? null
+        : liftAgentPermissionEnv(agent, env[agent], platform)
+    if (fromEnv?.choice && env[agent]) {
       env[agent] = fromEnv.env
     }
-    const choice = fromArgs.choice ?? fromEnv?.choice ?? 'own'
+    const choice = result.choices.permissionMode ?? fromEnv?.choice ?? 'own'
     choices.set(agent, choice)
     counts.set(choice, (counts.get(choice) ?? 0) + 1)
   }
@@ -124,7 +168,12 @@ export function migrateAgentPermissionChoice(
   return {
     agentDefaultArgs: args,
     agentDefaultEnv: env,
-    agentPermissionDefault,
-    agentPermissionOverrides
+    agentLaunchChoices,
+    agentPermissionDefault: typed
+      ? (settings.agentPermissionDefault ?? 'own')
+      : agentPermissionDefault,
+    agentPermissionOverrides: typed
+      ? normalizeAgentPermissionOverrides(settings.agentPermissionOverrides)
+      : agentPermissionOverrides
   }
 }

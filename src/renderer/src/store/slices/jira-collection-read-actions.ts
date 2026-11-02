@@ -1,4 +1,4 @@
-import { normalizeJiraStatusSelection } from '../../../../shared/jira-quick-filters'
+import { normalizeJiraStatusSelection } from '../../../../shared/jira/jira-quick-filters'
 import { jiraListIssuesForTarget, jiraSearchIssues } from '@/runtime/runtime-jira-client'
 import { getJiraRuntimeTarget } from '@/runtime/runtime-jira-target'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'

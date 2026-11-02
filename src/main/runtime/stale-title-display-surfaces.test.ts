@@ -15,8 +15,7 @@ async function psStatus(runtime: OrcaRuntimeService): Promise<string | undefined
     ?.status
 }
 
-// Synthetic titles: display surfaces must show what the tab shows once the stale-working timer
-// clears a title, although the runtime keeps the agent's own title as evidence.
+// Display must reflect stale-title clears while runtime retains native titles as evidence; these titles are synthetic.
 describe('display surfaces after the stale-working title clear', () => {
   it('worktree ps and the phone show the cleared status for a terminal with no renderer pane', async () => {
     vi.useFakeTimers()

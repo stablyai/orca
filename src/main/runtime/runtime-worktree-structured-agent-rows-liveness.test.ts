@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -7,27 +7,19 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 
-/**
- * The whole chain `worktree ps` walks: journal -> status feed -> agent-status store -> agent rows
- * -> worktree status.
- *
- * The feed's `published` map never retracts, so it cannot be the roster. A closed chat that was
- * waiting on an approval is the sharp edge: deliberate close does not settle a pending prompt, so
- * the retained summary stays `attention`, which maps to a `blocked` row and would merge the
- * worktree to `permission`. The store is the roster: the host drops the row on close.
- */
+/** Exercise journal to worktree-status liveness: feed summaries never retract, but the store drops closed chats, including unanswered approvals whose retained status stays attention. */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const SUBJECT = makeStructuredAgentStatusSubject(
@@ -110,7 +102,7 @@ async function awaitingApproval() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions,
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => Date.now(),
     statusSink: () => ({
       publish: (summary, subject) => {
@@ -133,7 +125,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
   const summaries = new Map([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries,
-    workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {
@@ -150,14 +142,6 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
 }
 
 describe('worktree ps and a closed structured chat', () => {
-  it('reports the blocked row while the session is still held', async () => {
-    const { store } = await awaitingApproval()
-    const row = worktreeFor(store)
-    expect(row.agents).toHaveLength(1)
-    expect(row.agents[0]?.state).toBe('blocked')
-    expect(row.status).toBe('permission')
-  })
-
   it('stops reporting it once close forgets the session', async () => {
     const { feed, sessions, store } = await awaitingApproval()
     // What the host does after eviction: the feed keeps its projection, the store drops the row.

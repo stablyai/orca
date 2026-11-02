@@ -1,8 +1,6 @@
-// The tool rows a Codex `collabAgentToolCall` item becomes: the calls an agent makes to spawn,
-// message, wait on and close its helpers. The host names each row; readers recognise it here.
+// Recognize host-named Codex spawn/message/wait/close rows.
 
-/** The name the model called the tool by, which is what its row shows. The wire item spells the
- *  tool in camelCase; the model-facing name is snake_case, so this map is not a spelling fix. */
+/** Map wire camelCase to model-facing snake_case names shown on rows. */
 const CODEX_COLLAB_TOOL_NAMES: ReadonlyMap<string, string> = new Map([
   ['spawnAgent', 'spawn_agent'],
   ['sendInput', 'send_input'],
@@ -17,7 +15,6 @@ const CODEX_COLLAB_TOOL_NAMES: ReadonlyMap<string, string> = new Map([
 
 const CODEX_COLLAB_ROW_NAMES: ReadonlySet<string> = new Set(CODEX_COLLAB_TOOL_NAMES.values())
 
-/** A tool Codex adds later keeps its wire spelling. */
 export function codexCollabToolRowName(wireTool: string): string {
   return CODEX_COLLAB_TOOL_NAMES.get(wireTool) ?? wireTool
 }

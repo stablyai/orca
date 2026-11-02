@@ -28,10 +28,7 @@ export function getGitHubSourceRuntimeTarget(
   return taskSourceRuntimeTarget(sourceContext?.provider === 'github' ? sourceContext : null)
 }
 
-// Why: PR reads and actions run on the repo's explicit owner host (#6957, #7623);
-// a local or absent source never downgrades a runtime-owned repo to local IPC,
-// a runtime source still overrides, and a repo without an explicit owner is a
-// local repo. Only a twin with no caller host falls back to the focused runtime.
+// Repo owners govern PR actions; runtime source overrides, local/absent source cannot downgrade. Only unqualified twins fall back to focused runtime (#6957, #7623).
 export function getGitHubRepoRoutingTarget(
   state: RepoRuntimeOwnerState,
   repoId: string | null | undefined,

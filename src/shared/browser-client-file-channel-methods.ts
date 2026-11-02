@@ -1,7 +1,6 @@
 import type { BrowserClientAutomationMethod } from './browser-client-automation-protocol'
 
-// Why: these methods name a filesystem path; on a client-placed page the path means the REMOTE
-// workspace, so they may only run once both peers negotiated the staging file channel.
+// Client-placed page paths name the remote workspace; require both peers to negotiate file staging before these methods run.
 const FILE_CHANNEL_AUTOMATION_METHODS = new Set<string>(['browser.upload', 'browser.download'])
 
 export const BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR =

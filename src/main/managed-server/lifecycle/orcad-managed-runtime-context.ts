@@ -1,4 +1,5 @@
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { ORCAD_UPDATE_TERMINALS_RUNNING_CODE } from '../../../shared/orcad-managed-runtime'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment,
@@ -150,5 +151,5 @@ export function managedOrcadDeployPolicy(
 
 // Force can override live terminal counts, never unknown census or protocol deferrals.
 export function isForceableOrcadDeferral(code: string): boolean {
-  return code === 'orcad_update_terminals_running'
+  return code === ORCAD_UPDATE_TERMINALS_RUNNING_CODE
 }

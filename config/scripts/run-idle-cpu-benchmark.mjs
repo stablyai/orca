@@ -169,8 +169,7 @@ function buildAppIfNeeded(root, skipBuild) {
     throw new Error(`--skip-build requested, but ${mainPath} does not exist`)
   }
   console.log('[idle-cpu] building Electron app with electron-vite --mode e2e')
-  // Why through the wrapper: `npx` only resolves to an executable on POSIX; on Windows it is
-  // `npx.cmd`, which execFileSync cannot run, and the wrapper also verifies the boot graph.
+  // Wrapper avoids Windows npx.cmd exec failure and verifies boot graph.
   run(
     process.execPath,
     [path.join(root, 'config', 'scripts', 'run-electron-vite-build.mjs'), '--mode', 'e2e'],
@@ -317,8 +316,7 @@ async function main() {
   void ELECTRON_RUN_AS_NODE
   void _codexHome
   void _orcaCodexHome
-  // Why: real-home rollout work would both contaminate idle measurements and
-  // expose the developer Codex profile to this disposable Electron launch.
+  // Disable real-home rollout to isolate measurements and protect developer’s Codex profile.
   const isolatedHome = path.join(userDataDir, 'home')
   mkdirSync(isolatedHome, { recursive: true })
   const app = await electron.launch({
@@ -499,8 +497,7 @@ async function main() {
     } catch (error) {
       // A failed or timed-out read must not skip the app close and fixture cleanup below.
       console.error('idle CPU benchmark: could not list launched processes', error)
-      // Without the list, kill the tree while its root still anchors it; app.close() alone
-      // leaves detached descendants running over the fixtures removed below.
+      // Kill descendants while root still anchors tree if list failed; app.close alone leaves detached children over fixtures slated for removal.
       forceKillProcessTree(rootPid)
     }
     await app.close().catch(() => undefined)

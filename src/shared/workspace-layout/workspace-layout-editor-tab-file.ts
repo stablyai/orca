@@ -1,5 +1,4 @@
-// Which file an editor tab shows. The window keys a file by its path, or by its owned id when
-// another owner holds the path, it is floating, or it moved to its file's workspace.
+// The window uses bare file paths or owner-qualified IDs for contested, floating or moved files.
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { ownedEditorFileId } from '../workspace-session-pane-ownership'
@@ -16,18 +15,13 @@ export function editorTabShowsFile(entityId: string, file: FileOwner, worktreeId
   )
 }
 
-/**
- * A file record's key among its workspace's records in this process: its path, and in a
- * layout-owner build its runtime owner too, since a local and a runtime-environment file can share
- * a path. A layout frame's records keep one key in every build (workspace-layout-records.ts).
- */
-/** The file fields `editorFileKey` is made of: a changed one names another record. */
+/** Include runtime owner in owner-build keys because local/remote files can share paths; stream frame keys remain stable across builds. */
 export const EDITOR_FILE_KEY_FIELDS: readonly (keyof FileOwner)[] = ORCA_LAYOUT_OWNER_IS_MAIN
   ? ['filePath', 'runtimeEnvironmentId']
   : ['filePath']
 
 export function editorFileKey(file: FileOwner): string {
-  // Why no worktree: every record keyed here belongs to one workspace, or moves between two.
+  // These maps are workspace-scoped, including during cross-workspace moves; omit worktree from their internal keys.
   return ORCA_LAYOUT_OWNER_IS_MAIN
     ? ownedEditorFileId(file.filePath, '', file.runtimeEnvironmentId)
     : file.filePath
@@ -77,10 +71,7 @@ export function editorTabNamesFile<F extends FileOwner>(
     : editorTabShowsFile(entityId, file, workspace.worktreeId)
 }
 
-/**
- * The records an editor tab shows. The window gives a path's bare id to one owner only, so a bare
- * id that matches several records names those no owned-id tab claims.
- */
+/** A bare path belongs to only one owner; among matching records, skip those already claimed by an owned-ID tab. */
 function editorTabFiles<F extends FileOwner>(workspace: EditorWorkspace<F>, entityId: string): F[] {
   const shown = (workspace.editorFiles ?? []).filter((file) =>
     editorTabShowsFile(entityId, file, workspace.worktreeId)

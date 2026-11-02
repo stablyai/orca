@@ -253,8 +253,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         })
       ])
     )
-    // Why: older runtimes omit this transient field. Omission must clear an
-    // earlier challenge instead of leaving an unsafe action wired to stale RPC input.
+    // Older hosts omit this transient challenge; clear stale RPC input rather than leaving unsafe actions armed.
     expect(patch.browserCertificateFailuresByPageId).toEqual({})
   })
 
@@ -357,8 +356,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   })
 
   it('keeps locally opened editor tabs when the host snapshot omits them', () => {
-    // Why: web file clicks open tabs locally with no host counterpart. A host
-    // snapshot that does not list the file must not cull the user's own tab.
+    // Web-opened files have no host counterpart; omission must not cull client-owned tabs.
     const openFile: OpenFile = {
       id: '/repo/local-notes.md',
       filePath: '/repo/local-notes.md',
@@ -409,8 +407,6 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
-    // The locally opened file and its tab survive the host snapshot sync. Nothing
-    // is culled, so the sync leaves editor ownership and selection state alone.
     expect(patch.openFiles).toBeUndefined()
     expect(patch.unifiedTabsByWorktree?.[WT]).toBeUndefined()
     expect(patch.groupsByWorktree?.[WT]).toBeUndefined()
@@ -447,7 +443,6 @@ describe('applyWebSessionTabsSnapshot', () => {
       isPreview: false,
       isPinned: false
     }
-    // The host republishes the same tab with its own store's flag: not dirty.
     const hostCleanSnapshot = () =>
       makeSnapshot(
         [
@@ -473,8 +468,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       )
 
     it('keeps a client-dirty mirrored file dirty when the host republishes isDirty: false', () => {
-      // Why: the host never learns about client edits, so its flag would otherwise erase the
-      // client's, and the tab strip would close the tab with no prompt while the draft lives.
+      // Host never learns client edits; its clean flag must not erase dirtiness and allow unprompted draft close.
       const patch = applyWebSessionTabsSnapshot(
         makeState({
           openFiles: [mirroredNotes(true)],
@@ -486,13 +480,11 @@ describe('applyWebSessionTabsSnapshot', () => {
         NOW
       )
 
-      // No open-file change means the dirty flag survived exactly as it was.
       expect(patch.openFiles).toBeUndefined()
     })
 
     it('follows a host-side save when the client holds no draft', () => {
-      // Why: a dirty flag with no client draft came from an earlier host snapshot; keeping it
-      // would strand the tab as dirty after the host saved.
+      // Host-origin dirty flags without client drafts must clear after host save.
       const patch = applyWebSessionTabsSnapshot(
         makeState({
           openFiles: [mirroredNotes(true)],
@@ -540,8 +532,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
 
     it('does not invent dirtiness from a draft the client already reverted', () => {
-      // Why: a lingering draft with isDirty false means the user typed and undid; the tab is
-      // clean and must not start prompting on close.
+      // Draft text with isDirty:false means typed-and-undone; keep the tab clean.
       const patch = applyWebSessionTabsSnapshot(
         makeState({
           openFiles: [mirroredNotes(false)],
@@ -638,11 +629,15 @@ describe('applyWebSessionTabsSnapshot host-invariant editor dedup', () => {
       buildOwnedEditorFileId('/repo/README.md', WT, null),
       '/repo/README.md'
     ]
+    // An older peer republishes its mirror as its own row; this build no longer publishes mirrors.
+    const olderPeerFile: OpenFile = { ...ownedFile, mirroredFromRuntimeSession: undefined }
     const published = buildMobileSessionTabSnapshots(
       makePublisherState({
-        openFiles: [ownedFile],
+        openFiles: [olderPeerFile],
         unifiedTabsByWorktree: {
-          [WT]: ids.flatMap((id) => stateWithVariant(id, ownedFile).unifiedTabsByWorktree[WT] ?? [])
+          [WT]: ids.flatMap(
+            (id) => stateWithVariant(id, olderPeerFile).unifiedTabsByWorktree[WT] ?? []
+          )
         }
       })
     )[0]

@@ -1,8 +1,3 @@
-/**
- * Readers for each place the workspace layout shows up besides the live stream: the saved profile,
- * what the window draws (DOM), and what a paired client or the CLI is told (runtime RPC).
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
 import {

@@ -49,8 +49,7 @@ describe('restart-survival E2E routing', () => {
     }
   })
 
-  // The pattern is deliberately not "anything under src": routing every PR at a two-Electron spec
-  // is the cost the filter exists to avoid.
+  // Keep restart-survival routing narrow to avoid two-Electron cost on every source change.
   it.each([
     'src/main/git/git-status.ts',
     'src/renderer/src/components/tab-bar/BrowserTab.tsx',
@@ -210,8 +209,8 @@ describe('PR E2E gate contract', () => {
       'src/renderer/src/lib/pane-manager/terminal-ime-anchor.ts',
       'src/shared/terminal-unicode-provider.ts',
       // The xterm fork owns the helper textarea the IME attaches to; no file here says "ime".
-      'config/patches/@xterm__xterm@6.1.0-beta.304.patch',
-      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.304.src.patch',
+      'config/patches/@xterm__xterm@6.1.0-beta.336.patch',
+      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.336.src.patch',
       // The harness is source too: breaking the runner or a probe is how the lane goes blind.
       'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
       'config/scripts/terminal-ime-engagement-receipt.mjs',
@@ -223,8 +222,7 @@ describe('PR E2E gate contract', () => {
       expect(hasNativeImeSourceChange([file]), file).toBe(true)
     }
 
-    // Why: a real ibus session on a Git or tab-bar edit is the cost the filter exists to avoid,
-    // and a unit test beside the source must not summon a three-and-a-half-minute lane.
+    // Exclude unrelated Git/tab-bar edits and unit tests from costly real-ibus lane.
     for (const file of [
       'src/main/git/git-status.ts',
       'src/renderer/src/components/tab-bar/BrowserTab.tsx',
@@ -239,8 +237,8 @@ describe('PR E2E gate contract', () => {
 
   it('routes only core xterm patches to both IME lanes across version updates', () => {
     for (const file of [
-      'config/patches/@xterm__xterm@6.1.0-beta.304.patch',
-      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.304.src.patch',
+      'config/patches/@xterm__xterm@6.1.0-beta.336.patch',
+      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.336.src.patch',
       'config/patches/@xterm__xterm@7.0.0.patch',
       'config/patches/xterm-src/@xterm__xterm@7.0.0.src.patch'
     ]) {
@@ -253,15 +251,15 @@ describe('PR E2E gate contract', () => {
       'config/patches/i18next-cli@1.74.2.patch',
       'config/patches/node-pty@1.1.0.patch',
       'config/patches/monaco-editor@0.55.1.patch',
-      'config/patches/@xterm__addon-webgl@0.20.0-beta.300.patch',
-      'config/patches/xterm-src/@xterm__addon-search@0.17.0-beta.301.src.patch',
+      'config/patches/@xterm__addon-webgl@0.20.0-beta.329.patch',
+      'config/patches/xterm-src/@xterm__addon-search@0.17.0-beta.330.src.patch',
       'config/patches/xterm-upstream.json',
       'config/patches/@xterm__xterm@7.0.0.patch.bak'
     ]) {
       expect(hasNativeImeSourceChange([file]), file).toBe(false)
       expect(selectPrE2eSpecs([file]), file).toEqual([])
     }
-    const corePatch = 'config/patches/@xterm__xterm@6.1.0-beta.304.patch'
+    const corePatch = 'config/patches/@xterm__xterm@6.1.0-beta.336.patch'
     const mixedChanges = ['config/patches/i18next-cli@1.74.2.patch', corePatch]
     expect(hasNativeImeSourceChange(mixedChanges)).toBe(true)
     expect(selectPrE2eSpecs(mixedChanges)).toEqual(selectPrE2eSpecs([corePatch]))
@@ -269,8 +267,7 @@ describe('PR E2E gate contract', () => {
 
   it('keeps the native IME spec out of the lane that would silently skip it', () => {
     expect(DEDICATED_E2E_SPECS).toContain('tests/e2e/terminal-ibus-hangul-native.spec.ts')
-    // Why it still has to be routed: the dedicated lane is selected by the same route, so the
-    // spec appearing in test_files is how a spec-only edit reaches the real-IME lane at all.
+    // Route native spec itself: its presence in test_files selects dedicated real-IME lane on spec-only changes.
     expect(selectPrE2eSpecs(['src/shared/terminal-unicode-provider.ts'])).toContain(
       'tests/e2e/terminal-ibus-hangul-native.spec.ts'
     )

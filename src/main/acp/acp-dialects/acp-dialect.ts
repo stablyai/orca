@@ -1,15 +1,20 @@
-import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
-import type { AgentSessionUsageLimit } from '../../../shared/agent-session-usage-limit'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
 import type {
   NativeChatBackgroundTaskBlock,
   NativeChatSubagentState
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpAgentError } from '../acp-errors'
-import type { AgentSessionOptionChoice } from '../../../shared/agent-session-wire'
-import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
+import type {
+  AvailableCommand,
+  InitializeResponse,
+  ModelInfo,
+  ToolCallUpdate
+} from '../generated/acp-protocol.generated'
 
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
@@ -70,6 +75,8 @@ export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
+  /** Effort replaces part of the native composite model selection. */
+  effortChangesModel?: true
   subagentStop?: {
     /** Probe without a target to establish support without cancelling a child. */
     probe: { method: string; params: unknown }
@@ -98,8 +105,19 @@ export type AcpDialect = {
   /** A child-session notice supplies only its outcome; the translator owns membership and replay. */
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
+  /** Completion of an independent text task, apart from interactive turn projection. */
+  textTaskCompletion?(
+    method: string,
+    params: unknown
+  ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
-  modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
+  modelEfforts?(model: ModelInfo): {
+    efforts: AgentSessionOptionChoice[]
+    defaultEffort?: string
+    declaredDefaultEffort?: string | null
+  }
+  /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
+  clampsUnlistedEffort?: true
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
@@ -109,11 +127,15 @@ export type AcpDialect = {
     at: number
   ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit'> | undefined
   authenticationRequired?(error: AcpAgentError): boolean
+  /** The agent dropped this session; only a new child can reopen it. */
+  sessionLost?(error: AcpAgentError, sessionId: string): boolean
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
+  /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
+  builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }

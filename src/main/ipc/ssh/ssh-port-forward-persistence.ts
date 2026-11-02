@@ -3,32 +3,28 @@ import type { SavedPortForward } from '../../../shared/ssh-types'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { connectionManager, portForwardManager } from './ssh-ipc-context'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
+import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
+import {
+  forwardKey,
+  isForwardBackingOff,
+  recordForwardFailure,
+  recordForwardStarted
+} from './ssh-port-forward-unrestored'
 
-function forwardKey(forward: SavedPortForward): string {
-  return `${forward.localPort}:${forward.remoteHost}:${forward.remotePort}`
-}
-
-// User mutations persist the runtime list; failed restores are retained by the separate restore path.
-export function persistPortForwards(targetId: string): void {
+/** Retain inactive saved forwards across edits; dropped excludes the removed/replaced mapping (#32484). */
+export function persistPortForwards(
+  targetId: string,
+  dropped?: Pick<SavedPortForward, 'localPort' | 'remoteHost' | 'remotePort'>
+): void {
   const active = portForwardManager!.listForwards(targetId)
-  const saved: SavedPortForward[] = active.map((f) => ({
-    localPort: f.localPort,
-    remoteHost: f.remoteHost,
-    remotePort: f.remotePort,
-    label: f.label
-  }))
-  getSshTargetRegistryStore()!.updateTarget(targetId, {
-    portForwards: saved.length > 0 ? saved : undefined
-  })
-}
-
-// Keep failed restores saved so transient errors can retry on reconnect.
-export function persistPortForwardsWithUnrestored(targetId: string): void {
-  const active = portForwardManager!.listForwards(targetId)
-  const activeKeys = new Set(active.map(forwardKey))
+  // A live forward on a saved one's local port replaced it, whatever its destination.
+  const activePorts = new Set(active.map((forward) => forward.localPort))
+  const droppedKey = dropped ? forwardKey(dropped) : null
 
   const existing = getSshTargetRegistryStore()!.getTarget(targetId)?.portForwards ?? []
-  const unrestored = existing.filter((pf) => !activeKeys.has(forwardKey(pf)))
+  const unrestored = existing.filter(
+    (pf) => !activePorts.has(pf.localPort) && forwardKey(pf) !== droppedKey
+  )
 
   const saved: SavedPortForward[] = [
     ...active.map((f) => ({
@@ -42,6 +38,13 @@ export function persistPortForwardsWithUnrestored(targetId: string): void {
   getSshTargetRegistryStore()!.updateTarget(targetId, {
     portForwards: saved.length > 0 ? saved : undefined
   })
+}
+
+/** Whether every saved forward has a live runtime entry. */
+export function savedPortForwardsAllLive(targetId: string): boolean {
+  const live = new Set(portForwardManager!.listForwards(targetId).map(forwardKey))
+  const saved = getSshTargetRegistryStore()!.getTarget(targetId)?.portForwards ?? []
+  return saved.every((forward) => live.has(forwardKey(forward)))
 }
 
 export async function restorePortForwards(
@@ -61,7 +64,7 @@ export async function restorePortForwards(
   const live = new Set(portForwardManager!.listForwards(targetId).map(forwardKey))
 
   for (const saved of target.portForwards) {
-    if (live.has(forwardKey(saved))) {
+    if (live.has(forwardKey(saved)) || isForwardBackingOff(targetId, saved)) {
       continue
     }
     // Reconnect can replace the transport mid-loop; stop before adding stale listeners.
@@ -82,13 +85,23 @@ export async function restorePortForwards(
         await portForwardManager!.removeForwardAndWait(entry.id)
         return
       }
+      recordForwardStarted(targetId, saved)
     } catch (err) {
+      // A teardown or reconnect cancelled this start; the next transport retries without a backoff.
+      if (
+        err instanceof PortForwardTornDownError ||
+        conn.isDisposed() ||
+        connectionManager!.getConnection(targetId) !== conn
+      ) {
+        return
+      }
+      recordForwardFailure(targetId, saved, err)
       console.warn(
         `[ssh] Failed to restore forward :${saved.localPort} → ${saved.remoteHost}:${saved.remotePort}: ${err instanceof Error ? err.message : String(err)}`
       )
     }
   }
 
-  persistPortForwardsWithUnrestored(targetId)
+  persistPortForwards(targetId)
   broadcastPortForwards(getMainWindow, targetId)
 }

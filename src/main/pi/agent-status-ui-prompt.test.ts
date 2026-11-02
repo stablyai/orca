@@ -21,7 +21,6 @@ function createHarness() {
 }
 
 async function flushPosts(): Promise<void> {
-  // Each delivery has a bounded promise chain; no wall-clock sleeps in the harness.
   for (let i = 0; i < 20; i++) {
     await Promise.resolve()
   }
@@ -130,7 +129,6 @@ describe('Pi UI prompt status', () => {
     await post(harness, 'ui_prompt_start')
     harness.reload()
     await post(harness, 'tool_execution_end', { toolName: 'bash' })
-    // Why: re-registering handlers is not a session boundary and must not lose the wait.
     expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
   })
 
@@ -140,8 +138,7 @@ describe('Pi UI prompt status', () => {
     await post(harness, 'agent_start')
     await post(harness, 'ui_prompt_start')
     expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
-    // Why: pi hides the dialog through resetExtensionUI without resolving its promise,
-    // so no ui_prompt_end is ever emitted — these two boundaries are the only release.
+    // Session replacement hides dialogs without resolving them, so no ui_prompt_end arrives.
     await post(harness, 'session_shutdown')
     await post(harness, 'session_start', { reason: 'switch' })
     await post(harness, 'tool_execution_end', { toolName: 'bash' })
@@ -207,7 +204,6 @@ describe('Pi UI prompt status', () => {
       }
     )
     await flushPosts()
-    // Why: the turn is still in flight, so done would ring the completion bell early.
     expect(harness.statuses.at(-1)?.payload.state).toBe('working')
     await post(harness, 'agent_settled')
     expect(harness.statuses.at(-1)?.payload.state).toBe('done')
@@ -217,7 +213,7 @@ describe('Pi UI prompt status', () => {
     const harness = createHarness()
     await post(harness, 'ui_prompt_start')
     expect(harness.fetchMock).not.toHaveBeenCalled()
-    // Why: a turn cannot begin under a dialog holding input focus, so this is recovery.
+    // A turn cannot start under an input-holding dialog; recover a missing close event.
     await post(harness, 'agent_start')
     await post(harness, 'tool_execution_end', { toolName: 'bash' })
     expect(harness.statuses.at(-1)?.payload.state).toBe('working')
@@ -252,8 +248,7 @@ describe('Pi UI prompt status', () => {
       }
     )
     await flushPosts()
-    // Why: the turn already reported its end, so no later event is coming to correct a
-    // guess of working — fall back to what this process knows rather than strand it.
+    // No later end event can correct this state; use the locally recorded turn outcome.
     expect(harness.statuses.at(-1)?.payload.state).toBe('done')
   })
 

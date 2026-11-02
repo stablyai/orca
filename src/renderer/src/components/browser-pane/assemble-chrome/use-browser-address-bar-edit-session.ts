@@ -28,14 +28,7 @@ export type BrowserAddressBarEditSessionBinding = {
   resumed: BrowserAddressBarResumedChrome | null
 }
 
-/**
- * The address bar's draft text, and its continuity across a remount.
- *
- * Panes that host a runtime page get swapped under React: adopting a client-hosted placement
- * replaces the streamed pane with the client-hosted one, and a host restart bumps the key of the
- * client-hosted one. Either way the chrome unmounts, and without this the user's half-typed URL,
- * caret and open suggestion list go with it.
- */
+/** Preserve draft, caret and suggestions across runtime-placement pane swaps; generation-only guest replacement keeps the same chrome mount. */
 export function useBrowserAddressBarEditSession({
   pageId,
   url,
@@ -70,20 +63,13 @@ export function useBrowserAddressBarEditSession({
     [addressBarInputRef]
   )
 
-  // Why layout and not passive: the client-hosted pane's guest-attach effects run in the same
-  // commit, and both focusing the webview and syncing the bar to the guest's URL would undo the
-  // resume. Grabbing focus here — which also raises the latch the guest-attach effect defers to —
-  // settles who owns the bar before any of them look.
+  // Resume and latch focus in layout before guest attach can focus the page or overwrite the draft with its URL.
   useLayoutEffect(() => {
-    // Why the consume is once per mount but the grab below is not: StrictMode destroys and
-    // recreates this effect on a pane that never went anywhere. The bar's save runs in between, on
-    // a bar this resume just focused and still holding the value the mount rendered with — reading
-    // that write back is what wiped the draft.
+    // Consume once per mount; StrictMode’s intermediate save still holds the pre-resume value and must not overwrite the draft.
     if (resumedPageIdRef.current !== pageId) {
       resumedPageIdRef.current = pageId
       const session = consumeBrowserAddressBarEditSession(pageId)
-      // Why cleared rather than left standing: a page id that arrives with nothing parked must not
-      // inherit the previous one's caret. Today's deps make that unreachable; a future one need not.
+      // Clear missing selections so a later page cannot inherit the prior caret.
       resumedSelectionRef.current = session?.selection ?? null
       if (session) {
         pendingCaretRef.current = session
@@ -95,16 +81,11 @@ export function useBrowserAddressBarEditSession({
     if (!selection) {
       return
     }
-    // Why the grab sits outside that branch: the teardown on the way through a rebuild cancels
-    // whatever grab is in flight, so a grab fired only on the consume leaves the rebuilt pane with
-    // nothing holding the bar, and its guest-attach effect takes focus to the page. Re-firing needs
-    // no canceller held here — startAddressBarFocusGrab cancels the previous grab itself.
+    // Restart the focus grab after StrictMode cleanup cancels it; startAddressBarFocusGrab supersedes any previous grab.
     startAddressBarFocusGrab(selection)
   }, [pageId, startAddressBarFocusGrab])
 
-  // Why the caret is placed twice: the grab above puts it back against the value still on screen,
-  // and React then resets a focused input's selection as it commits the resumed draft. This is the
-  // commit that lands it — and the only one, so nothing keeps re-aiming a bar the user is typing in.
+  // Restore the caret once more after React commits the resumed value, then stop touching edits the user continues typing.
   useLayoutEffect(() => {
     const pending = pendingCaretRef.current
     if (!pending || pending.draft !== addressBarValue) {

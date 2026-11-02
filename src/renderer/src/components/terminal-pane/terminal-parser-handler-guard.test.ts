@@ -68,10 +68,7 @@ describe('guardParserHandler', () => {
   })
 
   it('keeps the real xterm write pipeline alive through a throwing handler (inverse of the wedge repro)', () => {
-    // Why: xterm-write-buffer-stall.repro.test.ts proves an UNguarded throwing
-    // handler permanently wedges the WriteBuffer. This is the fix's proof:
-    // the same poison sequence through a GUARDED handler keeps completing
-    // writes.
+    // The unguarded handler wedges WriteBuffer; require guarded poison sequences to keep completing writes.
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       vi.useFakeTimers()

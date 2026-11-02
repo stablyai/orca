@@ -48,7 +48,6 @@ export type OpenFileOptions = {
 }
 
 export type EditorFilesSlice = {
-  // Open files / editor tabs
   openFiles: OpenFile[]
   /** Buffer state per record (file identity, or tab id for views that never share); views mirror it. */
   editorBuffers: EditorBufferRecords
@@ -73,15 +72,12 @@ export type EditorFilesSlice = {
   /** Keeps views on retired environments off every other record, with their drafts. */
   detachRetiredEditorBuffers: (environmentIds: readonly string[]) => void
   activeFileId: string | null
-  activeFileIdByWorktree: Record<string, string | null> // worktreeId -> last active file
-  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
+  activeFileIdByWorktree: Record<string, string | null>
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
   activeTabType: WorkspaceVisibleTabType
   setActiveTabType: (type: WorkspaceVisibleTabType, worktreeId: string | null) => void
   openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>, options?: OpenFileOptions) => string
-  /**
-   * openFile for a captured link activation; returns the view, or null when refused. `onShown`
-   * gets the view once drawn: a layout-owner build draws a new tab only with main's frame.
-   */
+  /** Open captured link intent; null on refusal. onShown receives actual view after drawing, which requires main frame in layout-owner builds. */
   openFileForLink: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options: Omit<OpenFileOptions, 'targetGroupId' | 'focusEditor' | 'selection'> | undefined,
@@ -89,6 +85,19 @@ export type EditorFilesSlice = {
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  acquireEditorFileOperationProvenance: (
+    file: OpenFile,
+    selected?: OpenFile['operationProvenance']
+  ) => OpenFile & {
+    operationProvenance: NonNullable<OpenFile['operationProvenance']>
+  }
+  /** Creates a plugin's new-file type at the active workspace root and opens it. */
+  openNewPluginFileInActiveWorkspace: (
+    newFile: { pluginKey: string; id: string; title: string; extension: string },
+    groupId?: string
+  ) => Promise<void>
+  /** Opens an empty `untitled<extension>` at the active workspace root. */
+  openBlankFileInActiveWorkspace: (extension: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,
@@ -110,7 +119,7 @@ export type EditorFilesSlice = {
       | 'runtimeEnvironmentId'
       | 'externalSshTargetId'
     > &
-      Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly'>>,
+      Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly' | 'operationProvenance'>>,
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
@@ -135,8 +144,10 @@ export type EditorFilesSlice = {
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
   /** `undefined` un-records a baseline a failed operation stamped provisionally. */
   setLastKnownDiskSignature: (fileId: string, signature: string | undefined) => void
+  /** Host grant for a file outside every workspace; grants lapse, so reads and saves renew them. */
+  setTerminalArtifactGrant: (fileId: string, grantId: string) => void
   clearSelfMoveEcho: (fileId: string) => void
-  /** Atomically retargets open editor sessions across an Orca-owned move — one commit-only update migrating every path-derived id + all id-keyed state, no close/reopen. Returns collision/stale without mutating. */
+  /** Atomically migrate path/ID-keyed editor state without close/reopen; stale/colliding moves leave state unchanged. */
   rekeyOpenFilesForPathChange: (args: {
     rekeys: readonly OpenFilePathRekey[]
     /** When set, dirty autosave-capable destinations get move-echo provenance + a synchronous autosave gate so the watcher can content-verify the echo. */
@@ -151,7 +162,7 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection }
+    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection; oldPath?: string }
   ) => void
   openBranchDiff: (
     worktreeId: string,

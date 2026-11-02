@@ -1,11 +1,4 @@
-/**
- * The eight grants this file pins, in six rows covering them (ruling 33.3).
- *
- * `haptics`, `screencastBinary`, `externalNavigation` and the three audio grants already have
- * censuses of their own; these eight did not, so removing any of them from a manifest entry
- * reddened nothing. Each row below gets its own named case, and each case's control is the same
- * rule driven over the entry that route would have had with the grant struck out.
- */
+// Each grant row has a named verdict and removal control; eight grants in six rows lack the other grants’ dedicated censuses.
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,7 +25,7 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 
 const SESSION = '/h/[hostId]/session/[worktreeId]'
 
-/** Memoised: every case below walks all eight, and a closure is a bundle the walk builds. */
+// Memoize closures: each of eight repeated walks builds a bundle.
 const closures = new Map()
 const readGrantModule = createGrantCallSiteReader()
 
@@ -157,13 +150,7 @@ describeClosure(
       expect(mapped).toEqual(declared)
     })
 
-    /**
-     * One case per row, named after its own grants.
-     *
-     * Per row rather than one check over the manifest, because the point is attribution: striking
-     * `native.clipboard.read` out of an entry has to red a case that says so, and a single
-     * whole-manifest assertion reds the same way whichever grant went missing.
-     */
+    // One verdict per grant row attributes a missing grant instead of failing a generic whole-manifest check.
     it.each(PAGE_GRANT_CALL_SITES.map((row) => [row.grants.join(' + '), row]))(
       'declares %s on every registered route whose own call sites reach it',
       async (_name, row) => {
@@ -179,14 +166,7 @@ describeClosure(
       }
     )
 
-    /**
-     * The control for each of those, self-contained on purpose.
-     *
-     * Built from what the session route's own closure reaches rather than from what its entry
-     * declares, so a case stays green whatever the manifest says and reds only when the rule stops
-     * working. Reading the manifest here instead would make every row red as soon as any one grant
-     * went missing, which is the attribution the case above exists to give.
-     */
+    // Derive control entry from reachable seams, not manifest; otherwise any missing grant would redden every row and defeat attribution.
     it.each(PAGE_GRANT_CALL_SITES.map((row) => [row.grants.join(' + '), row]))(
       'reds the session route when it is registered without %s',
       async (_name, row) => {
@@ -195,7 +175,7 @@ describeClosure(
           expect.arrayContaining(row.grants)
         )
         const entry = (grants) => [{ pathname: SESSION, grants }]
-        // Declaring everything it reaches passes, so each case is a rule and not a wall.
+        // Positive control: declaring all reachable grants must pass.
         expect(
           await grantsMissingForRow(mobileDir, entry(needed), closureOf, row, readGrantModule)
         ).toEqual([])
@@ -208,7 +188,7 @@ describeClosure(
 
     it('reaches every one of the eight through the session route, and names where', async () => {
       const closure = await closureOf(SESSION)
-      // The precondition an assertion about a closure needs: the walk read a page, not nothing.
+      // Require nonempty closure so an empty walk cannot pass absence checks.
       expect(closure.local.length).toBeGreaterThan(250)
       expect(grantsNeeded(mobileDir, closure, readGrantModule)).toEqual(
         PAGE_GRANT_CALL_SITES.flatMap((row) => row.grants)
@@ -234,7 +214,6 @@ describeClosure(
           reaching.media.push(pathname)
         }
       }
-      // Both are the session screen's and nowhere else's, which is why no other route carries them.
       expect(reaching.reader).toEqual([SESSION])
       expect(reaching.media).toEqual([SESSION])
     })

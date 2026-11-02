@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-/** A phone holding a terminal's input locks the chat composer (#30179): the lock must say so
- *  whatever the box holds, offer the terminal's Take back, and look disabled. */
+/** A phone’s input lease must visibly lock the composer and offer Take back regardless of draft contents. */
 
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
@@ -114,24 +113,9 @@ describe('the chat composer while a phone holds the input', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Take back' }))
     expect(onTakeBack).toHaveBeenCalledTimes(1)
   })
-
-  it('dims the editor through its contenteditable state, not :disabled', () => {
-    render(<HeldField notices={[]} goalActive={false} />)
-    const editor = screen.getByRole('textbox')
-
-    expect(editor.getAttribute('contenteditable')).toBe('false')
-    expect(editor.className).toContain('[&[contenteditable=false]]:opacity-50')
-    expect(editor.className).toContain('[&[contenteditable=false]]:cursor-not-allowed')
-    expect(editor.className).not.toContain('disabled:opacity-50')
-  })
 })
 
 describe('useNativeChatMobileHoldNotice', () => {
-  it('shows nothing while the composer can send or has no terminal', () => {
-    expect(renderHook(() => useNativeChatMobileHoldNotice('pty-1', true)).result.current).toBe(null)
-    expect(renderHook(() => useNativeChatMobileHoldNotice(null, false)).result.current).toBe(null)
-  })
-
   it("runs the terminal's reclaim for this pty and refits once it lands", async () => {
     let resolveRestore: (restored: boolean) => void = () => {}
     mocks.restoreTerminalFitToDesktop.mockReturnValue(

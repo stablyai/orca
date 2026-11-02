@@ -20,7 +20,6 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import {
   gcRemoteNodeRuntimeStore,
   parseSweptRuntimeStages,
@@ -36,9 +35,9 @@ import {
 } from './remote-node-runtime-store-inventory'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all connection access is replaced by execCommand's mock.
-const conn = {} as SshConnection
+const conn = unusedSshConnection()
 const host = getRemoteHostPlatform('linux-x64')
 const mockExec = vi.mocked(execCommand)
 const sha = (c: string): string => c.repeat(64)

@@ -1,7 +1,7 @@
 import {
   JIRA_STATUS_FILTER_RUNTIME_CAPABILITY,
   JIRA_STATUS_FILTER_UPDATE_REQUIRED
-} from '../../../shared/jira-quick-filters'
+} from '../../../shared/jira/jira-quick-filters'
 import type {
   JiraAuthType,
   JiraComment,

@@ -1,6 +1,4 @@
-// Editor tabs in a layout-owner build (ORCA_LAYOUT_OWNER=main): the window sends each open, close
-// and promotion to main and draws the tab only from main's frame. With the switch off the window
-// draws its own tabs and sends nothing; those cases run in the plain run.
+// Layout-owner editor opens/closes/promotions draw only from main frames; switch-off cases draw locally without main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -13,7 +11,6 @@ import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore, makeLayout, makeTab, makeWorktree } from './store-test-helpers'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

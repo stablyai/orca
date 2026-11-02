@@ -1,6 +1,4 @@
-// P4 (L80): with the switch on, a handle resolved for a pane whose terminal a replacement unbound
-// learns that replacement, and only when its own terminal ended, the replacement is connected and
-// bound at that pane now, and the workspace is the same.
+// Recover ended pane handles only to connected replacements bound in the same pane and workspace (L80 P4).
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -135,7 +133,7 @@ describe('a stale handle of a replaced pane (switch on)', () => {
 })
 
 describe('issuedForPaneKey census', () => {
-  it('is written by issuePtyHandle and read only by recoverTerminalPane', () => {
+  it('is minted by issuePtyHandle, compared by the canonical source and read for recovery', () => {
     const root = path.resolve(__dirname, '../../../../..')
     const users: string[] = []
     const walk = (dir: string): void => {
@@ -154,6 +152,7 @@ describe('issuedForPaneKey census', () => {
     expect(users.sort()).toEqual([
       'src/main/runtime/runtime-terminal-contracts.ts',
       'src/main/runtime/terminal/identity/terminal-handle-bindings.ts',
+      'src/main/runtime/terminal/identity/terminal-identity-source.ts',
       'src/main/runtime/terminal/recovery/resolve-terminal-pane.ts'
     ])
   })

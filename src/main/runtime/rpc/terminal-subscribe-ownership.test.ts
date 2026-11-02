@@ -67,8 +67,7 @@ const leaseOnlyParams = {
   capabilities: { terminalBinaryStream: 1, mobileInputLeaseOnly: 1 }
 }
 
-// No viewport: keeps the branch off the remote-desktop registration path so the test
-// isolates the post-rebind snapshot continuation.
+// Omit viewport to isolate post-rebind snapshot ownership from width-floor registration.
 const legacyParams = {
   terminal: 'terminal-1',
   client: { id: 'phone-1', type: 'desktop' }
@@ -84,7 +83,7 @@ const streamOptions = (connectionId: string, signal?: AbortSignal) => ({
 const flush = (ms = 20): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, ms))
 
 describe('terminal.subscribe teardown ownership', () => {
-  // T4(b): the anti-leak guard — an abort that is still the current owner must tear down.
+  // Current-owner abort must still tear down.
   it('tears down the current owner when its own connection aborts', async () => {
     const registry = createSubscriptionRegistryDouble()
     const waiters: Waiter[] = []
@@ -104,7 +103,7 @@ describe('terminal.subscribe teardown ownership', () => {
     expect(runtime.handleMobileUnsubscribe).toHaveBeenCalledWith('pty-1', 'phone-1')
   })
 
-  // T4(c): a genuine terminal exit still tears down.
+  // Real terminal exit must still tear down.
   it('tears down the current owner when the PTY exits', async () => {
     const registry = createSubscriptionRegistryDouble()
     const waiters: Waiter[] = []
@@ -142,7 +141,7 @@ describe('terminal.subscribe teardown ownership', () => {
     expect(removeAbort).toHaveBeenCalledWith('abort', addAbort.mock.calls[0]![1])
   })
 
-  // Why: the synchronous release runs cleanup before setup, so anything registered after it never gets torn down.
+  // Synchronous release precedes setup; registering afterward would orphan cleanup.
   it('registers nothing after an already-exited PTY releases the subscription', async () => {
     const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime(registry, [], {
@@ -190,7 +189,7 @@ describe('terminal.subscribe teardown ownership', () => {
     expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
   })
 
-  // T8: the exit-waiter is only half the story — stale async continuations must be owned too.
+  // Own async continuations as well as exit-waiters.
   it('does not let a lease-only subscribe rejecting after a rebind retire the replacement', async () => {
     const registry = createSubscriptionRegistryDouble()
     const waiters: Waiter[] = []
@@ -269,7 +268,7 @@ describe('terminal.unsubscribe connection ownership', () => {
     params: { subscriptionId, client: { id: 'phone-1' } }
   })
 
-  // T5 stale-connection: the make-before-break migration case.
+  // Make-before-break migration: old connection cannot unsubscribe the new stream.
   it('ignores an unsubscribe from a connection that no longer owns the subscription', async () => {
     const registry = createSubscriptionRegistryDouble()
     const waiters: Waiter[] = []
@@ -284,8 +283,7 @@ describe('terminal.unsubscribe connection ownership', () => {
     expect(live).toBeDefined()
 
     const replies: string[] = []
-    // Why dispatchStreaming: websocket requests route through it even for
-    // non-streaming methods, and it is the only path that carries connectionId.
+    // WebSockets always use dispatchStreaming, including unary methods; it carries connectionId.
     await dispatcher.dispatchStreaming(
       unsubscribeRequest(SUBSCRIPTION_ID),
       (msg) => replies.push(msg),
@@ -378,7 +376,7 @@ describe('terminal.unsubscribe connection ownership', () => {
     registry.cleanupSubscriptionsForConnection('conn-a')
   })
 
-  // T5 same-connection: preservation — the owning connection may still unsubscribe.
+  // The current owning connection may still unsubscribe.
   it('honors an unsubscribe from the connection that owns the subscription', async () => {
     const registry = createSubscriptionRegistryDouble()
     const waiters: Waiter[] = []
@@ -389,8 +387,7 @@ describe('terminal.unsubscribe connection ownership', () => {
     await vi.waitFor(() => expect(registry.peekCleanup(SUBSCRIPTION_ID)).toBeDefined())
 
     const replies: string[] = []
-    // Why dispatchStreaming: websocket requests route through it even for
-    // non-streaming methods, and it is the only path that carries connectionId.
+    // Use WebSocket dispatchStreaming so the request carries connectionId.
     await dispatcher.dispatchStreaming(
       unsubscribeRequest(SUBSCRIPTION_ID),
       (msg) => replies.push(msg),

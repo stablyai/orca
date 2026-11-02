@@ -11,15 +11,13 @@ const NO_TASKS: ReadonlySet<string> = new Set()
 const NO_CONFIRMED_STOPS: ReadonlyMap<string, string> = new Map()
 const NOT_STOPPING: MobileBackgroundTaskStopping = { taskIds: NO_TASKS, all: false }
 
-/** The strip's Stop presses: which buttons hold, and the press that sends one. */
 export function useMobileBackgroundTaskStops(
   tasks: Pick<MobileStructuredBackgroundTasks, 'view' | 'stop'>
 ): { stopping: MobileBackgroundTaskStopping; onStop: (taskId?: string) => void } {
   const { view, stop } = tasks
   const [stopping, setStopping] = useState<MobileBackgroundTaskStopping>(NOT_STOPPING)
   const stoppingRef = useRef(NOT_STOPPING)
-  // Stops the host confirmed, with the run each was pressed on: each row keeps its stopping button
-  // until that run leaves the strip.
+  // Hold confirmed Stop per run until its row leaves; the provider may reuse task ids.
   const [confirmed, setConfirmed] = useState<ReadonlyMap<string, string>>(NO_CONFIRMED_STOPS)
   const confirmedListed = structuredSessionConfirmedStopsStillListed(view, confirmed)
   if (confirmedListed !== confirmed) {
@@ -31,7 +29,7 @@ export function useMobileBackgroundTaskStops(
     stoppingRef.current = next
     setStopping(next)
   }
-  // A press already on its way holds its button; the ref closes the same-frame double tap.
+  // Close same-frame double taps with a ref before React disables the button.
   const onStop = (taskId?: string): void => {
     const current = stoppingRef.current
     if (taskId ? current.taskIds.has(taskId) : current.all) {

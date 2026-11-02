@@ -1,11 +1,9 @@
 import { build } from 'esbuild'
 import { join } from 'node:path'
 import { ORCAD_LINEAR_SDK_ENTRY } from '../../src/shared/orcad-artifacts.ts'
+import { ORCAD_SERVER_BUILD_TARGET } from './orcad-entry-build.mjs'
 
-/**
- * @linear/sdk as one CommonJS file where orcad's lazy `require('@linear/sdk')` resolves it.
- * Why bundled rather than copied: the package ships hashed chunk names that change every release.
- */
+// Bundle @linear/sdk into one CJS file for lazy require: copying would expose chunk names that change each release.
 export async function stageOrcadLinearSdk(root, outputDir) {
   await build({
     stdin: {
@@ -15,7 +13,7 @@ export async function stageOrcadLinearSdk(root, outputDir) {
     },
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_SERVER_BUILD_TARGET,
     format: 'cjs',
     outfile: join(outputDir, ORCAD_LINEAR_SDK_ENTRY),
     minify: true,

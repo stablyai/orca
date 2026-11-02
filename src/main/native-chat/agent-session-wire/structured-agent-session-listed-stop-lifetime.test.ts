@@ -1,22 +1,21 @@
-// A Stop of the listed background helpers acts only on the lifetimes it captured: a helper that
-// restarts under the same id, or appears refused while the Stop runs, is not this Stop's to end.
+// Stop owns captured helper lifetimes only; restarted or newly refused helpers under the same ID are outside its authority.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { AgentHookServer } from '../../agent-hooks/server'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { runTargetedCancel } from './structured-agent-session-targeted-cancel'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionStatusOwnership } from './structured-agent-session-status-ownership'
 

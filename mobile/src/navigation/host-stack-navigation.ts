@@ -11,8 +11,6 @@ export type HostStackNavigationRoute = Readonly<{
   state?: HostStackNavigationState
 }>
 
-/** A screen inside app/h/_layout.tsx plus the params it needs, e.g.
- *  `{ name: '[hostId]/session/[worktreeId]', params: { hostId, worktreeId } }`. */
 export type HostStackRouteTarget = Readonly<{
   name: string
   params: Readonly<Record<string, string>>
@@ -25,11 +23,18 @@ export type HostStackReplaceAction = Readonly<{
   payload: HostStackRouteTarget
 }>
 
+export type HostStackPushAction = Readonly<{
+  type: 'PUSH'
+  target: string
+  payload: HostStackRouteTarget
+}>
+
 export type HostStackRootNavigation = {
   addListener: (event: 'state', listener: () => void) => () => void
   dispatch: (
     action:
       | HostStackReplaceAction
+      | HostStackPushAction
       | Readonly<{
           type: 'SET_PARAMS'
           target: string
@@ -37,8 +42,7 @@ export type HostStackRootNavigation = {
           payload: { params: Readonly<Record<string, string>> }
         }>
   ) => void
-  // Why: the root layout's navigator has no committed state until it hydrates, and a
-  // notification tap can arm the transition before that first commit.
+  // Wait for hydration: notification taps can arrive before the root navigator has committed state.
   getState: () => HostStackNavigationState | undefined
 }
 
@@ -50,7 +54,7 @@ export type HostStackRouteHref = Readonly<{
 }>
 
 export type HostStackRouter = {
-  push: (route: HostStackHostRoute) => void
+  push: (route: HostStackHostRoute | HostStackRouteHref) => void
   replace: (route: HostStackRouteHref) => void
 }
 
@@ -65,6 +69,19 @@ export type PendingHostStackNavigation = Readonly<{
   controller: HostStackNavigationController
 }>
 
+export const HOST_SESSION_ROUTE = '[hostId]/session/[worktreeId]'
+
+// A session keeps its host's list beneath it so Back lands there; other targets take the list's place.
+function opensOverHostList(target: HostStackRouteTarget): boolean {
+  return target.name === HOST_SESSION_ROUTE
+}
+
+const SETTLED_NAVIGATION: HostStackNavigationController = {
+  cancel: () => {},
+  isActive: () => false,
+  retarget: () => {}
+}
+
 export function hostStackHostRoute(hostId: string): HostStackHostRoute {
   return `/h/${encodeURIComponent(hostId)}`
 }
@@ -73,8 +90,7 @@ export function hostStackRouteHref(target: HostStackRouteTarget): HostStackRoute
   return { pathname: `/h/${target.name}`, params: target.params }
 }
 
-// Why: the host is pushed as an encoded segment, so the committed route may hold
-// either form — an id with `/`, `#`, or `%` must still match its own push.
+// Match decoded and encoded ids so slash/hash/percent host ids recognize their own push.
 function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   if (typeof param !== 'string') {
     return false
@@ -85,13 +101,11 @@ function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   try {
     return decodeURIComponent(param) === expectedHostId
   } catch {
-    return false // Lone `%` — not our encoding.
+    return false
   }
 }
 
-/** The focused `h` route, however deep the caller's navigator sits above it: a screen
- *  inside the root stack sees it at the top, but app/_layout.tsx is itself a screen of
- *  Expo Router's internal navigator, so from there the root stack is one level down. */
+// Find the focused h route through Expo’s internal root navigator as well as callers already inside the root stack.
 function focusedHostRoute(state: HostStackNavigationState): HostStackNavigationRoute | null {
   let current: HostStackNavigationState | undefined = state
   while (current) {
@@ -124,9 +138,7 @@ function mountedHostStack(
   return { key: hostState.key, routeKey: hostRoute.key }
 }
 
-/** Opens a deep host route by mounting `/h/[hostId]` first and replacing it once
- *  its stack is committed. A cold push straight to a nested route resolves to the
- *  host index without the dynamic id, which lands on a blank host screen. */
+// Mount the host first, then open the target after its stack commits; a cold nested push otherwise resolves to a blank index without hostId.
 export function navigateToHostStackRoute(
   navigation: HostStackRootNavigation,
   router: HostStackRouter,
@@ -149,7 +161,16 @@ export function navigateToHostStackRoute(
       source: focused.key,
       payload: { params: target.params }
     })
-    return { cancel: () => {}, isActive: () => false, retarget: () => {} }
+    return SETTLED_NAVIGATION
+  }
+  // Already inside this host: pushing the host route again would stack a second list.
+  if (
+    opensOverHostList(target) &&
+    hostState?.key &&
+    hostParamMatches(focused?.params?.hostId, hostId)
+  ) {
+    navigation.dispatch({ type: 'PUSH', target: hostState.key, payload: target })
+    return SETTLED_NAVIGATION
   }
 
   let active = true
@@ -164,7 +185,6 @@ export function navigateToHostStackRoute(
     unsubscribeState()
   }
 
-  // Why: cold Expo deep links resolve to index; target the route only after its HostStack exists.
   const onState = () => {
     if (!active) {
       return
@@ -180,21 +200,31 @@ export function navigateToHostStackRoute(
       dispose()
       return
     }
+    const overHostList = opensOverHostList(selectedTarget)
     const hostStack = hostContainer && mountedHostStack(hostContainer, hostId)
     if (!hostStack) {
       if (hostContainer && hostParamMatches(hostContainer.params?.hostId, hostId)) {
         dispose()
-        router.replace(hostStackRouteHref(selectedTarget))
+        const href = hostStackRouteHref(selectedTarget)
+        if (overHostList) {
+          router.push(href)
+        } else {
+          router.replace(href)
+        }
       }
       return
     }
     dispose()
-    navigation.dispatch({
-      type: 'REPLACE',
-      target: hostStack.key,
-      source: hostStack.routeKey,
-      payload: selectedTarget
-    })
+    navigation.dispatch(
+      overHostList
+        ? { type: 'PUSH', target: hostStack.key, payload: selectedTarget }
+        : {
+            type: 'REPLACE',
+            target: hostStack.key,
+            source: hostStack.routeKey,
+            payload: selectedTarget
+          }
+    )
   }
 
   try {

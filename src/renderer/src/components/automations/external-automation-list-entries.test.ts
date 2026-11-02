@@ -73,9 +73,7 @@ describe('buildExternalAutomationListEntries', () => {
   })
 
   it('separates identical manager and job IDs reported by two authorities', () => {
-    // `openclaw:local` names no authority, so both hosts hand back the same manager
-    // ID. An unqualified key would make the two rows one, and the second would
-    // shadow the first in selection, dialogs, and React's reconciliation.
+    // Manager/job IDs collide across authorities; qualify row identity to preserve independent selection, dialogs and reconciliation.
     const entries = buildExternalAutomationListEntries([
       scoped(null, { id: 'openclaw:local', target: { type: 'local' }, jobs: [job()] }),
       scoped('env-7', { id: 'openclaw:local', target: { type: 'local' }, jobs: [job()] })
@@ -88,8 +86,7 @@ describe('buildExternalAutomationListEntries', () => {
   it('carries the scope it keyed each entry with', () => {
     const [entry] = buildExternalAutomationListEntries([scoped('env-7', { jobs: [job()] })])
 
-    // The entry is what the edit dialog captures; re-deriving the scope from the
-    // manager ID at save time is the lookup this field exists to avoid.
+    // Capture scope in the edit row; deriving it from manager ID at save would collide across hosts.
     expect(entry?.scope.owner.authority).toEqual({
       kind: 'runtime',
       environmentId: 'env-7',

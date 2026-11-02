@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -118,13 +120,25 @@ export function buildSourceControlAgentStatusCopy(args: {
     detecting
   } = args
   if (selectedAgentUnavailable) {
-    return `${getAgentCatalog().find((entry) => entry.id === selectedAgent)?.label ?? selectedAgent} is not enabled or was not detected on this workspace host.`
+    return translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.agentNotEnabledOrDetected',
+      '{{agent}} is not enabled or was not detected on this workspace host.',
+      {
+        agent: getAgentCatalog().find((entry) => entry.id === selectedAgent)?.label ?? selectedAgent
+      }
+    )
   }
   if (connectionUnavailable) {
-    return 'Unable to resolve the workspace connection.'
+    return translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.workspaceConnectionUnresolved',
+      'Unable to resolve the workspace connection.'
+    )
   }
   if (!hasEnabledAgents && !detecting) {
-    return 'No enabled agents were detected on this workspace host.'
+    return translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.noEnabledAgentsDetected',
+      'No enabled agents were detected on this workspace host.'
+    )
   }
   return null
 }
@@ -145,4 +159,17 @@ export function buildSourceControlAgentScopeNote(launchAgentScope: {
     effectiveAgentLabel: labelFor(launchAgentScope.effectiveAgentId),
     globalAgentLabel: labelFor(launchAgentScope.globalAgentId)
   }
+}
+
+/** The workspace owner answers detection, including a paired host's SSH workspace. */
+export function detectSourceControlActionAgents(
+  worktreeId: string | null | undefined,
+  connectionId: string | null | undefined
+): Promise<TuiAgent[]> {
+  const state = useAppStore.getState()
+  return worktreeId
+    ? ensureDetectedAgentsForWorktree(state, worktreeId)
+    : typeof connectionId === 'string'
+      ? state.ensureRemoteDetectedAgents(connectionId)
+      : state.ensureDetectedAgents()
 }

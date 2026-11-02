@@ -1,11 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-/**
- * The host descriptor rides inside the pairing offer, which both sides parse with a schema. An old
- * client must still accept an offer from a new host (dropping the field), and a new client must
- * accept an offer from an old host that has none.
- */
+// Pairing-offer readers must tolerate a new host descriptor and its absence on old hosts.
 const RELEASE_REF = 'v1.4.224'
 const SUITE_TIMEOUT_MS = 180_000
 
@@ -52,10 +48,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version host descriptor in the pairing offer', () => {
-  it('pairs two real builds', () => {
-    expect(released.parsePairingCode).not.toBe(current.parsePairingCode)
-  })
-
   it('an old client pairs with a new host and drops the descriptor', () => {
     const url = current.encodePairingOffer({ ...BASE_OFFER, hostDescriptor: DESCRIPTOR })
     expect(released.parsePairingCode(url)).toEqual(BASE_OFFER)

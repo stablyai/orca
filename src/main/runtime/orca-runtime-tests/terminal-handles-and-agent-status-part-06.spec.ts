@@ -72,7 +72,6 @@ describe('OrcaRuntimeService', () => {
         title: 'claude agents'
       })
     )
-    // Stale "working" status is suppressed (no spinner), but agent identity is retained so native chat can still address the idle agent's transcript.
     const suppressed = result.tabs[0]
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.state).toBe('done')
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.agentType).toBe('claude')
@@ -143,7 +142,6 @@ describe('OrcaRuntimeService', () => {
         title: 'bash'
       })
     )
-    // Stale "working" suppressed; agent identity retained for native chat.
     const suppressed = result.tabs[0]
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.state).toBe('done')
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.agentType).toBe('claude')
@@ -220,7 +218,6 @@ describe('OrcaRuntimeService', () => {
         title: 'claude agents'
       })
     )
-    // Stale "working" suppressed; agent identity retained for native chat.
     const suppressed = result.tabs[0]
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.state).toBe('done')
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.agentType).toBe('claude')

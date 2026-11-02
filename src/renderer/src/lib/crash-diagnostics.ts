@@ -14,9 +14,7 @@ const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 let rendererCrashDiagnosticsInstalled = false
 let rendererMemoryInterval: number | null = null
 
-// Why re-exported from a leaf module: terminal modules and their e2e-visible
-// import chains need breadcrumb recording without this file's import.meta /
-// webview-registry baggage. See crash-breadcrumb-recorder.ts.
+// Re-export the leaf recorder so terminal/E2E imports avoid this module’s import.meta and webview dependencies.
 export { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 
 export function installRendererCrashDiagnostics(surface: RendererSurface = 'main'): void {
@@ -54,15 +52,12 @@ function disposeRendererCrashDiagnostics(): void {
 }
 
 if (import.meta !== undefined && import.meta.hot) {
-  // Why: Vite can replace this module without a full renderer reload. Remove
-  // global diagnostics hooks so dev sessions do not accumulate listeners.
+  // Remove global hooks on Vite replacement so HMR cannot accumulate diagnostics listeners.
   import.meta.hot.dispose(disposeRendererCrashDiagnostics)
 }
 
 function recordRendererError(event: ErrorEvent): void {
-  // Why: "ResizeObserver loop completed" is a benign, self-resolving Chromium
-  // quirk. Recording it fills the breadcrumb buffer and inflates the error
-  // count without diagnostic value, contributing to renderer heap growth (#8260).
+  // Ignore benign self-resolving ResizeObserver loop errors; recording them floods evidence and increases heap use (#8260).
   if (
     /^ResizeObserver loop (?:limit exceeded|completed with undelivered notifications)\.?$/i.test(
       event.message

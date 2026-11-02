@@ -1,13 +1,11 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
-// E2E specs avoid importing renderer/shared modules into the Playwright runner.
+// Mirror FLOATING_TERMINAL_WORKTREE_ID without loading renderer/shared modules into Playwright.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const OPEN_PANEL_SELECTOR = '[data-floating-terminal-panel][aria-hidden="false"]'
 
-// `orca terminal switch` to a floating terminal reaches the renderer as ui:focusTerminal. It used
-// to select the floating workspace in the main window, blanking it while the panel stayed closed.
+// Switching must reveal the floating panel without selecting its workspace in the main window.
 test('switching to a floating terminal opens the panel and keeps the main workspace', async ({
   electronApp,
   orcaPage

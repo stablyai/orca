@@ -3,17 +3,7 @@ import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
 import { bestEffortFsyncDirectorySync } from '../../shared/secure-file'
 
-/**
- * Cached copy of `settings.electronHttp1CompatibilityMode` for pre-`ready` startup.
- * Version 2 carries the active profile ID so a profile switch cannot reuse the
- * previous profile's network compatibility choice.
- *
- * Why a standalone file (not the Store): app.commandLine.appendSwitch('disable-http2') must run
- * before the first Electron session exists, which is before the settings Store is constructed.
- * Reading it from the settings file meant a synchronous read + JSON.parse of the whole multi-MB
- * orca-data.json on the critical path of every cold start, duplicating the parse the Store does a
- * moment later. This marker is a few bytes, mirroring gpu-fallback-marker.ts.
- */
+/** A tiny profile-scoped marker selects HTTP/2 before the first Electron session without reparsing multi-MB settings before Store startup. Profile identity prevents cross-profile reuse. */
 
 export const HTTP1_COMPATIBILITY_MARKER_FILE = 'http1-compatibility.json'
 const LEGACY_MARKER_SCHEME_VERSION = 1
@@ -29,7 +19,7 @@ function markerPath(userDataPath: string): string {
   return join(userDataPath, HTTP1_COMPATIBILITY_MARKER_FILE)
 }
 
-/** Returns null when the marker is missing or unreadable, so callers fall back to the settings file. */
+/** Null means absent/untrusted; callers fail closed or read legacy JSON only when profile authority allows. */
 export function readHttp1CompatibilityMarker(
   userDataPath: string,
   expectedProfileId?: string
@@ -42,9 +32,7 @@ export function readHttp1CompatibilityMarker(
       return null
     }
     if (parsed.schemeVersion === LEGACY_MARKER_SCHEME_VERSION) {
-      // A v1 marker predates profile-scoped state. It remains useful for a
-      // legacy install with no profile index, but cannot be trusted once the
-      // active profile is known.
+      // Trust v1 only for legacy installs with no known active profile.
       return expectedProfileId === undefined ? parsed.enabled : null
     }
     if (

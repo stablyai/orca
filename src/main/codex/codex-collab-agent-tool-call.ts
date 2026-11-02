@@ -3,7 +3,7 @@
 // agentsStates holds caller snapshots; child turn frames determine execution state.
 
 import { codexCollabToolRowName } from '../../shared/codex-collab-agent-tools'
-import { collapsedToolInputPrefix } from '../../shared/native-chat-tool-preview-prefix'
+import { collapsedToolInputPrefix } from '../../shared/native-chat/tools/native-chat-tool-preview-prefix'
 import { readRecord, readString } from './codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 

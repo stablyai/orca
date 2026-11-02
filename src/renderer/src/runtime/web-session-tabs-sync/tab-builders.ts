@@ -197,11 +197,7 @@ export function buildMirroredEditorTabs(
     const { fileId, existingFile, sourceFileId } = identity
     const existingUnifiedTab = existingTabIndex.getEditorUnifiedTab(fileId, tab.id)
     const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
-    // Why: the host publishes only its own store's flag and never learns of client edits, so
-    // taking it verbatim would clear a client-dirty tab and the tab strip would then close it
-    // with no unsaved-changes prompt while the draft still exists (#21392). A local draft is
-    // the evidence the flag is the client's own; a dirty flag with no draft came from an
-    // earlier snapshot and must keep following the host, e.g. after a host-side save.
+    // Drafts prove client dirty ownership: host clean echoes must not bypass close prompts (#21392). Without a draft, dirty came from host and follows host saves.
     const keepsClientDirty = existingFile?.isDirty === true && hasLocalDraft(fileId)
     const file: OpenFile =
       identity.preservesOwner && existingFile

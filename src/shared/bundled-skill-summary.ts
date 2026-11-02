@@ -23,8 +23,7 @@ const PLAN_STATE_ORDER: readonly BundledSkillPlanState[] = [
   'repair'
 ]
 
-// Why a Record: adding an op kind fails to compile until it is summarised; a kind this
-// build does not know (a newer server) reads as `attention` at runtime.
+// Record requires every new op kind to have a summary; unknown newer-server kinds become attention at runtime.
 const OP_PLAN_STATE: Readonly<Record<BundledSkillOpKind, BundledSkillPlanState>> = {
   keep: 'current',
   leave: 'attention',
@@ -59,7 +58,7 @@ export const BUNDLED_SKILL_PLAN_OP_TEXT: Readonly<
 }
 
 function opPlanState(op: Pick<BundledSkillOp, 'kind' | 'reason'>): BundledSkillPlanState {
-  // Why: someone else's same-named skill is theirs; it is listed, never flagged.
+  // Other owners’ same-named skills are listed without flagging them.
   if (op.kind === 'leave' && op.reason === 'other') {
     return 'current'
   }
@@ -76,7 +75,6 @@ export function bundledSkillPlanState(entry: BundledSkillPlanEntry): BundledSkil
 export type BundledSkillPlanSummary = {
   /** Badge: only global-scope rewrites; link-only work is "Install for <agent>", never an update. */
   badge: 'update' | 'repair' | null
-  /** Whether running the plan would change anything. */
   hasWork: boolean
   skills: BundledSkillPlanSkillSummary[]
 }
@@ -86,7 +84,6 @@ export type BundledSkillPlanSkillSummary = {
   state: BundledSkillPlanState
   /** One per planned location, labelled by agent; the dialog's rows and location table. */
   locations: BundledSkillLocation[]
-  /** Every location is current, so the skill collapses into one line. */
   upToDate: boolean
 }
 
@@ -105,8 +102,7 @@ export function summarizeBundledSkillPlan(plan: BundledSkillPlan): BundledSkillP
   return {
     badge:
       global && states.has('repair') ? 'repair' : global && states.has('update') ? 'update' : null,
-    // Leftover swap siblings count: a stray released `.orca-old` would otherwise wait to be
-    // restored once the user deletes the skill.
+    // Clean leftover swap siblings or a stray released .orca-old could restore after the user deletes the skill.
     hasWork:
       skills.some((skill) => ['install', 'update', 'repair'].includes(skill.state)) ||
       plan.skills.some((entry) => entry.ops.some((op) => op.cleanup.length > 0)),
@@ -114,10 +110,7 @@ export function summarizeBundledSkillPlan(plan: BundledSkillPlan): BundledSkillP
   }
 }
 
-/**
- * A setup screen's one button for a named-skill plan: run it when it would change something,
- * offer Replace for replaceable copies, or attention when needed locations remain blocked.
- */
+/** A setup button runs useful work, offers Replace for replaceable copies, or shows attention for blocked locations. */
 export type BundledSkillInstallAction =
   | { kind: 'run' }
   | { kind: 'replace'; paths: string[] }
@@ -154,10 +147,45 @@ export function bundledSkillInstallAgents(
   return [...new Set(agents)].sort()
 }
 
-/** Changes whenever the skills the badge counts, or the bytes they would get, change. */
-export function bundledSkillNudgeKey(hostId: string, plan: BundledSkillPlan): string | null {
-  const counted = plan.skills
-    .filter((entry) => ['update', 'repair'].includes(bundledSkillPlanState(entry)))
+/** Replaces a copy whose hash matches a shipped Orca release; deletes only Orca's own swap leftovers. */
+export function isBundledSkillAutoUpdateOp(op: Pick<BundledSkillOp, 'kind' | 'cleanup'>): boolean {
+  return op.kind === 'update' && op.cleanup.every((item) => item.action === 'delete')
+}
+
+function opNeedsConsent(op: BundledSkillOp, autoUpdating: boolean): boolean {
+  // An old copy holding edits Orca has not yet backed up waits on the user, never on deletion.
+  if (op.cleanup.some((item) => item.action === 'backup')) {
+    return true
+  }
+  if (op.kind === 'leave') {
+    return op.reason === 'edited'
+  }
+  if (autoUpdating && isBundledSkillAutoUpdateOp(op)) {
+    return false
+  }
+  return ['update', 'repair'].includes(opPlanState(op))
+}
+
+/**
+ * Skills the nudge asks about: stale, broken or hand-edited copies.
+ * `autoUpdating` names skills whose hash-verified locations Orca is updating silently.
+ */
+export function bundledSkillNudgeEntries(
+  plan: BundledSkillPlan,
+  autoUpdating: ReadonlySet<string> = new Set()
+): BundledSkillPlanEntry[] {
+  return plan.skills.filter((entry) =>
+    entry.ops.some((op) => opNeedsConsent(op, autoUpdating.has(entry.name)))
+  )
+}
+
+/** Changes whenever the skills the nudge counts, or the bytes they would get, change. */
+export function bundledSkillNudgeKey(
+  hostId: string,
+  plan: BundledSkillPlan,
+  autoUpdating?: ReadonlySet<string>
+): string | null {
+  const counted = bundledSkillNudgeEntries(plan, autoUpdating)
     .map((entry) => `${entry.name}@${entry.digest}`)
     .sort()
   return plan.scope === 'global' && counted.length > 0
@@ -172,7 +200,7 @@ export type BundledSkillOutcomeText =
   | 'No change'
   | 'Needs attention'
 
-// Why `leave` is null: leaving someone else's folder alone is reported, not a failure.
+// Leaving another owner’s folder is reported without failure.
 const DONE_TEXT: Readonly<Record<BundledSkillOpKind, BundledSkillOutcomeText | null>> = {
   keep: null,
   leave: null,
@@ -181,7 +209,7 @@ const DONE_TEXT: Readonly<Record<BundledSkillOpKind, BundledSkillOutcomeText | n
   link: 'Linked',
   update: 'Updated',
   replace: 'Updated',
-  // Why: a restore puts back the copy an interrupted update moved aside; it still needs one.
+  // An interrupted update’s restored copy still needs updating.
   restore: 'Needs attention'
 }
 const OUTCOME_TEXT_ORDER: readonly BundledSkillOutcomeText[] = [
@@ -192,7 +220,6 @@ const OUTCOME_TEXT_ORDER: readonly BundledSkillOutcomeText[] = [
   'Needs attention'
 ]
 
-/** A `changed`, `skipped` or `failed` op, or a skill that never ran. */
 function hasProblem(outcome: BundledSkillOutcome): boolean {
   return outcome.status !== 'ran' || outcome.ops.some((op) => op.status !== 'done')
 }

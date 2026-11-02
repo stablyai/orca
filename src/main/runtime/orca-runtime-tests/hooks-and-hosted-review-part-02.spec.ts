@@ -183,7 +183,8 @@ describe('OrcaRuntimeService', () => {
       42,
       'pr',
       null,
-      localGitOptions
+      localGitOptions,
+      {}
     )
     expect(getGitHubWorkItemDetailsMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -191,7 +192,9 @@ describe('OrcaRuntimeService', () => {
       'pr',
       null,
       localGitOptions,
-      undefined
+      undefined,
+      undefined,
+      false
     )
     expect(getGitHubPRChecksMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -586,7 +589,7 @@ describe('OrcaRuntimeService', () => {
           connectionId: 'ssh-1'
         }
       ],
-      // Why: this process serves no SSH git, so the SSH repo resolves from its stored rows.
+      // SSH git is not served here; resolve remote workspaces from persisted rows.
       getAllWorktreeMeta: () => ({
         [`${TEST_REPO_ID}::/remote/repo`]: makeWorktreeMeta()
       }),

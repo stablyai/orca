@@ -7,6 +7,7 @@ import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 import { getWorkspaceAttachments } from './workspace-attachments'
 import { isSmartTier } from './sidebar-list/sort-stamps'
+import { normalizeOrcadRetainedMarker } from './orcad-retained-marker'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -23,12 +24,7 @@ export function normalizeFolderWorkspaces(
   if (!Array.isArray(value)) {
     return []
   }
-  const folderGroups = new Map<string, ProjectGroup>()
-  for (const group of projectGroups) {
-    if (group.parentPath) {
-      folderGroups.set(group.id, group)
-    }
-  }
+  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
 
   const workspaces: FolderWorkspace[] = []
   const seen = new Set<string>()
@@ -41,16 +37,18 @@ export function normalizeFolderWorkspaces(
       typeof raw.id !== 'string' ||
       raw.id.trim().length === 0 ||
       seen.has(raw.id) ||
-      typeof raw.projectGroupId !== 'string' ||
-      !folderGroups.has(raw.projectGroupId)
+      typeof raw.projectGroupId !== 'string'
     ) {
       continue
     }
-    const group = folderGroups.get(raw.projectGroupId)
+    const group = groupsById.get(raw.projectGroupId)
+    if (!group) {
+      continue
+    }
     const folderPath =
       typeof raw.folderPath === 'string' && raw.folderPath.trim().length > 0
         ? raw.folderPath
-        : group?.parentPath
+        : group.parentPath
     if (!folderPath) {
       continue
     }
@@ -58,10 +56,10 @@ export function normalizeFolderWorkspaces(
     const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
     const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
+    const orcadRetained = normalizeOrcadRetainedMarker(raw.orcadRetained)
     seen.add(raw.id)
-    // Why: `executionHostId` is deliberately NOT persisted. It is a fetch-time renderer
-    // stamp that can name a `runtime:*` authority the desktop store does not own, and it
-    // carries no generation to fence on. `connectionId` below is the durable pin main projects from.
+    // Do not persist fetch-time executionHostId: it may name an unowned runtime authority and lacks a generation fence.
+    // connectionId is the durable pin main projects from.
     workspaces.push({
       id: raw.id,
       projectGroupId: raw.projectGroupId,
@@ -72,7 +70,7 @@ export function normalizeFolderWorkspaces(
           ? raw.connectionId
           : raw.connectionId === null
             ? null
-            : (group?.connectionId ?? null),
+            : (group.connectionId ?? null),
       ...(creatorProvenance ? { creatorProvenance } : {}),
       linkedTask,
       ...(raw.linkedItems !== undefined
@@ -127,13 +125,13 @@ export function normalizeFolderWorkspaces(
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
         typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
-      // Legacy read: unreleased #14112 builds wrote notes inline. Canonical home is
-      // PersistedState.folderWorkspaceDiffComments.
+      // Legacy #14112 builds stored notes inline; canonical storage is PersistedState.folderWorkspaceDiffComments.
       ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {}),
       // Entries are validated where they are read (external-conversation-links.ts).
       ...(Array.isArray(raw.externalConversations)
         ? { externalConversations: raw.externalConversations }
-        : {})
+        : {}),
+      ...(orcadRetained ? { orcadRetained } : {})
     })
   }
   return workspaces.sort(

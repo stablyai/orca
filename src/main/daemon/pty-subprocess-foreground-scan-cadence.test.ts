@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as LocalPtyUtils from '../providers/local-pty/local-pty-executable-spawn'
 const { spawnMock, isPwshAvailableMock, resolveAgentForegroundProcessMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+vi.mock('../providers/local-pty/local-pty-executable-spawn', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
@@ -50,12 +50,14 @@ vi.mock('../providers/agent-foreground-process', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
+import { createConptyPreludeSender } from './pty-subprocess-test-harness'
 
 // Well past any hot window or retry throttle so t=0 reads behave as idle.
 const BASE_TIME_MS = 1_000_000
 
 function mockPtyProcess(processName: string, pid = 12345) {
   const onDataListeners: ((data: string) => void)[] = []
+  const sendConptyPrelude = createConptyPreludeSender()
   return {
     pid,
     write: vi.fn(),
@@ -64,6 +66,7 @@ function mockPtyProcess(processName: string, pid = 12345) {
     process: processName,
     onData: vi.fn((cb: (data: string) => void) => {
       onDataListeners.push(cb)
+      sendConptyPrelude(cb)
       return { dispose: vi.fn() }
     }),
     onExit: vi.fn(() => ({ dispose: vi.fn() })),
@@ -126,7 +129,10 @@ describe('daemon pty foreground scan cadence', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: targetPlatform })
     const proc = mockPtyProcess(shellProcessName)
     spawnMock.mockReturnValue(proc)
+    // Startup output (ConPTY DA1 query) lands before the 10s hot window these idle cases measure.
+    vi.setSystemTime(BASE_TIME_MS - 11_000)
     const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    vi.setSystemTime(BASE_TIME_MS)
     return { proc, handle }
   }
 

@@ -1,8 +1,4 @@
-/**
- * #10142 follow-ups to the X-button regression: middle-click prompts too, confirming
- * actually closes, and Cmd+W raises exactly one dialog (the pane path delegates the
- * last-pane close to closeTerminalTab instead of probing a second time).
- */
+// #10142: require middle-click confirmation, actual close on confirm, and one Cmd+W dialog across last-pane→tab delegation.
 import { test, expect } from './helpers/orca-app'
 import type { Page } from '@stablyai/playwright-test'
 import {
@@ -40,8 +36,7 @@ async function startBusyTerminal(page: Page): Promise<string> {
   await execInTerminal(page, ptyId, 'echo close-confirm-ready')
   await waitForTerminalOutput(page, 'close-confirm-ready', 20_000)
   await execInTerminal(page, ptyId, 'sleep 300')
-  // Why: `hasChildProcesses` is already true while macOS's `login` wrapper starts the
-  // shell, so wait for `sleep` itself or the close legitimately sees an idle terminal.
+  // Wait for sleep itself: macOS login already counts as a child before the command starts.
   await expect
     .poll(
       async () =>
@@ -94,8 +89,7 @@ test('Cmd+W on a busy single-pane tab raises exactly one dialog', async ({ orcaP
   await orcaPage.getByRole('button', { name: /^Stop and Close$/ }).click()
 
   await expect(busyTab).toHaveCount(0, { timeout: 15_000 })
-  // Why: the pane used to probe and prompt on its own before delegating to
-  // closeTerminalTab, which now prompts too — a second dialog would mean a double prompt.
+  // Reject duplicate pane and delegated closeTerminalTab confirmations.
   await orcaPage.waitForTimeout(1_500)
   await expect(closeDialogTitle(orcaPage)).toBeHidden()
 })

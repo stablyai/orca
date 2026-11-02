@@ -15,8 +15,9 @@ describe('SharedControlReconnectScheduler', () => {
     expect(scheduler.retryNow()).toBe(true)
     expect(scheduler.retryNow()).toBe(false)
     expect(open).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
 
-    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(36_000)
     expect(open).toHaveBeenCalledTimes(1)
   })
 

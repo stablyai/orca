@@ -11,26 +11,7 @@ import {
 } from '../../../shared/terminal-scrollback-policy'
 import { safeFind } from './terminal-search-safe-find'
 
-/**
- * Regression for crash report 012eb5be (Orca 1.4.194, win32): searching a pane
- * that held one un-newlined line — base64, a minified bundle, a single huge log
- * record — threw `RangeError: Maximum call stack size exceeded` out of
- * TerminalSearch's effect and tripped the `terminal.workbench` error boundary.
- *
- * Mechanism, in @xterm/addon-search's SearchEngine (patched in
- * config/patches/@xterm__addon-search@*.patch, generated from the source patch
- * under config/patches/xterm-src/; submitted upstream as
- * https://github.com/xtermjs/xterm.js/pull/6149): `_findInLine` rewound to the first row of a
- * wrapped line by calling itself once per wrapped row, so recursion depth equals
- * the number of screen rows the logical line occupies. Scrollback reaches
- * DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX rows, which is far past V8's stack.
- *
- * The rewind is reached on every re-entry into the middle of a wrapped line —
- * `_highlightAllMatches` restarting at the row after a match, and `findNext`
- * resuming from the current selection — so this drives the real Terminal +
- * SearchAddon through Orca's own `safeFind`, which deliberately rethrows
- * anything that is not the decoration error.
- */
+/** Wrapped-line rewind once recursed per row, overflowing V8 and killing the terminal surface (crash 012eb5be; xtermjs/xterm.js#6149). Drive real Terminal/SearchAddon through safeFind, which must rethrow non-decoration failures. */
 
 /** Reaches the ring behind the public buffer API to pin the negative-index state reflow leaves. */
 type RingBufferProbe = {
@@ -45,23 +26,13 @@ const WRAPPED_ROWS = 12_000
 const TRIMMED_HEAD_SCROLLBACK = 100
 const TRIMMED_HEAD_LINE_ROWS = 200
 const NEEDLE = 'needle'
-/**
- * Rows of one wrapped line per match, and how many matches that line holds. Enough matches to make
- * the highlight-all pass — which re-enters the line once per match — the dominant cost, and enough
- * rows that a per-match walk of the line is a freeze rather than a slow search. Kept under the
- * addon's 1 000-decoration limit so the match count is exact.
- */
+/** Enough wrapped rows and matches expose quadratic per-match scans; stay below the addon’s 1,000-decoration cap for exact counts. */
 const MATCH_ROW_STRIDE = 40
 const MATCHES_IN_LINE = 750
-/**
- * A full-buffer scan runs on the renderer's main thread on every keystroke in
- * the find bar, so anything near this is a visible freeze rather than a slow
- * search. Unfixed it is ~18s for a default-scrollback buffer; fixed, ~6ms.
- */
+/** Search runs on every keystroke on the renderer thread; this bound rejects visible freezes. */
 const FULL_SCAN_BUDGET_MS = 5_000
 
-// Matches the decoration options TerminalSearch passes, so the highlight-all
-// pass (the crash's entry point) actually runs.
+// Use Orca’s decoration options to exercise highlight-all, the original crash entry point.
 const SEARCH_DECORATIONS = {
   matchBackground: '#5c4a00',
   matchBorder: '#5c4a00',
@@ -71,12 +42,7 @@ const SEARCH_DECORATIONS = {
   activeMatchColorOverviewRuler: '#ff9900'
 } as const
 
-/**
- * Every mode the find bar can put the engine in. Regex and whole word used to be
- * excluded from the wrapped-row skip, which left them on the O(rows^2) walk after
- * the recursion that used to abort it was gone: a 12 000-row line took 5.4 minutes
- * of blocked main thread instead of throwing after 48 seconds.
- */
+/** Regex/whole-word searches must share wrapped-row skipping or removing recursion leaves a quadratic renderer freeze. */
 const SEARCH_MODES = [
   ['plain', {}],
   ['regex', { regex: true }],
@@ -117,10 +83,7 @@ describe('terminal search inside one very long wrapped line', () => {
     'rewinds to the start of the line without overflowing the stack (%s)',
     async (_mode, options) => {
       const { terminal, search } = openTerminalWithSearch()
-      // One line of WRAPPED_ROWS screen rows whose only match ends on the
-      // second-to-last row, so the highlight pass resumes one row further on and
-      // has to rewind the whole chain to reach the line start. Space-delimited so
-      // the whole-word mode has something to find.
+      // Put the match near the wrapped tail so highlight-all must rewind; spaces also exercise whole-word mode.
       await write(
         terminal,
         `${'x'.repeat(COLS * (WRAPPED_ROWS - 1) - NEEDLE.length - 1)} ${NEEDLE} ${'x'.repeat(COLS - 1)}`
@@ -167,12 +130,7 @@ describe('terminal search inside one very long wrapped line', () => {
     'highlights many matches in one wrapped line without re-walking it per match (%s)',
     async (_mode, options) => {
       const { terminal, search } = openTerminalWithSearch()
-      // `_highlightAllMatches` calls `SearchEngine.find` once per match, and each call resumes
-      // deep inside the line. Converting the resume column to a string offset walked every cell
-      // before it, O(line) per match, so this shape stayed quadratic after the no-match scan was
-      // bounded: ~11s for a line this long, a renderer freeze rather than a RangeError the
-      // boundary recovered from. The per-match rewind and case fold are O(rows) and O(chars)
-      // but measured at well under 1s combined, so they stay simple.
+      // Repeated matches resume deep in one line; per-match cell-to-string offset walks previously kept this path quadratic.
       const block = ` ${NEEDLE} ${'x'.repeat(COLS * MATCH_ROW_STRIDE - NEEDLE.length - 2)}`
       await write(terminal, block.repeat(MATCHES_IN_LINE))
 
@@ -202,8 +160,6 @@ describe('terminal search inside one very long wrapped line', () => {
     search.onDidChangeResults((event) => {
       resultCount = event.resultCount
     })
-    // One logical line wrapping over three rows with a match in each, then a
-    // separate unwrapped line.
     const paddedNeedle = NEEDLE + 'x'.repeat(COLS - NEEDLE.length)
     await write(terminal, `${paddedNeedle.repeat(3)}\r\nplain ${NEEDLE}\r\n`)
 
@@ -216,8 +172,7 @@ describe('terminal search inside one very long wrapped line', () => {
 
   it('keeps reaching matches in a wrapped line whose first row was trimmed away', async () => {
     const { terminal, search } = openTerminalWithSearch(TRIMMED_HEAD_SCROLLBACK)
-    // One long line whose head is evicted, so the surviving chain begins on a
-    // row marked isWrapped and no line start is left in the buffer to cover it.
+    // Evict the logical line’s head so the surviving first row is still marked wrapped.
     const paddedNeedle = NEEDLE + 'x'.repeat(COLS - NEEDLE.length)
     const lead = 'x'.repeat(COLS * (TRIMMED_HEAD_LINE_ROWS - 3))
     await write(terminal, `${lead}${paddedNeedle.repeat(2)}${'x'.repeat(COLS)}\r\n`)
@@ -235,9 +190,7 @@ describe('terminal search inside one very long wrapped line', () => {
     }
     expect(matchRows.length).toBe(2)
 
-    // Cycle far enough to come back round in both directions: the surviving rows must stay
-    // reachable, not be visited once and then stranded. Reverse search used to return for any
-    // wrapped row including row 0, so a trimmed-head line was never searched backwards at all.
+    // Cycle both directions past a full turn; reverse search previously skipped every surviving row of a trimmed-head line.
     for (const direction of ['findNext', 'findPrevious'] as const) {
       const visits = new Map<number, number>()
       for (let i = 0; i < 12; i++) {
@@ -258,8 +211,7 @@ describe('terminal search inside one very long wrapped line', () => {
 
   it('searches a line that is longer than the whole scrollback', async () => {
     const { terminal, search } = openTerminalWithSearch(TRIMMED_HEAD_SCROLLBACK)
-    // Every row of the buffer is then a continuation, and the ring answers an out-of-range row by
-    // cycling back to row 0, so walking forward for the end of the line never terminates.
+    // An all-continuation buffer wraps out-of-range ring reads to row zero; forward scans must stop at the buffer bound.
     const paddedNeedle = NEEDLE + 'x'.repeat(COLS - NEEDLE.length)
     await write(terminal, `${'x'.repeat(COLS * TRIMMED_HEAD_LINE_ROWS)}${paddedNeedle.repeat(3)}`)
     const buffer = terminal.buffer.active
@@ -282,9 +234,7 @@ describe('terminal search inside one very long wrapped line', () => {
     for (let i = 0; i < 20; i++) {
       await write(terminal, `line ${i}\r\n`)
     }
-    // Narrowing a pane reflows the buffer, which leaves the ring holding entries at negative
-    // indices, so `getLine(-1)` answers with a stale wrapped line instead of undefined. The rewind
-    // has to stop at row 0 or it walks backwards forever and hangs the renderer.
+    // Reflow leaves stale negative ring indices; rewind must stop at zero instead of walking backward forever.
     terminal.resize(15, 5)
     await write(terminal, '')
     expect(terminal.buffer.active.getLine(0)?.isWrapped).toBe(true)
@@ -303,9 +253,7 @@ describe('terminal search inside one very long wrapped line', () => {
 
   it('keeps scanning a line past a hit whole word rejects', async () => {
     const { terminal, search } = openTerminalWithSearch()
-    // Upstream stopped at the first `indexOf` hit, so `aneedlea` hid the real word
-    // nine columns later and the find bar reported no match at all. Scanning on is
-    // also what makes the wrapped-row skip sound for wholeWord.
+    // Skip non-word substring hits and keep scanning for a real word; wrapped-row skipping relies on finding it.
     await write(terminal, `a${NEEDLE}a ${NEEDLE} done\r\n`)
 
     const found = safeFind((term, options) => search.findNext(term, options), NEEDLE, {
@@ -319,8 +267,6 @@ describe('terminal search inside one very long wrapped line', () => {
 
   it('finds a whole-word match that only matches from a later wrapped row', async () => {
     const { terminal, search } = openTerminalWithSearch()
-    // The first hit on the line is `aneedlea`; the real word is on the second
-    // wrapped row, which the skip removes from the walk.
     const filler = 'x'.repeat(COLS - NEEDLE.length - 2)
     await write(terminal, `a${NEEDLE}a${filler} ${NEEDLE} ${filler}`)
 
@@ -336,7 +282,6 @@ describe('terminal search inside one very long wrapped line', () => {
     const { terminal, search } = openTerminalWithSearch()
     await write(terminal, `abc ${NEEDLE} def\r\n`)
 
-    // `^` matches empty at offset 0, which upstream took as the line's only answer.
     const found = safeFind((term, options) => search.findNext(term, options), `^|${NEEDLE}`, {
       regex: true,
       decorations: SEARCH_DECORATIONS
@@ -348,8 +293,7 @@ describe('terminal search inside one very long wrapped line', () => {
 
   it('anchors a regex to the logical line, not to every wrapped row', async () => {
     const { terminal, search } = openTerminalWithSearch()
-    // The needle starts the second row of one wrapped line. A wrap column is a
-    // rendering artifact, so `^` must not match there.
+    // A visual wrap is not a logical line start, so ^ must not match there.
     await write(terminal, 'x'.repeat(COLS) + NEEDLE + 'x'.repeat(COLS - NEEDLE.length))
 
     const found = safeFind((term, options) => search.findNext(term, options), `^${NEEDLE}`, {

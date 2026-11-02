@@ -28,7 +28,6 @@ vi.mock('electron', () => ({
 vi.mock('../browser/browser-screencast-stream', () => ({ startBrowserScreencast }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 
-/** A real legacy E2EE channel, as every directly connected phone uses. */
 function connectLegacyChannel() {
   const serverKeys = generateKeyPair()
   const clientKeys = generateKeyPair()
@@ -110,7 +109,7 @@ describe('screencast over a backlogged legacy E2EE socket', () => {
     vi.useRealTimers()
   })
 
-  // Why: a busy socket is alive; evicting its viewer as a ghost would blank a working phone.
+  // Backlogged sockets remain live; ghost eviction would blank working phones.
   it('keeps the viewer through a long backlog and then delivers only the newest frame', async () => {
     const transport = connectLegacyChannel()
     const { subscription, onFrame, stop } = await subscribe(transport.sendBinary)

@@ -1,4 +1,4 @@
-// Why: a restored dirty tab's changed-on-disk mark doesn't survive restarts (issue #7265), so re-derive it from disk to show the banner early; the guarded save is what keeps autosave off newer content.
+// Re-derive restored drafts’ conflict banners from disk; guarded writes still protect newer content before the scan settles.
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
@@ -22,7 +22,7 @@ type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 const VERIFY_RETRY_MS = 2_000
 const VERIFY_SLOW_RETRY_MS = 15_000
 const VERIFY_FAST_ATTEMPTS = 30
-// Cap concurrent reads: many restored dirty tabs would otherwise fire N concurrent 15s RPCs competing with startup connection recovery.
+// Bound startup RPC concurrency so many restored drafts cannot overwhelm connection recovery.
 const MAX_CONCURRENT_VERIFY_READS = 3
 export const MAX_VERIFY_ATTEMPTS = VERIFY_FAST_ATTEMPTS + 10
 
@@ -41,7 +41,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   const inFlightFileIds = new Set<string>()
   const attemptsByFileId = new Map<string, number>()
   const retryTimers = new Set<ReturnType<typeof setTimeout>>()
-  // Queue ids, not OpenFile snapshots: a snapshot can go stale (close/reopen or same-path save) while it waits for a slot.
+  // Queue IDs and reread live tabs; saved/reopened views can change while waiting for a slot.
   const verifyQueue: string[] = []
   let activeVerifyReads = 0
   let disposed = false
@@ -55,14 +55,14 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
     return connectionId
   }
 
-  // Only local/SSH paths can be probed: for runtime-owned files window.api.fs would stat the client path and misreport it as gone.
+  // Probe only local/SSH ownership; client filesystem stats would falsely report runtime-host files missing.
   const probeFileMissing = async (file: OpenFile): Promise<boolean> => {
     const owner = getRuntimeTargetForFileOwner(
       store.getState(),
       file.worktreeId,
       file.runtimeEnvironmentId
     )
-    // Why `!owner`: with no single owner, nothing can prove the file gone.
+    // No resolved owner means absence cannot be proved.
     if (!owner) {
       return false
     }
@@ -104,7 +104,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
     }
   }
 
-  // Why: a save (or reload) since the read re-baselined the tab, so the read proves nothing about it.
+  // A newer save/reload baseline invalidates this read’s evidence.
   const unchangedSinceRead = (file: OpenFile): OpenFile | null => {
     const liveFile = store.getState().openFiles.find((f) => f.id === file.id)
     return liveFile &&
@@ -115,7 +115,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   }
 
   const verify = async (file: OpenFile): Promise<void> => {
-    // ids are file paths: a stray leftover marker would skip a reopened same-path tab, so only a scheduled retry keeps it set.
+    // Keep dedupe markers only for scheduled retries so reopening the same view cannot inherit a stray marker.
     let retryScheduled = false
     try {
       const state = store.getState()
@@ -187,7 +187,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   const pumpVerifyQueue = (): void => {
     while (!disposed && activeVerifyReads < MAX_CONCURRENT_VERIFY_READS && verifyQueue.length > 0) {
       const fileId = verifyQueue.shift()!
-      // Re-read live file: a queued id may now be a reopened/saved same-path tab; skipping frees the dedupe marker.
+      // Recheck live eligibility after dequeueing; saved/reopened views release their dedupe marker when skipped.
       const file = store.getState().openFiles.find((f) => f.id === fileId)
       if (!file || !needsDiskCheck(file)) {
         inFlightFileIds.delete(fileId)
@@ -199,7 +199,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         activeVerifyReads -= 1
         pumpVerifyQueue()
       }
-      // verify() never rejects, but a stray rejection must still free the slot or the queue stalls.
+      // Even unexpected rejection must release the concurrency slot or the queue stalls.
       void verify(file).then(onSettled, onSettled)
     }
   }

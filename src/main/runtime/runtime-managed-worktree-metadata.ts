@@ -128,12 +128,12 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     })
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
-  // Why: a resolution snapshot taken before a removal still returns the workspace (#22712).
+  // Recheck removal: an earlier resolution snapshot may still contain this workspace (#22712).
   if (isRemovedFolderWorkspaceInstance(args.store, worktree.id, executionHostId)) {
     throw new Error('selector_not_found')
   }
   args.store.setWorktreeMeta(target, metadataUpdates)
-  // Why: CLI callers need an explicit push for metadata changed outside the renderer's optimistic update path.
+  // Push explicitly for CLI mutations outside renderer optimistic updates.
   args.ports.invalidateResolved()
   args.ports.notifyChanged(worktree.repoId)
   if (lineage) {
@@ -154,8 +154,7 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
   /** `sortOrders` omitted: the repo has same-id copies, which an id-keyed patch cannot tell apart. */
   notifyChanged: (repoId: string, sortOrders?: WorktreeSortOrderUpdate[]) => void
 }): { updated: number } {
-  // A moving project keeps its old order; the rest of the batch still lands. Only what was saved
-  // is reported and published.
+  // Skip moving projects but save/publish the rest; report only written orders.
   const updates = writeWorktreeSortOrder(
     args.store,
     { orderedIds: args.orderedIds, hostIds: args.hostIds },

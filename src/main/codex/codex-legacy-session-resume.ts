@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { link, lstat, mkdir } from 'node:fs/promises'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -19,6 +19,7 @@ import {
   isAtomicNoReplaceUnsupportedError
 } from './codex-session-backfill-copy'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
+import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
@@ -53,8 +54,9 @@ export async function prepareLegacySharedCodexSessionResume(
   }
 
   const sourcePath = resolve(args.filePath)
-  const relativePath = relative(resolve(managedSessionsRoot), sourcePath)
-  if (!isDatedRolloutRelativePath(relativePath)) {
+  // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
+  const relativePath = codexDatedRolloutRelativePath(managedSessionsRoot, sourcePath)
+  if (!relativePath) {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }
   const targetPath = join(paths.systemSessionsRoot, relativePath)
@@ -96,11 +98,11 @@ export async function prepareCodexAccountRestartResume(args: {
   if (sameRuntimePath(args.sourceHome, args.targetHome)) {
     return args.targetHome
   }
-  const relativePath = relative(
-    resolve(join(args.sourceHome, 'sessions')),
+  const relativePath = codexDatedRolloutRelativePath(
+    join(args.sourceHome, 'sessions'),
     resolve(args.transcriptPath)
   )
-  if (!isDatedRolloutRelativePath(relativePath)) {
+  if (!relativePath) {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }
   const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
@@ -133,8 +135,11 @@ async function resolveSelectedAccountCodexHomeForResume(
   if (!selectedCodexHome || sameRuntimePath(selectedCodexHome, args.codexHome)) {
     return null
   }
-  const relativePath = relative(resolve(join(args.codexHome, 'sessions')), resolve(args.filePath))
-  if (!isDatedRolloutRelativePath(relativePath)) {
+  const relativePath = codexDatedRolloutRelativePath(
+    join(args.codexHome, 'sessions'),
+    resolve(args.filePath)
+  )
+  if (!relativePath) {
     return null
   }
   const candidatePath = join(selectedCodexHome, 'sessions', relativePath)
@@ -224,20 +229,6 @@ async function fileDigest(filePath: string): Promise<string> {
     hash.update(chunk as Buffer)
   }
   return hash.digest('hex')
-}
-
-function isDatedRolloutRelativePath(relativePath: string): boolean {
-  if (!relativePath || relativePath.startsWith('..') || resolve(relativePath) === relativePath) {
-    return false
-  }
-  const parts = relativePath.split(sep)
-  return (
-    parts.length === 4 &&
-    /^\d{4}$/.test(parts[0] ?? '') &&
-    /^\d{2}$/.test(parts[1] ?? '') &&
-    /^\d{2}$/.test(parts[2] ?? '') &&
-    /^rollout-.+\.jsonl(?:\.zst)?$/.test(parts[3] ?? '')
-  )
 }
 
 function sameRuntimePath(left: string, right: string): boolean {

@@ -12,11 +12,7 @@ type ConnectOptions = {
   resumeProviderSession?: unknown
 }
 
-/**
- * Switch on: the window's own start of the pane (a cold-restore resume, a hibernated or deferred
- * wake, a restart replacement) asked main through `startPane`, and the window started nothing: no
- * connect carries a command or a resume, and every attach is attach-only.
- */
+/** Main owns start/resume; every window connect is attach-only without its own launch command. */
 export async function expectWindowStartAskedMain(
   transport: MockTransport,
   paneKey: string,
@@ -32,10 +28,7 @@ export async function expectWindowStartAskedMain(
 
 type ResumeRegistry = { registerAgentLaunchConfig: unknown }
 
-/**
- * Switch on: no connect the window made started or resumed a terminal of its own, and, given the
- * store, the window registered no resume launch of its own.
- */
+/** Verify the window neither starts/resumes a terminal nor registers its own resume launch. */
 export function expectNoWindowStart(transport: MockTransport, store?: ResumeRegistry): void {
   if (store) {
     expect(store.registerAgentLaunchConfig).not.toHaveBeenCalled()
@@ -52,8 +45,7 @@ export function expectNoWindowStart(transport: MockTransport, store?: ResumeRegi
 
 type LayoutApplyTestTransport = typeof answeringFallback
 
-/** The transport the mocked RPC client answers the window's layout commands with, even after
- *  `vi.resetModules`; dynamic, as the mocked client is. */
+/** Resolve the mocked layout-command transport dynamically across resetModules. */
 export async function mainLayoutApplyTransport(): Promise<LayoutApplyTestTransport> {
   const { ANSWERING_TRANSPORT, layoutApplyTestTransport } =
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -66,10 +58,7 @@ function isLayoutApplyTestTransport(value: unknown): value is LayoutApplyTestTra
   return typeof value === 'object' && value !== null && 'sentOfType' in value && 'reset' in value
 }
 
-/**
- * Main's answer to the window's `startPane`: it binds the pane to `ptyId` (the store's layout, as
- * main's frame does) and the terminal answers an attach to that id. Call before the window asks.
- */
+/** Install before startPane: main’s frame binds the terminal, which answers the window’s attach. */
 export async function mainStartsPaneAs(args: {
   ptyId: string
   bind: (ptyId: string) => void
@@ -87,11 +76,7 @@ export async function mainStartsPaneAs(args: {
   })
 }
 
-/**
- * Switch on: a reattach answered with a cold restore. The window attached attach-only, painted the
- * host's history, and resumed nothing: no command, no launch registered, no restored banner (main's
- * start owns the resume and its record), and no record dropped.
- */
+/** Cold reattach paints only: main owns resume, its record and outcome banner; the window registers or consumes none. */
 export function expectWindowPaintsColdRestoreOnly(
   pane: { terminal: { write: { mock: { calls: unknown[][] } } } },
   transport: MockTransport,

@@ -1,7 +1,6 @@
-import {
-  admitNativeChatPastedText,
-  resolveNativeChatPastedText
-} from './native-chat-composer-pasted-text-references'
+import { readNativeChatComposerDraft } from './native-chat-composer-draft-store'
+import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
+import { admitNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
@@ -17,10 +16,10 @@ import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
-import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
+import { isSlashCommandDraft } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
-import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-pty-session-options'
 import type { NativeChatOptimisticSendOutcome } from './native-chat-composer-types'
 import {
   answerNativeChatCommandInComposer,
@@ -36,7 +35,7 @@ export function useNativeChatPtyComposerSend(args: {
   isDispatchingSessionOption: boolean
   launchDraft?: NativeChatLaunchDraft | null
   launchDraftResolved: boolean
-  readTerminalScreen?: () => string | null
+  readTerminalDraft?: () => string | null
   resolveTarget: () => NativeChatResolvedTarget | null
   classifySend: NativeChatPickerState['classifySend']
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
@@ -59,7 +58,7 @@ export function useNativeChatPtyComposerSend(args: {
     if ((text.trim() === '' && imagePaths.length === 0) || args.disabled) {
       return
     }
-    // Why: keep option-command and prompt writes from interleaving on the PTY input line.
+    // Prevent option commands from interleaving with prompt writes on the PTY input line.
     if (args.isDispatchingSessionOption) {
       return
     }
@@ -74,12 +73,13 @@ export function useNativeChatPtyComposerSend(args: {
     if (!admitNativeChatPastedText(args.draftScopeKey, text, args.setNotice)) {
       return
     }
-    text = resolveNativeChatPastedText(args.draftScopeKey, text)
+    const submitted = readNativeChatComposerDraft(args.draftScopeKey)
+    text = serializeNativeChatAgentReferences(text, submitted.document, submitted.pastedTextFiles)
     const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,
       agent: args.agent,
-      readScreen: () => args.readTerminalScreen?.()
+      readInputLine: () => args.readTerminalDraft?.()
     })
     let pendingId: string | undefined
     const sendOptions =
@@ -99,11 +99,11 @@ export function useNativeChatPtyComposerSend(args: {
           }
         : launchSendOptions
     let pendingHandle: NativeChatSendHandle | null = null
-    // Why: slash-like text must not silently drop its attached images.
+    // Slash-like drafts with images must retain their attachments.
     if (classification !== 'chat' && imagePaths.length === 0) {
       pendingHandle =
         args.agent === 'codex' && isSlashCommandDraft(text)
-          ? sendNativeChatTypedCommand(target.ptyId, text)
+          ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions)
           : sendNativeChatMessage(target.ptyId, text, sendOptions)
     } else if (imagePaths.length > 0) {
       pendingHandle = sendNativeChatMessageWithImageAttachments(

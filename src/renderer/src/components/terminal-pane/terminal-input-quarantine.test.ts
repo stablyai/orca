@@ -70,15 +70,10 @@ describe('terminal input quarantine', () => {
     expect(isTerminalInputQuarantined(TAB)).toBe(false)
   })
 
-  // The accepted cost of the cap, pinned so it is not "fixed" by shortening it:
-  // over-quarantine is visible (nothing echoes) and recoverable by retyping,
-  // while under-quarantine executes half a command. A tail takes seconds to
-  // type, so a cap short enough to spare this command would cut that tail
-  // mid-line and deliver its remainder to the fresh shell.
+  // Quarantine may cost retyping, but shortening it can submit a surviving command suffix to a fresh shell.
   it('eats a fresh command typed inside the cap, terminator included', () => {
     armTerminalInputQuarantine(TAB, 0)
-    // No byte yet, so the idle gate cannot release the first keystroke however
-    // long the user waited; from there normal typing never opens a 700ms gap.
+    // Start idle timing at the first dropped byte; reattach delay must not release the interrupted line.
     let at = 1_500
     for (const char of 'ls -la\r') {
       expect(shouldDropQuarantinedTerminalInput(TAB, char, at)).toBe(true)
@@ -88,8 +83,7 @@ describe('terminal input quarantine', () => {
 
   it('does not let the idle gate fire on the re-attach delay itself', () => {
     armTerminalInputQuarantine(TAB, 0)
-    // First quarantined byte arrives well past the idle window, because the
-    // remount itself took that long. It is still the interrupted line.
+    // A slow remount still receives the interrupted line’s first quarantined byte.
     expect(shouldDropQuarantinedTerminalInput(TAB, 'c', REATTACH_MS)).toBe(true)
   })
 
@@ -117,8 +111,7 @@ describe('terminal input quarantine', () => {
 
 describe('quarantine notice', () => {
   it('tells the user once that the interrupted line was not sent', () => {
-    // Why revert-sensitive: the drop used to be silent, so the first command after a
-    // daemon restart vanished without a trace.
+    // Disclose dropped input once; silent loss made the first post-restart command appear to vanish.
     armTerminalInputQuarantine(TAB, 0)
     expect(notifyTerminalInputNotSent).not.toHaveBeenCalled()
     for (const char of 'echo hi') {

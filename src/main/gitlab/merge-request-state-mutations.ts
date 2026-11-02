@@ -9,6 +9,13 @@ import {
   type ProjectRef
 } from './gl-utils'
 import { withProjectRef } from './merge-request-project-resolution'
+import { codeHostFailure } from '../../shared/code-host-failure-copy'
+import { invalidateReviewLookupsAfterPRMutation } from '../github/pr-mutation-review-invalidation'
+
+// Why: glab's MRCheckErrors refuses a no-op close/reopen with these fixed texts; every other
+// failure, including "has already been merged", must surface.
+const GLAB_MR_ALREADY_CLOSED = 'this merge request has been closed'
+const GLAB_MR_ALREADY_OPEN = 'this merge request is already open'
 
 export async function closeMR(
   repoPath: string,
@@ -33,16 +40,17 @@ export async function closeMR(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // glab signals already-closed with nonzero exit; treat the repeated transition as success.
-        if (msg.toLowerCase().includes('already')) {
+        if (msg.toLowerCase().includes(GLAB_MR_ALREADY_CLOSED)) {
           return { ok: true }
         }
         return { ok: false, error: msg }
       } finally {
         release()
+        // Even a failed write may have landed; later reads must not reuse an answer from before it.
+        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -70,15 +78,17 @@ export async function reopenMR(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        if (msg.toLowerCase().includes('already')) {
+        if (msg.toLowerCase().includes(GLAB_MR_ALREADY_OPEN)) {
           return { ok: true }
         }
         return { ok: false, error: msg }
       } finally {
         release()
+        // Even a failed write may have landed; later reads must not reuse an answer from before it.
+        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -114,9 +124,11 @@ export async function mergeMR(
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       } finally {
         release()
+        // Even a failed write may have landed; later reads must not reuse an answer from before it.
+        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }

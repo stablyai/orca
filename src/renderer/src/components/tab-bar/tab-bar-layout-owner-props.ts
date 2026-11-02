@@ -13,11 +13,7 @@ type TabPinActions<Item extends PinnableItem> = {
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
 }
 
-/**
- * The tab bar's pin in a layout-owner build: main changes its copy and its frame draws the pin.
- * The window's own action runs when main is not asked or a paired server holds the tab. A tab's
- * rename and color go to main from their store actions.
- */
+/** Let main draw local pin changes; retain window actions for unsupported or paired-host ownership. */
 export function withLayoutOwnerTabProps<Item extends PinnableItem>(
   actions: TabPinActions<Item>,
   worktreeId: () => string
@@ -31,11 +27,10 @@ export function withLayoutOwnerTabProps<Item extends PinnableItem>(
         isPinned: !item.isPinned
       }
       const shown = (): void => {
-        // Preview stays the window's until main opens files (phase C4): pinning a preview keeps it.
+        // Pinning must make preview files permanent while file-open ownership remains in the window.
         if (!item.isPinned && item.type === 'editor' && item.data) {
           actions.makePreviewFilePermanent(item.data.id, item.unifiedTabId)
         }
-        // A pin counts as a use of terminal tabs, as the window's own pin does.
         void useAppStore.getState().recordFeatureInteraction?.('terminal-tabs')
       }
       if (

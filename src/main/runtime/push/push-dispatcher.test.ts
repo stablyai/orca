@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PushGatewayClient } from './push-gateway-client'
-import { mapPushAgentState, PushDispatcher } from './push-dispatcher'
+import { PushDispatcher } from './push-dispatcher'
+import { mapPushAgentState } from '../../../shared/mobile-push-alert'
 import {
   createHarness,
   flush,
@@ -151,7 +152,6 @@ describe('PushDispatcher', () => {
     scheduled[0]?.()
     await flush()
     expect(sends).toHaveLength(2)
-    // The second attempt is the last one; a further retry is never scheduled.
     expect(scheduled).toHaveLength(1)
   })
 

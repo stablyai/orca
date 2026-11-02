@@ -15,8 +15,7 @@ type BundleVersion = SkillCloudVersion & {
 
 const CONFLICT_STATES = new Set(['modified', 'unowned', 'external-link', 'name-collision'])
 
-// Why: the row already names the skill, so the note only has to say what
-// installing it would do to the copy already on the machine.
+// The row names the skill; notes explain only what installation changes in its existing copy.
 function destinationNotes(
   preview: SkillBundleInstallPreview | null
 ): ReadonlyMap<string, string> | undefined {

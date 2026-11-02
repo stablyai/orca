@@ -1,40 +1,12 @@
-/**
- * Paired remote server: a cold-parked remote terminal must not lose its scrollback when the host
- * cannot answer the restore the park was licensed against.
- *
- * Topology: headed Orca desktop host (remote server) + a separate paired Orca desktop client —
- * the "SSH into the box, open the workspace, switch away, come back" shape. A remote-runtime
- * pty's bytes never transit the client's main process, so the client's xterm buffer is the only
- * client-side copy, and the paired-parking capability that licenses the unmount is a static build
- * string that says nothing about whether the host retained this pty's buffer.
- *
- * Oracle: a token the test typed into the terminal before the park, echoed back by the fixture, is
- * still in the revealed pane's buffer. Nothing replays stdin, so a respawned command cannot
- * reproduce that line — only the pre-park buffer can.
- *
- * Three scenarios, two parks:
- *   - "host retains the buffer" is the control for the ordinary park. It fails if the harness never
- *     parks, never reveals, or never echoed the token in the first place — so a green regression
- *     case cannot be green for an unrelated reason.
- *   - "host retains nothing" is the ordinary-park regression. ORCA_E2E_FORCE_REMOTE_TERMINAL_SNAPSHOT_UNAVAILABLE
- *     makes the host answer `no-serializable-buffer` — the state a client cannot tell apart from a
- *     host that is merely slow. Pre-fix the reveal paints an empty pane.
- *   - "force-park" is the retention-budget park. It is the only park that still writes the shared
- *     layout's `buffersByLeafId`, so it is where the mirrored-layout carry-through
- *     (`retainLocalScrollbackInRemoteLayout`) is load-bearing; the ordinary park's bytes live in
- *     `localOnlyScrollbackByTabId`, which a host inventory frame cannot reach by construction.
- *
- * Run:
- *   pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-parked-scrollback-survives.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Retain client scrollback when a paired desktop host cannot serialize the parked PTY.
+// Control ordinary park with a live host; force no-serializable-buffer to isolate local replay; force-park to test shared buffersByLeafId carry-through.
+// Ordinary parks use localOnlyScrollbackByTabId; force-parks must survive host layout frames in the shared home.
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
@@ -55,10 +27,7 @@ const PARK_DELAY_MS = 2_000
 const PAINT_BUDGET_MS = 30_000
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-parked-scrollback-'))
 
-// Why the token arrives over stdin rather than argv or a startup write: a respawn of the same
-// command reprints anything baked into the command, and a startup write only reaches a client
-// that was already subscribed — which the forced-unavailable host snapshot makes racy. Nothing
-// replays stdin, so an echoed line can only come back from the buffer that was there pre-park.
+// Send the token only through stdin: startup/argv text reappears on respawn, while only the old buffer can retain this echo.
 const fixturePath = path.join(scratch, 'parked-scrollback-terminal.mjs')
 writeFileSync(
   fixturePath,
@@ -123,8 +92,7 @@ async function readHostWorktreeIds(page: Page): Promise<{ primary: string; secon
   })
 }
 
-/** Reads both scrollback homes for a tab straight out of the store. The reveal is not a valid
- *  oracle for where the bytes live — a live host repaints a reveal whether or not the capture ran. */
+// Read both scrollback homes directly; a host-served reveal cannot prove where client bytes persisted.
 async function readScrollbackHomes(clientPage: Page, webTabId: string): Promise<ScrollbackHomes> {
   return clientPage.evaluate((id) => {
     const state = window.__store?.getState()
@@ -159,9 +127,7 @@ async function typeToken(
   return { token, painted }
 }
 
-/** Ordinary park: the target hides behind two decoys in its own worktree. Two decoys because the
- *  most recently hidden tab is exempt from cold-park (#8262) — one hides the target, the second
- *  moves the exemption. */
+// Hide behind two decoys because #8262 exempts the most recently hidden tab.
 async function parkOrdinarily(
   clientPage: Page,
   environmentId: string,
@@ -179,10 +145,7 @@ async function parkOrdinarily(
   await openPairedClientTab(clientPage, worktreeId, decoys[1].webTabId)
 }
 
-/** Force-park: the host does not advertise paired parking, so the target's worktree is one the
- *  ordinary park can never evict. A second hidden worktree pushes it past a retention budget of
- *  one; the newest hidden worktree keeps the last-active exemption, so the older one — the
- *  target's — is what the budget force-parks. */
+// Without paired-parking capability, use two hidden worktrees and retention budget one so the older target is force-parked.
 async function parkByRetentionBudget(
   clientPage: Page,
   environmentId: string,
@@ -202,8 +165,7 @@ async function parkByRetentionBudget(
   await clientPage.evaluate(() => window.__store?.getState().setActiveView('tasks'))
 }
 
-/** Creates a host terminal, mirrors it on the client, parks it, forces a host inventory frame into
- *  the park→reveal window, reveals it, and reports where the bytes went and whether they came back. */
+// Mirror/mark/park, force an inventory frame inside the park→reveal window, then report capture and restored echo.
 async function runParkRevealScenario(args: {
   clientPage: Page
   environmentId: string
@@ -236,8 +198,7 @@ async function runParkRevealScenario(args: {
     parked = false
   }
 
-  // Logged, not asserted: on failure this is the whole diagnosis — whether the park left a client
-  // copy at all, and if not, whether the repo catalog ruled the worktree local.
+  // Log capture presence and catalog locality to diagnose failure.
   const afterPark = await readScrollbackHomes(clientPage, target.webTabId)
   const parkDiagnostics = await clientPage.evaluate(
     ({ webTabId, worktreeId }) => {
@@ -260,12 +221,8 @@ async function runParkRevealScenario(args: {
   )
   const parkedHome = classifyParkedHome(afterPark)
 
-  // Why a forced inventory frame: without one this spec passes whether or not the mirrored-layout
-  // rebuild carries the shared capture, because no frame happens to land in its window. A host
-  // frame rebuilds the tab's layout bufferless; terminalLayoutEqual compares buffers, so the write
-  // is not bailed out and apply-terminal-records assigns it wholesale. For the force-park, whose
-  // bytes live in the layout, that is the destroying event, so it belongs inside the window under
-  // test. For the ordinary park the frame proves the local-only home is out of its reach.
+  // Force a host frame inside the window: its bufferless layout rebuild would overwrite force-park’s shared capture.
+  // Ordinary park’s local-only bytes must remain outside that upload/rebuild path.
   const probeTab = await createPairedHostTerminal(
     clientPage,
     environmentId,
@@ -311,7 +268,7 @@ async function runParkRevealScenario(args: {
 
 async function runScenario(
   orcaPage: Page,
-  testInfo: Parameters<Parameters<typeof test>[1]>[1],
+  testInfo: TestInfo,
   clientName: string,
   parkKind: ParkKind
 ): Promise<ParkRevealOutcome> {
@@ -319,8 +276,7 @@ async function runScenario(
   const client = await launchPairedElectronClient(offer, testInfo, clientName, {
     extraEnv: {
       ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARK_DELAY_MS),
-      // Why limit=1 on every client: it is inert for the ordinary park (that worktree is
-      // ordinarily parkable, so the budget never ranks it) and is what makes the force-park cheap.
+      // Budget one affects only force-park; ordinary-parkable worktrees bypass the budget ranker.
       ORCA_E2E_TERMINAL_RETENTION_LIMIT: '1'
     }
   })
@@ -370,21 +326,15 @@ async function runScenario(
   }
 }
 
-// Why parkedHome is part of the expected shape: it is the upload contract, read from the store
-// rather than inferred from the reveal. An ordinary park that lands in the shared layout would
-// still reveal fine and would put tens of MiB back on every replace-session.
+// Assert the upload home directly: ordinary park in shared layout would reveal fine but upload tens of MiB.
 const RESTORED_LOCAL_ONLY: ParkRevealOutcome = {
   tokenBeforePark: true,
   parked: true,
   parkedHome: 'local-only',
   tokenAfterReveal: true
 }
-// Why tokenAfterReveal is logged and not asserted here: a host without paired parking serves the
-// reattach from its own tail and paints it over whatever the client replayed at mount
-// (apply-reattach-payload clears the screen first), so on this topology it cannot speak for the
-// client copy — it measured false once and true twice with the copy intact. The retention fix is
-// proven where it acts: the shared layout still holds the bytes after the forced inventory frame
-// (`survivedInventoryFrame` above). It is left out of the assertion rather than matched loosely.
+// Log force-park reveal only: live host tail replay can overwrite a correct client copy.
+// Assert retention at its actual boundary, survivedInventoryFrame, instead.
 const FORCE_PARKED_SHARED: Omit<ParkRevealOutcome, 'tokenAfterReveal'> = {
   tokenBeforePark: true,
   parked: true,
@@ -421,8 +371,7 @@ test.describe('force-park with a host that cannot answer', () => {
   test.use({
     orcaAppExtraEnv: {
       ORCA_E2E_FORCE_REMOTE_TERMINAL_SNAPSHOT_UNAVAILABLE: '1',
-      // Why: without the paired-parking capability the worktree is un-parkable, which is the class
-      // the retention budget governs — the only way to reach a force-park on this topology.
+      // Omit paired-parking capability so this topology reaches retention-budget force-park.
       ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING: '1'
     }
   })

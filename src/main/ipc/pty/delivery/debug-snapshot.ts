@@ -8,7 +8,7 @@ import {
   getHiddenRendererPtyDeliveryDebug,
   getHiddenRendererPtyIds,
   isHiddenRendererPty
-} from '../../pty-hidden-delivery-gate'
+} from './pty-hidden-delivery-gate'
 import {
   lastPowerResumeAtMs,
   lastPowerSuspendAtMs,

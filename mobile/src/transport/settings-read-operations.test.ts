@@ -6,6 +6,7 @@ import { markRpcDeliveryUnknown, isRpcDeliveryUnknown } from './rpc-delivery-amb
 import { LogicalClientCutoverError, isLogicalClientCutoverError } from './stable-logical-rpc-client'
 import {
   settingsRead,
+  nativeChatQueueFollowUpsRead,
   optionalSettingsRead,
   botOverridesRead,
   newTabSettingsRead,
@@ -50,6 +51,32 @@ async function drain() {
 }
 
 describe('settings historical acceptance', () => {
+  it.each([
+    undefined,
+    null,
+    {},
+    { nativeChatQueueFollowUps: true },
+    { nativeChatQueueFollowUps: false },
+    { nativeChatQueueFollowUps: 'false' }
+  ])(
+    'distinguishes an explicit queue boolean from a missing older-host report (%j)',
+    async (settings) => {
+      const response = await nativeChatQueueFollowUpsRead.request(replyWith(success({ settings })))
+      expect(nativeChatQueueFollowUpsRead.interpret(response)).toEqual({
+        accepted: true,
+        value:
+          typeof settings?.nativeChatQueueFollowUps === 'boolean'
+            ? settings.nativeChatQueueFollowUps
+            : null
+      })
+      expect(
+        nativeChatQueueFollowUpsRead.interpret(
+          await nativeChatQueueFollowUpsRead.request(replyWith(refusal()))
+        )
+      ).toEqual({ accepted: false })
+    }
+  )
+
   it('distinguishes a skipped refusal from an accepted absent settings member', async () => {
     const skipped = await settingsRead.request(replyWith(refusal()))
     const missing = await settingsRead.request(replyWith(success({})))
@@ -252,10 +279,7 @@ describe('new-tab settlement barriers', () => {
 })
 
 describe('the bound descriptor', () => {
-  // Eleven call sites pass `interpret` detached from its descriptor, five of them
-  // settlePreviewSend's second argument in files/mobile-file-preview-request.ts:
-  // filePreviewTextRead, filePreviewImageRead, terminalArtifactTextRead,
-  // terminalArtifactImageRead and terminalArtifactWrite.
+  // Callers pass interpret detached from its descriptor, including file-preview settlement callbacks.
   it('interprets the same reply when taken as an unbound reference', async () => {
     const settings = { futureField: 'kept' }
     const accepted = await settingsRead.request(replyWith(success({ settings })))
@@ -268,7 +292,6 @@ describe('the bound descriptor', () => {
     expect(readOverrides(refused)).toEqual(botOverridesRead.interpret(refused))
     expect(readOverrides(refused)).toEqual({ accepted: false })
 
-    // The throwing acceptance family keeps its throw unbound rather than losing it.
     const missing = await newTabSettingsRead.request(replyWith(success(null)))
     const readNewTab = newTabSettingsRead.interpret
     expect(() => readNewTab(missing)()).toThrow(TypeError)

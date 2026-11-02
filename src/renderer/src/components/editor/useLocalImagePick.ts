@@ -8,6 +8,7 @@ import {
   captureRichMarkdownImageInsertionTarget,
   type RichMarkdownImageInsertionTarget
 } from './rich-markdown-image-insertion-target'
+import { translate } from '@/i18n/i18n'
 
 export function useLocalImagePick(
   editor: Editor | null,
@@ -51,7 +52,15 @@ export function useLocalImagePick(
         getInsertionRange: target.getRange
       })
     } catch (err) {
-      toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
+      toast.error(
+        extractIpcErrorMessage(
+          err,
+          translate(
+            'auto.components.editor.useLocalImagePick.175cb8b8ce',
+            'Failed to insert image.'
+          )
+        )
+      )
     } finally {
       target.dispose()
       pendingTargetsRef.current.delete(target)

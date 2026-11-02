@@ -5,8 +5,7 @@ import type {
   SqlRow
 } from '../database.js'
 
-// Every statement a relay path issues, in order, so its round trips are counted rather than
-// described. BEGIN and COMMIT are recorded too: each is a trip to a remote database.
+// Count real round trips including BEGIN/COMMIT rather than inferring from query counts.
 export class StatementRecordingDatabase implements RelayDatabase {
   readonly dialect: RelayDatabase['dialect']
   // A statement this matches fails as a dropped connection would, before reaching the database.

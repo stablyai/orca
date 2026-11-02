@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A screenshot pasted into a chat on a paired server is still uploading when an agent prompt card
-// replaces the composer. The real composer, attachment and paste hooks keep the upload, and Send
-// waits for it, whenever the composer comes back; a rich-text paste's image is owed from the start.
+// Keep pending pasted images across prompt-card composer remounts; Send waits until the scoped upload resolves.
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,7 +12,7 @@ import type {
   NativeChatComposerFieldProps,
   NativeChatComposerImageAttachment
 } from './NativeChatComposerField'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 type FieldProps = {
   imageAttachments?: readonly NativeChatComposerImageAttachment[]
@@ -33,7 +31,7 @@ const mocks = vi.hoisted(() => {
       sessionId: 'session-1'
     }
   }
-  return { state, prepare: vi.fn(), save: vi.fn() }
+  return { state, prepare: vi.fn(), save: vi.fn(), goal: vi.fn(async () => true) }
 })
 
 vi.mock('../../store', () => {
@@ -55,7 +53,7 @@ vi.mock('../../store', () => {
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   sendRuntimePtyInput: vi.fn()
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
@@ -107,37 +105,46 @@ const STORED = '/srv/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8
 
 function composer(
   acceptsImages = true,
-  composerRef?: RefObject<NativeChatComposerHandle | null>
+  composerRef?: RefObject<NativeChatComposerHandle | null>,
+  mode: 'structured' | 'terminal' | 'goal' = 'structured'
 ): React.JSX.Element {
   return (
     <NativeChatComposer
       ref={composerRef}
       terminalTabId="tab-1"
       paneKey={PANE}
-      targetPtyId={null}
+      targetPtyId={mode === 'terminal' ? 'pty' : null}
       agent="claude"
-      structuredTransport={{
-        capturePresentation: () => () => true,
-        send: vi.fn(() => true),
-        dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
-        optionsSurface: {
-          getSnapshot: () => [],
-          setOption: vi.fn(),
-          invokeAction: vi.fn(),
-          subscribe: () => () => {}
-        },
-        optionSnapshot: [],
-        onError: vi.fn(),
-        runtime: 'remote',
-        acceptsImages,
-        sessionId: 'session-1',
-        runtimeEnvironmentId: 'env-1'
-      }}
+      structuredTransport={
+        mode === 'terminal'
+          ? undefined
+          : {
+              capturePresentation: () => () => true,
+              send: vi.fn(() => true),
+              dispatchCommand: vi.fn(async () => ({
+                handled: false,
+                accepted: false,
+                error: null
+              })),
+              optionsSurface: {
+                getSnapshot: () => [],
+                setOption: vi.fn(),
+                invokeAction: vi.fn(),
+                subscribe: () => () => {}
+              },
+              optionSnapshot: [],
+              onError: vi.fn(),
+              runtime: 'remote',
+              acceptsImages,
+              ...(mode === 'goal' ? { threadGoal: { setObjective: mocks.goal } } : {}),
+              sessionId: 'session-1',
+              runtimeEnvironmentId: 'env-1'
+            }
+      }
     />
   )
 }
 
-/** The preload bridge: what this test drives, and an inert subscription for everything else. */
 function installPreloadApi(ui: Record<string, unknown>): void {
   const inert = (): (() => void) => () => {}
   const namespace = (own: Record<string, unknown>): Record<string, unknown> =>
@@ -177,6 +184,7 @@ beforeEach(() => {
   clearNativeChatAttachmentCacheForTests()
   clearNativeChatDraftCacheForTests()
   mocks.state.fieldProps = null
+  mocks.goal.mockClear()
   mocks.state.owner = {
     kind: 'runtime-session',
     environmentId: 'env-1',
@@ -218,7 +226,6 @@ describe('a paste into a chat on a paired server', () => {
     await act(async () => fireEvent(screen.getByRole('textbox'), imagePaste()))
     expect(mocks.state.fieldProps?.imageAttachments).toMatchObject([{ pending: true }])
 
-    // The agent asks a question: its card takes the composer's place while the image uploads.
     view.unmount()
     await act(async () => finishUpload(STORED))
 
@@ -237,7 +244,6 @@ describe('a paste into a chat on a paired server', () => {
     await act(async () => fireEvent(screen.getByRole('textbox'), imagePaste()))
     first.unmount()
 
-    // Back from the prompt card while the image is still on its way to the server.
     render(composer())
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
     expect(mocks.state.fieldProps?.imageAttachments).toMatchObject([{ pending: true }])
@@ -251,13 +257,11 @@ describe('a paste into a chat on a paired server', () => {
     const prepared = Promise.withResolvers<unknown>()
     mocks.prepare.mockReturnValue(prepared.promise)
     holdUpload()
-    // What the user typed, and the pasted text with it: Send is open before the paste.
     writeNativeChatDraftCache(PANE, 'look at this caption')
     render(composer())
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
     await act(async () => fireEvent(screen.getByRole('textbox'), imagePaste('caption')))
 
-    // The text is in; the image is not yet anywhere, but it is owed to this message.
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
   })
 
@@ -268,7 +272,6 @@ describe('a paste into a chat on a paired server', () => {
     writeNativeChatDraftCache(PANE, 'look at this caption')
     const first = render(composer())
     await act(async () => fireEvent(screen.getByRole('textbox'), imagePaste('caption')))
-    // A prompt card replaces the composer while the server is still being asked.
     first.unmount()
     render(composer())
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
@@ -284,7 +287,6 @@ describe('a paste into a chat on a paired server', () => {
         }
       })
     )
-    // Shown, so the user can see it and remove it while it uploads.
     expect(mocks.state.fieldProps?.imageAttachments).toMatchObject([{ pending: true }])
     expect(mocks.state.fieldProps?.imageAttachments?.[0]).not.toHaveProperty('hidden')
 
@@ -445,7 +447,7 @@ it.each([false, true])(
     const storage = createMemoryNativeChatComposerDraftStorage()
     setNativeChatComposerDraftStorageForTests(storage)
     await hydrateNativeChatComposerDrafts()
-    mocks.state.owner = { kind: 'local' }
+    mocks.state.owner = { kind: 'local', structuredSessionId: 'session-1' }
     const pending = Promise.withResolvers<string>()
     installPreloadApi({ savePastedTextAsFile: () => pending.promise })
     writeNativeChatDraftCache(PANE, 'helloworldend')
@@ -473,7 +475,7 @@ it.each([false, true])(
     act(() => expect(copy()).toBe(`hello${'x'.repeat(32768)}end`))
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1000000)
     if (reconstruct) {
-      // The field adopts saved JSON this way after another window edits the same pending draft.
+      // Model another window reconstructing the editor from the saved pending draft.
       act(() => editor().commands.setContent(promptTextContent(`${raw}!`), { emitUpdate: false }))
     }
     const transaction = vi.fn()
@@ -521,5 +523,165 @@ it.each([false, true])(
     await act(async () => fireEvent(field(), imagePaste()))
     expect(mocks.state.fieldProps?.imageAttachments).toHaveLength(1)
     expect(screen.getByRole('button', { name: 'Image #1: Saving pasted image…' })).toBeTruthy()
+  }
+)
+
+it.each(['terminal', 'structured', 'goal'] as const)(
+  'uses the real clipboard path in %s mode, preserving inline terminal text and structured upload references',
+  async (mode) => {
+    const storage = createMemoryNativeChatComposerDraftStorage()
+    setNativeChatComposerDraftStorageForTests(storage)
+    await hydrateNativeChatComposerDrafts()
+    mocks.state.owner = {
+      kind: 'local',
+      ...(mode === 'terminal' ? {} : { structuredSessionId: 'session-1' })
+    }
+    const pending = Promise.withResolvers<string>()
+    const save = vi.fn(() => pending.promise)
+    installPreloadApi({ savePastedTextAsFile: save })
+    const view = render(composer(true, undefined, mode))
+    const field = () => screen.getByRole('textbox')
+    if (mode === 'goal') {
+      act(() => writeNativeChatDraftCache(PANE, '/goal'))
+      act(() => mocks.state.fieldProps?.onSend())
+      await waitFor(() => expect(promptValue(field())).toBe(''))
+      save.mockRejectedValueOnce(new Error('disk full'))
+      const failedData = new DataTransfer()
+      failedData.setData('text/plain', 'failed objective source'.repeat(2000))
+      await act(async () =>
+        fireEvent(
+          field(),
+          new ClipboardEvent('paste', { clipboardData: failedData, cancelable: true })
+        )
+      )
+      const failedDraft = promptValue(field())
+      expect(failedDraft).toContain('orca-paste:')
+      expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
+      act(() => mocks.state.fieldProps?.onSend())
+      expect(mocks.goal).not.toHaveBeenCalled()
+      expect(promptValue(field())).toBe(failedDraft)
+      act(() => promptEditor(field()).commands.undo())
+      expect(promptValue(field())).toBe('')
+    }
+    const text = 'exact clipboard source\r\n'.repeat(2000)
+    const data = new DataTransfer()
+    data.setData('text/plain', text)
+    await act(async () =>
+      fireEvent(field(), new ClipboardEvent('paste', { clipboardData: data, cancelable: true }))
+    )
+    const raw = promptValue(field())
+    if (mode === 'terminal') {
+      expect(raw).toBe(text)
+      expect(save).not.toHaveBeenCalled()
+    } else {
+      expect(raw).toMatch(/^\[Pasted text\]\(orca-paste:[0-9a-f-]{36}\)$/)
+      expect(save).toHaveBeenCalledWith({ text })
+      expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
+      act(() => mocks.state.fieldProps?.onSend())
+      expect(mocks.goal).not.toHaveBeenCalled()
+      await act(async () => pending.resolve('/p/structured.txt'))
+      expect(resolveNativeChatPastedText(PANE, raw)).toBe('@/p/structured.txt')
+      expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
+    }
+    if (mode === 'goal') {
+      mocks.goal.mockResolvedValueOnce(false)
+      act(() => mocks.state.fieldProps?.onSend())
+      await waitFor(() => expect(mocks.goal).toHaveBeenCalledWith('@/p/structured.txt'))
+      expect(promptValue(field())).toBe(raw)
+      act(() => mocks.state.fieldProps?.onSend())
+      await waitFor(() => expect(promptValue(field())).toBe(''))
+      act(() => promptEditor(field()).commands.undo())
+      expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('@/p/structured.txt')
+    }
+    const copied = new DataTransfer()
+    act(() => {
+      promptEditor(field()).commands.selectAll()
+      field().dispatchEvent(
+        new ClipboardEvent('copy', { clipboardData: copied, bubbles: true, cancelable: true })
+      )
+    })
+    expect(copied.getData('text/plain')).toBe(mode === 'terminal' ? raw : '@/p/structured.txt')
+    await nativeChatComposerDraftWriteSettled(PANE)
+    view.unmount()
+    clearNativeChatComposerDraftsForTests()
+    setNativeChatComposerDraftStorageForTests(storage)
+    await hydrateNativeChatComposerDrafts()
+    render(composer(true, undefined, mode))
+    expect(promptValue(field())).toBe(raw)
+    expect(resolveNativeChatPastedText(PANE, raw, true)).toBe(
+      mode === 'terminal' ? raw : '@/p/structured.txt'
+    )
+  }
+)
+
+it('preserves goal paste-time size refusal on an upload-incapable owner without changing the draft', async () => {
+  mocks.state.owner = { kind: 'remote' }
+  const save = vi.fn()
+  installPreloadApi({ savePastedTextAsFile: save })
+  render(composer(true, undefined, 'goal'))
+  act(() => writeNativeChatDraftCache(PANE, '/goal'))
+  act(() => mocks.state.fieldProps?.onSend())
+  act(() => writeNativeChatDraftCache(PANE, 'keep this objective'))
+  const data = new DataTransfer()
+  data.setData('text/plain', 'x'.repeat(300 * 1024))
+  await act(async () =>
+    fireEvent(
+      screen.getByRole('textbox'),
+      new ClipboardEvent('paste', { clipboardData: data, cancelable: true })
+    )
+  )
+  expect(promptValue(screen.getByRole('textbox'))).toBe('keep this objective')
+  expect(screen.getByText(/256 KB limit/)).toBeTruthy()
+  expect(save).not.toHaveBeenCalled()
+})
+
+it.each([100 * 1024, 1024 * 1024])(
+  'bounds real structured goal clipboard intake at %i bytes for N/10 actions',
+  async (bytes) => {
+    const measurements: unknown[] = []
+    for (const count of [1, 10]) {
+      clearNativeChatComposerDraftsForTests()
+      const storage = createMemoryNativeChatComposerDraftStorage()
+      setNativeChatComposerDraftStorageForTests(storage)
+      await hydrateNativeChatComposerDrafts()
+      mocks.state.owner = { kind: 'local', structuredSessionId: 'session-1' }
+      const save = vi.fn(async () => '/p/benchmark.txt')
+      installPreloadApi({ savePastedTextAsFile: save })
+      const view = render(composer(true, undefined, 'goal'))
+      const field = screen.getByRole('textbox')
+      act(() => writeNativeChatDraftCache(PANE, '/goal'))
+      act(() => mocks.state.fieldProps?.onSend())
+      const paste = (text: string) => {
+        const data = new DataTransfer()
+        data.setData('text/plain', text)
+        fireEvent(field, new ClipboardEvent('paste', { clipboardData: data, cancelable: true }))
+      }
+      await act(async () => paste('small paste'))
+      expect(promptValue(field)).toBe('small paste')
+      expect(save).not.toHaveBeenCalled()
+      act(() => promptEditor(field).commands.clearContent())
+      let inserted = 0
+      const text = 'x'.repeat(bytes)
+      const started = performance.now()
+      for (let index = 0; index < count; index++) {
+        await act(async () => paste(text))
+        inserted += promptValue(field).length
+        expect(resolveNativeChatPastedText(PANE, promptValue(field))).toBe('@/p/benchmark.txt')
+        act(() => promptEditor(field).commands.clearContent())
+      }
+      measurements.push({
+        bytes,
+        count,
+        inserted,
+        uploads: save.mock.calls.length,
+        elapsedMs: performance.now() - started
+      })
+      expect(save).toHaveBeenCalledTimes(count)
+      expect(inserted).toBeLessThan(100 * count)
+      expect(nativeChatPastedTextOperations.size).toBe(0)
+      view.unmount()
+    }
+    // Happy-dom handler/editor timing with upload I/O injected; no native layout or filesystem claim.
+    process.stdout.write(`structured-goal-paste-intake-benchmark ${JSON.stringify(measurements)}\n`)
   }
 )

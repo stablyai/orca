@@ -7,7 +7,7 @@ import { activateWebRuntimeSessionTab } from '../../runtime/web-runtime-session-
 import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session-environment'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
-import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 
 export function useTabGroupActivationCommands({

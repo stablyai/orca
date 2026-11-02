@@ -38,7 +38,7 @@ jobs:
   check:
     name: Build and test
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout pull request
@@ -80,7 +80,7 @@ jobs:
     if: >-
       github.repository == 'stablyai/orca' &&
       (github.event_name == 'release' || github.event_name == 'workflow_dispatch')
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       deploy: ${{ steps.validate.outputs.deploy }}
@@ -105,8 +105,7 @@ jobs:
           tag="$INPUT_TAG"
           [[ "$EVENT_NAME" == "release" ]] && tag="$RELEASE_TAG"
 
-          # Match the stable desktop format used by release-policy.yml. This
-          # intentionally rejects mobile-* and all -rc.* tags.
+          # Use release-policy’s stable desktop tag shape, excluding mobile-* and RC tags.
           stable_tag=false
           [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] && stable_tag=true
 
@@ -147,9 +146,7 @@ jobs:
             fi
           fi
 
-          # Resolve the tag to an immutable commit before handing it to the
-          # deployment job. This prevents a force-moved tag from changing the
-          # source between authorization and checkout.
+          # Pin the immutable commit before deployment so force-moving a tag cannot swap authorized source.
           tag_ref_json=''
           for attempt in 1 2 3; do
             if tag_ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" 2>/dev/null)"; then
@@ -173,9 +170,7 @@ jobs:
           fi
           echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
 
-          # Stable tags cut before the docs package was merged are valid Orca
-          # releases, but cannot produce a docs deployment. Skip them before
-          # requesting the protected production environment.
+          # Old stable tags may predate docs; skip before requesting the protected production environment.
           docs_source_available=false
           for attempt in 1 2 3; do
             if gh api "repos/$GITHUB_REPOSITORY/contents/docs/site/package.json?ref=$commit_sha" >/dev/null 2>&1; then
@@ -205,7 +200,7 @@ jobs:
       needs.release_gate.result == 'success' &&
       needs.release_gate.outputs.deploy == 'true'
     needs: release_gate
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
       name: docs-production

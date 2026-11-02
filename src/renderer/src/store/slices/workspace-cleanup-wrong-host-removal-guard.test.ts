@@ -1,27 +1,4 @@
-/**
- * STA-4343: workspace cleanup deletes on the host whose row was confirmed, and
- * only on that host.
- *
- * Two hosts can expose cleanup candidates with the SAME `repoId::path` identity
- * (the scan composes `worktreeId` from `repo.id` + `::` + the workspace path with
- * no host component). Selection, confirmation and preflight all keyed on
- * `worktreeId` alone, and removal routing prefers the ACTIVE workspace's host, so
- * confirming host B's row issued the destructive IPC against host A and destroyed
- * host A's real directory (and its uncommitted work).
- *
- * The same repo at the same path on two hosts is TWO workspaces, so the fix is to
- * ROUTE: the confirmed row names its host, and the removal lands there. #14731's
- * blanket refusal was the interim behavior this replaces. A refusal now means the
- * confirmed row itself cannot be attributed — no host evidence at all, or a
- * refreshed scan that no longer shows that host's row.
- *
- * Rig: two REAL temp directories stand in for the two hosts. The removal boundary
- * (`window.api.worktrees.remove`) is the only fake, and it ACTUALLY deletes the
- * directory on the host it is routed to. The gate is filesystem state, not
- * arguments — each assertion names which directory had to survive and which had
- * to go, so neither a rig that deletes nothing nor one that deletes everything
- * can pass.
- */
+/** Route cleanup to the confirmed host, replacing #14731’s blanket refusal (STA-4343). Real per-host temp directories and destructive transport fakes prove exactly the confirmed copy is removed; neither deleting none nor deleting all can pass. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
@@ -72,12 +49,7 @@ const WORKTREE_ID = 'repo1::/shared/workspace/path'
 const WORKTREE_PATH = '/shared/workspace/path'
 const FIRST_WORKTREE_ID = 'repo1::/first/very-long-workspace/path'
 
-/**
- * `force` here is the real thing, not a flag: a dirty worktree makes
- * shouldForceWorkspaceCleanupRemoval true, which is what the cleanup slice reads.
- * Force is the least re-checked destructive path, so every routing claim has to
- * hold on it too.
- */
+/** Dirty candidates exercise actual force removal; owner routing must remain correct on that least-rechecked path. */
 function makeHostCandidate(
   executionHostId: ExecutionHostId | undefined,
   connectionId: string | null = executionHostId === HOST_B_HOST_ID ? 'ssh-1' : null,
@@ -226,7 +198,6 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
       tabsByWorktree: { [WORKTREE_ID]: [makeTab({ id: 'host-a-tab', worktreeId: WORKTREE_ID })] }
     } as Partial<AppState>)
 
-    // The user confirms HOST B's cleanup row.
     const removal = await store
       .getState()
       .removeWorkspaceCleanupCandidates([WORKTREE_ID], { approvedCandidates: [hostBCandidate] })
@@ -235,7 +206,6 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
       fs.existsSync(hosts.hostAMarkerPath),
       `HOST A (active) worktree directory must still exist after confirming HOST B's row. worktrees.remove was routed to hostId=${routedHostIds.join(',')}`
     ).toBe(true)
-    // The confirmed row IS a workspace of its own, so it is deleted for real.
     expect(
       fs.existsSync(hosts.hostBMarkerPath),
       "HOST B's directory must be gone — its row is what the user confirmed"
@@ -243,7 +213,6 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
     expect(routedHostIds).toEqual([HOST_B_HOST_ID])
     expect(removal.removedIds).toEqual([WORKTREE_ID])
     expect(removal.failures).toEqual([])
-    // Host A's tabs belong to the workspace that survived, so they stay.
     expect(store.getState().tabsByWorktree[WORKTREE_ID]).toEqual([
       expect.objectContaining({ id: 'host-a-tab' })
     ])
@@ -280,9 +249,7 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
     expect(fs.existsSync(hosts.hostAMarkerPath), 'host A must survive').toBe(true)
     expect(fs.existsSync(hosts.hostBMarkerPath), 'host B must survive').toBe(true)
     expect(routedHostIds).toEqual([])
-    // The confirmed host's row is simply not there any more; do not fall through
-    // to another host's row, which would decide force/blockers for a workspace
-    // it does not own.
+    // Missing confirmed-host row must fail; another host’s scan cannot decide force/blockers for it.
     expect(removal.failures).toEqual([
       {
         worktreeId: WORKTREE_ID,
@@ -379,8 +346,7 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
         approvedCandidates: [firstCandidate, secondCandidate]
       })
 
-    // Both rows were confirmed on host A, so host A's becoming inactive mid-batch
-    // must not redirect the second removal onto whichever host is active now.
+    // Changing focus mid-batch must not retarget the second confirmed host-A removal.
     expect(fs.existsSync(hosts.hostBMarkerPath), 'newly active host B must survive').toBe(true)
     expect(fs.existsSync(hosts.hostAMarkerPath), "confirmed host A's row must be gone").toBe(false)
     expect(routedHostIds).toEqual([HOST_A_HOST_ID, HOST_A_HOST_ID])
@@ -440,8 +406,6 @@ describe.each([
     expect(fs.existsSync(hosts.hostAMarkerPath), 'ACTIVE host A must survive').toBe(true)
   })
 
-  // NO FALSE REFUSALS: the guard must not turn an ordinary one-host delete into
-  // an error, force included.
   it('still deletes an ordinary single-host workspace', async () => {
     const hosts = createHostDirectories()
     const routedHostIds: string[] = []
@@ -568,4 +532,147 @@ describe('STA-4343: ordinary single-host cleanup still deletes', () => {
     expect(routedHostIds).toEqual([HOST_A_HOST_ID])
     expect(fs.existsSync(hosts.hostAMarkerPath)).toBe(false)
   })
+})
+
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import * as pendingChips from '@/components/native-chat/native-chat-pending-attachment-cache'
+
+it.each([
+  { mode: 'normal', twin: true, preserved: false },
+  { mode: 'force', twin: true, preserved: true },
+  { mode: 'forget-local', twin: true, preserved: false },
+  { mode: 'normal', twin: false, preserved: false },
+  { mode: 'postcommit-error', twin: false, preserved: false }
+])(
+  'actual $mode removal revokes the return writer before postcommit work, twin=$twin preserved=$preserved',
+  async ({ mode, twin, preserved }) => {
+    launchDrafts.clearNativeChatComposerDraftsForTests()
+    pendingChips.clearNativeChatPendingAttachmentsForTests()
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', hostId: 'local' }),
+          ...(twin
+            ? [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', hostId: HOST_B_HOST_ID })]
+            : [])
+        ]
+      }
+    })
+    const scope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(WORKTREE_ID, 'codex', 'local')
+    const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      WORKTREE_ID,
+      'codex',
+      HOST_B_HOST_ID
+    )
+    launchDrafts.updateNativeChatComposerDraft(scope, { text: 'old task' }, 'immediate')
+    launchDrafts.updateNativeChatComposerDraft(other, { text: 'other host task' }, 'immediate')
+    const attempt = launchDrafts.captureNativeChatComposerSubmission(scope)
+    launchDrafts.updateNativeChatComposerDraft(scope, { text: '' }, 'immediate')
+    pendingChips.addNativeChatPendingAttachment(scope, { id: 'old-chip', path: '', pending: true })
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error('dirty worktree'))
+    expect(
+      (await store.getState().removeWorktree({ id: WORKTREE_ID, executionHostId: 'local' })).ok
+    ).toBe(false)
+    expect(attempt.draft?.text).toBe('old task')
+    const result = preserved ? { preservedBranch: { branchName: 'keep', head: 'abc123' } } : {}
+    mockApi.worktrees.remove.mockResolvedValue(result)
+    mockApi.worktrees.forgetLocal.mockResolvedValue(result)
+    if (mode === 'postcommit-error') {
+      store.setState({
+        shutdownWorktreeBrowsers: vi.fn(async () => {
+          expect(attempt.draft).toBeUndefined()
+          throw new Error('postcommit housekeeping failed')
+        })
+      })
+    }
+    const removal = await store
+      .getState()
+      .removeWorktree(
+        { id: WORKTREE_ID, executionHostId: 'local' },
+        mode === 'force',
+        mode === 'forget-local' ? { mode: 'forget-local' } : undefined
+      )
+    expect(removal.ok).toBe(mode !== 'postcommit-error')
+    expect(attempt.draft).toBeUndefined()
+    expect(pendingChips.nativeChatPendingAttachmentSnapshot(scope)).toHaveLength(twin ? 1 : 0)
+    const freshScope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      WORKTREE_ID,
+      'codex',
+      'local'
+    )
+    launchDrafts.updateNativeChatComposerDraft(freshScope, { text: 'new lifetime' }, 'immediate')
+    launchDrafts.finishNativeChatComposerSubmission(scope, attempt, true)
+    expect(pendingChips.takeNativeChatPendingAttachment(scope, 'old-chip') !== undefined).toBe(twin)
+    expect(launchDrafts.readNativeChatComposerDraft(freshScope).text).toBe('new lifetime')
+    expect(launchDrafts.readNativeChatComposerDraft(other).text).toBe('other host task')
+  }
+)
+
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from '@/components/native-chat/native-chat-composer-draft-storage'
+it('actual normal removal clears current setup while held residue stays inert and later manual input retains authority', async () => {
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+  pendingChips.clearNativeChatPendingAttachmentsForTests()
+  const storage = createMemoryNativeChatComposerDraftStorage()
+  const originalKey = `agent-setup:${JSON.stringify(['ssh:old', WORKTREE_ID, 'codex'])}`
+  storage.drafts.set(originalKey, {
+    text: 'old saved task',
+    images: [{ id: 'old', path: '/old.png' }],
+    savedAt: 1,
+    owner: { workspaceId: WORKTREE_ID, executionHostId: 'ssh:old' }
+  })
+  const snapshot = new Map(storage.drafts)
+  const gate = Promise.withResolvers<ReadonlyMap<string, unknown>>()
+  setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: () => gate.promise })
+  const loading = launchDrafts.hydrateNativeChatComposerDrafts()
+  const source = launchDrafts.nativeChatLaunchPromptDraftScopeKey(WORKTREE_ID, 'codex', 'ssh:old')
+  const current = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    WORKTREE_ID,
+    'codex',
+    HOST_B_HOST_ID
+  )
+  const live = launchDrafts.nativeChatLaunchPromptDraftScopeKey('repo1::/live', 'codex', 'local')
+  launchDrafts.updateNativeChatComposerDraft(current, { text: 'current target' }, 'immediate')
+  launchDrafts.updateNativeChatComposerDraft(live, { text: 'live control' }, 'immediate')
+  pendingChips.addNativeChatPendingAttachment(source, {
+    id: 'old-pending',
+    path: '',
+    pending: true
+  })
+  const store = createTestStore()
+  seedStore(store, {
+    worktreesByRepo: {
+      repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', hostId: HOST_B_HOST_ID })]
+    }
+  })
+  store
+    .getState()
+    .recordSshRepoReadoptions([{ oldTargetId: 'old', newTargetId: 'ssh-1', repoIds: ['repo1'] }])
+  mockApi.worktrees.remove.mockRejectedValueOnce(new Error('refused'))
+  expect(
+    (await store.getState().removeWorktree({ id: WORKTREE_ID, executionHostId: HOST_B_HOST_ID })).ok
+  ).toBe(false)
+  expect(launchDrafts.readNativeChatComposerDraft(current).text).toBe('current target')
+  expect(storage.drafts.has(originalKey)).toBe(true)
+  mockApi.worktrees.remove.mockResolvedValueOnce({})
+  expect(
+    (await store.getState().removeWorktree({ id: WORKTREE_ID, executionHostId: HOST_B_HOST_ID })).ok
+  ).toBe(true)
+  expect(pendingChips.nativeChatPendingAttachmentSnapshot(source)).toHaveLength(0)
+  launchDrafts.updateNativeChatComposerDraft(current, { text: 'new explicit input' }, 'immediate')
+  gate.resolve(snapshot)
+  await loading
+  await launchDrafts.nativeChatComposerDraftWritesSettled()
+  expect(launchDrafts.readNativeChatComposerDraft(source).text).toBe('new explicit input')
+  expect(launchDrafts.readNativeChatComposerDraft(source).images).toHaveLength(0)
+  expect(storage.drafts.has(originalKey)).toBe(true)
+  expect(launchDrafts.readNativeChatComposerDraft(live).text).toBe('live control')
+  expect(pendingChips.settleNativeChatPendingAttachment(source, 'old-pending', '/late.png')).toBe(
+    false
+  )
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+  pendingChips.clearNativeChatPendingAttachmentsForTests()
 })

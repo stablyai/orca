@@ -36,7 +36,7 @@ export type AgentHookSettingsUpdate = {
   settingsPath: string
 }
 
-/** Read the settings domain without creating SQLite for a JSON-only profile. */
+/** JSON-only profiles must not create SQLite while reading settings. */
 export function readAgentHookSettingsFromProfileState(
   location: ProfileStateOfflineLocation
 ): AgentHookSettings {
@@ -55,12 +55,7 @@ export function readAgentHookSettingsFromProfileState(
   return readAgentHookSettingsFromSettingsValue(result.values.get('settings'))
 }
 
-/**
- * Update only the settings row in an existing SQLite authority.
- *
- * The snapshot revision is checked again by BEGIN IMMEDIATE, so a runtime
- * writer between read and update produces a conflict instead of clobbering it.
- */
+/** Fence the snapshot revision under BEGIN IMMEDIATE so intervening runtime writes conflict. */
 export function updateAgentHookSettingsInProfileState(
   location: ProfileStateOfflineLocation,
   enabled: boolean
@@ -80,8 +75,11 @@ export function updateAgentHookSettingsInProfileState(
       throw domains.error
     }
     const persistedSettings = domains.values.get('settings')
-    const { uiLanguagePortugueseMigrationApplied: _migrationApplied, ...settingsDefaults } =
-      getDefaultPersistedState(homedir()).settings
+    const {
+      uiLanguagePortugueseMigrationApplied: _migrationApplied,
+      agentLaunchChoices: _launchChoices,
+      ...settingsDefaults
+    } = getDefaultPersistedState(homedir()).settings
     const settings = {
       ...settingsDefaults,
       ...(isRecord(persistedSettings) ? persistedSettings : {}),
@@ -101,7 +99,7 @@ export function updateAgentHookSettingsInProfileState(
   }
 }
 
-/** The caller holds maintenance ownership through import and the fenced settings write. */
+/** Caller retains maintenance ownership through import and fenced update. */
 export function updateAgentHookSettingsFromProfileState(
   location: ProfileStateOfflineLocation,
   enabled: boolean

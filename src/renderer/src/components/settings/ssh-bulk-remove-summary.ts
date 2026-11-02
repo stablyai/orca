@@ -7,7 +7,6 @@ export type SshBulkRemoveSummary = {
   description?: string
 }
 
-/** One toast for a whole bulk removal: counts first, then each host that needs a separate step. */
 export function summarizeSshBulkRemove(args: {
   removedCount: number
   skipped: SshBulkRemovePlan['skipped']

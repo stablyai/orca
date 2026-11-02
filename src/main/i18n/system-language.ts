@@ -9,10 +9,10 @@ export function getSystemLanguageDetection(
   if (snapshot === undefined) {
     try {
       if (!app.isReady()) {
-        return null
+        // Pre-ready startup-failure dialogs still need a language; cache only the post-ready read.
+        return readNativeLanguageDetection()
       }
-      const preferences = app.getPreferredSystemLanguages()
-      snapshot = preferences.length ? detectUiLanguage(preferences, 'native') : null
+      snapshot = readNativeLanguageDetection()
     } catch {
       snapshot = null
     }
@@ -21,4 +21,13 @@ export function getSystemLanguageDetection(
     snapshot = detectUiLanguage(browserPreferences, 'browser-fallback')
   }
   return snapshot
+}
+
+function readNativeLanguageDetection(): UiLanguageDetection | null {
+  try {
+    const preferences = app.getPreferredSystemLanguages()
+    return preferences.length ? detectUiLanguage(preferences, 'native') : null
+  } catch {
+    return null
+  }
 }

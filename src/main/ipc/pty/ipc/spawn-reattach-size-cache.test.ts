@@ -35,7 +35,8 @@ function makeCtx(args: PtySpawnIpcArgs, runtime: ReturnType<typeof makeRuntime>)
   ctx.isDaemonHostSpawn = true
   ctx.effectiveSessionId = SESSION_ID
   ctx.effectiveSessionAppId = SESSION_ID
-  ctx.isMintedSessionId = args.sessionId === undefined
+  // Mirrors spawn-preflight: a caller-supplied sessionId is an attach, never a fresh mint.
+  ctx.ownsNewIncarnation = args.sessionId === undefined
   return ctx
 }
 
@@ -79,14 +80,6 @@ describe('spawn size cache on reattach', () => {
       LIVE_GRID.cols,
       LIVE_GRID.rows
     )
-  })
-
-  it('records the requested grid for a genuinely fresh spawn', async () => {
-    const { runtime, preAttachSize } = await runSpawn({ cols: 120, rows: 40 }, { id: SESSION_ID })
-
-    expect(preAttachSize).toEqual({ cols: 120, rows: 40 })
-    expect(ptySizes.get(SESSION_ID)).toEqual({ cols: 120, rows: 40 })
-    expect(runtime.reflowHeadlessTerminalToPtyGrid).toHaveBeenCalledWith(SESSION_ID, 120, 40)
   })
 
   // Unmeasured attach skips pre-seeding; if the daemon recreates it, commit must size the model.

@@ -23,7 +23,7 @@ import {
   onboardingWindowsTerminalShellSchema
 } from './telemetry-onboarding-foundation-schemas'
 
-// Uniform button/keyboard shape lets keyboard skip/dismiss paths arrive without a schema migration.
+// Use one button/keyboard shape so skip/dismiss paths need no schema migration.
 export const advancedViaSchema = z.enum(['button', 'keyboard']).optional()
 
 export const onboardingStartedSchema = z
@@ -157,7 +157,7 @@ export const activationChecklistItemCompletedSchema = z
   })
   .strict()
 
-// Why: disambiguates `on_path:false` rows on dashboard 1562016 (shell-hydration failure vs genuinely-not-on-PATH). See docs/agent-on-path-detection.md.
+// Distinguish shell-hydration failure from an absent binary; see docs/agent-on-path-detection.md.
 export const pathSourceSchema = z.enum(['shell_hydrate', 'sync_seed_only'])
 export const pathFailureReasonSchema = z.enum([
   'none',
@@ -167,7 +167,6 @@ export const pathFailureReasonSchema = z.enum([
   'empty_path'
 ])
 
-// Compile-time guard: schema enum must match `ShellHydrationFailureReason`; drift breaks the build, not runtime parsing.
 export type _PathFailureReasonSync =
   z.infer<typeof pathFailureReasonSchema> extends ShellHydrationFailureReason
     ? ShellHydrationFailureReason extends z.infer<typeof pathFailureReasonSchema>
@@ -186,7 +185,7 @@ export type _PathSourceSync =
 export const _pathSourceSyncCheck: _PathSourceSync = true
 void _pathSourceSyncCheck
 
-// Fired at click time (captures mind-changes); `agent_kind` uses `tuiAgentToAgentKind` to keep the wire enum closed.
+// Record picks at click time, including mind changes; keep agent_kind closed through tuiAgentToAgentKind.
 export const onboardingAgentPickedSchema = z
   .object({
     agent_kind: agentKindSchema,
@@ -196,17 +195,16 @@ export const onboardingAgentPickedSchema = z
     detection_state: z.enum(['complete', 'pending']),
     // `true` when the agent lived under the "Show N more" disclosure — signals demand for less-popular agents.
     from_collapsed_section: z.boolean(),
-    // Why: `.optional()` is load-bearing so pre-deploy events validate under `.strict()`. See docs/agent-on-path-detection.md.
+    // Optional so pre-deploy events still validate; see docs/agent-on-path-detection.md.
     path_source: pathSourceSchema.optional(),
     path_failure_reason: pathFailureReasonSchema.optional(),
     cohort: cohortSchema
   })
   .strict()
 
-// Mirrors ThemeStep.tsx DiscoveryState; `failed` is intentionally absent (it's an import outcome, see onboarding_ghostty_import_failed).
+// Discovery mirrors ThemeStep; failed is an import outcome recorded separately.
 export const ghosttyDiscoveryStateSchema = z.enum(['found', 'absent', 'imported'])
 
-// Compile-time guard: schema enum must stay in sync with the renderer's DiscoveryState; drift breaks the build, not runtime.
 export type _GhosttyDiscoveryStateSync =
   z.infer<typeof ghosttyDiscoveryStateSchema> extends DiscoveryStatusEmitted
     ? DiscoveryStatusEmitted extends z.infer<typeof ghosttyDiscoveryStateSchema>
@@ -244,7 +242,6 @@ export const onboardingFeatureSetupRunSchema = z
   .object({
     ...onboardingFeatureSetupSelectionSchema,
     cli_touched: z.boolean(),
-    // How the one-click skill install ended; replaces the copy/paste command fields.
     skill_install_result: z.enum([
       'installed',
       'needs_attention',
@@ -256,7 +253,7 @@ export const onboardingFeatureSetupRunSchema = z
     warning_count: z.number().int().nonnegative(),
     cohort: cohortSchema
   })
-  // Why: validate derived selected_count at the untrusted IPC boundary rather than trust renderer callers.
+  // Validate derived selected_count at the untrusted IPC boundary.
   .refine(
     hasMatchingOnboardingFeatureSetupSelectedCount,
     onboardingFeatureSetupSelectedCountRefinement

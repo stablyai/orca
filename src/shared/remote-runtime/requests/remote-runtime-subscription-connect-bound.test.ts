@@ -1,16 +1,10 @@
 import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
-/**
- * The subscribe path is the one that regressed: its connect failure rejects the subscribe
- * promise rather than reaching `onError`, and that rejection crosses `ipcMain.handle`, which
- * keeps only the message. So this file pins two things together — that the connect bound, not
- * the subscription-start timer, is what fires against a silent host, and that the message it
- * produces still classifies as recoverable once the code is gone. Split them and a future
- * rewording passes both halves while dead-ending the terminal pane.
- */
+/** Pin connect-bound timing and recoverability together: subscribe rejection crosses IPC with only its message.
+ * Separate assertions could miss a rewording that stops pane recovery. */
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { generateKeyPair, publicKeyToBase64 } from '../../e2ee-crypto'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
@@ -116,9 +110,7 @@ describe('remote runtime subscription connect bound', () => {
       }),
       'terminal.multiplex',
       {},
-      // Why: comfortably longer than the connect bound, reproducing production's
-      // 12s < 15s ordering. If the bound stops firing, the start timer wins and
-      // the code/message assertions below change.
+      // Keep the start timeout longer than connect (production 15s vs 12s), so a lost bound changes these assertions.
       2_000,
       { onResponse: vi.fn(), onError: vi.fn(), onClose: vi.fn() },
       { connectTimeoutMs: 150 }

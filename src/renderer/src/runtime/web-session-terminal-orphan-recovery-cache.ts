@@ -141,10 +141,7 @@ function inventoryAbsenceCoordinates(args: {
       surfaceKey: args.surface.surfaceKey,
       expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
     }),
-    // Why no publicationEpoch: the fingerprint identifies the *surface* being confirmed absent, not the
-    // snapshot that carried it. Folding the epoch in required both observations to come from one
-    // publication — which is the same evidence counted twice — and reset the count whenever the host
-    // republished, so a host that re-publishes between inventories could never reach two.
+    // Absence fingerprints identify surfaces, not publicationEpoch: including epoch resets evidence on republication and prevents two independent inventories confirming absence.
     fingerprint: [args.surface.handle, args.surface.expectedPtyId ?? ''].join('\0')
   }
 }

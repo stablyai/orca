@@ -9,8 +9,7 @@ import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 import { isJcodeUserInputTool } from './jcode-tool-fields'
 
-// jcode's six lifecycle points, mapped the way docs/reference/jcode-hook-events.md
-// records them. `session_start` is absent on purpose: it returns early below.
+// Lifecycle mapping follows docs/reference/jcode-hook-events.md; idle session_start takes the early path.
 const JCODE_EVENT_STATES: Record<string, AgentStatusState> = {
   turn_start: 'working',
   pre_tool: 'working',
@@ -27,14 +26,12 @@ export function normalizeJcodeEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   if (eventName === 'session_start') {
-    // Why: jcode fires session_start on idle TUI open/attach/resume; mapping it
-    // to 'working' would show a spinner before the user typed (mirrors Devin).
+    // Idle open/attach/resume must not assert working before input.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
 
-  // Why the gate only: post_tool for the same tool fires after the human already
-  // answered, so it must not re-open the question.
+  // Only pre_tool can open a human-input wait; post_tool must not reopen answered questions.
   const stateName =
     eventName === 'pre_tool' && isJcodeUserInputTool(readString(hookPayload, 'tool_name'))
       ? 'waiting'
@@ -52,16 +49,14 @@ export function normalizeJcodeEvent(
   )
   // Why the error text first: a failed turn's own message beats the reply it never replaced.
   const errorText = hookPayload.status === 'error' ? readString(hookPayload, 'error') : undefined
-  // Why flag it: an unmarked message reads as assistant prose downstream, so a failed
-  // tool's stderr would render as jcode's reply in native chat.
+  // Mark tool errors so stderr does not render as assistant prose in native chat.
   const errorIsToolOutput = errorText !== undefined && eventName === 'post_tool'
 
   return normalizeAgentStatusPayload({
     state: stateName,
     prompt: resolvePrompt(state, paneKey, promptText, { resetOnNewTurn }),
     agentType: 'jcode',
-    // Why: jcode stamps the live model on session_start/turn_start/turn_end, so
-    // the row keeps naming the right model after an in-session `/model` switch.
+    // Keep live model stamps after in-session /model switches.
     model: readString(hookPayload, 'model'),
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,

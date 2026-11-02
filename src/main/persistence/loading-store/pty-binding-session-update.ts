@@ -24,8 +24,7 @@ export function applyPtyBinding(
   const advanceTopologyFence = (): void => {
     const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
     const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-    // Why: a split is itself the authority — with no fence the renderer's pre-split
-    // pane list replays over it and the pane is lost even on the repo's first split.
+    // A split establishes authority immediately, even before the first topology revision.
     const establishesMembershipAuthority = args.expectedSourceBinding !== undefined
     if (
       !reconciledIncarnation &&
@@ -33,14 +32,13 @@ export function applyPtyBinding(
     ) {
       return
     }
-    // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
+    // Host membership/incarnation changes must outrank stale renderer snapshots.
     session.terminalTopologyRevisionByRepoId = {
       ...session.terminalTopologyRevisionByRepoId,
       [repoId]: currentRevision + 1
     }
   }
-  // Switch point: a reused local id leaves the saved pane of the process that had it (P2, L80);
-  // the commit writes the unbinding with its own binding, each field once.
+  // Unbind reused local IDs in the same commit that publishes the new incarnation.
   const unbound =
     ORCA_LAYOUT_OWNER_IS_MAIN && args.incarnationId
       ? reusedTerminalIdUnbinding(session, { ...args, incarnationId: args.incarnationId })
@@ -75,7 +73,7 @@ export function applyPtyBinding(
     )
   } else {
     terminalMembershipChanged = true
-    // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
+    // Persist spawn-created tabs before delayed renderer saves to keep their bindings from becoming orphans.
     const nextTabs = [
       ...(tabs ?? []),
       createMinimalPersistedTerminalTab({
@@ -93,7 +91,7 @@ export function applyPtyBinding(
     }
   }
   session.tabsByWorktree = rows
-  // Why: host-initiated persist snapshots used to omit this write-once guard, so every launch or reattach treated the worktree as never having default terminals applied.
+  // Host-initiated binds must set the write-once default-terminal guard too.
   session.defaultTerminalTabsAppliedByWorktreeId = {
     ...session.defaultTerminalTabsAppliedByWorktreeId,
     [bindingWorktreeId]: true
@@ -108,20 +106,19 @@ export function applyPtyBinding(
       bindingWorktreeId
     ]
   }
-  // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
+  // Durable pane maps use UUID leaf keys; exclude legacy renderer-local IDs.
   const leafKeyed = isTerminalLeafId(args.leafId)
   const layout = layoutsByTab?.[args.tabId]
   if (leafKeyed && layout) {
     if (!layout.root) {
       terminalMembershipChanged = true
-      // Why: load names every saved root, but the layout type still allows none; the binding needs a durable one.
       layout.root = { type: 'leaf', leafId: args.leafId }
       layout.activeLeafId = args.leafId
       layout.expandedLeafId = null
     } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
       terminalMembershipChanged = true
-      // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
-      // Switch point: main's tree is drawn back, so it places the leaf where the window split it.
+      // Persist minimal split membership before renderer saves so crashes cannot strand the new binding.
+      // With main-owned layout, preserve the split position supplied by the window.
       layout.root = (ORCA_LAYOUT_OWNER_IS_MAIN &&
         placedSplitRoot(layout.root, args.leafId, args.placement)) || {
         type: 'split',
@@ -140,7 +137,7 @@ export function applyPtyBinding(
     }
   } else if (leafKeyed) {
     terminalMembershipChanged = true
-    // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
+    // First spawns need a minimal durable layout before renderer snapshots arrive.
     layoutsByTab = {
       ...layoutsByTab,
       [args.tabId]: {

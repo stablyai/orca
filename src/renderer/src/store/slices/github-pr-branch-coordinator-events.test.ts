@@ -9,8 +9,23 @@ import {
   mockApi,
   resetRemoteRuntimeMocks
 } from './github-slice-test-harness'
+import type { StoreApi } from 'zustand'
 import type { AppState } from '../types'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
+
+function applyStartedEvent(
+  store: StoreApi<AppState>,
+  event: Parameters<AppState['applyGitHubPRRefreshEvent']>[0]
+) {
+  store.getState().applyGitHubPRRefreshEvent({
+    sequence: event.sequence,
+    reason: event.reason,
+    aliases: event.aliases,
+    status: 'in-flight',
+    requestStartedAt: Date.now()
+  })
+  store.getState().applyGitHubPRRefreshEvent(event)
+}
 
 describe('createGitHubSlice.fetchPRForBranch', () => {
   beforeEach(() => {
@@ -49,7 +64,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       worktree
     })
 
-    store.getState().applyGitHubPRRefreshEvent({
+    applyStartedEvent(store, {
       sequence: 1,
       reason: 'swr',
       aliases: [
@@ -78,7 +93,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-      { shouldApply: expect.any(Function) }
+      { executionHostId: 'local', shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
   })
@@ -104,7 +119,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       worktree
     })
 
-    store.getState().applyGitHubPRRefreshEvent({
+    applyStartedEvent(store, {
       sequence: 1,
       reason: 'swr',
       aliases: [
@@ -128,7 +143,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-      { shouldApply: expect.any(Function) }
+      { executionHostId: 'local', shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
   })
@@ -504,10 +519,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       updateWorktreeMeta
     } as unknown as Partial<AppState>)
 
-    // The coordinator coalesces linked PR refreshes by PR number, so one probe
-    // (worktree A's head) is broadcast to both aliases. Only A actually diverged;
-    // B is still on a contained commit and must keep its link.
-    store.getState().applyGitHubPRRefreshEvent({
+    // PR-number coalescing broadcasts A’s head probe to B too; clear only diverged A, retaining B’s contained-head link.
+    applyStartedEvent(store, {
       sequence: 1,
       reason: 'swr',
       aliases: [

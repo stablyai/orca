@@ -1,8 +1,4 @@
-/**
- * Leak regression (STA-7436): a background-opened page's start admission must end however the page
- * leaves the store. A bulk worktree purge used to drop the page records without releasing it.
- * The sweep is the same function useTerminalWindowLifecycle runs on every store change.
- */
+/** Release background-page start admission on every removal, including bulk purge; exercise the same sweep as useTerminalWindowLifecycle (STA-7436). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'

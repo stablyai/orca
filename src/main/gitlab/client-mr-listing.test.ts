@@ -205,6 +205,68 @@ describe('gitlab client — MR operations', () => {
       expect(result.items[0].isCrossRepository).toBe(true)
     })
 
+    it('probes one more page when GitLab sends no pagination totals', async () => {
+      const mr = (iid: number) => ({
+        id: iid,
+        iid,
+        title: `mr ${iid}`,
+        state: 'opened',
+        source_branch: `b${iid}`,
+        target_branch: 'main'
+      })
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify([mr(1), mr(2)]),
+        headers: {}
+      })
+      expect(await listMergeRequests('/repo', 'all', 3, 2)).toMatchObject({
+        totalPages: 4,
+        totalCount: 0
+      })
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({ body: JSON.stringify([mr(3)]), headers: {} })
+      expect((await listMergeRequests('/repo', 'all', 4, 2)).totalPages).toBe(4)
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify([mr(1), mr(2)]),
+        headers: { 'x-total': '7' }
+      })
+      expect(await listMergeRequests('/repo', 'all', 1, 2)).toMatchObject({
+        totalPages: 4,
+        totalCount: 7
+      })
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify([mr(1), mr(2)]),
+        headers: {}
+      })
+      expect((await listMergeRequests('/repo', 'all', 1, 2)).totalPages).toBe(2)
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+      expect((await listMergeRequests('/repo', 'all', 2, 2)).totalPages).toBe(2)
+
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify([mr(1), mr(2)]),
+        headers: { 'x-total-pages': '5', 'x-total': '7' }
+      })
+      expect((await listMergeRequests('/repo', 'all', 1, 2)).totalPages).toBe(5)
+    })
+
+    it('retains MR inference when a known-other remote has an unresolved companion', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+      gitExecFileAsyncMock.mockResolvedValueOnce({
+        stdout:
+          'origin\tgit@github.com:team/project.git (fetch)\nupstream\t/local/project.git (fetch)\n'
+      })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+      const result = await listMergeRequests('/repo')
+
+      expect(result.error).toBeUndefined()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(expect.arrayContaining(['mr', 'list']), {
+        cwd: '/repo'
+      })
+    })
+
     it('falls back to glab mr list when project ref is unresolved', async () => {
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,

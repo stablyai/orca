@@ -6,8 +6,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveBuildSourceCommit } from './build-source-commit.mjs'
 
-// Electron packaging restamps the channel-specific version after compilation; `commit`
-// is what the tsc-compiled CLI pins official skill installs to.
+// Packager restamps channel version after compilation; compiled CLI’s commit pins official skill installs.
 function buildOutPackageJson(version, commit) {
   return `${JSON.stringify(
     { name: 'orca-compiled-output', type: 'commonjs', private: true, version, commit },
@@ -16,10 +15,6 @@ function buildOutPackageJson(version, commit) {
   )}\n`
 }
 
-/**
- * Verifies the published CLI entrypoint and the module-type boundary for the
- * compiled output tree that the packaged CLI loads at runtime.
- */
 export function verifyPackageCliBin({
   projectDir = path.resolve(import.meta.dirname, '..', '..'),
   fixExecutable = false,
@@ -94,7 +89,6 @@ export function verifyPackageCliBin({
   return { binPath, outPackageJsonPath, size: statSync(binPath).size }
 }
 
-/** Runs CLI verification from npm scripts and local release checks. */
 function main() {
   const args = new Set(process.argv.slice(2))
   const result = verifyPackageCliBin({

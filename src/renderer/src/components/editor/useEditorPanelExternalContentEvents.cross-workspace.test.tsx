@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// Why: a Source Control discard in workspace A names A's worktree; workspace B's panel shows a view
-// of the same record and must drop its copy of the discarded text too.
+// Workspace-scoped discards must evict every view of the shared record, including other workspaces.
 import { act, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'

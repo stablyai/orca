@@ -16,14 +16,8 @@ import {
   readShellCsp
 } from './preview/mobile-web-app-render-harness.mjs'
 
-/**
- * The host stack's push and pop on the page, sampled every animation frame in a real browser.
- *
- * The native stack slides; the page's stack is `HostStack`'s web half, and before it existed the
- * page rendered native-stack's web view, which flips `display` and nothing else. The probe tree
- * mounts the real `HostStack` (extensionless, so its `.web.tsx` wins as it does on a real route)
- * over two marked screens, so the frames measure the stack and not what a screen paints.
- */
+// Sample real HostStack web push/pop frame-by-frame; native-stack web fallback only flips display.
+// Two marked probe screens isolate stack motion from screen content while extensionless import selects shipped web sibling.
 
 const HOST_ID = 'stack-host'
 const LIST_ROUTE = `/${MOBILE_WEB_APP_ROUTE_ROOT}/${HOST_ID}`
@@ -35,7 +29,7 @@ const SETTLED_GRACE_MS = 150
 const bundles = mobileWebAppDependenciesPresent()
 const describeRender = bundles ? describe : describe.skip
 
-/** WKWebView carries the page on iOS, so WebKit's Web Animations and keyframes count too. */
+// Include WebKit Web Animations/keyframes used by iOS WKWebView.
 const ENGINES = [
   {
     name: 'chromium',
@@ -63,7 +57,7 @@ export default function ProbeHostLayout() {
 }
 `
 
-// Both screens go through the page's real router seam, so Back claims and pops as shipped.
+// Use real page router seam so Back claims/pops match shipped behavior.
 const listSource = (handoffModule) => `import { useEffect } from 'react'
 import { View } from 'react-native'
 import { useRouteHandoff } from ${JSON.stringify(handoffModule)}
@@ -81,7 +75,7 @@ export default function ProbeList() {
 }
 `
 
-// Counts mounts, so a screen remounted for its exit slide reads as a second one.
+// Count mounts to catch exit animation replacing screen instead of retaining it.
 const sessionSource = (handoffModule) => `import { useEffect } from 'react'
 import { View } from 'react-native'
 import { useRouteHandoff } from ${JSON.stringify(handoffModule)}
@@ -170,10 +164,7 @@ async function openList(browser, { animation = 'default', reducedMotion = 'no-pr
   return { errors, page }
 }
 
-/**
- * Runs `action` on the probe, then reads both screens' left edge once per animation frame, and
- * which screen a tap at the centre would land on. A hidden screen, or no screen hit, reads as null.
- */
+// Sample screen left edges and center hit target each rAF; hidden/missing screens read null.
 function sampleFrames(
   page,
   action,
@@ -207,7 +198,6 @@ function sampleFrames(
             list: leftOf('stack-probe-list'),
             session: leftOf('stack-probe-session'),
             hit: hitAt(),
-            // Where the running slide starts, which is how a slide that restarts from 0 shows.
             from: document.getAnimations()[0]?.effect?.getKeyframes()[0]?.transform ?? null
           })
           const last = frames.at(-1)
@@ -218,7 +208,6 @@ function sampleFrames(
           const settled = arrived && followUpDelivered && document.getAnimations().length === 0
           const now = performance.now()
           settledAt = settled ? (settledAt ?? now) : null
-          // Observe cleanup after actual arrival; retain the full window for interruption races.
           const finished = !fullWindow && settledAt !== null && now - settledAt >= settledGraceMs
           if (!finished && now - start < sampleMs) {
             requestAnimationFrame(tick)
@@ -232,7 +221,6 @@ function sampleFrames(
   )
 }
 
-/** Every element in the document, hidden ones included: a retained slot still counts. */
 const nodeCount = (page) => page.evaluate(() => document.querySelectorAll('*').length)
 
 async function waitForBackClaim(page) {
@@ -248,6 +236,10 @@ async function waitForBackClaim(page) {
 
 const between = (left) => left !== null && left > 0 && left < VIEWPORT.width
 const sliding = (frames) => frames.filter((frame) => between(frame.session))
+// The screen under a slide stays painted and drifts up to 30% left, like an iOS push (push-motion.ts).
+const drifting = (left) => left !== null && left < 0 && left >= -VIEWPORT.width * 0.3 - 1
+const overDriftingList = (frames) =>
+  frames.some((frame) => between(frame.session) && drifting(frame.list))
 const SESSION_SETTLED = { list: null, session: 0, hit: 'session', from: null }
 const LIST_SETTLED = { list: 0, session: null, hit: 'list', from: null }
 const sessionMounts = (page) => page.evaluate(() => globalThis.__orcaSessionMounts ?? 0)
@@ -260,10 +252,10 @@ describeRender('the host stack transition on the page', () => {
         const { errors, page } = await open()
         const frames = await sampleFrames(page, 'push')
         const firstShown = frames.find((frame) => frame.session !== null)
-        // Red on native-stack's web view: the session's first visible frame is already at x = 0.
+        // Native-stack web fallback fails: first visible session frame is already x=0.
         expect(firstShown?.session).toBeGreaterThan(0)
-        expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
-        // The list stays painted under the slide but takes no tap, so a double tap cannot push twice.
+        expect(overDriftingList(frames)).toBe(true)
+        // Underlying list stays painted but cannot receive taps that would double-push.
         expect(sliding(frames).map((frame) => frame.hit)).toEqual(sliding(frames).map(() => null))
         expect(frames.at(-1)).toEqual(SESSION_SETTLED)
         expect(errors).toEqual([])
@@ -275,9 +267,9 @@ describeRender('the host stack transition on the page', () => {
         await sampleFrames(page, 'push')
         expect(await sessionMounts(page)).toBe(1)
         const frames = await sampleFrames(page, 'back')
-        // Red on native-stack's web view: the popped screen is gone on the first frame after Back.
-        expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
-        // The screen sliding out is the one that was on screen, not a fresh mount of it.
+        // Native-stack web fallback removes popped screen on first frame instead of sliding out.
+        expect(overDriftingList(frames)).toBe(true)
+        // Exit must retain original screen instance.
         expect(await sessionMounts(page)).toBe(1)
         expect(frames.at(-1)).toEqual(LIST_SETTLED)
         expect(errors).toEqual([])
@@ -290,7 +282,7 @@ describeRender('the host stack transition on the page', () => {
         await sampleFrames(page, 'push')
         await waitForBackClaim(page)
         const frames = await sampleFrames(page, 'hardwareBack')
-        expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
+        expect(overDriftingList(frames)).toBe(true)
         expect(frames.at(-1)).toEqual(LIST_SETTLED)
         expect(await nodeCount(page)).toBe(baseline)
         expect(errors).toEqual([])
@@ -320,7 +312,7 @@ describeRender('the host stack transition on the page', () => {
 
       it('settles on the list when Back interrupts an unfinished push', async () => {
         const { errors, page } = await open()
-        // Warm the session chunk, so the interrupted push is mid-slide rather than waiting for content.
+        // Warm session chunk so interrupted push measures mid-slide, not pending content.
         await sampleFrames(page, 'push')
         await sampleFrames(page, 'back')
         const baseline = await nodeCount(page)
@@ -331,7 +323,7 @@ describeRender('the host stack transition on the page', () => {
           observeFullWindow: true
         })
         expect(between(frames[5].session)).toBe(true)
-        // Leaves from where the push stopped, not from 0: the exit's first keyframe is mid-screen.
+        // Exit must start where interrupted entry stopped, rather than restarting at zero.
         const exitFrom = frames.slice(6).find((frame) => frame.from?.startsWith('matrix'))?.from
         const startX = Number(exitFrom?.match(/matrix\(1, 0, 0, 1, ([\d.]+), 0\)/)?.[1])
         expect(between(startX)).toBe(true)
@@ -351,18 +343,17 @@ describeRender('the host stack transition on the page', () => {
         const { errors, page } = await open()
         await sampleFrames(page, 'push')
         await sampleFrames(page, 'back')
-        // wt-1 is still entering when wt-2 covers it, so wt-1 settles beneath at rest.
+        // Covered wt-1 must finish its ongoing entry beneath wt-2.
         await sampleFrames(page, 'push', { followUp: 'pushOther', afterFrames: 6 })
         await sampleFrames(page, 'back')
         const frames = await sampleFrames(page, 'back')
-        // getKeyframes() reports the keyframe normalized, as translateX(0px).
         expect(frames.find((frame) => frame.from !== null)?.from).toMatch(/^translateX\(0(px)?\)$/)
         expect(frames.at(-1)).toEqual(LIST_SETTLED)
         expect(errors).toEqual([])
         await page.close()
       }, 120_000)
 
-      it('swaps instantly in the tablet split view and under reduced motion', async () => {
+      it('swaps without sliding in the tablet split view and under reduced motion', async () => {
         for (const options of [{ animation: 'none' }, { reducedMotion: 'reduce' }]) {
           const { errors, page } = await open(options)
           const pushed = await sampleFrames(page, 'push')
