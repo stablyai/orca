@@ -57,7 +57,7 @@ export async function createFloatingWorkspaceMarkdownTab(
   store: FloatingWorkspaceMarkdownStore,
   markdownDirectory?: string | null
 ): Promise<void> {
-  const targetGroupId = store.activeGroupIdByWorktree[getSelectedFloatingWorkspaceId()]
+  const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
   const floatingMarkdownDirectory =
     markdownDirectory ?? (await window.api.app.getFloatingMarkdownDirectory())
   if (!floatingMarkdownDirectory) {

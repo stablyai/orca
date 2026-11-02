@@ -1,3 +1,5 @@
+import { useFloatingWorkspaceHost } from './floating-workspace-host'
+import { floatingWorkspaceId } from '../../../shared/floating-workspace-id'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import type { Tab } from '../../../shared/tab-types'
@@ -531,35 +533,42 @@ describe('createFloatingWorkspaceMarkdownTab', () => {
     createUntitledMarkdownFileWithTemplateSelectionMock.mockReset()
   })
 
-  it('creates floating markdown tabs without activating the main workspace', async () => {
-    const fileInfo = {
-      filePath: '/tmp/orca/floating-workspace/untitled.md',
-      relativePath: 'untitled.md',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      language: 'markdown',
-      isUntitled: true,
-      mode: 'edit'
-    }
-    const store = {
-      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
-      openFile: vi.fn()
-    }
-    createUntitledMarkdownFileWithTemplateSelectionMock.mockResolvedValue(fileInfo)
+  it.each([null, 'remote-host'])(
+    'creates local markdown in its local group with host %s selected',
+    async (host) => {
+      useFloatingWorkspaceHost.getState().selectHost(host)
+      const fileInfo = {
+        filePath: '/tmp/orca/floating-workspace/untitled.md',
+        relativePath: 'untitled.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        language: 'markdown',
+        isUntitled: true,
+        mode: 'edit'
+      }
+      const store = {
+        activeGroupIdByWorktree: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group',
+          [floatingWorkspaceId('remote-host')]: 'remote-group'
+        },
+        openFile: vi.fn()
+      }
+      createUntitledMarkdownFileWithTemplateSelectionMock.mockResolvedValue(fileInfo)
 
-    await createFloatingWorkspaceMarkdownTab(store as never, '/tmp/orca/floating-workspace')
+      await createFloatingWorkspaceMarkdownTab(store as never, '/tmp/orca/floating-workspace')
 
-    expect(createUntitledMarkdownFileWithTemplateSelectionMock).toHaveBeenCalledWith(
-      '/tmp/orca/floating-workspace',
-      FLOATING_TERMINAL_WORKTREE_ID,
-      undefined,
-      { kind: 'local' }
-    )
-    expect(store.openFile).toHaveBeenCalledWith(fileInfo, {
-      preview: false,
-      targetGroupId: 'floating-group',
-      suppressActiveRuntimeFallback: true
-    })
-  })
+      expect(createUntitledMarkdownFileWithTemplateSelectionMock).toHaveBeenCalledWith(
+        '/tmp/orca/floating-workspace',
+        FLOATING_TERMINAL_WORKTREE_ID,
+        undefined,
+        { kind: 'local' }
+      )
+      expect(store.openFile).toHaveBeenCalledWith(fileInfo, {
+        preview: false,
+        targetGroupId: 'floating-group',
+        suppressActiveRuntimeFallback: true
+      })
+    }
+  )
 
   it('does not open a floating markdown tab when template selection is cancelled', async () => {
     const store = {
