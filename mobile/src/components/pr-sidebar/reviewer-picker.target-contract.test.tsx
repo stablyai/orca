@@ -16,13 +16,16 @@ import type { OrcaRuntimeService } from '@orca/test-host/main/runtime/orca-runti
 import { eraseRpcMethods } from '@orca/test-host/main/runtime/rpc/core'
 import type { GitHubWorkItemDetails } from '@orca/test-host/shared/github/work-item-types'
 import type { Repo } from '@orca/test-host/shared/repo-types'
-const io = vi.hoisted(() => ({
-  gh: vi.fn(),
-  resolved: vi.fn(),
-  requestReviewer: vi.fn(),
-  // The sheet's real search field, as the thin native adapter last received it.
-  search: null as { value?: string; onChangeText?: (text: string) => void } | null
-}))
+type SearchField = { value?: string; onChangeText?: (text: string) => void }
+const io = vi.hoisted(
+  (): {
+    gh: ReturnType<typeof vi.fn>
+    resolved: ReturnType<typeof vi.fn>
+    requestReviewer: ReturnType<typeof vi.fn>
+    // The sheet's real search field, as the thin native adapter last received it.
+    search: SearchField | null
+  } => ({ gh: vi.fn(), resolved: vi.fn(), requestReviewer: vi.fn(), search: null })
+)
 vi.mock('react-native', () => ({
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },

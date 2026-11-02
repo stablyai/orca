@@ -394,13 +394,20 @@ function mountHub() {
   const requests: { method: string; params: unknown }[] = []
   const held = new Map<string, Held[]>()
   const holding = new Set<string>()
-  const io = {
-    owner: 'fork' as string | null,
+  const io: {
+    owner: string | null
+    detailsBody: string
+    checks: unknown[]
+    switched: boolean
+    pendingProbes: ((reply: RpcResponse) => void)[]
+    pendingStatuses: ((reply: RpcResponse) => void)[]
+  } = {
+    owner: 'fork',
     detailsBody: 'body',
-    checks: [] as unknown[],
+    checks: [],
     switched: false,
-    pendingProbes: [] as ((reply: RpcResponse) => void)[],
-    pendingStatuses: [] as ((reply: RpcResponse) => void)[]
+    pendingProbes: [],
+    pendingStatuses: []
   }
   const status = (branch: string) => ({ entries: [], branch, head: `${branch}-head` })
   const reply = (method: string, params: unknown): unknown => {

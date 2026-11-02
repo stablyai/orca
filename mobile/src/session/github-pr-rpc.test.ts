@@ -500,7 +500,7 @@ describe('fetch wrappers', () => {
     'fetchWorkItemDetails sends the addressed read intent a %s host understands',
     async (_host, capabilities, ordinary, refresh) => {
       const prRepo = { owner: 'fork', repo: 'widgets', host: 'github.corp' }
-      const sent: Record<string, unknown>[] = []
+      const sent: unknown[] = []
       const client = createFakeRpcClient()
       client.sendRequest = async (method, params) => {
         if (method === 'status.get') {
@@ -510,7 +510,7 @@ describe('fetch wrappers', () => {
             capabilities: [GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY, ...capabilities]
           })
         }
-        sent.push(params as Record<string, unknown>)
+        sent.push(params)
         return okResponse({
           item: {
             id: 'PR_93',
@@ -536,9 +536,12 @@ describe('fetch wrappers', () => {
         })
         expect(out.ok).toBe(true)
       }
-      const shape = (params: Record<string, unknown>) => ({
-        ownerRepo: 'ownerRepo' in params,
-        canonical: params.canonical
+      const shape = (params: unknown) => ({
+        ownerRepo: typeof params === 'object' && params !== null && 'ownerRepo' in params,
+        canonical:
+          typeof params === 'object' && params !== null && 'canonical' in params
+            ? params.canonical
+            : undefined
       })
       expect(sent.map(shape)).toEqual([ordinary, refresh])
       expect(sent[1]).toMatchObject({ number: 93, type: 'pr' })

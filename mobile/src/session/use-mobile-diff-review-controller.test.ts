@@ -308,11 +308,22 @@ it('runs the real Diff Review View dock demand before parent HEAD refresh withou
       worktreeId: 'wt-1',
       name: 'review',
       initialFilter: 'all',
+      commitOid: null,
       initialTarget: null,
       onOpenSession: () => {},
       onReconnect: () => {}
     })
-    return createElement(MobileDiffReviewScreenView, { controller, onBack: () => {} })
+    return createElement(MobileDiffReviewScreenView, {
+      controller,
+      hostConnection: {
+        reconnectAttempts: 0,
+        lastConnectedAt: null,
+        pendingPath: null,
+        pairingRejected: false,
+        relayHostReachability: 'connecting'
+      },
+      onBack: () => {}
+    })
   }
   const settle = async () => {
     const next = pending.shift()

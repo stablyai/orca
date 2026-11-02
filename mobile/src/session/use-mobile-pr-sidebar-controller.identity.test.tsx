@@ -294,7 +294,9 @@ it('selects fresh branch/client observations and keeps the same one across a gen
   branch = 'ensure'
   responseOwner = 'ensure-old'
   await update()
-  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => {
+    await controller.refetchPRSidebar({ includeDetails: false })
+  })
   await act(async () => {
     void controller.ensurePrSidebarDetails()
   })
@@ -388,15 +390,21 @@ it('retires details on accepted chip-only resource departure and none, retaining
   await act(async () => {
     renderer = create(<Probe />)
   })
-  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => {
+    await controller.refetchPRSidebar({ includeDetails: false })
+  })
   await act(async () => {
     void controller.ensurePrSidebarDetails()
   })
   const departedA = pending.shift()!
   resource = 'b'
-  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => {
+    await controller.refetchPRSidebar({ includeDetails: false })
+  })
   resource = 'a'
-  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => {
+    await controller.refetchPRSidebar({ includeDetails: false })
+  })
   await act(async () => departedA(rpcSuccess('departed-a', details('a'))))
   expect(controller!.prSidebarState).toMatchObject({ kind: 'ready', data: { details: null } })
   await act(async () => {
@@ -405,10 +413,14 @@ it('retires details on accepted chip-only resource departure and none, retaining
   expect(pending).toHaveLength(1)
   const beforeNone = pending.shift()!
   resource = null
-  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => {
+    await controller.refetchPRSidebar({ includeDetails: false })
+  })
   expect(controller!.prSidebarState).toEqual({ kind: 'none' })
   resource = 'a'
-  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => {
+    await controller.refetchPRSidebar({ includeDetails: false })
+  })
   await act(async () => beforeNone(rpcSuccess('before-none', details('a'))))
   expect(controller!.prSidebarState).toMatchObject({ kind: 'ready', data: { details: null } })
 
@@ -416,7 +428,9 @@ it('retires details on accepted chip-only resource departure and none, retaining
     void controller.ensurePrSidebarDetails()
   })
   const sameResource = pending.shift()!
-  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => {
+    await controller.refetchPRSidebar({ includeDetails: false })
+  })
   await act(async () => sameResource(rpcSuccess('same-resource', details('a'))))
   if (controller!.prSidebarState.kind !== 'ready') {
     throw new Error('expected ready')
@@ -567,7 +581,9 @@ it('marks a failed poll discovery as every caller does, clears it on a good poll
   await act(async () => {
     renderer = create(<Probe />)
   })
-  await act(async () => controller.refetchPRSidebar({ includeDetails: true }))
+  await act(async () => {
+    await controller.refetchPRSidebar({ includeDetails: true })
+  })
   let result: string | undefined
   const poll = () =>
     act(async () => {
