@@ -1,4 +1,4 @@
-import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'
+import type { WslGuestRoot } from '../../../shared/wsl-guest-root-marker'
 import type * as pty from 'node-pty'
 import type { PhysicalExitTracker } from '../../../shared/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../../shared/pty-startup-ingress'

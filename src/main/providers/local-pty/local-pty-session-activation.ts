@@ -41,7 +41,7 @@ import {
   ptyWslGuestRootById,
   startupIngressByPty
 } from './local-pty-provider-state'
-import { createWslGuestRootObserver } from '../../shared/wsl-guest-root-marker'
+import { createWslGuestRootObserver } from '../../../shared/wsl-guest-root-marker'
 import { createLocalPtyShellReadinessSession } from './local-pty-shell-readiness-session'
 import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-termination'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
