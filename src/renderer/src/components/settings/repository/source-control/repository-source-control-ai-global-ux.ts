@@ -268,11 +268,16 @@ export function useRepositorySourceControlAiGlobalUx({
       if (repoIdRef.current !== repoIdForWrite || !mountedRef.current || !ok) {
         return
       }
-      setImmediateRepoAi((current) => {
-        const next = withRepoAiActionRecipeText(current, settings, actionId, draft, repoIdForWrite)
-        immediateRepoAiRef.current = next
-        return next
-      })
+      // Built outside a state updater: replaying the menu edits reads the store's current settings.
+      commitImmediate(
+        withRepoAiActionRecipeText(
+          immediateRepoAiRef.current,
+          settings,
+          actionId,
+          draft,
+          repoIdForWrite
+        )
+      )
       setActionTextDrafts((current) =>
         clearActionTextDraftIfUnchanged(current, actionId, actionTextDrafts[actionId] ?? draft)
       )

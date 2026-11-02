@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import type { CommitMessageAiSettings } from '../../../../shared/commit-message-ai-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentCapability,
@@ -11,6 +10,7 @@ import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../shared/commit-message
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
 import { getTextGenerationModels } from '../../../../shared/source-control-ai-model-selection'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import {
@@ -39,8 +39,8 @@ export type AiCommitPrSettingsViewModel = {
 }
 
 /** List what Commit message generation can run on this host, including saved discovery. */
-function getTextGenerationCapability(agentId: TuiAgent, settings: GlobalSettings | null) {
-  const capability = getCommitMessageAgentCapability(agentId)
+function getTextGenerationCapability(agentId: string, settings: GlobalSettings | null) {
+  const capability = isTuiAgent(agentId) ? getCommitMessageAgentCapability(agentId) : undefined
   if (!capability || !settings) {
     return capability
   }
@@ -51,7 +51,7 @@ function getTextGenerationCapability(agentId: TuiAgent, settings: GlobalSettings
       normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi),
       settings.commitMessageAi,
       LOCAL_COMMIT_MESSAGE_HOST_KEY,
-      agentId
+      capability.id
     )
   }
 }
@@ -137,7 +137,7 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
       writeConfig({ agentId: CUSTOM_AGENT_ID })
       return
     }
-    const capability = getTextGenerationCapability(newAgentId as TuiAgent, settings)
+    const capability = getTextGenerationCapability(newAgentId, settings)
     if (!capability) {
       return
     }

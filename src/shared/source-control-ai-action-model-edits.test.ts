@@ -6,6 +6,8 @@ import {
   type SourceControlAiModelEdit,
   type SourceControlAiModelEdits
 } from './source-control-ai-action-model-edits'
+import type { GlobalSettings } from './global-settings-types'
+import { getDefaultSourceControlAiSettings } from './source-control-ai-settings'
 import type { SourceControlAiModelChoice } from './source-control-ai-types'
 import type { TuiAgent } from './tui-agent'
 
@@ -20,10 +22,15 @@ const START: SourceControlAiModelChoice = {
 const REGISTERED = ['ssh:registered']
 const DESTINATIONS = [...REGISTERED, 'ssh:saved-only']
 
-function settingsWith(choice: SourceControlAiModelChoice | undefined) {
+function settingsWith(
+  choice: SourceControlAiModelChoice | undefined
+): Pick<GlobalSettings, 'sourceControlAi'> {
   return {
-    sourceControlAi: { modelOverridesByOperation: choice ? { commitMessage: choice } : {} }
-  } as Parameters<typeof saveSourceControlAiActionModelChoice>[0]['settings']
+    sourceControlAi: {
+      ...getDefaultSourceControlAiSettings(),
+      modelOverridesByOperation: choice ? { commitMessage: choice } : {}
+    }
+  }
 }
 
 function applyInOrder(edits: readonly Edit[]): SourceControlAiModelChoice | undefined {

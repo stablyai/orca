@@ -33,10 +33,10 @@ type UseSourceControlActionRecipeDraftStateArgs = {
 
 /** A model choice the user did not edit in the menu follows the saved one, so another editor's newer pick shows. */
 function rebaseUneditedModelChoices(
-  current: ActionRecipeDraftState,
+  draft: ActionRecipeDraftState['values'],
   persisted: ActionRecipeDraftState['values']
 ): ActionRecipeDraftState['values'] {
-  const values = { ...current.values }
+  const values = { ...draft }
   for (const actionId of SOURCE_CONTROL_TEXT_ACTION_IDS) {
     const value = values[actionId]
     if (!value.modelEdits?.length) {
@@ -59,11 +59,17 @@ export function useSourceControlActionRecipeDraftState({
   )
   const persistedActionRecipeValuesRef = useRef(persistedActionRecipeValues)
   persistedActionRecipeValuesRef.current = persistedActionRecipeValues
-  const [actionRecipeDraftState, setActionRecipeDraftState] = useState<ActionRecipeDraftState>(
+  const [storedDraftState, setActionRecipeDraftState] = useState<ActionRecipeDraftState>(() => ({
+    values: persistedActionRecipeValues,
+    baseValues: persistedActionRecipeValues
+  }))
+  // Derived during render so the saved model shows in the same frame the settings change.
+  const actionRecipeDraftState = useMemo<ActionRecipeDraftState>(
     () => ({
-      values: persistedActionRecipeValues,
-      baseValues: persistedActionRecipeValues
-    })
+      baseValues: storedDraftState.baseValues,
+      values: rebaseUneditedModelChoices(storedDraftState.values, persistedActionRecipeValues)
+    }),
+    [storedDraftState, persistedActionRecipeValues]
   )
   const [savingActionTemplateIds, setSavingActionTemplateIds] = useState<
     Partial<Record<SourceControlActionId, boolean>>
@@ -92,7 +98,7 @@ export function useSourceControlActionRecipeDraftState({
         }
       }
       return {
-        values: rebaseUneditedModelChoices(current, persistedActionRecipeValues),
+        values: current.values,
         baseValues: persistedActionRecipeValues
       }
     })
@@ -215,7 +221,7 @@ export function useSourceControlActionRecipeDraftState({
   }
 
   const saveActionTemplateDraft = async (actionId: SourceControlActionId): Promise<void> => {
-    const submitted = actionRecipeDraftState.values[actionId]
+    const submitted = storedDraftState.values[actionId]
     const { agentId: _binding, ...nextValue } = liftActionPermissionArgs(
       { ...actionRecipeDraftState.values[actionId], agentId: config.actions?.[actionId]?.agentId },
       true,
