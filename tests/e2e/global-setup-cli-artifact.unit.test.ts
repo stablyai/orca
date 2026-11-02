@@ -2,9 +2,14 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fixture = vi.hoisted(() => ({
+  preflight: vi.fn(),
   exec: vi.fn(),
   exists: vi.fn(),
   write: vi.fn()
+}))
+
+vi.mock('../../config/scripts/macos-gui-launch-preflight.mjs', () => ({
+  assertMacGuiLaunchAllowed: fixture.preflight
 }))
 
 vi.mock('node:child_process', () => ({ execSync: fixture.exec }))
@@ -40,6 +45,17 @@ function commands(): string[] {
 }
 
 describe('E2E shared CLI artifact', () => {
+  it('refuses launch before preparing build artifacts or repositories', () => {
+    fixture.preflight.mockImplementationOnce(() => {
+      throw new Error('Launch denied')
+    })
+    expect(() => globalSetup()).toThrow('Launch denied')
+    expect(fixture.preflight).toHaveBeenCalledOnce()
+    expect(fixture.exec).not.toHaveBeenCalled()
+    expect(fixture.exists).not.toHaveBeenCalled()
+    expect(fixture.write).not.toHaveBeenCalled()
+  })
+
   it('keeps worker publications separate from the run seed and from other workers', () => {
     const runPath = path.join('temporary', 'run.txt')
     expect(workerTestRepositoryPathFile(runPath)).toBe(runPath)
