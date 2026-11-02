@@ -1,5 +1,7 @@
 import './mock-descendant-sweep'
 import { randomUUID } from 'node:crypto'
+import { writeFileSync } from 'node:fs'
+import { SETUP_STATUS_FILE_ENV } from '../../shared/observed-setup-launch'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isPreparedAgentLaunchStatus } from '../../shared/prepared-agent-launch'
 import { fingerprintPreparedAgentLaunch } from './prepared-agent-launch-payload'
@@ -21,16 +23,14 @@ describe('the Setup failure line written into a live shell', () => {
 
   it('lands above the prompt the shell already drew, keeping its typed input and cursor', async () => {
     let emit: (data: string) => void = () => {}
+    let statusFile = ''
     const spawnSubprocess = vi.fn<SpawnSubprocess>((opts) => {
-      // Like the native spawn: the raw observer reads every byte before the session does.
       const raw = opts.rawSpawnObserver?.()
+      statusFile = opts.env?.[SETUP_STATUS_FILE_ENV] ?? statusFile
       raw?.onSelected()
       let sessionData: (data: string) => void = () => {}
       let exit: (code: number) => void = () => {}
-      emit = (data) => {
-        raw?.onData(data)
-        sessionData(data)
-      }
+      emit = (data) => sessionData(data)
       return {
         pid: 4242,
         getForegroundProcess: () => null,
@@ -91,7 +91,13 @@ describe('the Setup failure line written into a live shell', () => {
 
     // Setup fails, and the interactive shell draws its prompt before main's answer arrives.
     emit('npm install\r\nnpm ERR! missing script\r\n')
-    emit(`\r\n__ORCA_SETUP_COMPLETE__:${attemptId}:3\r\n$ git sta`)
+    writeFileSync(statusFile, `${attemptId}:3\n`)
+    await vi.waitFor(async () =>
+      expect(
+        await host!.preparedAgentLaunch({ action: 'status', identity: prepared })
+      ).toMatchObject({ failure: 'setup-failed' })
+    )
+    emit('$ git sta')
     await expect(
       host.preparedAgentLaunch({ action: 'writeSetupOutcome', identity: prepared, text: FAILED })
     ).resolves.toEqual({ written: true })

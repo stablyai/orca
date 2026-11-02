@@ -11,6 +11,12 @@ import { PreparedTerminalPendingError } from '../../../../terminal/launch/prepar
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { createWorkerLaunchReceipt } from './worker-launch-preferences'
 import { decideWorkerStartMode } from '../../orchestration-worker-start-mode'
+import { reportSetupStatus } from '../../../../../daemon/prepared-setup-status-test-harness'
+
+vi.mock(
+  '../../../../../daemon/prepared-setup-status',
+  () => import('../../../../../daemon/prepared-setup-status-test-harness')
+)
 
 const NOW = 1_800_000_000_000
 let db: OrchestrationDb | undefined
@@ -103,7 +109,7 @@ async function acceptedPair() {
     worktreeId: 'wt',
     effects: [{ kind: 'worktree', id: 'wt', action: 'created_child' }]
   })
-  const zero = () => observers[0].onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:0\n`)
+  const zero = () => reportSetupStatus(0, attemptId)
   return { database, task, dispatch, owner, identity: prepared, calls, release, launch, zero }
 }
 

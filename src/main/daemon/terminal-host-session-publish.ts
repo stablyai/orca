@@ -129,7 +129,6 @@ export async function spawnAndPublishSession(
     scrollback: resolveDaemonSessionScrollbackRows(),
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
-    ...(opts.setupCompletionToken ? { setupCompletionToken: opts.setupCompletionToken } : {}),
     wslDistro,
     onExit: createSessionExitHandler(
       deps.onSessionExit,

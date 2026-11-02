@@ -10,6 +10,9 @@ import {
   isPreparedAgentLaunchStatus,
   type PreparedAgentLaunchIdentity
 } from '../../shared/prepared-agent-launch'
+import { reportSetupStatus } from './prepared-setup-status-test-harness'
+
+vi.mock('./prepared-setup-status', () => import('./prepared-setup-status-test-harness'))
 
 const NOW = 1_800_000_000_000
 const claim = {
@@ -94,7 +97,7 @@ async function fixture(
   }
   const identity: PreparedAgentLaunchIdentity = prepared
   const accept = () => owner.handle({ action: 'accept', identity, ...payload })
-  const zero = () => observers[0].onData(`\r\n__ORCA_SETUP_COMPLETE__:${attemptId}:0\r\n`)
+  const zero = () => reportSetupStatus(0, attemptId)
   const status = () => owner.handle({ action: 'status', identity })
   return { owner, identity, calls, observers, release, accept, zero, status, attemptId }
 }
@@ -184,7 +187,7 @@ describe('prepared Setup execution owner', () => {
     expect(await f.accept()).toMatchObject({ accepted: false, retirement: 'unused-retired' })
     expect(f.calls).toHaveLength(0)
   })
-  it('accepts both processes before Setup, sees a split raw marker before publication and launches the unchanged payload once', async () => {
+  it('accepts both processes before Setup, completes from the Setup status before publication and launches the unchanged payload once', async () => {
     const setupReply = Promise.withResolvers<CreateOrAttachResult>()
     const f = await fixture((opts) =>
       opts.sessionId === 'setup' ? setupReply.promise : Promise.resolve(result())
@@ -192,10 +195,7 @@ describe('prepared Setup execution owner', () => {
     expect(f.calls).toHaveLength(0)
     await f.accept()
     expect(f.calls).toHaveLength(1)
-    const marker = `\n__ORCA_SETUP_COMPLETE__:${f.attemptId}:0\r\n`
-    f.observers[0].onData('x'.repeat(100_000) + marker.slice(0, -2))
-    expect(f.calls).toHaveLength(1)
-    f.observers[0].onData(marker.slice(-2))
+    f.zero()
     await Promise.resolve()
     expect(f.calls).toHaveLength(2)
     f.zero()
@@ -213,6 +213,22 @@ describe('prepared Setup execution owner', () => {
     expect(f.calls).toHaveLength(2)
   })
 
+  it('ignores the exit of a replaced Windows spawn attempt and completes the selected Setup', async () => {
+    const f = await fixture((opts) => {
+      // A ConPTY attempt that was replaced exits after the selected attempt took over.
+      if (opts.sessionId === 'setup') {
+        opts.rawSpawnObserver?.().onExit()
+      }
+      return Promise.resolve(result())
+    })
+    await f.accept()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(await f.status()).toMatchObject({ execution: 'not-dispatched' })
+    f.zero()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(await f.status()).toMatchObject({ execution: 'started' })
+  })
+
   it.each(['cancel', 'deadline', 'nonzero', 'exit'] as const)(
     'retires unstarted execution on %s and ignores late zero',
     async (reason) => {
@@ -225,11 +241,12 @@ describe('prepared Setup execution owner', () => {
         await vi.advanceTimersByTimeAsync(7_200_000)
       }
       if (reason === 'nonzero') {
-        f.observers[0].onData(`\n__ORCA_SETUP_COMPLETE__:${f.attemptId}:9\n`)
+        reportSetupStatus(9, f.attemptId)
       }
       if (reason === 'exit') {
         f.observers[0].onExit()
       }
+      await vi.advanceTimersByTimeAsync(0)
       f.zero()
       await vi.advanceTimersByTimeAsync(0)
       expect(f.calls).toHaveLength(1)

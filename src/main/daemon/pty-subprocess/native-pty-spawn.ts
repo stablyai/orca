@@ -107,7 +107,6 @@ export async function spawnNativeDaemonPty(args: {
     physical.observeExit()
     const observer = args.rawSpawnObserver?.()
     if (observer) {
-      const data = proc.onData(observer.onData)
       if ('on' in proc && typeof proc.on === 'function') {
         proc.on('close', observer.onExit)
         proc.on('error', observer.onExit)
@@ -115,7 +114,6 @@ export async function spawnNativeDaemonPty(args: {
       let exit: { dispose(): void } | undefined
       exit = proc.onExit(() => {
         observer.onExit()
-        data.dispose()
         exit?.dispose()
       })
     }

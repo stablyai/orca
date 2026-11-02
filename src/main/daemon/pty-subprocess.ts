@@ -19,7 +19,6 @@ import type { TuiAgent } from '../../shared/tui-agent'
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 
 export type RawPtySpawnObserver = {
-  onData: (data: string) => void
   onExit: () => void
   onSelected: () => void
 }

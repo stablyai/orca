@@ -108,14 +108,8 @@ export function stageStartupCommand(args: {
     setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
   const shellName = stagingShellName(args.shellPath)
-  const bootTag = args.owner?.boot ? ownedStagingBootTag(args.owner.boot) : undefined
   const directoryPath = args.owned
-    ? mkdtempSync(
-        join(
-          directory,
-          bootTag ? `${OWNED_STAGING_PREFIX}${bootTag}-` : OWNED_STAGING_WRITER_PREFIX
-        )
-      )
+    ? createOwnedStagingDirectory({ owner: args.owner, directory })
     : undefined
   const scriptPath = join(
     directoryPath ?? directory,
@@ -123,20 +117,6 @@ export function stageStartupCommand(args: {
   )
   const quotedPath = quoteStartupArg(scriptPath, 'posix')
   try {
-    if (directoryPath) {
-      chmodSync(directoryPath, 0o700)
-      if (!bootTag && args.owner) {
-        writeFileSync(
-          join(directoryPath, OWNED_STAGING_WRITER_FILE),
-          JSON.stringify({
-            pid: args.owner.pid,
-            namespace: args.owner.namespace,
-            start: args.owner.start
-          }),
-          { mode: 0o600, flag: 'wx' }
-        )
-      }
-    }
     // Unlink before the agent starts; the shell continues reading its open file.
     writeFileSync(
       scriptPath,
@@ -162,6 +142,38 @@ export function stageStartupCommand(args: {
     scriptPath,
     ...(directoryPath ? { directoryPath } : {})
   }
+}
+
+/** A private directory this daemon generation owns; the collector removes it once nothing can still use it. */
+export function createOwnedStagingDirectory(args: {
+  owner?: PreparedLaunchIncarnation
+  directory?: string
+}): string {
+  const bootTag = args.owner?.boot ? ownedStagingBootTag(args.owner.boot) : undefined
+  const directoryPath = mkdtempSync(
+    join(
+      args.directory ?? tmpdir(),
+      bootTag ? `${OWNED_STAGING_PREFIX}${bootTag}-` : OWNED_STAGING_WRITER_PREFIX
+    )
+  )
+  try {
+    chmodSync(directoryPath, 0o700)
+    if (!bootTag && args.owner) {
+      writeFileSync(
+        join(directoryPath, OWNED_STAGING_WRITER_FILE),
+        JSON.stringify({
+          pid: args.owner.pid,
+          namespace: args.owner.namespace,
+          start: args.owner.start
+        }),
+        { mode: 0o600, flag: 'wx' }
+      )
+    }
+  } catch (error) {
+    rmSync(directoryPath, { recursive: true, force: true })
+    throw error
+  }
+  return directoryPath
 }
 
 /** Explain fallback because the full typed line may leave the shell awaiting more input. */

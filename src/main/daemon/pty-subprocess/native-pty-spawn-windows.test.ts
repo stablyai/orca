@@ -119,17 +119,8 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     vi.restoreAllMocks()
   })
 
-  it('retains physical ownership when raw listener registration throws after spawn', async () => {
+  it('retains physical ownership when raw observer setup throws after spawn', async () => {
     const pane = healthyPane(4242)
-    const raw = { onData() {}, onExit() {}, onSelected() {} }
-    const onData = pane.onData
-    // Only the raw observer's registration fails; the owner's own subscriptions still work.
-    pane.onData = (listener) => {
-      if (listener === raw.onData) {
-        throw new Error('listener failed')
-      }
-      return onData(listener)
-    }
     nodePty.spawn.mockReturnValue(pane)
     const work = new TerminalCreationWork()
     await expect(
@@ -137,7 +128,10 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
         ...args,
         windowsFallbackAttempts: [attempts[0]!],
         creationWork: work,
-        rawSpawnObserver: () => raw
+        // Only the raw observer fails; the owner's own subscriptions still work.
+        rawSpawnObserver: () => {
+          throw new Error('listener failed')
+        }
       })
     ).rejects.toThrow('listener failed')
     await work.finish()
@@ -420,23 +414,20 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     const healthy = healthyPane(990112)
     nodePty.spawn.mockReturnValueOnce(broken).mockReturnValueOnce(healthy)
     const observers: {
-      onData: ReturnType<typeof vi.fn>
       onExit: ReturnType<typeof vi.fn>
       onSelected: ReturnType<typeof vi.fn>
     }[] = []
     await spawnNativeDaemonPty({
       ...args,
       rawSpawnObserver: () => {
-        const observer = { onData: vi.fn(), onExit: vi.fn(), onSelected: vi.fn() }
+        const observer = { onExit: vi.fn(), onSelected: vi.fn() }
         observers.push(observer)
         return observer
       }
     })
     expect(observers).toHaveLength(2)
-    expect(observers[0].onData).toHaveBeenCalled()
     expect(observers[0].onExit).toHaveBeenCalled()
     expect(observers[0].onSelected).not.toHaveBeenCalled()
-    expect(observers[1].onData).toHaveBeenCalled()
     expect(observers[1].onSelected).toHaveBeenCalledTimes(1)
     healthy.emitExit(0)
     expect(observers[1].onExit).toHaveBeenCalledTimes(1)

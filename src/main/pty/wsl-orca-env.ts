@@ -13,6 +13,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
+import { SETUP_STATUS_FILE_ENV } from '../../shared/observed-setup-launch'
 import { getShellReadyWrapperRoot } from '../providers/local-pty/local-pty-shell-ready-wrapper-root'
 import { ORCA_IMAGE_PROTOCOL_ENV } from '../../shared/terminal-image-protocol'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../shared/remote-viewer-clipboard-env'
@@ -101,6 +102,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/u`,
+    // The daemon names a host temp path; the guest's Setup wrapper writes it through /mnt.
+    `${SETUP_STATUS_FILE_ENV}/p`,
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u',
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u',

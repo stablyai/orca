@@ -11,6 +11,12 @@ import { startPreparedWorktreeTerminals } from './prepared-worktree-terminal-sta
 import { OrcaRuntimeWithPreparedTerminals } from './prepared-terminal-runtime'
 import { forgetPreparedPromptContinuation } from './prepared-terminal-prompt-delivery'
 import { PreparedTerminalPendingError } from './prepared-terminal-pending'
+import { reportSetupStatus } from '../../../daemon/prepared-setup-status-test-harness'
+
+vi.mock(
+  '../../../daemon/prepared-setup-status',
+  () => import('../../../daemon/prepared-setup-status-test-harness')
+)
 
 afterEach(() => vi.useRealTimers())
 
@@ -25,8 +31,8 @@ function controllerDouble(members: Partial<RuntimePtyController>): RuntimePtyCon
 }
 
 type FixtureOptions = {
-  /** Setup output the native start buffered before its process was selected. */
-  setupOutputBeforeSelected?: (attemptId: string) => string
+  /** Setup's status, written before its native start selected the process. */
+  setupStatusBeforeSelected?: number
   /** The agent's own creation fails, as staging or native spawn can. */
   agentCreateFails?: boolean
   /** Whether that Setup's session can take output when main asks; false before registration. */
@@ -45,10 +51,8 @@ async function fixture(options: FixtureOptions = {}) {
   const create = vi.fn(async (opts: InternalCreateOrAttachOptions) => {
     if (opts.rawSpawnObserver) {
       setupObserver = opts.rawSpawnObserver()
-      const attemptId = row?.preparedLaunch?.setup?.attemptId ?? ''
-      const early = options.setupOutputBeforeSelected?.(attemptId)
-      if (early) {
-        setupObserver.onData(early)
+      if (options.setupStatusBeforeSelected !== undefined) {
+        reportSetupStatus(options.setupStatusBeforeSelected)
       }
       setupObserver.onSelected()
     } else if (options.agentCreateFails) {
@@ -340,8 +344,8 @@ describe('late prepared agent waiter', () => {
       ],
       notices: []
     })
-    // A late marker after the deadline never revives the launch.
-    f.setupObserver().onData(`\n__ORCA_SETUP_COMPLETE__:x:0\n`)
+    // A late status after the deadline never revives the launch.
+    reportSetupStatus(0)
     expect(f.create).toHaveBeenCalledTimes(1)
     expect(f.ports.store.retirePreparedAgentLaunch).toHaveBeenCalledOnce()
   })
@@ -438,8 +442,7 @@ describe('final outcome explanation', () => {
       startupOptions: { command: 'codex', launchAgent: 'codex' },
       ports: f.startPorts
     })
-    const attemptId = f.ports.store.listOperationRows()[0]?.preparedLaunch?.setup?.attemptId
-    f.setupObserver().onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:0\n`)
+    reportSetupStatus(0)
     await expect(f.wait(started.pending)).rejects.toThrow(SPAWN_FAILED)
     expect(explained(f)).toEqual({ lines: [], notices: ['spawn-failed'] })
   })
@@ -453,8 +456,7 @@ describe('final outcome explanation', () => {
       startupOptions: { command: 'codex', launchAgent: 'codex' },
       ports: f.startPorts
     })
-    const attemptId = f.ports.store.listOperationRows()[0]?.preparedLaunch?.setup?.attemptId
-    f.setupObserver().onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:2\n`)
+    reportSetupStatus(2)
     await expect(f.wait(started.pending)).rejects.toThrow('Setup failed, so Codex was not started.')
     await expect(f.wait(started.pending)).rejects.toThrow('Setup failed, so Codex was not started.')
     expect(explained(f)).toEqual({
@@ -475,8 +477,7 @@ describe('final outcome explanation', () => {
         startupOptions: { command: 'codex', launchAgent: 'codex' },
         ports: f.startPorts
       })
-      const attemptId = f.ports.store.listOperationRows()[0]?.preparedLaunch?.setup?.attemptId
-      f.setupObserver().onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:2\n`)
+      reportSetupStatus(2)
       await vi.advanceTimersByTimeAsync(0)
       // An unknown answer is not a "no": nothing is shown and the launch is not retired yet.
       expect(f.setupWrites).toHaveLength(1)
@@ -505,7 +506,7 @@ describe('final outcome explanation', () => {
     async (_case, live, expected) => {
       // Windows native start can deliver the completion before the process is selected.
       const f = await fixture({
-        setupOutputBeforeSelected: (attemptId) => `__ORCA_SETUP_COMPLETE__:${attemptId}:9\r\n`,
+        setupStatusBeforeSelected: 9,
         setupSessionLive: () => live
       })
       const started = await startPreparedWorktreeTerminals({

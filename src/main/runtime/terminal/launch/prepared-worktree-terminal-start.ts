@@ -18,7 +18,7 @@ import type {
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
-import { buildObservedSetupCommand } from '../../orchestration/setup-completion-signal'
+import { createObservedSetupCommand } from '../../../../shared/observed-setup-launch'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/setup-runner-command'
 import type { WorktreeSetupLaunch } from '../../../../shared/worktree/launch-types'
 import { mintAgentSessionOperationId } from '../../orchestration/structured-pointer-operation-id'
@@ -84,15 +84,15 @@ export async function startPreparedWorktreeTerminals(args: {
   const operationId = mintAgentSessionOperationId(Date.now())
   const attemptId = randomUUID()
   const observed = args.setup
-    ? buildObservedSetupCommand(
-        args.setup.runnerScriptPath,
-        getSetupRunnerCommandPlatformForPath(
+    ? createObservedSetupCommand({
+        runnerScriptPath: args.setup.runnerScriptPath,
+        platform: getSetupRunnerCommandPlatformForPath(
           args.setup.runnerScriptPath,
           process.platform === 'win32' ? 'windows' : 'posix'
         ),
-        attemptId,
-        args.setup.shell
-      )
+        shell: args.setup.shell,
+        attemptId
+      })
     : undefined
   const launch = await ports.prepare(args.startupOptions).catch((error: unknown) => {
     throw new PreparedLaunchNotAcceptedError(error)

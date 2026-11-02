@@ -17,7 +17,6 @@ export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
   ownedStaging?: PreparedLaunchIncarnation
   reservedCapacity?: () => void
   rawSpawnObserver?: () => RawPtySpawnObserver
-  setupCompletionToken?: string
   agentSessionGeneration?: string
   /** Request identity for the fork gate; absent for in-process callers. */
   spawnAdmission?: { clientId: string; declaredIntent: SpawnIntent | null; deadlineAt: number }

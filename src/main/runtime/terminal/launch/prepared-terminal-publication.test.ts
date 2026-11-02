@@ -28,6 +28,7 @@ import {
 import { PreparedAgentLaunchOwner } from '../../../daemon/prepared-agent-launch-owner'
 import { fingerprintPreparedAgentLaunch } from '../../../daemon/prepared-agent-launch-payload'
 import type { RawPtySpawnObserver } from '../../../daemon/pty-subprocess'
+import { reportSetupStatus } from '../../../daemon/prepared-setup-status-test-harness'
 import {
   publishPreparedTerminal,
   reconcilePreparedTerminalPublications,
@@ -63,6 +64,10 @@ vi.mock('../../../agent-hooks/managed-hook-owner-identity', async (importOrigina
   const actual = await importOriginal<typeof HostIdentity>()
   return { ...actual, readBootIdentity: vi.fn(actual.readBootIdentity) }
 })
+vi.mock(
+  '../../../daemon/prepared-setup-status',
+  () => import('../../../daemon/prepared-setup-status-test-harness')
+)
 vi.mock('../../../daemon/daemon-process-inspection', async (importOriginal) => {
   const actual = await importOriginal<typeof ProcessInspection>()
   return {
@@ -256,7 +261,7 @@ async function fixture(
     setupLines,
     listProcesses,
     observer: () => observer!,
-    zero: () => observer?.onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:0\n`)
+    zero: () => reportSetupStatus(0, attemptId)
   }
 }
 
@@ -488,6 +493,27 @@ describe('prepared terminal publication recovery', () => {
     expect(f.ports.notifyLaunchNotice).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ operationId: f.identity.operationId, kind: 'setup-ended' })
     )
+  })
+
+  it('launches the agent once when Setup finishes while main is restarting', async () => {
+    const f = await fixture(true)
+    // No main is connected: the daemon reads Setup's status itself and starts the agent.
+    f.zero()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.create).toHaveBeenCalledTimes(2)
+    expect(f.createTerminal).not.toHaveBeenCalled()
+    // The restarted main rejoins that agent; neither reconnect starts another.
+    await reconcilePreparedTerminalPublications(f.ports)
+    await reconcilePreparedTerminalPublications(f.ports)
+    expect(f.create).toHaveBeenCalledTimes(2)
+    // It also rejoins the still-open Setup tab; the agent is published once, attached, never re-run.
+    const agentPublications = f.createTerminal.mock.calls.filter(
+      ([, options]) => options.sessionId === 'agent'
+    )
+    expect(agentPublications).toEqual([
+      ['id:wt', expect.objectContaining({ attachOnly: true, preparedFirstPublication: true })]
+    ])
+    expect(f.retire).toHaveBeenCalledOnce()
   })
 
   it('recovery after a main restart publishes the accepted recipe, view and authority', async () => {

@@ -7,8 +7,9 @@ import type {
   PreparedAgentPtyOwner,
   PtyCreationDisposition
 } from '../../shared/claimed-agent-pty-owner'
-import { createSetupCompletionScanner } from '../runtime/orchestration/setup-completion-signal'
-import { lineAboveCursor } from './setup-outcome-line'
+import { SETUP_STATUS_FILE_ENV } from '../../shared/observed-setup-launch'
+import { observeSetupStatus } from './prepared-setup-status'
+import { isOneLine, lineAboveCursor } from './setup-outcome-line'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type {
@@ -81,61 +82,67 @@ export abstract class PreparedAgentLaunchExecution {
     work: LaunchWork,
     setup: { spawn: PreparedAgentSpawn; attemptId: string }
   ) {
-    const complete = (exitCode: number) => {
+    // Whether a spawn attempt became this Setup; a replaced ConPTY attempt never does.
+    let selected = false
+    let exitCode: number | undefined
+    const complete = (code: number) => {
       if (!work.status.setup) {
         return
       }
-      work.status.setup.exitCode = exitCode
-      if (exitCode === 0) {
+      work.status.setup.exitCode = code
+      if (code === 0) {
         void this.dispatch(work)
       } else {
         this.retireUnstarted(work, 'setup-failed')
       }
     }
     try {
+      // Completion leaves through a file this daemon owns, never through the Setup terminal.
+      const status = observeSetupStatus({
+        owner: this.incarnation,
+        attemptId: setup.attemptId,
+        onStatus: (code) => {
+          exitCode = code
+          if (selected) {
+            complete(code)
+          }
+        }
+      })
+      // Settlement removes the file's directory: a late status after cancel or deadline lands nowhere.
+      work.stopSetupScan = status.stop
       const result = await this.deps.create({
         ...setup.spawn,
+        env: { ...setup.spawn.env, [SETUP_STATUS_FILE_ENV]: status.path },
         spawnAdmission: {
           clientId: CALLER_KEY,
           declaredIntent: setup.spawn.spawnIntent ?? null,
           deadlineAt: Infinity
         },
         streamClient: { onData() {}, onExit() {} },
-        setupCompletionToken: setup.attemptId,
         rawSpawnObserver: () => {
-          let selected = false
+          let mine = false
           let ended = false
-          let scanning = work.status.execution === 'not-dispatched'
-          let exitCode: number | undefined
-          // Settlement stops the scan; a still-running Setup's later output costs nothing.
-          work.stopSetupScan = () => {
-            scanning = false
-          }
-          const scanner = createSetupCompletionScanner(setup.attemptId, (code) => {
-            exitCode = code
-            scanning = false
-            if (selected) {
-              complete(code)
-            }
-          })
-          return {
-            onData: (data) => {
-              if (scanning) {
-                scanner.scan(data)
+          // The wrapper writes the status before Setup's shell exits; read it before calling the exit early.
+          const settleEnded = () =>
+            void status.check().then(() => {
+              if (exitCode === undefined) {
+                this.retireUnstarted(work, 'setup-ended')
               }
-            },
+            })
+          return {
             onExit: () => {
               ended = true
-              if (selected) {
-                this.retireUnstarted(work, 'setup-ended')
+              if (mine) {
+                settleEnded()
               }
             },
             onSelected: () => {
+              mine = true
               selected = true
               if (exitCode !== undefined) {
                 complete(exitCode)
               } else if (ended) {
-                this.retireUnstarted(work, 'setup-ended')
+                settleEnded()
               }
             }
           }
@@ -316,13 +323,4 @@ export abstract class PreparedAgentLaunchExecution {
     }
     this.notify(work)
   }
-}
-
-/** Main's explanation is one bounded line; control bytes could drive the terminal. */
-function isOneLine(text: string): boolean {
-  return (
-    text.length > 0 &&
-    text.length <= 512 &&
-    ![...text].some((char) => char < ' ' || char === '\u007f')
-  )
 }

@@ -7,3 +7,12 @@ export function lineAboveCursor(text: string, cols: number | undefined): string 
   const rows = Math.max(1, Math.ceil(text.length / Math.max(1, cols ?? text.length)))
   return `${'\n'.repeat(rows)}\x1b7\x1b[${rows}A\r\x1b[${rows}L${text}\x1b8`
 }
+
+/** Main's explanation is one bounded line; control bytes could drive the terminal. */
+export function isOneLine(text: string): boolean {
+  return (
+    text.length > 0 &&
+    text.length <= 512 &&
+    ![...text].some((char) => char < ' ' || char === '\u007f')
+  )
+}

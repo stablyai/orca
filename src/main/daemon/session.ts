@@ -12,7 +12,6 @@ import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
-import { hideSetupCompletionRecords } from '../runtime/orchestration/setup-completion-signal'
 
 import type {
   SessionState,
@@ -42,7 +41,6 @@ export class Session extends SessionProcessInspection {
   private readonly termination: SessionTerminationController
   readonly startupIngress: PtyStartupIngress
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
-  private readonly setupRecords: ReturnType<typeof hideSetupCompletionRecords> | null
 
   constructor(opts: SessionOptions) {
     super(opts.subprocess)
@@ -76,17 +74,12 @@ export class Session extends SessionProcessInspection {
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
-    const ingest = (data: string): void => {
-      if (!this._disposed) {
-        this.shellReady.ingestSubprocessData(data)
-      }
-    }
-    // A prepared Setup's completion record is the daemon's own signal, never drawn or saved.
-    this.setupRecords = opts.setupCompletionToken
-      ? hideSetupCompletionRecords(opts.setupCompletionToken, ingest)
-      : null
     try {
-      this.subprocess.onData(this.setupRecords?.write ?? ingest)
+      this.subprocess.onData((data) => {
+        if (!this._disposed) {
+          this.shellReady.ingestSubprocessData(data)
+        }
+      })
       this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
     } catch (error) {
       this._disposed = true
@@ -260,7 +253,6 @@ export class Session extends SessionProcessInspection {
   }
 
   prepareForFinalSnapshot(): string {
-    this.setupRecords?.flush()
     const held = this.shellReady.releaseHeldBytes()
     this.startupIngress.snapshotBarrier()
     // Flush last: the ingress snapshot barrier can emit more held bytes into recovery.
@@ -322,7 +314,6 @@ export class Session extends SessionProcessInspection {
   }
 
   private drainStartupOutput(): void {
-    this.setupRecords?.flush()
     this.shellReady.releaseDeviceAttributes()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
