@@ -61,6 +61,25 @@ describe('agent prompt writer: onPermission wait', () => {
     expect(pasted(writes, 'held prompt')).toBe(1)
   })
 
+  // J9: a caller that set no deadline waits as long as the person takes to answer, as main does.
+  it('writes once a permission prompt is answered after more than a minute', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createRuntime()
+    runtime.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
+    const sent = runtime.sendTerminalAgentPrompt(handle, 'late answer', {
+      inputKind: 'driving',
+      onPermission: 'wait'
+    })
+    await vi.advanceTimersByTimeAsync(61_000)
+    expect(writes).toEqual([])
+
+    runtime.onPtyData('pty-prompt', IDLE_TITLE, Date.now())
+    await vi.runAllTimersAsync()
+
+    await expect(sent).resolves.toMatchObject({ accepted: true })
+    expect(pasted(writes, 'late answer')).toBe(1)
+  })
+
   it('does not hold another caller: a refusing prompt still refuses while one waits', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createRuntime()

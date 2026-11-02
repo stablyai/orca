@@ -76,12 +76,12 @@ describe('agent prompt writer: default path', () => {
     }
   })
 
-  // The prompt is bound to the PTY its leaf named when the host accepted it; a respawn before its
-  // turn is that operation's own binding check, never a write into the replacement process.
-  it('binds a queued leaf prompt to the PTY the leaf named when it was accepted', async () => {
+  // A default send looks its leaf up again when its queue turn opens, before any byte, as main does.
+  it('writes a queued leaf prompt to the PTY the leaf names when its turn comes', async () => {
     const target = dispatchRuntime()
     const leaf = { writable: true, ptyId: PTY }
     const written: string[] = []
+    let turn = Promise.resolve()
     let releaseFirst!: () => void
     const firstHeld = new Promise<void>((resolve) => {
       releaseFirst = resolve
@@ -93,11 +93,25 @@ describe('agent prompt writer: default path', () => {
       // Default-path relookup assumes the replacement PTY shares this generation.
       assertAgentPromptGeneration: { value: () => {} },
       writeTerminalAgentPrompt: {
-        value: async (_handle: string, ptyId: string) => {
-          written.push(ptyId)
+        // Stands in for the queue: each prompt's turn opens after the one before it finishes.
+        value: async (
+          _handle: string,
+          ptyId: string,
+          _generation: number,
+          _payload: string,
+          _options: unknown,
+          _atTurn: unknown,
+          retarget?: { resolve: () => string | null }
+        ) => {
+          const previous = turn
+          let done!: () => void
+          turn = new Promise<void>((resolve) => (done = resolve))
+          await previous
+          written.push(retarget?.resolve() ?? ptyId)
           if (written.length === 1) {
             await firstHeld
           }
+          done()
           return { submits: 1 }
         }
       }
@@ -115,6 +129,6 @@ describe('agent prompt writer: default path', () => {
 
     await first
     await second
-    expect(written).toEqual([PTY, PTY])
+    expect(written).toEqual([PTY, 'pty-default-path-respawned'])
   })
 })

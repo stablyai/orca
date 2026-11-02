@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { PluginHookChainOutcome } from '../../../../shared/plugins/workers/plugin-hook-chain'
+import { setPluginHookRunner } from '../../../plugins/hooks/plugin-hook-dispatch'
 import { createAgentPromptSubmissionRuntime } from '../../agent-prompt-submission-runtime-test-fixture'
 import { deliverGeneratedTerminalInput } from './generated-terminal-input-delivery'
 import { finalReplayFrame } from '../../agent-transcript-replay-test-harness'
@@ -257,4 +259,162 @@ describe('one host transaction for generated input', () => {
       }
     }
   )
+})
+
+describe('generated input behind an agent.prompt.before hook', () => {
+  afterEach(() => setPluginHookRunner(null))
+
+  function installPromptHook(
+    decide: (payload: unknown) => PluginHookChainOutcome | Promise<PluginHookChainOutcome>
+  ) {
+    const run = vi.fn(async (_event: unknown, payload: unknown) => decide(payload))
+    setPluginHookRunner({ wants: (event) => event === 'agent.prompt.before', run })
+    return run
+  }
+
+  // The request's lifetime starts at acceptance: a hook that outlives it delivers nothing later.
+  it.each(['deadline', 'abort'] as const)(
+    'settles on time when a hook stalls past the %s, writes nothing later, and the next send succeeds',
+    async (ending) => {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => {},
+        'claude'
+      )
+      runtime.onPtyData('pty-prompt', READY, 0)
+      let answer!: (outcome: PluginHookChainOutcome) => void
+      const run = installPromptHook(
+        () => new Promise<PluginHookChainOutcome>((resolve) => (answer = resolve))
+      )
+      const aborter = new AbortController()
+      const started = Date.now()
+      const stalled = deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'stalled',
+        submit: true,
+        agent: 'claude',
+        timeoutMs: ending === 'deadline' ? 100 : 5_000,
+        signal: aborter.signal
+      })
+      if (ending === 'abort') {
+        setTimeout(() => aborter.abort(), 50)
+      }
+      await expect(stalled).resolves.toBe('not-sent')
+      expect(Date.now() - started).toBeLessThan(1_000)
+      answer({ kind: 'continue', payload: { prompt: 'stalled' } })
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(writes.some((data) => data.includes('stalled'))).toBe(false)
+      expect(run).toHaveBeenCalledOnce()
+      setPluginHookRunner(null)
+      await expect(
+        deliverGeneratedTerminalInput(runtime, handle, {
+          text: 'next',
+          submit: true,
+          agent: 'claude',
+          composerReady: true,
+          timeoutMs: 3_000
+        })
+      ).resolves.toBe('delivered')
+      expect(writes.filter((data) => data.includes('next'))).toHaveLength(1)
+    }
+  )
+
+  it('delivers a rewritten prompt and refuses a denied one, running the hook once each', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'claude')
+    runtime.onPtyData('pty-prompt', READY, 0)
+    const rewrite = installPromptHook((payload) => ({
+      kind: 'continue',
+      payload: { ...Object(payload), prompt: 'rewritten by plugin' }
+    }))
+    await expect(
+      deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'original',
+        submit: true,
+        agent: 'claude',
+        composerReady: true,
+        timeoutMs: 3_000
+      })
+    ).resolves.toBe('delivered')
+    expect(rewrite).toHaveBeenCalledOnce()
+    expect(writes.filter((data) => data.includes('rewritten by plugin'))).toHaveLength(1)
+    expect(writes.some((data) => data.includes('original'))).toBe(false)
+
+    const deny = installPromptHook(() => ({ kind: 'deny', pluginKey: 'acme.guard', reason: 'no' }))
+    const before = writes.length
+    await expect(
+      deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'denied',
+        submit: true,
+        agent: 'claude',
+        composerReady: true,
+        timeoutMs: 3_000
+      })
+    ).resolves.toBe('not-sent')
+    expect(deny).toHaveBeenCalledOnce()
+    expect(writes).toHaveLength(before)
+  })
+})
+
+// J7: a default leaf send looks its leaf up again when its turn opens; a replacement PTY is a new
+// target, admitted from its own evidence, before any byte.
+describe('generated input retargeted to a replacement PTY', () => {
+  async function retargetedSend(replacementScreen: string, inputDeadline: number) {
+    const targets: string[] = []
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      () => {},
+      'claude',
+      (_runtime, ptyId) => {
+        targets.push(ptyId)
+        return true
+      }
+    )
+    runtime.onPtyData('pty-prompt', READY, 0)
+    runtime.registerPty('pty-replacement', 'repo-1::/tmp/worktree-a', null)
+    runtime.onPtyData('pty-replacement', replacementScreen, 0)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected writer and handle lookup on OrcaRuntimeService.
+    const host = runtime as unknown as {
+      ptysById: Map<string, { connected: boolean }>
+      getLivePtyForHandle: (handle: string) => unknown
+      assertLiveTerminalHandleTargetsPty: (handle: string, ptyId: string) => void
+      writeTerminalAgentPrompt: (...args: unknown[]) => Promise<{ submits: number }>
+    }
+    // The handle now names the replacement, as after a respawn.
+    const replacement = host.ptysById.get('pty-replacement')!
+    replacement.connected = true
+    vi.spyOn(host, 'getLivePtyForHandle').mockReturnValue({ pty: replacement })
+    vi.spyOn(host, 'assertLiveTerminalHandleTargetsPty').mockImplementation(() => {})
+    const sent = host.writeTerminalAgentPrompt(
+      handle,
+      'pty-prompt',
+      0,
+      '\x1b[200~replaced\x1b[201~',
+      {
+        inputKind: 'driving',
+        generatedAgent: 'claude',
+        composerReady: true,
+        inputDeadline,
+        promptForSchedule: 'replaced',
+        acceptQueued: true,
+        requestId: 'retarget',
+        observationTimeoutMs: 0
+      },
+      undefined,
+      { resolve: () => 'pty-replacement', payloadFor: () => '\x1b[200~replaced\x1b[201~' }
+    )
+    return { sent, writes, targets }
+  }
+
+  it('writes to a ready replacement PTY, never the PTY it was accepted on', async () => {
+    const { sent, writes, targets } = await retargetedSend(READY, Date.now() + 3_000)
+    await expect(sent).resolves.toMatchObject({ submits: expect.any(Number) })
+    expect(writes.filter((data) => data.includes('replaced'))).toHaveLength(1)
+    expect(new Set(targets)).toEqual(new Set(['pty-replacement']))
+  })
+
+  it('writes nothing to a replacement PTY showing a dialog, on time', async () => {
+    const started = Date.now()
+    const { sent, writes } = await retargetedSend(DIALOG, Date.now() + 300)
+    await expect(sent).rejects.toThrow()
+    expect(Date.now() - started).toBeLessThan(1_500)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(writes).toEqual([])
+  })
 })

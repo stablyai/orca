@@ -28,6 +28,8 @@ type Facts = {
   /** What the terminal already showed before this send: a host's PTY output, an older host's
    *  stream replay on subscription. */
   backlog: string
+  /** The text an older host's stream-backed read answers (its recent output), if any. */
+  streamTail: string[]
   writes: string[]
   runtime: OrcaRuntimeService | null
   handle: string
@@ -41,6 +43,7 @@ const f = vi.hoisted((): Facts => ({
   pasteMode: false,
   observers: [],
   backlog: '',
+  streamTail: [],
   writes: [],
   runtime: null,
   handle: '',
@@ -104,7 +107,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
     }
     if (method === 'terminal.read') {
       if (!f.hostReadsScreen || !f.grid) {
-        return { terminal: { tail: [], source: 'stream' } }
+        return { terminal: { tail: f.streamTail, source: 'stream' } }
       }
       return { terminal: { tail: f.grid.lines, source: 'screen' } }
     }
@@ -134,6 +137,7 @@ async function setUp(agent: TuiAgent, capable: boolean): Promise<string> {
   f.pasteMode = false
   f.observers = []
   f.backlog = ''
+  f.streamTail = []
   f.writes = []
   f.holdProcessRead = null
   const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, agent)
@@ -237,6 +241,23 @@ describe.each([
     }
   )
 
+  // J2: a short budget still delivers blind; the blind policy does not wait out a quiet window.
+  it.runIf(!capable)('delivers blind within a 1,000 ms budget', async () => {
+    const ptyId = await setUp('claude', capable)
+    f.process = 'claude'
+    const result = pasteDraftToAgentPtyWhenReady({
+      ptyId,
+      content: 'go',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true,
+      timeoutMs: 1000
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    await expect(result).resolves.toBe(true)
+    expect(f.writes.filter((data) => data.includes('go'))).toHaveLength(1)
+  })
+
   // H3: a dialog streamed to the observer refuses a running send, on time, with no later write.
   it.each(['cline-3-0-66-permission', 'claude-dialog-trust-workspace'])(
     'refuses a reused session showing %s through its stream, on time, with no later write',
@@ -311,6 +332,115 @@ describe.each([
     await vi.advanceTimersByTimeAsync(5000)
     expect(f.writes).toEqual([])
   })
+
+  // J5: a recorded dialog streamed whole, and cut inside every escape sequence, keeps its keys at
+  // startup, where a dialog-free tail alone would admit.
+  it.each(['whole', 'cut inside every escape sequence'])(
+    'never types into the recorded Claude trust dialog streamed %s',
+    async (cut) => {
+      const ptyId = await setUp('claude', capable)
+      f.process = 'claude'
+      const recorded = readRuntimeFixture('claude-dialog-trust-workspace')
+      // Earlier dialog-free output: the send is not blind, so only the dialog can withhold it.
+      f.backlog = 'Claude Code starting\r\n'
+      f.streamTail = ['Claude Code starting']
+      f.runtime?.onPtyData('pty-prompt', f.backlog, Date.now())
+      const result = pasteDraftToAgentPtyWhenReady({
+        ptyId,
+        content: 'go',
+        agent: 'claude',
+        submit: true,
+        forcePaste: true,
+        timeoutMs: 6000
+      })
+      await vi.advanceTimersByTimeAsync(100)
+      if (cut === 'whole') {
+        stream(recorded)
+      } else {
+        let start = 0
+        for (let index = recorded.indexOf('\x1b'); index >= 0;) {
+          stream(recorded.slice(start, index + 2))
+          start = index + 2
+          index = recorded.indexOf('\x1b', start)
+        }
+        stream(recorded.slice(start))
+      }
+      await vi.advanceTimersByTimeAsync(6000)
+      await expect(result).resolves.toBe(false)
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(f.writes).toEqual([])
+    }
+  )
+
+  // Control for the case above: the same dialog-free output alone admits through an older host.
+  it.runIf(!capable)('delivers at startup when the same earlier output has no dialog', async () => {
+    const ptyId = await setUp('claude', capable)
+    f.process = 'claude'
+    f.backlog = 'Claude Code starting\r\n'
+    f.streamTail = ['Claude Code starting']
+    const result = pasteDraftToAgentPtyWhenReady({
+      ptyId,
+      content: 'go',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true,
+      timeoutMs: 6000
+    })
+    await vi.advanceTimersByTimeAsync(6000)
+    await expect(result).resolves.toBe(true)
+  })
+
+  // J2: the recorded plain Claude 2.1.291 composer with no mode history delivers at startup, as main.
+  it('delivers a startup prompt to the recorded plain Claude 2.1.291 composer, as main does', async () => {
+    const ptyId = await setUp('claude', capable)
+    f.process = 'claude'
+    const lines = (await grid('claude-ready-task-wakeup')).lines
+    f.streamTail = [...lines]
+    f.backlog = lines.join('\r\n')
+    f.runtime?.onPtyData('pty-prompt', f.backlog, Date.now())
+    const result = pasteDraftToAgentPtyWhenReady({
+      ptyId,
+      content: 'go',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true,
+      timeoutMs: 6000
+    })
+    await vi.advanceTimersByTimeAsync(6000)
+    await expect(result).resolves.toBe(true)
+    expect(f.writes.filter((data) => data.includes('go'))).toHaveLength(1)
+    expect(f.writes.at(-1)).toBe('\r')
+  })
+
+  // CI-4: a follow-up needs its agent still in front at every frame; a shell never gets the text.
+  it.each(['before the text', 'between the text and Enter'])(
+    'withholds a follow-up when its agent exits %s',
+    async (when) => {
+      const ptyId = await setUp('claude', capable)
+      f.grid = { lines: ['❯ '], alternateScreen: false }
+      f.process = when === 'before the text' ? 'zsh' : 'claude'
+      f.pasteMode = true
+      stream('\x1b[?2004h\x1b[?2031h❯ ')
+      const result = pasteDraftToAgentPtyWhenReady({
+        ptyId,
+        content: 'followup',
+        agent: 'claude',
+        submit: true,
+        forcePaste: true,
+        intent: 'running',
+        requireConsumer: true,
+        timeoutMs: 6000
+      })
+      if (when !== 'before the text') {
+        await vi.waitFor(() => expect(f.writes).toHaveLength(1))
+        f.process = 'zsh'
+      }
+      await vi.advanceTimersByTimeAsync(7000)
+      await expect(result).resolves.toBe(false)
+      expect(f.writes.filter((data) => data === '\r')).toEqual([])
+      expect(f.writes).toHaveLength(when === 'before the text' ? 0 : 1)
+    }
+  )
 
   // Controls kept: inline ZCode delivers from its grid; a plain shell never receives the text.
   it('delivers to an inline ZCode composer and refuses a plain shell', async () => {
