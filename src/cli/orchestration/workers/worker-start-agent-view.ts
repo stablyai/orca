@@ -54,6 +54,7 @@ type WorkerStartFields = {
   runCreated?: true
   state: string
   agent?: string
+  agentSelection?: WorkerStartReceipt['agentSelection']
   model?: string
   effort?: string
   mode?: string
@@ -86,7 +87,8 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         runId: value.runId ?? value.run?.id,
         runCreated: value.run?.created ? true : undefined,
         state: value.state,
-        agent: effective?.agent ?? requested?.agent ?? undefined,
+        agent: effective?.agent ?? requested?.agent ?? value.agentSelection?.agent ?? undefined,
+        agentSelection: value.agentSelection,
         // Null unless requested or chosen by a fallback.
         model: effective?.model ?? requested?.model ?? undefined,
         effort: effective?.effort ?? requested?.effort ?? undefined,
