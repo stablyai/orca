@@ -96,7 +96,11 @@ export function createQueuedImageWireRecord(
         agentSessionSendBodyFingerprint(sessionId, normalizedBody)
       )
     }
-    for (const card of state.queuedMessages.list()) {
+    const rawCards = [
+      ...state.queuedMessages.inputState().queue.cards.values(),
+      ...state.queuedMessages['legacy'].cards()
+    ].sort((a, b) => a.position - b.position)
+    for (const card of rawCards) {
       expect(card.fingerprint).toBe(agentSessionSendBodyFingerprint(sessionId, card.body))
       hashes.set(
         card.fingerprint,
@@ -113,7 +117,7 @@ export function createQueuedImageWireRecord(
           body: state.submissionBody(submission.clientMessageId),
           receipt: state.receiptFor(submission.clientMessageId)
         })),
-        choices: state.queuedMessages.list()
+        choices: rawCards
       })
     )
     return normalized

@@ -144,7 +144,26 @@ export function queuedImageReaderSnapshot(
   return {
     ...snapshot,
     items: retained.length ? [...items, ...retained].sort(compareAgentJournalItems) : items,
-    submissions: touched ? snapshot.submissions.map(present) : memo!.submissions
+    submissions: retained.length
+      ? [
+          ...new Map(
+            [
+              ...(touched ? snapshot.submissions.map(present) : memo!.submissions),
+              ...retained.flatMap((item) => {
+                const original = journal.inputOrder.inputForItem(item.itemId)
+                return original ? [present(original)] : []
+              })
+            ].map((send) => [send.clientMessageId, send])
+          ).values()
+        ].sort(
+          (a, b) =>
+            a.submittedAt - b.submittedAt ||
+            journal.inputOrder.inputOrdinal(a.clientMessageId) -
+              journal.inputOrder.inputOrdinal(b.clientMessageId)
+        )
+      : touched
+        ? snapshot.submissions.map(present)
+        : memo!.submissions
   }
 }
 

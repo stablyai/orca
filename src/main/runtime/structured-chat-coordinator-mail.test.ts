@@ -522,7 +522,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     )
 
     // Ending that turn without acking stays quiet: nothing newer arrived, so no edge even reads the chat to send.
-    const reads = vi.spyOn(host, 'journalSnapshot')
+    const reads = vi.spyOn(host, 'pointerInputs')
     await settleTurn(COORDINATOR, 2)
     runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
     expect(reads).not.toHaveBeenCalled()
@@ -558,11 +558,11 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const task2 = await call('orchestration.taskCreate', { spec: 'b' }, { sessionId: COORDINATOR })
     const reading = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
-    const snapshot = host.journalSnapshot.bind(host)
-    vi.spyOn(host, 'journalSnapshot').mockImplementationOnce(async (sessionId) => {
+    const snapshot = host.pointerInputs.bind(host)
+    vi.spyOn(host, 'pointerInputs').mockImplementationOnce(async (...args) => {
       reading.resolve()
       await release.promise
-      return snapshot(sessionId)
+      return snapshot(...args)
     })
     await finishWorker(idOf(task2.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
     await reading.promise

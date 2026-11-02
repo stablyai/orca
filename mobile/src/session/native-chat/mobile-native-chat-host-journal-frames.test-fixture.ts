@@ -1,3 +1,4 @@
+import { journalInputOrder } from '../../../../src/main/native-chat/agent-session-journal/journal-input-order'
 import type { AgentJournalCursor } from '../../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../src/shared/agent-session/agent-session-wire'
 import {
@@ -34,8 +35,11 @@ export function hostJournalFrames(
   const fences: number[] = []
   for (const row of rows) {
     applyJournalRow(state, row)
-    // Clone each view because the fold revises submissions in place.
-    views.push(structuredClone(readJournalPublicView(state)))
+    // Freeze the canonical state before constructing its callable read facade.
+    const saved = structuredClone(state)
+    const owner = journalInputOrder(saved)
+    owner.restore(saved)
+    views.push(readJournalPublicView(saved, owner))
     aliases.push(new Map(state.aliases))
     fences.push(Math.max(row.fence, fences.at(-1) ?? 0))
   }
@@ -45,6 +49,9 @@ export function hostJournalFrames(
     const journal = {
       isReadOnly: false,
       snapshot: () => snapshot,
+      currentRead: view.currentSnapshot.bind(view),
+      submission: (id: string) =>
+        snapshot.submissions.find((entry) => entry.clientMessageId === id),
       publicRead: () => view,
       cursor: () => snapshot.cursor,
       canonicalItemId: (itemId: string) => aliases[upTo - 1]!.get(itemId) ?? itemId,

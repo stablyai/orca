@@ -1,3 +1,5 @@
+import { createJournalReducerState } from '../agent-session-journal/journal-reducer'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -31,6 +33,13 @@ describe('history catch-up runner', () => {
       visitItemsWithLinkage: vi.fn(),
       receiptFor: () => null,
       submissions: () => [],
+      currentRead: () => ({
+        sessionId: 'session-1',
+        cursor: { epoch: 'epoch-1', sequence: 0 },
+        items: [],
+        submissions: []
+      }),
+      inputOrder: journalInputOrder(createJournalReducerState('session-1', 'epoch-1')),
       historyOrigin: () => null
     }
     const append = vi.fn<NonNullable<StructuredAgentSessionEventSink['tryAppendTransition']>>(

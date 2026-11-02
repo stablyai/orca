@@ -1,3 +1,4 @@
+import type { AgentSessionFailureSentence } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { newestAcceptedSendKey } from './structured-agent-session-status-child-work'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -239,7 +240,8 @@ it('retains historical status evidence and exact digested attribution across log
   await journal.resolveDispatch({
     clientMessageId: 'steer',
     state: 'rejected',
-    reason: 'provider ended the steered input',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: historical unbranded reasons must keep their exact retained-status interpretation.
+    reason: 'provider ended the steered input' as AgentSessionFailureSentence,
     answeredInTurn: { turn, via: 'steer' },
     fence: 7
   })
@@ -260,7 +262,8 @@ it('retains historical status evidence and exact digested attribution across log
   await journal.resolveDispatch({
     clientMessageId: 'refused',
     state: 'rejected',
-    reason: 'provider refused the request',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: historical unbranded reasons must keep their exact retained-status interpretation.
+    reason: 'provider refused the request' as AgentSessionFailureSentence,
     fence: 7
   })
   check()

@@ -42,7 +42,9 @@ export function createRetainedMaterializerCounters(
   const values = Map.prototype.values,
     keys = Map.prototype.keys,
     entries = Map.prototype.entries
-  const mv = vi.spyOn(Map.prototype, 'values').mockImplementation(function* () {
+  const mv = vi.spyOn(Map.prototype, 'values').mockImplementation(function* (
+    this: Map<unknown, unknown>
+  ) {
     if (inputMaps.has(this)) {
       count().fullIterations++
     }
@@ -52,7 +54,9 @@ export function createRetainedMaterializerCounters(
     }
     return undefined
   })
-  const mk = vi.spyOn(Map.prototype, 'keys').mockImplementation(function* () {
+  const mk = vi.spyOn(Map.prototype, 'keys').mockImplementation(function* (
+    this: Map<unknown, unknown>
+  ) {
     if (inputMaps.has(this)) {
       count().fullIterations++
     }
@@ -62,7 +66,9 @@ export function createRetainedMaterializerCounters(
     }
     return undefined
   })
-  const me = vi.spyOn(Map.prototype, 'entries').mockImplementation(function* () {
+  const me = vi.spyOn(Map.prototype, 'entries').mockImplementation(function* (
+    this: Map<unknown, unknown>
+  ) {
     if (inputMaps.has(this)) {
       count().fullIterations++
     }
@@ -72,7 +78,9 @@ export function createRetainedMaterializerCounters(
     }
     return undefined
   })
-  const mi = vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function* () {
+  const mi = vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function* (
+    this: Map<unknown, unknown>
+  ) {
     if (inputMaps.has(this)) {
       count().fullIterations++
     }
@@ -82,7 +90,11 @@ export function createRetainedMaterializerCounters(
     }
     return undefined
   })
-  const mf = vi.spyOn(Map.prototype, 'forEach').mockImplementation(function (callback, receiver) {
+  const mf = vi.spyOn(Map.prototype, 'forEach').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    callback,
+    receiver
+  ) {
     if (inputMaps.has(this)) {
       count().fullIterations++
     }

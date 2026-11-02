@@ -253,7 +253,11 @@ it.each([10, 100])(
           expect(await pending.result).toMatchObject({ ok: true })
           const settled = rig.host.waitForSendSettlement(SESSION, pending.id)
           expect(await rig.stop()).toMatchObject({ ok: true })
-          expect((await settled)?.value.submission.clientMessageId).toBe(pending.id)
+          const stoppedAnswer = (await settled)?.value
+          if (!stoppedAnswer || !('submission' in stoppedAnswer)) {
+            throw new Error('Stop lost its submission settlement')
+          }
+          expect(stoppedAnswer.submission.clientMessageId).toBe(pending.id)
           expect(journal.submission(pending.id)?.dispatchState).not.toBe('pending')
           stopped.push({ clientMessageId: pending.id, words: `stop pending ${l}` })
           publication()
@@ -413,7 +417,11 @@ it.each([10, 100])(
             ordinal: 0
           }
         })
-        expect((await settled)?.value.submission.dispatchState).toBe('accepted')
+        const acceptedAnswer = (await settled)?.value
+        if (!acceptedAnswer || !('submission' in acceptedAnswer)) {
+          throw new Error('Delivery lost its submission settlement')
+        }
+        expect(acceptedAnswer.submission.dispatchState).toBe('accepted')
         acceptedKey = next.id
         stopped = []
       })

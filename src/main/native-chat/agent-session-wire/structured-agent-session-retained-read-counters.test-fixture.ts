@@ -7,6 +7,11 @@ import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-m
 import { JournalInputCardIndex } from '../agent-session-journal/journal-input-card-index'
 import { JournalInputPlaceIndex } from '../agent-session-journal/journal-input-place-index'
 
+function counterProperty<T extends object>(target: T, key: PropertyKey) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Proxy keys forward unchanged; absent properties read as undefined.
+  return target[key as keyof T]
+}
+
 export function createRetainedReadCounters() {
   type Counts = {
     fullViews: number
@@ -88,9 +93,11 @@ export function createRetainedReadCounters() {
   const observeNode = (node: Tree | undefined): Tree | undefined =>
     node &&
     new Proxy(node, {
-      get(target, key: keyof typeof target) {
+      get(target, key) {
         count().paths++
-        return key === 'left' || key === 'right' ? observeNode(target[key]) : target[key]
+        return key === 'left' || key === 'right'
+          ? observeNode(target[key])
+          : counterProperty(target, key)
       }
     })
   const atPath = <T>(index: JournalInputPlaceIndex, run: () => T): T => {
@@ -155,8 +162,8 @@ export function createRetainedReadCounters() {
     .spyOn(JournalInputOrder.prototype, 'stoppedHistoryInputs')
     .mockImplementation(function (this: JournalInputOrder, ...args) {
       return new Proxy(stoppedInputs.apply(this, args), {
-        get(target, key: keyof typeof target) {
-          const value = target[key]
+        get(target, key) {
+          const value = counterProperty(target, key)
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             visit(value)
           }
@@ -169,8 +176,8 @@ export function createRetainedReadCounters() {
     .mockImplementation(function (this: JournalInputOrder, ...args) {
       const result = status.apply(this, args)
       return new Proxy(result, {
-        get(target, key: keyof typeof target) {
-          const value = target[key]
+        get(target, key) {
+          const value = counterProperty(target, key)
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             count().statusRecords++
             const input = target[Number(key)]
@@ -191,16 +198,19 @@ export function createRetainedReadCounters() {
   const rendered = vi.spyOn(reducer, 'renderJournalItems').mockImplementation(
     (...args) =>
       new Proxy(renderItems(...args), {
-        get(target, key: keyof typeof target) {
+        get(target, key) {
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             count().statusItems++
           }
-          return target[key]
+          return counterProperty(target, key)
         }
       })
   )
   const get = Map.prototype.get
-  const mg = vi.spyOn(Map.prototype, 'get').mockImplementation(function (key) {
+  const mg = vi.spyOn(Map.prototype, 'get').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    key
+  ) {
     if (archived(key)) {
       count().points++
     }
@@ -214,8 +224,8 @@ export function createRetainedReadCounters() {
     this: JournalQueuedMessages
   ) {
     return new Proxy(list.call(this), {
-      get(target, key: keyof typeof target) {
-        const value: unknown = target[key]
+      get(target, key) {
+        const value: unknown = counterProperty(target, key)
         if (typeof key === 'string' && /^\d+$/.test(key)) {
           visit(value)
         }

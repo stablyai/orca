@@ -200,7 +200,7 @@ it.each([10, 100])(
           openOutstanding--
         }
       })
-    const reads = vi.spyOn(host, 'journalSnapshot')
+    const reads = vi.spyOn(host, 'journalCurrentRead')
     const seed = Promise.withResolvers<void>()
     const generated = Promise.withResolvers<void>()
     const publications = vi.spyOn(host, 'publishConversationName')

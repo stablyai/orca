@@ -168,6 +168,6 @@ export type AgentSessionReplayContext = Pick<
 > & {
   journal: Pick<
     AgentSessionJournal,
-    'cursor' | 'submission' | 'submissions' | 'epoch' | 'threadGoal'
+    'cursor' | 'submission' | 'inputOrder' | 'epoch' | 'threadGoal'
   > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
 }
