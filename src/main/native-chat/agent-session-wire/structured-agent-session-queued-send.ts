@@ -3,6 +3,7 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session/jour
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { maybeQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import type { JournalSendAdmission } from '../agent-session-journal/journal-store-contracts'
 
 export async function runQueueableStructuredAgentSessionSend(
   context: StructuredAgentSessionMutationContext,
@@ -15,6 +16,7 @@ export async function runQueueableStructuredAgentSessionSend(
     options?: Readonly<Record<string, string>>
     userSend?: true
     personsMessage?: true
+    admit?: JournalSendAdmission
   },
   immediate: () => Promise<TurnOutcome<AgentSessionSendResult>>
 ): Promise<TurnOutcome<AgentSessionSendResult>> {

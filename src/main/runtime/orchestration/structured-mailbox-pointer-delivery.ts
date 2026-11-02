@@ -8,11 +8,9 @@ import {
   shouldReleaseOrchestrationPointer,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
-import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
 import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
-import { structuredMailMessage } from './structured-mail-source'
+import { structuredMailMessage, structuredMailWrittenAt } from './structured-mail-source'
 import type { SenderSnapshotResolver } from './agent-message-sender'
-import type { StructuredMailSendRow } from './db/messages/structured-mail-send-store'
 import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
 import {
   orchestrationMailNotice,
@@ -23,6 +21,7 @@ import { StructuredMailSettledState } from './structured-mail-settled-state'
 import {
   hasStructuredMailSends,
   settleStructuredMailSends,
+  structuredMailAttempt,
   StructuredMailAuthority,
   type StructuredMailResend
 } from './structured-mail-custody'
@@ -196,6 +195,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     let currentReservedTypes = reservedTypes
     // Each message is offered to each owner once per pass; one it no longer owes waits for an edge.
     const offered = new Set<string>()
+    // Mail the person's Stop holds: later mail still goes, and the mailbox stays parked for it.
+    const pass = { held: false }
     for (;;) {
       const db = this.deps.getDb()
       if (!db) {
@@ -235,7 +236,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         if (!message || again.row.session_id !== target.sessionId) {
           continue
         }
-        if ((await this.admit(db, mailboxHandle, target, message, again)) === 'park') {
+        if ((await this.admit(db, mailboxHandle, target, message, pass, again)) === 'park') {
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
           return
         }
@@ -250,8 +251,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           !outstanding.has(message.id) && !offered.has(`${message.id}:${target?.sessionId}`)
       )
       if (batch.length === 0) {
-        if (hasStructuredMailSends(db, mailboxHandle)) {
-          // Cards still in the chat: their handover or deletion is read on this session's next edge.
+        if (pass.held || hasStructuredMailSends(db, mailboxHandle)) {
+          // Cards still in the chat, or mail its Stop holds: read again on this session's next edge.
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
         } else {
           this.parking.unpark(mailboxHandle)
@@ -271,7 +272,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         offered.add(`${message.id}:${target.sessionId}`)
         // Parked first, so a send that throws is retried on this session's next journal edge.
         this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
-        if ((await this.admit(db, mailboxHandle, target, message)) === 'park') {
+        if ((await this.admit(db, mailboxHandle, target, message, pass)) === 'park') {
           // An edge during the send may have taken the entry; the refusal still waits for the next one.
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
           return
@@ -288,6 +289,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     mailboxHandle: string,
     target: StructuredPointerTarget,
     message: MessageRow,
+    pass: { held: boolean },
     again?: StructuredMailResend
   ): Promise<AdmitStep> {
     const sessionId = target.sessionId
@@ -303,14 +305,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       cliCommand: this.deps.getCliCommand(),
       senderSnapshot: this.deps.senderSnapshot
     })
-    const attempt: StructuredMailSendRow = {
-      mailbox_handle: mailboxHandle,
-      message_id: message.id,
-      session_id: sessionId,
-      operation_id:
-        again && !again.renew ? again.row.operation_id : mintAgentSessionOperationId(Date.now()),
-      minted_at_ms: again && !again.renew ? again.row.minted_at_ms : Date.now()
-    }
+    const attempt = structuredMailAttempt(mailboxHandle, message.id, sessionId, again)
     // Reserved before the send, with its delivered stamp, so a crash after it lands finds the card
     // instead of sending twice. Only the pass whose reservation lands sends.
     if (!db.reserveStructuredMailSend(attempt, again?.row.operation_id)) {
@@ -324,6 +319,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       operationId: attempt.operation_id,
       expectedRuntimeFence: fence,
       body,
+      createdAt: structuredMailWrittenAt(db, mailboxHandle, message),
       stillOwed: () => {
         last.owed = this.authority.owedTo(sessionId, mailboxHandle, [message.id])
         return (
@@ -346,6 +342,11 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       case 'obsolete':
         db.releaseStructuredMailSend(attempt)
         return last.owed === 'unavailable' ? 'park' : 'next'
+      case 'held':
+        // Unread and undelivered again: the person's send or Resume redrives it.
+        db.releaseStructuredMailSend(attempt)
+        pass.held = true
+        return 'next'
       case 'queued':
         return 'next'
       case 'sent':

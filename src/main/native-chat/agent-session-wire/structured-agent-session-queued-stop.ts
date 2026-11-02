@@ -1,5 +1,5 @@
 // Stop atomically records its event/queued-send withdrawal without withdrawing draft text.
-// Derive pause until a later send’s turn starts or Resume; Send-now alone lifts only its own card.
+// Derive pause until the person sends (Send-now included) or Resumes; an agent's turn lifts nothing.
 
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {

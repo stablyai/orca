@@ -4,6 +4,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import type { JournalReducerState } from './journal-reducer'
 import { journalRowBase } from './journal-row-builders'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
+import { journalUserStopInForce } from './queued-message-pause'
 
 // Reserve IDs that no real item uses.
 const JOURNAL_STOP_EVENT_ITEM_ID = agentJournalItemKey({
@@ -82,6 +83,16 @@ export function journalQueueResumeRowBuilder(
   fence: number
 ): (seq: number, ts: number) => JournalTombstoneRow {
   return (seq, ts) => buildJournalQueueResumeRow({ state: state(), seq, fence, ts })
+}
+
+/** The person's send lifts their Stop: its Resume mark commits with the send, so it never falls back. */
+export function journalStopLiftRows(
+  state: () => JournalReducerState,
+  fence = state().highestFence
+): ((seq: number, ts: number) => JournalTombstoneRow)[] {
+  return journalUserStopInForce(state().queuePauseMarks)
+    ? [journalQueueResumeRowBuilder(state, fence)]
+    : []
 }
 
 export function journalQueueReopenRowBuilder(
