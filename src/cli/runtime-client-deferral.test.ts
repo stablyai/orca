@@ -125,7 +125,7 @@ describe('RuntimeClient module-graph deferral', () => {
         ).toHaveBeenCalledExactlyOnceWith(
           false,
           { agentCmdOverrides: {}, disabledTuiAgents: [] },
-          {}
+          { userDataPath: testUserDataPathRef.current }
         )
       } else {
         expect(
