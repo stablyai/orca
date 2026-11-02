@@ -75,3 +75,64 @@ describe('paired/mobile Codex status while a /side chat is shown', () => {
     expect(out).toBeNull()
   })
 })
+
+describe('paired/mobile waiting permission prompts exceeding staleness timeout (#37039)', () => {
+  const ASK_PROMPT = JSON.stringify({ approval: { tool: 'Bash', summary: 'gh pr comment' } })
+
+  it('preserves interactivePrompt when waiting on an idle PTY past 30 minutes', () => {
+    const hookAt = Date.now() - 50 * 60 * 1000
+    const out = renewRuntimeMobileAgentStatusFromPtyTitle(
+      {
+        ...runningExec(hookAt, 'claude'),
+        state: 'waiting',
+        interactivePrompt: ASK_PROMPT
+      },
+      sideChatIdlePty(hookAt)
+    )
+    expect(out?.state).toBe('waiting')
+    expect(out?.interactivePrompt).toBe(ASK_PROMPT)
+  })
+
+  it('preserves interactivePrompt, toolName, and toolInput under permission title past 30 minutes', () => {
+    const hookAt = Date.now() - 60 * 60 * 1000
+    const out = renewRuntimeMobileAgentStatusFromPtyTitle(
+      {
+        ...runningExec(hookAt, 'claude'),
+        state: 'blocked',
+        interactivePrompt: ASK_PROMPT
+      },
+      {
+        ...sideChatIdlePty(hookAt),
+        lastOscTitle: '✋ repo',
+        lastOscTitleEpochMs: hookAt + 15_000,
+        lastAgentStatus: 'permission',
+        lastAgentStatusStartedAtEpochMs: hookAt + 15_000,
+        lastAgentStatusRichInvalidatedAtEpochMs: hookAt + 15_000
+      }
+    )
+    expect(out?.state).toBe('blocked')
+    expect(out?.interactivePrompt).toBe(ASK_PROMPT)
+    expect(out?.toolName).toBe('Bash')
+  })
+
+  it('retires interactivePrompt once PTY title transitions to working', () => {
+    const hookAt = Date.now() - 50 * 60 * 1000
+    const out = renewRuntimeMobileAgentStatusFromPtyTitle(
+      {
+        ...runningExec(hookAt, 'claude'),
+        state: 'waiting',
+        interactivePrompt: ASK_PROMPT
+      },
+      {
+        ...sideChatIdlePty(hookAt),
+        lastOscTitle: 'repo',
+        lastOscTitleEpochMs: Date.now() - 1000,
+        lastAgentStatus: 'working',
+        lastAgentStatusStartedAtEpochMs: Date.now() - 1000,
+        lastAgentStatusRichInvalidatedAtEpochMs: Date.now() - 1000
+      }
+    )
+    expect(out?.state).toBe('working')
+    expect(out?.interactivePrompt).toBeUndefined()
+  })
+})

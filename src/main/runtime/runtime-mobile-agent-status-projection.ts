@@ -65,15 +65,13 @@ function completedTurnFields(
     return {}
   }
   return {
-    ...(status.lastAssistantMessage
-      ? {
-          lastAssistantMessage: status.lastAssistantMessage,
-          ...(status.lastAssistantMessageIsToolOutput != null
-            ? { lastAssistantMessageIsToolOutput: status.lastAssistantMessageIsToolOutput }
-            : {})
-        }
-      : {}),
-    ...(status.interrupted != null ? { interrupted: status.interrupted } : {})
+    ...(status.lastAssistantMessage && {
+      lastAssistantMessage: status.lastAssistantMessage,
+      ...(status.lastAssistantMessageIsToolOutput != null && {
+        lastAssistantMessageIsToolOutput: status.lastAssistantMessageIsToolOutput
+      })
+    }),
+    ...(status.interrupted != null && { interrupted: status.interrupted })
   }
 }
 
@@ -90,7 +88,7 @@ export function demoteRuntimeMobileAgentStatus(
     stateHistory: [],
     agentType: status.agentType,
     ...completedTurnFields(status),
-    ...(status.providerSession ? { providerSession: status.providerSession } : {})
+    ...(status.providerSession && { providerSession: status.providerSession })
   }
 }
 
@@ -107,7 +105,8 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   if (
     (status.state === 'waiting' || status.state === 'blocked') &&
     pty.lastAgentStatus === 'idle' &&
-    Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS
+    (status.interactivePrompt != null ||
+      Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS)
   ) {
     return status
   }
@@ -137,13 +136,20 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     stateStartedAt,
     paneKey: status.paneKey,
     stateHistory: [],
-    ...(status.agentType ? { agentType: status.agentType } : {}),
-    ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
-    ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
-    ...(status.tabId ? { tabId: status.tabId } : {}),
-    ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
-    ...(status.providerSession ? { providerSession: status.providerSession } : {}),
-    ...(state === 'done' ? completedTurnFields(status) : {})
+    ...(status.agentType && { agentType: status.agentType }),
+    ...(status.terminalHandle && { terminalHandle: status.terminalHandle }),
+    ...(status.worktreeId && { worktreeId: status.worktreeId }),
+    ...(status.tabId && { tabId: status.tabId }),
+    ...(status.terminalTitle && { terminalTitle: status.terminalTitle }),
+    ...(status.providerSession && { providerSession: status.providerSession }),
+    ...(state === 'done' ? completedTurnFields(status) : {}),
+    ...((state === 'waiting' || state === 'blocked') && status.interactivePrompt != null
+      ? {
+          interactivePrompt: status.interactivePrompt,
+          ...(status.toolName && { toolName: status.toolName }),
+          ...(status.toolInput && { toolInput: status.toolInput })
+        }
+      : {})
   })
   const titleConfirmsState =
     (pty.lastAgentStatus === 'working' && status.state === 'working') ||
@@ -182,8 +188,13 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
       pty.lastAgentStatusStartedAtEpochMs ?? titleEvidenceAt
     )
   }
+  const waitingInteractivePromptRetained =
+    (status.state === 'waiting' || status.state === 'blocked') &&
+    status.interactivePrompt != null &&
+    pty.lastAgentStatus !== 'working'
   const richStatusOwnsCurrentState =
-    Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS &&
+    (waitingInteractivePromptRetained ||
+      Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS) &&
     richStatusCanOwnTitleInterval
   // Fresh explicit evidence from this title interval owns acknowledgement identity.
   const stateStartedAt = richStatusOwnsCurrentState
@@ -281,11 +292,11 @@ function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow {
   return {
     payload: pickParsedAgentStatusPayload(row),
     updatedAt: row.receivedAt,
-    ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
+    ...(row.evidenceObservedAt !== undefined && { evidenceObservedAt: row.evidenceObservedAt }),
     stateStartedAt: row.stateStartedAt ?? row.receivedAt,
     ...pickHostTurnEnd(row),
-    ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
-    ...(row.programStatus ? { programStatus: row.programStatus } : {})
+    ...(row.worktreeId && { worktreeId: row.worktreeId }),
+    ...(row.programStatus && { programStatus: row.programStatus })
   }
 }
 
@@ -294,10 +305,7 @@ export function resolveRuntimeHookLiveAgentRow(
   pty: RuntimePtyWorktreeRecord | null,
   nonAgentTitle: boolean
 ): HookLiveAgentRow | null {
-  if (!live) {
-    return null
-  }
-  if (live.payload.interactivePrompt != null) {
+  if (!live || live.payload.interactivePrompt != null) {
     return live
   }
   if (workingHookOwnsIdleTitleInterval(live.payload, agentStatusAuthorityObservedAt(live), pty)) {
