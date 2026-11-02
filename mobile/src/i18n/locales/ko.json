@@ -2036,8 +2036,7 @@
       "promptUnconfirmed": "에이전트가 시작되었지만 프롬프트가 전송되었는지 확인하지 못했습니다."
     },
     "prActionsEngine": {
-      "mergeFailed": "PR을 병합하지 못했습니다.",
-      "refreshFailed": "PR을 새로고침하지 못했습니다."
+      "mergeFailed": "PR을 병합하지 못했습니다."
     },
     "prAiTriageLaunch": {
       "agentStarted": "에이전트 시작됨",

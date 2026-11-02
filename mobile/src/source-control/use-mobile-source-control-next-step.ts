@@ -9,7 +9,6 @@ import {
   buildResolveConflictsPrompt as buildReviewConflictsPrompt
 } from '../session/pr-ai-triage-prompt'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
-import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
 import { buildResolveConflictsPrompt } from '../../../src/shared/source-control-conflict-prompts'
 import { resolveGitHubPRMergeMethods } from '../../../src/shared/github/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../src/shared/github/pull-request-types'
@@ -39,7 +38,8 @@ type Params = {
   prState: PrSidebarState
   /** False on hosts without PR support; the bar then stops at Create PR. */
   reviewsSupported: boolean
-  refetchPr: (options?: PrSidebarLoadOptions) => void
+  /** A PR write's follow-up read: never skipped behind another read, and a failed one keeps the shown PR. */
+  rereadPr: () => Promise<void>
   headSha: string | null
   /** The Changes body shows git workflow failures; elsewhere the bar has to. */
   showWorkflowErrors: boolean
@@ -62,7 +62,7 @@ export function useMobileSourceControlNextStep({
   review,
   prState,
   reviewsSupported,
-  refetchPr,
+  rereadPr,
   headSha,
   showWorkflowErrors,
   onMerge
@@ -79,7 +79,7 @@ export function useMobileSourceControlNextStep({
     prNumber,
     headSha,
     prRepo,
-    refetch: refetchPr
+    refetch: rereadPr
   })
   const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
   const triage = useMobilePrAiTriage({

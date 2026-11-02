@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
@@ -10,7 +11,11 @@ import {
 } from './github-pr-mutations'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { buildUpdatePRBodyParams, buildUpdatePRTitleParams } from './pr-title-edit'
+import {
+  buildUpdatePRBodyParams,
+  buildUpdatePRTitleParams,
+  createPrTextEditOwnership
+} from './pr-title-edit'
 
 export type PrTextField = 'title' | 'body'
 
@@ -53,6 +58,11 @@ export function useMobilePrTextAction(input: PrTextActionInput) {
     null
   )
   const inFlightRef = useRef(false)
+  const [ownership] = useState(createPrTextEditOwnership)
+  // A write that settles after the view moved to another PR must not show its error there or reread for it.
+  const identity = `${prNumber}:${prRepo ? githubRepoIdentityKey(prRepo) : ''}`
+  const identityRef = useRef(identity)
+  identityRef.current = identity
 
   const mutations = useMemo(
     () => input.mutations ?? (client ? realMutations(client, worktreeId) : null),
@@ -60,7 +70,7 @@ export function useMobilePrTextAction(input: PrTextActionInput) {
   )
   const ready = mutations !== null && (input.mutations !== undefined || connState === 'connected')
 
-  const save = useCallback(
+  const write = useCallback(
     async (field: PrTextField, draft: string, current: string): Promise<boolean> => {
       const params =
         field === 'title'
@@ -80,6 +90,7 @@ export function useMobilePrTextAction(input: PrTextActionInput) {
       inFlightRef.current = true
       setSaving(true)
       setError(null)
+      const isCurrent = (): boolean => identityRef.current === identity
       try {
         const outcome =
           'title' in params
@@ -87,23 +98,40 @@ export function useMobilePrTextAction(input: PrTextActionInput) {
             : await mutations.updateBody({ ...params, prRepo })
         if (outcome.ok) {
           triggerSuccess()
-          await refetch()
           return true
         }
         triggerError()
-        setError(outcome.error)
+        if (isCurrent()) {
+          setError(outcome.error)
+        }
         return false
       } catch (err) {
-        // Contain fire-and-forget save/refetch rejection and return false with feedback.
+        // Contain fire-and-forget save rejection and return false with feedback.
         triggerError()
-        setError(err instanceof Error ? err.message : { kind: 'updateFailed' })
+        if (isCurrent()) {
+          setError(err instanceof Error ? err.message : { kind: 'updateFailed' })
+        }
         return false
       } finally {
         inFlightRef.current = false
         setSaving(false)
+        // A failed response doesn't prove the host kept the old text, so every attempted write rereads.
+        // The write decides Save's result; a failed reread is contained and keeps the shown PR.
+        if (isCurrent()) {
+          try {
+            await refetch()
+          } catch {
+            // Keep the write's outcome.
+          }
+        }
       }
     },
-    [ready, mutations, prNumber, prRepo, refetch]
+    [ready, mutations, prNumber, prRepo, refetch, identity]
+  )
+  const save = useCallback(
+    (field: PrTextField, draft: string, current: string): Promise<boolean> =>
+      ownership.save(() => write(field, draft, current)),
+    [ownership, write]
   )
 
   return {
@@ -115,7 +143,12 @@ export function useMobilePrTextAction(input: PrTextActionInput) {
         : error.kind === 'disconnected'
           ? t('session.usePrTitleAction.disconnected', 'Not connected to desktop.')
           : t('session.usePrTextAction.updateFailed', 'Failed to update pull request.'),
-    clearError: useCallback(() => setError(null), []),
+    // Opening or cancelling an editor starts a new edit, so an older Save cannot close it.
+    clearError: useCallback(() => {
+      ownership.touch()
+      setError(null)
+    }, [ownership]),
+    touch: ownership.touch,
     save
   }
 }

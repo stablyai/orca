@@ -2172,8 +2172,7 @@
       "promptUnconfirmed": "Агент запущен, но подтвердить отправку запроса не удалось."
     },
     "prActionsEngine": {
-      "mergeFailed": "Не удалось слить пул-реквест.",
-      "refreshFailed": "Не удалось обновить пул-реквест."
+      "mergeFailed": "Не удалось слить пул-реквест."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Агент запущен",

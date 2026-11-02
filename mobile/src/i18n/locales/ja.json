@@ -2036,8 +2036,7 @@
       "promptUnconfirmed": "Agent は起動しましたが、プロンプトの送信を確認できませんでした。"
     },
     "prActionsEngine": {
-      "mergeFailed": "PR のマージに失敗しました。",
-      "refreshFailed": "PR の更新に失敗しました。"
+      "mergeFailed": "PR のマージに失敗しました。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent を起動しました。",
