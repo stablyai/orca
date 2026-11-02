@@ -214,6 +214,28 @@ describe('searchClickUpTasks', () => {
     ).toBe(true)
   })
 
+  it('falls back to the scoped scan for a pasted task URL using the parsed task id', async () => {
+    const added = rawTask('86abc123', 'Added from another List', {
+      list: { id: 'list-2', name: 'Other' }
+    })
+    clickUpRequestMock.mockImplementation(async (_client: unknown, path: string) =>
+      path.startsWith('/task/') ? added : { tasks: [added] }
+    )
+    const { searchClickUpTasks } = await import('./task-search')
+
+    await expect(
+      searchClickUpTasks('https://app.clickup.com/t/86abc123', 5, 'team-1', {
+        listIds: ['list-1']
+      })
+    ).resolves.toMatchObject([{ id: '86abc123' }])
+    getClientsMock.mockReturnValue([client('12345')])
+    await expect(
+      searchClickUpTasks('https://app.clickup.com/t/12345/86abc123', 5, '12345', {
+        listIds: ['list-1']
+      })
+    ).resolves.toMatchObject([{ id: '86abc123' }])
+  })
+
   it('stops paging an older search once a newer one starts for the same query', async () => {
     let releaseFirst: () => void = () => undefined
     const gate = new Promise<void>((resolve) => {

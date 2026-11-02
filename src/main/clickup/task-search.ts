@@ -1,7 +1,8 @@
 import {
   CLICKUP_TASK_ID_PATTERN,
   getMatchingClickUpWorkspaces,
-  parseClickUpTaskInput
+  parseClickUpTaskInput,
+  type ParsedClickUpTaskUrl
 } from '../../shared/clickup-task-url'
 import type {
   ClickUpTask,
@@ -151,16 +152,21 @@ function looksLikeNativeTaskId(query: string): boolean {
   return CLICKUP_TASK_ID_PATTERN.test(query) && /\d/.test(query) && /[a-z]/.test(query)
 }
 
-async function lookupExactTask(
-  clients: ClickUpClientForWorkspace[],
-  query: string
-): Promise<RankedTask[]> {
+function parseExactTaskSearchQuery(query: string): ParsedClickUpTaskUrl | null {
   const trimmed = query.trim()
-  const parsed =
+  return (
     parseClickUpTaskInput(trimmed) ??
     (looksLikeNativeTaskId(trimmed)
       ? { taskId: trimmed, isCustomId: false, workspaceId: null, origin: '' }
       : null)
+  )
+}
+
+async function lookupExactTask(
+  clients: ClickUpClientForWorkspace[],
+  query: string
+): Promise<RankedTask[]> {
+  const parsed = parseExactTaskSearchQuery(query)
   if (!parsed) {
     return []
   }
@@ -255,9 +261,10 @@ export async function searchClickUpTasks(
   if (scopedExact.length > 0) {
     return scopedExact.slice(0, safeLimit)
   }
+  const rankQuery = parseExactTaskSearchQuery(trimmed)?.taskId ?? trimmed
   const viewerId = getStatus().viewer?.id
   const scanned = await Promise.all(
-    clients.map((client) => scanWorkspace(client, trimmed, safeLimit, viewerId, taskScope, force))
+    clients.map((client) => scanWorkspace(client, rankQuery, safeLimit, viewerId, taskScope, force))
   )
   return scanned
     .flat()
