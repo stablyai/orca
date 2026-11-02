@@ -1,4 +1,4 @@
-import { fileIdentity } from './session-search-file-cursor'
+import { fileIdentity, type SessionSearchFileRow } from './session-search-file-cursor'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
@@ -9,6 +9,43 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 /** Use the sidebar’s path normalization so indexed cwd keys join its folder groups. */
 export function cwdKey(cwd: string | null): string | null {
   return cwd ? normalizeRuntimePathForComparison(cwd) : null
+}
+
+export function readSessionSearchFileRows(db: SyncDatabase): SessionSearchFileRow[] {
+  const rows = db
+    .prepare(
+      `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
+              mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
+              content_fingerprint AS contentFingerprint,
+              state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs FROM files`
+    )
+    .all()
+  return rows.map((row) => {
+    if (
+      typeof row.path !== 'string' ||
+      typeof row.mtimeMs !== 'number' ||
+      (row.sizeBytes !== null && typeof row.sizeBytes !== 'number') ||
+      (row.contentFingerprint !== null && typeof row.contentFingerprint !== 'string') ||
+      (row.state !== 'current' && row.state !== 'due' && row.state !== 'failed') ||
+      typeof row.failCount !== 'number' ||
+      (row.failedMtimeMs !== null && typeof row.failedMtimeMs !== 'number')
+    ) {
+      throw new Error('Invalid session search file observation')
+    }
+    return {
+      path: row.path,
+      identity:
+        typeof row.dev === 'number' && typeof row.ino === 'number'
+          ? { dev: row.dev, ino: row.ino }
+          : null,
+      mtimeMs: row.mtimeMs,
+      sizeBytes: row.sizeBytes,
+      contentFingerprint: row.contentFingerprint,
+      state: row.state,
+      failCount: row.failCount,
+      failedMtimeMs: row.failedMtimeMs
+    }
+  })
 }
 
 export class SessionSearchFileRecords {
@@ -91,8 +128,8 @@ export class SessionSearchFileRecords {
     this.db
       .prepare(
         `INSERT INTO files(path, dev, ino, byte_offset, mtime_ms, size_bytes, session_row_id,
-                           prefix_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                           prefix_hash, content_fingerprint)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(path) DO UPDATE SET
            -- Partial observations must never create a pair that no stat proved.
            dev = CASE WHEN excluded.dev IS NOT NULL AND excluded.ino IS NOT NULL
@@ -101,7 +138,7 @@ export class SessionSearchFileRecords {
              THEN excluded.ino ELSE files.ino END,
            byte_offset = excluded.byte_offset, mtime_ms = excluded.mtime_ms,
            size_bytes = excluded.size_bytes, session_row_id = excluded.session_row_id,
-           prefix_hash = excluded.prefix_hash`
+           prefix_hash = excluded.prefix_hash, content_fingerprint = excluded.content_fingerprint`
       )
       .run(
         file.path,
@@ -111,7 +148,8 @@ export class SessionSearchFileRecords {
         file.mtimeMs,
         file.sizeBytes ?? null,
         sessionRowId,
-        prefixHash ?? null
+        prefixHash ?? null,
+        file.contentFingerprint ?? null
       )
   }
 }

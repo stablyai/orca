@@ -5,13 +5,14 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
 import { addSessionContent, addSessionText } from './session-scanner-messages'
 import {
-  kimiPrimaryAgentWirePath,
+  kimiSessionWirePaths,
   kimiSessionIdFromStatePath,
   kimiSessionIndexPathFromStatePath,
   readKimiWorkDirBySessionId
 } from './session-scanner-kimi-paths'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
+import { createKimiV2WireConsumer } from './session-scanner-kimi-v2-wire'
 import {
   asRecord,
   extractContentText,
@@ -50,22 +51,28 @@ export async function parseKimiSessionFile(
   const workDirBySessionId = await readKimiWorkDirBySessionId(
     kimiSessionIndexPathFromStatePath(file.path)
   )
-  accumulator.cwd = workDirBySessionId.get(sessionId) ?? null
+  accumulator.cwd = workDirBySessionId.get(sessionId) ?? extractString(stateRecord.cwd)
 
   accumulator.title = normalizeTitleText(extractString(stateRecord.title) ?? '')
   accumulator.fallbackTitle = normalizeTitleText(extractString(stateRecord.lastPrompt) ?? '')
-  updateTimeline(accumulator, extractString(stateRecord.createdAt))
-  updateTimeline(accumulator, extractString(stateRecord.updatedAt))
+  updateTimeline(accumulator, stateRecord.createdAt)
+  updateTimeline(accumulator, stateRecord.updatedAt)
 
-  await consumeKimiWireTranscript(accumulator, kimiPrimaryAgentWirePath(file.path, stateRecord))
+  const wires = kimiSessionWirePaths(file.path, stateRecord)
+  for (const [index, wire] of wires.entries()) {
+    await consumeKimiWireTranscript(accumulator, wire, stateRecord.version === 2, index === 0)
+  }
 
   return finalizeSession(accumulator, platform)
 }
 
 async function consumeKimiWireTranscript(
   accumulator: SessionAccumulator,
-  wirePath: string
+  wirePath: string,
+  version2 = false,
+  preview = true
 ): Promise<void> {
+  const v2 = version2 ? createKimiV2WireConsumer(accumulator, preview) : null
   let pendingAssistantText: string[] = []
   const flushAssistant = (): void => {
     const text = pendingAssistantText.join('')
@@ -82,6 +89,12 @@ async function consumeKimiWireTranscript(
     for await (const line of lines) {
       const record = parseJsonObject(line)
       if (!record) {
+        continue
+      }
+      if (v2?.consume(record)) {
+        continue
+      }
+      if (!preview) {
         continue
       }
       switch (record.type) {
@@ -103,8 +116,12 @@ async function consumeKimiWireTranscript(
       }
     }
   } catch (error) {
-    // Metadata-only sessions may list, but WSL refusal must propagate so missing wire content remains retryable.
-    if (error instanceof WslTranscriptFsError) {
+    // Unreadable v2 wires must retry instead of caching incomplete content.
+    const code = asRecord(error)?.code
+    if (
+      error instanceof WslTranscriptFsError ||
+      (version2 && code !== 'ENOENT' && code !== 'ENOTDIR')
+    ) {
       throw error
     }
   } finally {
@@ -112,6 +129,7 @@ async function consumeKimiWireTranscript(
     lines.close()
     input.destroy()
   }
+  v2?.finish()
   flushAssistant()
 }
 

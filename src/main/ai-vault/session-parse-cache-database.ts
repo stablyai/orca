@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS rows(
   platform TEXT NOT NULL,
   -- JSON, validated on read like any other untrusted file content.
   sidecar TEXT,
+  content_fingerprint TEXT,
   session TEXT NOT NULL,
   -- Wall-clock ms the transcript was last parsed or found still on disk. Rows
   -- past an age are re-checked, which is what ends a row whose transcript was
@@ -55,7 +56,9 @@ export class SessionParseCacheDatabase {
   read(path: string): PersistedSessionParseCacheEntry | undefined {
     return this.run((db) => {
       const row = db
-        .prepare('SELECT mtime_ms, size_bytes, platform, sidecar, session FROM rows WHERE path = ?')
+        .prepare(
+          'SELECT mtime_ms, size_bytes, platform, sidecar, content_fingerprint, session FROM rows WHERE path = ?'
+        )
         .get(path)
       if (row === undefined) {
         return undefined
@@ -67,6 +70,7 @@ export class SessionParseCacheDatabase {
           sizeBytes: row.size_bytes,
           platform: row.platform,
           sidecar: typeof row.sidecar === 'string' ? JSON.parse(row.sidecar) : undefined,
+          contentFingerprint: row.content_fingerprint,
           session: typeof row.session === 'string' ? JSON.parse(row.session) : undefined
         }
       ])
@@ -97,7 +101,7 @@ export class SessionParseCacheDatabase {
   ): void {
     this.run((db) => {
       const insert = db.prepare(
-        `INSERT OR ${keepExisting ? 'IGNORE' : 'REPLACE'} INTO rows(path, mtime_ms, size_bytes, platform, sidecar, session, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT OR ${keepExisting ? 'IGNORE' : 'REPLACE'} INTO rows(path, mtime_ms, size_bytes, platform, sidecar, content_fingerprint, session, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       db.exec('BEGIN IMMEDIATE')
       try {
@@ -108,6 +112,7 @@ export class SessionParseCacheDatabase {
             entry.sizeBytes,
             entry.platform,
             entry.sidecar === undefined ? null : JSON.stringify(entry.sidecar),
+            entry.contentFingerprint ?? null,
             JSON.stringify(entry.session),
             seenAt
           )
@@ -211,7 +216,20 @@ function openDatabase(path: string): SyncDatabase {
     sql: SCHEMA_SQL,
     directoryMode: PRIVATE_DIRECTORY_MODE,
     pageSize: PAGE_SIZE,
-    afterSchema: ensureScopeCwdsTable
+    afterSchema: (opened) => {
+      ensureScopeCwdsTable(opened)
+      opened.exec('BEGIN IMMEDIATE')
+      try {
+        const columns = opened.prepare('PRAGMA table_info(rows)').all()
+        if (!columns.some((column) => column.name === 'content_fingerprint')) {
+          opened.exec('ALTER TABLE rows ADD COLUMN content_fingerprint TEXT')
+        }
+        opened.exec('COMMIT')
+      } catch (error) {
+        opened.exec('ROLLBACK')
+        throw error
+      }
+    }
   })
   hardenSqliteDatabaseFiles(path)
   return db
@@ -246,6 +264,9 @@ export function parsePersistedSessionParseCacheRow(
       platform: platform as NodeJS.Platform,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: written only from AiVaultSession values by this build or one with the same schema version; a semantics change bumps the version and drops the rows.
       session: session as AiVaultSession | null,
+      ...(typeof entry.contentFingerprint === 'string'
+        ? { contentFingerprint: entry.contentFingerprint }
+        : {}),
       ...(sidecar === undefined ? {} : { sidecar })
     }
   ]

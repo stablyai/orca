@@ -31,6 +31,7 @@ export type SessionParseCacheEntry = {
   session: AiVaultSession | null
   // Sidecar and transcript versions can become stale independently.
   sidecar?: SessionSidecarObservation
+  contentFingerprint?: string
   // Retain the transcript-only result so sidecar changes do not force a reparse.
   foldSession?: AiVaultSession | null
   resume: SessionParseResumePoint | null
@@ -236,6 +237,7 @@ export function storeSessionParseCacheEntry(path: string, entry: SessionParseCac
     previous === undefined ||
     previous.mtimeMs !== entry.mtimeMs ||
     previous.sizeBytes !== entry.sizeBytes ||
+    previous.contentFingerprint !== entry.contentFingerprint ||
     previous.platform !== entry.platform ||
     previous.session !== entry.session ||
     !sameSidecar(previous.sidecar, entry.sidecar)
@@ -246,6 +248,9 @@ export function storeSessionParseCacheEntry(path: string, entry: SessionParseCac
       sizeBytes: entry.sizeBytes,
       platform: entry.platform,
       session: entry.session,
+      ...(entry.contentFingerprint === undefined
+        ? {}
+        : { contentFingerprint: entry.contentFingerprint }),
       ...(entry.sidecar === undefined ? {} : { sidecar: entry.sidecar })
     })
   }

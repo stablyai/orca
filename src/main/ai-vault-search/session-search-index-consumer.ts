@@ -146,8 +146,13 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       this.store.writeCommitted(candidate)
       return
     }
-    // Stamp and count repeated read failures so unchanged unreadable files can be held out.
-    this.store.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
+    // A dependency change should retry even when the main file stat is unchanged.
+    this.store.setFileState(
+      candidate.file.path,
+      'failed',
+      candidate.file.mtimeMs,
+      candidate.file.contentFingerprint
+    )
   }
 }
 

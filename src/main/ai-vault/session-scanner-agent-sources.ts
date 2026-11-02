@@ -14,6 +14,7 @@ import {
 import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
+import { kimiSessionContentFingerprint } from './session-scanner-kimi-content-fingerprint'
 import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
 import {
   isKiroSessionMetadataPath,
@@ -76,6 +77,7 @@ export type AiVaultAgentSource = {
   filePredicate?: (filePath: string) => boolean
   // Sidecar stats affect freshness and recency; async resolution supports non-derived paths.
   contentDependencyPath?: (filePath: string) => string | undefined | Promise<string | undefined>
+  contentFingerprint?: (filePath: string, signal?: AbortSignal) => Promise<string>
   // Return false to skip a directory; depth 0 is a child of the root.
   directoryPredicate?: (name: string, depth: number) => boolean
   // Share the per-agent limit across alternate roots for one install.
@@ -278,6 +280,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     directoryPredicate: (_name, depth) => depth === 0
   },
   kimi: {
+    contentFingerprint: kimiSessionContentFingerprint,
     rootDirs: (options, wslHomeDirs) =>
       sessionRootDirs(resolveKimiSessionsDir(options.kimiSessionsDir), wslHomeDirs, [
         '.kimi-code',
