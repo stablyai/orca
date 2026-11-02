@@ -8,6 +8,8 @@ import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../src/shared/github/w
 
 export const GITHUB_CONNECTION_CHANGED = 'The Orca server connection changed. Try again.'
 export const GITHUB_TARGET_CHECK_TIMED_OUT = 'Timed out confirming the executing Orca server.'
+// The paired desktop relays to the executing server; when only it lacks the check, it is the one to update.
+export const GITHUB_DESKTOP_UPDATE_REQUIRED = 'Update Orca desktop'
 const statusRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'status.github-target-authority',

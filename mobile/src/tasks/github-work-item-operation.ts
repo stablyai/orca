@@ -3,6 +3,7 @@ import type { GitHubOwnerRepo } from '../../../src/shared/github/pull-request-ty
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../src/shared/github/work-item-target'
 import {
   captureGitHubInvocation,
+  GITHUB_DESKTOP_UPDATE_REQUIRED,
   GITHUB_TARGET_CHECK_TIMED_OUT,
   supportsExactGitHubOperations,
   githubOperationResponse
@@ -46,15 +47,21 @@ export async function withGitHubTargetOperation<T>(args: {
     assertCurrent()
     const status = await invocation.status(options())
     assertCurrent()
-    const supports =
-      supportsExactGitHubOperations(status) &&
-      (!intermediary || (relayStatus !== null && supportsExactGitHubOperations(relayStatus)))
+    const serverSupports = supportsExactGitHubOperations(status)
+    const relaySupports =
+      !intermediary || (relayStatus !== null && supportsExactGitHubOperations(relayStatus))
+    const supports = serverSupports && relaySupports
     const source =
       status.runtimeId && status.hostDescriptor?.installationId
         ? { sourceId: status.hostDescriptor.installationId, runtimeId: status.runtimeId }
         : null
     if ((!supports || !source) && !args.read) {
-      throw new Error(GITHUB_EXACT_OPERATION_UNSUPPORTED)
+      // Name the build to update: the relaying desktop when only it lacks the check, else the executing server.
+      throw new Error(
+        serverSupports && source && !relaySupports
+          ? GITHUB_DESKTOP_UPDATE_REQUIRED
+          : GITHUB_EXACT_OPERATION_UNSUPPORTED
+      )
     }
     const result = await args.send(
       {

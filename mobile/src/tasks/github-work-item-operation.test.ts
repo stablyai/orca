@@ -4,6 +4,7 @@ import { githubIssueUpdate } from './mobile-task-item-state-operations'
 import { RpcClientRequestTracker } from '../transport/rpc-client-request-tracker'
 import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
+import { GITHUB_DESKTOP_UPDATE_REQUIRED } from '../transport/github-target-invocation'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../src/shared/source-control-runtime-capabilities'
 
 function deferred() {
@@ -125,4 +126,14 @@ it('a disconnect/reconnect cannot regain authority with an identical connected-a
   await refused
   expect(a.writes).toEqual([])
   expect(a.client.stateListeners()).toBe(0)
+})
+it('names the relaying desktop when only it lacks the exact-target check', async () => {
+  const desktop = physical('d', false),
+    server = physical('s')
+  const routed = {
+    ...server.client,
+    requestRoute: () => ({ client: server.client, intermediary: desktop.client })
+  }
+  await expect(update(routed)).rejects.toThrow(GITHUB_DESKTOP_UPDATE_REQUIRED)
+  expect(server.writes).toEqual([])
 })
