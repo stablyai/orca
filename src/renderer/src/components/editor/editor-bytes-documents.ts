@@ -4,7 +4,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { writeRuntimeFileBytes } from '@/runtime/runtime-file-bytes-write'
-import type { CustomEditorBinaryDocument } from './plugin-custom-editor-host'
+import type { CustomEditorBinaryDocument } from './plugin-custom-editor-host-contract'
 import type { EditorSaveResult, EditorSaveTrigger } from './editor-save-disk-precondition'
 import {
   clearSelfWrite,

@@ -1,4 +1,4 @@
-import type { CustomEditorBinaryDocument } from './plugin-custom-editor-host'
+import type { CustomEditorBinaryDocument } from './plugin-custom-editor-host-contract'
 
 /**
  * A binary custom editor's bytes last read or saved, and the unsaved edit. Kept apart from the

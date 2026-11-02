@@ -16,11 +16,11 @@ import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { registerEditorFrameFlush } from './editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
-import {
-  createCustomEditorHost,
-  type CustomEditorBinaryDocument,
-  type CustomEditorEditRefusal
-} from './plugin-custom-editor-host'
+import { createCustomEditorHost } from './plugin-custom-editor-host'
+import type {
+  CustomEditorBinaryDocument,
+  CustomEditorEditRefusal
+} from './plugin-custom-editor-host-contract'
 
 type PluginCustomEditorFrameProps = {
   editor: ActivePluginCustomEditor
