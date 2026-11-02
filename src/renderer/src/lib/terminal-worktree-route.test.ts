@@ -139,6 +139,51 @@ describe('resolveTerminalWorktreeRoute', () => {
       expect(resolveTerminalWorktreeRoute(unstampedState(), 'repo-9::/stale')).toBeNull()
     })
   })
+
+  it('routes a focused-host copy when the same worktree id is projected on two hosts (#10491)', () => {
+    const state = localState({
+      settings: { activeRuntimeEnvironmentId: 'hub-a' },
+      runtimeEnvironments: [{ id: 'hub-a' }, { id: 'hub-b' }],
+      worktreesByRepo: {
+        'repo-1': [
+          { id: 'repo-1::/w', repoId: 'repo-1', hostId: 'local' },
+          {
+            id: 'repo-1::/w',
+            repoId: 'repo-1',
+            hostId: 'ssh:private-target',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+    expect(resolveTerminalWorktreeRoute(state, 'repo-1::/w')).toEqual({
+      runtimeEnvironmentId: 'hub-a'
+    })
+  })
+
+  it('fails closed when multi-host projections share an id and focus matches none (#10491)', () => {
+    const state = localState({
+      settings: { activeRuntimeEnvironmentId: 'hub-c' },
+      runtimeEnvironments: [{ id: 'hub-a' }, { id: 'hub-b' }, { id: 'hub-c' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'repo-1::/w',
+            repoId: 'repo-1',
+            hostId: 'ssh:private-a',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          },
+          {
+            id: 'repo-1::/w',
+            repoId: 'repo-1',
+            hostId: 'ssh:private-b',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+    expect(resolveTerminalWorktreeRoute(state, 'repo-1::/w')).toBeNull()
+  })
 })
 
 // Spawn can prefer focused runtime; teardown must follow actual PTY ownership. Assert both purposes to prevent accidental convergence (STA-2639).
