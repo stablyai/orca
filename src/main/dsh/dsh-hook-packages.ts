@@ -1,6 +1,8 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+
 /** The package Orca's patch row names; DSH imports it from each profile. */
 export const DSH_HOOK_EXECUTOR_PACKAGE = '@deepseek-ai/dsh-hooks-claude-code'
 
@@ -13,8 +15,10 @@ export function describeDshProfilesMissingHookPackages(dshHome: string): string 
   let entries: string[]
   try {
     entries = readdirSync(profilesDir)
-  } catch {
-    return null
+  } catch (error) {
+    return isDefinitiveAbsence(error)
+      ? null
+      : `Could not read the DSH profiles directory ${profilesDir}`
   }
   const broken = entries
     .map((profile) => join(profilesDir, profile))
@@ -34,5 +38,5 @@ export function describeDshProfilesMissingHookPackages(dshHome: string): string 
     .map(({ profileDir, missing }) => `${profileDir} (missing ${missing.join(', ')})`)
     .join('; ')
   const install = DSH_HOOK_PACKAGES.map((pkg) => `${pkg}@<dsh version>`).join(' ')
-  return `DSH cannot load Orca's hooks, so no DSH events reach Orca. Profiles: ${list}. Run \`pnpm add ${install}\` in each profile directory (npm latest is an older, incompatible line).`
+  return `These DSH profiles cannot load Orca's hooks, so their sessions send no events to Orca: ${list}. Run \`pnpm add ${install}\` in each profile directory (npm latest is an older, incompatible line).`
 }
