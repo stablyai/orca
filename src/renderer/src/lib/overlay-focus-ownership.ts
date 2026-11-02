@@ -1,4 +1,4 @@
-import { getVisibleOverlays } from './visible-overlay'
+import { getVisibleOverlays, isVisibleOverlay } from './visible-overlay'
 
 const NON_OWNING_SURFACES =
   '[data-focus-behavior="page"], [data-focus-behavior="composer-suggestions"]'
@@ -26,7 +26,11 @@ export function getOverlayFocusSources(): HTMLElement[] {
 }
 
 export function isOverlayFocusSourceDismissed(owner: HTMLElement): boolean {
-  return !owner.isConnected || hasDismissedFocusScope(owner)
+  return (
+    !owner.isConnected ||
+    hasDismissedFocusScope(owner) ||
+    !isVisibleOverlay(owner, { includeAriaHidden: true })
+  )
 }
 
 function hasDismissedFocusScope(owner: HTMLElement): boolean {
@@ -40,7 +44,18 @@ function hasDismissedFocusScope(owner: HTMLElement): boolean {
 
 export function subscribeOverlayFocusChanges(listener: () => void): () => void {
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  // Custom role-based overlays do not emit the primitives' focus-scope callbacks.
+  const observer = new MutationObserver(listener)
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'hidden', 'role', 'data-state', 'data-focus-behavior']
+  })
+  return () => {
+    listeners.delete(listener)
+    observer.disconnect()
+  }
 }
 
 export function registerOverlayFocusOwner(owner: HTMLElement): void {

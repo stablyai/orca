@@ -28,7 +28,7 @@ export function getVisibleOverlays(options?: VisibleOverlayOptions): HTMLElement
   )
 }
 
-function isVisibleOverlay(element: Element, options?: VisibleOverlayOptions): boolean {
+export function isVisibleOverlay(element: Element, options?: VisibleOverlayOptions): boolean {
   if (!(element instanceof HTMLElement)) {
     return false
   }

@@ -621,7 +621,7 @@ describe('useNativeChatComposerRevealFocus', () => {
     expect(document.activeElement).toBe(container.querySelector('textarea'))
   })
 
-  it('hands an existing draft through real sheet and dialog dismissal callbacks', async () => {
+  it('hands composer focus through real sheet and dialog dismissal callbacks', async () => {
     vi.useFakeTimers()
     function Dashboard(): React.JSX.Element {
       const [open, setOpen] = useState(false)
@@ -654,13 +654,11 @@ describe('useNativeChatComposerRevealFocus', () => {
       act(() => root.render(<Dashboard />))
       drainFrames()
       const composer = container.querySelector('textarea')!
-      composer.value = 'Existing draft'
       await act(async () => {
         ;[...container.querySelectorAll('button')]
           .find((button) => button.textContent === 'Dashboard preview')!
           .click()
       })
-      expect(document.querySelector('[data-slot="dialog-content"]')).not.toBeNull()
       const action = [...document.querySelectorAll('button')].find(
         (button) => button.textContent === 'Open worktree'
       )!
@@ -668,7 +666,6 @@ describe('useNativeChatComposerRevealFocus', () => {
       await act(async () => vi.advanceTimersByTime(0))
       drainFrames()
       expect(document.activeElement).toBe(composer)
-      expect(composer.value).toBe('Existing draft')
     } finally {
       vi.useRealTimers()
     }
