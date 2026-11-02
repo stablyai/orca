@@ -15,6 +15,8 @@ import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 import type { AgentPaneConversationIdentity } from '@/store/slices/agent-pane-conversation'
 import type { ITerminalOptions } from '@xterm/headless'
 
+type TerminalCoreAccess = { _core: unknown }
+
 type InputProvenanceFixture = {
   getState: () => StoreState
   getTransportQueue: () => MockTransport[]
@@ -40,8 +42,12 @@ export function registerPtyConnectionInputProvenanceTests({
       const pane = createPane(1)
       const terminalOptions: ITerminalOptions & { termName: string } = { termName: 'linux' }
       const terminal = new Terminal(terminalOptions)
+      if (!('_core' in terminal)) {
+        throw new Error('Expected xterm core')
+      }
+      const terminalWithCore: TerminalCoreAccess = terminal
       Object.assign(pane.terminal, {
-        _core: Reflect.get(terminal, '_core'),
+        _core: terminalWithCore._core,
         onData: vi.fn((listener: (data: string) => void) => terminal.onData(listener))
       })
       pane.terminal.write.mockImplementation((data, callback) => terminal.write(data, callback))

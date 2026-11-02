@@ -13,6 +13,24 @@ type CoreServiceAccess = {
   }
 }
 
+function hasCoreServiceAccess(terminal: Terminal): terminal is Terminal & CoreServiceAccess {
+  if (
+    !('_core' in terminal) ||
+    typeof terminal._core !== 'object' ||
+    terminal._core === null ||
+    !('coreService' in terminal._core)
+  ) {
+    return false
+  }
+  const service = terminal._core.coreService
+  return (
+    typeof service === 'object' &&
+    service !== null &&
+    'triggerDataEvent' in service &&
+    typeof service.triggerDataEvent === 'function'
+  )
+}
+
 // Use vendored xterm so private input-signal API drift fails here instead of silently disabling activity tracking.
 describe('subscribeToTerminalUserInput', () => {
   it('fires for real user input and not for parser auto-replies', () => {
@@ -80,10 +98,10 @@ describe('subscribeToTerminalUserInput', () => {
 describe('subscribeToTerminalInputData', () => {
   it('keeps input unclassified when the core provenance signal is unavailable', () => {
     const terminal = new Terminal({ allowProposedApi: true })
-    const core: CoreServiceAccess['_core']['coreService'] = Reflect.get(
-      terminal,
-      '_core'
-    ).coreService
+    if (!hasCoreServiceAccess(terminal)) {
+      throw new Error('Expected xterm input core')
+    }
+    const core = terminal._core.coreService
     Object.defineProperty(core, 'onUserInput', { value: undefined })
     const listener = vi.fn()
     const subscription = subscribeToTerminalInputData(terminal, listener)
