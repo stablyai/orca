@@ -86,6 +86,7 @@ export function createOrcadAccountServices(args: {
     sessionMover: {
       headless: true,
       getController: () => attachedRuntime?.ptyController ?? null,
+      // Why the notification stream: no window is attached here; a paired client sees the same list as `orca account moves`.
       onNotice: (notice) =>
         dispatchClaudeRecentMoves(
           attachedRuntime?.dispatchMobileNotification,
@@ -94,7 +95,7 @@ export function createOrcadAccountServices(args: {
         )
     }
   })
-  // Headless auto-switch needs readings even without a window requesting them.
+  // Headless usage-driven features need readings even without a window requesting them.
   const polling = createClaudeUsagePollingSwitch(services.rateLimits, () => store.getSettings())
   polling.apply()
   const unsubscribePolling = store.onSettingsChanged((updates) => {

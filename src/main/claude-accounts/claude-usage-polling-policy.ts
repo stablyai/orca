@@ -2,12 +2,13 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RateLimitService } from '../rate-limits/service'
 
 export type ClaudeUsagePollingSettings = Partial<
-  Pick<GlobalSettings, 'claudeAutoSwitchEnabled' | 'claudeSessionMover'>
+  Pick<GlobalSettings, 'claudeAutoSwitchEnabled' | 'claudeSessionMover' | 'claudeAccountPool'>
 >
 
 export const CLAUDE_USAGE_POLLING_SETTING_KEYS = [
   'claudeAutoSwitchEnabled',
-  'claudeSessionMover'
+  'claudeSessionMover',
+  'claudeAccountPool'
 ] as const
 
 type UsagePollingRateLimits = {
@@ -18,7 +19,9 @@ type UsagePollingRateLimits = {
 /** Why: these features decide on readings; without polling a headless host never has one to decide on. */
 export function shouldPollClaudeUsage(settings: ClaudeUsagePollingSettings): boolean {
   return (
-    settings.claudeAutoSwitchEnabled === true || (settings.claudeSessionMover ?? 'ask') !== 'off'
+    settings.claudeAutoSwitchEnabled === true ||
+    (settings.claudeSessionMover ?? 'ask') !== 'off' ||
+    settings.claudeAccountPool === 'on'
   )
 }
 
@@ -26,7 +29,7 @@ export function shouldPollClaudeUsage(settings: ClaudeUsagePollingSettings): boo
 export function createClaudeUsagePollingSwitch(
   rateLimits: UsagePollingRateLimits,
   getSettings: () => ClaudeUsagePollingSettings
-): { apply: (updates?: ClaudeUsagePollingSettings) => boolean; polling: () => boolean } {
+): { apply: (updates?: object) => boolean; polling: () => boolean } {
   let release: (() => void) | null = null
   return {
     polling: () => release !== null,

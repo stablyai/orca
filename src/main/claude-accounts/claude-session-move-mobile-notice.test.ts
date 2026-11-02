@@ -42,7 +42,7 @@ const notice: ClaudeSessionMoveNotice = {
 }
 
 describe('recent moves on the mobile notification stream', () => {
-  it('sends the same rows the recent-moves list prints', () => {
+  it('sends the same rows orca account moves prints', () => {
     expect(claudeRecentMovesMobileNotification(notice, 'Recent moves')).toEqual({
       type: 'notification',
       source: 'plugin',

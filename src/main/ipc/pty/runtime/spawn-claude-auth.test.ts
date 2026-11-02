@@ -9,7 +9,12 @@ import {
 } from '../../../../shared/claude-profile-routing'
 import { resetUserAnthropicBaseUrlNote } from '../../../claude-accounts/claude-auth-proxy/claude-auth-proxy-note'
 import * as claudeAuthProxyHost from '../../../claude-accounts/claude-auth-proxy/claude-auth-proxy-host'
-import { applyRuntimeClaudeAuthEnv, resolveRuntimeClaudeAuth } from './spawn-claude-auth'
+import { installClaudePoolLaunchRead } from '../../../claude-accounts/claude-account-pool-launch'
+import {
+  applyRuntimeClaudeAuthEnv,
+  claudeLaunchPinsAccount,
+  resolveRuntimeClaudeAuth
+} from './spawn-claude-auth'
 
 const selected: ClaudeRuntimeAuthPreparation = {
   configDir: '/a',
@@ -24,6 +29,7 @@ const target: ClaudeRuntimeAuthPreparation = {
 
 afterEach(() => {
   installClaudeProfileRouter(undefined)
+  installClaudePoolLaunchRead(null)
 })
 
 describe('resolveRuntimeClaudeAuth', () => {
@@ -86,14 +92,99 @@ describe('resolveRuntimeClaudeAuth', () => {
     await expect(resume('sess-other')).resolves.toBe(selected)
     expect(prepareClaudeAuth).toHaveBeenCalledTimes(1)
   })
+
+  it("sets CLAUDE_CONFIG_DIR from the pool's account when the pool is on", async () => {
+    const prepareClaudeAuth = vi.fn(async () => selected)
+    const prepareLaunchFor = vi.fn(async () => target)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only prepareLaunchFor is read here.
+    installClaudeProfileRouter({ prepareLaunchFor } as unknown as ClaudeProfileRouter)
+    installClaudePoolLaunchRead(() => ({ accountId: 'b', named: true }))
+    const codexSelectionTarget = { runtime: 'host' as const }
+
+    const auth = await resolveRuntimeClaudeAuth({
+      args: {},
+      deps: { prepareClaudeAuth },
+      codexSelectionTarget
+    })
+
+    expect(auth?.envPatch.CLAUDE_CONFIG_DIR).toBe('/b')
+    expect(auth?.pooled).toBe(true)
+    expect(prepareLaunchFor).toHaveBeenCalledWith('b')
+    expect(prepareClaudeAuth).not.toHaveBeenCalled()
+    const env = applyRuntimeClaudeAuthEnv(
+      {
+        CLAUDE_CONFIG_DIR: '/a',
+        [CLAUDE_PROFILE_POINTER_ENV]: '/pointer',
+        [CLAUDE_INJECTED_CONFIG_DIR_ENV]: '/a'
+      },
+      auth,
+      claudeLaunchPinsAccount(auth, undefined)
+    )
+    expect(env?.CLAUDE_CONFIG_DIR).toBe('/b')
+    expect(env).not.toHaveProperty(CLAUDE_PROFILE_POINTER_ENV)
+    expect(env).not.toHaveProperty(CLAUDE_INJECTED_CONFIG_DIR_ENV)
+  })
+
+  it('keeps a named account and a remembered resume ahead of the pool', async () => {
+    const prepareClaudeAuth = vi.fn(async () => selected)
+    const prepareLaunchFor = vi.fn(async (id: string) => (id === 'b' ? target : selected))
+    const assignedAccountForResume = vi.fn((sessionId: string) =>
+      sessionId === 'sess-moved' ? 'b' : null
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these two methods are read here.
+    installClaudeProfileRouter({
+      prepareLaunchFor,
+      assignedAccountForResume
+    } as unknown as ClaudeProfileRouter)
+    installClaudePoolLaunchRead(() => ({ accountId: 'c', named: true }))
+    const codexSelectionTarget = { runtime: 'host' as const }
+
+    await expect(
+      resolveRuntimeClaudeAuth({
+        args: { claudeAccountId: 'b' },
+        deps: { prepareClaudeAuth },
+        codexSelectionTarget
+      })
+    ).resolves.toBe(target)
+    await expect(
+      resolveRuntimeClaudeAuth({
+        args: { resumeProviderSession: { key: 'session_id', id: 'sess-moved' } },
+        deps: { prepareClaudeAuth },
+        codexSelectionTarget
+      })
+    ).resolves.toBe(target)
+    expect(prepareLaunchFor).toHaveBeenCalledTimes(2)
+    expect(prepareClaudeAuth).not.toHaveBeenCalled()
+  })
+
+  it('records a pooled fallback on the selected account without asking for another folder', async () => {
+    const prepareClaudeAuth = vi.fn(async () => selected)
+    const prepareLaunchFor = vi.fn(async () => target)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only prepareLaunchFor is read here.
+    installClaudeProfileRouter({ prepareLaunchFor } as unknown as ClaudeProfileRouter)
+    installClaudePoolLaunchRead(() => ({ accountId: 'a', named: false }))
+
+    const auth = await resolveRuntimeClaudeAuth({
+      args: {},
+      deps: { prepareClaudeAuth },
+      codexSelectionTarget: { runtime: 'host' }
+    })
+
+    expect(auth).toMatchObject({ pooled: true, envPatch: { CLAUDE_CONFIG_DIR: '/a' } })
+    expect(prepareLaunchFor).not.toHaveBeenCalled()
+    expect(claudeLaunchPinsAccount(auth, undefined)).toBe(true)
+    expect(claudeLaunchPinsAccount(selected, undefined)).toBe(false)
+  })
 })
 
 describe('applyRuntimeClaudeAuthEnv', () => {
+  // What `withClaudeProfileTerminalEnv` gives every host pane before the login shell's env arrives.
   const terminalEnv = {
     KEEP: '1',
     [CLAUDE_PROFILE_POINTER_ENV]: '/data/claude-profiles/selected-host',
     [CLAUDE_USER_CONFIG_DIR_ENV]: '/home/u/.claude-own'
   }
+  // The same pane once the selected account's launch env has been merged in too.
   const selectedEnv = {
     ...terminalEnv,
     [CLAUDE_INJECTED_CONFIG_DIR_ENV]: '/a',
@@ -118,11 +209,13 @@ describe('applyRuntimeClaudeAuthEnv', () => {
       [CLAUDE_USER_CONFIG_DIR_ENV]: '/home/u/.claude-own',
       CLAUDE_CONFIG_DIR: '/b'
     })
+    // The caller's env is never mutated (the renderer may reuse it).
     expect(selectedEnv.CLAUDE_CONFIG_DIR).toBe('/a')
     expect(selectedEnv).toHaveProperty(CLAUDE_PROFILE_POINTER_ENV)
   })
 
   it("resumes an account System default covers on the user's own folder, never the selected one", () => {
+    // A covered account gets an additive patch: the user's own CLAUDE_CONFIG_DIR, or nothing.
     const covered = (envPatch: ClaudeRuntimeAuthPreparation['envPatch']) => ({
       configDir: '/home/u/.claude-own',
       envPatch,

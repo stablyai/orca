@@ -5,17 +5,17 @@ import {
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
-  ClaudeRateLimitAccountsState,
-  ClaudeSessionMoveSummary
+  ClaudeSessionMoveSummary,
+  ClaudeRateLimitAccountsState
 } from '../../shared/managed-account-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RateLimitService } from '../rate-limits/service'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
+import { savedWslClaudeAccountHome } from './claude-profile-wsl-paths'
+import { wslAuthProxyStatus } from './wsl-auth-proxy-status'
+import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import { claudeListedPaneAccounts } from './claude-listed-pane-accounts'
 import { listClaudePaneAccounts } from './claude-pane-account-registry'
-import { wslAuthProxyStatus } from './wsl-auth-proxy-status'
-import { savedWslClaudeAccountHome } from './claude-profile-wsl-paths'
-import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
   getClaudeSelectionTargetForAccount,
   getClaudeWslSelectionKey,
@@ -42,6 +42,7 @@ export type ClaudeAccountSettings = Pick<
   | 'claudeAutoSwitchEnabled'
   | 'claudeAuthProxy'
   | 'claudeSessionMover'
+  | 'claudeAccountPool'
 >
 
 export type ClaudeAccountStore = {
@@ -72,6 +73,12 @@ export type ClaudeAccountUsage = Pick<
 >
 
 export class ClaudeAccountSelection {
+  constructor(
+    private readonly store: ClaudeAccountStore,
+    private readonly rateLimits: ClaudeAccountUsage,
+    private readonly runtimeAuth: ClaudeAccountRuntime
+  ) {}
+
   private sessionMovesProvider: (() => ClaudeSessionMoveSummary[]) | null = null
 
   setSessionMovesProvider(provider: (() => ClaudeSessionMoveSummary[]) | null): void {
@@ -83,11 +90,10 @@ export class ClaudeAccountSelection {
     return this.list()
   }
 
-  constructor(
-    private readonly store: ClaudeAccountStore,
-    private readonly rateLimits: ClaudeAccountUsage,
-    private readonly runtimeAuth: ClaudeAccountRuntime
-  ) {}
+  setAccountPool(enabled: boolean): ClaudeRateLimitAccountsState {
+    this.saveSettings({ claudeAccountPool: enabled ? 'on' : 'off' })
+    return this.list()
+  }
 
   setAuthProxy(enabled: boolean): ClaudeRateLimitAccountsState {
     this.saveSettings({ claudeAuthProxy: enabled })
@@ -130,6 +136,8 @@ export class ClaudeAccountSelection {
       ...(wslAuthProxy ? { wslAuthProxy } : {}),
       sessionMover: settings.claudeSessionMover ?? 'ask',
       sessionMoves: this.sessionMovesProvider?.() ?? [],
+      accountPool: settings.claudeAccountPool === 'on' ? 'on' : 'off',
+      pool: settings.claudeAccountPool === 'on' ? 'on' : 'off',
       assignedSessions,
       paneAccounts,
       ...(paneAssignments.length > 0 ? { paneAssignments } : {}),
@@ -144,6 +152,11 @@ export class ClaudeAccountSelection {
         ? { systemDefaultMayBeCopied: true }
         : {})
     }
+  }
+
+  setAutoSwitch(enabled: boolean): ClaudeRateLimitAccountsState {
+    this.saveSettings({ claudeAutoSwitchEnabled: enabled })
+    return this.list()
   }
 
   private summarize(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
@@ -268,11 +281,6 @@ export class ClaudeAccountSelection {
       throw error
     }
     this.refreshUsage(outgoingAccountId, effectiveTarget)
-    return this.list()
-  }
-
-  setAutoSwitch(enabled: boolean): ClaudeRateLimitAccountsState {
-    this.saveSettings({ claudeAutoSwitchEnabled: enabled })
     return this.list()
   }
 

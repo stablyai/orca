@@ -5,7 +5,7 @@ import type { ClaudeSessionMoveNotice } from './claude-session-mover-types'
 /** One stream item per update, so a burst of panes does not stack a banner per row. */
 export const CLAUDE_RECENT_MOVES_ATTENTION_KEY = 'claude-recent-moves'
 
-/** The phone's notification stream gets the same rows the desktop lists. */
+/** The phone's notification stream gets the same rows as `orca account moves`. */
 export function claudeRecentMovesMobileNotification(
   notice: ClaudeSessionMoveNotice,
   title: string

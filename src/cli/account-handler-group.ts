@@ -9,6 +9,8 @@ export const ACCOUNT_HANDLER_GROUP: HandlerGroup = {
     'account rm',
     'account auth-proxy',
     'account auto-switch',
+    'account moves',
+    'account pool',
     'account session-mover'
   ],
   load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS

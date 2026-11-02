@@ -48,6 +48,8 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca account auto-switch --agent claude --on|--off [--environment <selector>]',
   '  orca account auth-proxy --agent claude --on|--off|--status [--environment <selector>]',
   '  orca account session-mover --agent claude --off|--ask|--move [--environment <selector>]',
+  '  orca account pool --agent claude --on|--off [--environment <selector>]',
+  '  orca account moves [--environment <selector>]',
   '  orca host list [--json]',
   '  orca environment add --name <name> --pairing-code <code> [--json]',
   '  orca environment list [--json]',

@@ -132,6 +132,10 @@ export type ClaudeRateLimitAccountsState = {
   autoSwitchEnabled?: boolean
   /** Whether launches bill through the local auth proxy. Absent from older hosts; readers treat that as off. */
   authProxy?: 'on' | 'off'
+  /** Whether Orca-made Claude launches spread across accounts. Absent from older hosts means off. */
+  accountPool?: 'off' | 'on'
+  /** Same value as `accountPool`. The CLI and the status bar read this name. */
+  pool?: 'on' | 'off'
   /**
    * Windows desktop view of WSL guest billing. `unsupported:wsl` means the guest credential file
    * is unreadable. Absent when this host has no WSL accounts.

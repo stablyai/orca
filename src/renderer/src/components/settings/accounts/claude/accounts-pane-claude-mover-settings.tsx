@@ -1,3 +1,4 @@
+import { ClaudeAccountPoolSetting } from './claude-account-pool-setting'
 import { ClaudeAuthProxySetting } from './claude-auth-proxy-setting'
 import { ClaudeRecentMoves } from './claude-recent-moves'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
@@ -13,6 +14,7 @@ export function renderClaudeMoverSettings(model: AccountsPaneSectionModel): Reac
         <>
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
           <ClaudeSessionMoverSetting settings={settings} updateSettings={updateSettings} />
+          <ClaudeAccountPoolSetting settings={settings} updateSettings={updateSettings} />
           <ClaudeAuthProxySetting settings={settings} updateSettings={updateSettings} />
         </>
       )}

@@ -22328,6 +22328,14 @@
           "rebalance": "rebalance"
         }
       },
+      "pool": {
+        "settingTitle": "Spread sessions across accounts",
+        "settingDescription": "New Claude sessions start on the signed-in account with the most room left.",
+        "sessionsOne": "1 session",
+        "sessionsOther": "{{count}} sessions",
+        "badge": "Pool",
+        "paneBadge": "Claude account {{label}}"
+      },
       "switchSessions": {
         "title": "Switched to {{account}}",
         "dontAskAgain": "Don't ask again (restart automatically)",

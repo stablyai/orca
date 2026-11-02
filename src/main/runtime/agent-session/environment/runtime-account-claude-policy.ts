@@ -24,6 +24,10 @@ export class RuntimeClaudePolicyController {
     return this.claudeAccounts().setSessionMover(setting)
   }
 
+  setAccountPool(enabled: boolean): ClaudeRateLimitAccountsState {
+    return this.claudeAccounts().setAccountPool(enabled)
+  }
+
   /** Live listener. Does not require the account service: the proxy is process-global. */
   authProxyStatus(): ClaudeAuthProxyStatus {
     return readClaudeAuthProxyStatus()

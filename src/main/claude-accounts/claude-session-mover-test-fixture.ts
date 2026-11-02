@@ -86,7 +86,7 @@ function record(
 export function setup(
   options: {
     setting?: 'off' | 'ask' | 'move'
-    /** Tests pass the pool field directly. Settings do not have it on this branch. */
+    /** Tests pass the pool field directly. The production default is off. */
     pool?: 'off' | 'on'
     headless?: boolean
     accounts?: ClaudeManagedAccountSummary[]

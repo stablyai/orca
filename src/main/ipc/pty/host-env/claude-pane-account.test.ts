@@ -117,6 +117,16 @@ describe('recordClaudePaneAccountForSpawn', () => {
     expect(getClaudePaneAccount('pty-1')).toBeNull()
   })
 
+  it('records a pooled launch as a pool assignment', () => {
+    spawn({ claudeAuth: { ...auth('profile:b'), pooled: true } })
+    expect(getClaudePaneAccount('pty-1')).toMatchObject({
+      accountId: 'b',
+      source: 'pool',
+      assignedAccountId: 'b',
+      pinned: false
+    })
+  })
+
   it('records the proxy slot and bills the spawn account until a move', () => {
     spawn({
       claudeAuth: {

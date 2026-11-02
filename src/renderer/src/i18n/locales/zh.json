@@ -21147,6 +21147,14 @@
       "copySignInLink": "改为复制登录链接",
       "signInLinkCopied": "已复制登录链接。请在隐私窗口中打开它以使用其他账户登录。",
       "signInLinkCopyFailed": "无法复制链接。",
+      "pool": {
+        "settingTitle": "在账户之间分担会话",
+        "settingDescription": "新的 Claude 会话从剩余额度最多的已登录账户开始。",
+        "sessionsOne": "1 个会话",
+        "sessionsOther": "{{count}} 个会话",
+        "badge": "分担",
+        "paneBadge": "Claude 账户 {{label}}"
+      },
       "switchSessions": {
         "busy": "工作中",
         "idle": "空闲",

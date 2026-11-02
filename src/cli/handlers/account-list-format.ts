@@ -14,6 +14,8 @@ type AccountsBlock = {
   sessionMover?: 'off' | 'ask' | 'move'
   /** Claude only: the mover's last decision per live session. JSON carries the same records. */
   sessionMoves?: readonly { ptyId: string; reason: string }[]
+  /** Claude only: whether new launches spread across accounts (absent from older hosts). */
+  pool?: 'on' | 'off'
   /** Claude only: live sessions billed to each account (absent from older hosts). */
   assignedSessions?: readonly { accountId: string; count: number }[]
   /** Claude only: whether launches bill through the local auth proxy. */
@@ -66,6 +68,9 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
   }
   if (block.sessionMover !== undefined) {
     lines.push(`  session-mover: ${block.sessionMover}`)
+  }
+  if (block.pool !== undefined) {
+    lines.push(`  pool: ${block.pool}`)
   }
   for (const move of block.sessionMoves ?? []) {
     lines.push(`  session ${move.ptyId}: ${move.reason}`)

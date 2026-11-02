@@ -36,7 +36,7 @@ export type ClaudeSessionMoveNotice = {
   balance?: true
   /** The phone opens this pane. Absent when the session has no pane key. */
   paneKey?: string | null
-  /** Recent move rows, newest first, including this notice. */
+  /** `orca account moves` rows, newest first, including this notice. */
   moves?: readonly ClaudeSessionMoveSummary[]
 }
 
@@ -49,8 +49,7 @@ export type ClaudeSessionMoverDeps = {
     | 'claudeManagedAccounts'
   > & {
     /**
-     * Absent until the pool setting exists. A missing field is off, so running sessions
-     * keep the 95/90 lines.
+     * Absent means the pool is off, so running sessions keep the 95/90 lines.
      */
     claudeAccountPool?: 'off' | 'on'
   }

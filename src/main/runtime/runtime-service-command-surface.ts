@@ -64,6 +64,7 @@ export type RuntimeServiceCommandSurface = {
   assignClaudePane: RuntimeClaudePolicyController['assignPane']
   setClaudeAutoSwitch: RuntimeClaudePolicyController['setAutoSwitch']
   setClaudeSessionMover: RuntimeClaudePolicyController['setSessionMover']
+  setClaudeAccountPool: RuntimeClaudePolicyController['setAccountPool']
   selectCodexAccount: RuntimeAccountController['selectCodex']
   selectCodexAccountForTarget: RuntimeAccountController['selectCodexForTarget']
   consumeCodexRateLimitResetCredit: RuntimeAccountController['consumeCodexResetCredit']
@@ -187,6 +188,7 @@ export function installRuntimeServiceCommandSurface(
     selectClaudeAccount: accounts.selectClaude.bind(accounts),
     setClaudeAutoSwitch: accounts.claudePolicy.setAutoSwitch.bind(accounts.claudePolicy),
     setClaudeSessionMover: accounts.claudePolicy.setSessionMover.bind(accounts.claudePolicy),
+    setClaudeAccountPool: accounts.claudePolicy.setAccountPool.bind(accounts.claudePolicy),
     selectCodexAccount: accounts.selectCodex.bind(accounts),
     selectCodexAccountForTarget: accounts.selectCodexForTarget.bind(accounts),
     consumeCodexRateLimitResetCredit: accounts.consumeCodexResetCredit.bind(accounts),

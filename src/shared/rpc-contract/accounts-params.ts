@@ -35,6 +35,8 @@ export const SetClaudeAuthProxyParams = z.object({ enabled: z.boolean() })
 
 export const ClaudeAuthProxyStatusParams = z.object({}).strict()
 
+export const SetClaudeAccountPoolParams = z.object({ enabled: z.boolean() })
+
 /** Tell the execution host which account a live pane's proxy slot bills. configDir is required on a WSL guest. */
 export const AssignClaudePaneParams = z.object({
   ptyId: z.string().min(1),
