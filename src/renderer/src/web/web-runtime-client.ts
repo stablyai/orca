@@ -27,10 +27,7 @@ import type {
   WebRuntimeTransportSubscriptionHandle
 } from './web-runtime-subscription-contract'
 
-export type WebRuntimeSubscriptionHandle = {
-  unsubscribe: () => void
-  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
-}
+export type WebRuntimeSubscriptionHandle = WebRuntimeTransportSubscriptionHandle
 
 export type SubscribeOptions = WebRuntimeSubscribeOptions
 
