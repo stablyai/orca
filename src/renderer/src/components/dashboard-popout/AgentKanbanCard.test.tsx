@@ -225,6 +225,17 @@ describe('AgentKanbanCard', () => {
     expect(idleClassName).not.toContain('agent-question')
   })
 
+  it('tints an unread completed turn as Needs You rather than Done green', () => {
+    const { container } = renderCard({
+      card: card({ bucket: 'attention', dotState: 'done', unseen: true }),
+      now: 2_000
+    })
+    const className = container.firstElementChild?.className ?? ''
+    // Needs You wins the tint; displayState stays 'done' so the green check dot still reports the outcome.
+    expect(className).toContain('border-agent-question/40')
+    expect(className).not.toContain('emerald')
+  })
+
   it('heads the card with the conversation name and drops the worktree to the footer', () => {
     const { container } = renderCard({
       card: card({ lastUserMessage: 'ship it', conversationName: 'Sparse-checkout parser' }),

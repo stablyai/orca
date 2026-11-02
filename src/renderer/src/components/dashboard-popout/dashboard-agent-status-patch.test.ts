@@ -63,7 +63,7 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
             ? 'failed'
             : 'unconfirmed'
       )
-      expect(patched.cards[0].bucket).toBe('done')
+      expect(patched.cards[0].bucket).toBe('attention')
       for (const interrupted of [undefined, false]) {
         const cleared = patchDashboardSnapshotFromAgentStatus(
           patched,
@@ -85,6 +85,28 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
       ).toBe(patched)
     }
   )
+
+  it('moves an unread plain-Stop completion into Needs You', () => {
+    const patched = patchDashboardSnapshotFromAgentStatus(
+      snapshot(),
+      event({
+        state: 'done',
+        prompt: 'Should I tag v2.1 now?',
+        interactivePrompt: undefined,
+        lastAssistantMessage: 'Should I tag v2.1 now?'
+      })
+    ).snapshot
+    // A plain-text question ends the turn without a hook prompt; until the user
+    // opens the agent (the next full snapshot carries the ack) it waits in Needs You.
+    expect(patched.cards[0]).toMatchObject({
+      bucket: 'attention',
+      dotState: 'done',
+      unseen: true,
+      finishedAt: 250,
+      askSummary: undefined
+    })
+    expect(dashboardCardDisplayState(patched.cards[0])).toBe('done')
+  })
 
   it('patches one known card without rebuilding the dashboard topology', () => {
     const original = snapshot([card(), card({ paneKey: 'tab-2:leaf-2' })])
