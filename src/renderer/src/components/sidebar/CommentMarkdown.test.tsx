@@ -417,6 +417,63 @@ describe('GitHub callouts', () => {
     expect(markup).not.toContain('[!CAUTION]')
     expect(markup).toContain('Irreversible.')
   })
+
+  it.each(['compact', 'document'] as const)(
+    'renders Claude Code ★ Insight blocks as callouts in %s markdown without divider pills',
+    (variant) => {
+      const markup = renderComment(
+        [
+          '`★ Insight ─────────────────────────────────────`',
+          '- Some point about the code.',
+          '`─────────────────────────────────────────────────`'
+        ].join('\n'),
+        variant
+      )
+
+      expect(markup).toContain('data-callout="tip"')
+      expect(markup).toContain('Insight')
+      expect(markup).toContain('Some point about the code.')
+      expect(markup).not.toContain('─────')
+      expect(markup).not.toContain('★ Insight')
+    }
+  )
+
+  it('keeps streaming Claude Code ★ Insight blocks as callouts while growing', () => {
+    const markup = renderToStaticMarkup(
+      <NativeChatMarkdown
+        content={[
+          '`★ Insight ─────────────────────────────────────`',
+          '- Streaming point about the code.',
+          '`─────────────────'
+        ].join('\n')}
+        variant="document"
+        growing
+        renderCodeBlock={NativeChatCodeBlock}
+        onLinkClick={() => {}}
+        linkifyFilePaths
+      />
+    )
+
+    expect(markup).toContain('data-callout="tip"')
+    expect(markup).toContain('Insight')
+    expect(markup).toContain('Streaming point about the code.')
+    expect(markup).not.toContain('─────')
+  })
+
+  it('does not rewrite ★ Insight dividers inside fenced code blocks', () => {
+    const markup = renderComment(
+      [
+        '```markdown',
+        '`★ Insight ─────────────────────────────────────`',
+        '- Some point about the code.',
+        '`─────────────────────────────────────────────────`',
+        '```'
+      ].join('\n')
+    )
+
+    expect(markup).not.toContain('data-callout')
+    expect(markup).toContain('★ Insight ─────────────────────────────────────')
+  })
 })
 
 function renderAdf(adf: unknown): string {
