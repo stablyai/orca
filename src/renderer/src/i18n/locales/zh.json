@@ -19289,7 +19289,10 @@
           "toCliTooltip": "切换到 CLI：停止聊天界面中的 {{agent}}，并在终端中继续同一对话。",
           "openedInWorkspace": "已在 {{workspace}} 中打开聊天。",
           "toNativeChatTooltip": "切换到聊天界面：在此标签页的聊天中继续同一对话。",
-          "noConversation": "此终端中尚无可用的已保存对话。"
+          "noConversation": "此终端中尚无可用的已保存对话。",
+          "switchingToNativeChat": "正在切换到聊天界面…",
+          "switchingToCli": "正在切换到 CLI…",
+          "switchingDetail": "正在停止 {{agent}}。准备就绪后，对话将在此处继续。"
         },
         "BrowserTab": {
           "closeOthers": "关闭其他",

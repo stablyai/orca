@@ -20077,7 +20077,10 @@
           "toCliTooltip": "Passer à la CLI : arrête {{agent}} dans l'interface de chat et poursuit la même conversation dans un terminal.",
           "openedInWorkspace": "Chat ouvert dans {{workspace}}.",
           "toNativeChatTooltip": "Passer à l'interface de chat : poursuit la même conversation dans un chat, dans cet onglet.",
-          "noConversation": "Aucune conversation enregistrée n’est encore disponible dans ce terminal."
+          "noConversation": "Aucune conversation enregistrée n’est encore disponible dans ce terminal.",
+          "switchingToNativeChat": "Passage à l'interface de chat…",
+          "switchingToCli": "Passage à la CLI…",
+          "switchingDetail": "Arrêt de {{agent}}. La conversation reprend ici dès qu'elle est prête."
         },
         "BrowserTab": {
           "closeOthers": "Fermer les autres",

@@ -1,4 +1,5 @@
 import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
+import { ConversationSwitchNote } from '../tab-bar/ConversationSwitchNote'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
@@ -264,6 +265,7 @@ export function NativeChatStructuredSession(
       {paneHeader}
       <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
         {(find.isOpen || !paneHeader) && <NativeChatTopRightControls {...controls} />}
+        <ConversationSwitchNote surface={{ sessionId: props.sessionId, tabId: props.tabId }} />
         {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
           historyPhase !== 'unread' && <NativeChatLoadingCue />
         ) : viewState.kind === 'error' ? (

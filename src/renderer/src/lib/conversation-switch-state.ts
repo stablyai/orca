@@ -76,6 +76,47 @@ export function useConversationSwitchBusy(pending: boolean, delayMs = 200): bool
   return pending && busy
 }
 
+export type ConversationSwitchNote = { direction: 'chat' | 'terminal'; agent: AiVaultAgent }
+/** A terminal pane by its pane key, or a chat by its session or tab. */
+export type ConversationSwitchSurface = { paneKey: string } | { sessionId: string; tabId: string }
+
+function pendingNoteKey(surface: ConversationSwitchSurface): string {
+  for (const entry of pending.values()) {
+    const matches =
+      'paneKey' in surface
+        ? entry.direction === 'chat' && entry.paneKey === surface.paneKey
+        : entry.direction === 'terminal' &&
+          (entry.sessionId === surface.sessionId || entry.chatTabId === surface.tabId)
+    if (matches) {
+      return `${entry.direction}\0${entry.agent}`
+    }
+  }
+  return ''
+}
+
+/**
+ * The switch working on this surface, for the note it shows until the destination replaces it.
+ * Only the window that started the switch knows it; it shows after the controls' 200 ms delay.
+ */
+export function useConversationSwitchNote(
+  surface: ConversationSwitchSurface | null
+): ConversationSwitchNote | null {
+  const key = useSyncExternalStore(
+    subscribe,
+    () => (surface ? pendingNoteKey(surface) : ''),
+    () => ''
+  )
+  const shown = useConversationSwitchBusy(key !== '')
+  if (!shown) {
+    return null
+  }
+  const [direction, agent] = key.split('\0')
+  return {
+    direction: direction as ConversationSwitchNote['direction'],
+    agent: agent as AiVaultAgent
+  }
+}
+
 export function useConversationSwitchReadiness(args: ConversationSwitch | null) {
   const capability = useInPlaceSwitchCapability(args?.executionHostId, args?.agent)
   const pending = useConversationSwitchPending(args)

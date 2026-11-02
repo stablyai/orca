@@ -20980,7 +20980,10 @@
         },
         "switch": {
           "stopUnknown": "O Orca não pôde confirmar que {{agent}} parou. Verifique os chats e terminais abertos e tente alternar novamente.",
-          "sourceStopUnknown": "O Orca não pôde confirmar que {{agent}} parou. Verifique {{agent}} no terminal original e tente alternar novamente."
+          "sourceStopUnknown": "O Orca não pôde confirmar que {{agent}} parou. Verifique {{agent}} no terminal original e tente alternar novamente.",
+          "switchingToNativeChat": "Mudando para a interface de chat…",
+          "switchingToCli": "Mudando para a CLI…",
+          "switchingDetail": "Parando {{agent}}. A conversa continua aqui quando estiver pronta."
         },
         "BrowserTab": {
           "closeOthers": "Fechar Outras",

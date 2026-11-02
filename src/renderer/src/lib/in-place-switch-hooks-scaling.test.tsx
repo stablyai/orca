@@ -27,7 +27,8 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
 }))
 
 const { useInPlaceSwitchCapability } = await import('./in-place-switch-support')
-const { useConversationSwitchPending } = await import('./conversation-switch-state')
+const { useConversationSwitchPending, useConversationSwitchNote } =
+  await import('./conversation-switch-state')
 const { conversationSwitchChanged, pendingNativeChatCliSwitches } =
   await import('./pending-conversation-surface-switches')
 
@@ -64,7 +65,10 @@ function work(consumers: number): { reads: number; renders: number } {
           workspaceId: 'wt-1',
           agent: 'codex',
           sessionId: `chat-${index}`
-        })
+        }),
+        // Each pane's and chat's "Switching…" note.
+        useConversationSwitchNote({ paneKey: `tab-${index}:leaf` }),
+        useConversationSwitchNote({ sessionId: `chat-${index}`, tabId: `chat-tab-${index}` })
       ]
     })
   }
@@ -79,7 +83,11 @@ function work(consumers: number): { reads: number; renders: number } {
     pendingNativeChatCliSwitches.set('runtime:host-b\0other-chat', {
       chatTabId: null,
       workspaceId: 'wt-2',
-      executionHostId: 'runtime:host-b'
+      executionHostId: 'runtime:host-b',
+      direction: 'terminal',
+      agent: 'codex',
+      paneKey: null,
+      sessionId: 'other-chat'
     })
     conversationSwitchChanged()
   })

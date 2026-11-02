@@ -78,7 +78,11 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
   pending.set(key, {
     chatTabId: args.source?.tabId ?? args.chatTabId ?? null,
     workspaceId: args.workspaceId,
-    executionHostId: args.executionHostId
+    executionHostId: args.executionHostId,
+    direction: args.direction,
+    agent: args.agent,
+    paneKey: args.direction === 'chat' ? (args.source?.paneKey ?? null) : null,
+    sessionId: args.direction === 'terminal' ? (args.sessionId ?? null) : null
   })
   conversationSwitchChanged()
   let attempted = false

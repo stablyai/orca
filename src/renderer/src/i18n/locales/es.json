@@ -19857,7 +19857,10 @@
           "toCliTooltip": "Cambiar a la CLI: detiene {{agent}} en la interfaz de chat y continúa la misma conversación en una terminal.",
           "openedInWorkspace": "Chat abierto en {{workspace}}.",
           "toNativeChatTooltip": "Cambiar a la interfaz de chat: continúa la misma conversación en un chat, en esta pestaña.",
-          "noConversation": "Todavía no hay una conversación guardada disponible en este terminal."
+          "noConversation": "Todavía no hay una conversación guardada disponible en este terminal.",
+          "switchingToNativeChat": "Cambiando a la interfaz de chat…",
+          "switchingToCli": "Cambiando a la CLI…",
+          "switchingDetail": "Deteniendo {{agent}}. La conversación continúa aquí cuando esté lista."
         },
         "BrowserTab": {
           "closeOthers": "Cerrar otras",

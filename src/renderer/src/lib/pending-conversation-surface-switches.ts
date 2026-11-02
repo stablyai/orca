@@ -1,9 +1,21 @@
 import type { AgentPaneConversationIdentity } from '@/store/slices/agent-pane-conversation'
 import { getTabIdFromPaneKey } from '@/store/slices/agent-status/agent-status-pane-key-tab-binding'
+import type { AiVaultAgent } from '../../../shared/ai-vault-types'
 
 export const pendingNativeChatCliSwitches = new Map<
   string,
-  { chatTabId: string | null; workspaceId: string; executionHostId: string }
+  {
+    chatTabId: string | null
+    workspaceId: string
+    executionHostId: string
+    /** What the switch's note on its source says. */
+    direction: 'chat' | 'terminal'
+    agent: AiVaultAgent
+    /** The terminal pane being switched to chat, when the switch captured one. */
+    paneKey: string | null
+    /** The chat being switched to its terminal. */
+    sessionId: string | null
+  }
 >()
 
 export function protectedConversationPaneKeys(

@@ -19323,7 +19323,10 @@
           "toCliTooltip": "CLI に切り替え: チャット UI で {{agent}} を停止し、ターミナルで同じ会話を続けます。",
           "openedInWorkspace": "{{workspace}} でチャットを開きました。",
           "toNativeChatTooltip": "チャット UI に切り替え: このタブのチャットで同じ会話を続けます。",
-          "noConversation": "このターミナルには、保存された会話がまだありません。"
+          "noConversation": "このターミナルには、保存された会話がまだありません。",
+          "switchingToNativeChat": "チャット UI に切り替えています…",
+          "switchingToCli": "CLI に切り替えています…",
+          "switchingDetail": "{{agent}} を停止しています。準備ができたら、ここで会話が続きます。"
         },
         "BrowserTab": {
           "closeOthers": "その他を閉じる",
