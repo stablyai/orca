@@ -63,8 +63,7 @@ import {
   noCodexResumeLaunch,
   prepareCodexResumeHome,
   reconcileSharedRuntimeResumeHome,
-  resolveCodexResumeLaunch,
-  stripSequencedStartupResumeArgv
+  resolveCodexResumeLaunch
 } from './host-env/codex-resume'
 import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/linux-terminal-orca-cli-shim'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
@@ -257,7 +256,6 @@ export function registerPtyHandlers(
     resolveCodexResumeLaunch,
     noCodexResumeLaunch,
     reconcileSharedRuntimeResumeHome,
-    stripSequencedStartupResumeArgv,
     assertWorkspaceAcceptsNewPty,
     resolvePtySpawnStartupCwd,
     requestSerializedBuffer: session.requestSerializedBuffer,
@@ -304,7 +302,6 @@ export function registerPtyHandlers(
     noCodexResumeLaunch,
     resolveCodexResumeLaunch,
     reconcileSharedRuntimeResumeHome,
-    stripSequencedStartupResumeArgv,
     transitionSpawnHiddenRendererPtyDeliveryState:
       session.transitionSpawnHiddenRendererPtyDeliveryState,
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv,

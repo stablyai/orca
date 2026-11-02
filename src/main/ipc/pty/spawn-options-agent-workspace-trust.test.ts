@@ -49,7 +49,6 @@ function makeDeps(): PtySpawnIpcDeps & PtyRuntimeControllerDeps {
     noCodexResumeLaunch: notReachedByOptionBuilding,
     resolveCodexResumeLaunch: notReachedByOptionBuilding,
     reconcileSharedRuntimeResumeHome: notReachedByOptionBuilding,
-    stripSequencedStartupResumeArgv: notReachedByOptionBuilding,
     transitionSpawnHiddenRendererPtyDeliveryState: notReachedByOptionBuilding,
     trustedTerminalHandleEnv: new Set(),
     sendPtySpawnedToRenderer: notReachedByOptionBuilding,

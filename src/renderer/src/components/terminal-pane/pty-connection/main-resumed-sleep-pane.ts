@@ -97,7 +97,6 @@ export async function attachToMainResumedSleepPane(
   }
   const ptyId = await session.startFreshSpawn(null, options)
   if (isCurrent() && resumed && ptyId) {
-    session.showSessionRestoredBanner()
     // Main keeps its record; the window's mirror of it is spent.
     if (startup.sleepingRecordEntry) {
       useAppStore.getState().clearSleepingAgentSession(startup.sleepingRecordEntry.paneKey)

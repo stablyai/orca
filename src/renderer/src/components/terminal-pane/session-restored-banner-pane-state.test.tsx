@@ -3,17 +3,13 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  SESSION_RESTORED_BANNER_TEXT,
-  SESSION_RESUME_UNAVAILABLE_BANNER_TEXT
-} from './SessionRestoredBanner'
+import { SESSION_RESUME_UNAVAILABLE_BANNER_TEXT } from './SessionRestoredBanner'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import {
   addSessionRestoredBannerPaneId,
   dismissSessionRestoredBannerPaneIds,
   pruneSessionRestoredBannerPaneIds,
   removeSessionRestoredBannerPaneId,
-  seedStartupSessionRestoredBanner,
   syncSessionRestoredBannerTitleSpace,
   type SessionRestoredBannerPane,
   type SessionRestoredBannerPaneReasons
@@ -48,7 +44,7 @@ function eventFrom(target: HTMLElement, event: KeyboardEvent | PointerEvent): ty
 }
 
 function bannerReasons(paneIds: readonly number[]): SessionRestoredBannerPaneReasons {
-  return new Map(paneIds.map((paneId) => [paneId, 'restored' as const]))
+  return new Map(paneIds.map((paneId) => [paneId, 'resume-unavailable' as const]))
 }
 
 function paneText(pane: SessionRestoredBannerPane): string {
@@ -63,25 +59,6 @@ describe('session restored banner pane state', () => {
       }
     })
     document.body.innerHTML = ''
-  })
-
-  it('seeds sidebar startup onto the created pane and renders its overlay there', async () => {
-    const firstPane = createPane(1)
-    const createdPane = createPane(2)
-    let paneIds: SessionRestoredBannerPaneReasons = new Map()
-
-    seedStartupSessionRestoredBanner(
-      { showSessionRestoredBanner: true },
-      createdPane.id,
-      (paneId) => {
-        paneIds = addSessionRestoredBannerPaneId(paneIds, paneId)
-      }
-    )
-    await renderPortals([firstPane, createdPane], paneIds)
-
-    expect(paneIds).toEqual(new Map([[createdPane.id, 'restored']]))
-    expect(paneText(firstPane)).toBe('')
-    expect(paneText(createdPane)).toBe(SESSION_RESTORED_BANNER_TEXT)
   })
 
   it('does not reserve title space for chromeless always-on pane headers', () => {
@@ -119,7 +96,7 @@ describe('session restored banner pane state', () => {
   it('renders and reserves title space only on the restored inactive split pane', async () => {
     const activePane = createPane(1)
     const inactiveRestoredPane = createPane(2)
-    const paneIds = new Map<number, 'restored'>([[inactiveRestoredPane.id, 'restored']])
+    const paneIds = bannerReasons([inactiveRestoredPane.id])
 
     const needsFit = syncSessionRestoredBannerTitleSpace({
       panes: [activePane, inactiveRestoredPane],
@@ -133,33 +110,14 @@ describe('session restored banner pane state', () => {
     expect(activePane.container.hasAttribute('data-has-title')).toBe(false)
     expect(inactiveRestoredPane.container.hasAttribute('data-has-title')).toBe(true)
     expect(paneText(activePane)).toBe('')
-    expect(paneText(inactiveRestoredPane)).toBe(SESSION_RESTORED_BANNER_TEXT)
+    expect(paneText(inactiveRestoredPane)).toBe(SESSION_RESUME_UNAVAILABLE_BANNER_TEXT)
   })
 
-  it('names a fresh session when the requested resume could not be verified', async () => {
-    const restoredPane = createPane(1)
-    const freshPane = createPane(2)
+  it('keeps identity when the pane already shows the banner', () => {
+    // Stable identity prevents unnecessary rerender.
+    const shown = bannerReasons([1])
 
-    await renderPortals(
-      [restoredPane, freshPane],
-      new Map([
-        [restoredPane.id, 'restored' as const],
-        [freshPane.id, 'resume-unavailable' as const]
-      ])
-    )
-
-    expect(paneText(restoredPane)).toBe(SESSION_RESTORED_BANNER_TEXT)
-    expect(paneText(freshPane)).toBe(SESSION_RESUME_UNAVAILABLE_BANNER_TEXT)
-  })
-
-  it('upgrades a restored pane to resume-unavailable and keeps identity otherwise', () => {
-    // Fresh-session failure reasons replace restored claims; stable identity prevents unnecessary rerender.
-    const restored = new Map<number, 'restored'>([[1, 'restored']])
-
-    expect(addSessionRestoredBannerPaneId(restored, 1, 'resume-unavailable')).toEqual(
-      new Map([[1, 'resume-unavailable']])
-    )
-    expect(addSessionRestoredBannerPaneId(restored, 1, 'restored')).toBe(restored)
+    expect(addSessionRestoredBannerPaneId(shown, 1, 'resume-unavailable')).toBe(shown)
   })
 
   it('dismisses only the interacted pane for pointer and key events', () => {

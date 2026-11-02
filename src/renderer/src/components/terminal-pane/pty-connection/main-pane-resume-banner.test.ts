@@ -73,16 +73,30 @@ describe("the window's banner for main's start of a pane", () => {
     vi.unstubAllGlobals()
   })
 
-  it('shows the outcome of the terminal the view attached, once per start', async () => {
+  it('shows nothing for a restored outcome: only the agent confirms its resume', async () => {
     const showMainPaneResumeOutcome = await loadBannerModule()
     store.publish({
       terminalPaneResumeOutcomesByPaneKey: {
         [PANE_KEY]: { ptyId: 'pty-1', ptyGeneration: 1, outcome: 'restored' }
       }
     })
+    const { view, session } = attachedView()
+    showMainPaneResumeOutcome(session, 'pty-1')
+    expect(view.showSessionRestoredBanner).not.toHaveBeenCalled()
+  })
+
+  it('shows the outcome of the terminal the view attached, once per start', async () => {
+    const showMainPaneResumeOutcome = await loadBannerModule()
+    store.publish({
+      terminalPaneResumeOutcomesByPaneKey: {
+        [PANE_KEY]: { ptyId: 'pty-1', ptyGeneration: 1, outcome: 'resume-unavailable' }
+      }
+    })
     const first = attachedView()
     showMainPaneResumeOutcome(first.session, 'pty-1')
-    expect(first.view.showSessionRestoredBanner).toHaveBeenCalledExactlyOnceWith('restored')
+    expect(first.view.showSessionRestoredBanner).toHaveBeenCalledExactlyOnceWith(
+      'resume-unavailable'
+    )
 
     // A remounted view attaching the same start says nothing again.
     const remounted = attachedView()

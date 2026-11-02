@@ -70,6 +70,12 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
         ctx.env = ctx.baseEnv = ctx.spawnEnv = ctx.spawnOptions.env
         ctx.effectiveLaunchConfig = undefined
       },
+      savedResumeLaunch: {
+        shellOverride: ctx.effectiveShellOverride,
+        applyLaunchConfig: (launchConfig) => {
+          ctx.effectiveLaunchConfig = launchConfig
+        }
+      },
       paneKey: ctx.reservationPaneKey,
       preAllocatedHandle: ctx.preAllocatedHandle,
       replacedPaneOwner: ctx.replacedPaneOwner,

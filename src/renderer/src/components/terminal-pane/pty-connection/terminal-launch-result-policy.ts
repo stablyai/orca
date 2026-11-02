@@ -89,6 +89,9 @@ export function applyTerminalLaunchResult(
     console.warn('Terminal launch result bookkeeping failed', error)
   }
   if (rejected && !superseded) {
+    if (kind !== 'candidate' && !result.agentResumeRefused && decision?.verdict === 'admitted') {
+      session.reconcileExitStartupAfterFreshStart(result)
+    }
     session.showSessionRestoredBanner('resume-unavailable')
   }
   return rejected

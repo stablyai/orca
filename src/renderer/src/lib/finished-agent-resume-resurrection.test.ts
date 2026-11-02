@@ -85,7 +85,7 @@ describe('a finished local agent', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree[WORKTREE_ID]?.[0]
     expect(resumedTab?.launchAgent).toBe('codex')
-    expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
+    expect(state.pendingStartupByTabId[resumedTab!.id]?.resumeOrigin).toBe('saved')
   })
 
   it('is not respawned into a new tab once its pane is killed', () => {

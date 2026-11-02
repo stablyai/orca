@@ -27,7 +27,7 @@ export async function prepareCodexSessionResume(args: {
     ...(args.fileIsRegular ? { fileIsRegular: args.fileIsRegular } : {}),
     ...(args.listSessionFiles ? { listSessionFiles: args.listSessionFiles } : {})
   })
-  if (provenance.outcome === 'fresh') {
+  if (provenance.outcome === 'unresolved') {
     return provenance
   }
   return {

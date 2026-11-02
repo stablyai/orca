@@ -23,6 +23,10 @@ import {
   type ResumeSpawnRefusal
 } from './host-env/saved-resume-admission'
 import { failPtySpawnExecute } from './spawn-execute-failure'
+import {
+  SavedResumeStartedFresh,
+  startJoinedSavedResumeFresh
+} from './saved-resume-fresh/saved-resume-fresh-launch'
 import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-operation-state'
 import { excludeReplacedPaneOwner } from './pane/replaced-pane-owner'
 import { attachViewWithoutOwner } from './pane/attach-only-view'
@@ -123,6 +127,9 @@ export async function executePtySpawn(
             if (refusal) {
               throw new SavedResumeFreshRefusal(refusal)
             }
+            if (ctx.savedResumeStartedFresh && ctx.resumeAdmission) {
+              throw new SavedResumeStartedFresh(ctx.resumeAdmission.refused)
+            }
             validateDispatch()
             providerResult = await ctx.provider.spawn(ctx.spawnOptions)
             ctx.rejectedRegistrationCandidate = providerResult
@@ -151,13 +158,22 @@ export async function executePtySpawn(
           }
         })
       } catch (error) {
-        if (!(error instanceof SavedResumeFreshRefusal)) {
+        if (error instanceof SavedResumeFreshRefusal) {
+          // The claim has unwound; the refused shell must never become its agent owner.
+          await chooseFresh(error.admission)
+          suppressSavedResumeLaunch(args, ctx.spawnOptions)
+          facts.suppressRefusedLaunch?.()
+        } else if (!(error instanceof SavedResumeStartedFresh)) {
           throw error
+        } else if (!ctx.savedResumeStartedFresh) {
+          // Another request on this claim found the conversation gone; a saved restore of it
+          // starts fresh too, and any other request keeps its own command.
+          const joined = await startJoinedSavedResumeFresh(ctx, facts.savedResumeLaunch, error)
+          if (joined === 'failed') {
+            throw error
+          }
+          ctx.savedResumeStartedFresh = joined === 'started-fresh' || undefined
         }
-        // The claim has unwound; the refused shell must never become its agent owner.
-        await chooseFresh(error.admission)
-        suppressSavedResumeLaunch(args, ctx.spawnOptions)
-        facts.suppressRefusedLaunch?.()
         delete args.agentSessionEnsure
         delete ctx.spawnOptions.agentSessionEnsure
         validateDispatch()

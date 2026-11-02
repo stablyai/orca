@@ -10,7 +10,6 @@ import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-re
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 import type { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
-import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 
 export type TerminalPaneMountContext = {
   deps: UseTerminalPaneLifecycleDeps
@@ -34,7 +33,6 @@ export type TerminalPaneMountContext = {
   getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
   canOpenOwnedBrowserForPane: (paneId: number) => boolean
   requestOpenLinksInAppPreference: TerminalLinkRoutingPreferenceRequester
-  onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
   queueResizeAll: (focusActive: boolean) => void
   syncPaneCount: () => void
   syncPaneLayoutRevision: () => void

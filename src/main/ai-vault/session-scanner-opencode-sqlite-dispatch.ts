@@ -2,6 +2,7 @@ import {
   readOpenCodeTranscriptPage,
   readOpenCodeTranscriptSignal
 } from '../native-chat/transcript-opencode-sqlite-query'
+import { readOpenCodeSessionPresence } from '../native-chat/transcript-opencode-session-presence'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { captureOpenCodeSqliteSession } from './session-scanner-opencode-sqlite-capture'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
@@ -22,11 +23,17 @@ export async function handleOpenCodeSqliteRequest(
   request: OpenCodeSqliteWorkerRequest
 ): Promise<OpenCodeSqliteWorkerResponse> {
   try {
-    if (request.kind === 'native-page' || request.kind === 'native-signal') {
+    if (
+      request.kind === 'native-page' ||
+      request.kind === 'native-signal' ||
+      request.kind === 'native-presence'
+    ) {
       const value =
-        request.kind === 'native-signal'
-          ? readOpenCodeTranscriptSignal(request.dbPath, request.sessionId, request.agent)
-          : readOpenCodeTranscriptPage({ ...request, limit: request.limit ?? 50 })
+        request.kind === 'native-presence'
+          ? readOpenCodeSessionPresence(request.dbPath, request.sessionId)
+          : request.kind === 'native-signal'
+            ? readOpenCodeTranscriptSignal(request.dbPath, request.sessionId, request.agent)
+            : readOpenCodeTranscriptPage({ ...request, limit: request.limit ?? 50 })
       return { id: request.id, ok: true, value }
     }
     if (request.kind === 'list') {

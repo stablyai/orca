@@ -124,39 +124,32 @@ describe('runtime spawn commit: run facts', () => {
     expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual([])
   })
 
-  it.each([false, true])(
-    'reports unavailable before binding even when the request was erased (%s)',
-    async (erased) => {
-      const onResumeOutcome = vi.fn()
-      const persistPtyBinding = vi.fn(async () => {
-        expect(onResumeOutcome.mock.calls).toEqual(
-          ORCA_LAYOUT_OWNER_IS_MAIN ? [[PTY_ID, 'resume-unavailable']] : []
-        )
-        return true
-      })
+  it('reports unavailable before binding when saved admission removed the request', async () => {
+    const onResumeOutcome = vi.fn()
+    const persistPtyBinding = vi.fn(async () => {
+      expect(onResumeOutcome.mock.calls).toEqual(
+        ORCA_LAYOUT_OWNER_IS_MAIN ? [[PTY_ID, 'resume-unavailable']] : []
+      )
+      return true
+    })
 
-      await commit({}, undefined, undefined, (ctx) => {
-        ctx.args.resumeProviderSession = erased
-          ? undefined
-          : { key: 'session_id', id: 'codex-session-1' }
-        ctx.result.agentResumeUnavailable = erased ? true : undefined
-        ctx.args.onResumeOutcome = onResumeOutcome
-        ctx.codexResumeUnavailable = !erased
-        ctx.codexResumeArgvDropped = true
-        ctx.hostSessionBinding = {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this boundary pin observes the bind write without invoking its stored callback.
-          store: { persistPtyBinding } as unknown as NonNullable<
-            typeof ctx.hostSessionBinding
-          >['store'],
-          worktreeId: 'wt-1',
-          tabId: 'tab-1',
-          leafId: 'leaf-1'
-        }
-      })
+    await commit({}, undefined, undefined, (ctx) => {
+      ctx.args.resumeProviderSession = undefined
+      ctx.result.agentResumeUnavailable = true
+      ctx.args.onResumeOutcome = onResumeOutcome
+      ctx.hostSessionBinding = {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this boundary pin observes the bind write without invoking its stored callback.
+        store: { persistPtyBinding } as unknown as NonNullable<
+          typeof ctx.hostSessionBinding
+        >['store'],
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'leaf-1'
+      }
+    })
 
-      expect(persistPtyBinding).toHaveBeenCalledOnce()
-    }
-  )
+    expect(persistPtyBinding).toHaveBeenCalledOnce()
+  })
 
   it('records nothing for a spawn discarded because its binding save failed', async () => {
     const facts = new TerminalRunFactsRegister()

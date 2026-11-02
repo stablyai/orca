@@ -62,7 +62,6 @@ export type PtySpawnCommitState = {
   provisionalPtySize: PtySpawnSizeSeed | undefined
   isDaemonHostSpawn: boolean
   codexResumeHomeSelected: boolean
-  codexResumeUnavailable?: boolean
   selectedCodexHomePath: string | null
   codexSelectionTarget: CodexAccountSelectionTarget
   codexHomeLaunchStartedAt: Date | undefined
@@ -99,7 +98,6 @@ export type PtySpawnCommitInput = {
   /** Validated pane key; serializer readiness, aliases and resume identity read it. */
   paneKey: string | null
   paneKeyAliases?: PtySpawnPaneKeyAliases
-  resumeArgvDropped: boolean
   /** TEMPORARY (rows 14–18): window reports base env, host assembled env; launch-env follow-up. */
   codexLaunchEnv: Record<string, string> | undefined
   initiallyHidden: boolean
@@ -130,9 +128,7 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
   }
   reportRuntimeResumeOutcome({
     args: state.args,
-    result,
-    codexResumeUnavailable: state.codexResumeUnavailable,
-    codexResumeArgvDropped: input.resumeArgvDropped
+    result
   })
   if (input.paneBinding) {
     await savePtySpawnPaneBinding(state, input.paneBinding, state.args.connectionId)

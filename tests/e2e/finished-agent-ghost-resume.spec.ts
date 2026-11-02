@@ -167,8 +167,7 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
       return tabs.map((tab) => ({
         id: tab.id,
         launchAgent: tab.launchAgent ?? null,
-        startup: state?.pendingStartupByTabId[tab.id]?.command ?? null,
-        banner: state?.pendingStartupByTabId[tab.id]?.showSessionRestoredBanner ?? false
+        startup: state?.pendingStartupByTabId[tab.id]?.command ?? null
       }))
     }, worktreeId)
     const resumeTabs = respawned.filter(

@@ -224,7 +224,6 @@ export type TerminalActions = {
         agent: TuiAgent
         prompt: string
       }
-      showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
     }
   ) => void
@@ -251,7 +250,6 @@ export type TerminalActions = {
       agent: TuiAgent
       prompt: string
     }
-    showSessionRestoredBanner?: boolean
     telemetry?: AgentStartedTelemetry
   } | null
   queueTabIssueCommandSplit: (

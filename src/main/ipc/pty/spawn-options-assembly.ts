@@ -1,15 +1,15 @@
-import { withClaudeAgentViewPlugin } from '../../../shared/claude-agent-view-launch'
-import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../shared/codex-terminal-server-isolation'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../opencode/opencode-pty-launch'
+import {
+  decorateAgentLaunchCommand,
+  resolveAgentLaunchShell
+} from './agent-launch-command-decoration'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../pty/legacy-terminal-shim-dir'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../pty/pi-process-owner-env'
-import { planCodexNoDaemonLaunch } from '../../pty/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../providers/pty-provider-contract'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
@@ -117,13 +117,10 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-  const shell = resolveStartupShell(
-    input.codexRuntime === 'wsl' ? 'linux' : process.platform,
-    resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
-      terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
-    })
+  const shell = resolveAgentLaunchShell(
+    Boolean(connectionId) || input.codexRuntime === 'wsl',
+    input.codexRuntime === 'wsl',
+    input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
   )
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: input.launchCommand,
@@ -139,11 +136,17 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       : {})
   })
   const env = openCodeLaunch.env
-  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
-  const launchCommand =
-    pluginDir && openCodeLaunch.command
-      ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
-      : openCodeLaunch.command
+  const decorated = decorateAgentLaunchCommand({
+    command: openCodeLaunch.command,
+    env,
+    envToDelete: input.envToDelete,
+    cwd: input.cwd,
+    shell,
+    connectionId,
+    executesOnThisHost: !connectionId && input.codexRuntime !== 'wsl',
+    shellOverride: input.shellOverride
+  })
+  const launchCommand = decorated.launchCommand
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
@@ -163,15 +166,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   if (!connectionId && !input.isDaemonHostSpawn) {
     spawnOptions.codexHomePathOverride = { value: input.selectedCodexHomePath }
   }
-  const noDaemonLaunch = planCodexNoDaemonLaunch({
-    command: launchCommand,
-    executesOnThisHost: !connectionId && input.codexRuntime !== 'wsl',
-    shellOverride: input.shellOverride,
-    env,
-    envToDelete: input.envToDelete,
-    cwd: input.cwd
-  })
-  const command = noDaemonLaunch ? await noDaemonLaunch : launchCommand
+  const command = decorated.command ? await decorated.command : launchCommand
   if (command !== undefined) {
     spawnOptions.command = command
   }

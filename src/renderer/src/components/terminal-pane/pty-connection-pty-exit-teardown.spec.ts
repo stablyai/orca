@@ -449,6 +449,65 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       expect(manager.closePane).toHaveBeenCalledWith(1)
     })
 
+    it('retries the fresh agent main started instead of the resume it replaced', async () => {
+      restoreUserAgent = temporarilySetNavigatorUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      )
+      const { connectPanePty } = await import('./pty-connection')
+      const callbacks: ConnectCallbacks[] = []
+      const transport = createMockTransport('fresh-pty')
+      const launchConfig = installSleepingCodexResumeState()
+      transport.connect.mockImplementation(async (options: { callbacks: ConnectCallbacks }) => {
+        callbacks.push(options.callbacks)
+        return {
+          id: 'fresh-pty',
+          agentResumeUnavailable: true as const,
+          savedResumeDecision: {
+            agent: 'codex' as const,
+            providerSession: { key: 'session_id' as const, id: 'codex-session-1' },
+            verdict: 'admitted' as const
+          },
+          launchAgent: 'codex' as const,
+          launchConfig
+        }
+      })
+      transportFactoryQueue.push(transport)
+      const deps = createDeps({
+        startup: { command: 'codex stale-startup' },
+        onPaneProcessDied: vi.fn()
+      })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(20)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn
+      if (typeof onPtySpawn !== 'function') {
+        throw new Error('Missing production PTY spawn callback')
+      }
+      onPtySpawn('fresh-pty')
+      callbacks[0]?.onData?.('too many consoles in use, max consoles is 128')
+      const onPtyExit = createdTransportOptions[0]?.onPtyExit as
+        | ((ptyId: string, exitCode?: number) => void)
+        | undefined
+      onPtyExit?.('fresh-pty', 1)
+
+      expect(deps.onPaneProcessDied).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: 'git-bash-console-capacity',
+          startup: expect.objectContaining({
+            command: expect.stringMatching(/^codex\b(?![\s\S]*codex-session-1)/),
+            launchAgent: 'codex'
+          })
+        })
+      )
+      for (const resumeField of ['resumeProviderSession', 'resumeOrigin']) {
+        expect(deps.onPaneProcessDied).toHaveBeenCalledWith(
+          expect.objectContaining({
+            startup: expect.not.objectContaining({ [resumeField]: expect.anything() })
+          })
+        )
+      }
+    })
+
     it('retains the cold-restore resume startup when its replacement hits capacity', async () => {
       restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -487,8 +546,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
           command: expect.stringContaining("'resume' 'codex-session-1'"),
           launchConfig,
           resumeProviderSession: { key: 'session_id', id: 'codex-session-1' },
-          launchAgent: 'codex',
-          showSessionRestoredBanner: true
+          launchAgent: 'codex'
         }),
         reason: 'git-bash-console-capacity'
       })

@@ -3,10 +3,7 @@ import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
-import { dropAgentResumeArgvFromCommand } from '../../../../shared/agent-resume-argv-drop'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import { dropUnverifiedCodexResumeArgv } from '../../../codex/codex-unverified-resume-launch'
 import type { CodexSessionResumePreparation } from '../../../codex/codex-session-resume-home'
 import { CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE, codexHomePathsEqual } from './codex-home'
 import type { PrepareCodexSessionResume } from './types'
@@ -14,13 +11,9 @@ import type { PrepareCodexSessionResume } from './types'
 export type CodexResumeLaunch = {
   codexResumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }> | null
   command: string | undefined
-  notifyResumeUnavailable: boolean
-  droppedResumeArgv: boolean
-  providerSession: AgentProviderSessionMetadata | null
 }
 
 export type PreparedCodexResumeHome = {
-  providerSession: AgentProviderSessionMetadata
   preparation: Promise<CodexSessionResumePreparation | null>
 }
 
@@ -45,7 +38,6 @@ export function prepareCodexResumeHome(
     return null
   }
   return {
-    providerSession,
     preparation: prepareCodexSessionResume({
       providerSession,
       target: args.target,
@@ -57,46 +49,17 @@ export function prepareCodexResumeHome(
 
 /** Keep non-Codex preparation synchronous: an extra await changes pane-reservation race ordering. */
 export function noCodexResumeLaunch(command: string | undefined): CodexResumeLaunch {
-  return {
-    codexResumeHome: null,
-    command,
-    notifyResumeUnavailable: false,
-    droppedResumeArgv: false,
-    providerSession: null
-  }
+  return { codexResumeHome: null, command }
 }
 
 export function resolveCodexResumeLaunch(
   command: string | undefined,
   preparation: PreparedCodexResumeHome
 ): Promise<CodexResumeLaunch> {
-  return preparation.preparation.then((prepared) => {
-    const providerSession = preparation.providerSession
-    if (prepared?.outcome !== 'fresh') {
-      return {
-        codexResumeHome: prepared ?? null,
-        command,
-        notifyResumeUnavailable: false,
-        droppedResumeArgv: false,
-        providerSession
-      }
-    }
-    const dropped = dropUnverifiedCodexResumeArgv({
-      command,
-      providerSession,
-      claimedCodexProvenance: prepared.claimedCodexProvenance
-    })
-    return {
-      codexResumeHome: null,
-      command: dropped.command,
-      // Notify missing provenance too; only positively other-agent metadata can fail silently.
-      notifyResumeUnavailable:
-        dropped.droppedResumeArgv &&
-        (prepared.claimedCodexProvenance || !providerSession.transcriptPath),
-      droppedResumeArgv: dropped.droppedResumeArgv,
-      providerSession
-    }
-  })
+  return preparation.preparation.then((prepared) => ({
+    codexResumeHome: prepared?.outcome === 'resume' ? prepared : null,
+    command
+  }))
 }
 
 export async function reconcileSharedRuntimeResumeHome(
@@ -111,23 +74,4 @@ export async function reconcileSharedRuntimeResumeHome(
     throw new Error(CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE)
   }
   return resumeHome.codexHomePath
-}
-
-/** Sequenced startup overrides the launch command and is evaluated by the wrapper; strip its resume arguments too. */
-export function stripSequencedStartupResumeArgv<T extends Record<string, string> | undefined>(
-  env: T,
-  launch: CodexResumeLaunch
-): T {
-  const sequenced = env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
-  if (!env || !sequenced || !launch.droppedResumeArgv || !launch.providerSession) {
-    return env
-  }
-  const drop = dropAgentResumeArgvFromCommand({
-    command: sequenced,
-    agent: 'codex',
-    providerSession: launch.providerSession
-  })
-  return drop.status === 'dropped'
-    ? { ...env, [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: drop.command }
-    : env
 }

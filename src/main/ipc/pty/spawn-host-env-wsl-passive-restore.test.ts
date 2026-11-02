@@ -36,7 +36,7 @@ vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => ({
 }))
 
 import { resolvePtySpawnHostEnv } from './spawn-host-env'
-import { noCodexResumeLaunch, stripSequencedStartupResumeArgv } from './host-env/codex-resume'
+import { noCodexResumeLaunch } from './host-env/codex-resume'
 import { isWslUserActFor } from '../../wsl/wsl-user-act-scope'
 import { resetWslDefaultDistroForTests } from '../../wsl/wsl-default-distro'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
@@ -75,7 +75,6 @@ function resolve(
       resolveCodexResumeLaunch: async () => noCodexResumeLaunch('codex'),
       noCodexResumeLaunch,
       reconcileSharedRuntimeResumeHome: async (home) => home.codexHomePath,
-      stripSequencedStartupResumeArgv,
       getSelectedCodexHomePath: async () => {
         seen.push(isWslUserActFor('Ubuntu'))
         return HOME

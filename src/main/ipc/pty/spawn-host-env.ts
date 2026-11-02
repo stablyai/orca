@@ -48,10 +48,6 @@ export type PtySpawnCodexResumeDeps = {
     resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
     resolveCurrent: () => string | null | Promise<string | null>
   ) => Promise<string>
-  stripSequencedStartupResumeArgv: <T extends Record<string, string> | undefined>(
-    env: T,
-    launch: CodexResumeLaunch
-  ) => T
 }
 
 export type PtySpawnHostEnv = {
@@ -135,7 +131,7 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
   args.mark?.('codex_resume')
   const codexResumeHome = codexResumeLaunch.codexResumeHome
   const launchCommand = codexResumeLaunch.command
-  const baseEnv = deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch)
+  const baseEnv = args.env
   const launchesCodex = args.launchAgent === 'codex'
   const selectLaunchCodexHome = async (): Promise<string | null> =>
     (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null

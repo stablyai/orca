@@ -3,16 +3,14 @@ import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-l
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata
-} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { agentSubagentsEqual } from '../../../shared/agent-status-subagent-snapshot'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 import { programStatusHookYieldEndsAt } from './program-status/hook-precedence'
+import { withHookProvenance } from './server-launch-seed'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 
 const PROGRAM_STATUS_FACET_REPUBLISH_MS = 250
@@ -33,17 +31,12 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       return
     }
     const previous = this.state.lastStatusByPaneKey.get(paneKey)
+    // Every resumed launch seeds anew; only a row reported since this launch is newer evidence.
     if (
       previous &&
-      (previous.providerSessionOnly === true
-        ? agentProviderSessionsEqual(
-            event.agentType,
-            previous.providerSession,
-            event.providerSession
-          )
-        : 'receivedAt' in previous &&
-          typeof previous.receivedAt === 'number' &&
-          previous.receivedAt >= event.launchedAt)
+      'receivedAt' in previous &&
+      typeof previous.receivedAt === 'number' &&
+      previous.receivedAt >= event.launchedAt
     ) {
       return
     }
@@ -302,7 +295,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         ? previous.payload.mainAgent
         : undefined)
     // Terminal observations cannot establish prompt-sent telemetry.
-    this.applyNormalizedStatus(
+    const applied = this.applyNormalizedStatus(
       {
         paneKey,
         tabId,
@@ -321,5 +314,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       newRun,
       !preservedProviderSession
     )
+    const kept = preservedProviderSession ? withHookProvenance(previous, applied) : null
+    // The write above already scheduled a persist, which serializes the map as it is when it runs.
+    if (kept && this.writeLegacyStatusRow(kept)) {
+      this.commitStatusRowMutation(applied, kept, false)
+    }
   }
 }

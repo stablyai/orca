@@ -314,8 +314,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       )
       const writeCalls = pane.terminal.write.mock.calls.map(([data]) => terminalWriteText(data))
       expect(writeCalls.findIndex((data) => data.includes('--- session restored ---'))).toBe(-1)
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'restored')
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -485,7 +484,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         `${RESET_GRAPHIC_RENDITION}cold-payload`,
         expect.any(Function)
       )
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'restored')
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({

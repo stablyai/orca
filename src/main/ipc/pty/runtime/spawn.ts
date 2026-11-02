@@ -34,6 +34,7 @@ export async function spawnPtyFromRuntimeController(
         ctx.launchCommand = undefined
         ctx.env = ctx.spawnOptions.env
       },
+      savedResumeLaunch: { shellOverride: ctx.daemonShellOverride },
       paneKey: ctx.spawnIdentityPaneKey,
       preAllocatedHandle: args.preAllocatedHandle,
       beforeProviderSpawn: () => markRuntimeSpawnHiddenBeforeSpawn(ctx),
@@ -42,13 +43,10 @@ export async function spawnPtyFromRuntimeController(
     commit: () => {
       if (!ctx.result.isReattach) {
         Object.assign(ctx.result, {
-          ...(ctx.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {}),
           launchConfig: ctx.args.launchConfig,
           launchAgent: ctx.args.launchAgent,
           launchToken: ctx.args.launchToken,
-          resumeProviderSession: ctx.codexResumeArgvDropped
-            ? undefined
-            : ctx.args.resumeProviderSession
+          resumeProviderSession: ctx.args.resumeProviderSession
         })
       }
       return commitRuntimePtySpawn(ctx)

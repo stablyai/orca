@@ -6,6 +6,7 @@ import {
   type ResumeSpawnAdmission,
   type ResumeSpawnRefusal
 } from './host-env/saved-resume-admission'
+import { startSavedResumeFreshWhenMissing } from './saved-resume-fresh/saved-resume-fresh-launch'
 
 /** Capture the acquired pane's source once; only the physical-fresh branch judges its launch. */
 export async function prepareSavedPtyResume(
@@ -47,6 +48,16 @@ export async function prepareSavedPtyResume(
     }
     if (resumeSpawnRefusal(ctx.resumeAdmission)) {
       facts.suppressRefusedLaunch?.()
+    } else if (
+      !inherited &&
+      (await startSavedResumeFreshWhenMissing(
+        ctx,
+        facts.savedResumePaneKey ?? null,
+        facts.savedResumeLaunch,
+        ctx.resumeAdmission
+      ))
+    ) {
+      ctx.savedResumeStartedFresh = true
     }
   }
 }

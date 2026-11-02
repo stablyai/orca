@@ -26,7 +26,6 @@ import {
   formatTerminalUrlTooltip,
   terminalSelectionExceedsPrimaryLimit
 } from './terminal-pane-lifecycle-primitives'
-import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
 
 type PaneLinkContext = {
   pane: ManagedPane
@@ -53,8 +52,6 @@ type PaneLinkContext = {
   getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
   getPaneLinkCwd: (paneId: number) => string
   getUrlOpenLinkHint: (paneId: number) => string
-  onShowSessionRestoredBanner: (paneId: number) => void
-  ptyStartup: Parameters<typeof seedStartupSessionRestoredBanner>[0]
 }
 
 export function installTerminalPaneLinkHandling(context: PaneLinkContext): void {
@@ -70,9 +67,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
     getHttpLinkActionDestinations,
     getLinkActionContext,
     getPaneLinkCwd,
-    getUrlOpenLinkHint,
-    onShowSessionRestoredBanner,
-    ptyStartup
+    getUrlOpenLinkHint
   } = context
   const linkPointerGesture = installTerminalLinkPointerGesture(pane.terminal)
   refs.linkPointerGesturesRef.current.set(pane.id, linkPointerGesture)
@@ -113,8 +108,6 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       getActionDestinations: () => getHttpLinkActionDestinations(pane.id)
     })
   )
-  seedStartupSessionRestoredBanner(ptyStartup, pane.id, onShowSessionRestoredBanner)
-
   refs.nativeCopyDisposablesRef.current.set(
     pane.id,
     installTerminalNativeCopyGutterTrim(pane.terminal)

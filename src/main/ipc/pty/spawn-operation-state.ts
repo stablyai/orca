@@ -4,6 +4,7 @@ import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { PaneSpawnOperation } from './pane/pane-spawn-operation'
 import type { ReplacedPaneOwner } from './pane/replaced-pane-owner'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SavedResumeLaunchFacts } from './saved-resume-fresh/saved-resume-fresh-launch'
 
 export type PtySpawnOperationState = Pick<
   RuntimePtySpawnState,
@@ -33,6 +34,9 @@ export type PtySpawnOperationState = Pick<
   | 'provisionalPtySize'
   | 'ownsNewIncarnation'
   | 'resumeAdmission'
+  | 'launchCommand'
+  | 'selectedCodexHomePath'
+  | 'codexResumeHomeSelected'
 > & {
   deps: Pick<
     PtyRuntimeControllerDeps,
@@ -43,7 +47,10 @@ export type PtySpawnOperationState = Pick<
     | 'getLocalPtyStartupPromise'
     | 'resolvePtySpawnStartupCwd'
     | 'options'
+    | 'getSettings'
   >
+  /** The admitted saved resume was rebuilt as a fresh launch of the same agent. */
+  savedResumeStartedFresh?: true
   args: Omit<
     RuntimePtySpawnArgs,
     'spawnIntent' | 'terminalColorQueryReplies' | 'placement' | 'launchToken' | 'resumeOrigin'
@@ -66,6 +73,7 @@ export type PtySpawnExecutionFacts = {
   savedResumePaneKey?: string | null
   launchConfig?: SleepingAgentLaunchConfig
   suppressRefusedLaunch?: () => void
+  savedResumeLaunch?: SavedResumeLaunchFacts
   validateDispatch?: () => void
   beforeProviderSpawn?: () => void
   reportPtySpawnCommitted?: () => void

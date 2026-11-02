@@ -215,10 +215,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             typeof spawnedPtyId === 'object' &&
             spawnedPtyId.agentResumeUnavailable
           ) {
-            // Dropped resume argv starts a new session; do not claim the previous session was restored.
+            // Orca refused the saved resume, so the pane started fresh; say so.
             options.onAgentResumeUnavailable?.()
-          } else if (coldRestore?.hasSleepingRecord) {
-            session.showSessionRestoredBanner()
           }
           session.clearSleepingRecordAfterColdRestoreSpawn(coldRestore)
         } else if (

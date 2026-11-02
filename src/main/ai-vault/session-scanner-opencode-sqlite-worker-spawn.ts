@@ -39,7 +39,7 @@ function defaultWorkerFactory(): Worker {
 
 let sharedClient: OpenCodeSqliteWorkerClient | null = null
 
-function getSharedClient(): OpenCodeSqliteWorkerClient {
+export function getSharedClient(): OpenCodeSqliteWorkerClient {
   sharedClient ??= new OpenCodeSqliteWorkerClient({
     workerFactory: defaultWorkerFactory
   })

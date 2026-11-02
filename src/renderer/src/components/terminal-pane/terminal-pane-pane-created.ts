@@ -166,9 +166,7 @@ export function createTerminalPaneCreatedHandler(
       getHttpLinkActionDestinations: context.getHttpLinkActionDestinations,
       getLinkActionContext: context.getLinkActionContext,
       getPaneLinkCwd: context.getPaneLinkCwd,
-      getUrlOpenLinkHint: context.getUrlOpenLinkHint,
-      onShowSessionRestoredBanner: context.onShowSessionRestoredBanner,
-      ptyStartup: ptyDeps.startup
+      getUrlOpenLinkHint: context.getUrlOpenLinkHint
     })
 
     context.applyAppearance(manager)

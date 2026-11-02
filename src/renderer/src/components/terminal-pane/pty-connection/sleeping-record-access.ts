@@ -1,4 +1,5 @@
 import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
+import { installStartedFreshExitStartup } from './started-fresh-exit-startup'
 import { launchConfigsEqual } from '../../../../../shared/agent-resume-record-equivalence'
 import { useAppStore } from '@/store'
 import type { PtyConnectResult } from '../pty-transport-types'
@@ -183,6 +184,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     }
   }
   installSavedResumeStartupCancellation(session)
+  installStartedFreshExitStartup(session)
   session.neutralTerminalTitle = (): string => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(

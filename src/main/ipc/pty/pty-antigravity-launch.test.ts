@@ -18,8 +18,7 @@ import {
   noCodexResumeLaunch,
   prepareCodexResumeHome,
   resolveCodexResumeLaunch,
-  reconcileSharedRuntimeResumeHome,
-  stripSequencedStartupResumeArgv
+  reconcileSharedRuntimeResumeHome
 } from './host-env/codex-resume'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -113,7 +112,6 @@ function runtimeDeps(): PtyRuntimeControllerDeps {
     noCodexResumeLaunch,
     resolveCodexResumeLaunch,
     reconcileSharedRuntimeResumeHome,
-    stripSequencedStartupResumeArgv,
     adoptStablePane: async () => null,
     getLocalPtyStartupPromise: () => undefined,
     getLocalPtyProviderStartupPromise: () => undefined,

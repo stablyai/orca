@@ -1,5 +1,4 @@
 import './tui-agent-startup.spec'
-import './agent-resume-argv-drop.spec'
 import './agent-resume-launch-command.spec'
 import './agent-startup-plan-inputs.spec'
 import './agent-startup-plan-inputs-extra-agent-args.spec'

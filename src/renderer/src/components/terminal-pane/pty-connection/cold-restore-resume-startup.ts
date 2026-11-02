@@ -49,6 +49,38 @@ export function findColdRestoreResumeSource(session: ConnectPanePtySession, stat
   return providerSession ? { agent, providerSession, liveEntry, sleepingRecordEntry } : null
 }
 
+/** The platform and shell that quote an agent launch for this pane's host. */
+export function resolvePaneResumeLaunchTarget(session: ConnectPanePtySession, state: AppState) {
+  // Quote resume for the live pane’s effective Windows shell rather than the platform’s PowerShell default.
+  // Why: a nested-SSH pane on a server runs on its SSH target; the pane's host names a worktree
+  // copy, while a folder's own record carries its connection.
+  const paneHostId = normalizeExecutionHostId(session.executionHostId)
+  const connectionId =
+    (paneHostId && parseWorkspaceKey(session.deps.worktreeId)?.type !== 'folder'
+      ? getConnectionIdForWorktreeCopy(state, session.deps.worktreeId, paneHostId)
+      : getConnectionIdFromState(state, session.deps.worktreeId)) ?? null
+  return resolveAgentResumeLaunchTarget({
+    projectRuntime: session.projectRuntime,
+    connectionId,
+    executionHostId: session.executionHostId,
+    worktreePath: session.worktree?.path,
+    terminalWindowsShell: state.settings?.terminalWindowsShell,
+    tabShellOverride: session.shellOverride,
+    // Why the transport's runtime: the pane's own connection names the SSH target's owner.
+    remotePlatform: resolveSshHostReportedPlatform(
+      state,
+      session.executionHostId,
+      session.transport.getRuntimeEnvironmentId?.() ?? null,
+      connectionId
+    ),
+    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, session.executionHostId),
+    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
+      state,
+      session.executionHostId
+    )
+  })
+}
+
 export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySession): void {
   session.buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
     if (session.pendingStartupCommand) {
@@ -83,34 +115,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
-    // Quote resume for the live pane’s effective Windows shell rather than the platform’s PowerShell default.
-    // Why: a nested-SSH pane on a server runs on its SSH target; the pane's host names a worktree
-    // copy, while a folder's own record carries its connection.
-    const paneHostId = normalizeExecutionHostId(session.executionHostId)
-    const connectionId =
-      (paneHostId && parseWorkspaceKey(session.deps.worktreeId)?.type !== 'folder'
-        ? getConnectionIdForWorktreeCopy(state, session.deps.worktreeId, paneHostId)
-        : getConnectionIdFromState(state, session.deps.worktreeId)) ?? null
-    const resumeTarget = resolveAgentResumeLaunchTarget({
-      projectRuntime: session.projectRuntime,
-      connectionId,
-      executionHostId: session.executionHostId,
-      worktreePath: session.worktree?.path,
-      terminalWindowsShell: state.settings?.terminalWindowsShell,
-      tabShellOverride: session.shellOverride,
-      // Why the transport's runtime: the pane's own connection names the SSH target's owner.
-      remotePlatform: resolveSshHostReportedPlatform(
-        state,
-        session.executionHostId,
-        session.transport.getRuntimeEnvironmentId?.() ?? null,
-        connectionId
-      ),
-      runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, session.executionHostId),
-      runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
-        state,
-        session.executionHostId
-      )
-    })
+    const resumeTarget = resolvePaneResumeLaunchTarget(session, state)
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
@@ -154,7 +159,6 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       },
       launchToken: coldRestoreLaunchToken,
       useLiveEntry: Boolean(useLiveEntry),
-      hasSleepingRecord: Boolean(sleepingRecord),
       sleepingRecordEntry
     }
   }

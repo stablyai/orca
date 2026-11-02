@@ -2,25 +2,18 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 
 export type SessionRestoredBannerPane = Pick<ManagedPane, 'id' | 'container'>
 
-/** `resume-unavailable`: the pane asked to resume a provider session Orca could not
- *  verify, so it launched a fresh one — silence would read as a successful restore. */
-export type SessionRestoredBannerReason = 'restored' | 'resume-unavailable'
+/** `resume-unavailable`: the pane asked to resume a provider session but Orca launched a
+ *  fresh one. A requested resume shows no banner; the agent's own output confirms it. */
+export type SessionRestoredBannerReason = 'resume-unavailable'
 
 export type SessionRestoredBannerPaneReasons = ReadonlyMap<number, SessionRestoredBannerReason>
-
-export type SessionRestoredBannerStartup =
-  | {
-      showSessionRestoredBanner?: boolean
-    }
-  | null
-  | undefined
 
 export type SessionRestoredBannerDismissEvent = KeyboardEvent | PointerEvent
 
 export function addSessionRestoredBannerPaneId(
   paneReasons: SessionRestoredBannerPaneReasons,
   paneId: number,
-  reason: SessionRestoredBannerReason = 'restored'
+  reason: SessionRestoredBannerReason
 ): Map<number, SessionRestoredBannerReason> {
   if (paneReasons.get(paneId) === reason) {
     return paneReasons instanceof Map ? paneReasons : new Map(paneReasons)
@@ -78,16 +71,6 @@ export function dismissSessionRestoredBannerPaneIds(
     return new Map()
   }
   return removeSessionRestoredBannerPaneId(paneReasons, paneId)
-}
-
-export function seedStartupSessionRestoredBanner(
-  startup: SessionRestoredBannerStartup,
-  paneId: number,
-  onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
-): void {
-  if (startup?.showSessionRestoredBanner === true) {
-    onShowSessionRestoredBanner(paneId)
-  }
 }
 
 export function syncSessionRestoredBannerTitleSpace(args: {

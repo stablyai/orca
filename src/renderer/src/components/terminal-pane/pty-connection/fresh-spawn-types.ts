@@ -27,6 +27,5 @@ export type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
   launchToken: string
   useLiveEntry: boolean
-  hasSleepingRecord: boolean
   sleepingRecordEntry: { paneKey: string; record: SleepingAgentSessionRecord } | null
 }

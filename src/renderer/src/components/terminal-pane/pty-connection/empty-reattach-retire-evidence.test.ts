@@ -30,7 +30,6 @@ function resumeStartup(
     launchConfig: { agentArgs: '', agentEnv: {} },
     launchToken: 'token-1',
     useLiveEntry,
-    hasSleepingRecord: record !== null,
     sleepingRecordEntry: record ? { paneKey: record.paneKey, record } : null
   }
 }

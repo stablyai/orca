@@ -80,7 +80,7 @@ export type UseTerminalPaneLifecycleDeps = {
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
   markTerminalBell: WorkspaceAttentionSlice['markTerminalBell']
-  onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
+  onShowSessionRestoredBanner: (paneId: number, reason: SessionRestoredBannerReason) => void
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
     ptyId?: string | null

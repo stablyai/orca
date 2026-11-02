@@ -106,7 +106,6 @@ export function launchSleepingAgentSession(
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
-      showSessionRestoredBanner: true,
       telemetry: {
         agent_kind: tuiAgentToAgentKind(record.agent),
         launch_source: 'sidebar',
