@@ -188,7 +188,7 @@ function chatTabOpen(db: OrchestrationDb, resource: WorkerTerminalResourceRow): 
 }
 
 /** The user resumed the conversation in a tab of their own: the follow-up goes there and the tab stays theirs. */
-async function userTabHoldingSession(
+export async function userTabHoldingSession(
   runtime: OrcaRuntimeService,
   session: WorkerResumeSession
 ): Promise<string | undefined> {

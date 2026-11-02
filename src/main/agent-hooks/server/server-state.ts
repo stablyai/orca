@@ -183,7 +183,7 @@ export abstract class AgentHookServerState {
   ): EnrichedAgentHookEventPayload | undefined
   protected abstract clearTmuxInnerSubjects(paneKey: string): void
   protected abstract clearTmuxTabSubjects(tabId: string): void
-  protected abstract ingestSpoolRecord(record: SpoolRecord): Promise<void> | void
+  protected abstract ingestSpoolRecord(record: SpoolRecord, answerBy?: number): Promise<void> | void
   protected abstract emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void
   protected abstract buildStatusChangeNotification(): {
     statuses: AgentHookStatusChangeEntry[]

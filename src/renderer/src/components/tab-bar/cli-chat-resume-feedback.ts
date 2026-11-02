@@ -90,7 +90,7 @@ export async function reportCliChatResumeFailure(
     refusal?.code === 'agent_session_conflict' ||
     refusal?.code === 'agent_session_ownership_unknown'
   ) {
-    const owner = refusal.owner
+    const owner = refusal.owner ?? undefined
     if (
       refusal.code === 'agent_session_conflict' &&
       refusal.details?.reason === 'conversationHeldElsewhere' &&

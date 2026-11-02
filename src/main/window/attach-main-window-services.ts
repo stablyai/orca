@@ -11,7 +11,7 @@ import { registerRepoHandlers } from '../ipc/repos'
 import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
-import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
+import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup/workspace-cleanup'
 import { registerPtyHandlers } from '../ipc/pty/register-handlers'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
@@ -157,7 +157,13 @@ export function attachMainWindowServices(
     }
   )
   mainWindow.webContents.session.setPermissionCheckHandler(
-    (_webContents, permission, _origin, details) => {
+    (webContents, permission, _origin, details) => {
+      // Electron's typings omit 'local-fonts', which Chromium checks before queryLocalFonts().
+      const permissionName: string = permission
+      // Only the app frame's font picker may list fonts; not subframes or other default-session pages.
+      if (permissionName === 'local-fonts') {
+        return webContents?.id === mainWindow.webContents.id && details.isMainFrame === true
+      }
       if (permission !== 'media') {
         return allowedPermissions.has(permission)
       }

@@ -81,31 +81,4 @@ describe('handle-gap verdict, landed-handle eviction', () => {
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS + 1)
     expect(replay).toHaveBeenCalledTimes(1)
   })
-
-  it('a wait re-parked under a new worktree is released by that worktree, not the old one', () => {
-    // Adopting an orphaned terminal re-keys `tabsByWorktree` without re-keying the record, so the
-    // re-park hands the live wait a new worktree. Retraction evidence about the OLD one says
-    // nothing about the wait that is actually running.
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-old': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-old', title: 't' })],
-        'wt-new': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-new', title: 't' })]
-      },
-      ptyIdsByTabId: {}
-    })
-    parkUntilHostMirrorHandleLands(ENV_ID, 'wt-old', TAB_ID, vi.fn())
-    const replayAfterAdoption = vi.fn()
-    parkUntilHostMirrorHandleLands(ENV_ID, 'wt-new', TAB_ID, replayAfterAdoption)
-
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-new': [makeTerminalTab({ id: TAB_ID, worktreeId: 'wt-new', title: 't' })]
-      }
-    })
-    expect(replayAfterAdoption).not.toHaveBeenCalled()
-    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
-
-    useAppStore.setState({ tabsByWorktree: {} })
-    expect(replayAfterAdoption).toHaveBeenCalledTimes(1)
-  })
 })

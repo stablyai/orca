@@ -8,8 +8,8 @@ import type { AskPrompt } from '../../../../../src/shared/native-chat/input/nati
 import {
   resolveNativeChatInteractivePromptCard,
   type ChatApproval
-} from '../../../../../src/shared/native-chat-interactive-prompt'
-import { nativeChatPromptWaitStartedAt } from '../../../../../src/shared/native-chat-prompt-dismiss-key'
+} from '../../../../../src/shared/native-chat/input/native-chat-interactive-prompt'
+import { nativeChatPromptWaitStartedAt } from '../../../../../src/shared/native-chat/input/native-chat-prompt-dismiss-key'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   useMobileStructuredAsyncQuestion,

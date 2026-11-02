@@ -12,39 +12,44 @@ import {
   type WslHostRuntimeAccess
 } from './wsl-host-server-stop'
 
-const FakeDistrosSchema = z.array(
-  z.object({
-    name: z.string().min(1),
-    state: z.enum(['running', 'stopped']),
-    version: z.union([z.literal(1), z.literal(2)])
-  })
-)
+// Lazy: eager zod chains survive tree-shaking, so module-level schemas would ship in release builds.
+const fakeDistrosSchema = () =>
+  z.array(
+    z.object({
+      name: z.string().min(1),
+      state: z.enum(['running', 'stopped']),
+      version: z.union([z.literal(1), z.literal(2)])
+    })
+  )
 
-const FakeWslHostsSchema = z.object({
-  distros: FakeDistrosSchema,
-  /** Re-read on every listing, so a test can register a distro while the app runs, or stop one:
-   *  a distro marked `stopped` loses its bridge, and only a booting connect starts it again. */
-  distrosFile: z.string().optional(),
-  pairingCode: z.string().min(1),
-  /** Each distro the fake is asked to start, one per line, so e2e can prove nothing respawns. */
-  connectLogFile: z.string().optional(),
-  /** `missing` stands in for a build shipped without the orcad template. */
-  serverFiles: z.enum(['present', 'missing']).optional(),
-  /** A stop the fake does not report, as when liveness sees only a quick reboot: a runtime call must. */
-  stopSilently: z.boolean().optional()
-})
+const fakeWslHostsSchema = () =>
+  z.object({
+    distros: fakeDistrosSchema(),
+    /** Re-read on every listing, so a test can register a distro while the app runs, or stop one:
+     *  a distro marked `stopped` loses its bridge, and only a booting connect starts it again. */
+    distrosFile: z.string().optional(),
+    pairingCode: z.string().min(1),
+    /** Each distro the fake is asked to start, one per line, so e2e can prove nothing respawns. */
+    connectLogFile: z.string().optional(),
+    /** `missing` stands in for a build shipped without the orcad template. */
+    serverFiles: z.enum(['present', 'missing']).optional(),
+    /** A stop the fake does not report, as when liveness sees only a quick reboot: a runtime call must. */
+    stopSilently: z.boolean().optional()
+  })
+
+type FakeWslHostsConfig = z.infer<ReturnType<typeof fakeWslHostsSchema>>
 
 export function readFakeWslHostsConfig(
   raw = process.env.ORCA_E2E_FAKE_WSL_HOSTS
-): z.infer<typeof FakeWslHostsSchema> | null {
+): FakeWslHostsConfig | null {
   if (!raw) {
     return null
   }
-  return FakeWslHostsSchema.parse(JSON.parse(raw))
+  return fakeWslHostsSchema().parse(JSON.parse(raw))
 }
 
 export function createFakeWslHostConnector(
-  config: z.infer<typeof FakeWslHostsSchema>,
+  config: FakeWslHostsConfig,
   onChange: NonNullable<WslOrcadConnectionDependencies['onChange']>,
   options: { isKnownDistro: (distro: string) => boolean; runtime: WslHostRuntimeAccess }
 ): WslHostConnector {
@@ -52,9 +57,9 @@ export function createFakeWslHostConnector(
   const port = offer ? Number(new URL(offer.endpoint).port) : 0
   const active = new Map<string, WslOrcadConnection>()
   const key = (distro: string): string => distro.toLowerCase()
-  const readDistros = (): z.infer<typeof FakeDistrosSchema> =>
+  const readDistros = (): z.infer<ReturnType<typeof fakeDistrosSchema>> =>
     config.distrosFile
-      ? FakeDistrosSchema.parse(JSON.parse(readFileSync(config.distrosFile, 'utf8')))
+      ? fakeDistrosSchema().parse(JSON.parse(readFileSync(config.distrosFile, 'utf8')))
       : config.distros
   // Only a distros file can stop a distro, so fixed listings keep their always-running hosts.
   const isStopped = (distro: string): boolean =>

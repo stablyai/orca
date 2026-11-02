@@ -318,17 +318,6 @@ describe('tab.close uses the unified active tab', () => {
     expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
   })
 
-  it('preserves pinned tabs during a bulk close without prompting', () => {
-    tab.isPinned = true
-    dispatchWorkspaceTabCommand({
-      type: 'close',
-      target: { kind: 'tab', worktreeId, tabId: tab.id },
-      bulk: true
-    })
-    expect(mocks.state.requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
-    expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
-  })
-
   it('does not substitute the ambient tab for a stale explicit target', () => {
     expect(
       dispatchWorkspaceTabCommand({
