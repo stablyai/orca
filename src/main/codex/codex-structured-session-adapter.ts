@@ -10,7 +10,8 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenInput } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
-import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
+import { dispatchCodexTurn } from './codex-structured-turn-start'
+import { isCodexTurnOptionKey } from './codex-turn-option-keys'
 import { supportsCodexStructuredLocation } from './codex-structured-location-support'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {

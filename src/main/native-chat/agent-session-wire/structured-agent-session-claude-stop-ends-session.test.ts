@@ -1,12 +1,12 @@
 import { expect, it } from 'vitest'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { ClaudeControlRequestError } from '../../claude/claude-agent-sdk-control-requests'
 import { CLAUDE_STOP_GRACE_MS } from '../../claude/claude-request-end-wait'
 import {
   claudeFrame as frame,
   claudeWasSent as wrote,
   PROVIDER_SESSION_ID
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
 import {

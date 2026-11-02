@@ -6,7 +6,7 @@ import { extname, join } from 'node:path'
 import {
   sanitizeAgentSessionAttachmentName,
   type AgentSessionAttachmentUploadCommitResult
-} from '../../../shared/agent-session-attachments'
+} from '../../../shared/agent-session/agent-session-attachments'
 import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
 import { readAuthorizedDocPreviewFile } from '../../../shared/doc-preview-file-access'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'

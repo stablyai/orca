@@ -4,24 +4,24 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemIdentity,
-  AgentJournalTurnLifecycle,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnLifecycle } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import {
   activeStructuredAgentSessionTurnId,
   runningStructuredAgentSessionTurnId
-} from '../../../shared/structured-agent-session-live-turn'
+} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../shared/structured-agent-session-reducer'
-import { selectStructuredAgentTurnBars } from '../../../shared/structured-agent-session-turn-timing'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
+import { selectStructuredAgentTurnBars } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {

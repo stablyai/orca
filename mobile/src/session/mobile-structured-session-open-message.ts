@@ -1,14 +1,26 @@
-import { HOST_ROUTE_NOTICES } from '../host-route-notice'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
 import type { StructuredSessionOpenFailure } from '../../../src/shared/open-structured-agent-session'
 import { translate } from '../i18n/mobile-i18n'
 
 export function mobileStructuredSessionOpenMessage(
   reason: StructuredSessionOpenFailure['reason'],
-  displayLabel?: string
+  displayLabel?: string,
+  surface?: StructuredSessionOpenFailure['surface'],
+  workspaceKind?: StructuredSessionOpenFailure['workspaceKind']
 ): string {
+  if (reason === 'gone' && surface === 'terminal') {
+    return translate(
+      'session.structuredOpen.paneUnavailable',
+      "Agent's pane is no longer available."
+    )
+  }
   if (reason === 'workspace-missing') {
-    return HOST_ROUTE_NOTICES['worktree-missing']
+    return workspaceKind === 'folder'
+      ? translate(
+          'session.structuredOpen.folderWorkspaceRemoved',
+          'The folder workspace was removed.'
+        )
+      : translate('session.structuredOpen.worktreeDeleted', 'The worktree was deleted.')
   }
   if (!displayLabel || displayLabel === 'unknown') {
     switch (reason) {

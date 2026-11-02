@@ -8,7 +8,7 @@ import { useStructuredAgentSessionOptionStamp } from './structured-agent-session
 import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import type * as StructuredClient from '@/runtime/structured-agent-session-client'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests

@@ -92,30 +92,7 @@
         }
       }
     },
-    "9948855e8b8d": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "kind": "response",
-        "pending": {
-          "admission": {
-            "kind": "full",
-            "snapshotId": "snapshot-1",
-            "worktrees": [
-              {
-                "displayName": "One",
-                "repo": "Repo",
-                "worktreeId": "w-1"
-              }
-            ]
-          },
-          "client": "logical-client",
-          "hostId": "host-1"
-        }
-      }
-    },
-    "ab1a9ba6301c": {
+    "b0a047ec8551": {
       "admitted": [
         {
           "displayName": "One",
@@ -138,7 +115,36 @@
             ]
           },
           "client": "logical-client",
-          "hostId": "host-1"
+          "hostId": "host-1",
+          "requestedSnapshotId": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "e160b2089696": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "response",
+        "pending": {
+          "admission": {
+            "kind": "full",
+            "snapshotId": "snapshot-1",
+            "worktrees": [
+              {
+                "displayName": "One",
+                "repo": "Repo",
+                "worktreeId": "w-1"
+              }
+            ]
+          },
+          "client": "logical-client",
+          "hostId": "host-1",
+          "requestedSnapshotId": {
+            "$rpc": "null"
+          }
         }
       }
     }
@@ -164,9 +170,9 @@
           "sender": ["976f56339476"],
           "payloads": ["922cb68379ac"],
           "settlements": {
-            "fetch": "9948855e8b8d"
+            "fetch": "e160b2089696"
           },
-          "state": "ab1a9ba6301c",
+          "state": "b0a047ec8551",
           "effects": []
         }
       }

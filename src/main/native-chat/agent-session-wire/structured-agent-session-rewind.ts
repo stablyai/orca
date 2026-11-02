@@ -1,11 +1,11 @@
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type {
   AgentSessionRewindParams,
   AgentSessionRewindRecord,
   AgentSessionRewindResult
-} from '../../../shared/agent-session-rewind'
-import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionMutationResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import {
   runWithReadyStructuredAgentSessionOperation,

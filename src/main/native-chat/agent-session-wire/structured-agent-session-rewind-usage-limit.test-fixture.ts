@@ -1,15 +1,15 @@
 import { expect, vi } from 'vitest'
-import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   HOST_TEST_SESSION,
   hostTestOperationId,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 

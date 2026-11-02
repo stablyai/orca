@@ -1,8 +1,8 @@
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionChildExitSession } from './structured-agent-session-child-exit'
 import type {
   JournalLifecycleBatchInput,

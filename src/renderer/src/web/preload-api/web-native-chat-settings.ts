@@ -1,7 +1,7 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { StoredWebRuntimeEnvironment } from '../web-runtime-environment'
-import { AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+import { AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { runtimeChatPermissionSetting } from './web-preference-normalization'
 import { callEnvironmentEnvelope } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'

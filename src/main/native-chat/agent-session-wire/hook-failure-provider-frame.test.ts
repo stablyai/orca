@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { projectStructuredItemToNativeChat } from '../../../shared/structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { unhandledProviderFrameJournalItem } from './unhandled-provider-frame'
 
 const CODEX_KIND = 'notification:hook/completed'

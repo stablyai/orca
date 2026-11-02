@@ -1,10 +1,10 @@
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import {
   agentSessionProviderHandleKey,
-  type AgentSessionProviderHandleLink
-} from '../../shared/agent-session-provider-handle'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
+  codexProviderHandle
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { readProcessStartTimeMs } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
 const START_TIME_READ_ATTEMPTS = 3

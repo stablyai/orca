@@ -3,7 +3,7 @@ import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-t
 import {
   structuredAgentSessionHostTabId,
   isReopenedChatTabId
-} from '../../../../shared/structured-agent-session-host-tab-id'
+} from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import {
   getActiveTabNavOrder,
   getGroupVisibleTabOrder,

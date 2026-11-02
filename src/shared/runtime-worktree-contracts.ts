@@ -197,25 +197,6 @@ export type RuntimeWorktreePsResult = {
   hostScope?: RuntimeListingHostScope
 }
 
-export type RuntimeWorktreePsSnapshotResult = RuntimeWorktreePsResult & { snapshotId: string }
-
-export type RuntimeWorktreePsUnchangedResult = {
-  unchanged: true
-  snapshotId: string
-}
-
-/** Rows the caller already holds under `baseSnapshotId` arrive as their index in that catalog. */
-export type RuntimeWorktreePsRowDeltaResult = Omit<RuntimeWorktreePsResult, 'worktrees'> & {
-  snapshotId: string
-  baseSnapshotId: string
-  rowsFromBase: (number | RuntimeWorktreePsSummary)[]
-}
-
-export type RuntimeWorktreePsConditionalResult =
-  | RuntimeWorktreePsSnapshotResult
-  | RuntimeWorktreePsUnchangedResult
-  | RuntimeWorktreePsRowDeltaResult
-
 export type RuntimeRepoList = { repos: Repo[] }
 
 export type RuntimeRepoSearchRefs = {

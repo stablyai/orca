@@ -4,13 +4,13 @@
 import {
   cancelAgentSessionUsageLimitContinue,
   type UsageLimitContinueIdentity
-} from '../../../shared/agent-session-usage-limit-continue'
+} from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext

@@ -9,10 +9,10 @@ import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session-continuation'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import { useNativeChatUsageLimitAutoContinue } from './use-native-chat-usage-limit-auto-continue'
 
 const mocks = vi.hoisted(() => ({

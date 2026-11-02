@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexJournalItems } from './codex-structured-journal-items'
 import { MAX_CODEX_ACTIVE_ITEMS } from './codex-structured-journal-limits'

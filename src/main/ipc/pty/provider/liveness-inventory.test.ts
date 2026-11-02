@@ -4,7 +4,7 @@ import { DaemonPtyRouter } from '../../../daemon/daemon-pty-router'
 import { DegradedDaemonPtyProvider } from '../../../daemon/degraded-daemon-pty-provider'
 import { TerminalSessionOwnerUnverifiedError } from '../../../daemon/daemon-errors'
 import { PROTOCOL_VERSION } from '../../../daemon/daemon-protocol-version'
-import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
 import { isProviderAgentSessionOwnerLive, isProviderPtyLive, verifyPtyStopped } from './liveness'
 import { ptyIncarnationById } from './ownership-state'
 

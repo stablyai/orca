@@ -8,19 +8,15 @@ import type {
   AgentSessionHistoryResult,
   AgentSessionStatusSummary,
   AgentSessionSubscribeEvent
-} from '../../src/shared/agent-session-wire'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalCursor
-} from '../../src/shared/agent-session-journal-types'
+} from '../../src/shared/agent-session/agent-session-wire'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../src/shared/agent-session-journal-identity'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../src/shared/structured-agent-session-reducer'
-import {
-  hasUnansweredStructuredAgentSessionDispatch,
-  projectStructuredAgentSessionStatus
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/structured-agent-session-reducer'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../src/shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
+import { projectStructuredAgentSessionStatus } from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../../src/main/native-chat/agent-session-wire/agent-session-history-page'
 import { AgentSessionSubscribers } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-subscribers'
@@ -37,7 +33,7 @@ import {
   resetStructuredAgentSessionReadOwnersForTests
 } from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'cursor-body-regression'
 const target = { kind: 'local' } as const

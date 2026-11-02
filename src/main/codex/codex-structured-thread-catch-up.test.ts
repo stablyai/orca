@@ -1,5 +1,5 @@
 import { registerCodexCatchUpEchoTests } from './codex-structured-thread-catch-up-echo.spec'
-import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
+import { projectStructuredItemsToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { expect, it } from 'vitest'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 

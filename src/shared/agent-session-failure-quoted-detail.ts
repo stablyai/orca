@@ -1,9 +1,9 @@
-import type { ProviderDiagnostic } from './agent-session-failure'
+import type { ProviderDiagnostic } from './agent-session/failures/agent-session-failure'
 import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues,
   AgentSessionFailureSay
-} from './agent-session-failure-copy'
+} from './agent-session/failures/agent-session-failure-copy'
 
 /** Person-facing provider text is quoted, but bounded so the sentence stays one. */
 const MAX_QUOTED_DETAIL_CHARS = 512

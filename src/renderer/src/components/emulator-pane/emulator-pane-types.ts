@@ -57,17 +57,3 @@ export function simulatorPreviewStreamUrl(info?: EmulatorStreamInfo): string | u
   }
   return undefined
 }
-
-export function pickDefaultDevice(devices: SimulatorDeviceRow[]): SimulatorDeviceRow | null {
-  const available = devices.filter((d) => d.isAvailable !== false)
-  const booted = available.filter((d) => d.state === 'Booted')
-  const bootedIphone = booted.find((d) => /iPhone/i.test(d.name || ''))
-  return (
-    bootedIphone ||
-    booted[0] ||
-    available.find((d) => /iPhone/i.test(d.name || '')) ||
-    available[0] ||
-    devices[0] ||
-    null
-  )
-}

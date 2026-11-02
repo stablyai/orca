@@ -27,10 +27,14 @@ function MobileNativeChatComposer({
 }
 
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+// BottomDrawer also carries the option pager, which loads Reanimated at import.
+vi.mock('react-native-reanimated', async () =>
+  (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
-    AccessibilityInfo: { announceForAccessibilityWithOptions: vi.fn() },
+    ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
@@ -63,10 +67,10 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
-vi.mock('../../../components/mounted-bottom-drawer', () => ({
+vi.mock('../../../components/bottom-drawer/mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'BottomDrawer'
 }))
-vi.mock('../../../components/bottom-drawer-modal-host-scope', () => ({
+vi.mock('../../../components/bottom-drawer/bottom-drawer-modal-host-scope', () => ({
   useBottomDrawerModalHost: () => null
 }))
 

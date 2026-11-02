@@ -6,7 +6,7 @@ import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
 import type { onRunningWslDistrosStopped } from '../wsl-running-distro-cache'
 import { onWslDistroGateNote } from '../wsl-background-distro-gate'
 import { isCodexAccountSessionBridgeStopping } from './codex-account-session-bridge'
-import { runCodexAppServerSession } from './codex-app-server-session'
+import { runCodexAppServerSession } from './app-server/codex-app-server-session'
 import {
   createCodexAccountStateDb,
   healPendingCodexAccountThreads

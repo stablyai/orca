@@ -4,11 +4,11 @@ import type {
   AgentJournalSnapshot,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentJournalSubmissionKey,
   agentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import { chatAutomationRunObservation, observeAutomationChatRun } from './runtime-chat-run-observer'
@@ -23,7 +23,7 @@ import {
   HOST_TEST_THREAD,
   hostTestMessage
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { automationRunOperationId } from './automation-run-operation'
 
 const mocks = vi.hoisted(() => {

@@ -58,6 +58,9 @@ function lockEntrySource(
   }
 }
 
+const devChangeCountOf = (plugin: DiscoveredPlugin) =>
+  plugin.devChangeCount === undefined ? {} : { devChangeCount: plugin.devChangeCount }
+
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
 
 export async function buildPluginList(
@@ -89,6 +92,7 @@ export async function buildPluginList(
           needsReconsent: false,
           error: plugin.error,
           isDev: plugin.isDev,
+          ...devChangeCountOf(plugin),
           official: false,
           bundled: false,
           capabilities: [],
@@ -159,6 +163,7 @@ export async function buildPluginList(
           ? { error: activationError ?? 'plugin worker crashed repeatedly' }
           : {}),
         isDev: plugin.isDev,
+        ...devChangeCountOf(plugin),
         official,
         bundled,
         capabilities: plugin.manifest.capabilities.map((capability) => ({

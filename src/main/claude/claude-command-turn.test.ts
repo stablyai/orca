@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionRevisionJournal
@@ -16,7 +14,7 @@ import {
   CAPTURED_COMPACT_SUCCEEDS,
   type CapturedCompactEvent
 } from './claude-captured-compact-frames.test-fixture'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 
 const COMMAND_IDENTITY: AgentJournalItemIdentity = {
   provider: 'orca',

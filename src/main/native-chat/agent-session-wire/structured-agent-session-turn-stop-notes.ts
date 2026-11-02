@@ -1,10 +1,8 @@
 // Key Stop notes by captured turn so repeated Stops revise one row, even after the turn ends.
 
-import type {
-  AgentJournalStatusItem,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import type { AgentJournalStatusItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'

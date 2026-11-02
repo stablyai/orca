@@ -26,6 +26,7 @@ import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { readPluginCurrentPointer } from './installation/plugin-current-pointer'
 import { hashPluginTree } from './plugin-content-hash'
+import { pluginDevChangeCount } from './plugin-dev-revision'
 
 export { PLUGIN_CURRENT_POINTER_FILENAME } from './installation/plugin-current-pointer'
 
@@ -44,6 +45,10 @@ export type ValidDiscoveredPlugin = {
   consentContentHash?: string | null
   /** Null for mutable dev trees. */
   contentHash: string | null
+  /** Dev worker plugins: hash of the working tree, so a save restarts the worker. */
+  devRevision?: string | null
+  /** Dev folders: the watcher's change count when this discovery read the folder. */
+  devChangeCount?: number
   isDev: boolean
 }
 
@@ -51,6 +56,7 @@ export type InvalidDiscoveredPlugin = {
   pluginKey?: string
   rootDir: string
   error: string
+  devChangeCount?: number
   isDev: boolean
 }
 
@@ -135,12 +141,18 @@ async function readManifestDir(
   }
   // Why dev trees bind only instructions: dev code is the author's working copy, and
   // binding it would re-prompt on every save.
+  let devRevision: string | null = null
   if (isDev && hasDeclarativePluginContributions(manifest)) {
-    const treeHash = await hashPluginTree(rootDir)
+    const treeHash = await hashPluginTree(rootDir, { devFolder: true })
     if (!treeHash.ok) {
       return { pluginKey, rootDir, error: treeHash.error, isDev }
     }
     consentContentIdentity = treeHash.hash
+    devRevision = treeHash.hash
+  } else if (isDev && manifest.main) {
+    const treeHash = await hashPluginTree(rootDir, { devFolder: true })
+    // Why not an error: an oversized tree still runs; only edit-triggered restarts are lost.
+    devRevision = treeHash.ok ? treeHash.hash : null
   }
   return {
     pluginKey,
@@ -154,6 +166,7 @@ async function readManifestDir(
     ),
     consentContentHash: consentContentIdentity ?? null,
     contentHash: null,
+    ...(isDev && manifest.main ? { devRevision } : {}),
     isDev
   }
 }
@@ -255,7 +268,12 @@ export async function discoverPlugins(options: {
     ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
   )
   for (const devPath of options.devPluginPaths) {
-    const plugin = await readManifestDir(devPath, options.hostVersion, true)
+    // Why read the count first: a save during the read bumps it again and schedules another refresh.
+    const devChangeCount = pluginDevChangeCount(devPath)
+    const plugin = {
+      ...(await readManifestDir(devPath, options.hostVersion, true)),
+      devChangeCount
+    }
     // Dev paths override installed identities; two dev paths still cannot claim one identity.
     if (!isInvalidDiscoveredPlugin(plugin)) {
       const collision = discovered.find(

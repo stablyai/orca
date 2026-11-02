@@ -107,7 +107,8 @@ const preview: PluginMarketplaceHostInstallPreview = {
       iconThemes: [],
       syntaxes: [],
       customEditors: [],
-      newFiles: []
+      newFiles: [],
+      settings: []
     },
     capabilities: [{ kind: 'workspace:read' }]
   }

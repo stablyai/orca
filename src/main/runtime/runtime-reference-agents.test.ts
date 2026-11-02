@@ -1,9 +1,9 @@
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   createReferenceAgentIndex,
   referenceConnectionHosts,
@@ -12,7 +12,7 @@ import {
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 
 const observations = vi.hoisted<{ status: 'live' | 'exited' | 'unverifiable'; reachable: boolean }>(
   () => ({
@@ -26,7 +26,7 @@ vi.mock('./structured-worker-authority', () => ({
 vi.mock('./orchestration/structured-session-mail-address', () => ({
   structuredSessionMailReach: () => ({ kind: observations.reachable ? 'reachable' : 'ended' })
 }))
-vi.mock('./agent-session-record-store-slot', () => ({
+vi.mock('./agent-session/records/agent-session-record-store-slot', () => ({
   peekOpenedAgentSessionRecordStore: () => null
 }))
 

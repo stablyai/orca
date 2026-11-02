@@ -1,4 +1,4 @@
-import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
+import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,

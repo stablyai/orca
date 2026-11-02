@@ -5,8 +5,8 @@ import {
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE,
   type NativeChatUsageLimitCut
 } from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { restoreJournal } from '../agent-session-journal/journal-open'
 import { renderJournalState } from '../agent-session-journal/journal-reducer'
 import type {

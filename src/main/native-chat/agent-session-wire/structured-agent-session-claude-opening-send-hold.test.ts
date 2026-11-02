@@ -4,21 +4,21 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { agentSessionSendSubmission } from '../../../shared/agent-session/agent-session-wire'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
-import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
+import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
+import { ClaudeStructuredSessionAdapter } from '../../claude/structured/claude-structured-session-adapter'
 import {
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
-} from '../../claude/claude-structured-session-test-support'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+} from '../../claude/structured/claude-structured-session-test-support'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import {
   closeTestJournalHostDatabases,
@@ -35,12 +35,12 @@ import {
 } from './structured-agent-session-host-test-data'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { DISPATCH_DOUBT_PROVIDER_IDLE } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import * as unheld from './structured-agent-session-unheld-turns'
 import { claudeUnwrittenUserMessageError } from '../../claude/claude-agent-sdk-user-message-queue'
 

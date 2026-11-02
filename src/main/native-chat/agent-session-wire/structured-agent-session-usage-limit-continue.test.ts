@@ -1,16 +1,16 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { holdLane } from './structured-agent-session-delivery-hold.test-fixture'
 import {
   hostTestAttachParams,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { refuse } from '../../../shared/agent-session-wire'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   createRestTestRig,
   foundRestTestChat,
@@ -299,7 +299,7 @@ it('an ordinary Stop cancels the cut durably; late named Stop and manual Continu
   await current.host.usageLimitContinue.tick()
   expect(send).not.toHaveBeenCalled()
   const { structuredAgentSessionMessageSendMutation } =
-    await import('../../../shared/structured-agent-session-send-mutation')
+    await import('../../../shared/agent-session/requests/structured-agent-session-send-mutation')
   const continued = await current.host.send(
     REST_TEST_CALLER,
     structuredAgentSessionMessageSendMutation({

@@ -4,8 +4,8 @@ import Database from '../../sqlite/sync-database'
 import { journalDatabasePath } from './journal-host-database'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import type { AgentSessionJournal } from './journal-store'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 export function registerQueuedMessageReopenPauseTests(
   fixture: ReturnType<typeof createFixture>

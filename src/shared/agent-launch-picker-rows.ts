@@ -6,7 +6,7 @@ import {
 import type { ExecutionHostId } from './execution-host'
 import type { TuiAgent } from './tui-agent'
 import { filterEnabledTuiAgents, TUI_AGENT_AUTO_PICK_ORDER } from './tui-agent-selection'
-import type { AgentSessionChatProgram } from './agent-session-agent-availability'
+import type { AgentSessionChatProgram } from './agent-session/agent-session-agent-availability'
 
 export type HostChatAnswer =
   | 'yes'

@@ -6,7 +6,7 @@ import {
   eventually
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage

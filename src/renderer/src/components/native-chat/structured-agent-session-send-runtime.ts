@@ -1,14 +1,12 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionWriteNoticeParts,
   agentSessionWriteNotDoneParts
-} from '../../../../shared/agent-session-refusal-notice'
-import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
-import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
-import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
+import type { AgentSessionWriteFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'

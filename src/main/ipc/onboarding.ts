@@ -1,7 +1,9 @@
 import { ipcMain } from 'electron'
-import { sanitizeOnboardingUpdate, type Store } from '../persistence'
+import { sanitizeOnboardingUpdate } from '../persistence/applying-settings/onboarding-normalization'
+import type { Store } from '../persistence/loading-store/store'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
 import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
+import { isChatUiLaunchTipDeferredForConsent } from '../telemetry/chat-ui-launch-tip-cohort'
 
 export function registerOnboardingHandlers(store: Store): void {
   ipcMain.removeHandler('onboarding:get')
@@ -13,7 +15,8 @@ export function registerOnboardingHandlers(store: Store): void {
   ipcMain.handle('onboarding:update', (_event, updates: unknown): OnboardingState => {
     return store.updateOnboarding(sanitizeOnboardingUpdate(updates))
   })
+  // 'none' skips the tip this launch without marking it seen, so it returns once consent resolves.
   ipcMain.handle('onboarding:getChatUiLaunchTipVariant', (): ChatUiLaunchTipVariant =>
-    store.getChatUiLaunchTipVariant()
+    isChatUiLaunchTipDeferredForConsent() ? 'none' : store.getChatUiLaunchTipVariant()
   )
 }

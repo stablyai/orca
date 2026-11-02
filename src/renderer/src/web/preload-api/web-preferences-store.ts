@@ -52,6 +52,8 @@ export function getStoredSettings(): GlobalSettings {
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
       stored.terminalColorOverridesSplit !== migratedStored.terminalColorOverridesSplit ||
       stored.uiLanguage !== migratedStored.uiLanguage ||
+      stored.pluginAppThemeLight !== migratedStored.pluginAppThemeLight ||
+      stored.pluginAppThemeDark !== migratedStored.pluginAppThemeDark ||
       needsChatUiChoiceCarry(stored) ||
       stored.uiLanguagePortugueseMigrationApplied !== true)
   ) {

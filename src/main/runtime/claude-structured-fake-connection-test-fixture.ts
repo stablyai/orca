@@ -1,7 +1,7 @@
 import {
   type claudeInitialization,
   claudeInitializationScope
-} from '../claude/claude-structured-startup-settled-test-support'
+} from '../claude/structured/claude-structured-startup-settled-test-support'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,

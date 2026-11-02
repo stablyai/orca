@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'

@@ -10,7 +10,7 @@ import {
   type ChatApproval
 } from '../../../../../src/shared/native-chat-interactive-prompt'
 import { nativeChatPromptWaitStartedAt } from '../../../../../src/shared/native-chat-prompt-dismiss-key'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   useMobileStructuredAsyncQuestion,
   type MobileStructuredAskSession
@@ -42,10 +42,17 @@ export function useMobileNativeChatPrompts(args: {
     () => (!transcriptLoading ? scanPendingAsks(messages) : null),
     [messages, transcriptLoading]
   )
+  const queuedCards = structured?.queued?.cards
+  const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
   const pendingAsk = useMemo(
     () =>
-      aggregateAsyncQuestions(scan?.contributors ?? [], args.asyncSourceScope, args.hiddenAsyncIds),
-    [scan, args.asyncSourceScope, args.hiddenAsyncIds]
+      aggregateAsyncQuestions(
+        scan?.contributors ?? [],
+        args.asyncSourceScope,
+        args.hiddenAsyncIds,
+        queuedTexts
+      ),
+    [scan, args.asyncSourceScope, args.hiddenAsyncIds, queuedTexts]
   )
   const transcriptAsk = scan?.blocking ?? pendingAsk
   const interactivePrompt = status?.interactivePrompt

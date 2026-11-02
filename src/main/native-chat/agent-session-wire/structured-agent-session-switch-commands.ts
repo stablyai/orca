@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionConversationLifetimeHost } from './structured-agent-session-conversation-lifetime-host'
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type {
   AgentSessionSwitchDeadline,
   AgentSessionSwitchResult,

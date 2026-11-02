@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import {
   applyJournalRow,
   createJournalReducerState,

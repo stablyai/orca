@@ -1,7 +1,7 @@
 import { AlertCircle, Check, Clock, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { formatNativeChatDuration } from '../../../shared/native-chat-turn-status'
+import { formatNativeChatDuration } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 import type { ResumeRunRowStatus } from './native-chat-resume-run-view'
 
 export type ResumeRunStartPhase = 'starting' | 'ready' | null
