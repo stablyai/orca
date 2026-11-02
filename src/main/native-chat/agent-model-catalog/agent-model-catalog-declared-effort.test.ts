@@ -81,7 +81,6 @@ it('joins recorded declarations to unchanged configured policy, host capture and
       journalClosed: null,
       ended: false,
       exitObservedAt: null,
-      dispose: unused,
       open: unused
     }
     const set = vi.fn(async (_key: 'model' | 'effort', _value: string) => {})

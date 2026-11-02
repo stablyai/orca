@@ -1,4 +1,3 @@
-import type { StructuredAgentStartupFailure } from './structured-agent-session-adapter'
 import type { AgentSessionRecordReader } from '../../runtime/orchestration/structured-session-lineage'
 import type { NativeResponseEvidence } from '../../runtime/orchestration/structured-parent-account-work'
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
@@ -39,6 +38,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
 import type {
+  StructuredAgentStartupFailure,
   StructuredAgentSessionAdapter,
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionProviderChildPhase,

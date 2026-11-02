@@ -1,3 +1,4 @@
+import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
@@ -322,7 +323,13 @@ describe("codex background tasks reach the host's child records", () => {
     published.length = 0
     const drain = vi.spyOn(CodexBackgroundTaskTracker.prototype, 'drainChildWorkEvidence')
     try {
-      expect(await adapter.closeSession('session-1')).toBe(true)
+      const closing = adapter.closeSession('session-1')
+      await (ended
+        ? expect(closing).resolves.toBe(true)
+        : expect(closing).rejects.toMatchObject({
+            name: AgentSessionAcquisitionRootExitObservedError.name,
+            deathEvidenceKind: proof.root === 'exited' ? 'exit-observed' : 'kill-delivered'
+          }))
       const endings = drain.mock.results.flatMap((result) =>
         result.type === 'return' ? result.value.filter((edge) => edge.type === 'ended') : []
       )

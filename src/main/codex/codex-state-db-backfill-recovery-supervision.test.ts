@@ -1,4 +1,6 @@
-import { ChildProcess } from 'node:child_process'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import * as launchReports from '../provider-process/provider-launch-report'
+import type { CodexBackfillRecoveryProcess } from './codex-state-db-backfill-recovery-process'
 import { existsSync, readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
@@ -40,6 +42,7 @@ function decodedSupervisorSpec(env: unknown): unknown {
 
 describe('Codex backfill recovery app-server supervision', () => {
   afterEach(() => {
+    vi.restoreAllMocks()
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
@@ -48,13 +51,18 @@ describe('Codex backfill recovery app-server supervision', () => {
   it('runs the POSIX recovery app-server under a session-lifetime supervisor', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     // Stub termination: this handle-less child must never be signalled.
-    const child = new ChildProcess()
+    const child = createFakePipedChild(123)
     const calls: { program: string; args: string[]; options: Record<string, unknown> }[] = []
     const spawnProcess: CodexAppServerSpawn = (program, args, options) => {
       calls.push({ program, args, options })
       return child
     }
-    const terminate = vi.fn(async () => {})
+    const report = vi.spyOn(launchReports, 'createProviderLaunchReport')
+    const terminate = vi.fn(async (owner: CodexBackfillRecoveryProcess) => {
+      expect(owner.child).toBe(child)
+      expect(owner.supervised).toBe(true)
+      expect(owner.launchReport).toBe(report.mock.results[0].value)
+    })
     const readStatus = vi
       .fn()
       .mockReturnValueOnce(INCOMPLETE)
@@ -77,15 +85,17 @@ describe('Codex backfill recovery app-server supervision', () => {
       '/bin/codex',
       ...CODEX_READ_ONLY_APP_SERVER_ARGS
     ])
-    expect(options).toMatchObject({ cwd: '/managed-home', detached: true })
-    expect(options.env).toMatchObject({ CODEX_HOME: '/managed-home' })
+    expect(options.cwd).toBe('/managed-home')
+    expect(options.detached).toBe(true)
+    if (typeof options.env !== 'object' || options.env === null || !('CODEX_HOME' in options.env)) {
+      throw new Error('Recovery spawn requires its account home')
+    }
+    expect(options.env.CODEX_HOME).toBe('/managed-home')
     expect(decodedSupervisorSpec(options.env)).toMatchObject({
       lifetime: 'session',
       cwd: '/managed-home'
     })
-    expect(terminate).toHaveBeenCalledWith(
-      expect.objectContaining({ child, supervised: true, launchReport: expect.any(Object) })
-    )
+    expect(terminate).toHaveBeenCalledOnce()
   })
 })
 

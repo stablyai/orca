@@ -1,3 +1,4 @@
+import { withObservedProviderExit } from './structured-agent-session-failure-text'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -169,8 +170,11 @@ async function driveFailures(): Promise<void> {
       ownerProcess: { pid: entry.connection.pid }
     })
     entry.connection.closed = true
-    entry.connection.handlers.onExit?.(new Error(LAUNCH_FAILURE))
-    entry.connection.initialization.reject(new Error('Query closed before response received'))
+    const original = new Error('Query closed before response received')
+    const source = withObservedProviderExit(new Error(LAUNCH_FAILURE, { cause: original }))
+    entry.connection.rejectStartup?.(source)
+    entry.connection.handlers.onExit?.(source)
+    entry.connection.initialization.reject(original)
     await entry.opened.catch(() => {})
   }
 }

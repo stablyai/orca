@@ -1,3 +1,4 @@
+import { AgentSessionAcquisitionRootExitObservedError } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { createCodexJournalTranslator } from '../codex-structured-journal-translation'
 import {
   openProviderTimelineRig,
@@ -259,9 +260,12 @@ it.each(['thread/start', 'turn/start'] as const)(
       }
       child.emit('exit', 0, null)
       child.stdout.end()
-      await expect(adapter.closeSession(SESSION)).rejects.toThrow(
-        'process tree was not proven gone'
-      )
+      const closeError = await adapter.closeSession(SESSION).catch((error: unknown) => error)
+      expect(closeError).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
+      expect(closeError).toMatchObject({
+        deathEvidenceKind: 'exit-observed',
+        cause: expect.any(Error)
+      })
       if (dispatch) {
         await dispatch
         expect(settlements).toContainEqual(

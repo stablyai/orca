@@ -307,19 +307,6 @@ async function startingConnection() {
   return connection
 }
 
-function failStarting(
-  connection: ReturnType<typeof claude.live>,
-  tree: 'unverifiable' | 'live' | 'exited'
-) {
-  connection.exitVerdict = { root: 'exited', tree }
-  connection.closeProven = tree === 'exited'
-  connection.handlers.onExit?.(
-    new Error('claude stream-json exited (code 1): claude: not signed in')
-  )
-  connection.initialization.reject(new Error('Query closed before response received'))
-  claude.setInitializeHeld(false)
-}
-
 describe('a structured Claude session over agentSession.*', () => {
   it("hands its subagents to the status sink under the session's own address", async () => {
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
@@ -451,7 +438,7 @@ describe('a structured Claude session over agentSession.*', () => {
       const failed = await call('agentSession.create', createIntentParams())
 
       expect(failed).toMatchObject({ ok: true, result: { ok: true } })
-      failStarting(await startingConnection(), tree)
+      claude.failStarting(await startingConnection(), tree)
       await vi.waitFor(() => expect(leaseOf(SESSION).claimStatus).toBe('released'))
       const failure = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
       expect(failure?.body).toMatchObject({
@@ -477,7 +464,7 @@ describe('a structured Claude session over agentSession.*', () => {
     const failed = await call('agentSession.create', createIntentParams())
 
     expect(failed).toMatchObject({ ok: true, result: { ok: true } })
-    failStarting(await startingConnection(), 'exited')
+    claude.failStarting(await startingConnection(), 'exited')
     await vi.waitFor(() =>
       expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     )

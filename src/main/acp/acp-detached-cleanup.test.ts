@@ -1,3 +1,6 @@
+import { readTestJournalOutcomes } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { storedItem } from '../native-chat/agent-session-journal/journal-storage-schema'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { PassThrough } from 'node:stream'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { createAcpAgentConnection, type AcpAgentConnection } from './acp-agent-connection'
@@ -217,7 +220,13 @@ it.each([true, false])(
             )
           }
           if (children.length > 0) {
-            agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+            agent.on('session/prompt', (frame) => {
+              agent.notify(
+                'session/update',
+                replyChunk(promptIdOf(frame), 'healthy successor reply')
+              )
+              agent.reply(frame, { stopReason: 'end_turn' })
+            })
             child.stdin.once('finish', () => {
               child.emit('exit', 0, null)
               child.stdout.end()
@@ -354,11 +363,14 @@ it.each([true, false])(
         throw new Error('resident source prefix was not replayable')
       }
       expect(
-        replay.rows.flatMap((row) =>
-          row.kind === 'item' && row.body.kind === 'tool-call'
-            ? [{ itemId: row.itemId, state: row.body.state }]
-            : []
-        )
+        readTestJournalOutcomes(database.db, sessionId)
+          .filter((row) => row.seq > cursor.sequence && row.field === 'items' && !row.deleted)
+          .flatMap((row) => {
+            const item = storedItem.parse(JSON.parse(row.json))
+            return item.body.kind === 'tool-call'
+              ? [{ itemId: item.itemId, state: item.body.state }]
+              : []
+          })
       ).toEqual([
         {
           itemId:
@@ -387,7 +399,7 @@ it.each([true, false])(
       })
     } finally {
       await reopened.close()
-      database.close()
+      await database.close()
     }
     vi.useRealTimers()
     const successor = await send(f.host, 'healthy successor')
@@ -399,6 +411,22 @@ it.each([true, false])(
         )
       ).toMatchObject({ dispatchState: 'accepted' })
     )
+    await vi.waitFor(async () => {
+      await f.host.flushStreamedEvents(sessionId)
+      const saved = await f.host.journalSnapshot(sessionId)
+      expect(
+        saved.items.flatMap((row) => readAgentJournalTurn(row.body) ?? []).at(-1)
+      ).toMatchObject({ state: 'completed' })
+      expect(
+        saved.items
+          .filter((row) => row.body.kind === 'message' && row.body.role === 'assistant')
+          .map((row) => row.body)
+      ).toContainEqual({
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'healthy successor reply' }]
+      })
+    })
     expect(children).toHaveLength(2)
     expect(f.store.getRecord(sessionId)?.lease.runtimeFence).toBeGreaterThan(old.fence)
     await f.host.close(sessionId, 'user-close')

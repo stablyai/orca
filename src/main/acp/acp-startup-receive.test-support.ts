@@ -1,3 +1,5 @@
+import { readTestJournalOutcomes } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { storedItem } from '../native-chat/agent-session-journal/journal-storage-schema'
 import { PassThrough } from 'node:stream'
 import { expect } from 'vitest'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
@@ -117,11 +119,14 @@ export async function startupReceiveRig(
     if (!replay.ok) {
       throw new Error('received startup output is not replayable')
     }
-    const updates = replay.rows.flatMap((row) =>
-      row.kind === 'item' && row.body.kind === 'tool-call'
-        ? [{ itemId: row.itemId, state: row.body.state }]
-        : []
-    )
+    const updates = readTestJournalOutcomes(reopened['database'].db, reopened['identity'].sessionId)
+      .filter((row) => row.seq > receivedAfter.sequence && row.field === 'items' && !row.deleted)
+      .flatMap((row) => {
+        const item = storedItem.parse(JSON.parse(row.json))
+        return item.body.kind === 'tool-call'
+          ? [{ itemId: item.itemId, state: item.body.state }]
+          : []
+      })
     expect(updates).toEqual([
       { itemId: STARTUP_ITEM, state: 'running' },
       { itemId: STARTUP_ITEM, state: 'completed' }

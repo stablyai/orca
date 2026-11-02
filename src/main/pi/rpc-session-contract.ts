@@ -1,4 +1,3 @@
-import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import type {
   JsonlRpcAgentConnection,
@@ -6,6 +5,7 @@ import type {
 } from '../jsonl-rpc/agent-connection'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type {
+  StructuredAgentSessionAcquireInput,
   StructuredAgentSessionLifecycleEvent,
   AgentSessionDispatchOutcome
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'

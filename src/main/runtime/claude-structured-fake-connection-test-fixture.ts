@@ -1,6 +1,8 @@
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
   type claudeInitialization,
-  claudeInitializationScope
+  claudeInitializationScope,
+  ownFakeClaudeQuery
 } from '../claude/structured/claude-structured-startup-settled-test-support'
 import type {
   ClaudeStreamJsonConnection,
@@ -109,6 +111,11 @@ export function fakeClaude(providerSession: string) {
         return outcome.accepted
       }
     }
+    ownFakeClaudeQuery(
+      connection,
+      { initializationResult: () => initialization.read(connection.calls) },
+      launch.account
+    )
     connections.push(connection)
     return connection
   }) as typeof openClaudeStreamJsonConnection
@@ -121,6 +128,18 @@ export function fakeClaude(providerSession: string) {
   }
   return {
     connections,
+    failStarting(connection: FakeClaudeConnection, tree: 'unverifiable' | 'live' | 'exited') {
+      connection.exitVerdict = { root: 'exited', tree }
+      connection.closeProven = tree === 'exited'
+      const original = new Error('Query closed before response received')
+      const source = withObservedProviderExit(
+        new Error('claude stream-json exited (code 1): claude: not signed in', { cause: original })
+      )
+      connection.rejectStartup?.(source)
+      connection.handlers.onExit?.(source)
+      connection.initialization.reject(original)
+      initializeHeld = false
+    },
     openConnection,
     live,
     setInitializeAccount: (account: unknown) => {

@@ -1,13 +1,13 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { AgentSessionAcquisitionExitUnprovenError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { CodexCloseOutcome } from './app-server/codex-app-server-connection-types'
 import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type {
+  CodexCloseOutcome,
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from './app-server/codex-app-server-connection-types'
@@ -166,7 +166,8 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       adapter.readAppliedInputOptions({
         sessionId: 'session-1',
         fence: 7,
-        acquisitionGeneration: 'generation-1'
+        acquisitionGeneration: 'generation-1',
+        next: undefined
       })
     ).toBeNull()
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)

@@ -1,3 +1,4 @@
+import type { Query, SDKControlInitializeResponse } from '@anthropic-ai/claude-agent-sdk'
 import { createClaudeQueryOperation } from '../claude-query-operation'
 import type { FakeConnection } from '../claude-structured-session-test-contract'
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
@@ -53,21 +54,32 @@ export function claudeInitialization(options: {
   deliver: () => void
   synchronous?: boolean
 }) {
-  const result = Promise.withResolvers<unknown>()
+  const response: SDKControlInitializeResponse = Object.assign(
+    {
+      commands: [],
+      agents: [],
+      output_style: 'default',
+      available_output_styles: [],
+      models: [],
+      account: {}
+    },
+    options.response
+  )
+  const result = Promise.withResolvers<SDKControlInitializeResponse>()
   void result.promise.catch(() => {})
   let pending = true
   let successful = false
   let terminal = false
   let observed = false
   let timer: ReturnType<typeof setTimeout> | undefined
-  const resolve = (response = options.response): void => {
+  const resolve = (value = response): void => {
     if (!pending) {
       return
     }
     pending = false
     successful = true
     clearTimeout(timer)
-    result.resolve(response)
+    result.resolve(value)
   }
   const reject = (error: unknown): void => {
     if (!pending) {
@@ -140,11 +152,31 @@ export function claudeInitializationScope() {
 }
 
 export function ownFakeClaudeQuery(
-  connection: FakeConnection,
-  account?: AgentSessionAccountKind
-): void {
+  connection: Pick<
+    FakeConnection,
+    'initializationResult' | 'startupFailure' | 'startupSettled' | 'rejectStartup'
+  >,
+  query: Pick<Query, 'initializationResult'>,
+  account?: AgentSessionAccountKind,
+  diagnostic?: string
+): ReturnType<typeof createClaudeQueryOperation> {
   const operation = createClaudeQueryOperation(account)
-  operation.start({ initializationResult: connection.initializationResult })
+  operation.start(
+    query,
+    diagnostic === undefined
+      ? undefined
+      : {
+          observeLaunchFailure: async () => ({
+            record: null,
+            absence: null,
+            directError: undefined
+          }),
+          abandonLaunchObservation: () => {},
+          finishDiagnostics: async () => {},
+          stderrTail: () => diagnostic,
+          exitStatus: null
+        }
+  )
   connection.initializationResult = () => operation.result
   Object.defineProperty(connection, 'startupFailure', { get: () => operation.failure })
   connection.startupSettled = () =>
@@ -153,4 +185,5 @@ export function ownFakeClaudeQuery(
       () => {}
     )
   connection.rejectStartup = operation.reject
+  return operation
 }

@@ -1,5 +1,6 @@
-import { ChildProcess } from 'node:child_process'
-import { PassThrough } from 'node:stream'
+import type { ChildProcess } from 'node:child_process'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import type { PassThrough } from 'node:stream'
 import { expect, vi } from 'vitest'
 
 export type MockDiscoveryChild = ChildProcess & {
@@ -11,18 +12,9 @@ export type MockDiscoveryChild = ChildProcess & {
 }
 
 export function createMockDiscoveryChild(): MockDiscoveryChild {
-  const child = new ChildProcess()
-  Object.defineProperties(child, {
-    stdout: { writable: true, configurable: true, enumerable: true },
-    stderr: { writable: true, configurable: true, enumerable: true },
-    stdin: { writable: true, configurable: true, enumerable: true }
-  })
+  const child = createFakePipedChild(123)
   return Object.assign(child, {
-    pid: 123,
-    kill: vi.fn(() => true),
-    stdout: new PassThrough(),
-    stderr: new PassThrough(),
-    stdin: Object.assign(new PassThrough(), { end: vi.fn() })
+    stdin: Object.assign(child.stdin, { end: vi.fn() })
   })
 }
 

@@ -69,7 +69,7 @@ it.each([1024, 1025])('saves all %i tool results in one received Claude message'
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     expect(onFailed).not.toHaveBeenCalled()
     await journal.close()
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     journal = await openAgentSessionJournal({
       identity,
       database: openTestJournalHostDatabase(root)
@@ -84,7 +84,7 @@ it.each([1024, 1025])('saves all %i tool results in one received Claude message'
     translator.dispose()
     deferred.close()
     await journal.close()
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   }
 })

@@ -1,3 +1,4 @@
+import type { SDKControlInitializeResponse } from '@anthropic-ai/claude-agent-sdk'
 import { Duplex, PassThrough } from 'node:stream'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,7 +16,7 @@ import {
 } from '../provider-process/provider-executable-missing'
 
 it('keeps the captured initialize refusal when cleanup races its continuation', async () => {
-  const initialize = Promise.withResolvers<unknown>()
+  const initialize = Promise.withResolvers<SDKControlInitializeResponse>()
   const operation = createClaudeQueryOperation()
   const original = new ClaudeControlRequestError('initialize', 'original refusal')
   operation.start({ initializationResult: () => initialize.promise })
@@ -93,7 +94,8 @@ function launch(supervised: boolean, command = '/orca-query-missing-agent', cwd 
     }
   )
   const child = managed.child
-  const initialize = Promise.withResolvers<unknown>()
+  const stderr = injected?.stderr
+  const initialize = Promise.withResolvers<SDKControlInitializeResponse>()
   const operation = createClaudeQueryOperation()
   operation.start({ initializationResult: () => initialize.promise }, managed)
   const finish = async () => {
@@ -110,7 +112,7 @@ function launch(supervised: boolean, command = '/orca-query-missing-agent', cwd 
     outgoing.destroy()
     await managed.launchReport.closed
   }
-  return { child, incoming, managed, initialize, operation, finish, ack: () => ack }
+  return { child, stderr, incoming, managed, initialize, operation, finish, ack: () => ack }
 }
 
 it.each(['spawned', 'failed'] as const)(
@@ -138,7 +140,7 @@ it.each(['spawned', 'failed'] as const)(
       await new Promise<void>((resolve) => source.managed.launchReport.subscribe(() => resolve()))
       expect(source.managed.launchReport.record?.kind).toBe(kind)
       expect(source.ack()).toBe('{"kind":"committed"}\n')
-      source.child.stderr.end()
+      source.stderr?.end()
       source.initialize.reject(new Error('Query closed before response received'))
       const error = await source.operation.result.catch((cause: unknown) => cause)
       expect(providerExecutableMissing(error)).toBe(false)
@@ -160,7 +162,7 @@ it('uses only a genuine in-cut failed report to refine generic SDK closure', asy
       })}\n`
     )
     await source.managed.launchReport.done
-    source.child.stderr.end()
+    source.stderr?.end()
     source.initialize.reject(new Error('Query closed before response received'))
     const error = await source.operation.result.catch((cause: unknown) => cause)
     expect(providerExecutableMissing(error)).toBe(true)

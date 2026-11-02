@@ -466,7 +466,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
   })
 
   it('reports the CLI diagnostic when the child exits during open', async () => {
-    const claude = fakeClaude({ holdInit: true })
+    const claude = fakeClaude({ holdInit: true, startupDiagnostic: 'Claude login required' })
     const adapter = adapterAtPublishFor(claude)
     let opening: Promise<unknown> | undefined
     onTestFinished(async () => {
@@ -485,16 +485,22 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     void opening.catch(() => {})
     connection.closed = true
     connection.handlers.onExit?.(new Error('Claude login required'))
-    connection.initialization.reject(new Error('Query closed before response received'))
-    await expect(opening).rejects.toThrow('Claude login required')
-    await expect(first).rejects.toThrow('Query closed before response received')
+    const original = new Error('Query closed before response received')
+    connection.initialization.reject(original)
+    const selected = await first.catch((error: unknown) => error)
+    await expect(opening).rejects.toBe(selected)
+    expect(selected).toMatchObject({
+      message: expect.stringContaining('Claude login required'),
+      cause: original
+    })
     expect(connection.initializationResult()).toBe(first)
     expect(connection.sent).toEqual([])
     await adapter.drainObservedExits()
     const reads = connection.calls.length
     await connection.close()
     expect(connection.initializationResult()).toBe(first)
-    expect(connection.calls).toHaveLength(reads + 1)
+    expect(connection.calls).toHaveLength(reads)
+    expect(connection.calls.filter((call) => call.subtype === 'initialize')).toHaveLength(1)
     expect(exited).toHaveBeenCalledOnce()
     expect(proof).not.toHaveBeenCalled()
   })
@@ -560,6 +566,7 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     first.close = async () => false
     options.holdInit = true
+    options.startupDiagnostic = 'not logged in'
 
     const acquisition = adapter.acquire({
       identity: identityFor(),

@@ -49,6 +49,7 @@ export function fakeClaude(
     initPermissionMode?: string
     /** Default: live SessionStart proof; 'none': no hook; 'init': unmeasured startup shape. */
     initProof?: 'init' | 'session-start' | 'none'
+    startupDiagnostic?: string
     initAccount?: unknown
     initCommands?: unknown
     initModels?: unknown[]
@@ -205,14 +206,18 @@ export function fakeClaude(
         receive: { state: 'complete' }
       }),
       close: async () => {
-        connection.rejectStartup?.(new Error('Query closed before response received'))
         connection.closeCount += 1
         connection.closed = true
         initialization.dispose()
         return config.unprovenCloseVerdict === undefined
       }
     }
-    ownFakeClaudeQuery(connection, launch.account)
+    ownFakeClaudeQuery(
+      connection,
+      { initializationResult: () => initialization.read(connection.calls) },
+      launch.account,
+      config.startupDiagnostic
+    )
     connections.push(connection)
     return connection
   }

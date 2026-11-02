@@ -1,13 +1,17 @@
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { createAcpAgentConnection } from './acp-agent-connection'
 import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
-import { PROVIDER_SESSION } from './acp-structured-adapter.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { GROK_CONFIG_OPTIONS, replyChunk, waitFor } from './acp-structured-adapter.test-support'
+import {
+  PROVIDER_SESSION,
+  GROK_CONFIG_OPTIONS,
+  replyChunk,
+  waitFor
+} from './acp-structured-adapter.test-support'
 import {
   attachParams,
   launch,

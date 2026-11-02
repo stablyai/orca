@@ -1,3 +1,6 @@
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import type { SDKControlInitializeResponse } from '@anthropic-ai/claude-agent-sdk'
+import { ownFakeClaudeQuery } from '../claude/structured/claude-structured-startup-settled-test-support'
 // Use production runtime/adapter/store/host with only the Claude CLI process replaced.
 
 import {
@@ -103,7 +106,16 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
     if (behavior.spawnHangs) {
       await stall
     }
-    let failInit = (_error: Error): void => {}
+    const initialized: SDKControlInitializeResponse = {
+      models: [{ value: 'sonnet', displayName: 'Sonnet', description: '' }],
+      commands: [],
+      agents: [],
+      output_style: 'default',
+      available_output_styles: [],
+      account: {}
+    }
+    const initialization = Promise.withResolvers<SDKControlInitializeResponse>()
+    void initialization.promise.catch(() => {})
     let answerInit = (): void => {}
     const answer = <T>(value: T, startup: boolean): Promise<T> =>
       behavior.stallsControlReads && !startup ? stall.then(() => value) : Promise.resolve(value)
@@ -121,6 +133,30 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
             : Promise.resolve()
       )
     }
+    const initializeQuery = () => {
+      child.initializing = true
+      const announce = (): void => {
+        if (behavior.sendsNoStartFrame) {
+          return
+        }
+        handlers.onMessage?.({
+          type: 'system',
+          subtype: 'init',
+          session_id: behavior.initNamesForeignSession ? 'foreign-session' : providerSessionId,
+          model: 'claude-sonnet-5',
+          apiKeySource: 'none'
+        })
+      }
+      if (!behavior.initHangs && !child.connection.closed) {
+        announce()
+        initialization.resolve(initialized)
+      }
+      answerInit = () => {
+        announce()
+        initialization.resolve(initialized)
+      }
+      return initialization.promise
+    }
     let settingsReads = 0
     const child: ScriptedClaudeChild = {
       sessionId,
@@ -130,7 +166,8 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
       handlers,
       exit: (error) => {
         child.connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
-        failInit(error)
+        operation.reject(withObservedProviderExit(error))
+        initialization.reject(error)
         handlers.onExit?.(error)
       },
       answerInit: () => answerInit(),
@@ -138,33 +175,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         pid: 5000 + children.length,
         closed: false,
         exitVerdict: { root: 'live', tree: 'unverifiable' },
-        initializationResult: () => {
-          child.initializing = true
-          const initialized = { models: [{ value: 'sonnet', displayName: 'Sonnet' }] }
-          const announce = (): void => {
-            if (behavior.sendsNoStartFrame) {
-              return
-            }
-            handlers.onMessage?.({
-              type: 'system',
-              subtype: 'init',
-              session_id: behavior.initNamesForeignSession ? 'foreign-session' : providerSessionId,
-              model: 'claude-sonnet-5',
-              apiKeySource: 'none'
-            })
-          }
-          if (behavior.initHangs) {
-            return new Promise((resolve, reject) => {
-              failInit = reject
-              answerInit = () => {
-                announce()
-                resolve(initialized)
-              }
-            })
-          }
-          announce()
-          return Promise.resolve(initialized)
-        },
+        initializationResult: initializeQuery,
         renameSession: () => Promise.resolve(),
         getContextUsage: () => {
           child.calls.push('get_context_usage')
@@ -208,11 +219,17 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
           receive: { state: 'complete' }
         }),
         close: async () => {
+          initialization.reject(new Error('Query closed before response received'))
           child.connection.closed = true
           return !behavior.closeUnproven
         }
       }
     }
+    const operation = ownFakeClaudeQuery(
+      child.connection,
+      { initializationResult: initializeQuery },
+      launch.account
+    )
     children.push(child)
     if (behavior.exitsDuringSpawn?.at === 'spawn') {
       exitAtSpawn(child, behavior.exitsDuringSpawn.diagnostic)
