@@ -4,6 +4,7 @@ import { TaskPageGitHubIssueDialog } from './github/IssueDialog'
 import { TaskPageLinearProjectDialog } from './linear/ProjectDialog'
 import { TaskPageLinearIssueDialog } from './linear/IssueDialog'
 import { TaskPageJiraIssueDialog } from './jira/IssueDialog'
+import { TaskPageAzureDevOpsWorkItemDialog } from './azure-devops/WorkItemDialog'
 import { TaskPageGitLabDialog } from './gitlab/Dialog'
 import { TaskPageLinearConnectDialog } from './linear/ConnectDialog'
 import { TaskPageJiraConnectDialog } from './jira/ConnectDialog'
@@ -23,6 +24,8 @@ export function TaskPageSurface({
       <TaskPageLinearIssueDialog model={model} />
 
       <TaskPageJiraIssueDialog model={model} />
+
+      <TaskPageAzureDevOpsWorkItemDialog model={model} />
 
       <TaskPageGitLabDialog model={model} />
 

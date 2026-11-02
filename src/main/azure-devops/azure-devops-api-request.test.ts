@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { _resetAzCliAccessTokenCacheForTests } from './az-cli-access-token'
 import {
   _resetAzureDevOpsApiVersionCache,
   requestAzureDevOpsJson,
   requestAzureDevOpsJsonAtBase
 } from './azure-devops-api-request'
 import type { AzureDevOpsRepoRef } from './repository-ref'
+
+const runAzAccessTokenCommandMock = vi.hoisted(() => vi.fn())
+
+vi.mock('./az-cli-invocation', () => ({
+  runAzAccessTokenCommand: runAzAccessTokenCommandMock
+}))
 
 const OLD_ENV = process.env
 const OLD_FETCH = globalThis.fetch
@@ -37,7 +44,10 @@ describe('Azure DevOps API request (STA-3494)', () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
     delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
+    runAzAccessTokenCommandMock.mockReset()
+    runAzAccessTokenCommandMock.mockRejectedValue(new Error('az not available'))
     _resetAzureDevOpsApiVersionCache()
+    _resetAzCliAccessTokenCacheForTests()
   })
 
   afterEach(() => {
@@ -150,5 +160,128 @@ describe('Azure DevOps API request (STA-3494)', () => {
 
     await requestAzureDevOpsJson(serverRepoRef(), '/_apis/git/repositories/my-repo')
     expect(paths).toEqual(['/rewrite/MyProject/_apis/git/repositories/my-repo'])
+  })
+})
+
+function fetchCapturingAuthorization(captured: (string | null)[]): typeof fetch {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the call signature the code under test uses; vi.fn's return type lacks fetch's preconnect member.
+  return vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+    const headers = new Headers(init?.headers)
+    captured.push(headers.get('Authorization'))
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }) as unknown as typeof fetch
+}
+
+describe('a call that pins its own api-version', () => {
+  const OLD_ENV = process.env
+
+  beforeEach(() => {
+    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
+    _resetAzureDevOpsApiVersionCache()
+  })
+
+  afterEach(() => {
+    process.env = OLD_ENV
+    _resetAzureDevOpsApiVersionCache()
+  })
+
+  it('keeps the pinned version and does not negotiate it away', async () => {
+    const versions: (string | null)[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        versions.push(new URL(String(input)).searchParams.get('api-version'))
+        return Response.json({ typeKey: 'VssVersionOutOfRangeException' }, { status: 400 })
+      })
+    )
+
+    await expect(
+      requestAzureDevOpsJsonAtBase(SERVER_BASE, '/_apis/Settings/WebTeam/team-1/Entries/me', {
+        searchParams: { 'api-version': '7.1-preview.1' }
+      })
+    ).resolves.toBeNull()
+    // The endpoint exists only at that version, so stepping down would just fail differently.
+    expect(versions).toEqual(['7.1-preview.1'])
+  })
+})
+
+describe('requestAzureDevOpsJsonAtBase auth resolution', () => {
+  beforeEach(() => {
+    process.env = { ...OLD_ENV }
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    delete process.env.ORCA_AZURE_DEVOPS_PAT
+    delete process.env.ORCA_AZURE_DEVOPS_ACCESS_TOKEN
+    delete process.env.ORCA_AZURE_DEVOPS_USERNAME
+    runAzAccessTokenCommandMock.mockReset()
+    _resetAzureDevOpsApiVersionCache()
+    _resetAzCliAccessTokenCacheForTests()
+  })
+
+  afterEach(() => {
+    process.env = OLD_ENV
+    globalThis.fetch = OLD_FETCH
+  })
+
+  it('falls back to the az CLI token for hosted Azure DevOps when no env token is set', async () => {
+    runAzAccessTokenCommandMock.mockResolvedValue(
+      JSON.stringify({ accessToken: 'entra-jwt', expires_on: 32472144000 })
+    )
+    const captured: (string | null)[] = []
+    globalThis.fetch = fetchCapturingAuthorization(captured)
+
+    await requestAzureDevOpsJsonAtBase('https://dev.azure.com/acme/Project', '/_apis/projects')
+
+    expect(captured).toEqual(['Bearer entra-jwt'])
+  })
+
+  it('never invokes az for on-prem Azure DevOps Server base URLs', async () => {
+    const captured: (string | null)[] = []
+    globalThis.fetch = fetchCapturingAuthorization(captured)
+
+    await requestAzureDevOpsJsonAtBase('https://tfs.corp.example/tfs/Collection', '/_apis/projects')
+
+    expect(runAzAccessTokenCommandMock).not.toHaveBeenCalled()
+    expect(captured).toEqual([null])
+  })
+
+  it('prefers a configured env token over the az CLI', async () => {
+    process.env.ORCA_AZURE_DEVOPS_TOKEN = 'pat-token'
+    const captured: (string | null)[] = []
+    globalThis.fetch = fetchCapturingAuthorization(captured)
+
+    await requestAzureDevOpsJsonAtBase('https://dev.azure.com/acme/Project', '/_apis/projects')
+
+    expect(runAzAccessTokenCommandMock).not.toHaveBeenCalled()
+    expect(captured).toEqual([`Basic ${Buffer.from(':pat-token').toString('base64')}`])
+  })
+
+  it('sends a JSON body with POST when the caller asks for it', async () => {
+    process.env.ORCA_AZURE_DEVOPS_TOKEN = 'pat-token'
+    const calls: { method: string | undefined; contentType: string | null; body: string }[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the call signature the code under test uses; vi.fn's return type lacks fetch's preconnect member.
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      calls.push({
+        method: init?.method,
+        contentType: new Headers(init?.headers).get('Content-Type'),
+        body: String(init?.body)
+      })
+      return Response.json({ workItemRelations: [] })
+    }) as never
+
+    await requestAzureDevOpsJsonAtBase('https://dev.azure.com/acme/Project', '/_apis/wit/wiql', {
+      method: 'POST',
+      body: { query: 'SELECT [System.Id] FROM WorkItems' }
+    })
+
+    expect(calls).toEqual([
+      {
+        method: 'POST',
+        contentType: 'application/json',
+        body: JSON.stringify({ query: 'SELECT [System.Id] FROM WorkItems' })
+      }
+    ])
   })
 })

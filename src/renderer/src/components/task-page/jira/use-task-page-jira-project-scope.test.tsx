@@ -10,6 +10,7 @@ import { useTaskPageJiraListState } from './use-task-page-jira-list-state'
 import { useTaskPageStoreBindings } from '../use-task-page-store-bindings'
 import { useTaskPageRepoSelection } from '../use-task-page-repo-selection'
 import { useTaskPageRuntimeHosts } from '../use-task-page-runtime-hosts'
+import { useTaskPageAzureDevOpsState } from '../../use-task-page-azure-devops-state'
 import { useTaskPageSourceAvailability } from '../use-task-page-source-availability'
 import { useTaskPageProviderState } from '../use-task-page-provider-state'
 import { useTaskPageGitHubListState } from '../github/use-task-page-github-list-state'
@@ -58,7 +59,8 @@ function useComposedJiraListState() {
   const store = useTaskPageStoreBindings()
   const selection = useTaskPageRepoSelection(store)
   const hosts = useTaskPageRuntimeHosts(selection)
-  const availability = useTaskPageSourceAvailability(hosts)
+  const azureDevOps = useTaskPageAzureDevOpsState(hosts)
+  const availability = useTaskPageSourceAvailability(azureDevOps)
   const provider = useTaskPageProviderState(availability)
   const githubList = useTaskPageGitHubListState(provider)
   const githubDetail = useTaskPageGitHubDetail(githubList)

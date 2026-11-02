@@ -92,6 +92,28 @@ describe('task source context', () => {
     )
   })
 
+  it('normalizes every task provider, including azure-devops', () => {
+    const context = normalizeTaskSourceContext({
+      provider: 'azure-devops',
+      projectId: 'project-1',
+      providerIdentity: {
+        provider: 'azure-devops',
+        organization: 'contoso',
+        project: 'Contoso',
+        teamId: 'team-1',
+        teamName: 'Contoso'
+      }
+    })
+    expect(context?.provider).toBe('azure-devops')
+    expect(context?.providerIdentity).toEqual({
+      provider: 'azure-devops',
+      organization: 'contoso',
+      project: 'Contoso',
+      teamId: 'team-1',
+      teamName: 'Contoso'
+    })
+  })
+
   it('drops provider identities that do not match the source provider', () => {
     expect(
       normalizeTaskSourceContext({

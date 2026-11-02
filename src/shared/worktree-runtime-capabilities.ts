@@ -19,6 +19,9 @@ export const WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY = 'workspace-run-context.v
 export const WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY = 'worktree.provisioned-root.v1' as const
 export const WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY =
   'worktree.linked-work-item-context.v1' as const
+// Why: `azure-devops` joined the WorkspaceLinkedItem / TaskSourceContext unions; older runtimes reject it in zod.
+export const WORKTREE_LINKED_WORK_ITEM_AZURE_DEVOPS_RUNTIME_CAPABILITY =
+  'worktree.linked-work-item.azure-devops.v1' as const
 export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
   'worktree.github-pr-suppression.v1' as const
 // Legacy clients cannot safely derive a branch name from a qualified ref selector.
@@ -57,6 +60,7 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_WORK_ITEM_AZURE_DEVOPS_RUNTIME_CAPABILITY,
   ...WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,

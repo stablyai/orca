@@ -357,6 +357,41 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('blocks Azure DevOps linking when the paired runtime lacks the azure-devops capability', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.linked-work-item.azure-devops.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
+    )
+    const store = createRepoTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    seedRepoHost(store, 'runtime:env-1')
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'ado-link']
+    args[25] = {
+      linkedWorkItem: {
+        provider: 'azure-devops',
+        type: 'issue',
+        number: 288,
+        title: 'Ship the backlog view',
+        url: 'https://dev.azure.com/org/project/_workitems/edit/288',
+        azureDevOpsIdentifier: '288'
+      }
+    }
+
+    await expect(createWorktree(...args)).rejects.toThrow(
+      'Update the remote runtime to link Azure DevOps'
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('passes startup commands through remote runtime worktree creation', async () => {
     const store = createRepoTestStore()
     const wt = makeWorktree({

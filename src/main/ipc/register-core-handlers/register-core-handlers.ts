@@ -13,13 +13,7 @@ import { registerFilesystemHandlers } from '../filesystem/filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
 import { registerUsageProviderHandlers } from '../usage-provider-handlers'
-import { registerGitHubHandlers } from '../github'
-import { registerGitLabHandlers } from '../gitlab'
-import { registerHostedReviewHandlers } from '../hosted-review'
-import { registerLinearHandlers } from '../linear/register-handlers'
-import { registerJiraHandlers } from '../jira/register-handlers'
-import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summary-generation'
-import { registerBitbucketHandlers } from '../bitbucket'
+import { registerTaskProviderHandlers } from './register-task-provider-handlers'
 import { registerFeedbackHandlers } from '../feedback'
 import { registerCrashReportingHandlers } from '../crash-reporting'
 import { registerExportHandlers } from '../export'
@@ -199,13 +193,7 @@ export function registerCoreHandlers(
   registerGrokAccountHandlers()
   registerCursorAccountHandlers()
   registerRateLimitHandlers(rateLimits, codexAccounts)
-  registerGitHubHandlers(store, stats)
-  registerGitLabHandlers(store)
-  registerHostedReviewHandlers(store, stats)
-  registerLinearHandlers()
-  registerJiraHandlers()
-  registerJiraIssueSummaryGenerationHandlers(store, commitMessageAgentEnv)
-  registerBitbucketHandlers()
+  registerTaskProviderHandlers(store, stats, commitMessageAgentEnv)
   registerFeedbackHandlers()
   if (crashReports) {
     registerCrashReportingHandlers(crashReports)
