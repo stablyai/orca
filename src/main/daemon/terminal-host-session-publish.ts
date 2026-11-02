@@ -4,6 +4,7 @@ import { buildStartupCommandSubmission } from '../../shared/startup-command-subm
 import {
   stageStartupCommand,
   discardStagedStartupCommand,
+  recordStagedStartupReader,
   startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../shared/startup-command-staging'
@@ -58,9 +59,7 @@ export async function spawnAndPublishSession(
       command: opts.command,
       shellPath,
       orcaBuiltLine: opts.launchAgent !== undefined,
-      ...(opts.retainOnPublicationFailure
-        ? { owned: true as const, ownerBoot: opts.ownedStagingBoot }
-        : {})
+      ...(opts.retainOnPublicationFailure ? { owned: true as const, owner: opts.ownedStaging } : {})
     })
   }
   try {
@@ -207,6 +206,7 @@ export async function spawnAndPublishSession(
         // Diagnostics must never turn a live PTY into a failed create.
       }
     }
+    recordStagedStartupReader(staged, subprocess.pid)
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.writeStartupCommand(
       buildStartupCommandSubmission(staged.command, {

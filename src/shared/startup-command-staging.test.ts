@@ -211,7 +211,7 @@ describe('stageStartupCommand', () => {
         platform: 'darwin',
         directory,
         owned: true,
-        ...(ownerBoot ? { ownerBoot } : {})
+        ...(ownerBoot ? { owner: { pid: process.pid, boot: ownerBoot } } : {})
       })
     const crashedBeforeReboot = owned('boot-before')
     const untagged = owned()

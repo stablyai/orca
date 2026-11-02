@@ -62,13 +62,13 @@ export type PreparedAgentLaunchRequest = {
         action: 'claimPrompt'
         identity: PreparedAgentLaunchIdentity
         consumer: PreparedPromptConsumer
-        /** Acquisition grants nothing; an attempt is the exclusive right to begin writing. */
-        attempt?: true
+        /** Reading grants nothing; this request id asks for the operation's single write grant. */
+        attempt?: string
       }
     | {
         action: 'settlePrompt'
         identity: PreparedAgentLaunchIdentity
-        consumer: PreparedPromptConsumer
+        attempt: string
         outcome: PreparedLaunchInputOutcome
       }
     | {

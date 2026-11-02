@@ -1,5 +1,10 @@
 import type { InternalCreateOrAttachOptions } from '../../../daemon/terminal-host-agent-session-claim'
 import { spawnSync } from 'node:child_process'
+import type * as HostIdentity from '../../../agent-hooks/managed-hook-owner-identity'
+import {
+  readBootIdentity,
+  readManagedHookProcessIdentity
+} from '../../../agent-hooks/managed-hook-owner-identity'
 import { createHash } from 'node:crypto'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import {
@@ -22,6 +27,15 @@ import {
   reconcilePreparedTerminalPublications,
   type PreparedPublicationPorts
 } from './prepared-terminal-publication'
+
+vi.mock('../../../agent-hooks/managed-hook-owner-identity', async (importOriginal) => {
+  const actual = await importOriginal<typeof HostIdentity>()
+  return {
+    ...actual,
+    readBootIdentity: vi.fn(actual.readBootIdentity),
+    readManagedHookProcessIdentity: vi.fn(actual.readManagedHookProcessIdentity)
+  }
+})
 
 const NOW = 1_800_000_000_000
 afterEach(() => vi.useRealTimers())
@@ -166,7 +180,8 @@ async function fixture(
     createTerminal,
     placePrimary: vi.fn(async () => {}),
     setTabColor: vi.fn(async () => {}),
-    deliverPrompts: vi.fn(async () => true)
+    deliverPrompts: vi.fn(async () => true),
+    notifyLaunchNotice: vi.fn()
   }
   await owner.handle({ action: 'accept', identity: prepared, ...payload })
   await vi.advanceTimersByTimeAsync(0)
@@ -279,7 +294,96 @@ describe('prepared terminal publication recovery', () => {
     expect(f.retire).toHaveBeenCalledTimes(1)
     expect(f.owner.pending).toBe(0)
     expect(f.create).toHaveBeenCalledTimes(1)
+    expect(f.ports.notifyLaunchNotice).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ operationId: f.identity.operationId, kind: 'prompt-uncertain' })
+    )
   })
+
+  it('grants one write across overlapping old and new controllers, whatever order their replies arrive in', async () => {
+    const f = await fixture()
+    const handle = f.ports.controller.preparedAgentLaunch!
+    const held = Promise.withResolvers<void>()
+    // Controller B is the old connection: the daemon handles its attempt, but its reply is late.
+    const portsB: PreparedPublicationPorts = {
+      ...f.ports,
+      controller: {
+        ...f.ports.controller,
+        preparedAgentLaunch: async (request) => {
+          const reply = await handle(request)
+          if (request.action === 'claimPrompt' && request.attempt) {
+            await held.promise
+          }
+          return reply
+        }
+      }
+    }
+    const portsA: PreparedPublicationPorts = {
+      ...f.ports,
+      controller: { ...f.ports.controller, preparedAgentLaunch: (request) => handle(request) }
+    }
+    const publicationB = publishPreparedTerminal(f.identity, f.descriptor, portsB)
+    await vi.advanceTimersByTimeAsync(0)
+    // A runs its whole publication, delivery attempt, settlement and retirement while B's reply waits.
+    const terminalA = await publishPreparedTerminal(f.identity, f.descriptor, portsA)
+    held.resolve()
+    const terminalB = await publicationB
+    expect(f.ports.deliverPrompts).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ handle: 'term_agent' }),
+      { followup: { agent: 'codex', prompt: 'full guarded prompt' } }
+    )
+    expect(terminalA?.warning).toBeUndefined()
+    expect(terminalB?.warning).toBeUndefined()
+    expect(await f.owner.handle({ action: 'status', identity: f.identity })).toMatchObject({
+      input: 'written',
+      retirement: 'unused-retired'
+    })
+    // A later reader of either controller gets the same receipt, never the prompt.
+    for (const ports of [portsA, portsB]) {
+      expect(
+        await ports.controller.preparedAgentLaunch!({
+          action: 'claimPrompt',
+          identity: f.identity,
+          consumer: { id: 'later', pid: process.pid },
+          attempt: 'later'
+        })
+      ).toMatchObject({ input: 'written' })
+    }
+    expect(f.ports.notifyLaunchNotice).not.toHaveBeenCalled()
+  })
+
+  it.each(['attempt', 'settlement'] as const)(
+    'a lost %s reply never resends the prompt',
+    async (lost) => {
+      const f = await fixture()
+      const handle = f.ports.controller.preparedAgentLaunch!
+      let dropped = false
+      f.ports.controller.preparedAgentLaunch = async (request) => {
+        const reply = await handle(request)
+        const target =
+          lost === 'attempt'
+            ? request.action === 'claimPrompt' && request.attempt !== undefined
+            : request.action === 'settlePrompt'
+        if (target && !dropped) {
+          dropped = true
+          throw new Error('daemon connection closed')
+        }
+        return reply
+      }
+      await expect(publishPreparedTerminal(f.identity, f.descriptor, f.ports)).rejects.toThrow(
+        'daemon connection closed'
+      )
+      await reconcilePreparedTerminalPublications(f.ports)
+      await reconcilePreparedTerminalPublications(f.ports)
+      // A lost grant closes as uncertain unwritten; a lost settlement retries settlement only.
+      expect(f.ports.deliverPrompts).toHaveBeenCalledTimes(lost === 'attempt' ? 0 : 1)
+      expect(await f.owner.handle({ action: 'status', identity: f.identity })).toMatchObject({
+        input: lost === 'attempt' ? 'uncertain' : 'written',
+        retirement: 'unused-retired'
+      })
+      expect(f.retire).toHaveBeenCalledTimes(1)
+      expect(f.ports.notifyLaunchNotice).toHaveBeenCalledTimes(lost === 'attempt' ? 1 : 0)
+    }
+  )
 
   it('recovers a prompt whose acquisition reply was lost and delivers it exactly once', async () => {
     const f = await fixture()
@@ -378,6 +482,60 @@ describe('prepared terminal publication recovery', () => {
       expect(retire).toHaveBeenCalledTimes(count)
       // Each dead owner is asked once; a retired descriptor is never probed again.
       expect(probes).toHaveBeenCalledTimes(count)
+    }
+  )
+
+  it.each([1, 10])(
+    'proves one live but unreachable generation once per pass for %i descriptors',
+    async (count) => {
+      const f = await fixture()
+      vi.useRealTimers()
+      const live = await readCurrentPreparedLaunchIncarnation()
+      const generation = formatPreparedLaunchGeneration(live)
+      const rows = Array.from({ length: count + 1 }, (_, index) => ({
+        ...pendingAgentSessionOperationRow({
+          callerKey: 'worktree-startup',
+          operationId: `${NOW}-${String(index).padStart(32, '0')}`,
+          fingerprint: 'fingerprint',
+          now: NOW
+        }),
+        preparedLaunch: { ...f.descriptor, daemonGeneration: generation }
+      }))
+      const answered = rows[count].operationId
+      const retire = vi.fn(async (identity: { operationId: string }) => {
+        Reflect.deleteProperty(
+          rows.find((row) => row.operationId === identity.operationId)!,
+          'preparedLaunch'
+        )
+      })
+      const ports: PreparedPublicationPorts = {
+        ...f.ports,
+        controller: {
+          // One operation is answered by its own generation; the rest cannot reach it.
+          preparedAgentLaunch: async (request) => {
+            throw new Error(
+              'identity' in request && request.identity.operationId === answered
+                ? 'agent_session_operation_unknown'
+                : 'agent_session_ownership_unknown'
+            )
+          }
+        },
+        store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
+      }
+      for (const pass of [1, 2]) {
+        vi.mocked(readBootIdentity).mockClear()
+        vi.mocked(readManagedHookProcessIdentity).mockClear()
+        await reconcilePreparedTerminalPublications(ports)
+        // One boot read and one process probe per pass, however many descriptors share the owner.
+        expect(readBootIdentity).toHaveBeenCalledTimes(live.boot ? 1 : 0)
+        expect(readManagedHookProcessIdentity).toHaveBeenCalledTimes(live.process ? 1 : 0)
+        expect(retire, `pass ${pass}`).toHaveBeenCalledTimes(1)
+      }
+      // That generation's answer retired only its own operation; the live owner keeps the rest.
+      expect(retire).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ operationId: answered })
+      )
+      expect(rows.filter((row) => 'preparedLaunch' in row)).toHaveLength(count)
     }
   )
 

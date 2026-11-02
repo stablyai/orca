@@ -15,7 +15,7 @@ import {
 } from './prepared-agent-launch-incarnation'
 import {
   claimPreparedPrompt,
-  settlePreparedPrompt,
+  settlePreparedAttempt,
   snapshotPreparedLaunch,
   waitForPreparedLaunch
 } from './prepared-agent-launch-handoff'
@@ -95,13 +95,12 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
         this.notify(work)
         return this.snapshot(work)
       case 'claimPrompt':
-        return claimPreparedPrompt(work, payload.consumer, payload.attempt === true, {
+        return claimPreparedPrompt(work, payload.consumer, payload.attempt, {
           isGone: this.deps.isConsumerGone ?? isPreparedLaunchIncarnationGone,
           notify: () => this.notify(work)
         })
       case 'settlePrompt':
-        if (work.promptConsumer?.id === payload.consumer.id && work.promptAttempted) {
-          settlePreparedPrompt(work, payload.outcome)
+        if (settlePreparedAttempt(work, payload.attempt, payload.outcome)) {
           this.notify(work)
         }
         return snapshotPreparedLaunch(work)
@@ -135,7 +134,7 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
     // Read once, lazily: hosts that never prepare a launch pay no process inspection.
     this.ready ??= readCurrentPreparedLaunchIncarnation().then((incarnation) => {
       this.generation = formatPreparedLaunchGeneration(incarnation)
-      this.boot = incarnation.boot
+      this.incarnation = incarnation
     })
     await this.ready
     this.rows = pruneAgentSessionOperationRows(this.rows, this.now())

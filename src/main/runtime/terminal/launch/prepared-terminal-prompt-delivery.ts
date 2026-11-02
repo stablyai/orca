@@ -15,11 +15,15 @@ export function preparedPromptUncertainText(agent: string): string {
   return `${name} started, but its first prompt may not have been delivered. Check ${name} before sending the prompt again.`
 }
 
-// One process is one prompt consumer across reconnects and controller objects; a reused PID only delays demise.
+// One process is one prompt consumer; its PID lets the daemon prove a dead writer's attempt uncertain.
 const promptConsumer: PreparedPromptConsumer = { id: randomUUID(), pid: process.pid }
-const promptDeliveries = new Map<string, Promise<PreparedLaunchInputOutcome>>()
+// Settlements whose reply was lost, retried by the next publication. Losing this never permits a write.
+const unsettled = new Map<string, { attempt: string; outcome: PreparedLaunchInputOutcome }>()
 
-/** Acquire, then take the exclusive attempt, then write once; a lost reply retries settlement, never input. */
+/**
+ * The daemon grants the write once per operation; this only reads, asks, writes and settles.
+ * Its outcome is read back from the daemon's receipt, never from this call.
+ */
 export async function deliverPreparedPrompts(
   identity: PreparedAgentLaunchIdentity,
   terminal: RuntimeTerminalCreate,
@@ -30,49 +34,57 @@ export async function deliverPreparedPrompts(
       prompts: PreparedTerminalPrompts
     ) => Promise<boolean>
   }
-): Promise<PreparedLaunchInputOutcome | undefined> {
-  const { controller } = ports
-  if (!controller.preparedAgentLaunch) {
-    return undefined
+): Promise<void> {
+  const request = ports.controller.preparedAgentLaunch
+  if (!request) {
+    return
   }
-  const consumer = promptConsumer
-  let delivery = promptDeliveries.get(identity.operationId)
-  if (!delivery) {
-    const acquired = await controller.preparedAgentLaunch({
-      action: 'claimPrompt',
-      identity,
-      consumer
-    })
-    if (!isPreparedTerminalPrompts(acquired)) {
-      return undefined
-    }
-    const granted = await controller.preparedAgentLaunch({
-      action: 'claimPrompt',
-      identity,
-      consumer,
-      attempt: true
-    })
-    if (!isPreparedTerminalPrompts(granted)) {
-      return undefined
-    }
-    delivery = promptDeliveries.get(identity.operationId)
-    if (!delivery) {
-      // Boolean refusal does not prove nothing was written, so it settles as uncertain.
-      delivery = ports.deliverPrompts(terminal, granted).then(
-        (written): PreparedLaunchInputOutcome => (written ? 'written' : 'uncertain'),
-        (): PreparedLaunchInputOutcome => 'uncertain'
-      )
-      promptDeliveries.set(identity.operationId, delivery)
-    }
+  const settle = async (attempt: string, outcome: PreparedLaunchInputOutcome) => {
+    unsettled.set(identity.operationId, { attempt, outcome })
+    await request({ action: 'settlePrompt', identity, attempt, outcome })
+    unsettled.delete(identity.operationId)
   }
-  const outcome = await delivery
-  await controller.preparedAgentLaunch({ action: 'settlePrompt', identity, consumer, outcome })
-  promptDeliveries.delete(identity.operationId)
-  return outcome
+  const owed = unsettled.get(identity.operationId)
+  if (owed) {
+    await settle(owed.attempt, owed.outcome)
+    return
+  }
+  // A lost reply here consumed nothing: the next publication reads again.
+  if (
+    !grantedPrompts(await request({ action: 'claimPrompt', identity, consumer: promptConsumer }))
+  ) {
+    return
+  }
+  const attempt = randomUUID()
+  let granted: unknown
+  try {
+    granted = await request({ action: 'claimPrompt', identity, consumer: promptConsumer, attempt })
+  } catch (error) {
+    // This request ended without writing; if it won the grant, that grant closes as uncertain.
+    await settle(attempt, 'uncertain').catch(() => {})
+    throw error
+  }
+  const prompts = grantedPrompts(granted)
+  if (!prompts) {
+    return
+  }
+  // Boolean refusal does not prove nothing was written, so it settles as uncertain.
+  const outcome = await ports.deliverPrompts(terminal, prompts).then(
+    (written): PreparedLaunchInputOutcome => (written ? 'written' : 'uncertain'),
+    (): PreparedLaunchInputOutcome => 'uncertain'
+  )
+  await settle(attempt, outcome)
 }
 
 export function forgetPreparedPromptDelivery(operationId: string): void {
-  promptDeliveries.delete(operationId)
+  unsettled.delete(operationId)
+}
+
+function grantedPrompts(value: unknown): PreparedTerminalPrompts | null {
+  if (typeof value !== 'object' || value === null || !('prompts' in value)) {
+    return null
+  }
+  return isPreparedTerminalPrompts(value.prompts) ? value.prompts : null
 }
 
 function isPreparedTerminalPrompts(value: unknown): value is PreparedTerminalPrompts {

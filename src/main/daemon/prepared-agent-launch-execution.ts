@@ -17,6 +17,7 @@ import type {
 } from './prepared-agent-launch-protocol'
 import {
   preparedLaunchFailureText,
+  type PreparedLaunchIncarnation,
   type PreparedLaunchPublication,
   type PreparedPromptConsumer
 } from '../../shared/prepared-agent-launch'
@@ -32,9 +33,8 @@ export type LaunchWork = {
   /** Retained until input retirement so recovery publishes the accepted recipe, view and authority. */
   publication?: PreparedLaunchPublication
   prompts?: PreparedTerminalPrompts
-  promptConsumer?: PreparedPromptConsumer
-  /** Set before any write can begin; only that consumer's settlement or proven demise ends it. */
-  promptAttempted?: boolean
+  /** The one issued write grant; only its request's settlement or its writer's demise ends it. */
+  promptAttempt?: { request: string; consumer: PreparedPromptConsumer }
   stopSetupScan?: () => void
   cancelDeadline?: () => void
   releaseCapacity?: () => void
@@ -57,8 +57,8 @@ export type PreparedLaunchDependencies = {
 
 export abstract class PreparedAgentLaunchExecution {
   protected rows = new Map<string, AgentSessionOperationRow>()
-  /** This host boot, once read; it tags owned staged files for cleanup after a reboot. */
-  protected boot?: string
+  /** This daemon's incarnation, once read; it owns staged files for crash collection. */
+  protected incarnation?: PreparedLaunchIncarnation
   protected readonly now: () => number
   constructor(protected readonly deps: PreparedLaunchDependencies) {
     this.now = deps.now ?? Date.now
@@ -166,7 +166,7 @@ export abstract class PreparedAgentLaunchExecution {
             },
             agentSessionGeneration: generation,
             retainOnPublicationFailure: true,
-            ...(this.boot ? { ownedStagingBoot: this.boot } : {}),
+            ...(this.incarnation ? { ownedStaging: this.incarnation } : {}),
             onCreationDisposition: (disposition) => {
               creation.resolve(disposition)
               if (disposition.kind === 'physical') {
@@ -258,8 +258,7 @@ export abstract class PreparedAgentLaunchExecution {
     work.launch = undefined
     work.publication = undefined
     work.prompts = undefined
-    work.promptConsumer = undefined
-    work.promptAttempted = undefined
+    work.promptAttempt = undefined
   }
 
   private settlePhysicalEnd(work: LaunchWork): void {

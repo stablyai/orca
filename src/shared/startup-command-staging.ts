@@ -10,7 +10,10 @@ import { quoteStartupArg } from './tui-agent-startup-shell'
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
 const OWNED_STAGING_PREFIX = 'orca-owned-launch-'
 const OWNED_STAGING_BOOT = /^orca-owned-launch-([0-9a-f]{16})-/
-let ownedSweepStarted = false
+/** Staged without a boot: its writer and reader files carry the proof instead. */
+export const OWNED_STAGING_WRITER_PREFIX = 'orca-owned-launch-w-'
+export const OWNED_STAGING_WRITER_FILE = 'writer'
+export const OWNED_STAGING_READER_FILE = 'reader'
 
 /** Which delivery ran for a spawn's typed startup line, decided by the host that owns the PTY. */
 export type StartupLineDelivery = 'typed' | 'staged' | 'typed-after-stage-failed'
@@ -90,8 +93,8 @@ export function stageStartupCommand(args: {
   platform?: NodeJS.Platform
   directory?: string
   owned?: true
-  /** The host boot an owned launch runs in; a later boot proves nothing can still read its files. */
-  ownerBoot?: string
+  /** The daemon that owns the launch; a later boot, or its exit with no live reader, frees its files. */
+  owner?: { pid: number; process?: string; boot?: string }
 }): StartupCommandStaging {
   const platform = args.platform ?? process.platform
   if (!shouldStageStartupCommand({ ...args, platform })) {
@@ -104,15 +107,14 @@ export function stageStartupCommand(args: {
     setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
   const shellName = stagingShellName(args.shellPath)
-  const bootTag = args.ownerBoot
-    ? createHash('sha256').update(args.ownerBoot).digest('hex').slice(0, 16)
-    : undefined
-  if (args.owned && bootTag && !ownedSweepStarted) {
-    ownedSweepStarted = true
-    setTimeout(() => sweepPriorBootOwnedStaging({ directory, bootTag }), 0).unref?.()
-  }
+  const bootTag = args.owner?.boot ? ownedStagingBootTag(args.owner.boot) : undefined
   const directoryPath = args.owned
-    ? mkdtempSync(join(directory, `${OWNED_STAGING_PREFIX}${bootTag ? `${bootTag}-` : ''}`))
+    ? mkdtempSync(
+        join(
+          directory,
+          bootTag ? `${OWNED_STAGING_PREFIX}${bootTag}-` : OWNED_STAGING_WRITER_PREFIX
+        )
+      )
     : undefined
   const scriptPath = join(
     directoryPath ?? directory,
@@ -122,6 +124,13 @@ export function stageStartupCommand(args: {
   try {
     if (directoryPath) {
       chmodSync(directoryPath, 0o700)
+      if (!bootTag && args.owner) {
+        writeFileSync(
+          join(directoryPath, OWNED_STAGING_WRITER_FILE),
+          JSON.stringify({ pid: args.owner.pid, process: args.owner.process }),
+          { mode: 0o600, flag: 'wx' }
+        )
+      }
     }
     // Unlink before the agent starts; the shell continues reading its open file.
     writeFileSync(
@@ -197,6 +206,32 @@ export function sweepStaleStagedStartupCommands(args: { directory?: string; now?
     } catch {
       // Raced another instance's sweep.
     }
+  }
+}
+
+export function ownedStagingBootTag(boot: string): string {
+  return createHash('sha256').update(boot).digest('hex').slice(0, 16)
+}
+
+/** Name the shell that can read this path before handing it over; a failed record keeps it unknown. */
+export function recordStagedStartupReader(
+  staging: StartupCommandStaging,
+  pid: number | null | undefined
+): void {
+  if (!staging.directoryPath) {
+    return
+  }
+  try {
+    if (!pid) {
+      throw new Error('reader_unknown')
+    }
+    writeFileSync(join(staging.directoryPath, OWNED_STAGING_READER_FILE), String(pid), {
+      mode: 0o600,
+      flag: 'wx'
+    })
+  } catch {
+    // Without a named reader the writer's exit proves nothing, so drop that proof too.
+    rmSync(join(staging.directoryPath, OWNED_STAGING_WRITER_FILE), { force: true })
   }
 }
 

@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
@@ -97,11 +98,14 @@ async function fixture() {
     })),
     setTabColor: vi.fn(async () => {}),
     placePrimary: vi.fn(async () => {}),
-    deliverPrompts: vi.fn(async () => true)
+    deliverPrompts: vi.fn(async () => true),
+    notifyLaunchNotice: vi.fn()
   }
+  const notifier = { preparedAgentLaunchNotice: vi.fn() }
   // Only main's own PTY records are a seam: the waiter reads the published agent from them.
   const runtime = Object.assign(Object.create(OrcaRuntimeWithPreparedTerminals.prototype), {
     ptyController: ports.controller,
+    notifier,
     openAgentSessionRecordStore: async () => ports.store,
     createTerminal: ports.createTerminal,
     getWorktreeTerminalProvisioningHost: () => ({ setTabColor: ports.setTabColor }),
@@ -118,7 +122,7 @@ async function fixture() {
       runtime as never,
       identity
     )
-  return { owner, ports, create, notice, wait, setupObserver: () => setupObserver! }
+  return { owner, ports, create, notice, notifier, wait, setupObserver: () => setupObserver! }
 }
 
 describe('late prepared agent waiter', () => {
@@ -140,6 +144,53 @@ describe('late prepared agent waiter', () => {
     })
     expect(f.create).toHaveBeenCalledTimes(1)
     expect(f.ports.createTerminal).toHaveBeenCalledTimes(1)
+  })
+
+  it("reports a dead writer's prompt as uncertain once to the waiter and the desktop, never resending it", async () => {
+    const f = await fixture()
+    // A previous main won the write grant, then exited before settling it.
+    const gone = spawnSync(process.execPath, ['-e', ''])
+    const handle = f.ports.controller.preparedAgentLaunch
+    f.ports.controller.preparedAgentLaunch = async (request) => {
+      const reply = await handle(request)
+      if (request.action === 'ackPublication') {
+        await handle({
+          action: 'claimPrompt',
+          identity: request.identity,
+          consumer: { id: 'previous-main', pid: gone.pid! },
+          attempt: 'previous-attempt'
+        })
+      }
+      return reply
+    }
+    const started = await startPreparedWorktreeTerminals({
+      worktreeId: 'wt',
+      targetKind: 'new-git',
+      startupOptions: { command: 'codex', launchAgent: 'codex' },
+      prompts: { followup: { agent: 'codex', prompt: 'the complete task' } },
+      ports: f.ports
+    })
+    vi.useRealTimers()
+    const terminal = await f.wait(started.pending)
+    expect(terminal.warning).toBe(
+      'Codex started, but its first prompt may not have been delivered. Check Codex before sending the prompt again.'
+    )
+    expect(f.ports.deliverPrompts).not.toHaveBeenCalled()
+    const notices = [
+      ...f.ports.notifyLaunchNotice.mock.calls,
+      ...f.notifier.preparedAgentLaunchNotice.mock.calls
+    ]
+    expect(notices).toEqual([
+      [
+        expect.objectContaining({
+          operationId: started.pending.operationId,
+          kind: 'prompt-uncertain'
+        })
+      ]
+    ])
+    // A later waiter reads the same retained receipt and still never writes.
+    await expect(f.wait(started.pending)).resolves.toMatchObject({ warning: terminal.warning })
+    expect(f.ports.deliverPrompts).not.toHaveBeenCalled()
   })
 
   it('reports a Setup timeout once in Setup and names the agent to an attached caller', async () => {

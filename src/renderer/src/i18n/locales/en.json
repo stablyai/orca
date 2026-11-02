@@ -1,6 +1,7 @@
 {
   "agentLaunch": {
     "setupClosed": "Setup was closed before it finished, so {{agent}} wasn't started. Start {{agent}} from a new tab.",
+    "promptUncertain": "{{agent}} started, but its first prompt may not have been delivered. Check {{agent}} before sending the prompt again.",
     "opencode": {
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.",
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",

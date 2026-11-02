@@ -59,10 +59,11 @@ export function parsePreparedLaunchGeneration(
 
 /** Positive demise only: another boot, or a vanished or reused PID. Unreadable evidence is never demise. */
 export async function isPreparedLaunchIncarnationGone(
-  incarnation: PreparedLaunchIncarnation
+  incarnation: PreparedLaunchIncarnation,
+  currentBoot: () => Promise<string | undefined> = readCurrentBoot
 ): Promise<boolean> {
   if (incarnation.boot) {
-    const boot = await readBootIdentity().catch(() => undefined)
+    const boot = await currentBoot()
     if (boot && boot !== incarnation.boot) {
       return true
     }
@@ -76,6 +77,10 @@ export async function isPreparedLaunchIncarnationGone(
     current === null ||
     (current !== undefined && digestProcessIdentity(current) !== incarnation.process)
   )
+}
+
+function readCurrentBoot(): Promise<string | undefined> {
+  return readBootIdentity().catch(() => undefined)
 }
 
 // Start identities can carry a whole command line; the generation only needs to compare them.

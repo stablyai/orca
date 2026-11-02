@@ -110,7 +110,7 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
         this.getWorktreeTerminalProvisioningHost().setTabColor(handle, color),
       placePrimary: this.placePreparedPrimary.bind(this),
       deliverPrompts: this.deliverPreparedTerminalPrompts.bind(this),
-      notifySetupClosed: (event) => this.notifier?.preparedAgentSetupClosed?.(event)
+      notifyLaunchNotice: (notice) => this.notifier?.preparedAgentLaunchNotice?.(notice)
     }
   }
 

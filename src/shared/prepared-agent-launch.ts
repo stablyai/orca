@@ -70,8 +70,13 @@ export type PreparedAgentLaunchStatus = PreparedAgentLaunchIdentity & {
   input?: PreparedLaunchInputOutcome
 }
 
-/** An automatic launch whose Setup ended before finishing; the window shows one short notice. */
-export type PreparedAgentSetupClosedEvent = { worktreeId: string; agent: string }
+/** An automatic launch outcome no surviving terminal shows; the window shows one short notice per operation. */
+export type PreparedAgentLaunchNotice = {
+  operationId: string
+  worktreeId: string
+  agent: string
+  kind: 'setup-closed' | 'prompt-uncertain'
+}
 
 export type PreparedLaunchInputOutcome = 'written' | 'uncertain'
 

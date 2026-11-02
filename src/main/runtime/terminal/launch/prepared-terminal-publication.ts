@@ -4,22 +4,18 @@ import {
   forgetPreparedPromptDelivery,
   preparedPromptUncertainText
 } from './prepared-terminal-prompt-delivery'
-import {
-  isPreparedLaunchIncarnationGone,
-  parsePreparedLaunchGeneration
-} from '../../../daemon/prepared-agent-launch-incarnation'
+import { provesPreparedLaunchOwnerGone } from './prepared-terminal-owner-demise'
 import type { PreparedTerminalPrompts } from '../../../daemon/prepared-agent-launch-protocol'
 export { preparedPromptUncertainText } from './prepared-terminal-prompt-delivery'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session-operation-ledger'
 import {
   isPreparedAgentLaunchDescriptor,
   isPreparedAgentLaunchStatus,
-  isPreparedLaunchOperationUnknown,
   parsePreparedLaunchPublication,
   type PreparedAgentLaunchIdentity,
   type PreparedAgentLaunchDescriptor,
   type PreparedAgentLaunchStatus,
-  type PreparedAgentSetupClosedEvent,
+  type PreparedAgentLaunchNotice,
   type PreparedLaunchPublication
 } from '../../../../shared/prepared-agent-launch'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
@@ -41,8 +37,8 @@ export type PreparedPublicationPorts = {
     terminal: RuntimeTerminalCreate,
     prompts: PreparedTerminalPrompts
   ) => Promise<boolean>
-  /** Setup that ended before finishing has no terminal left to explain why the agent is absent. */
-  notifySetupClosed?: (event: PreparedAgentSetupClosedEvent) => void
+  /** One short desktop notice for an outcome no surviving terminal shows, keyed by operation. */
+  notifyLaunchNotice?: (notice: PreparedAgentLaunchNotice) => void
 }
 const publications = new WeakMap<
   RuntimePtyController,
@@ -124,9 +120,11 @@ async function publish(
     if (status.retirement === 'unused-retired') {
       // Failure and deadline already wrote into the surviving Setup terminal; never say it twice.
       if (status.failure === 'setup-ended') {
-        ports.notifySetupClosed?.({
+        ports.notifyLaunchNotice?.({
+          operationId: identity.operationId,
           worktreeId: descriptor.surface.worktreeId,
-          agent: descriptor.claim.agent
+          agent: descriptor.claim.agent,
+          kind: 'setup-closed'
         })
       }
       await retirePreparedDescriptor(ports, identity)
@@ -185,12 +183,22 @@ async function publish(
     await ports.setTabColor(terminal.handle, descriptor.presentation.color)
   }
   await controller.preparedAgentLaunch({ action: 'ackPublication', identity })
-  const input = await deliverPreparedPrompts(identity, terminal, ports)
+  await deliverPreparedPrompts(identity, terminal, ports)
+  const receipt = await readPreparedTerminalStatus(controller, identity)
+  // The daemon's receipt, not this attempt, says whether the first prompt is in doubt.
+  if (receipt.input === 'uncertain') {
+    ports.notifyLaunchNotice?.({
+      operationId: identity.operationId,
+      worktreeId: descriptor.surface.worktreeId,
+      agent: descriptor.claim.agent,
+      kind: 'prompt-uncertain'
+    })
+  }
   const retirement = await controller.preparedAgentLaunch({ action: 'retireInput', identity })
   if (isPreparedAgentLaunchStatus(retirement) && retirement.retirement === 'unused-retired') {
     await retirePreparedDescriptor(ports, identity)
   }
-  return input === 'uncertain'
+  return receipt.input === 'uncertain'
     ? { ...terminal, warning: preparedPromptUncertainText(descriptor.claim.agent) }
     : terminal
 }
@@ -229,20 +237,6 @@ async function retirePreparedDescriptor(
 }
 
 /** Retire only on positive owner demise: the exact generation's answer, another boot, or a gone process. */
-async function provesPreparedLaunchOwnerGone(
-  error: unknown,
-  descriptor: PreparedAgentLaunchDescriptor
-): Promise<boolean> {
-  if (isPreparedLaunchOperationUnknown(error)) {
-    return true
-  }
-  const incarnation =
-    descriptor.hostScope.hostId === 'local'
-      ? parsePreparedLaunchGeneration(descriptor.daemonGeneration)
-      : null
-  return incarnation !== null && (await isPreparedLaunchIncarnationGone(incarnation))
-}
-
 async function publishPreparedSetup(
   descriptor: PreparedAgentLaunchDescriptor,
   status: PreparedAgentLaunchStatus,
@@ -282,6 +276,7 @@ export async function reconcilePreparedTerminalPublications(
   ports: PreparedPublicationPorts
 ): Promise<void> {
   const rows: AgentSessionOperationRow[] = ports.store.listOperationRows()
+  const pass = { generations: new Map<string, Promise<boolean>>() }
   await Promise.all(
     rows.map(async (row) => {
       if (!isPreparedAgentLaunchDescriptor(row.preparedLaunch)) {
@@ -299,7 +294,7 @@ export async function reconcilePreparedTerminalPublications(
         await publishPreparedTerminal(identity, descriptor, ports)
       } catch (error) {
         // Unreachable is not gone: retain the exact owner unless its demise is proven.
-        if (await provesPreparedLaunchOwnerGone(error, descriptor).catch(() => false)) {
+        if (await provesPreparedLaunchOwnerGone(error, descriptor, pass).catch(() => false)) {
           await retirePreparedDescriptor(ports, identity).catch(() => {})
         }
       }

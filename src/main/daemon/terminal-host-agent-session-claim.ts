@@ -1,3 +1,4 @@
+import type { PreparedLaunchIncarnation } from '../../shared/prepared-agent-launch'
 import type { RawPtySpawnObserver } from './pty-subprocess'
 import type { TerminalCreationWork } from './terminal-creation-work'
 import type {
@@ -10,8 +11,8 @@ import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 
 export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
   retainOnPublicationFailure?: true
-  /** The boot that owns this launch's staged files; untagged files are never swept. */
-  ownedStagingBoot?: string
+  /** The daemon incarnation that owns this launch's staged files, for crash collection. */
+  ownedStaging?: PreparedLaunchIncarnation
   reservedCapacity?: () => void
   rawSpawnObserver?: () => RawPtySpawnObserver
   agentSessionGeneration?: string
