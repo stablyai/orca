@@ -18,7 +18,7 @@ vi.mock('./editor-shortcuts', () => ({
 
 import { CUSTOM_EDITOR_FLUSH_TIMEOUT_MS } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
-import { closeAfterEditorFramesFlush, flushEditorFrames } from './editor-pending-flush'
+import { runAfterEditorFramesFlush, flushEditorFrames } from './editor-pending-flush'
 
 const FILE_ID = '/repo/diagram.excalidraw'
 const READY = { orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } }
@@ -160,7 +160,7 @@ describe('PluginCustomEditorFrame', () => {
     await fromFrame(READY)
     const index = { editorBufferIdOf: {}, editorBufferViews: {} }
     const close = vi.fn(() => expect(onContentChange).toHaveBeenCalledWith('scene+late'))
-    closeAfterEditorFramesFlush(index, [FILE_ID], close)
+    runAfterEditorFramesFlush(index, [FILE_ID], close)
     expect(posted).toHaveBeenLastCalledWith(
       { orca: 1, kind: 'req', id: 0, method: 'editor.flush' },
       '*',
@@ -174,7 +174,7 @@ describe('PluginCustomEditorFrame', () => {
     // A silent frame delays the close by the flush deadline only.
     vi.useFakeTimers()
     const silentClose = vi.fn()
-    closeAfterEditorFramesFlush(index, [FILE_ID], silentClose)
+    runAfterEditorFramesFlush(index, [FILE_ID], silentClose)
     await act(async () => vi.advanceTimersByTimeAsync(CUSTOM_EDITOR_FLUSH_TIMEOUT_MS))
     expect(silentClose).toHaveBeenCalledWith(true)
   })
