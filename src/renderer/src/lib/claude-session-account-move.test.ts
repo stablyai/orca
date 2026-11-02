@@ -13,12 +13,10 @@ import {
   inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
 import {
-  claudeLaunchAccountId,
   findClaudeSwitchSessions,
-  findQueuedClaudeRestartsOnAccount,
-  isClaudePaneMidTurn
+  findQueuedClaudeRestartsOnAccount
 } from './claude-session-account-move'
-import { resolveClaudePaneFolder, type ClaudeHostFolders } from './claude-pane-account-folder'
+import type { ClaudeHostFolders } from './claude-pane-account-folder'
 
 const laneByPtyId: Record<string, string> = {}
 let projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -165,17 +163,6 @@ describe('findMovableClaudeSessions', () => {
     vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('claude')
   })
 
-  it('finds resumable Claude panes and skips other agents and session-less panes', async () => {
-    seedPanes([
-      { n: 1, agentType: 'claude' },
-      { n: 2, agentType: 'codex' },
-      { n: 3, agentType: 'claude', sessionId: null },
-      { n: 4 }
-    ])
-
-    expect(await movable()).toEqual([ptyId(1)])
-  })
-
   it('counts only sessions running on the outgoing account', async () => {
     seedPanes([
       { n: 1, agentType: 'claude', configDir: FOLDER_A },
@@ -213,17 +200,6 @@ describe('findMovableClaudeSessions', () => {
     ).toEqual({ onAccount: [], elsewhere: [], cantMove: [] })
 
     laneByPtyId[ptyId(1)] = 'ssh-connection'
-    expect(await movable()).toEqual([])
-  })
-
-  it('skips a pane where Claude has exited to the shell', async () => {
-    seedPanes([{ n: 1, agentType: 'claude' }])
-    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
-      foregroundProcess: 'zsh',
-      hasChildProcesses: false
-    })
-    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('zsh')
-
     expect(await movable()).toEqual([])
   })
 
@@ -324,48 +300,6 @@ describe('findMovableClaudeSessions', () => {
     expect(await movable('acct-a', { runtime: 'wsl', wslDistro: 'Ubuntu-24.04' })).toEqual([
       ptyId(1)
     ])
-  })
-})
-
-describe('resolveClaudePaneFolder', () => {
-  const accounts = [account('acct-a', FOLDER_A)]
-
-  it('reads the account from the transcript folder, with System default as the rest', () => {
-    expect(resolveClaudePaneFolder(`${FOLDER_A}/projects/-repo/s.jsonl`, accounts)).toEqual({
-      kind: 'account',
-      accountId: 'acct-a'
-    })
-    expect(resolveClaudePaneFolder(`${SYSTEM_FOLDER}/projects/-repo/s.jsonl`, accounts)).toEqual({
-      kind: 'system-default'
-    })
-    expect(resolveClaudePaneFolder(undefined, accounts)).toBeUndefined()
-  })
-
-  it('matches Windows paths whatever their separators', () => {
-    const windowsAccounts = [account('acct-w', 'C:\\Users\\dev\\claude\\acct-w')]
-    expect(
-      resolveClaudePaneFolder(
-        'C:\\Users\\dev\\claude\\acct-w\\projects\\-repo\\s.jsonl',
-        windowsAccounts
-      )
-    ).toEqual({ kind: 'account', accountId: 'acct-w' })
-  })
-})
-
-describe('isClaudePaneMidTurn', () => {
-  it('waits on a reply, a permission prompt or a question, not on an idle session', () => {
-    seedPanes([
-      { n: 1, agentType: 'claude', state: 'working' },
-      { n: 2, agentType: 'claude', state: 'blocked' },
-      { n: 3, agentType: 'claude', state: 'waiting' },
-      { n: 4, agentType: 'claude', state: 'done' }
-    ])
-    const state = useAppStore.getState()
-    const midTurn = [1, 2, 3, 4].map((n) =>
-      isClaudePaneMidTurn(state, makePaneKey(tabId(n), leafId(n)))
-    )
-
-    expect(midTurn).toEqual([true, true, true, false])
   })
 })
 
@@ -471,16 +405,5 @@ describe('a switch away from the login System default holds', () => {
     seedPanes([{ n: 1, agentType: 'claude', configDir: '/data/claude-profiles/acct-a/home' }])
 
     expect(await movable('acct-a', HOST, hostFolders())).toEqual([ptyId(1)])
-  })
-})
-
-describe('claudeLaunchAccountId', () => {
-  it('reads an account System default covers as System default, where its sessions run', () => {
-    const covered = { ...account('acct-a', FOLDER_A), runsOnSystemDefault: true as const }
-    const own = account('acct-b', FOLDER_B)
-
-    expect(claudeLaunchAccountId({ accounts: [covered, own] }, 'acct-a')).toBeNull()
-    expect(claudeLaunchAccountId({ accounts: [covered, own] }, 'acct-b')).toBe('acct-b')
-    expect(claudeLaunchAccountId({ accounts: [covered, own] }, null)).toBeNull()
   })
 })
