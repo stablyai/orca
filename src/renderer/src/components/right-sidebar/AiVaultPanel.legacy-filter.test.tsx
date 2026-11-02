@@ -2,8 +2,9 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const mockState: {
   settings: { aiVaultSearch?: { enabled: boolean } }
@@ -42,12 +43,13 @@ const sessions: AiVaultSession[] = [
   vaultSession('claude:1', 'Fix the foo pipeline'),
   vaultSession('claude:2', 'Rename the bar widget')
 ]
+const scanIssues: AiVaultScanIssue[] = []
 vi.mock('./ai-vault-session-refresh', () => ({
   useAiVaultSessionRefresh: () => ({
     error: null,
     loading: false,
     refresh: vi.fn(),
-    scanResult: { sessions, issues: [], scannedAt: '2026-05-01T10:10:00.000Z' },
+    scanResult: { sessions, issues: scanIssues, scannedAt: '2026-05-01T10:10:00.000Z' },
     sessions
   })
 }))
@@ -113,6 +115,7 @@ function vaultSession(id: string, title: string): AiVaultSession {
 
 beforeEach(() => {
   mockState.settings = {}
+  scanIssues.length = 0
   searchSessions.mockReset().mockResolvedValue({
     kind: 'results',
     hits: [],
@@ -131,7 +134,11 @@ afterEach(cleanup)
 async function typeQuery(text: string) {
   // Imported here, not at the top: the hoisted mock factories close over `mockState` and `sessions`.
   const { default: AiVaultPanel } = await import('./AiVaultPanel')
-  render(<AiVaultPanel />)
+  render(
+    <TooltipProvider>
+      <AiVaultPanel />
+    </TooltipProvider>
+  )
   if (text) {
     await userEvent.type(screen.getByLabelText('Search sessions'), text)
   }
@@ -160,4 +167,23 @@ it('switches to index search with the same query once indexing is enabled', asyn
   )
   expect(screen.queryByRole('button', { name: 'Enable' })).toBeNull()
   await waitFor(() => expect(screen.queryByText('Fix the foo pipeline')).toBeNull())
+})
+
+it('keeps a dismissed history notice hidden after searching and clearing the query', async () => {
+  mockState.settings = { aiVaultSearch: { enabled: true } }
+  scanIssues.push({
+    agent: 'codex',
+    kind: 'notice',
+    path: '/sessions/large.jsonl',
+    message: 'Skipped 2 oversized transcript records.'
+  })
+  await typeQuery('')
+  await userEvent.click(screen.getByRole('button', { name: 'Dismiss history notices' }))
+  const search = screen.getByLabelText('Search sessions')
+  await userEvent.type(search, 'foo')
+  await waitFor(() => expect(searchSessions).toHaveBeenCalled())
+  await waitFor(() => expect(screen.queryByText('Fix the foo pipeline')).toBeNull())
+  await userEvent.clear(search)
+  await waitFor(() => expect(screen.getByText('Fix the foo pipeline')).toBeTruthy())
+  expect(screen.queryByRole('button', { name: 'History notices · 1' })).toBeNull()
 })
