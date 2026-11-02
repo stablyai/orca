@@ -1,3 +1,6 @@
+import { normalizeClaudeSessionEnd } from './agent-hook-listener/claude-session-end'
+import { projectClaudePermissionState } from './agent-hook-listener/claude-permission-projection'
+import { observeClaudePermissionEvent } from './agent-hook-listener/claude-permission-state'
 import { readHookAgentProcess } from './agent-process-presence'
 import { isInheritedHookStatus } from './agent-hook-presence-transition'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
@@ -32,12 +35,6 @@ import {
   readPaneSessionContext
 } from './agent-hook-listener/pane-provider-session'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
-const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
-  'prompt_input_exit',
-  'logout',
-  'other',
-  'bypass_permissions_disabled'
-])
 
 export function normalizeHookPayload(
   state: HookListenerState,
@@ -45,6 +42,7 @@ export function normalizeHookPayload(
   body: unknown,
   expectedEnv: string,
   options: {
+    isReplay?: boolean
     deferCompactOwnershipToClient?: boolean
     previousOpenCodeMainAgent?: AgentMainAgentStatus
     bindingStatusByPaneKey?: ReadonlyMap<string, AgentHookEventPayload>
@@ -198,35 +196,29 @@ export function normalizeHookPayload(
   const agentPresence = agentProcess
     ? { agent: source, process: agentProcess, sessionOwner: true as const }
     : undefined
-  const sessionEndReason = readString(hookPayloadRecord, 'reason')
-  if (
-    eventName === 'SessionEnd' &&
-    agentPresence &&
-    !readString(hookPayloadRecord, 'agent_id') &&
-    // Only known process-exit reasons prove session death; /clear, /resume and unknown reasons do not.
-    sessionEndReason !== undefined &&
-    CLAUDE_EXIT_SESSION_END_REASONS.has(sessionEndReason)
-  ) {
-    const payload =
-      previousStatus?.payload ??
-      normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
-    if (!payload) {
-      return null
-    }
-    return {
-      paneKey,
-      source,
-      launchToken,
-      tabId,
-      worktreeId,
-      connectionId: null,
-      providerSession: providerSession ?? undefined,
-      hookEventName: 'SessionEnd',
-      agentPresence: { ...agentPresence, ended: true as const },
-      payload
-    }
+  const sessionEnd = normalizeClaudeSessionEnd(
+    state,
+    source,
+    envelope,
+    providerSession,
+    agentPresence,
+    previousStatus
+  )
+  if (sessionEnd) {
+    return sessionEnd
   }
 
+  const permissionObservation =
+    source === 'claude'
+      ? observeClaudePermissionEvent(
+          state,
+          paneKey,
+          eventName,
+          hookPayloadRecord,
+          launchToken,
+          options.isReplay === true
+        )
+      : undefined
   const promptText = extractedPrompt.text
   const dispatched = normalizeProviderEvent({
     state,
@@ -256,7 +248,7 @@ export function normalizeHookPayload(
   }
   const grokActiveTurn = source === 'grok' ? state.grokActiveTurnByPaneKey.get(paneKey) : undefined
 
-  return {
+  const normalized: AgentHookEventPayload = {
     paneKey,
     source,
     agentPresence,
@@ -284,7 +276,12 @@ export function normalizeHookPayload(
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
-    toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
+    toolUseId:
+      permissionObservation?.toolUseId ??
+      readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
+    ...(permissionObservation?.settled
+      ? { claudeSettledRequests: permissionObservation.settled }
+      : {}),
     toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
     teammateName:
       source === 'claude' && eventName === 'TeammateIdle'
@@ -302,4 +299,5 @@ export function normalizeHookPayload(
     ...dispatched.hostTurnSignals,
     payload: transportPayload
   }
+  return source === 'claude' ? projectClaudePermissionState(state, normalized) : normalized
 }

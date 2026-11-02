@@ -190,6 +190,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
         res.writeHead(204)
         res.end()
       } catch (error) {
+        this.invalidateClaudeHookRequest(pathname, req.headers, isStatusCurrent())
         if (pathname === OPENCODE_STARTUP_PROMPT_CLAIM_PATH) {
           if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {
             res.writeHead(503)

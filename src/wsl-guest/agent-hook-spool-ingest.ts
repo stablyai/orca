@@ -46,6 +46,7 @@ export function ingestRelayHookSpoolRecord(
     }
     const options: Parameters<typeof normalizeHookPayload>[4] = {
       admitOpenCodeTui: (identity) => admitRelayOpenCodeTui(host, identity),
+      isReplay: true,
       deferCompactOwnershipToClient: true
     }
     const event = host.providerNormalization

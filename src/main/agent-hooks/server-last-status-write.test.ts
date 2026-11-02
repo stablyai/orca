@@ -83,6 +83,8 @@ describe('Last-status persistence', () => {
         })
       })
       expect(file.entries[PANE].launchToken).toBeUndefined()
+      expect(file.entries[PANE].claudePermissionState).toBeUndefined()
+      expect(file.entries[PANE].claudeSettledRequests).toBeUndefined()
       expect(file.entries[PANE].launchTokenHash).toBe(
         createHash('sha256').update('launch-bearer-must-not-persist').digest('hex')
       )

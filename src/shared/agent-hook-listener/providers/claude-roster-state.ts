@@ -1,3 +1,4 @@
+import { retireClaudePermissions } from '../claude-permission-table'
 import type {
   AgentMainAgentStatus,
   AgentStatusState,
@@ -5,7 +6,11 @@ import type {
   AgentWorkingMode
 } from '../../agent-status-types'
 import { continueMainAgentStatus, mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
-import type { ClaudeSubagentRoster } from '../../claude-subagent-roster'
+import {
+  foldClaudeBackgroundTasksIntoRoster,
+  type ClaudeSubagentRoster
+} from '../../claude-subagent-roster'
+import type { ClaudeBackgroundAgentTask } from '../../claude-background-task-inventory'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
@@ -95,6 +100,21 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
+/** A complete inventory proves child ends as their own end hooks do, so those children's requests end too. */
+export function foldClaudeBackgroundInventory(
+  state: HookListenerState,
+  paneKey: string,
+  inventory: { tasks: ClaudeBackgroundAgentTask[]; truncated: boolean }
+): void {
+  const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
+  const before = [...roster.keys()]
+  foldClaudeBackgroundTasksIntoRoster(roster, inventory.tasks, Date.now(), {
+    inventoryComplete: !inventory.truncated
+  })
+  const ended = new Set(before.filter((id) => !roster.has(id)))
+  retireClaudePermissions(state, paneKey, (owner) => owner !== undefined && ended.has(owner))
+}
+
 /** Only fresh inventory retires a reported shell; lead verdicts cannot override positive process evidence. */
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
@@ -159,6 +179,7 @@ export function markClaudeLeadTurnDone(
   mainAgent?: AgentMainAgentStatus
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 } {
+  retireClaudePermissions(state, paneKey, (owner) => owner === undefined)
   const record = setClaudeMainAgentTurnState(state, paneKey, { state: 'done', outcome })
   const resolved = resolveClaudePaneStatus(state, paneKey, record)
   const mainAgent = claudeMainAgentStatusForPayload(record)
@@ -237,6 +258,7 @@ export function clearClaudePendingWaitForAgent(
   paneKey: string,
   ownsWait: (waitingAgentId: string) => boolean
 ): void {
+  retireClaudePermissions(state, paneKey, (owner) => owner !== undefined && ownsWait(owner))
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
     return

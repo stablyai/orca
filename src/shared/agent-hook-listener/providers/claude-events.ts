@@ -8,7 +8,6 @@ import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inv
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
-  foldClaudeBackgroundTasksIntoRoster,
   isClaudeChildTurnEndEvent,
   reapUnconfirmedRestoredClaudeSubagents,
   upsertWorkingClaudeSubagent
@@ -22,6 +21,7 @@ import {
   normalizeClaudeSubagentLifecycleEvent
 } from './claude-lifecycle-events'
 import {
+  foldClaudeBackgroundInventory,
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus,
   setClaudeMainAgentTurnState,
@@ -32,18 +32,17 @@ import {
   claudePaneHasRunningChildWork,
   claudeRowHasUnlistedLiveWork
 } from './claude-pane-hold-evidence'
-import { buildClaudeStatusPayload } from './claude-status-build'
+import { buildClaudePermissionBasePayload, buildClaudeStatusPayload } from './claude-status-build'
 import { trackClaudeTaskNotificationDelivery } from './claude-task-notification-delivery'
 import { recordClaudeTeammateSpawn } from './claude-teammate-spawn'
-
-const CLAUDE_HOOK_AGENT_ID_PREFIX = 'hook-agent-'
 
 export function normalizeClaudeEvent(
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  observePermissions = false
 ): ParsedAgentStatusPayload | null {
   const eventAgentId = readString(hookPayload, 'agent_id')
   if (
@@ -79,6 +78,12 @@ export function normalizeClaudeEvent(
       sessionBoundary: true
     })
   }
+  if (observePermissions && eventName === 'PostToolBatch') {
+    // A batch fires mid-turn once its calls resolve, so even a cold host publishes the proof it carries.
+    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
+      inTurnEvidence: true
+    })
+  }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Only Stop/StopFailure carries a turn verdict; cancellation never retires surviving shell/cron/subagent work.
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
@@ -111,7 +116,6 @@ export function normalizeClaudeEvent(
   const isAskUserQuestionWait =
     (eventName === 'PreToolUse' || eventName === 'PermissionRequest') &&
     isAskUserQuestionTool(eventToolName)
-  const isAskUserQuestion = eventName === 'PreToolUse' && isAskUserQuestionWait
   // Manual PostCompact ends at idle without Stop; auto compaction stays in-turn, and PreCompact alone can be aborted (STA-2915).
   const isManualCompactCompletion = eventName === 'PostCompact' && hookPayload.trigger === 'manual'
   // An answered MCP dialog restores the displaced state; a server can elicit outside any turn.
@@ -133,9 +137,9 @@ export function normalizeClaudeEvent(
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||
     eventName === 'PostToolUseFailure' ||
-    (eventName === 'PreToolUse' && !isAskUserQuestion)
+    (eventName === 'PreToolUse' && !isAskUserQuestionWait)
       ? 'working'
-      : eventName === 'PermissionRequest' || eventName === 'Elicitation' || isAskUserQuestion
+      : eventName === 'PermissionRequest' || eventName === 'Elicitation' || isAskUserQuestionWait
         ? 'waiting'
         : isTurnBoundary || isManualCompactCompletion
           ? 'done'
@@ -182,7 +186,7 @@ export function normalizeClaudeEvent(
       ? eventAgentId
       : undefined
   // Why: `"type": "agent"` hook runs emit tool hooks (agent_type only if inherited) but never SubagentStop, so their row would stay working forever; real children may be untyped and start-less.
-  const isClaudeHookAgent = eventAgentId?.startsWith(CLAUDE_HOOK_AGENT_ID_PREFIX) === true
+  const isClaudeHookAgent = eventAgentId?.startsWith('hook-agent-') === true
   if (eventAgentId && (subagentOriginId || isWaitingInducing) && !isClaudeHookAgent) {
     upsertWorkingClaudeSubagent(
       getOrCreateClaudeSubagentRoster(state, paneKey),
@@ -190,6 +194,9 @@ export function normalizeClaudeEvent(
       { agentType: readString(hookPayload, 'agent_type') },
       Date.now()
     )
+  }
+  if (observePermissions && eventName === 'PermissionRequest' && !isAskUserQuestionWait) {
+    return buildClaudePermissionBasePayload(state, paneKey, promptText, hookPayload)
   }
   if (subagentOriginId) {
     const lead = state.claudeLeadStateByPaneKey.get(paneKey)
@@ -232,12 +239,7 @@ export function normalizeClaudeEvent(
   if (isTurnBoundary && eventAgentId === undefined) {
     // Teammates can report running while idle; trust only unambiguous background_tasks entries and retain tracking for older builds.
     if (backgroundTasks.present) {
-      foldClaudeBackgroundTasksIntoRoster(
-        getOrCreateClaudeSubagentRoster(state, paneKey),
-        backgroundTasks.tasks,
-        Date.now(),
-        { inventoryComplete: !backgroundTasks.truncated }
-      )
+      foldClaudeBackgroundInventory(state, paneKey, backgroundTasks)
     }
   }
   // Preserve the original lead stash through multiple child waits.
@@ -283,7 +285,6 @@ export function normalizeClaudeEvent(
     ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {})
   })
   // Reuse resolved state for compact ownership instead of folding twice (#15202).
-  const effectiveState = resolvedStatus.stateName
   const ownPreviousLead = previousLead?.waitingAgentId ? previousLead.stateBeforeWait : previousLead
   // Stamp (announce now, pair the later all-clear) only a held turn that already counts as finished; cancelled turns earn none.
   const turnCompletedAt =
@@ -323,7 +324,7 @@ export function normalizeClaudeEvent(
     state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
   }
 
-  if (isManualCompactCompletion && effectiveState !== 'done') {
+  if (isManualCompactCompletion && resolvedStatus.stateName !== 'done') {
     // Compact clears or stays silent; live work must not gain a fresh clock or lose restoredUnconfirmed from an unrelated compact.
     return null
   }

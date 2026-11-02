@@ -1,3 +1,4 @@
+import { invalidateRejectedClaudeHook } from '../shared/agent-hook-listener/claude-permission-table'
 import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
@@ -57,8 +58,8 @@ export async function handleRelayHookRequest(
     destroyedBySlowlorisCap = true
     req.destroy()
   })
+  const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
   try {
-    const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
     if (pathname === CLAUDE_AGENT_VIEW_PATH) {
       const body = await readRequestBody(req)
       const reply = options.isCurrent() ? await options.forwardClaudeAgentView?.(body) : {}
@@ -130,6 +131,9 @@ export async function handleRelayHookRequest(
     res.writeHead(204)
     res.end()
   } catch (err) {
+    if (options.isCurrent() && resolveHookSource(pathname) === 'claude') {
+      invalidateRejectedClaudeHook(options.state, req.headers)
+    }
     // Count remote truncations too so a blocked relay names the cause rather than an anonymous request failure (#11217).
     if (isHookRequestTruncatedError(err) && !destroyedBySlowlorisCap) {
       options.transportInterference.record({ source: null, error: err })

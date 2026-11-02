@@ -1,3 +1,4 @@
+import { resolveClaudePaneStatus } from './claude-roster-state'
 import {
   normalizeAgentStatusPayload,
   type AgentStatusState,
@@ -54,5 +55,21 @@ export function buildClaudeStatusPayload(
     turnCompletedAt: mainAgentRecord?.turnCompletedAt,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey)),
     mainAgent: mainAgentRecord ? claudeMainAgentStatusForPayload(mainAgentRecord) : undefined
+  })
+}
+
+export function buildClaudePermissionBasePayload(
+  state: HookListenerState,
+  paneKey: string,
+  promptText: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  return buildClaudeStatusPayload(state, 'PermissionRequest', promptText, paneKey, hookPayload, {
+    ...resolveClaudePaneStatus(
+      state,
+      paneKey,
+      state.claudeLeadStateByPaneKey.get(paneKey) ?? { state: 'working' }
+    ),
+    updateToolSnapshot: false
   })
 }

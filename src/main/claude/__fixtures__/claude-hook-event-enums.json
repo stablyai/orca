@@ -999,5 +999,12 @@
       "CwdChanged",
       "FileChanged"
     ]
+  },
+  "eventAvailability": {
+    "source": "Static cli.js npm artifact hook-enum presence scan, 2026-11-01; event availability only, not a complete enum capture. Delivery verified separately with all supported hooks on 2.1.316.",
+    "PostToolBatch": {
+      "2.1.117": false,
+      "2.1.118": true
+    }
   }
 }

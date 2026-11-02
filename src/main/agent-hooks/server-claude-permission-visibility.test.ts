@@ -1,6 +1,8 @@
+import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from './server/program-status/hook-precedence'
+import captures from '../../shared/agent-hook-listener/__fixtures__/declined-permission-hooks.json'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { buildBody, PANE } from './server.test-fixtures'
+import { buildBody, postHookEvent, PANE } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -342,7 +344,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('lets Claude permission clear when same explicit agent type starts the approved tool', async () => {
+  it('lets Claude permission clear when same explicit agent type finishes the exact approved tool', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -370,6 +372,14 @@ describe('AgentHookServer listener replay', () => {
         tool_input: { command: 'rm -rf /tmp/orca-subagent-repro' },
         tool_use_id: 'toolu-approved-1'
       })
+      expect(server.getStatusSnapshot()[0].state).toBe('waiting')
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        agent_type: 'main',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf /tmp/orca-subagent-repro' },
+        tool_use_id: 'toolu-approved-1'
+      })
 
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
@@ -385,7 +395,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('lets Claude subagent permission clear when the same agent starts the approved tool', async () => {
+  it('lets Claude subagent permission clear when the same agent finishes the exact approved tool', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -415,14 +425,23 @@ describe('AgentHookServer listener replay', () => {
         tool_input: { command: 'pnpm test' },
         tool_use_id: 'toolu-approved-subagent'
       })
+      expect(server.getStatusSnapshot()[0].state).toBe('waiting')
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        agent_id: 'agent-subagent-a',
+        agent_type: 'Review',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' },
+        tool_use_id: 'toolu-approved-subagent'
+      })
 
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,
           state: 'working',
           agentType: 'claude',
-          toolName: 'Bash',
-          toolInput: 'pnpm test'
+          toolName: undefined,
+          toolInput: undefined
         })
       ])
     } finally {
@@ -430,7 +449,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('lets same Claude subagent clear an unknown approved tool without an input preview', async () => {
+  it('lets same Claude subagent settle an unknown approved tool without an input preview', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -460,13 +479,22 @@ describe('AgentHookServer listener replay', () => {
         tool_input: { request_id: 'pending-1' },
         tool_use_id: 'toolu-custom-approved'
       })
+      expect(server.getStatusSnapshot()[0].state).toBe('waiting')
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        agent_id: 'agent-custom-tool',
+        agent_type: 'Review',
+        tool_name: 'BespokeTool',
+        tool_input: { request_id: 'pending-1' },
+        tool_use_id: 'toolu-custom-approved'
+      })
 
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,
           state: 'working',
           agentType: 'claude',
-          toolName: 'BespokeTool',
+          toolName: undefined,
           toolInput: undefined
         })
       ])
@@ -588,4 +616,115 @@ describe('AgentHookServer listener replay', () => {
       server.stop()
     }
   })
+})
+
+describe('recorded Claude decline and continuation', () => {
+  it.each(['claudeDecline', 'claudeParallel'] as const)(
+    'settles %s through the production HTTP listener before the turn ends',
+    async (capture) => {
+      const server = new AgentHookServer()
+      await server.start({ env: 'production' })
+      try {
+        let waiting = false
+        for (const raw of captures[capture]) {
+          if (raw.hook_event_name === 'Stop') {
+            break
+          }
+          await postHookEvent(server, buildBody(raw))
+          if (raw.hook_event_name === 'PermissionRequest') {
+            waiting = true
+          }
+          if (raw.hook_event_name === 'PostToolBatch') {
+            waiting = false
+          }
+          if (waiting) {
+            expect(server.getStatusSnapshot()[0]).toMatchObject({
+              state: 'waiting',
+              toolName: 'Read'
+            })
+          }
+          if (raw.hook_event_name === 'PostToolBatch') {
+            expect(server.getStatusSnapshot()[0].state).toBe('working')
+          }
+        }
+      } finally {
+        server.stop()
+      }
+    }
+  )
+})
+
+it('keeps a second equal-input request waiting when the first invocation ends, until its own invocation resolves', async () => {
+  const server = new AgentHookServer()
+  await server.start({ env: 'production' })
+  try {
+    const [start, prompt, preA, request] = captures.claudeDecline
+    const post = async (raw: Record<string, unknown>): Promise<string> => {
+      await postHookEvent(server, buildBody(raw))
+      return server.getStatusSnapshot()[0].state
+    }
+    const done = (pre: Record<string, unknown>) => ({ ...pre, hook_event_name: 'PostToolUse' })
+    const preB = { ...preA, tool_use_id: 'toolu_second_same_input' }
+    for (const raw of [start, prompt, preA, request]) {
+      await post(raw)
+    }
+    // Constructed reordering: the second invocation's request arrives before its late PreToolUse.
+    expect(await post(request)).toBe('waiting')
+    expect(await post(done(preA))).toBe('waiting')
+    expect(await post(preB)).toBe('waiting')
+    expect(await post(done(preB))).toBe('working')
+
+    // Constructed: requests that name different invocations stay separate obligations.
+    const [preC, preD] = ['toolu_named_c', 'toolu_named_d'].map((id) => ({
+      ...preA,
+      tool_use_id: id
+    }))
+    for (const raw of [preC, preD, { ...request, tool_use_id: preC.tool_use_id }]) {
+      await post(raw)
+    }
+    expect(await post({ ...request, tool_use_id: preD.tool_use_id })).toBe('waiting')
+    expect(await post(done(preC))).toBe('waiting')
+    expect(await post(done(preD))).toBe('working')
+  } finally {
+    server.stop()
+  }
+})
+
+it('holds OSC working behind a projected request and preserves the existing done fallback', async () => {
+  const server = new AgentHookServer()
+  await server.start({ env: 'production' })
+  try {
+    for (const raw of captures.claudeParallel.slice(0, 5)) {
+      await postHookEvent(server, buildBody(raw))
+    }
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.now() + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+    const terminal = {
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId: null,
+      fromProgramStatus: true,
+      renewsProgramStatusLease: true
+    }
+    server.ingestTerminalStatus({
+      ...terminal,
+      payload: { agentType: 'claude', state: 'working', prompt: '' }
+    })
+    expect(server.getStatusSnapshot()[0].state).toBe('waiting')
+    server.ingestTerminalStatus({
+      ...terminal,
+      payload: { agentType: 'claude', state: 'done', prompt: '' }
+    })
+    expect(server.getStatusSnapshot()[0].state).toBe('done')
+    vi.useRealTimers()
+    // A delayed anonymous repeat is indistinguishable from a fresh prompt; it shows until the owner's next end.
+    await postHookEvent(server, buildBody(captures.claudeParallel[3]))
+    expect(server.getStatusSnapshot()[0].state).toBe('waiting')
+    await postHookEvent(server, buildBody(captures.claudeParallel[14]))
+    expect(server.getStatusSnapshot()[0].state).toBe('done')
+  } finally {
+    vi.useRealTimers()
+    server.stop()
+  }
 })
