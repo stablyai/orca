@@ -109,7 +109,12 @@ export function createRuntimeRepoCatalogActions(
                 : {}
               : {}),
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
+            ...reconcileFetchedCatalogWorktreeState(
+              s,
+              catalog,
+              finalizedRepos,
+              reconciliation.pendingReadoptions
+            ),
             ...mergedProjectCompatibility,
             activeRepoId:
               s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,

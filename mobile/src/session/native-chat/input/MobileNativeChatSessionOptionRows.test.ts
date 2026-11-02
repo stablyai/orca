@@ -11,10 +11,10 @@ import {
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
-  Switch: 'Switch',
   Text: 'Text',
   View: 'View'
 }))
+vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronDown: 'ChevronDown',

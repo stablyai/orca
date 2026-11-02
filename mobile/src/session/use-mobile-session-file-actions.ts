@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { openExternalLink } from '../platform/external-link'
 import { triggerSelection } from '../platform/haptics'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
@@ -7,7 +7,6 @@ import {
   type PendingTerminalUrlTap
 } from './MobileTerminalUrlTapSheet'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
-import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
 import { useProvideSessionScreenHandlers } from './session-screen-handlers'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalSendActionsModel } from './use-mobile-session-terminal-send-actions'
@@ -51,46 +50,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     reportChatTapFailure: nativeChatSendError.show
   })
 
-  const handleOpenedFileDiffActivationSeqRef = useRef(0)
-  // Capture the active tab before awaiting openDiff so focus retries cannot override a later user switch.
-  const fileOpenStartActiveTabIdRef = useRef<string | null>(null)
-  const handleFileOpenStart = useCallback(() => {
-    fileOpenStartActiveTabIdRef.current = activeSessionTabIdRef.current
-  }, [])
-  const handleOpenedFileDiff = useCallback(
-    (relativePath: string) => {
-      const activationSeq = ++handleOpenedFileDiffActivationSeqRef.current
-      const activeTabIdAtTap = fileOpenStartActiveTabIdRef.current
-
-      let activated = false
-      const activateOpenedTab = async (): Promise<void> => {
-        const settled = await activateOpenedSourceControlDiffTab<MobileSessionTab>({
-          relativePath,
-          activeTabIdAtTap,
-          fetchSessionTabs,
-          getTabs: () => sessionTabsRef.current,
-          getActiveTabId: () => activeSessionTabIdRef.current,
-          getActivationState: () => ({
-            activated,
-            activationSeq,
-            latestActivationSeq: handleOpenedFileDiffActivationSeqRef.current
-          }),
-          switchSessionTab: (tab) => switchSessionTabRef.current?.(tab)
-        })
-        if (settled) {
-          activated = true
-        }
-      }
-
-      scheduleDelayedAction(() => void activateOpenedTab(), 300)
-      scheduleDelayedAction(() => void activateOpenedTab(), 900)
-      scheduleDelayedAction(() => void activateOpenedTab(), 1800)
-    },
-    [fetchSessionTabs, scheduleDelayedAction]
-  )
   useProvideSessionScreenHandlers(hostId, worktreeId, {
-    onFileOpenStart: handleFileOpenStart,
-    onOpenedFileDiff: handleOpenedFileDiff,
     onResumedTerminal: switchTab
   })
 
@@ -131,10 +91,6 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     setPendingTerminalUrlTap,
     handleFileTap,
     handleNativeChatFileTap,
-    handleOpenedFileDiffActivationSeqRef,
-    fileOpenStartActiveTabIdRef,
-    handleFileOpenStart,
-    handleOpenedFileDiff,
     handleTerminalOpenUrl
   }
 }

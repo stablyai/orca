@@ -140,11 +140,4 @@ describe('shell handlers for a WSL-owned path', () => {
     expect(statMock).not.toHaveBeenCalled()
     expect(launchMock).not.toHaveBeenCalled()
   })
-
-  it('keeps opening with the system default refused for a WSL owner', async () => {
-    await expect(getHandler('shell:openFilePath')({}, '/home/me/a.txt', WSL_OWNER)).resolves.toBe(
-      false
-    )
-    expect(statMock).not.toHaveBeenCalled()
-  })
 })

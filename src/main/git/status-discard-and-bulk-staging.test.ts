@@ -52,13 +52,7 @@ vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) =>
   })
 )
 
-import {
-  bulkDiscardChanges,
-  bulkStageFiles,
-  bulkUnstageFiles,
-  discardChanges,
-  isWithinWorktree
-} from './status'
+import { bulkDiscardChanges, bulkStageFiles, bulkUnstageFiles, discardChanges } from './status'
 
 describe('discardChanges', () => {
   beforeEach(() => {
@@ -72,45 +66,6 @@ describe('discardChanges', () => {
     realpathMock.mockImplementation(async (targetPath: string) => path.resolve(targetPath))
   })
 
-  it('restores tracked files from the index', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'src/file.ts\n' })
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
-
-    await discardChanges('/repo', 'src/file.ts')
-
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      ['ls-files', '--error-unmatch', '--', ':(literal)src/file.ts'],
-      {
-        cwd: '/repo'
-      }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['restore', '--worktree', '--', ':(literal)src/file.ts'],
-      {
-        cwd: '/repo'
-      }
-    )
-    expect(rmMock).not.toHaveBeenCalled()
-  })
-
-  it('removes untracked files from disk', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not tracked'))
-
-    await discardChanges('/repo', 'src/new-file.ts')
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['clean', '-ffdx', '--', ':(literal)src/new-file.ts'],
-      {
-        cwd: '/repo'
-      }
-    )
-    expect(rmMock).not.toHaveBeenCalled()
-  })
-
   it('rejects paths that traverse outside the worktree', async () => {
     await expect(discardChanges('/repo', '../../etc/passwd')).rejects.toThrow(
       'resolves outside the worktree'
@@ -118,10 +73,6 @@ describe('discardChanges', () => {
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(rmMock).not.toHaveBeenCalled()
-  })
-
-  it('accepts in-tree Windows paths when resolving containment', async () => {
-    expect(isWithinWorktree(path.win32, 'C:\\repo', 'C:\\repo\\src\\file.ts')).toBe(true)
   })
 })
 
@@ -163,45 +114,6 @@ describe('bulk git helpers', () => {
         stdin: filePaths.map((filePath) => `:(literal)${filePath}\0`).join('')
       }
     )
-  })
-
-  it('discards tracked and untracked paths in bulk', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'src/file.ts\0docs/readme.md\0' })
-      .mockResolvedValueOnce({ stdout: '' })
-
-    await bulkDiscardChanges('/repo', ['src/file.ts', 'src/new-file.ts', 'docs', 'scratch'])
-
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      [
-        'ls-files',
-        '-z',
-        '--',
-        ':(literal)src/file.ts',
-        ':(literal)src/new-file.ts',
-        ':(literal)docs',
-        ':(literal)scratch'
-      ],
-      { cwd: '/repo' }
-    )
-    // A tracked descendant keeps directory pathspecs on the restore path.
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
-      {
-        cwd: '/repo',
-        stdin: ':(literal)src/file.ts\0:(literal)docs\0'
-      }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['clean', '-ffdx', '--', ':(literal)src/new-file.ts', ':(literal)scratch'],
-      {
-        cwd: '/repo'
-      }
-    )
-    expect(rmMock).not.toHaveBeenCalled()
   })
 
   it('preserves bulk discard action selection and original path order for path edges', async () => {

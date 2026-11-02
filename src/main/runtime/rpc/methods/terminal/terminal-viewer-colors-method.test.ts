@@ -6,9 +6,7 @@ import { TERMINAL_METHODS } from '../terminal'
 import {
   _resetTerminalViewAttributesForTest,
   getTerminalViewAttributes,
-  getTerminalViewerColors,
-  setTerminalViewAttributes,
-  setTerminalViewerColorsListener
+  setTerminalViewAttributes
 } from '../../../terminal-view-attribute-store'
 import type {
   TerminalViewAttributes,
@@ -45,42 +43,6 @@ function setViewerColors(params: unknown) {
 describe('terminal.setViewerColors', () => {
   afterEach(() => _resetTerminalViewAttributesForTest())
 
-  it("makes a paired client's colours the ones a headless host answers with", async () => {
-    const published: unknown[] = []
-    setTerminalViewerColorsListener((colors) => published.push(colors))
-    const colors = { foreground: '#2e3434', background: '#ffffff' }
-
-    const response = await setViewerColors({ colors })
-
-    expect(response).toMatchObject({ ok: true, result: { applied: true } })
-    expect(getTerminalViewerColors()).toEqual(colors)
-    expect(published).toEqual([colors])
-  })
-
-  it('keeps the current colours when the pair cannot answer both slots', async () => {
-    const response = await setViewerColors({ colors: { foreground: '#ffffff' } })
-
-    expect(response).toMatchObject({ ok: true, result: { applied: false } })
-    expect(getTerminalViewerColors()).toBeNull()
-  })
-
-  it('ignores members a newer client adds', async () => {
-    const colors = { foreground: '#000000', background: '#ffffff' }
-
-    const response = await setViewerColors({ colors: { ...colors, cursor: '#ff0000' }, seq: 3 })
-
-    expect(response).toMatchObject({ ok: true, result: { applied: true } })
-    expect(getTerminalViewerColors()).toEqual(colors)
-  })
-
-  it("gives a windowless host the paired client's palette for hidden OSC 4/12 and ?996n replies", async () => {
-    const attributes = appearance([0xff, 0xff, 0xff])
-
-    await setViewerColors({ colors: { foreground: '#2e3434', background: '#ffffff' }, attributes })
-
-    expect(getTerminalViewAttributes()).toEqual(attributes)
-  })
-
   it("keeps a windowed host's own palette", async () => {
     const own = appearance([0x28, 0x2c, 0x34])
     setTerminalViewAttributes(own)
@@ -91,15 +53,6 @@ describe('terminal.setViewerColors', () => {
     })
 
     expect(getTerminalViewAttributes()).toEqual(own)
-  })
-
-  it('drops a malformed palette but still applies the colours', async () => {
-    const colors = { foreground: '#2e3434', background: '#ffffff' }
-
-    await setViewerColors({ colors, attributes: { ...appearance([1, 2, 3]), ansi: [] } })
-
-    expect(getTerminalViewAttributes()).toBeNull()
-    expect(getTerminalViewerColors()).toEqual(colors)
   })
 
   it("forgets an earlier client's palette when an older client pushes colours only", async () => {

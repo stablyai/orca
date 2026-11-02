@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { addLocalRepoFromPath } from './local-repo-registration'
 
 vi.mock('../../repo-icon-autodetect', () => ({

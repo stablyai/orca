@@ -239,6 +239,8 @@ describe('plugin auto-update', () => {
     await updater.run()
     expect(install).toHaveBeenCalledTimes(1)
     expect(info).toHaveBeenCalledWith(`[plugins] auto-updated ${KEY} to 1.1.0`)
+    // Why: an update that installs on its own is never held, so it gets no review notice.
+    expect(updater.getHeldForReview()).toEqual({})
     info.mockRestore()
   })
 
@@ -254,6 +256,7 @@ describe('plugin auto-update', () => {
     expect(install).not.toHaveBeenCalled()
     expect(consents[KEY]).toBe(before)
     expect(updater.getState().needsReview).toEqual({ [KEY]: '1.1.0' })
+    expect(updater.getHeldForReview()).toEqual({ [KEY]: { version: '1.1.0', reason: 'access' } })
   })
 
   // Why every kind: each is a security boundary that must reach the user's own approval.
@@ -300,6 +303,9 @@ describe('plugin auto-update', () => {
     await updater.run()
     expect(install).not.toHaveBeenCalled()
     expect(updater.getState().needsReview).toEqual({ [KEY]: '1.1.0' })
+    expect(updater.getHeldForReview()).toEqual({
+      [KEY]: { version: '1.1.0', reason: 'repository' }
+    })
   })
 
   it('skips disabled, unapproved, development, blocked plugins and the manual policy', async () => {
@@ -313,6 +319,7 @@ describe('plugin auto-update', () => {
       const { updater, install } = setup({ officialCatalog: true, ...options })
       await updater.run()
       expect(install, JSON.stringify(options)).not.toHaveBeenCalled()
+      expect(updater.getHeldForReview(), JSON.stringify(options)).toEqual({})
     }
   })
 

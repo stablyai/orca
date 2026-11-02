@@ -79,7 +79,7 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
 
-vi.mock('@/lib/structured-agent-session-launch', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
 

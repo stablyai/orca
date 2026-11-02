@@ -2,11 +2,15 @@
 
 import {
   dirtyScopes,
+  isNativeChatSetupDraft,
+  installNativeChatDraftRecord,
   load,
   nextSavedAt,
+  nativeChatDraftPositions,
   notifyScope,
   records,
-  reconcileRestoredImageChecks
+  reconcileRestoredImageChecks,
+  type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
 import {
   flushNativeChatComposerDrafts,
@@ -44,10 +48,18 @@ function withAppends(
     return { draft: loaded, changed: false }
   }
   const merged = missing.reduce((draft, entry) => entry.append(draft), loaded)
-  return { draft: { ...merged, savedAt: nextSavedAt() }, changed: true }
+  return {
+    draft: { ...merged, savedAt: nextSavedAt() },
+    changed: true,
+    position: nativeChatDraftPositions.get(merged)
+  }
 }
 
-type DraftLoadResult = { draft: StoredNativeChatComposerDraft; changed: boolean }
+type DraftLoadResult = {
+  draft: StoredNativeChatComposerDraft
+  changed: boolean
+  position?: NativeChatDraftPosition
+}
 
 function applyLoaded(
   loaded: ReadonlyMap<string, unknown>,
@@ -56,7 +68,9 @@ function applyLoaded(
 ): void {
   const drafts = new Map<string, StoredNativeChatComposerDraft | null>()
   for (const [scopeKey, value] of loaded) {
-    drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
+    if (!isNativeChatSetupDraft(scopeKey)) {
+      drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
+    }
   }
   for (const scopeKey of replayNativeChatComposerDraftJournal(drafts, journal)) {
     dirtyScopes.add(scopeKey)
@@ -76,9 +90,13 @@ function applyLoaded(
       dirtyScopes.add(scopeKey)
       continue
     }
-    const { draft, changed } = withAppends(scopeKey, stored, readAtSequence)
+    const { draft, changed, position } = withAppends(scopeKey, stored, readAtSequence)
     reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
-    records.set(scopeKey, draft)
+    installNativeChatDraftRecord(
+      scopeKey,
+      draft,
+      position ?? (changed ? undefined : { at: 'start', pending: true })
+    )
     if (changed) {
       dirtyScopes.add(scopeKey)
     }
@@ -119,7 +137,9 @@ export function hydrateNativeChatComposerDrafts(): Promise<void> {
     installNativeChatComposerDraftBroadcast()
     // Why read here: storage applies changes in order, so this load reads every append made so far.
     const readAtSequence = load.appendSequence
-    const journal = snapshotNativeChatComposerDraftJournal()
+    const journal = snapshotNativeChatComposerDraftJournal().filter(
+      (entry) => !isNativeChatSetupDraft(entry.scopeKey)
+    )
     applyLoaded(await nativeChatComposerDraftStorage().loadAll(), readAtSequence, journal)
   })().catch(retryLater)
   return hydration

@@ -11,6 +11,7 @@ import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import { createOrchestrationRpcHarness } from './methods/orchestration/rpc-test-harness'
+import { MessageWake } from '../runtime-message-waiters'
 
 describe('orchestration commit-notify recovery', () => {
   const harness = createOrchestrationRpcHarness()
@@ -102,7 +103,7 @@ describe('orchestration commit-notify recovery', () => {
     const messages = db.getInbox(100)
     expect(messages).toHaveLength(1)
     expect(replayed.result).toMatchObject({ message: { id: messages[0]?.id } })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays one Dispatch send after notification throws post-commit', async () => {
@@ -125,7 +126,7 @@ describe('orchestration commit-notify recovery', () => {
     const messages = db.getUnreadMessages(`dispatch:${dispatch.id}`)
     expect(messages).toHaveLength(1)
     expect(replayed.result).toMatchObject({ message: { id: messages[0]?.id } })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays one generic reply after notification throws post-commit', async () => {
@@ -152,7 +153,7 @@ describe('orchestration commit-notify recovery', () => {
     const replies = db.getInbox(100).filter((message) => message.thread_id === original.id)
     expect(replies).toHaveLength(1)
     expect(replayed.result).toMatchObject({ message: { id: replies[0]?.id } })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays one question reply nudge without duplicating the answer', async () => {
@@ -188,7 +189,7 @@ describe('orchestration commit-notify recovery', () => {
       db.getInbox(100).filter((message) => message.thread_id === question.message.id)
     ).toHaveLength(2)
     expect(replayed.result).toMatchObject({ duplicate: false })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays worker settlement without applying lifecycle state twice', async () => {
@@ -243,7 +244,7 @@ describe('orchestration commit-notify recovery', () => {
         mutation: { requestId: 'mutation_worker_done', replayed: true }
       }
     })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('resumes an effect-free worker_done checkpoint after a runtime restart', async () => {

@@ -29,6 +29,11 @@ function eventTitle(event: PluginEventName): string {
         'auto.components.settings.PluginContributionActionEvents.agentStatusChanged',
         'When an agent’s status changes'
       )
+    case 'workspace.changed':
+      return translate(
+        'auto.components.settings.PluginContributionActionEvents.workspaceChanged',
+        'When you switch workspace or its terminals change'
+      )
   }
 }
 

@@ -189,8 +189,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         hostId,
         worktreeId,
         name: worktreeName || '',
-        // Source-control/PR origin enables dismissal after diff open; Files must not inherit it.
-        ...(action.panel === 'sourceControl' || action.panel === 'pr' ? { origin: 'session' } : {}),
         ...descriptor.params,
         ...workspaceRouteParams(executionHost)
       }
@@ -213,7 +211,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
-  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
   const handleOpenNewTab = () => {
     setCreateError('')
@@ -245,7 +242,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     openAgentSessionHistory,
     showAgentSessionHistoryAction,
     showChecksAction,
-    showHeaderMoreButton,
     createTabBusy,
     handleOpenNewTab,
     handleOpenQuickCommands

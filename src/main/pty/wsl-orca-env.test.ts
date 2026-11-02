@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isAbsolute } from 'node:path'
-import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
+import { getShellReadyWrapperRoot } from '../providers/local-pty/local-pty-shell-ready-wrapper-root'
 import {
   SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,

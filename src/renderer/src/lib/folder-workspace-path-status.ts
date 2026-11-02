@@ -171,6 +171,11 @@ export function humanizeFolderWorkspacePathError(message: string): string {
     : message
 }
 
+// Why: a moved or deleted folder is the user's to fix, so it gets actionable copy, not an issue link.
+export function humanizeFolderWorkspacePathErrors(error: string): string {
+  return error.split('\n').map(humanizeFolderWorkspacePathError).join('\n')
+}
+
 export function formatFolderWorkspaceCreateError(error: unknown): {
   title: string
   description: string

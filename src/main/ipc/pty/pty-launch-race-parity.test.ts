@@ -31,12 +31,12 @@ import {
   type LaunchRaceLane
 } from './pty-launch-race-test-fixture'
 
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

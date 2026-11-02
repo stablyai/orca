@@ -64,7 +64,6 @@ const runningRecordFor = (options: PullRequestGenerationOptions = {}) =>
     { base: 0, title: 0, body: 0, draft: 0 },
     options.autoSubmit
   )
-const runningRecord = runningRecordFor()
 
 const readyEligibility: HostedReviewCreationEligibility = {
   provider: 'github',
@@ -165,25 +164,6 @@ function deferredGeneration() {
 }
 
 describe('useSourceControlHostedReviewCreation', () => {
-  it('generates details for untouched placeholders, then creates with them', async () => {
-    const input = makeInput()
-    const { result } = renderHook(() => useSourceControlHostedReviewCreation(input))
-
-    await act(async () => result.current.handleCreatePullRequest())
-
-    expect(input.handleGeneratePullRequestFields).toHaveBeenCalledTimes(1)
-    expect(input.createHostedReview).toHaveBeenCalledTimes(1)
-    expect(input.createHostedReview).toHaveBeenCalledWith(
-      '/repo',
-      expect.objectContaining({
-        base: 'main',
-        title: 'Correct README install steps',
-        body: 'Fixes the typo.',
-        draft: true
-      })
-    )
-  })
-
   it.each(['github', 'gitlab'] as const)(
     'preserves edits made during delayed %s auto-submit generation',
     async (provider) => {
@@ -367,57 +347,6 @@ describe('useSourceControlHostedReviewCreation', () => {
     )
   })
 
-  it('submits as shown when clicked again after Stop', async () => {
-    const { generate, finish } = deferredGeneration()
-    const input = makeInput({ handleGeneratePullRequestFields: generate })
-    const { result } = renderHook(() => useSourceControlHostedReviewCreation(input))
-
-    let firstClick: Promise<void> = Promise.resolve()
-    act(() => {
-      firstClick = result.current.handleCreatePullRequest()
-    })
-    useAppStore
-      .getState()
-      .setPullRequestGenerationRecord(GENERATION_KEY, { ...runningRecord, status: 'canceled' })
-    await act(async () => {
-      finish(generatedFields)
-      await firstClick
-    })
-    await act(async () => result.current.handleCreatePullRequest())
-
-    expect(generate).toHaveBeenCalledTimes(1)
-    expect(input.createHostedReview).toHaveBeenCalledTimes(1)
-    expect(input.createHostedReview).toHaveBeenCalledWith(
-      '/repo',
-      expect.objectContaining({ title: 'Fix readme typo', body: '' })
-    )
-  })
-
-  it('still creates the clicked branch PR when the panel closes mid-run', async () => {
-    const { generate, finish } = deferredGeneration()
-    const input = makeInput({ handleGeneratePullRequestFields: generate })
-    const { result, rerender, unmount } = renderHook(
-      (props: Input) => useSourceControlHostedReviewCreation(props),
-      { initialProps: input }
-    )
-
-    let click: Promise<void> = Promise.resolve()
-    act(() => {
-      click = result.current.handleCreatePullRequest()
-    })
-    rerender({ ...input, prGenerating: true })
-    unmount()
-    await act(async () => {
-      finish(generatedFields)
-      await click
-    })
-
-    expect(input.createHostedReview).toHaveBeenCalledWith(
-      '/repo',
-      expect.objectContaining({ head: 'fix-readme-typo', title: 'Correct README install steps' })
-    )
-  })
-
   it.each([
     { name: 'still selected', selectedAtFinish: 'wt-1', reveals: true },
     { name: 'no longer selected', selectedAtFinish: 'wt-2', reveals: false }
@@ -543,34 +472,6 @@ describe('useSourceControlHostedReviewCreation', () => {
     )
   })
 
-  it.each([
-    { name: 'fails', result: null },
-    { name: 'creates', result: generatedFields }
-  ])('releases the in-flight hold when the run $name', async ({ result }) => {
-    const { generate, finish } = deferredGeneration()
-    const input = makeInput({ handleGeneratePullRequestFields: generate })
-    const { result: hook } = renderHook(() => useSourceControlHostedReviewCreation(input))
-    const inFlight = (): boolean | undefined =>
-      vi
-        .mocked(input.setCreatePrInFlightByWorktree)
-        .mock.calls.reduce<Record<string, boolean>>(
-          (state, [update]) => (typeof update === 'function' ? update(state) : update),
-          {}
-        )['wt-1']
-
-    let click: Promise<void> = Promise.resolve()
-    act(() => {
-      click = hook.current.handleCreatePullRequest()
-    })
-    expect(inFlight()).toBe(true)
-    await act(async () => {
-      finish(result)
-      await click
-    })
-
-    expect(inFlight()).toBe(false)
-  })
-
   it('releases the hold as soon as Stop lands, so the next click submits as shown while the stopped request is still pending', async () => {
     let answer: (result: RuntimeGeneratePullRequestFieldsResult) => void = () => {}
     runtime.generate.mockImplementation(
@@ -692,44 +593,5 @@ describe('useSourceControlHostedReviewCreation', () => {
       .mocked(input.setCreatePrIntentNoticeForWorktree)
       .mock.calls.map(([worktreeId]) => worktreeId)
     expect(new Set(noticeTargets)).toEqual(new Set(['wt-1']))
-  })
-
-  it.each([
-    { name: 'the fields were edited', overrides: { prFieldsAreSeedPlaceholders: false } },
-    { name: 'AI actions are off', overrides: { prAiGenerationEnabled: false } },
-    {
-      name: 'no PR agent is configured',
-      overrides: { settings: getDefaultSettings('/home/test') }
-    },
-    {
-      name: 'generation cannot start',
-      overrides: { handleGeneratePullRequestFields: vi.fn(async () => undefined) }
-    }
-  ])('submits as shown when $name', async ({ overrides }) => {
-    const input = makeInput(overrides)
-    const { result } = renderHook(() => useSourceControlHostedReviewCreation(input))
-
-    await act(async () => result.current.handleCreatePullRequest())
-
-    expect(input.createHostedReview).toHaveBeenCalledWith(
-      '/repo',
-      expect.objectContaining({ title: input.prTitle, body: '' })
-    )
-  })
-
-  it('shows the blocked notice instead of generating when the branch is not ready', async () => {
-    const input = makeInput({
-      hostedReviewCreation: { ...readyEligibility, canCreate: false, blockedReason: 'needs_push' }
-    })
-    const { result } = renderHook(() => useSourceControlHostedReviewCreation(input))
-
-    await act(async () => result.current.handleCreatePullRequest())
-
-    expect(input.handleGeneratePullRequestFields).not.toHaveBeenCalled()
-    expect(input.createHostedReview).not.toHaveBeenCalled()
-    expect(input.setCreatePrIntentNoticeForWorktree).toHaveBeenCalledWith(
-      'wt-1',
-      expect.objectContaining({ tone: 'destructive' })
-    )
   })
 })

@@ -4,11 +4,11 @@ import type * as I18nModule from '@/i18n/i18n'
 import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
-import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
-import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
-import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import { agentSessionRefusalFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { structuredAgentSessionRejectionParts } from '../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 
@@ -22,6 +22,20 @@ afterEach(async () => {
 })
 
 describe('desktop words for a failure fact', () => {
+  it('gives new-chat guidance while keeping a missing conversation diagnostic private', () => {
+    expect(
+      agentSessionFailureSentence(
+        {
+          kind: 'savedConversationMissing',
+          detail: { text: 'No conversation found with session ID: private-id', audience: 'log' }
+        },
+        'row',
+        { agentName: 'Claude' },
+        sayAgentSessionFailureTranslated
+      )
+    ).toBe("Claude couldn't find this chat's saved conversation. Start a new chat to continue.")
+  })
+
   it.each([
     ['en', 'Then send your message again.'],
     ['es', 'Después, envía tu mensaje de nuevo.'],

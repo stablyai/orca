@@ -4,7 +4,7 @@ import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_SESSION_ATTACHMENT_PART_FILE,
   agentSessionAttachmentReferences,

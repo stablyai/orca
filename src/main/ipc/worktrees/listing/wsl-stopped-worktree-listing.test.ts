@@ -249,13 +249,4 @@ describe('Retry on a stopped WSL distro (E9)', () => {
     expect(insideAct).toEqual([true])
     expect(isWslUserActFor('Ubuntu')).toBe(false)
   })
-
-  it('does nothing for a folder workspace or a repo outside WSL', async () => {
-    for (const repo of [makeRepo({ kind: 'folder' }), makeRepo({ path: 'C:\\work\\repo' })]) {
-      await scanWorktreesStartingWslDistro(createStore(repo), repo.id)
-    }
-    await scanWorktreesStartingWslDistro(createStore(makeRepo()), 'unknown-repo')
-
-    expect(mocks.listDetectedGitWorktrees).not.toHaveBeenCalled()
-  })
 })

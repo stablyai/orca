@@ -12,6 +12,7 @@ import type {
   HeadlessAutomationDispatcher,
   HeadlessAutomationDispatchLaunch
 } from './headless-dispatch'
+import { AutomationRunLaunchError } from './headless-dispatch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
 import {
@@ -77,10 +78,14 @@ export async function runHeadlessAutomationDispatch(
       runId: run.id,
       status: refusal ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
+      ...(error instanceof AutomationRunLaunchError ? error.target : {}),
+      ...(automation.surface === 'chat' ? { dispatchedAt, precheckResult } : {}),
       ...(refusal ?? { error: describeDispatchError(error) })
     })
   }
   const launchRunTarget = {
+    sessionKind: launch.sessionKind ?? 'terminal',
+    chatSessionId: launch.chatSessionId ?? null,
     workspaceId: launch.workspaceId,
     workspaceDisplayName: launch.workspaceDisplayName ?? null,
     terminalSessionId: launch.terminalSessionId,

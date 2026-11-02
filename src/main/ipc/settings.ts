@@ -1,11 +1,10 @@
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { listSystemFontFamilies } from '../system-fonts'
-import { previewGhosttyImport } from '../ghostty/index'
-import { previewWarpThemeImport } from '../warp-themes'
+import { registerSettingsImportHandlers } from './settings-import-handlers'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
@@ -59,6 +58,7 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // Plugin consent and enablement require main's reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+  delete sanitizedArgs.pluginExternalHostGrants
   return sanitizedArgs
 }
 
@@ -307,14 +307,7 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
 
-  ipcMain.handle('settings:previewGhosttyImport', () => {
-    return previewGhosttyImport(store)
-  })
-
-  ipcMain.handle('settings:previewWarpThemeImport', (event, args?: unknown) => {
-    const source = args === undefined ? { kind: 'auto' } : args
-    return previewWarpThemeImport(store, source, event.sender)
-  })
+  registerSettingsImportHandlers(store)
 
   ipcMain.handle('cache:getGitHub', () => {
     return store.getGitHubCache()

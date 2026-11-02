@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TabHoverCard } from './TabHoverCard'
 import { TAB_TOOLTIP_DELAY_MS, TabStripTooltipProvider } from './TabStripTooltipProvider'
 import { NativeChatNamingErrorBlock } from './NativeChatNamingFailure'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import { useNativeChatNamingFailure } from './use-native-chat-naming-failure'
 

@@ -2,7 +2,7 @@ import { classifyClaudeBackgroundTaskKind } from '../../shared/claude-background
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-background-task-wire'
 import { ownRetainedString } from '../../shared/own-retained-string'
 
 const MAX_TASK_ID_LENGTH = 512

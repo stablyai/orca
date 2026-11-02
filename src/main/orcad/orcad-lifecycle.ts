@@ -8,7 +8,7 @@ import type { OrcadManagedStopInstance } from '../../shared/orcad-stop-request'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
-import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
 import { holdOrcadTerminalAdmissionUntilExit } from './orcad-stop-terminal-admission'
 import {
@@ -95,7 +95,7 @@ export function installOrcadShutdownSignals(
 
 export async function stopOrcadStructuredAgentSessions(): Promise<void> {
   const { stopStructuredAgentSessionRuntime } =
-    await import('../runtime/structured-agent-session-runtime')
+    await import('../runtime/agent-session/structured-agent-session-runtime')
   await stopStructuredAgentSessionRuntime({ trigger: 'quit' })
 }
 

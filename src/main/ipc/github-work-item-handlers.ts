@@ -12,7 +12,7 @@ import {
   listWorkItems
 } from '../github/client'
 import { getPRFileContents, getWorkItemDetails } from '../github/work-item-details'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
 import {
   assertRegisteredGitHubRepo,
@@ -179,13 +179,13 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
 
   ipcMain.handle(
     'gh:workItemDetails',
-    (_event, args: WorkItemArgs & { ownerRepo?: GitHubOwnerRepo }) => {
+    (_event, args: WorkItemArgs & { ownerRepo?: GitHubOwnerRepo; canonical?: boolean }) => {
       const repo = assertRegisteredGitHubRepo(args, store)
       return dispatchWorkItem(
         args,
         repo,
         args.ownerRepo
-          ? (...params) => getWorkItemDetails(...params, args.ownerRepo)
+          ? (...params) => getWorkItemDetails(...params, args.ownerRepo, args.canonical === true)
           : getWorkItemDetails,
         getGitHubLocalGitOptionArgs(store, repo)[0]
       )

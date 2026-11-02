@@ -8,7 +8,10 @@ import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
 import { WSL_ORCAD_HEARTBEAT_MS } from './wsl-orcad-liveness-state'
 import { WSL_ORCAD_IDLE_VERIFY_MS } from './wsl-orcad-liveness-monitor'
-import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
+import {
+  WslDistroNotRunningError,
+  WslDistroUnverifiableConnectError
+} from './wsl-orcad-connection-errors'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { WSL_ORCAD_RECONNECT_DELAYS_MS } from './wsl-orcad-reconnect-backoff'
 import {
@@ -188,7 +191,8 @@ function harness(options: { visible?: boolean } = {}) {
       clock += ms
     },
     clock: () => clock,
-    lastWatch: () => watches.at(-1)!
+    lastWatch: () => watches.at(-1)!,
+    watchCount: () => watches.length
   }
 }
 
@@ -246,6 +250,21 @@ describe('WslOrcadLivenessSupervisor', () => {
     await expect(h.supervisor.connect('Ubuntu', { noBoot: true })).rejects.toBeInstanceOf(
       WslDistroNotRunningError
     )
+    await h.advance(60_000)
+    expect(h.statuses.at(-1)).toMatchObject({ state: 'distro-stopped' })
+  })
+
+  it('re-verifies, never arms, when a no-boot connect could not read the running list (E9)', async () => {
+    const h = harness({ visible: true })
+    await h.supervisor.connect('Ubuntu')
+    const watches = h.watchCount()
+    h.state.running = { status: 'confirmed', distros: [] }
+    h.state.ensureFails = 1
+    h.state.ensureError = new WslDistroUnverifiableConnectError('Ubuntu')
+    await expect(h.supervisor.connect('Ubuntu', { noBoot: true })).rejects.toBeInstanceOf(
+      WslDistroUnverifiableConnectError
+    )
+    expect(h.watchCount()).toBe(watches)
     await h.advance(60_000)
     expect(h.statuses.at(-1)).toMatchObject({ state: 'distro-stopped' })
   })

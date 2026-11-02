@@ -1,10 +1,8 @@
-import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
-import {
-  agentSessionBackgroundTasksEqual,
-  type AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import { agentSessionBackgroundTasksEqual } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import { structuredStatusChildrenEqual } from './structured-agent-session-status-child-work'
 
 export function structuredStatusSummariesEqual(
@@ -13,6 +11,9 @@ export function structuredStatusSummariesEqual(
 ): boolean {
   return (
     a.workspaceId === b.workspaceId &&
+    a.usageLimitContinue?.turnItemId === b.usageLimitContinue?.turnItemId &&
+    a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&
+    a.usageLimitContinue?.state === b.usageLimitContinue?.state &&
     a.agent === b.agent &&
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&

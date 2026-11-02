@@ -1,7 +1,7 @@
 // A structured Claude chat on the desktop, read back with `agentSession.history` after its owner
 // approved a Bash call and answered an AskUserQuestion (Claude Code 2.1.300, 2026-10-15).
 
-import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 export const ANSWERED_PROMPT_ITEMS: AgentJournalRenderItem[] = [
   {
