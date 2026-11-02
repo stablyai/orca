@@ -17,6 +17,10 @@ const discover = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/runtime-git-generation-client', () => ({
   discoverRuntimeCommitMessageModels: discover
 }))
+// The WSL case runs the real client; loaded at collection, outside any test's timeout.
+const actualGenerationClient = await vi.importActual<typeof GenerationClient>(
+  '@/runtime/runtime-git-generation-client'
+)
 
 const SOL = [{ id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }]
 
@@ -90,10 +94,7 @@ it('a local repository card lists the models this machine reports when its picke
 })
 
 it('a local repository card in WSL refreshes the local catalog generation reads, as the global card does', async () => {
-  const actual = await vi.importActual<typeof GenerationClient>(
-    '@/runtime/runtime-git-generation-client'
-  )
-  discover.mockImplementation(actual.discoverRuntimeCommitMessageModels)
+  discover.mockImplementation(actualGenerationClient.discoverRuntimeCommitMessageModels)
   const list = vi.fn(async (args: { worktreePath?: string }) => ({
     success: true,
     models: args.worktreePath ? [{ id: 'wsl-only', label: 'WSL only' }] : SOL

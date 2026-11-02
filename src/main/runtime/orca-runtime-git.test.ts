@@ -56,6 +56,11 @@ vi.mock('../text-generation/pull-request-context', async () => ({
   getPullRequestDraftContext: mocks.getPullRequestDraftContext
 }))
 
+// Loaded at collection so a test that runs the real resolver does not pay for it in its timeout.
+const actualTextGeneration = await vi.importActual<typeof CommitMessageTextGenerationModule>(
+  '../text-generation/commit-message-text-generation'
+)
+
 vi.mock('../source-control/pull-request-template', () => ({
   resolveHostedReviewBodyForGeneration: mocks.resolveHostedReviewBodyForGeneration
 }))
@@ -275,10 +280,9 @@ describe('RuntimeGitCommands', () => {
   it('runs a phone-initiated commit message with the saved Commit message model and effort', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
-    const actual = await vi.importActual<typeof CommitMessageTextGenerationModule>(
-      '../text-generation/commit-message-text-generation'
+    mocks.resolveCommitMessageSettings.mockImplementation(
+      actualTextGeneration.resolveCommitMessageSettings
     )
-    mocks.resolveCommitMessageSettings.mockImplementation(actual.resolveCommitMessageSettings)
     mocks.getStagedCommitContext.mockResolvedValue({
       branch: 'main',
       stagedSummary: 'M\tREADME.md',

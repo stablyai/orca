@@ -45,21 +45,28 @@ export function ChatNamingSetting({
     [settings.sourceControlAi, settings.commitMessageAi]
   )
   const recipe = config.actions?.conversationName
-  const persisted: ActionRecipeDraftValue = {
-    commandInputTemplate:
-      recipe?.commandInputTemplate ??
-      DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.conversationName,
-    agentArgs: recipe?.agentArgs ?? '',
-    modelChoice: config.modelOverridesByOperation?.conversationName
-  }
+  const persistedModelChoice = config.modelOverridesByOperation?.conversationName
+  const persisted = useMemo<ActionRecipeDraftValue>(
+    () => ({
+      commandInputTemplate:
+        recipe?.commandInputTemplate ??
+        DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.conversationName,
+      agentArgs: recipe?.agentArgs ?? '',
+      modelChoice: persistedModelChoice
+    }),
+    [recipe, persistedModelChoice]
+  )
   const [draft, setDraft] = useState<ActionRecipeDraftValue | null>(null)
   const [customCommandDraft, setCustomCommandDraft] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   // Without a menu edit the model choice is whatever is saved now, including another editor's.
-  const value =
-    draft && !draft.modelEdits?.length
-      ? { ...draft, modelChoice: persisted.modelChoice }
-      : (draft ?? persisted)
+  const value = useMemo(
+    () =>
+      draft && !draft.modelEdits?.length
+        ? { ...draft, modelChoice: persisted.modelChoice }
+        : (draft ?? persisted),
+    [draft, persisted]
+  )
   const customCommand = customCommandDraft ?? config.customAgentCommand
   const customCommandDirty = customCommand !== config.customAgentCommand
   const recipeDirty = JSON.stringify(value) !== JSON.stringify(persisted)

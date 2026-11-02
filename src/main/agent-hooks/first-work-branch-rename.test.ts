@@ -33,6 +33,10 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
   generateBranchNameFromContext: generateBranchNameMock,
   resolveTextGenerationParams: resolveTextGenerationParamsMock
 }))
+// Loaded at collection so a test that runs the real resolver does not pay for it in its timeout.
+const actualTextGeneration = await vi.importActual<typeof CommitMessageTextGenerationModule>(
+  '../text-generation/commit-message-text-generation'
+)
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: prepareLocalEnvMock
 }))
@@ -292,10 +296,9 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   })
 
   it('generates the branch name with the saved Branch name model and effort', async () => {
-    const actual = await vi.importActual<typeof CommitMessageTextGenerationModule>(
-      '../text-generation/commit-message-text-generation'
+    resolveTextGenerationParamsMock.mockImplementation(
+      actualTextGeneration.resolveTextGenerationParams
     )
-    resolveTextGenerationParamsMock.mockImplementation(actual.resolveTextGenerationParams)
     const settings = getDefaultSettings('/home')
     settings.autoRenameBranchFromWork = true
     settings.sourceControlAi = {
