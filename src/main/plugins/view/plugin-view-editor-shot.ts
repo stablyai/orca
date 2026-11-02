@@ -135,7 +135,12 @@ export async function shootPluginEditor(
         RENDER_TIMEOUT_MS + REPLY_GRACE_MS
       )
       if (!reply.ok) {
-        throw new PluginCliError('invalid_argument', reply.message, { reason: reply.code })
+        throw new PluginCliError('invalid_argument', reply.message, {
+          reason: reply.code,
+          nextSteps: [
+            `\`orca plugin logs ${pluginKey}\` shows what the editor reported; fix it, then shoot again.`
+          ]
+        })
       }
       const drawn = reply.panel
       if (!drawn) {

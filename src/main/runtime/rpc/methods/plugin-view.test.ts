@@ -111,7 +111,8 @@ describe('plugins.open / plugins.shot', () => {
     const view: PluginViewDesktop = {
       open: vi.fn().mockResolvedValue({ kind: 'panel' }),
       shot: vi.fn().mockResolvedValue({ png: 'x' }),
-      shotReplay: vi.fn().mockResolvedValue({ png: 'x', replay: true })
+      shotReplay: vi.fn().mockResolvedValue({ png: 'x', replay: true }),
+      shotEditor: vi.fn().mockResolvedValue({ png: 'x' })
     }
     setPluginViewForRpc(view)
     await method('plugins.open').handler({ pluginKey: 'acme.todos', panelId: 'a' }, context)
@@ -121,11 +122,15 @@ describe('plugins.open / plugins.shot', () => {
     const replay = { pluginKey: 'acme.todos', panelId: 'a', scenario: 's', tree: null }
     await method('plugins.shotReplay').handler(replay, context)
     expect(view.shotReplay).toHaveBeenCalledWith(replay)
+    const editorShot = { pluginKey: 'acme.todos', filePath: '/w/a.sketch', acts: [{ key: 'r' }] }
+    await method('plugins.shotEditor').handler(editorShot, context)
+    expect(view.shotEditor).toHaveBeenCalledWith(editorShot)
   })
 
   it('need host-admin, like the other plugin controls', () => {
     expect(method('plugins.open').permission).toBe('host-admin')
     expect(method('plugins.shot').permission).toBe('host-admin')
     expect(method('plugins.shotReplay').permission).toBe('host-admin')
+    expect(method('plugins.shotEditor').permission).toBe('host-admin')
   })
 })
