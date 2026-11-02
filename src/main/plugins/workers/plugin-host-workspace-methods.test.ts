@@ -256,7 +256,11 @@ describe('workspace host actions', () => {
   })
 
   it('editor.open asks the window to open a file inside the workspace', async () => {
-    const renderer = { openFile: vi.fn().mockResolvedValue(undefined), runAction: vi.fn() }
+    const renderer = {
+      openFile: vi.fn().mockResolvedValue(undefined),
+      runAction: vi.fn(),
+      openFolderWorkspace: vi.fn()
+    }
     await expect(
       call('editor.open', { workspaceId: 'app', path: 'src/main.ts' }, null, { renderer })
     ).resolves.toEqual({ ok: true, value: { opened: true } })
@@ -270,7 +274,11 @@ describe('workspace host actions', () => {
   })
 
   it("commands.run runs only built-in actions, and needs Orca's window", async () => {
-    const renderer = { openFile: vi.fn(), runAction: vi.fn().mockResolvedValue(undefined) }
+    const renderer = {
+      openFile: vi.fn(),
+      runAction: vi.fn().mockResolvedValue(undefined),
+      openFolderWorkspace: vi.fn()
+    }
     await expect(
       call('commands.run', { action: 'sidebar.left.toggle' }, null, { renderer })
     ).resolves.toEqual({ ok: true, value: { ran: true } })
@@ -281,5 +289,19 @@ describe('workspace host actions', () => {
     await expect(
       call('commands.run', { action: 'sidebar.left.toggle' }, null)
     ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+  })
+
+  it("workspace.open shows a folder workspace through Orca's window", async () => {
+    const renderer = {
+      openFile: vi.fn(),
+      runAction: vi.fn(),
+      openFolderWorkspace: vi.fn().mockResolvedValue(undefined)
+    }
+    const { rpc, calls } = runtime({})
+    await expect(
+      call('workspace.open', { workspaceId: 'folder:f1' }, rpc, { renderer })
+    ).resolves.toEqual({ ok: true, value: { opened: true } })
+    expect(renderer.openFolderWorkspace).toHaveBeenCalledWith('f1')
+    expect(calls).toEqual([])
   })
 })

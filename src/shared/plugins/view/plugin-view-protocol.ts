@@ -75,6 +75,8 @@ export type PluginViewRequestBody =
   | { kind: 'open-file'; worktreeId: string; relativePath: string }
   /** A plugin worker's `commands.run`: always the built-in action, never a plugin's override. */
   | { kind: 'run-action'; action: PluginCommandAliasActionId }
+  /** A plugin worker's `workspace.open` of a folder workspace, which the runtime cannot activate. */
+  | { kind: 'open-folder-workspace'; folderWorkspaceId: string }
 
 export type PluginViewReplay = {
   tree: PluginDeclarativeNode | null

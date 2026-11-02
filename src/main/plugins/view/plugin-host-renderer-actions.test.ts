@@ -34,5 +34,11 @@ describe('plugin host renderer actions', () => {
     await expect(actions.runAction('view.tasks')).rejects.toMatchObject({ code: 'action_failed' })
     await expect(actions.runAction('view.tasks')).rejects.toMatchObject({ code: 'unavailable' })
     expect(request).toHaveBeenLastCalledWith({ kind: 'run-action', action: 'view.tasks' })
+    request.mockResolvedValueOnce({ requestId: 'd', ok: true })
+    await actions.openFolderWorkspace('f1')
+    expect(request).toHaveBeenLastCalledWith({
+      kind: 'open-folder-workspace',
+      folderWorkspaceId: 'f1'
+    })
   })
 })

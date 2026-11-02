@@ -154,7 +154,7 @@ declare module 'orca/host' {
       result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; path: string; branch: string | null; hostId: string | null }[]; truncated: boolean }
       surfaces: "worker"
     }
-    /** Shows a workspace in Orca, as clicking it in the sidebar does. Since host API 1.3. */
+    /** Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app. Since host API 1.3. */
     "workspace.open": {
       params: { workspaceId: string }
       result: { opened: true }

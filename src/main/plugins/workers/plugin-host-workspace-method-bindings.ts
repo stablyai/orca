@@ -149,9 +149,12 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     }
   }),
   'workspace.open': bind(api['workspace.open'], async ({ workspaceId }, ctx) => {
-    if (parseWorkspaceKey(workspaceId)?.type === 'folder') {
-      // The runtime activates Git worktrees only; a folder is shown by Orca's window.
-      throw new PluginHostCallError('unavailable', 'this Orca cannot open folder workspaces yet')
+    const scope = parseWorkspaceKey(workspaceId)
+    if (scope?.type === 'folder') {
+      // The runtime activates Git worktrees only; Orca's window shows a folder workspace.
+      ctx.scope.assertActive()
+      await renderer(ctx.services).openFolderWorkspace(scope.folderWorkspaceId)
+      return { opened: true as const }
     }
     await effect(ctx, 'worktree.activate', { worktree: workspaceSelector(workspaceId) })
     return { opened: true as const }

@@ -25,26 +25,41 @@ function workspaceFilePath(worktreePath: string, relativePath: string): string {
   return [worktreePath.replace(/[\\/]+$/, ''), ...parts].join(separator)
 }
 
+/** A `workspace.list` id (a worktree id, its host-naming `identity:` key, or a folder key) as
+ *  this window's workspace id and folder path. */
+function resolveWorkspace(workspaceId: string): { id: string; root: string } | null {
+  const state = useAppStore.getState()
+  const scope = parseWorkspaceKey(workspaceId)
+  if (scope?.type === 'folder') {
+    const folder = selectFolderWorkspaces(state)?.find(
+      (entry) => entry.id === scope.folderWorkspaceId
+    )
+    return folder ? { id: workspaceId, root: folder.folderPath } : null
+  }
+  const worktrees = selectWorktreesByRepo(state)
+  const identity = workspaceId.startsWith('identity:') ? workspaceId.slice(9) : null
+  const worktree = identity
+    ? Object.values(worktrees)
+        .flat()
+        .find((entry) => entry.identity?.key === identity)
+    : getIndexedWorktreeMap(worktrees).get(workspaceId)
+  return worktree ? { id: worktree.id, root: worktree.path } : null
+}
+
 export function openWorkspaceFile(
   request: Extract<PluginViewRequest, { kind: 'open-file' }>
 ): PluginViewReply {
   const { requestId, worktreeId, relativePath } = request
-  const state = useAppStore.getState()
-  const scope = parseWorkspaceKey(worktreeId)
-  const root =
-    scope?.type === 'folder'
-      ? selectFolderWorkspaces(state)?.find((folder) => folder.id === scope.folderWorkspaceId)
-          ?.folderPath
-      : getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)?.path
-  if (!root) {
+  const workspace = resolveWorkspace(worktreeId)
+  if (!workspace) {
     return fail(requestId, 'workspace_not_found', `This window does not list ${worktreeId}.`)
   }
-  const filePath = workspaceFilePath(root, relativePath)
-  state.openFile(
+  const filePath = workspaceFilePath(workspace.root, relativePath)
+  useAppStore.getState().openFile(
     {
       filePath,
       relativePath: relativePath.split(/[\\/]/).filter(Boolean).join('/'),
-      worktreeId,
+      worktreeId: workspace.id,
       language: detectLanguage(filePath),
       mode: 'edit'
     },
@@ -53,6 +68,21 @@ export function openWorkspaceFile(
   return { requestId, ok: true }
 }
 
+/** `workspace.open` of a folder workspace: the runtime activates Git worktrees only. */
+export function openFolderWorkspace(
+  request: Extract<PluginViewRequest, { kind: 'open-folder-workspace' }>
+): PluginViewReply {
+  const { requestId, folderWorkspaceId } = request
+  const state = useAppStore.getState()
+  if (!selectFolderWorkspaces(state)?.some((folder) => folder.id === folderWorkspaceId)) {
+    return fail(requestId, 'workspace_not_found', `This window does not list that folder.`)
+  }
+  state.setActiveFolderWorkspace(folderWorkspaceId)
+  return { requestId, ok: true }
+}
+
+// Rule: the raw built-in handler, never a wrapper that runs a plugin's replacement first, or a
+// replacement that calls commands.run for Orca's own version would call itself.
 export function runBuiltInAction(
   request: Extract<PluginViewRequest, { kind: 'run-action' }>
 ): PluginViewReply {

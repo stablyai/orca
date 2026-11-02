@@ -115,7 +115,8 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
     result: workspaceListResult
   }),
   'workspace.open': spec({
-    summary: 'Shows a workspace in Orca, as clicking it in the sidebar does.',
+    summary:
+      'Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app.',
     since: 3,
     scope: 'any-workspace',
     capability: 'workspace:write',

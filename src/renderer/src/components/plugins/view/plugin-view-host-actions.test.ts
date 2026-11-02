@@ -10,11 +10,17 @@ afterEach(() => {
   useAppStore.setState(initialState, true)
 })
 
-function seedWorkspaces(openFile: ReturnType<typeof vi.fn>): void {
+function seedWorkspaces(
+  openFile: ReturnType<typeof vi.fn>,
+  setActiveFolderWorkspace: ReturnType<typeof vi.fn> = vi.fn()
+): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only id and path of worktrees and id and folderPath of folders.
   useAppStore.setState({
     openFile,
-    worktreesByRepo: { r1: [{ id: 'r1::/repo', path: '/repo' }] },
+    worktreesByRepo: {
+      r1: [{ id: 'r1::/repo', path: '/repo', identity: { key: 'wt2:local:i1' } }]
+    },
+    setActiveFolderWorkspace,
     folderWorkspaces: [{ id: 'f1', folderPath: 'C:\\notes' }]
   } as unknown as Partial<ReturnType<typeof useAppStore.getState>>)
 }
@@ -50,6 +56,41 @@ describe('open-file', () => {
       expect.objectContaining({ filePath: 'C:\\notes\\todo\\today.md', worktreeId: 'folder:f1' }),
       { preview: false }
     )
+  })
+
+  it('takes the host-naming identity id workspace.list returns', async () => {
+    const openFile = vi.fn().mockReturnValue('file-1')
+    seedWorkspaces(openFile)
+    await handlePluginViewRequest({
+      requestId: 'i',
+      kind: 'open-file',
+      worktreeId: 'identity:wt2:local:i1',
+      relativePath: 'a.ts'
+    })
+    expect(openFile).toHaveBeenLastCalledWith(
+      expect.objectContaining({ filePath: '/repo/a.ts', worktreeId: 'r1::/repo' }),
+      { preview: false }
+    )
+  })
+
+  it('shows a folder workspace for workspace.open', async () => {
+    const setActiveFolderWorkspace = vi.fn()
+    seedWorkspaces(vi.fn(), setActiveFolderWorkspace)
+    await expect(
+      handlePluginViewRequest({
+        requestId: 'o',
+        kind: 'open-folder-workspace',
+        folderWorkspaceId: 'f1'
+      })
+    ).resolves.toEqual({ requestId: 'o', ok: true })
+    expect(setActiveFolderWorkspace).toHaveBeenCalledWith('f1')
+    await expect(
+      handlePluginViewRequest({
+        requestId: 'p',
+        kind: 'open-folder-workspace',
+        folderWorkspaceId: 'zz'
+      })
+    ).resolves.toMatchObject({ ok: false, code: 'workspace_not_found' })
   })
 
   it('refuses a workspace this window does not list', async () => {
