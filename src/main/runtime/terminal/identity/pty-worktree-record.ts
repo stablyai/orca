@@ -274,7 +274,13 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       // Why: the renderer's graph sync carrying the move is still in flight, like a spawn's.
-      recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))
+      recordPtySurface(
+        this.terminalIdentity,
+        pty,
+        tabId,
+        paneKey,
+        spawnSurfaceClaimSequence(this.graphSequence)
+      )
     }
   }
 
