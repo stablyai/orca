@@ -137,7 +137,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.declarative-panels',
     ['plugin-declarative-panel'],
     [
-      `${UI}declarative\\/`,
+      `${UI}(?:declarative\\/|plugin-icon-glyphs\\.ts$)`,
       'src\\/shared\\/plugins\\/(?:declarative\\/|frames\\/plugin-declarative-)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
       'resources\\/plugins\\/declarative\\/'
@@ -211,13 +211,14 @@ const SPECIFIC_PLUGIN_ROUTES = [
   // `orca plugin open` / `shot`: renderer reveal, draw wait and main's capture of the panel rect.
   pluginRoute(
     'plugins.view-shot',
-    ['plugin-shot'],
+    ['plugin-shot', 'plugin-shot-editor'],
     [
       `${UI}view\\/`,
-      `${STORE}view-capture`,
+      `${STORE}(?:view-capture|shot-replay)`,
+      'src\\/main\\/plugins\\/testing\\/plugin-test-(?:hooks|register)',
       'src\\/(?:main|shared)\\/plugins\\/view\\/',
       'src\\/main\\/runtime\\/rpc\\/methods\\/plugin-view',
-      'src\\/cli\\/(?:handlers|specs)\\/plugin-view',
+      'src\\/cli\\/(?:handlers|specs)\\/plugin-(?:view|shot-scenario)',
       'src\\/renderer\\/src\\/hooks\\/(?:ipc-events\\/plugin-view-ipc-bridge|use-document-dark-theme)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report|right-sidebar-panel-content)'
     ].join('|'),
