@@ -179,6 +179,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       function Conversation() {
         const session = useMobileStructuredAgentSession({
           client,
+          pairedHostClient: client,
           sessionId: SESSION_ID,
           sourceIdentity: 'host',
           enabled: true,
@@ -277,6 +278,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       function Conversation() {
         const session = useMobileStructuredAgentSession({
           client,
+          pairedHostClient: client,
           sessionId: SESSION_ID,
           sourceIdentity: 'host',
           enabled: true,
@@ -504,6 +506,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     function Conversation() {
       const session = useMobileStructuredAgentSession({
         client,
+        pairedHostClient: client,
         sessionId: SESSION_ID,
         sourceIdentity: 'host',
         enabled: true,
