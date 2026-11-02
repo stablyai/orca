@@ -1,7 +1,10 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import {
+  structuredLaunchConversationOwner,
+  structuredLaunchFailure
+} from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { agentSessionWriteFailureText } from '../native-chat/agent-session-write-notice-text'
 import { agentLabel } from '../../../../shared/ai-vault-session-filters'
@@ -38,78 +41,39 @@ export function reportCliChatResumeTerminalChanged(source: CliChatResumeSource):
   )
 }
 
+/** After the terminal closed, the chat that took its place says why, as any failed start does;
+ *  only a chat that already holds the conversation is opened instead. */
+export async function reportCliChatResumeFailureInChat(
+  error: unknown,
+  openOwner: boolean,
+  target: RuntimeClientTarget,
+  dropChat: () => void
+): Promise<void> {
+  const owner = structuredLaunchConversationOwner(error)
+  if (openOwner && owner) {
+    dropChat()
+    await reportCliChatResumeOwner(owner, openOwner, target)
+  }
+}
+
+/** Said in the chat that took the terminal's place, since that terminal is gone. */
+export function cliChatResumeExitUnprovenText(source: CliChatResumeSource): string {
+  return translate(
+    'components.native-chat.resumeInNewChat.terminalExitUnprovenInChat',
+    "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Check the host connection, then try again.",
+    { agent: agentLabel(source.agent) }
+  )
+}
+
 export async function reportCliChatResumeFailure(
   source: CliChatResumeSource,
   error: unknown,
   openOwner: boolean,
   target: RuntimeClientTarget,
-  closed = false,
   closing = false
 ): Promise<void> {
   const refusal = structuredLaunchFailure(error)
   const values = { agent: agentLabel(source.agent) }
-  if (closed) {
-    const held =
-      refusal?.code === 'agent_session_conflict' ||
-      refusal?.code === 'agent_session_ownership_unknown'
-    if (held && openOwner && refusal?.owner) {
-      await reportCliChatResumeOwner(refusal.owner, openOwner, target)
-      return
-    }
-    const reason = refusal?.details?.reason
-    // Another terminal still runs it; Session History refuses too until that one stops.
-    if (
-      refusal?.code === 'agent_session_conflict' &&
-      reason === 'conversationHeldElsewhere' &&
-      !refusal.owner
-    ) {
-      toast.error(
-        translate(
-          'components.native-chat.resumeInNewChat.otherTerminalAfterClose',
-          "{{agent}}'s terminal was closed, but {{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History.",
-          values
-        )
-      )
-      return
-    }
-    // Nothing was written yet, so Session History has nothing to offer.
-    if (reason === 'transcriptNotFound') {
-      toast.error(
-        translate(
-          'components.native-chat.resumeInNewChat.notSavedAfterClose',
-          "{{agent}}'s terminal was closed, but {{agent}} hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead.",
-          values
-        )
-      )
-      return
-    }
-    const plainReason =
-      reason === 'transcriptUnreadable'
-        ? translate(
-            'components.native-chat.resumeInNewChat.historyUnavailable',
-            "Orca couldn't read the conversation"
-          )
-        : held
-          ? translate(
-              'components.native-chat.resumeInNewChat.chatHeld',
-              'another chat or terminal is using it'
-            )
-          : null
-    toast.error(
-      plainReason
-        ? translate(
-            'components.native-chat.resumeInNewChat.startFailedAfterClose',
-            "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
-            { ...values, reason: plainReason }
-          )
-        : translate(
-            'components.native-chat.resumeInNewChat.chatFailedAfterClose',
-            "{{agent}}'s terminal was closed, but the chat couldn't open. Your conversation is saved. Open it from Session History.",
-            values
-          )
-    )
-    return
-  }
   if (closing) {
     toast.error(
       translate(

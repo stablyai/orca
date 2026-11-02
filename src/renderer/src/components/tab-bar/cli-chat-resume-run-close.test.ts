@@ -71,6 +71,9 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 import { useAppStore } from '@/store'
+import { getStructuredAgentSessionLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { startStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
+import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -88,6 +91,11 @@ import {
 } from './cli-chat-resume-run.test-fixture'
 
 const creates = () => mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.create')
+/** What the chat that took the terminal's place says about its failed start. */
+const chatFailure = () => {
+  const [chat] = tabs()
+  return chat ? getStructuredAgentSessionLaunchFailure('wt-1', chat.entityId) : null
+}
 let main: TabsDrawnFromMain | undefined
 afterEach(() => {
   vi.useRealTimers()
@@ -129,19 +137,114 @@ describe('close terminal then continue on capable hosts', () => {
     expect(mocks.toast).not.toHaveBeenCalled()
   })
 
-  it('reports an unverified stop once, pointing to Session History, and opens no chat', async () => {
+  it('says an unverified stop once, in the chat that took the terminal’s place', async () => {
     mocks.closeTerminal.mockImplementation(async (_source, _current, hooks) => {
       hooks.closing()
       throw new Error('private negative stop sentinel')
     })
     await runCliChatResume(SOURCE)
+    await vi.waitFor(() =>
+      expect(chatFailure()?.causeText).toBe(
+        "Orca closed Claude's terminal but couldn't confirm Claude stopped. Check the host connection, then try again."
+      )
+    )
+    expect(creates()).toEqual([])
+    expect(tabs().map((tab) => tab.contentType)).toEqual(['agent-session'])
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
+
+  it('leaves a tab the user picked while the chat waited on the close', async () => {
+    mocks.closeTerminal.mockImplementation(async (_source, _current, hooks) => {
+      useAppStore.getState().createUnifiedTab('wt-1', 'agent-session', {
+        id: 'picked',
+        entityId: 'picked-chat'
+      })
+      expect(resolveWebSessionVisibleTabId(useAppStore.getState(), 'wt-1')).toBe('picked')
+      hooks.prepared()
+      hooks.closing()
+      mocks.source = null
+      return true
+    })
+    await runCliChatResume(SOURCE)
+    await main?.settle()
+    expect(creates()).toHaveLength(1)
+    expect(resolveWebSessionVisibleTabId(useAppStore.getState(), 'wt-1')).toBe('picked')
+  })
+
+  it('keeps the terminal, quietly, when the user closes the pending chat first', async () => {
+    mocks.closeTerminal.mockImplementation(async (_source, current, hooks) => {
+      useAppStore.getState().closeUnifiedTab(tabs()[0].id)
+      await main?.settle()
+      hooks.prepared()
+      if (!current()) {
+        hooks.refused()
+        return false
+      }
+      hooks.closing()
+      return true
+    })
+    await runCliChatResume(SOURCE)
     expect(creates()).toEqual([])
     expect(tabs()).toEqual([])
-    expect(mocks.toast.mock.calls).toEqual([
-      [
-        "Orca closed Claude's terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History."
-      ]
-    ])
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
+
+  // What the host reads in the clicked pane decides whether continuing stops it or its prompt asks.
+  it.each([
+    {
+      name: 'the agent runs',
+      probe: { verdict: 'live', foregroundProcess: 'claude' },
+      asks: false
+    },
+    { name: 'the read is unverifiable', probe: { verdict: 'unverifiable' }, asks: false },
+    { name: 'no terminal is bound here', probe: null, asks: false },
+    {
+      name: 'another job runs after the agent quit',
+      probe: { verdict: 'live', foregroundProcess: 'vim' },
+      asks: true
+    }
+  ])('closes the terminal when $name', async ({ probe, asks }) => {
+    if (probe) {
+      mocks.probe.mockImplementation(async ([ptyId]: string[]) => [
+        { ptyId, timedOut: false, remote: false, ...probe }
+      ])
+    } else {
+      useAppStore.setState((state) => ({
+        terminalLayoutsByTabId: {
+          'tab-1': { ...state.terminalLayoutsByTabId['tab-1'], ptyIdsByLeafId: {} }
+        }
+      }))
+    }
+    // Its own running-process prompt asks only without consent; the user cancels it.
+    mocks.closeTerminal.mockImplementation(async (_source, _current, hooks, _signal, consents) => {
+      hooks.prepared()
+      if (!consents) {
+        return false
+      }
+      hooks.closing()
+      return true
+    })
+    await runCliChatResume(SOURCE)
+    expect(mocks.closeTerminal.mock.calls.map((call) => call[4])).toEqual([!asks])
+    // A cancelled prompt keeps the terminal and removes the chat opened for it.
+    expect(creates()).toHaveLength(asks ? 0 : 1)
+    expect(tabs()).toHaveLength(asks ? 0 : 1)
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
+
+  it('shows a chat already opening this conversation and keeps the terminal', async () => {
+    mocks.call.mockImplementationOnce(() => new Promise(() => undefined))
+    const other = startStructuredAgentLaunch('wt-1', 'claude', {
+      requestId: 'other-resume',
+      resumeFrom: { providerSessionId: SOURCE.providerSessionId }
+    })
+    await vi.waitFor(() => expect(creates()).toHaveLength(1))
+    await runCliChatResume(SOURCE)
+    await main?.settle()
+    expect(mocks.closeTerminal).not.toHaveBeenCalled()
+    expect(tabs().map((tab) => tab.entityId)).toEqual([other.sessionId])
+    expect(creates()).toHaveLength(1)
+    expect(mocks.toast).not.toHaveBeenCalled()
   })
 
   it('stops counting preparation time once the close waits on the user', async () => {
@@ -223,7 +326,8 @@ describe('close terminal then continue on capable hosts', () => {
   })
 })
 
-// The same host refusal on an older host (terminal kept, CLI source sent) and a capable one (closed first).
+// The same host refusal on an older host (terminal kept, CLI source sent, said in a toast) and a capable
+// one (closed first, said in the chat that took its place).
 // A capable host whose pane agent already quit keeps the terminal, exactly as an older host does.
 // Only the host's process read decides: a CLI has no status row before its first hook.
 describe.each([
@@ -246,35 +350,23 @@ describe.each([
   })
   const owner = { sessionId: 'owner-chat', workspaceId: 'owner-workspace' }
   it.each([
-    { name: 'it opens', refusal: null, older: null, capable: null, opens: true },
-    {
-      name: 'a chat owns it',
-      refusal: held(owner),
-      older: null,
-      capable: null,
-      activates: true
-    },
+    { name: 'it opens', refusal: null, older: null, opens: true },
+    { name: 'a chat owns it', refusal: held(owner), older: null, activates: true },
     {
       name: 'a terminal holds it',
       refusal: held(),
       older:
-        'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.',
-      capable:
-        "Claude's terminal was closed, but Claude is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History."
+        'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.'
     },
     {
       name: 'nothing saved yet',
       refusal: refuse('transcriptNotFound'),
-      older: "Claude hasn't saved this conversation yet. Try again after it replies.",
-      capable:
-        "Claude's terminal was closed, but Claude hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead."
+      older: "Claude hasn't saved this conversation yet. Try again after it replies."
     },
     {
       name: 'saved but unreadable',
       refusal: refuse('transcriptUnreadable'),
-      older: /couldn't open.*history/i,
-      capable:
-        "Claude's terminal was closed, but the chat couldn't open: Orca couldn't read the conversation. Your conversation is saved. Open it from Session History."
+      older: /couldn't open.*history/i
     },
     {
       // Not an admission refusal, so the launch keeps its recovery tab on either path.
@@ -286,10 +378,9 @@ describe.each([
         createAttemptRefusedBeforeCommit: true
       },
       older: null,
-      capable: null,
       recoveryTab: true
     }
-  ])('$name', async ({ refusal, older, capable, activates, recoveryTab, opens }) => {
+  ])('$name', async ({ refusal, older, activates, recoveryTab, opens }) => {
     if (refusal) {
       mocks.call.mockResolvedValue({ ok: false, refusal })
     }
@@ -300,12 +391,12 @@ describe.each([
     })
     expect(mocks.closeTerminal).toHaveBeenCalledTimes(closes ? 1 : 0)
     expect(mocks.activate).toHaveBeenCalledTimes(activates ? 1 : 0)
-    const expected = closes ? capable : older
+    const toast = closes ? null : older
     expect(mocks.toast.mock.calls.map(([text]) => text)).toEqual(
-      expected === null
-        ? []
-        : [expected instanceof RegExp ? expect.stringMatching(expected) : expected]
+      toast === null ? [] : [toast instanceof RegExp ? expect.stringMatching(toast) : toast]
     )
-    expect(tabs()).toHaveLength(recoveryTab || opens ? 1 : 0)
+    const saysInChat = closes && !!refusal && !activates && !recoveryTab
+    expect(tabs()).toHaveLength(recoveryTab || opens || saysInChat ? 1 : 0)
+    expect(!!chatFailure()).toBe(saysInChat)
   })
 })

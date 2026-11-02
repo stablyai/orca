@@ -12,26 +12,43 @@ import { probePtyRunningWork } from '../terminal/pty-running-work-probe'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { namesCliConversation } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'
 
+/** keep: the agent quit, so the terminal stays; close: continuing stops the pane's agent;
+ *  ask: the pane runs another job, so the terminal's own running-process prompt asks. */
+export type CliChatResumeClose = 'keep' | 'close' | 'ask'
+
 /** Only the host's proof that the pane's shell runs nothing shows its agent quit; a CLI has no status row before its first hook. */
-async function paneAgentQuit(source: CliChatResumeSource, signal: AbortSignal): Promise<boolean> {
+async function paneClose(
+  source: CliChatResumeSource,
+  signal: AbortSignal
+): Promise<CliChatResumeClose> {
   const leafId = source.paneKey.slice(source.tabId.length + 1)
   const ptyId =
     useAppStore.getState().terminalLayoutsByTabId[source.tabId]?.ptyIdsByLeafId?.[leafId]
+  // Unbound here is unverifiable, not quit: the close resolves the pane on its host.
   if (!ptyId) {
-    return true
+    return 'close'
   }
   const [probe] = await waitForPromiseWithSignal(
     probePtyRunningWork([ptyId], { timeoutMs: 5_000 }),
     signal
   )
-  return probe?.verdict === 'exited'
+  if (probe?.verdict === 'exited') {
+    return 'keep'
+  }
+  // A job started after the agent quit (an editor, a dev server) is the user's to stop.
+  return probe?.verdict === 'live' &&
+    probe.foregroundProcess &&
+    !recognizeAgentProcess(probe.foregroundProcess)
+    ? 'ask'
+    : 'close'
 }
 
-/** Whether continuing closes the terminal first; null when a check refused and said so, or the source changed. */
+/** How continuing treats the terminal; null when a check refused and said so, or the source changed. */
 export async function admitCliChatResumeClose(
   source: CliChatResumeSource,
   agent: TuiAgent,
@@ -39,7 +56,7 @@ export async function admitCliChatResumeClose(
   openOwner: boolean,
   isCurrent: () => boolean,
   signal: AbortSignal
-): Promise<boolean | null> {
+): Promise<CliChatResumeClose | null> {
   const closeSupported = await waitForPromiseWithSignal(
     structuredAgentSessionHostSupports(
       target,
@@ -48,12 +65,12 @@ export async function admitCliChatResumeClose(
     signal
   )
   // An agent that already quit leaves nothing to stop, so its terminal stays and main's create runs.
-  const quit = closeSupported && (await paneAgentQuit(source, signal))
+  const close = closeSupported ? await paneClose(source, signal) : 'keep'
   if (!isCurrent()) {
     return null
   }
-  if (!closeSupported || quit) {
-    return false
+  if (close === 'keep') {
+    return close
   }
   const state = useAppStore.getState()
   // Main's answer to a chat that already holds the conversation; the host's create judges terminals.
@@ -94,5 +111,5 @@ export async function admitCliChatResumeClose(
     notifyHostPermissionRefused(agent, permission.kind)
     return null
   }
-  return isCurrent() ? true : null
+  return isCurrent() ? close : null
 }

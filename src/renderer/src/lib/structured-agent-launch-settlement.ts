@@ -7,7 +7,10 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import type { StructuredAgentLaunchOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
-import { StructuredAgentSessionCreateAbandonedError } from './agent-session/launch/structured-agent-session-launch-errors'
+import {
+  StructuredAgentSessionCreateAbandonedError,
+  type StructuredAgentSessionCreateGate
+} from './agent-session/launch/structured-agent-session-launch-errors'
 
 export type StructuredAgentLaunchSettlement =
   | {
@@ -32,8 +35,8 @@ export type StructuredAgentLaunchHooks = {
   // Abort on the caller’s event, not only after awaits, so abandoned staged prompts never reach providers.
   signal?: AbortSignal
   beforeCreate?: () => boolean
-  /** The create waits for this; false abandons it. */
-  createAfter?: Promise<boolean>
+  /** The create waits for this. */
+  createAfter?: Promise<StructuredAgentSessionCreateGate>
 }
 
 export type StructuredAgentLaunchHandle = {
