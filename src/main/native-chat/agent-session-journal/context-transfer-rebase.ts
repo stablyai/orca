@@ -1,4 +1,4 @@
-import { deriveContextTransferState } from './context-transfer-state'
+import { contextTransferLookup, deriveContextTransferState } from './context-transfer-state'
 import { randomUUID } from 'node:crypto'
 import type Database from '../../sqlite/sync-database'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -22,7 +22,7 @@ export function rebaseContextTransfers(
   at: number
 ): void {
   const records = readContextTransfers(db, snapshot.sessionId)
-  if (records.some((row) => row.kind === 'closure' && row.commandId === commandId)) {
+  if (contextTransferLookup(records).closureCommands.has(commandId)) {
     return
   }
   const owner = contextTransferOwner(db, snapshot.sessionId)
@@ -76,7 +76,8 @@ export function rebaseCompletedContextRewind(
   sessionId: string,
   publishedEpoch?: string
 ): void {
-  if (!readContextTransfers(db, sessionId).length) {
+  const records = readContextTransfers(db, sessionId)
+  if (!records.length) {
     return
   }
   const owner = contextTransferOwner(db, sessionId)
@@ -84,7 +85,10 @@ export function rebaseCompletedContextRewind(
   if (
     rewind?.phase !== 'completed' ||
     !rewind.epoch ||
-    (publishedEpoch !== undefined && rewind.epoch !== publishedEpoch)
+    (publishedEpoch !== undefined && rewind.epoch !== publishedEpoch) ||
+    // Settle before restoring the kept journal: a repeated publication or nothing applicable needs no rebase.
+    contextTransferLookup(records).closureCommands.has(rewind.operationId) ||
+    deriveContextTransferState(records, owner?.providerHandleChain ?? []).kind === 'none'
   ) {
     return
   }

@@ -14,8 +14,11 @@ import { isAgentSessionProviderContextBoundary } from '../../../shared/agent-ses
 import { matchContextTransferEcho } from './context-transfer-echo'
 import { contextTransferOwner, readContextTransfers } from './context-transfer-repository'
 import { writeContextTransferJournalReceipts } from './context-transfer-journal-receipts'
+import { applyContextTransferRecord, trackContextTransferLookup } from './context-transfer-state'
 
-const indexes = new WeakMap<Database.Database, Map<string, readonly ContextTransferRecord[]>>()
+type CachedFacts = { records: ContextTransferRecord[]; positions: Map<string, number> }
+
+const indexes = new WeakMap<Database.Database, Map<string, CachedFacts>>()
 const owners = new WeakMap<Database.Database, Map<string, AgentSessionRecord | null>>()
 const dirtyFacts = new WeakMap<Database.Database, Set<string>>()
 const dirtyOwners = new WeakMap<Database.Database, Set<string>>()
@@ -30,13 +33,34 @@ export function contextTransferIndex(
     index = new Map()
     indexes.set(db, index)
   }
-  let records = index.get(sessionId)
-  if (!records) {
-    // Frozen so derived lookups can be memoized by array identity.
-    records = Object.freeze(load())
-    index.set(sessionId, records)
+  let cached = index.get(sessionId)
+  if (!cached) {
+    const records = load()
+    cached = { records, positions: new Map(records.map((record, at) => [record.id, at])) }
+    trackContextTransferLookup(records)
+    index.set(sessionId, cached)
   }
-  return records
+  return cached.records
+}
+
+/** A committed write updates the cached facts in place; rollback discards them. */
+export function recordContextTransferWrite(
+  db: Database.Database,
+  record: ContextTransferRecord
+): void {
+  markDirty(dirtyFacts, db, record.sessionId)
+  const cached = indexes.get(db)?.get(record.sessionId)
+  if (!cached) {
+    return
+  }
+  const at = cached.positions.get(record.id)
+  if (at === undefined) {
+    cached.positions.set(record.id, cached.records.length)
+    cached.records.push(record)
+  } else {
+    cached.records[at] = record
+  }
+  applyContextTransferRecord(cached.records, record)
 }
 
 function markDirty(
@@ -78,9 +102,9 @@ function indexedOwner(db: Database.Database, sessionId: string) {
   return index.get(sessionId) ?? null
 }
 
-/** Transaction-local derivations are never retained after commit or rollback. */
-export function finishContextTransferTransaction(db: Database.Database): void {
-  for (const sessionId of dirtyFacts.get(db) ?? []) {
+/** Rolled-back fact writes and every owner read inside the transaction are discarded. */
+export function finishContextTransferTransaction(db: Database.Database, committed: boolean): void {
+  for (const sessionId of committed ? [] : (dirtyFacts.get(db) ?? [])) {
     indexes.get(db)?.delete(sessionId)
   }
   for (const sessionId of dirtyOwners.get(db) ?? []) {

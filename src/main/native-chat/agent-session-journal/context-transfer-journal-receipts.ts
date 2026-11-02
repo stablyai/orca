@@ -48,18 +48,7 @@ export function writeContextTransferJournalReceipts(
   )
     ? readContextTransfers(db, next.sessionId)
     : indexed
-  // Copy the retained facts only when this batch actually writes one.
-  let records: ContextTransferRecord[] | undefined
-  const write = (record: ContextTransferRecord) => {
-    records ??= [...base]
-    writeContextTransfer(db, record, records)
-    const index = records.findIndex((row) => row.id === record.id)
-    if (index !== -1) {
-      records[index] = record
-    } else {
-      records.push(record)
-    }
-  }
+  const write = (record: ContextTransferRecord) => writeContextTransfer(db, record)
   // A lost outcome leaves the started write uncertain, so it can neither replay nor end the provider's events.
   const settle = (delivery: ContextTransferDelivery) => {
     db.exec(`SAVEPOINT ${RECEIPT_SAVEPOINT}`)
@@ -83,7 +72,6 @@ export function writeContextTransferJournalReceipts(
     return
   }
   const lookup = contextTransferLookup(base)
-  const carriers = new Map(lookup.carriers)
   for (const row of rows) {
     if (
       row.kind === 'dispatch' &&
@@ -93,23 +81,19 @@ export function writeContextTransferJournalReceipts(
       if (!target.firstInputId) {
         write({ ...target, firstInputId: row.clientMessageId })
       }
-      const deliveries = carriers.get(row.clientMessageId) ?? []
-      const started = deliveries.map((delivery) =>
-        delivery.targetId === target.id && !delivery.writeStartedAt && !delivery.outcome
-          ? { ...delivery, writeStartedAt: row.ts }
-          : delivery
-      )
-      started.forEach((delivery, index) => {
-        if (delivery !== deliveries[index]) {
-          write(delivery)
+      for (const delivery of lookup.carriers.get(row.clientMessageId) ?? []) {
+        if (delivery.targetId === target.id && !delivery.writeStartedAt && !delivery.outcome) {
+          write({ ...delivery, writeStartedAt: row.ts })
         }
-      })
-      if (started.length) {
-        carriers.set(row.clientMessageId, started)
       }
     }
   }
-  for (const [carrierInputId, deliveries] of carriers) {
+  // Only this batch's dispatches can change a carrier's acceptance or settlement.
+  const carriers = new Set(
+    rows.flatMap((row) => (row.kind === 'dispatch' ? [row.clientMessageId] : []))
+  )
+  for (const carrierInputId of carriers) {
+    const deliveries = lookup.carriers.get(carrierInputId) ?? []
     const receipt = next.receipts.get(carrierInputId)
     const submission = next.submissions.get(carrierInputId)
     const accepted = receipt !== undefined && previous.receipts.get(carrierInputId) !== receipt

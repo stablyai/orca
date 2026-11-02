@@ -1,5 +1,13 @@
-import { contextTransferIndex, invalidateContextTransferIndex } from './journal-context-transfer'
-import { deriveContextTransferState, contextTransferDelivered } from './context-transfer-state'
+import {
+  contextTransferIndex,
+  invalidateContextTransferIndex,
+  recordContextTransferWrite
+} from './journal-context-transfer'
+import {
+  contextTransferLookup,
+  deriveContextTransferState,
+  contextTransferDelivered
+} from './context-transfer-state'
 export { currentContextTransferTarget, contextTransferDelivered } from './context-transfer-state'
 import type { JournalHostDatabase } from './journal-host-database'
 import { isPersistedAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -69,13 +77,11 @@ function loadContextTransfers(db: Database.Database, sessionId: string): Context
   })
 }
 
-export function writeContextTransfer(
-  db: Database.Database,
-  record: ContextTransferRecord,
-  records: readonly ContextTransferRecord[] = readContextTransfers(db, record.sessionId)
-): void {
+export function writeContextTransfer(db: Database.Database, record: ContextTransferRecord): void {
   contextTransferRecordSchema.parse(record)
-  const previous = records.find((item) => item.id === record.id)
+  const records = readContextTransfers(db, record.sessionId)
+  const lookup = contextTransferLookup(records)
+  const previous = lookup.byId.get(record.id)
   if (previous && (previous.kind !== record.kind || previous.handoffId !== record.handoffId)) {
     throw new Error('Context transfer identity changed')
   }
@@ -89,10 +95,7 @@ export function writeContextTransfer(
   ) {
     throw new Error('Frozen delivery changed')
   }
-  if (
-    record.kind !== 'handoff' &&
-    !records.some((row) => row.kind === 'handoff' && row.id === record.handoffId)
-  ) {
+  if (record.kind !== 'handoff' && !lookup.handoffs.has(record.handoffId)) {
     throw new Error('Context transfer has no source')
   }
   if (record.kind === 'target') {
@@ -121,10 +124,9 @@ export function writeContextTransfer(
       const owner = contextTransferOwner(db, record.sessionId)
       const state = deriveContextTransferState(records, owner?.providerHandleChain ?? [])
       const current = state.kind === 'none' ? undefined : state.target
-      const handoff = records.find((row) => row.kind === 'handoff' && row.id === record.handoffId)
+      const handoff = lookup.handoffs.get(record.handoffId)
       const sameHandoff = current?.handoffId === record.handoffId
-      const successor =
-        current && handoff?.kind === 'handoff' && handoff.supersedesHandoffId === current.handoffId
+      const successor = current && handoff?.supersedesHandoffId === current.handoffId
       if ((sameHandoff || successor ? current?.id : null) !== record.predecessorTargetId) {
         throw new Error('Context target predecessor changed')
       }
@@ -141,8 +143,8 @@ export function writeContextTransfer(
     }
   }
   if (record.kind === 'delivery') {
-    const target = records.find((row) => row.kind === 'target' && row.id === record.targetId)
-    if (target?.kind !== 'target' || target.handoffId !== record.handoffId || !target.targetLink) {
+    const target = lookup.targets.get(record.targetId)
+    if (!target || target.handoffId !== record.handoffId || !target.targetLink) {
       throw new Error('Context delivery has no published target')
     }
     if (previous?.kind === 'delivery') {
@@ -157,7 +159,6 @@ export function writeContextTransfer(
       }
     }
   }
-  invalidateContextTransferIndex(db, record.sessionId)
   db.prepare(`INSERT INTO agent_session_context_transfers (id,session_id,handoff_id,kind,format,record_json)
     VALUES (?,?,?,?,1,?) ON CONFLICT(id) DO UPDATE SET record_json = excluded.record_json`).run(
     record.id,
@@ -166,6 +167,7 @@ export function writeContextTransfer(
     record.kind,
     JSON.stringify(record)
   )
+  recordContextTransferWrite(db, record)
 }
 
 export function closeContextTransfers(
@@ -176,19 +178,15 @@ export function closeContextTransfers(
   at: number,
   successorHandoffId?: string
 ): void {
-  const records = readContextTransfers(db, sessionId)
-  const closed = new Set(
-    records.filter((row) => row.kind === 'closure').map((row) => row.handoffId)
-  )
-  for (const handoff of records) {
-    if (handoff.kind !== 'handoff' || closed.has(handoff.id)) {
-      continue
-    }
+  // Copied: each closure write removes its handoff from the open set.
+  for (const handoffId of Array.from(
+    contextTransferLookup(readContextTransfers(db, sessionId)).openHandoffs
+  )) {
     writeContextTransfer(db, {
       kind: 'closure',
       id: randomUUID(),
       sessionId,
-      handoffId: handoff.id,
+      handoffId,
       commandId,
       cause,
       at,

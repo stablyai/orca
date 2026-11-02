@@ -10,7 +10,10 @@ import {
   readContextTransfers,
   writeContextTransfer
 } from '../agent-session-journal/context-transfer-repository'
-import { deriveContextTransferState } from '../agent-session-journal/context-transfer-state'
+import {
+  contextTransferLookup,
+  deriveContextTransferState
+} from '../agent-session-journal/context-transfer-state'
 import type { RecoveryConstructionPermit } from './structured-agent-session-construction'
 import type { StructuredAgentSessionProviderOpenResult } from './structured-agent-session-provider-open-contract'
 import type { StructuredAgentSessionProviderStartedContext } from './structured-agent-session-provider-started'
@@ -56,22 +59,21 @@ export async function publishNativeRecovery(input: {
     ) {
       throw new Error('Recovery target changed before publication')
     }
-    const prior = records.find(
-      (row) => row.kind === 'target' && row.id === target.predecessorTargetId
-    )
+    const lookup = contextTransferLookup(records)
+    const prior =
+      target.predecessorTargetId === null
+        ? undefined
+        : lookup.targets.get(target.predecessorTargetId)
+    const handoff = lookup.handoffs.get(target.handoffId)
     const key = agentSessionProviderHandleKey(source.handle)
     const recovered = {
       ...link,
       origin: 'created' as const,
-      ...(prior?.kind === 'target' &&
+      ...(prior &&
       prior.firstInputId === null &&
       prior.targetLink?.origin === 'created' &&
-      records.some(
-        (row) =>
-          row.kind === 'handoff' &&
-          row.id === target.handoffId &&
-          (row.id === prior.handoffId || row.supersedesHandoffId === prior.handoffId)
-      ) &&
+      handoff &&
+      (handoff.id === prior.handoffId || handoff.supersedesHandoffId === prior.handoffId) &&
       !journal
         .submissions()
         .some(
@@ -90,13 +92,11 @@ export async function publishNativeRecovery(input: {
   await store.commitOperationReceipt({
     write: (db, row) => {
       receipt.write(db, row)
-      const records = readContextTransfers(db, sessionId)
-      const target = records.find(
-        (row) => row.kind === 'target' && row.id === permit.targetAttemptId
-      )
+      const lookup = contextTransferLookup(readContextTransfers(db, sessionId))
+      const target = lookup.targets.get(permit.targetAttemptId)
       const published =
         committed && agentSessionProviderHandleChainHead(committed.providerHandleChain)
-      if (target?.kind !== 'target' || !published) {
+      if (!target || !published) {
         throw new Error('Recovery publication lost its target')
       }
       writeContextTransfer(db, {
@@ -104,8 +104,8 @@ export async function publishNativeRecovery(input: {
         targetLink: published,
         acquisitionGeneration: generation
       })
-      const handoff = records.find((row) => row.kind === 'handoff' && row.id === target.handoffId)
-      if (handoff?.kind === 'handoff' && handoff.capture.coverage.eligibleCount === 0) {
+      const handoff = lookup.handoffs.get(target.handoffId)
+      if (handoff && handoff.capture.coverage.eligibleCount === 0) {
         writeContextTransfer(db, {
           kind: 'delivery',
           id: randomUUID(),

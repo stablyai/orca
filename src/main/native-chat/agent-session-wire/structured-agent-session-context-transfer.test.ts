@@ -141,11 +141,11 @@ describe('native saved-context recovery delivery', () => {
     ).toHaveLength(1)
     prepare.mockClear()
     expect(decode).toHaveBeenCalledOnce()
+    // The committed receipt updated the cached facts, so reading them reloads nothing.
     const committedFacts = journal.contextTransfers.read()
-    journal.contextTransfers.read()
     expect(
       prepare.mock.calls.filter(([sql]) => sql.startsWith('SELECT id, session_id, handoff_id'))
-    ).toHaveLength(1)
+    ).toHaveLength(0)
     expect(committedFacts.find((row) => row.id === delivery.id)).toMatchObject({
       outcome: { kind: 'inline-accepted' }
     })

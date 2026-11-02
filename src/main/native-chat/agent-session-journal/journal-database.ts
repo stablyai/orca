@@ -126,12 +126,14 @@ export function runJournalTransaction<T>(
   onStranded: () => void = () => undefined
 ): T {
   db.exec('BEGIN IMMEDIATE')
+  let committed = false
   try {
     const result = run(db)
     if (result instanceof Promise) {
       throw new Error('a chat journal transaction must not await')
     }
     db.exec('COMMIT')
+    committed = true
     return result
   } catch (error) {
     if (db.isTransaction) {
@@ -147,6 +149,6 @@ export function runJournalTransaction<T>(
     }
     throw error
   } finally {
-    finishContextTransferTransaction(db)
+    finishContextTransferTransaction(db, committed)
   }
 }

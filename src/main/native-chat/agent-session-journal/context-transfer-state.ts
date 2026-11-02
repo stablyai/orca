@@ -22,71 +22,114 @@ export type ContextTransferState =
       target: ContextTransferTarget
     }
 
-/** One pass over the facts; reused while the cached frozen array is unchanged. */
-export type ContextTransferLookup = {
-  handoffs: ReadonlyMap<string, ContextTransferHandoff>
-  targets: ReadonlyMap<string, ContextTransferTarget>
-  deliveries: ReadonlyMap<string, ContextTransferDelivery>
-  deliveriesByTarget: ReadonlyMap<string, readonly ContextTransferDelivery[]>
+/** Keyed facts, kept current one write at a time for the cached array so lookups never rescan history. */
+export class ContextTransferLookup {
+  readonly byId = new Map<string, ContextTransferRecord>()
+  readonly handoffs = new Map<string, ContextTransferHandoff>()
+  readonly targets = new Map<string, ContextTransferTarget>()
+  readonly deliveries = new Map<string, ContextTransferDelivery>()
+  readonly deliveriesByTarget = new Map<string, readonly ContextTransferDelivery[]>()
   /** Inline deliveries still awaiting a final outcome, by the input that carried them. */
-  carriers: ReadonlyMap<string, readonly ContextTransferDelivery[]>
-  current: ContextTransferTarget | undefined
+  readonly carriers = new Map<string, readonly ContextTransferDelivery[]>()
+  /** Handoffs no successful context edit has closed. */
+  readonly openHandoffs = new Set<string>()
+  readonly closureCommands = new Set<string>()
+  private readonly closed = new Set<string>()
+  private openTargets: string[] = []
+  private readonly replaced = new Map<string, number>()
+
+  constructor(records: readonly ContextTransferRecord[]) {
+    for (const record of records) {
+      this.apply(record)
+    }
+  }
+
+  get current(): ContextTransferTarget | undefined {
+    for (let index = this.openTargets.length - 1; index >= 0; index--) {
+      const id = this.openTargets[index]!
+      if (!this.replaced.get(id)) {
+        return this.targets.get(id)
+      }
+    }
+    return undefined
+  }
+
+  apply(record: ContextTransferRecord): void {
+    const previous = this.byId.get(record.id)
+    this.byId.set(record.id, record)
+    if (record.kind === 'handoff') {
+      this.handoffs.set(record.id, record)
+      if (!this.closed.has(record.id)) {
+        this.openHandoffs.add(record.id)
+      }
+    } else if (record.kind === 'target') {
+      this.targets.set(record.id, record)
+      if (!previous && !this.closed.has(record.handoffId)) {
+        this.openTargets.push(record.id)
+        this.countReplaced(record.predecessorTargetId, 1)
+      }
+    } else if (record.kind === 'delivery') {
+      this.deliveries.set(record.id, record)
+      this.deliveriesByTarget.set(record.targetId, [
+        ...(this.deliveriesByTarget.get(record.targetId) ?? []).filter(
+          (row) => row.id !== record.id
+        ),
+        record
+      ])
+      const carrier = record.carrierInputId
+      if (record.mode === 'inline' && carrier) {
+        const waiting = (this.carriers.get(carrier) ?? []).filter((row) => row.id !== record.id)
+        if (record.outcome === null || record.outcome.kind === 'unknown') {
+          waiting.push(record)
+        }
+        if (waiting.length) {
+          this.carriers.set(carrier, waiting)
+        } else {
+          this.carriers.delete(carrier)
+        }
+      }
+    } else {
+      this.closureCommands.add(record.commandId)
+      if (!this.closed.has(record.handoffId)) {
+        this.closed.add(record.handoffId)
+        this.openHandoffs.delete(record.handoffId)
+        this.openTargets = this.openTargets.filter((id) => {
+          const target = this.targets.get(id)
+          if (target?.handoffId !== record.handoffId) {
+            return true
+          }
+          this.countReplaced(target.predecessorTargetId, -1)
+          return false
+        })
+      }
+    }
+  }
+
+  private countReplaced(id: string | null, change: number): void {
+    if (id !== null) {
+      this.replaced.set(id, (this.replaced.get(id) ?? 0) + change)
+    }
+  }
 }
 
 const lookups = new WeakMap<readonly ContextTransferRecord[], ContextTransferLookup>()
 
+/** Track an owned fact array whose every later change goes through `applyContextTransferRecord`. */
+export function trackContextTransferLookup(records: readonly ContextTransferRecord[]): void {
+  lookups.set(records, new ContextTransferLookup(records))
+}
+
+export function applyContextTransferRecord(
+  records: readonly ContextTransferRecord[],
+  record: ContextTransferRecord
+): void {
+  lookups.get(records)?.apply(record)
+}
+
 export function contextTransferLookup(
   records: readonly ContextTransferRecord[]
 ): ContextTransferLookup {
-  const cached = lookups.get(records)
-  if (cached) {
-    return cached
-  }
-  const handoffs = new Map<string, ContextTransferHandoff>()
-  const targets = new Map<string, ContextTransferTarget>()
-  const deliveries = new Map<string, ContextTransferDelivery>()
-  const deliveriesByTarget = new Map<string, ContextTransferDelivery[]>()
-  const carriers = new Map<string, ContextTransferDelivery[]>()
-  const closed = new Set<string>()
-  for (const row of records) {
-    if (row.kind === 'handoff') {
-      handoffs.set(row.id, row)
-    } else if (row.kind === 'target') {
-      targets.set(row.id, row)
-    } else if (row.kind === 'delivery') {
-      deliveries.set(row.id, row)
-      const list = deliveriesByTarget.get(row.targetId)
-      if (list) {
-        list.push(row)
-      } else {
-        deliveriesByTarget.set(row.targetId, [row])
-      }
-      if (
-        row.mode === 'inline' &&
-        row.carrierInputId &&
-        (row.outcome === null || row.outcome.kind === 'unknown')
-      ) {
-        carriers.set(row.carrierInputId, [...(carriers.get(row.carrierInputId) ?? []), row])
-      }
-    } else {
-      closed.add(row.handoffId)
-    }
-  }
-  const open = [...targets.values()].filter((row) => !closed.has(row.handoffId))
-  const replaced = new Set(open.map((row) => row.predecessorTargetId))
-  const lookup = {
-    handoffs,
-    targets,
-    deliveries,
-    deliveriesByTarget,
-    carriers,
-    current: open.findLast((row) => !replaced.has(row.id))
-  }
-  // Only the cached facts are frozen; callers' working copies change in place.
-  if (Object.isFrozen(records)) {
-    lookups.set(records, lookup)
-  }
-  return lookup
+  return lookups.get(records) ?? new ContextTransferLookup(records)
 }
 
 export function contextTransferDelivered(
