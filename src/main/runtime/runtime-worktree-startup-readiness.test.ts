@@ -64,65 +64,46 @@ describe('startup follow-up prompt', () => {
     expect(f.write).not.toHaveBeenCalled()
   })
 
-  // WSL and SSH-to-Windows reads cannot prove a lone shell, so they keep main's behaviour per caller.
-  it('gates WSL or SSH-to-Windows follow-ups before typing and Enter', async () => {
-    vi.useFakeTimers()
-    const f = fixture('kimi', false, false, 'unknown')
-
-    const delivered = deliverStartupFollowupPrompt(f.runtime, f.host, 'term-1', {
-      agent: 'kimi',
-      prompt: 'go'
-    })
-    await vi.advanceTimersByTimeAsync(1499)
-    expect(f.write).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(201)
-    await expect(delivered).resolves.toBe(true)
-    expect(f.write.mock.calls).toEqual([
-      ['pty-1', 'go', 'launch'],
-      ['pty-1', '\r', 'launch']
-    ])
-    expect(f.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
-
-  it('never types a WSL follow-up into a dialog, even after the deadline', async () => {
-    vi.useFakeTimers()
-    const f = fixture('kimi', false, false, 'unknown')
-    f.host.readInputScreen = async () => ['Bypass Permissions', 'Enter to confirm · Esc to cancel']
-    const onRefused = vi.fn()
-    const delivered = deliverStartupFollowupPrompt(
-      f.runtime,
-      f.host,
-      'term-1',
-      { agent: 'kimi', prompt: 'exact text' },
-      { onRefused }
-    )
-    await vi.advanceTimersByTimeAsync(60_000)
-    await expect(delivered).resolves.toBe(false)
-    expect(f.write).not.toHaveBeenCalled()
-    expect(onRefused).toHaveBeenCalledExactlyOnceWith('not-sent')
-  })
-
-  it('withholds WSL Enter if a dialog takes input after text was written', async () => {
-    vi.useFakeTimers()
-    const f = fixture('kimi', false, false, 'unknown')
-    let dialog = false
-    f.host.readInputScreen = async () => (dialog ? ['Enter to confirm · Esc to cancel'] : ['> '])
-    f.write.mockImplementation(() => {
-      dialog = true
-    })
-    const onRefused = vi.fn()
-    const delivered = deliverStartupFollowupPrompt(
-      f.runtime,
-      f.host,
-      'term-1',
-      { agent: 'kimi', prompt: 'exact text' },
-      { onRefused }
-    )
-    await vi.advanceTimersByTimeAsync(1800)
-    await expect(delivered).resolves.toBe(false)
-    expect(f.write.mock.calls).toEqual([['pty-1', 'exact text', 'launch']])
-    expect(onRefused).toHaveBeenCalledExactlyOnceWith('unconfirmed')
-  })
+  // WSL and SSH-to-Windows reads cannot prove a lone shell; their typed bytes still go through
+  // the host's one generated-input transaction, which waits, rechecks before Enter and reports.
+  it.each([
+    [{ accepted: true }, true, undefined],
+    [new Error('Kimi could not take your prompt'), false, 'not-sent'],
+    ['pasted', false, 'unconfirmed']
+  ] as const)(
+    'types WSL or SSH-to-Windows follow-ups through the host transaction (%#)',
+    async (answer, delivered, refused) => {
+      const f = fixture('kimi', false, false, 'unknown')
+      f.sendTerminalAgentPrompt.mockImplementation(async (handle: string, ...rest: unknown[]) => {
+        const options = rest[1] as { onPasteWritten?: () => void }
+        if (answer instanceof Error) {
+          throw answer
+        }
+        if (answer === 'pasted') {
+          options.onPasteWritten?.()
+          throw new Error('Kimi could not take your prompt')
+        }
+        return { handle, accepted: true, bytesWritten: 2 }
+      })
+      const onRefused = vi.fn()
+      await expect(
+        deliverStartupFollowupPrompt(
+          f.runtime,
+          f.host,
+          'term-1',
+          { agent: 'kimi', prompt: 'go' },
+          { onRefused }
+        )
+      ).resolves.toBe(delivered)
+      expect(f.sendTerminalAgentPrompt).toHaveBeenCalledWith(
+        'term-1',
+        'go',
+        expect.objectContaining({ framing: 'typed', submit: true, generatedAgent: 'kimi' })
+      )
+      expect(f.write).not.toHaveBeenCalled()
+      expect(onRefused.mock.calls).toEqual(refused ? [[refused]] : [])
+    }
+  )
 
   it('still refuses an agent.launch prompt on WSL or SSH-to-Windows, as before', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

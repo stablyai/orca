@@ -153,10 +153,7 @@ import {
 } from './browser-params'
 import { ScreencastUnsubscribe } from './browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-params'
-import {
-  ClientEventsUnsubscribeParams,
-  DismissGeneratedInputNoticeParams
-} from './client-events-params'
+import { ClientEventsUnsubscribeParams } from './client-events-params'
 import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,
@@ -259,6 +256,12 @@ import {
   FolderWorkspaceSelector,
   FolderWorkspaceUpdate
 } from './folder-workspace-params'
+import {
+  DismissGeneratedInputNoticeParams,
+  GeneratedInputNoticesPageParams,
+  GeneratedInputNoticesUnsubscribeParams,
+  TerminalSendGeneratedInputParams
+} from './generated-input-params'
 import {
   GitBranchCompare,
   GitBranchDiff,
@@ -1472,6 +1475,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.dismissGeneratedInputNotice': DismissGeneratedInputNoticeParams,
   'terminal.ensureAgentSession': EnsureAgentSessionParams,
   'terminal.focus': TerminalFocus,
+  'terminal.generatedInputNotices.page': GeneratedInputNoticesPageParams,
+  'terminal.generatedInputNotices.subscribe': null,
+  'terminal.generatedInputNotices.unsubscribe': GeneratedInputNoticesUnsubscribeParams,
   'terminal.getAutoRestoreFit': TerminalGetAutoRestoreFitParams,
   'terminal.getDisplayMode': TerminalHandle,
   'terminal.inspectProcess': TerminalInspectProcess,
@@ -1490,6 +1496,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.restoreFit': TerminalHandle,
   'terminal.reveal': TerminalReveal,
   'terminal.send': TerminalSend,
+  'terminal.sendGeneratedInput': TerminalSendGeneratedInputParams,
   'terminal.setAutoRestoreFit': TerminalSetAutoRestoreFit,
   'terminal.setDisplayMode': TerminalSetDisplayMode,
   'terminal.setPaneTitle': TerminalSetPaneTitle,

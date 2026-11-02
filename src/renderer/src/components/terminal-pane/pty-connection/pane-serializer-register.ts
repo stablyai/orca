@@ -61,6 +61,7 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
         }
       },
       {
+        bracketedPasteMode: () => session.pane.terminal.modes.bracketedPasteMode,
         readInputScreen: async () => {
           await waitForTerminalOutputParsed(session.pane.terminal)
           if (

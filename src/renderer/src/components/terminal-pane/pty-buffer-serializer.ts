@@ -27,6 +27,7 @@ export type SerializeFn = (
 type SerializerEntry = {
   fn: SerializeFn
   readInputScreen?: () => Promise<RuledScreen | null>
+  bracketedPasteMode?: () => boolean
   clear?: () => void
   resetInputModes?: () => void
   owner: symbol
@@ -45,7 +46,10 @@ let listenerAttached = false
 export function registerPtySerializer(
   ptyId: string,
   serialize: SerializeFn,
-  actions: Pick<SerializerEntry, 'clear' | 'resetInputModes' | 'readInputScreen'> = {}
+  actions: Pick<
+    SerializerEntry,
+    'clear' | 'resetInputModes' | 'readInputScreen' | 'bracketedPasteMode'
+  > = {}
 ): () => void {
   const owner = Symbol(ptyId)
   serializersByPtyId.set(ptyId, { fn: serialize, ...actions, owner })
@@ -108,6 +112,11 @@ export async function readPtyInputScreen(ptyId: string): Promise<RuledScreen | n
   const entry = serializersByPtyId.get(ptyId)
   const screen = await entry?.readInputScreen?.()
   return serializersByPtyId.get(ptyId) === entry ? (screen ?? null) : null
+}
+
+/** The mounted xterm's current bracketed-paste mode; false with no mounted pane. */
+export function readPtyBracketedPasteMode(ptyId: string): boolean {
+  return serializersByPtyId.get(ptyId)?.bracketedPasteMode?.() === true
 }
 
 export function hasPtySerializer(ptyId: string): boolean {

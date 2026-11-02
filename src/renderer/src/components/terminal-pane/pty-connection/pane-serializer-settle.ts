@@ -2,10 +2,8 @@ import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remot
 import type { SessionRestoredBannerReason } from '../session-restored-banner-pane-state'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-paste-ready-timeout'
-import { waitForAgentDraftInputReady, agentInputIsAdmitted } from '@/lib/agent-draft-readiness'
-import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
-import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
+import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../../../shared/generated-agent-input-readiness'
+import { deliverGeneratedPaste } from '@/lib/agent-paste-draft'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -61,10 +59,8 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
   const startupSource = session.paneStartup?.resumeSource
   let armed = false
   let settled = !session.ownsStartupDraftPaste
-  let running = false
-  let recorded = false
-  const stop = new AbortController()
-  const recover = (certainty: 'not-sent' | 'unconfirmed' = 'not-sent'): void => {
+  let handedOff = false
+  const recover = (certainty: 'not-sent' | 'unconfirmed'): void => {
     if (settled) {
       return
     }
@@ -82,9 +78,11 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       }).onTimeout(certainty)
     }
   }
+  // Once handed to the host the draft outlives this pane: parking or closing it does not cancel.
   session.cleanupStartupDraftPasteTimers = (): void => {
-    stop.abort()
-    recover(recorded ? 'unconfirmed' : 'not-sent')
+    if (!handedOff) {
+      recover('not-sent')
+    }
   }
   const currentPty = (): string | null => {
     return !session.disposed &&
@@ -93,61 +91,42 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       ? session.transport.getPtyId()
       : null
   }
-  const begin = (initialData = ''): void => {
+  // The host that owns the PTY waits for the agent and stages the draft in one transaction.
+  const begin = (): void => {
     const ptyId = currentPty()
-    if (!armed || running || settled || !ptyId) {
+    if (!armed || handedOff || settled || !ptyId) {
       return
     }
-    running = true
-    const timeoutMs = resolveDraftPasteReadyTimeoutMs(session.startupDraftAgent ?? undefined)
-    const deadline = Date.now() + timeoutMs
-    void waitForAgentDraftInputReady(
+    handedOff = true
+    const content = session.startupDraftPrompt
+    if (!content) {
+      settled = true
+      return
+    }
+    session.startupDraftPasteAttempted = true
+    void deliverGeneratedPaste({
       ptyId,
-      timeoutMs,
-      session.startupDraftAgentConfig?.draftPasteReadySignal ??
-        'render-quiet-after-bracketed-paste',
-      session.startupDraftAgent ?? undefined,
-      stop.signal,
-      initialData
-    )
-      .then(async (ready) => {
-        if (!ready || currentPty() !== ptyId) {
-          return recover()
-        }
-        const content = session.startupDraftPrompt
-        if (!content) {
-          settled = true
-          return
-        }
-        session.startupDraftPasteAttempted = true
-        const sent = await sendAgentDraftPasteContent(ptyId, content, 'launch', async (data) => {
-          if (
-            currentPty() !== ptyId ||
-            !(await agentInputIsAdmitted(ptyId, session.startupDraftAgent ?? undefined)) ||
-            Date.now() >= deadline
-          ) {
-            return false
-          }
-          recorded = true
-          const accepted = await writeTerminalPastePtyInput(session.transport, data, 'launch')
-          if (accepted) {
-            session.recordTerminalInputForHibernation()
-          }
-          return accepted
-        })
-        if (!sent) {
-          return recover(recorded ? 'unconfirmed' : 'not-sent')
-        }
+      content,
+      submit: false,
+      agent: session.startupDraftAgent ?? undefined,
+      inputKind: 'launch',
+      deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
+    }).then((outcome) => {
+      if (outcome === 'staged' || outcome === 'delivered') {
         settled = true
         session.startupDraftPrompt = null
-      })
-      .catch(() => recover(recorded ? 'unconfirmed' : 'not-sent'))
+        // Transport-free paste bypasses xterm's input signal; record it so hibernation keeps the draft.
+        session.recordTerminalInputForHibernation()
+        return
+      }
+      recover(outcome === 'unconfirmed' ? 'unconfirmed' : 'not-sent')
+    })
   }
   session.armStartupDraftReadinessObservation = (): void => {
     armed = true
     begin()
   }
-  session.observeStartupDraftPasteReadiness = (data: string): void => begin(data)
+  session.observeStartupDraftPasteReadiness = (): void => begin()
   if (
     session.ownsStartupDraftPaste &&
     !session.unservedSshTargetId &&

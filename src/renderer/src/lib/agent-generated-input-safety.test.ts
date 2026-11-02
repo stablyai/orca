@@ -10,9 +10,15 @@ const f = vi.hoisted(() => ({
   write: vi.fn(async () => true),
   notice: vi.fn()
 }))
+// These cases drive the legacy adapter: a paired host older than the generated-input transaction.
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInput: async () => null
+}))
 vi.mock('@/store', () => ({ useAppStore: {} }))
 vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
-  readPtyInputScreen: async () => ({ lines: f.screen, alternateScreen: false })
+  readPtyInputScreen: async () => ({ lines: f.screen, alternateScreen: false }),
+  // A running agent's mounted xterm reports its current paste mode; no replayed byte is needed.
+  readPtyBracketedPasteMode: () => true
 }))
 vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (_id: string, observe: (data: string) => void) => {
@@ -69,7 +75,9 @@ it('holds generated input through a startup dialog and keeps the full prompt at 
   await vi.advanceTimersByTimeAsync(3000)
   await expect(result).resolves.toBe(false)
   expect(f.write).not.toHaveBeenCalled()
-  expect(f.notice).toHaveBeenCalledExactlyOnceWith({ agent: 'claude', text: args.content })
+  expect(f.notice).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ agent: 'claude', text: args.content, certainty: 'not-sent' })
+  )
 })
 
 it('waits for the user to answer a dialog, then submits the prompt once', async () => {
@@ -107,7 +115,8 @@ it('does not type after a caller deadline expires between readiness and writing'
   const result = pasteDraftToAgentPtyWhenReady({
     ...args,
     beforePaste: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1600))
+      // Readiness comes at once from the painted composer; this check outlasts the budget.
+      await new Promise((resolve) => setTimeout(resolve, 3100))
       return true
     }
   })
@@ -119,7 +128,7 @@ it('does not type after a caller deadline expires between readiness and writing'
   )
 })
 
-it('delivers a late follow-up on recorded default-quiet output without startup bytes', async () => {
+it('delivers a late follow-up to a recorded default-quiet composer without startup bytes', async () => {
   vi.useRealTimers()
   const { ruledScreenLines } = await finalReplayFrame('cline-3-0-66-ready', 120, 40)
   vi.useFakeTimers()
@@ -131,9 +140,8 @@ it('delivers a late follow-up on recorded default-quiet output without startup b
     expectedProcess: 'cline',
     prompt: args.content
   })
-  await vi.advanceTimersByTimeAsync(1499)
-  expect(f.write).not.toHaveBeenCalled()
-  await vi.advanceTimersByTimeAsync(251)
+  // The current screen's painted composer with Cline in front is positive evidence, no 2004 replay.
+  await vi.advanceTimersByTimeAsync(1750)
   await expect(result).resolves.toBe(true)
   expect(f.write.mock.calls).toEqual([
     ['pty-1', '\x1b[200~exact\rprompt\x1b[201~', 'launch'],
@@ -145,6 +153,7 @@ it('delivers a late follow-up on recorded default-quiet output without startup b
 it('keeps positive composer delivery when foreground inspection is unavailable', async () => {
   f.process = ''
   const result = pasteDraftToAgentPtyWhenReady(args)
+  await vi.advanceTimersByTimeAsync(0)
   f.observe('\x1b[?2004h\x1b[?2031h❯\u00a0')
   await vi.advanceTimersByTimeAsync(100)
   await expect(result).resolves.toBe(true)

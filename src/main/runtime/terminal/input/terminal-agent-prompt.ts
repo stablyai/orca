@@ -1,9 +1,6 @@
 import { agentPromptObservationSignal } from './agent-prompt-signals'
 import { assertTerminalInputAdmitted } from '../../terminal-input-admission'
-import type {
-  AgentPromptExpectedBinding,
-  RuntimeAgentPromptWriteOptions
-} from '../../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
@@ -40,22 +37,6 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     pasteIngestMs: number
   ): { arm: () => void; wait: () => Promise<void>; dispose: () => void } | null
 
-  protected assertAgentPromptExpectedBinding(
-    handle: string,
-    expected: AgentPromptExpectedBinding | undefined
-  ): void {
-    if (!expected) {
-      return
-    }
-    const current = this.getTerminalPromptRequestBinding(handle)
-    if (
-      current.ptyId !== expected.ptyId ||
-      current.processIncarnation !== expected.processIncarnation
-    ) {
-      throw new Error('terminal_handle_stale')
-    }
-  }
-
   /** Under `wait`, a pre-paste refusal is the hold's to resume rather than the caller's to see. */
   private throwIfAgentPromptPermissionReturned(
     baseline: AgentPromptActivity,
@@ -74,6 +55,14 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     options: RuntimeAgentPromptWriteOptions
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
     const observationSignal = agentPromptObservationSignal(options)
+    // A paused terminal refuses at once rather than after the wait; the write rechecks it.
+    assertTerminalInputAdmitted(this, ptyId, options.inputSource)
+    // Admission happens here, at the head of this PTY's tail; queue residency spent the same budget.
+    const { agent, deadline, submit } = await this.admitGeneratedTerminalInput(
+      ptyId,
+      options,
+      observationSignal
+    )
     assertAgentPromptRequestActive(observationSignal)
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
@@ -84,9 +73,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
     // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
-    const submitWithPaste = agentPromptSubmitJoinsPasteFrame(
-      pty?.foregroundAgent ?? pty?.launchAgent
-    )
+    const submitWithPaste =
+      submit && agentPromptSubmitJoinsPasteFrame(pty?.foregroundAgent ?? pty?.launchAgent)
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
     // A ready Claude composer never settles this gate, adding its full 8s cap; desktop paste submits in about 2s.
@@ -117,7 +105,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         throw new Error('terminal_not_writable')
       }
     }
-    const beforeWrite = async (signal: AbortSignal): Promise<void> => {
+    // Every frame rechecks the current screen; after the paste its own rows are composer text.
+    const beforeWrite = async (signal: AbortSignal, typedText?: string): Promise<void> => {
       assertWritable(signal)
       await waitForAgentPromptPromise(
         Promise.resolve().then(() => {
@@ -126,6 +115,12 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         }),
         signal
       )
+      if (
+        Date.now() >= deadline ||
+        !(await this.generatedInputAdmitted(ptyId, agent, false, typedText))
+      ) {
+        throw this.generatedInputRefusal(ptyId)
+      }
       assertWritable(signal)
     }
     let baseline: AgentPromptActivity
@@ -149,11 +144,15 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
+      options.onPasteWritten?.()
+      if (!submit) {
+        return { submits: 0 }
+      }
       if (submitWithPaste) {
         options.onSubmitWritten?.()
       }
       if (!submitWithPaste) {
-        // Once paste is accepted, only host cancellation can suppress its first Enter.
+        // A dialog that opened, or the deadline, still withholds Enter after the paste.
         if (renderGate) {
           await waitForAgentPromptPromise(renderGate.wait(), deliverySignal)
         } else if (options.composerReady) {
@@ -173,7 +172,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
           await waitForAgentPromptDelay(submitDelayMs, deliverySignal)
         }
         try {
-          await beforeWrite(deliverySignal)
+          await beforeWrite(deliverySignal, options.promptForSchedule)
         } catch (error) {
           if (options.suffixFailureError) {
             throw new Error(options.suffixFailureError)
@@ -208,7 +207,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
           {
             ...options,
             signal: admissionSignal,
-            beforeWrite: () => beforeWrite(admissionSignal)
+            beforeWrite: () => beforeWrite(admissionSignal, options.promptForSchedule)
           },
           {
             baseline,

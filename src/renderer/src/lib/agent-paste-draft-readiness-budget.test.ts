@@ -16,6 +16,10 @@ function storeState() {
   return { settings: {}, tabsByWorktree: {}, ptyIdsByTabId: testState.ptyIdsByTabId }
 }
 
+// These cases drive the legacy adapter: a paired host older than the generated-input transaction.
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInput: async () => null
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: storeState,

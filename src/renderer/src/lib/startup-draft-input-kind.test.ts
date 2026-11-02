@@ -4,15 +4,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
+import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../shared/generated-agent-input-readiness'
 import { bindSettlePaneSerializer } from '@/components/terminal-pane/pty-connection/pane-serializer-settle'
 import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from '@/components/terminal-pane/pty-connection/pty-connect-limits'
 import { pasteDraftToAgentPtyWhenReady } from './agent-paste-draft'
 
-const { onTimeout } = vi.hoisted(() => ({ onTimeout: vi.fn() }))
+const { onTimeout, readiness } = vi.hoisted(() => ({
+  onTimeout: vi.fn(),
+  readiness: { ready: true }
+}))
+// These cases drive the legacy adapter: a paired host older than the generated-input transaction.
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInput: async () => null
+}))
 vi.mock('./launch-agent-paste-timeout-notice', () => ({
-  createPasteReadinessTimeoutNotice: () => ({ onTimeout })
+  createPasteReadinessTimeoutNotice: () => ({ onTimeout }),
+  showGeneratedInputNotice: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -23,7 +31,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('./agent-draft-readiness', () => ({
-  waitForAgentDraftInputReady: async () => true
+  waitForAgentDraftInputReady: async () => readiness.ready,
+  agentInputIsAdmitted: async () => true
 }))
 
 const DRAFT = 'plan the migration'
@@ -92,6 +101,7 @@ describe('a created worktree’s startup draft', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     onTimeout.mockClear()
+    readiness.ready = true
   })
 
   afterEach(() => {
@@ -109,9 +119,10 @@ describe('a created worktree’s startup draft', () => {
   })
 
   it('never delivers a pane-owned Codex draft after readiness times out', async () => {
+    readiness.ready = false
     const { session, kinds } = createPaneDraftSession('codex')
     session.observeStartupDraftPasteReadiness('\x1b[?2004hWaiting for Codex...')
-    await vi.advanceTimersByTimeAsync(resolveDraftPasteReadyTimeoutMs('codex'))
+    await vi.advanceTimersByTimeAsync(GENERATED_AGENT_INPUT_TIMEOUT_MS)
 
     expect(onTimeout).toHaveBeenCalledOnce()
     expect(kinds).toEqual([])

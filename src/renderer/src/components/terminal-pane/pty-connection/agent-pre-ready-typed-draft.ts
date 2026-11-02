@@ -1,14 +1,13 @@
 // Pre-bind keys would prefix the launch command; draft until agent readiness and recover if the user starts driving the live screen.
 
 import { useAppStore } from '@/store'
-import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-paste-ready-timeout'
-import { agentInputIsAdmitted, waitForAgentDraftInputReady } from '@/lib/agent-draft-readiness'
-import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
+import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../../../shared/generated-agent-input-readiness'
+import { deliverGeneratedPaste } from '@/lib/agent-paste-draft'
+import { waitForAgentDraftInputReady } from '@/lib/agent-draft-readiness'
+import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 import { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } from '../pty-preconnect-input-buffer'
-import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { paneHasStartupWork } from './pane-transport-options'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -124,11 +123,8 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     }
   }
 
-  const pasteDraft = async (
-    ptyId: string,
-    draftAgent: TuiAgent,
-    deadline: number
-  ): Promise<void> => {
+  /** The pane's readiness is only when to offer the keys; the PTY's host still admits and writes. */
+  const pasteDraft = (ptyId: string, draftAgent: TuiAgent): void => {
     if (session.disposed || session.transport.getPtyId() !== ptyId) {
       recoverDraft(draftAgent)
       return
@@ -139,32 +135,22 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       recoverDraft(draftAgent)
       return
     }
-    const text = draft
-    // Why merge: a launch-time draft not yet pasted sends both as one, in typing order.
-    if (session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted) {
-      session.startupDraftPrompt = joinDraftText(session.startupDraftPrompt, text)
-      draft = ''
-      phase = 'closed'
-      return
-    }
-    const sent = await sendAgentDraftPasteContent(ptyId, text, 'driving', async (data) => {
-      if (
-        session.disposed ||
-        session.transport.getPtyId() !== ptyId ||
-        !(await agentInputIsAdmitted(ptyId, draftAgent)) ||
-        Date.now() >= deadline
-      ) {
-        return false
+    void deliverGeneratedPaste({
+      ptyId,
+      content: draft,
+      submit: false,
+      agent: draftAgent,
+      inputKind: 'driving',
+      deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
+    }).then((outcome) => {
+      if (outcome === 'staged' || outcome === 'delivered') {
+        draft = ''
+        phase = 'closed'
+        return
       }
-      wrote = true
-      return writeTerminalPastePtyInput(session.transport, data, 'driving')
-    }).catch(() => false)
-    if (!sent) {
+      wrote = outcome === 'unconfirmed'
       recoverDraft(draftAgent)
-    } else {
-      draft = ''
-      phase = 'closed'
-    }
+    })
   }
 
   session.onAgentPreReadyDraftPtyBound = (ptyId: string, freshSpawn: boolean): void => {
@@ -177,7 +163,6 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       phase = 'closed'
       return
     }
-    liveInputSinceBind = false
     phase = 'delivering'
     if (session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted) {
       session.startupDraftPrompt = joinDraftText(session.startupDraftPrompt, draft)
@@ -190,14 +175,14 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       recoverDraft(draftAgent)
       return
     }
-    const deadline = Date.now() + resolveDraftPasteReadyTimeoutMs(draftAgent)
+    liveInputSinceBind = false
     void waitForAgentDraftInputReady(
       ptyId,
-      resolveDraftPasteReadyTimeoutMs(draftAgent),
+      GENERATED_AGENT_INPUT_TIMEOUT_MS,
       TUI_AGENT_CONFIG[draftAgent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste',
       draftAgent
     )
-      .then((ready) => (ready ? pasteDraft(ptyId, draftAgent, deadline) : recoverDraft(draftAgent)))
+      .then((ready) => (ready ? pasteDraft(ptyId, draftAgent) : recoverDraft(draftAgent)))
       .catch(() => recoverDraft(draftAgent))
   }
 

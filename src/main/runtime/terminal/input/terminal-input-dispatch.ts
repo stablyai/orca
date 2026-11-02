@@ -21,6 +21,7 @@ import {
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../../shared/generated-agent-input-readiness'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected abstract writeTerminalAction(
@@ -227,9 +228,16 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     prompt: string,
     options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend> {
-    options = { ...options, inputDeadline: options.inputDeadline ?? Date.now() + 60_000 }
+    // The deadline is fixed when the host accepts the prompt, so queue residency spends it too.
+    options = {
+      ...options,
+      inputDeadline: options.inputDeadline ?? Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
+    }
     // Why the consuming agent: the foreground process reads the bytes; launchAgent covers startup.
     const payloadFor = (ptyId: string): string => {
+      if (options.framing === 'typed') {
+        return prompt
+      }
       // Why: a launch prompt replaced the desktop's draft paste, so it sends that paste's bytes.
       if (options.inputKind === 'launch') {
         return wrapTerminalBracketedPasteText(prompt)

@@ -277,9 +277,16 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   promptForSchedule?: string
   /** Caller observed composer input acceptance; schedule Enter using desktop draft-paste timing instead of render settlement. */
   composerReady?: boolean
-  /** Admission and all generated suffixes share the initiating operation's deadline. */
+  /** Admission, queue residency and every later frame share the operation's one deadline. */
   inputDeadline?: number
-  inputReady?: boolean
+  /** The agent the caller expects; the PTY's resolved agent wins. */
+  generatedAgent?: TuiAgent | null
+  /** False stages an unsubmitted draft: paste only, no Enter, no turn observation. */
+  submit?: boolean
+  /** Typed bytes and a separate Enter (WSL, SSH to Windows) instead of a bracketed paste. */
+  framing?: 'paste' | 'typed'
+  /** A launch's readiness wait already saw the composer; admission still applies every veto. */
+  observedReady?: boolean
   /** See buildAgentPromptPasteBytes. */
   leadLine?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */

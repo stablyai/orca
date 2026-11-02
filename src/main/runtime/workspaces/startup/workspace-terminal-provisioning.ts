@@ -4,8 +4,6 @@ import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-c
 import { OrcaRuntimeWithActivateManagedWorktree } from '../workspace-activation'
 import type { WorktreeTerminalProvisioningHost } from '../../runtime-worktree-terminal-provisioning'
 import type { WorktreeStartupReadinessHost } from '../../runtime-worktree-startup-readiness'
-import { readScreenInputVeto } from '../../../../shared/screen-input-veto'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { prefetchWorktreeCreateBase } from '../../../worktree-create-base-prefetch'
 import { prepareWorktreeCreateForRepo } from '../../../worktree-create-preparation'
 import { getWorktreeCreatePrefetchGitOptions } from '../../../project-runtime-git-options'
@@ -160,22 +158,9 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         this.ptyController!.hasChildProcesses?.(ptyId) ?? Promise.resolve(false),
       subscribeToData: (ptyId, listener) => this.subscribeToTerminalData(ptyId, listener),
       generation: (ptyId) => this.getPtyLifecycleGeneration(ptyId),
-      readInputScreen: async (ptyId) => {
-        const screen =
-          this.readCaughtUpRuledScreen(ptyId) ?? (await this.readCurrentTerminalWaitScreen(ptyId))
-        const resolved = this.getPtyAgent(ptyId)
-        if (
-          screen &&
-          readScreenInputVeto(isTuiAgent(resolved) ? resolved : null, () => ({
-            lines: screen.lines,
-            alternateScreen:
-              'alternateScreen' in screen ? screen.alternateScreen : screen.isAlternateScreen
-          })) === true
-        ) {
-          return null
-        }
-        return screen?.lines ?? null
-      },
+      readInputScreen: (ptyId) => this.readGeneratedInputScreen(ptyId),
+      bracketedPaste: (ptyId) =>
+        this.headlessTerminals.get(ptyId)?.emulator.getModes().bracketedPaste === true,
       readRecentOutput: (ptyId) => this.recentPtyOutputById.get(ptyId)?.read(),
       write: (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind)
     }

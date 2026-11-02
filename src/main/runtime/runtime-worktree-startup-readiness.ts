@@ -1,5 +1,6 @@
 import { waitForGeneratedAgentInput } from '../../shared/generated-agent-input-readiness'
-import { findAgentInputDialogIndex } from '../../shared/agent-input-dialog'
+import { admitsGeneratedInput } from '../../shared/generated-agent-input-admission'
+import type { RuledScreen } from '../../shared/screen-input-veto'
 import type { TerminalReadinessCreation } from './launched-agent-composer-readiness'
 import { isShellProcess } from '../../shared/agent-detection'
 import {
@@ -11,62 +12,43 @@ import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
-import type {
-  WorktreeStartupDraftPaste,
-  WorktreeStartupFollowup
-} from './runtime-worktree-agent-startup'
+import type { GeneratedInputOutcome } from '../../shared/generated-terminal-input'
+import type { WorktreeStartupFollowup } from './runtime-worktree-agent-startup'
 import {
   deliverTerminalAgentLaunchPrompt,
   type TerminalPromptRuntime
 } from './rpc/methods/agent-launch-terminal-prompt'
+import { deliverGeneratedTerminalInput } from './terminal/input/generated-terminal-input-delivery'
 
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
 export type WorktreeStartupReadinessHost = {
   getPtyId: (handle: string) => string | null
   getForegroundProcess: (ptyId: string) => Promise<string | null>
   hasChildProcesses?: (ptyId: string) => Promise<boolean>
   subscribeToData: (ptyId: string, listener: (data: string) => void) => () => void
   readRecentOutput: (ptyId: string) => string | undefined
-  readInputScreen?: (ptyId: string) => Promise<readonly string[] | null>
+  /** The host's current caught-up screen, null while it cannot be read. */
+  readInputScreen?: (ptyId: string) => Promise<RuledScreen | null>
+  /** The host model's current bracketed-paste mode, for an observer that missed its byte. */
+  bracketedPaste?: (ptyId: string) => boolean
   generation?: (ptyId: string) => number
-  recover?: (certainty: 'not-sent' | 'unconfirmed') => void
   write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
-}
-
-export function pasteWorktreeStartupDraftWhenReady(
-  host: WorktreeStartupReadinessHost,
-  handle: string,
-  draft: WorktreeStartupDraftPaste
-): void {
-  const deadline = Date.now() + resolveDraftPasteReadyTimeoutMs(draft.agent)
-  const targetPty = host.getPtyId(handle)
-  const generation = targetPty ? host.generation?.(targetPty) : undefined
-  void waitForWorktreeStartupDraft(host, handle, draft.agent)
-    .then(async (ptyId) => {
-      const foreground = ptyId ? await host.getForegroundProcess(ptyId) : null
-      if (
-        !ptyId ||
-        ptyId !== targetPty ||
-        !(await startupInputIsClear(host, ptyId)) ||
-        (foreground && isShellProcess(foreground)) ||
-        Date.now() >= deadline ||
-        host.getPtyId(handle) !== ptyId ||
-        host.generation?.(ptyId) !== generation
-      ) {
-        host.recover?.('not-sent')
-        return
-      }
-      host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`, 'launch')
-    })
-    .catch(() => host.recover?.('unconfirmed'))
 }
 
 export type StartupFollowupPromptOptions = {
   signal?: AbortSignal
   agentLaunch?: boolean
   terminalCreation?: TerminalReadinessCreation
+  /** The prompt was not delivered: proven not written, or possibly written in part. */
   onRefused?: (certainty: 'not-sent' | 'unconfirmed') => void
+}
+
+export function generatedInputRefusalCertainty(
+  outcome: GeneratedInputOutcome
+): 'not-sent' | 'unconfirmed' | null {
+  if (outcome === 'delivered' || outcome === 'staged') {
+    return null
+  }
+  return outcome === 'unconfirmed' ? 'unconfirmed' : 'not-sent'
 }
 
 /** A post-start agent's first prompt: its process in front can still drop typed text (#10336). */
@@ -78,8 +60,6 @@ export async function deliverStartupFollowupPrompt(
   options: StartupFollowupPromptOptions = {}
 ): Promise<boolean> {
   const { signal } = options
-  const deadline = Date.now() + resolveDraftPasteReadyTimeoutMs(agent)
-  let wrote = false
   try {
     const ptyId = host.getPtyId(handle)
     // Where no read proves the agent in front (Windows), its process must be seen first: a lone shell's prompt also reads as ready.
@@ -94,40 +74,19 @@ export async function deliverStartupFollowupPrompt(
       }
       // WSL and SSH-to-Windows cannot prove a lone shell either: keep their typed follow-up; agent.launch refused there.
       if (!options.agentLaunch && runtime.launchedAgentHostProvesShellAlone?.(ptyId) !== true) {
-        const generation = host.generation?.(ptyId)
-        const readyPty = await waitForWorktreeStartupDraft(host, handle, agent, {
-          signal,
+        // Typed bytes still go through this PTY's one admitted transaction, Enter rechecked.
+        const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
+          text: prompt,
           submit: true,
-          timeoutMs: Math.max(0, deadline - Date.now())
+          agent,
+          framing: 'typed',
+          ...(signal ? { signal } : {})
         })
-        if (readyPty !== ptyId) {
-          options.onRefused?.('not-sent')
-          return false
+        const refused = generatedInputRefusalCertainty(outcome)
+        if (refused) {
+          options.onRefused?.(refused)
         }
-        const admitted = async (): Promise<boolean> => {
-          const foreground = await host.getForegroundProcess(ptyId)
-          return (
-            !isShellProcess(foreground ?? '') &&
-            (await startupInputIsClear(host, ptyId)) &&
-            !signal?.aborted &&
-            Date.now() < deadline &&
-            host.getPtyId(handle) === ptyId &&
-            host.generation?.(ptyId) === generation
-          )
-        }
-        if (!(await admitted())) {
-          options.onRefused?.('not-sent')
-          return false
-        }
-        wrote = true
-        host.write(ptyId, prompt, 'launch')
-        await new Promise((resolve) => setTimeout(resolve, 50))
-        if (!(await admitted())) {
-          options.onRefused?.('unconfirmed')
-          return false
-        }
-        host.write(ptyId, '\r', 'launch')
-        return true
+        return refused === null
       }
     }
     return await deliverTerminalAgentLaunchPrompt({
@@ -137,13 +96,12 @@ export async function deliverStartupFollowupPrompt(
       freshLaunch: true,
       terminalCreation: options.terminalCreation,
       text: prompt,
-      inputDeadline: deadline,
       unprovableHost: 'write-if-shell-provable',
-      onRefused: options.onRefused,
+      ...(options.onRefused ? { onRefused: options.onRefused } : {}),
       ...(signal ? { signal } : {})
     })
   } catch (error) {
-    options.onRefused?.(wrote ? 'unconfirmed' : 'not-sent')
+    options.onRefused?.('not-sent')
     console.warn('[agent-startup] failed to deliver the startup prompt:', error)
     return false
   }
@@ -211,10 +169,9 @@ export function waitForWorktreeStartupDraft(
     {
       subscribe: (observe) => host.subscribeToData(ptyId, observe),
       replay: () => host.readRecentOutput(ptyId),
+      ...(host.bracketedPaste ? { bracketedPaste: () => host.bracketedPaste!(ptyId) } : {}),
+      // Launch readiness observes with the same rule every generated write is admitted by.
       accept: async (quiet) => {
-        if (!(await startupInputIsClear(host, ptyId))) {
-          return false
-        }
         if (options.accept && !(await options.accept(ptyId))) {
           return false
         }
@@ -222,36 +179,26 @@ export function waitForWorktreeStartupDraft(
           return false
         }
         const foreground = await host.getForegroundProcess(ptyId)
-        if (foreground && isShellProcess(foreground)) {
-          return false
-        }
-        if (quiet && !isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess)) {
-          if (
-            !isAgentForegroundWrapperProcess(foreground ?? '') ||
-            !(await host.hasChildProcesses?.(ptyId))
-          ) {
-            return false
-          }
-        }
+        const hasChildProcesses =
+          foreground !== null && isAgentForegroundWrapperProcess(foreground)
+            ? ((await host.hasChildProcesses?.(ptyId)) ?? false)
+            : false
+        const screen = host.readInputScreen
+          ? await host.readInputScreen(ptyId)
+          : { lines: [], alternateScreen: false }
         return (
           host.getPtyId(handle) === ptyId &&
           host.generation?.(ptyId) === generation &&
-          (await startupInputIsClear(host, ptyId))
+          admitsGeneratedInput({
+            agent,
+            screen,
+            quiet,
+            process: foreground ? { known: true, foreground, hasChildProcesses } : { known: false }
+          })
         )
       }
     },
     signal,
     { ...options, timeoutMs: options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent) }
   ).then((ready) => (ready ? ptyId : null))
-}
-
-async function startupInputIsClear(
-  host: WorktreeStartupReadinessHost,
-  ptyId: string
-): Promise<boolean> {
-  if (!host.readInputScreen) {
-    return true
-  }
-  const screen = await host.readInputScreen(ptyId)
-  return screen !== null && findAgentInputDialogIndex(screen.join('\n')) === null
 }

@@ -1,6 +1,7 @@
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
+import { reusedAutomationPromptRefusal } from '../../../shared/generated-agent-input-notice'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
@@ -119,14 +120,19 @@ export async function handleAutomationDispatchRequest({
         if (releaseTab) {
           completion.setReuseDispatchTabRelease(releaseTab)
           try {
-            const submitted = await submitPromptToAgentPty({
+            const outcome = await submitPromptToAgentPty({
               tabId: reusableSession.tabId,
               ptyId: reusableSession.ptyId,
               content: automation.prompt,
               agent: automation.agentId
             })
-            if (!submitted) {
+            if (outcome !== 'delivered') {
               completion.cleanupRunObservers()
+              // Only a session gone before any write may start a fresh one: anything else would
+              // send the same prompt twice. The automation keeps its prompt for the next run.
+              if (outcome !== 'target-gone') {
+                throw new Error(reusedAutomationPromptRefusal(automation.agentId, outcome))
+              }
             } else {
               let reuseSawWorking = false
               const handleReusableAgentStatus = (payload: { state: string }): void => {

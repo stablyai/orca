@@ -12,6 +12,8 @@ import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
+import type { GeneratedInputOutcome } from '../../shared/generated-terminal-input'
+import { reusedAutomationPromptRefusal } from '../../shared/generated-agent-input-notice'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
@@ -216,19 +218,29 @@ async function sendToReusableSession(
         : null
     }
   })
-  if (
-    !session ||
-    !(await deliverTerminalAgentLaunchPrompt({
-      runtime,
-      handle: session.handle,
-      agent: automation.agentId,
-      freshLaunch: false,
-      text,
-      // Windows cannot prove which agent is foreground; refuse only a proven shell.
-      unprovableHost: 'write-unless-shell'
-    }))
-  ) {
+  if (!session) {
     return null
+  }
+  const seen: { outcome: GeneratedInputOutcome } = { outcome: 'not-sent' }
+  const delivered = await deliverTerminalAgentLaunchPrompt({
+    runtime,
+    handle: session.handle,
+    agent: automation.agentId,
+    freshLaunch: false,
+    text,
+    // Windows cannot prove which agent is foreground; refuse only a proven shell.
+    unprovableHost: 'write-unless-shell',
+    onOutcome: (result) => {
+      seen.outcome = result
+    }
+  })
+  if (!delivered) {
+    // Only a session gone before any write may start a fresh one; anything else would send the
+    // same prompt twice, so the run fails and the automation keeps its prompt.
+    if (seen.outcome === 'target-gone') {
+      return null
+    }
+    throw new Error(reusedAutomationPromptRefusal(automation.agentId, seen.outcome))
   }
   return {
     workspaceId: worktreeId,

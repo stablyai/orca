@@ -35,6 +35,10 @@ const testState = vi.hoisted(() => ({
   subscribeToRuntimeTerminalData: vi.fn()
 }))
 
+// These cases drive the legacy adapter: a paired host older than the generated-input transaction.
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInput: async () => null
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => testState.appState,
@@ -72,7 +76,9 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
 }))
 
 vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
-  readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false })
+  readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false }),
+  // A running agent's mounted xterm reports its current paste mode; no replayed byte is needed.
+  readPtyBracketedPasteMode: () => true
 }))
 vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
 
@@ -169,6 +175,8 @@ describe('pasteDraftWhenAgentReady', () => {
       subscriber(testState.appState)
     }
     expect(testState.storeSubscribers.size).toBe(0)
+    // The adapter attaches once the host answers that it predates the transaction.
+    await flushMicrotasks()
     expect(testState.ptyObserver).not.toBeNull()
     expect(testState.replayPreHandlerPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     await flushMicrotasks()
@@ -290,7 +298,7 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(onTimeout).toHaveBeenCalledOnce()
   })
 
-  it('keeps live quiet compatibility for an already running markerless agent', async () => {
+  it('delivers at once to a running markerless agent whose composer is painted', async () => {
     testState.inspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'claude',
       hasChildProcesses: false
@@ -301,9 +309,8 @@ describe('pasteDraftWhenAgentReady', () => {
       agent: 'claude',
       forcePaste: true
     })
-    await vi.advanceTimersByTimeAsync(1499)
-    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(151)
+    // The painted composer with Claude proven in front is current evidence; no quiet wait.
+    await vi.advanceTimersByTimeAsync(100)
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
   })
@@ -465,6 +472,7 @@ describe('pasteDraftWhenAgentReady', () => {
     for (const subscriber of testState.storeSubscribers) {
       subscriber(testState.appState)
     }
+    await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
     // The composer gets its own window after PTY appearance, beyond the old shared budget.
@@ -585,6 +593,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL
     })
 
+    await flushMicrotasks()
     expect(testState.subscribeToPtyData).toHaveBeenCalledOnce()
     expect(testState.subscribeToRuntimeTerminalData).not.toHaveBeenCalled()
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
@@ -651,7 +660,7 @@ describe('pasteDraftWhenAgentReady', () => {
     await flushMicrotasks()
     await vi.advanceTimersByTimeAsync(1650)
 
-    await expect(promise).resolves.toBe(true)
+    await expect(promise).resolves.toBe('delivered')
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
       1,
       'pty-right',

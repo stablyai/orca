@@ -31,7 +31,7 @@ const {
   recoveryNotice
 } = vi.hoisted(() => ({
   waitForAgentDraftInputReady: vi.fn(),
-  sendAgentDraftPasteContent: vi.fn(async () => true),
+  sendAgentDraftPasteContent: vi.fn(async (..._args: unknown[]) => true),
   onPasteTimeout: vi.fn(),
   recoveryNotice: vi.fn(),
   notifyCodexPaneBoundForStaleSweep: vi.fn(),
@@ -47,6 +47,10 @@ let storeSubscribers: ((state: StoreState) => void)[] = []
 
 const layoutOwner = vi.hoisted(() => ({ isMain: false }))
 
+// These cases drive the legacy adapter: a paired host older than the generated-input transaction.
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInput: async () => null
+}))
 vi.mock('../../../../shared/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
@@ -100,7 +104,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-vi.mock('@/lib/agent-draft-paste-content', () => ({ sendAgentDraftPasteContent }))
+vi.mock('@/lib/agent-draft-paste-content', () => ({
+  sendAgentDraftPasteContent,
+  sendAgentDraftPasteContentNow: (...args: Parameters<typeof sendAgentDraftPasteContent>) =>
+    sendAgentDraftPasteContent(...args)
+}))
 
 vi.mock('@/lib/launch-agent-paste-timeout-notice', () => ({
   createPasteReadinessTimeoutNotice: (args: unknown) => {

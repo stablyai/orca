@@ -1,4 +1,5 @@
 import { captureGeneratedInputRecovery } from '../generated-agent-input-notices'
+import { deliverGeneratedTerminalInput } from '../terminal/input/generated-terminal-input-delivery'
 import { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
 import {
   type RuntimeNavigationTarget,
@@ -30,7 +31,7 @@ import type {
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from '../runtime-worktree-lineage-recording'
 import {
   deliverStartupFollowupPrompt,
-  pasteWorktreeStartupDraftWhenReady,
+  generatedInputRefusalCertainty,
   type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from '../runtime-worktree-startup-readiness'
@@ -210,13 +211,19 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
   }
 
+  /** Detached: creation already succeeded, so a refusal becomes this runtime's recovery notice. */
   protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
     const recover = captureGeneratedInputRecovery(this, handle, draft.agent, draft.content)
-    pasteWorktreeStartupDraftWhenReady(
-      { ...this.getWorktreeStartupReadinessHost(), recover },
-      handle,
-      draft
-    )
+    void deliverGeneratedTerminalInput(this, handle, {
+      text: draft.content,
+      submit: false,
+      agent: draft.agent
+    }).then((outcome) => {
+      const refused = generatedInputRefusalCertainty(outcome)
+      if (refused) {
+        recover(refused)
+      }
+    })
   }
 
   /** Before first input only: await composer readiness without startup dialogs or Codex provisional headers. stopOnDialog returns early for the caller's idle report. */

@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { getAgentLabel } from '../../../shared/agent-detection'
+import { generatedInputAgentName } from '../../../shared/generated-agent-input-notice'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -11,7 +11,7 @@ export function showGeneratedInputNotice(args: {
   id?: string
   onDismiss?: () => void
 }): string | number {
-  const agent = args.agent ? getAgentLabel(args.agent) : 'The agent'
+  const agent = generatedInputAgentName(args.agent)
   const message =
     args.certainty === 'unconfirmed'
       ? translate(

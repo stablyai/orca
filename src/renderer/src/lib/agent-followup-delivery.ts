@@ -7,7 +7,7 @@ import {
 } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import { showGeneratedInputNotice } from './launch-agent-paste-timeout-notice'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
+import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../shared/generated-agent-input-readiness'
 
 export async function sendFollowupPromptWhenAgentReady(args: {
   ptyId: string
@@ -16,7 +16,7 @@ export async function sendFollowupPromptWhenAgentReady(args: {
   prompt: string
 }): Promise<boolean> {
   const { ptyId, agent, expectedProcess, prompt } = args
-  const deadline = Date.now() + resolveDraftPasteReadyTimeoutMs(agent)
+  const deadline = Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
   if (!(await waitForAgentForeground(ptyId, expectedProcess))) {
     showGeneratedInputNotice({ agent, text: prompt })
     return false

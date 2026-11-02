@@ -27,6 +27,10 @@ const testState = vi.hoisted(() => ({
   subscribeToRuntimeTerminalData: vi.fn()
 }))
 
+// These cases drive the legacy adapter: a paired host older than the generated-input transaction.
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInput: async () => null
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => testState.appState,
@@ -58,7 +62,8 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
 }))
 
 vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
-  readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false })
+  readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false }),
+  readPtyBracketedPasteMode: () => false
 }))
 vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
 
