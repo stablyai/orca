@@ -139,7 +139,7 @@ export async function maybeQueueStructuredAgentSessionSend(
   if (queuedBefore) {
     return { ok: true, value: queuedBefore }
   }
-  if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
+  if (ctx.journal.submission(clientMessageId)) {
     return null
   }
   if (

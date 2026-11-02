@@ -1,3 +1,4 @@
+import { getJournalInputOrder } from './journal-input-order-registry'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
@@ -138,9 +139,7 @@ export function acceptSubmissionFromProviderItem(
     return
   }
   state.inputs.echoes.add(resolvedItemId)
-  const submission = [...state.submissions.values()].find(
-    (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
-  )
+  const submission = getJournalInputOrder(state)?.inputForItem(resolvedItemId)
   if (!submission || !journalDispatchRowApplies(submission)) {
     return
   }

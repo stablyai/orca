@@ -1,5 +1,6 @@
 import type {
   StructuredAgentSessionWorkEvidence,
+  StructuredAgentSessionCurrentWorkJournal,
   StructuredAgentSessionSeenEnd,
   StructuredAgentSessionReplacedEnd
 } from './structured-agent-session-work-evidence'
@@ -34,11 +35,7 @@ export type { StructuredAgentSessionWorkEvidence } from './structured-agent-sess
 // Derive operational work from lease, first-hand exit, replaced-runtime and journal evidence.
 // Cleanup writes never gate current work; readers share this projection rather than maintaining rules.
 
-export type StructuredAgentSessionCurrentWorkJournal = Pick<
-  AgentSessionJournal,
-  'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
-> &
-  Partial<Pick<AgentSessionJournal, 'readSince'>>
+export type { StructuredAgentSessionCurrentWorkJournal } from './structured-agent-session-work-evidence'
 
 /** Missing records retain legacy fence-0 behavior; released/ended generations have no live fence. */
 export function structuredAgentSessionLiveFence(
@@ -180,7 +177,9 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   private unansweredSends(): AgentJournalSubmission[] {
-    return this.journal.submissions().filter((submission) => this.unanswered(submission))
+    return this.journal.inputOrder
+      .recoverableSubmissions()
+      .filter((submission) => this.unanswered(submission))
   }
 
   /** Restate held-send changes even without journal rows. */
@@ -292,7 +291,9 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   owesAnySend(): boolean {
-    return this.journal.submissions().some((submission) => this.owesSend(submission))
+    return this.journal.inputOrder
+      .recoverableSubmissions()
+      .some((submission) => this.owesSend(submission))
   }
 
   working(): boolean {

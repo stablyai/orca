@@ -1,3 +1,4 @@
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 export type StructuredAgentSessionWorkEvidence = {
@@ -17,3 +18,11 @@ export type StructuredAgentSessionSeenEnd = {
   rootGone?: boolean
   cause?: string
 }
+
+export type StructuredAgentSessionCurrentWorkJournal = Pick<
+  AgentSessionJournal,
+  'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
+> &
+  Partial<Pick<AgentSessionJournal, 'readSince'>> & {
+    inputOrder: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
+  }

@@ -38,6 +38,7 @@ async function droppedFromRoster() {
           cursor: () => ({ epoch: 'e', sequence: 0 }),
           item: () => null,
           submissions: () => [],
+          inputOrder: { recoverableSubmissions: () => [] },
           runningTurn: () => null,
           itemFence: () => undefined,
           visitItems: () => undefined,

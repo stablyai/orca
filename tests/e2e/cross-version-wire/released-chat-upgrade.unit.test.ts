@@ -61,7 +61,9 @@ afterEach(() => {
 
 const view = (journal: ContinuedJournal) => ({
   snapshot: journal.snapshot(),
-  cards: [...journal.queuedMessages.list()]
+  cards: [...journal.queuedMessages.displayState().queue.cards.values()].sort(
+    (a, b) => a.position - b.position
+  )
 })
 
 /** What the release wrote: its items, sends and cards, in order. Fields a later build adds to them

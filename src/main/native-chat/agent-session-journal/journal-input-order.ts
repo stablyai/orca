@@ -8,15 +8,14 @@ import {
 } from './journal-input-order-state'
 export type { JournalInputPlace } from './journal-input-order-state'
 
-import { JournalSubmissionLinks } from './journal-submission-links'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import type { QueuedMessageRow } from './queued-message-table'
 import type { InputPlaceQuery } from './journal-input-place-index'
+import { JournalInputEvidence } from './journal-input-evidence'
 import { JournalInputLineageOwner } from './journal-input-lineage'
 import { JournalInputCardIndex } from './journal-input-card-index'
 
@@ -36,8 +35,7 @@ export function journalInputOrder(state: JournalReducerState): JournalInputOrder
 }
 
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
-export class JournalInputOrder {
-  private readonly links = new JournalSubmissionLinks()
+export class JournalInputOrder extends JournalInputEvidence {
   private reconstructing = false
   private legacyPlaces = 0
   private readonly recoveryOwed = new Set<string>()
@@ -54,9 +52,10 @@ export class JournalInputOrder {
   private revision = 0
 
   constructor(
-    private readonly state: JournalReducerState,
+    state: JournalReducerState,
     private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined
   ) {
+    super(state)
     this.lineage = new JournalInputLineageOwner(state.inputCards)
     this.cards = new JournalInputCardIndex(this.lineage)
   }
@@ -112,19 +111,6 @@ export class JournalInputOrder {
     this.lineage.restoreFrontier(state.lastSequence, state.inputEntries.values())
   }
 
-  refreshLink(id: string): void {
-    this.links.refreshInput(this.state, id)
-  }
-  familyOriginal(id: string): AgentJournalSubmission | undefined {
-    return this.links.original(id)
-  }
-
-  linkedVersion(): number {
-    return this.links.version()
-  }
-  linkedTo(id: string): Iterable<AgentJournalSubmission> {
-    return this.links.to(id)
-  }
   overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
     this.cards.overlay(state, rows)
   }
@@ -181,6 +167,18 @@ export class JournalInputOrder {
     return this.revision
   }
 
+  liveCards(state: JournalReducerState): Iterable<QueuedMessageRow> {
+    this.cards.ensure(state)
+    return this.cards.live()
+  }
+  cardVersion(state: JournalReducerState): number {
+    this.cards.ensure(state)
+    return this.cards.version()
+  }
+  cardBounds(state: JournalReducerState): { first: number; last: number } {
+    this.cards.ensure(state)
+    return this.cards.bounds()
+  }
   head(state: JournalReducerState, floor: AgentJournalCursor | null): QueuedMessageRow | undefined {
     this.cards.ensure(state, floor)
     return this.cards.head()
@@ -205,7 +203,7 @@ export class JournalInputOrder {
     prior: QueuedMessageRow | undefined,
     card: QueuedMessageRow
   ): void {
-    this.cards.queueChanged(state, prior, card)
+    this.cards.queueChanged(state, prior, card, this.reconstructing || this.legacyPlaces > 0)
     if (!this.reconstructing && this.legacyPlaces === 0) {
       const source = this.lineage.cards.get(card.messageId)
       if (source) {
@@ -240,14 +238,15 @@ export class JournalInputOrder {
   }
 
   private refreshItem(state: JournalReducerState, itemId: string): void {
-    const identity = parseAgentJournalItemKey(itemId)
-    if (identity?.provider === 'orca') {
-      this.refresh(state, identity.clientMessageId)
+    const id = this.inputIds.get(itemId)
+    if (id !== undefined) {
+      this.refresh(state, id)
     }
   }
 
   private refresh(state: JournalReducerState, id: string): void {
     const entry = state.submissions.get(id)
+    this.refreshInputEvidence(state, id, entry)
     this.refreshLink(id)
     if (entry?.dispatchState === 'pending' || entry?.dispatchState === 'unknown') {
       if (this.unsettled.get(id) !== entry) {

@@ -1,3 +1,4 @@
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import type { JournalQueuedChange } from './journal-queue-events'
@@ -15,6 +16,21 @@ export function queuedChangeOf(
     ...(card.options ? { options: card.options } : {}),
     ...(card.recovers ? { recovers: card.recovers } : {})
   }
+}
+
+/** Membership outlives automatic eligibility, but not a completed handoff. */
+export function isLiveJournalQueueCard(
+  card: QueuedMessageRow,
+  submissions: ReadonlyMap<string, AgentJournalSubmission>
+): boolean {
+  const handoff = card.consumedAs ? submissions.get(card.consumedAs) : undefined
+  return (
+    card.state === 'waiting' ||
+    card.state === 'returned' ||
+    (card.state === 'dispatched' &&
+      handoff !== undefined &&
+      isQueuedAgentJournalSubmission(handoff))
+  )
 }
 
 export function queueNeedsReopen(

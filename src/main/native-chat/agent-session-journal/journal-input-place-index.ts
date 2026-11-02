@@ -8,7 +8,7 @@ export type InputPlaceQuery = {
   handoff?: QueuedMessageRow
   position: number
 }
-type Entry = InputPlaceQuery & { card: QueuedMessageRow; sequence: number; domain: string }
+type Entry = InputPlaceQuery & { id: string; sequence: number; domain: string; tie?: number }
 type Node = {
   entry: Entry
   height: number
@@ -30,7 +30,7 @@ export function mergeInputPlaces(a: InputPlaceQuery, b: InputPlaceQuery): InputP
 }
 const height = (node?: Node) => node?.height ?? 0
 const compare = (a: Entry, b: Entry) =>
-  a.sequence - b.sequence || a.card.messageId.localeCompare(b.card.messageId)
+  a.sequence - b.sequence || (a.tie ?? 0) - (b.tie ?? 0) || a.id.localeCompare(b.id)
 function update(node: Node): Node {
   node.height = 1 + Math.max(height(node.left), height(node.right))
   node.result = mergeInputPlaces(
@@ -109,16 +109,12 @@ export class JournalInputPlaceIndex {
     handoff: boolean,
     coordinate: AgentJournalCursor | null = card.queuedAt
   ): void {
-    const prior = this.entries.get(card.messageId)
-    if (prior) {
-      this.change(prior, true)
-    }
-    this.entries.delete(card.messageId)
+    this.delete(card.messageId)
     if (card.state === 'withdrawn') {
       return
     }
     const entry: Entry = {
-      card,
+      id: card.messageId,
       sequence: coordinate?.sequence ?? 0,
       domain: coordinate?.epoch ?? '',
       position: card.position,
@@ -130,6 +126,26 @@ export class JournalInputPlaceIndex {
     }
     this.entries.set(card.messageId, entry)
     this.change(entry, false)
+  }
+
+  /** Numeric summaries retain positions/sequences without retaining or walking record bodies. */
+  setPosition(id: string, position: number, tie = 0): void {
+    const prior = this.entries.get(id)
+    if (prior?.position === position && (prior.tie ?? 0) === tie) {
+      return
+    }
+    this.delete(id)
+    const entry: Entry = { id, sequence: position, domain: '', position, tie }
+    this.entries.set(id, entry)
+    this.change(entry, false)
+  }
+
+  delete(id: string): void {
+    const prior = this.entries.get(id)
+    if (prior) {
+      this.change(prior, true)
+      this.entries.delete(id)
+    }
   }
 
   private change(entry: Entry, remove: boolean): void {
@@ -161,6 +177,36 @@ export class JournalInputPlaceIndex {
       )
     }
     return before(this.epochs.get(epoch))
+  }
+
+  lastId(): string | undefined {
+    let node = this.all
+    while (node?.right) {
+      node = node.right
+    }
+    return node?.entry.id
+  }
+
+  successorId(sequence: number): string | undefined {
+    let node = this.all,
+      selected: string | undefined
+    while (node) {
+      if (node.entry.sequence > sequence) {
+        selected = node.entry.id
+        node = node.left
+      } else {
+        node = node.right
+      }
+    }
+    return selected
+  }
+
+  firstPosition(): number {
+    let node = this.all
+    while (node?.left) {
+      node = node.left
+    }
+    return node?.entry.position ?? Infinity
   }
 
   allPlaces(): InputPlaceQuery {

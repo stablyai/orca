@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
@@ -105,15 +106,10 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
   })
   const rewindReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) => {
     const state = host.state()
-    const pending = [...state.submissions.values()].filter(isQueuedAgentJournalSubmission)
-    const bodies = queuedMessages.list().flatMap((card) => {
-      const handoff = card.consumedAs ? state.submissions.get(card.consumedAs) : undefined
-      return card.state === 'waiting' ||
-        card.state === 'returned' ||
-        (card.state === 'dispatched' && handoff && isQueuedAgentJournalSubmission(handoff))
-        ? [card.body]
-        : []
-    })
+    const pending = journalInputOrder(state)
+      .recoverableSubmissions()
+      .filter(isQueuedAgentJournalSubmission)
+    const bodies = queuedMessages.list().map((card) => card.body)
     for (const submission of pending) {
       const body = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))?.body
       if (body?.kind !== 'message') {

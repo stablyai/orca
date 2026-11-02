@@ -4,7 +4,7 @@ import { JournalWriteProjection } from './journal-write-projection'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './journal-commit'
-import { createJournalPublicReader } from './journal-public-read'
+import { createJournalPublicReader, renderJournalStatus } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalItemBody,
@@ -191,6 +191,8 @@ export class AgentSessionJournal {
   cursor = (): AgentJournalCursor => journalContext.journalContextCursor(this.state)
 
   snapshot = (): AgentJournalSnapshot => this.publicRead().snapshot
+
+  statusRead = () => renderJournalStatus(this.queuedMessages.displayState(), this.inputOrder)
 
   publicRead = () =>
     this.readPublic(this.state, this.queuedMessages.displayState(), this.queuedMessages.revision())

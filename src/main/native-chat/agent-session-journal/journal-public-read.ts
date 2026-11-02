@@ -1,6 +1,7 @@
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { renderJournalState, type JournalReducerState } from './journal-reducer'
+import type { JournalInputOrder } from './journal-input-order'
+import { renderJournalItems, renderJournalState, type JournalReducerState } from './journal-reducer'
 
 /** Only a committed journal owner can certify reuse across public reads. */
 export function createJournalPublicReader() {
@@ -60,4 +61,17 @@ function journalNormalizationKey(state: JournalReducerState): string {
       : []
   })
   return corrections.length === 0 ? '' : JSON.stringify([state.epoch, corrections])
+}
+
+export function renderJournalStatus(state: JournalReducerState, owner: JournalInputOrder) {
+  const failed = state.queuePauseMarks.latestStop?.settle?.failedOn
+  const items = renderJournalItems(state)
+  return {
+    items,
+    submissions: owner.statusInputs(
+      state,
+      items,
+      failed && 'openedAfter' in failed ? failed.openedAfter : undefined
+    )
+  }
 }

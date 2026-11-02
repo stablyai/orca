@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -72,8 +73,8 @@ export async function holdUnsentSends(
   }
 ): Promise<number | null> {
   const { hold } = input
-  const unsent = journal
-    .submissions()
+  const unsent = journal.inputOrder
+    .recoverableSubmissions()
     .filter((entry) =>
       input.unrun
         ? isUnansweredHandedOverSubmission(entry) && (input.unrun === true || input.unrun(entry))
@@ -177,9 +178,7 @@ function headOfQueuePositions(
   unrun: boolean
 ): { placed: Map<string, number>; moves: QueuedMessagePositionMove[] } {
   const cards = journal.queuedMessages.list()
-  const keptIds = new Set(
-    journal.submissions().flatMap((entry) => entry.keptAsQueuedMessageId ?? [])
-  )
+  const kept = (id: string) => journal.inputOrder.keptCard(id)
   const { epoch } = journal.physicalCursor()
   const state = journal.queuedMessages.displayState()
   const forcedBatch = batch.some(({ submission }) =>
@@ -191,9 +190,12 @@ function headOfQueuePositions(
   const explicitHeads = new Map(
     batch.flatMap(({ submission }) => {
       const id = submission.origin === 'client' ? submission.queuedMessageId : undefined
-      return id && cardsById.get(id)?.consumedAs === submission.clientMessageId
-        ? [[submission.clientMessageId, id] as const]
-        : []
+      const card = id ? journal.queuedMessages.get(id) : null
+      if (id && card?.consumedAs === submission.clientMessageId) {
+        cardsById.set(id, card)
+        return [[submission.clientMessageId, id] as const]
+      }
+      return []
     })
   )
   const explicit = new Set(explicitHeads.values())
@@ -203,7 +205,7 @@ function headOfQueuePositions(
     }
     if (
       card.state === 'waiting' &&
-      ((unrun && keptIds.has(card.messageId)) ||
+      ((unrun && kept(card.messageId)) ||
         (!forcedBatch && card.queuedAt && card.queuedAt.epoch !== epoch))
     ) {
       earlier.push(card.messageId)
@@ -222,7 +224,7 @@ function headOfQueuePositions(
   for (let i = 0; i < rest.length; i++) {
     if (
       rest[i].state === 'waiting' &&
-      keptIds.has(rest[i].messageId) &&
+      kept(rest[i].messageId) &&
       (journal.inputOrder.lineage.cards.get(rest[i].messageId)?.introduced ?? -Infinity) < firstCut
     ) {
       previousBoundary = i + 1
@@ -230,7 +232,7 @@ function headOfQueuePositions(
   }
   for (const { submission, body } of batch) {
     const id = body ? submission.clientMessageId : explicitHeads.get(submission.clientMessageId)
-    if (!id || (body && keptIds.has(id))) {
+    if (!id || (body && kept(id))) {
       continue
     }
     if (!body && previousBoundary > 0) {
@@ -266,7 +268,7 @@ function headOfQueuePositions(
   const placed = new Map(order.map((id, index) => [id, index]))
   return {
     placed,
-    moves: cards.flatMap((card) => {
+    moves: [...cardsById.values()].flatMap((card) => {
       const position = placed.get(card.messageId)!
       return position === card.position ? [] : [{ messageId: card.messageId, position }]
     })
@@ -279,8 +281,7 @@ export function keepFailedStartSends(
   dispatches: readonly ResolveDispatchInput[]
 ): { cards: JournalQueueCardChange[]; dispatches: typeof dispatches } {
   const cards: JournalQueueCardChange[] = []
-  let position =
-    Math.min(0, ...[...state.queue.cards.values()].map((card) => card.position)) - dispatches.length
+  let position = journalInputOrder(state).cardBounds(state).first - dispatches.length
   return {
     cards,
     dispatches: dispatches.map((dispatch) => {

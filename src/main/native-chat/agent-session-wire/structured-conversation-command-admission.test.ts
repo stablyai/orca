@@ -37,6 +37,7 @@ function contextWith(
       cursor: () => ({ epoch: 'e', sequence: 0 }),
       item: () => null,
       submissions: () => [],
+      inputOrder: { recoverableSubmissions: () => [] },
       runningTurn: () => null,
       itemFence: () => undefined,
       visitItems: () => undefined,
@@ -212,6 +213,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
       { clientMessageId: 'behind', dispatchState: 'pending', handoverRecorded: true }
     ] as never
     ctx.journal.submissions = () => queued
+    ctx.journal.inputOrder.recoverableSubmissions = () => queued
     expect(conversationCommandBlocked(ctx, RECORD, reading([]), 'handover')).toBeNull()
   })
 })
@@ -249,6 +251,8 @@ describe('conversationCommandBlocked on unsettled messages', () => {
       }
     ]
     ctx.journal.submissions = () => submissions
+    ctx.journal.inputOrder.recoverableSubmissions = () =>
+      submissions.filter((s) => s.dispatchState === 'pending' || s.dispatchState === 'unknown')
     const refusal = conversationCommandBlocked(ctx, RECORD, reading([]), admission)
     return {
       blocked: refusal?.details && 'reason' in refusal.details ? refusal.details.reason : null,

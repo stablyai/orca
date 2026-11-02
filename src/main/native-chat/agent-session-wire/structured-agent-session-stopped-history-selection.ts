@@ -16,7 +16,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 type StoppedHistoryContext = {
-  journal: Pick<AgentSessionJournal, 'submissions' | 'submissionBody' | 'stoppedHistoryCarried'> & {
+  journal: Pick<AgentSessionJournal, 'inputOrder' | 'submissionBody'> & {
     context: Pick<AgentSessionJournal['context'], 'floor'>
   }
 }
@@ -37,10 +37,8 @@ export function carriedStoppedHistory(
   }
   return selectStoppedHistory(
     agentSessionStoppedHistoryOwed({
-      submissions: ctx.journal.submissions(),
-      carried: new Map(
-        [...ctx.journal.stoppedHistoryCarried()].filter(([id]) => id !== submission.clientMessageId)
-      ),
+      submissions: ctx.journal.inputOrder.stoppedHistoryInputs(submission.clientMessageId),
+      carried: new Map(),
       clearSequence: ctx.journal.context.floor()?.sequence ?? 0,
       body: (id) => ctx.journal.submissionBody(id)
     }),

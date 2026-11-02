@@ -278,7 +278,9 @@ it.each([10, 40])(
           (card) => !card.baseline
         )
       ).toBe(true)
-      expect(journal.inputOrder['cards']['domains']).toBeUndefined()
+      expect(journal.inputOrder['cards']['domains']['root']).toEqual({
+        index: new JournalInputPlaceIndex('')
+      })
       expect(journal.queuedMessages.displayState().inputEntries.size).toBe(0)
       expect(finished.state.inputEntries.size).toBe(0)
       expect(

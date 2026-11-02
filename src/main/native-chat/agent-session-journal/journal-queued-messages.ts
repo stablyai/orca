@@ -12,7 +12,6 @@ import type {
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalQueueCardChange, JournalQueueRow } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
-import { queueNeedsReopen } from './journal-queue-retention'
 import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
 import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './journal-store-contracts'
 import {
@@ -66,14 +65,15 @@ export class JournalQueuedMessages {
   }
 
   revision(): string {
-    const { epoch, queue } = this.deps.state()
-    return `${epoch}:${queue.revision}:${this.legacy.key()}`
+    const state = this.inputState()
+    return `${state.epoch}:${state.queue.revision}:${journalInputOrder(state).cardVersion(state)}:${this.legacy.key()}`
   }
 
   list(): readonly QueuedMessageRow[] {
     const key = this.revision()
     if (this.viewed?.key !== key) {
-      const cards = [...this.deps.state().queue.cards.values(), ...this.legacy.cards()]
+      const state = this.inputState()
+      const cards = [...journalInputOrder(state).liveCards(state)]
       this.viewed = { key, cards: cards.sort((a, b) => a.position - b.position) }
     }
     return this.viewed.cards
@@ -124,7 +124,7 @@ export class JournalQueuedMessages {
           return { changes: [], result: undefined }
         }
         const { epoch, lastSequence } = this.deps.state()
-        const position = Math.max(0, ...this.list().map((card) => card.position)) + 1
+        const position = journalInputOrder(this.inputState()).cardBounds(this.deps.state()).last + 1
         const change = {
           op: 'queued' as const,
           body,
@@ -254,7 +254,21 @@ export class JournalQueuedMessages {
   }
 
   awaitReopenMark(): boolean {
-    return queueNeedsReopen(this.list(), this.deps.state().submissions)
+    if (this.list().some((card) => card.state === 'waiting')) {
+      return true
+    }
+    const state = this.inputState()
+    return journalInputOrder(state)
+      .recoverableSubmissions()
+      .some((entry) => {
+        const card = entry.queuedMessageId ? this.get(entry.queuedMessageId) : null
+        return (
+          card?.state === 'dispatched' &&
+          card.consumedAs === entry.clientMessageId &&
+          (entry.dispatchState === 'pending' ||
+            (entry.dispatchState === 'unknown' && entry.recovered !== true))
+        )
+      })
   }
 
   userStopInForce(): JournalQueuePauseMarks['latestStop'] {

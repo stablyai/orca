@@ -71,6 +71,7 @@ describe('the stop-note refresh frame', () => {
           }
         },
         submissions: () => [],
+        inputOrder: { recoverableSubmissions: () => [] },
         wroteBeforeOpen: () => false
       },
       2

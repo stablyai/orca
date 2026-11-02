@@ -369,8 +369,7 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
       {
         journal: {
           context: { floor: () => null },
-          submissions: () => [...state.submissions.values()],
-          stoppedHistoryCarried: () => state.stoppedHistoryCarried,
+          inputOrder: journalInputOrder(state),
           submissionBody: (id) => journalInputSourceBody(state.inputs.sources.get(id))
         }
       },

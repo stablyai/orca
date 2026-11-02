@@ -136,7 +136,7 @@ export function readQueuePublication(
   // Avoid scanning submissions when no pause can show.
   const pause =
     resumable &&
-    !queuePauseLiftOnItsWay(resumable, journal.submissions(), (submission) =>
+    !queuePauseLiftOnItsWay(resumable, journal.inputOrder.recoverableSubmissions(), (submission) =>
       gate(journal).work.owesSend(submission)
     )
       ? resumable

@@ -155,6 +155,10 @@ export function journal(
     },
     runningTurn: () => runningStructuredAgentSessionTurnItemBySequence(items),
     submissions: () => submissions,
+    inputOrder: {
+      recoverableSubmissions: () =>
+        submissions.filter((s) => s.dispatchState === 'pending' || s.dispatchState === 'unknown')
+    },
     itemFence: () => undefined,
     wroteBeforeOpen: () => false
   }

@@ -3,7 +3,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 
 /** Refused conversions replay as returned cards, avoiding duplicate Retry rows; null means never queued. */
 export function queuedSendAnswer(
-  journal: Pick<AgentSessionJournal, 'submission' | 'submissions'> & {
+  journal: Pick<AgentSessionJournal, 'submission' | 'inputOrder'> & {
     queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'>
   },
   clientMessageId: string
@@ -22,9 +22,9 @@ export function queuedSendAnswer(
         }
   }
   // Missing cards with rejected handoffs were deleted; replay withdrawn rather than a refused send.
-  const handoff = journal
-    .submissions()
-    .findLast((entry) => entry.queuedMessageId === clientMessageId)
+  const handoff = [...journal.inputOrder.linkedTo(clientMessageId)].findLast(
+    (entry) => entry.queuedMessageId === clientMessageId
+  )
   if (handoff?.dispatchState === 'rejected') {
     return {
       clientMessageId,

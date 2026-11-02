@@ -43,7 +43,7 @@ function submissionFor(
   ctx: AgentSessionTurnContext,
   clientMessageId: string
 ): AgentJournalSubmission | undefined {
-  return ctx.journal.submissions().find((entry) => entry.clientMessageId === clientMessageId)
+  return ctx.journal.submission(clientMessageId)
 }
 
 function submissionRowReceipt(
@@ -148,7 +148,7 @@ export function sendQueuedStructuredAgentMessage(
     replay: (ctx, _outcome, receipt) => {
       const submission =
         receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
-          ? ctx.journal.submissions().find((entry) => entry.submittedSequence === receipt.sequence)
+          ? ctx.journal.inputOrder.submissionAt(receipt.sequence)
           : undefined
       return submission?.queuedMessageId === messageId
         ? { clientMessageId: submission.clientMessageId, submission }

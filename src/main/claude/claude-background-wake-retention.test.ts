@@ -31,6 +31,15 @@ async function wiredSession() {
       const item = run.journalItems.get(itemId)
       return item ? { ...item, revision: 1, observedAt: run.now() } : null
     },
+    statusRead(): ReturnType<Journal['statusRead']> {
+      return this.snapshot()
+    },
+    inputOrder: {
+      inputCount: () => submissions.length,
+      inputOrdinal: (id: string) => submissions.findIndex((s) => s.clientMessageId === id),
+      recoverableSubmissions: () =>
+        submissions.filter((s) => s.dispatchState === 'pending' || s.dispatchState === 'unknown')
+    },
     context: { floor: () => null },
     stopMarks: { latest: () => null, revision: () => 0 },
     itemFence: () => undefined,

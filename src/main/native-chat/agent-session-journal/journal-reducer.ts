@@ -280,16 +280,19 @@ export function rememberAppliedSettlementId(
   }
 }
 
-export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
+export function renderJournalItems(state: JournalReducerState): AgentJournalSnapshot['items'] {
   // Map insertion order changes on recreation; journal position alone orders the timeline.
-  const items = [...state.items.values()]
+  return [...state.items.values()]
     .filter((item) => journalInputPresentationMember(state, item.itemId))
     .map((item) => projectJournalStopNote(item, state.items))
     .sort(compareAgentJournalItems)
+}
+
+export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
   return {
     sessionId: state.sessionId,
     cursor: journalContextCursor(state),
-    items,
+    items: renderJournalItems(state),
     submissions: [...state.submissions.values()].sort((a, b) => a.submittedAt - b.submittedAt)
   }
 }

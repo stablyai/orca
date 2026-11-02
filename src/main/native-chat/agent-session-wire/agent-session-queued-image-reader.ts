@@ -36,14 +36,13 @@ function sourceIds(
   if (cached) {
     return cached
   }
-  const rows = new Map(journal.queuedMessages.list().map((card) => [card.messageId, card]))
   const ids = new Map<string, boolean>()
   const imageIds = new Set<string>()
   for (const card of cards) {
     if (!queuedCardHoldsImage(card)) {
       continue
     }
-    const row = rows.get(card.messageId)
+    const row = journal.queuedMessages.get(card.messageId)
     if (row?.state !== 'waiting' && row?.state !== 'returned') {
       continue
     }

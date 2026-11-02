@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import {
   agentJournalItemKey,
@@ -56,7 +57,8 @@ export async function rewindJournalContext(input: {
             ).cleared
           : null
       const queued = new Set(
-        [...state.submissions.values()]
+        journalInputOrder(state)
+          .recoverableSubmissions()
           .filter(isQueuedAgentJournalSubmission)
           .map((entry) => agentJournalSubmissionKey(entry.clientMessageId))
       )
