@@ -1,3 +1,4 @@
+import { ClaudeRemoteHookService } from './claude-remote-hook-service'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
   listClaudeProfileHomes,
@@ -7,24 +8,14 @@ import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  buildManagedCommandHook,
   readHooksJson,
   writeHooksJson,
   writeManagedScript,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
-import {
-  readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { getManagedScript } from './hook-script'
-import {
-  removeClaudeAgentViewRemote,
-  refreshClaudeAgentView,
-  removeClaudeAgentView
-} from './agent-view-install'
+import { refreshClaudeAgentView, removeClaudeAgentView } from './agent-view-install'
 import {
   installWindowsClaudeHookExecutable,
   installWindowsClaudeHookFiles,
@@ -49,9 +40,6 @@ import {
   getConfigPath,
   getManagedEventHook,
   getManagedScriptPath,
-  getPosixManagedScriptFileName,
-  getRemoteConfigPath,
-  getRemoteManagedEventCommand,
   getStatusLineScriptPath,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
@@ -252,64 +240,36 @@ export class ClaudeHookService {
     }
   }
 
-  async installRemote(
+  private remoteHooks(): ClaudeRemoteHookService {
+    return new ClaudeRemoteHookService({
+      ...this.options,
+      script: () => this.managedScript('posix'),
+      plan: (options) => this.managedHookPlan(options)
+    })
+  }
+
+  installRemote(
     sftp: SFTPWrapper,
-    remoteHome: string,
+    home: string,
     options: ClaudeHookInstallOptions & { configDir?: string } = {}
   ): Promise<AgentHookInstallStatus> {
-    // Remote hook installation targets POSIX hosts regardless of the client platform.
-    const remoteConfigPath = options.configDir
-      ? `${options.configDir.replace(/\/$/, '')}/settings.json`
-      : getRemoteConfigPath(remoteHome, this.options.settings)
-    const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
-    try {
-      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
-      if (!config) {
-        return {
-          agent: this.options.agent,
-          state: 'error',
-          configPath: remoteConfigPath,
-          managedHooksPresent: false,
-          detail: `Could not parse remote ${this.options.displayName} settings.json`
-        }
-      }
+    return this.remoteHooks().install(sftp, home, options)
+  }
 
-      // Settings resolve HOME at runtime; SFTP writes to the discovered remote home.
-      const nextConfig = applyManagedHooks(
-        config,
-        (eventName) =>
-          buildManagedCommandHook(getRemoteManagedEventCommand(eventName, remoteScriptPath)),
-        remoteScriptFileName,
-        this.managedHookPlan(options)
-      )
+  getRemoteStatus(
+    sftp: SFTPWrapper,
+    home: string,
+    options: ClaudeHookInstallOptions & { configDir?: string } = {}
+  ): Promise<AgentHookInstallStatus> {
+    return this.remoteHooks().getStatus(sftp, home, options)
+  }
 
-      // Publish scripts before settings can reference them.
-      await writeManagedScriptRemote(sftp, remoteScriptPath, this.managedScript('posix'))
-      // Remote relays lack the statusline route, and remote account usage cannot be attributed locally.
-      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
-      if (this.options.agent === 'claude') {
-        await removeClaudeAgentViewRemote(sftp, remoteConfigPath).catch((error: unknown) => {
-          console.warn('[agent-hooks] Remote Claude agent view migration failed', error)
-        })
-      }
-
-      return {
-        agent: this.options.agent,
-        state: 'installed',
-        configPath: remoteConfigPath,
-        managedHooksPresent: true,
-        detail: null
-      }
-    } catch (err) {
-      return {
-        agent: this.options.agent,
-        state: 'error',
-        configPath: remoteConfigPath,
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
+  removeRemote(
+    sftp: SFTPWrapper,
+    home: string,
+    options: { configDir?: string } = {}
+  ): Promise<AgentHookInstallStatus> {
+    return this.remoteHooks().remove(sftp, home, options)
   }
 
   remove(options: { target?: SystemClaudeHookTarget } = {}): AgentHookInstallStatus {

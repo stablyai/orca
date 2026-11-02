@@ -1,3 +1,9 @@
+import {
+  wslHookInvocation,
+  conventionalHookInvocation,
+  runWslClaudeHookCommand
+} from './agent-hooks-wsl'
+import { AGENT_HOOK_TARGETS } from '../../shared/agent-hook-types'
 import type { ManagedHookInvocation } from '../../main/claude/claude-hook-target'
 import { readUserClaudeConfigDirAsSet } from '../../shared/claude-user-config'
 import { join } from 'node:path'
@@ -176,6 +182,9 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
 }
 
 function hookInvocation(): ManagedHookInvocation {
+  if (wslHookInvocation()) {
+    return conventionalHookInvocation()
+  }
   const configDir = readUserClaudeConfigDirAsSet(process.env)
   return configDir === undefined ? {} : { env: { CLAUDE_CONFIG_DIR: configDir } }
 }
@@ -186,12 +195,27 @@ async function setAgentHooksEnabled(
 ): Promise<AgentHookCommandResult> {
   const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } =
     await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+  const origin = wslHookInvocation()
   const updatedRuntime = await updateRunningRuntime(client, enabled)
   const offlineUpdate = updatedRuntime ? null : await updateEnabledOnDisk(enabled)
   const settingsPath = offlineUpdate?.settingsPath ?? (await getDataPath())
   const invocation = hookInvocation()
   let statuses: AgentHookInstallStatus[]
-  if (updatedRuntime && invocation.env) {
+  if (origin?.context) {
+    const nativeOptions = {
+      ...invocation,
+      agents: AGENT_HOOK_TARGETS.filter((agent) => agent !== 'claude')
+    }
+    const nativeStatuses = updatedRuntime
+      ? await getManagedAgentHookStatuses(nativeOptions)
+      : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings, nativeOptions)
+    const claude = await runWslClaudeHookCommand(
+      { distro: origin.distro, context: origin.context },
+      enabled ? 'on' : 'off',
+      updatedRuntime?.settings ?? offlineUpdate?.settings ?? null
+    )
+    statuses = [claude, ...nativeStatuses]
+  } else if (updatedRuntime && invocation.env) {
     const applied = await applyAgentStatusHooksEnabled(enabled, updatedRuntime.settings, {
       ...invocation,
       agents: ['claude']
@@ -233,15 +257,34 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
       // Best effort: old or unavailable runtimes must not block Codex launch.
     }
   },
-  'agent hooks status': async ({ json, flags }) => {
+  'agent hooks status': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
     const { getManagedAgentHookStatuses } =
       await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+    const origin = wslHookInvocation()
+    const admission = origin?.context ? await client.getOfflineRuntimeAdmission() : null
+    const settings = admission?.reachable
+      ? (await client.call<{ settings: HookSettings }>('settings.get')).result.settings
+      : await readHookSettingsFromDisk()
+    const invocation = hookInvocation()
+    const statuses = origin?.context
+      ? [
+          await runWslClaudeHookCommand(
+            { distro: origin.distro, context: origin.context },
+            'status',
+            settings
+          ),
+          ...(await getManagedAgentHookStatuses({
+            ...invocation,
+            agents: AGENT_HOOK_TARGETS.filter((agent) => agent !== 'claude')
+          }))
+        ]
+      : await getManagedAgentHookStatuses(invocation)
     const result: AgentHookCommandResult = {
-      enabled: (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
+      enabled: settings.agentStatusHooksEnabled,
       settingsPath: await getDataPath(),
       appliedBy: 'offline',
-      statuses: await getManagedAgentHookStatuses(hookInvocation())
+      statuses
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },

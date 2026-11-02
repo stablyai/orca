@@ -198,6 +198,7 @@ export async function installManagedAgentHooks(
     const installing = runInstaller(entry, options.onInstallError, {
       ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),
       ...(cliVersion ? { cliVersion } : {}),
+      ...(options.target ? { target: options.target } : {}),
       ...(options.env ? { env: options.env } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       ...(options.shouldContinue
@@ -252,10 +253,12 @@ export async function removeManagedAgentHooksAsync(
 }
 
 export async function getManagedAgentHookStatuses(
-  options: ManagedHookInvocation = {}
+  options: ManagedHookInvocation & { agents?: readonly AgentHookTarget[] } = {}
 ): Promise<AgentHookInstallStatus[]> {
   return Promise.all(
-    MANAGED_AGENT_HOOK_STATUS_READERS.map(async ([agent, getStatus]) => {
+    MANAGED_AGENT_HOOK_STATUS_READERS.filter(
+      ([agent]) => !options.agents || options.agents.includes(agent)
+    ).map(async ([agent, getStatus]) => {
       try {
         return await getStatus(options)
       } catch (error) {

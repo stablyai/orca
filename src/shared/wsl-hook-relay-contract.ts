@@ -38,7 +38,7 @@ export type WslFsFailure = {
 export type WslFsResult<T extends object = object> = ({ ok: true } & T) | WslFsFailure
 
 /** Opt-in publication is admitted only by the current mux's home response. */
-export type WslHookFsHome = { home: string; physicalAtomicWrite?: true }
+export type WslHookFsHome = { home: string; physicalAtomicWrite?: true; claudeConfigDir?: string }
 
 /** Restart-stable per-instance endpoint directory. Rewrite the same file so surviving agents discover fresh port/token values. */
 export function wslHookRelayEndpointDir(guestHome: string, instanceKey: string): string {

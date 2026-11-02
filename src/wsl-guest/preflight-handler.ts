@@ -40,7 +40,10 @@ const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
 const AGENT_PATH_PREFIX = '__ORCA_AGENT_PATH__'
 
 export class PreflightHandler {
-  constructor(private readonly dispatcher: RelayDispatcher) {
+  constructor(
+    private readonly dispatcher: Pick<RelayDispatcher, 'onRequest'>,
+    private readonly invocationConfigDir?: string
+  ) {
     this.registerHandlers()
   }
 
@@ -109,7 +112,10 @@ export class PreflightHandler {
       agents: [...new Set(detectedCommands.map(({ id }) => id))],
       ...(Object.keys(versions).length > 0 ? { versions } : {}),
       ...(detectedCommands.some(({ id }) => id === 'claude')
-        ? { claudeConfigDir: (await resolveSystemClaudeHookTarget()).configDir }
+        ? {
+            claudeConfigDir:
+              this.invocationConfigDir ?? (await resolveSystemClaudeHookTarget()).configDir
+          }
         : {})
     }
   }

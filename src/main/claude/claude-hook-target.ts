@@ -8,7 +8,7 @@ export type ClaudeHookTarget =
   | SystemClaudeHookTarget
   | { kind: 'profile'; configDir: string; systemDefaultConfigDir?: string }
 
-export type ManagedHookInvocation = { env?: NodeJS.ProcessEnv }
+export type ManagedHookInvocation = { env?: NodeJS.ProcessEnv; target?: SystemClaudeHookTarget }
 
 export function systemClaudeHookTarget(
   env: NodeJS.ProcessEnv = process.env
@@ -23,5 +23,8 @@ export function systemClaudeHookTarget(
 export async function resolveSystemClaudeHookTarget(
   invocation: ManagedHookInvocation = {}
 ): Promise<SystemClaudeHookTarget> {
-  return systemClaudeHookTarget(invocation.env ?? (await resolveLoginShellEnvironment()))
+  return (
+    invocation.target ??
+    systemClaudeHookTarget(invocation.env ?? (await resolveLoginShellEnvironment()))
+  )
 }

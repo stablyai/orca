@@ -1,4 +1,5 @@
 import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { WSL_CLI_ROOT_ENV_KEYS } from '../../shared/wsl-cli-context'
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 
 const MANAGED_MARKER = '# Orca managed WSL CLI launcher'
@@ -46,6 +47,10 @@ function buildLauncher(
   resolvePowerShell: string
 ): string {
   const encodedTarget = Buffer.from(windowsLauncherPath, 'utf8').toString('base64')
+  const contextFields = WSL_CLI_ROOT_ENV_KEYS.map((key) => `"\${${key}+1}" "\${${key}:-}"`).join(
+    ' '
+  )
+
   return `#!/usr/bin/env bash
 set -euo pipefail
 ${MANAGED_MARKER}
@@ -59,10 +64,17 @@ ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
   ORCA_WSL_CWD=/
   cd /
 }
+ORCA_WSL_CONTEXT=''
+if [ "\${1:-}" = agent ] && [ "\${2:-}" = hooks ]; then
+  ORCA_WSL_CONTEXT=$(printf '%s\\0' 1 "$(id -un)" "$HOME" "$ORCA_WSL_CWD" ${contextFields} | base64 | tr -d '\\n')
+fi
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
 ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
 if [ -n "\${WSL_DISTRO_NAME:-}" ]; then
   set -- -WslDistro "$WSL_DISTRO_NAME" "$@"
+fi
+if [ -n "$ORCA_WSL_CONTEXT" ]; then
+  set -- -WslContext "$ORCA_WSL_CONTEXT" "$@"
 fi
 exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"
 `
@@ -129,12 +141,20 @@ try {
     $WslCwd = $args[2]
     $ForwardArgStart = 3
   }
-  if ($ForwardArgStart -eq 3 -and $args.Count -ge 4 -and $args[3] -eq '-WslDistro') {
-    if ($args.Count -lt 5) {
+  Remove-Item Env:ORCA_CLI_WSL_CONTEXT -ErrorAction SilentlyContinue
+  if ($args.Count -gt $ForwardArgStart -and $args[$ForwardArgStart] -eq '-WslContext') {
+    if ($args.Count -le ($ForwardArgStart + 1)) {
       throw 'Invalid Orca WSL CLI bridge invocation.'
     }
-    $WslDistro = $args[4]
-    $ForwardArgStart = 5
+    $env:ORCA_CLI_WSL_CONTEXT = $args[$ForwardArgStart + 1]
+    $ForwardArgStart += 2
+  }
+  if ($args.Count -gt $ForwardArgStart -and $args[$ForwardArgStart] -eq '-WslDistro') {
+    if ($args.Count -le ($ForwardArgStart + 1)) {
+      throw 'Invalid Orca WSL CLI bridge invocation.'
+    }
+    $WslDistro = $args[$ForwardArgStart + 1]
+    $ForwardArgStart += 2
   }
   [string[]]$ForwardArgs = @()
   if ($args.Count -gt $ForwardArgStart) {

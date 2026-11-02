@@ -6,8 +6,10 @@ import { posix } from 'node:path'
 export async function writeHookFileAtomically(
   logicalPath: string,
   content: string,
-  requiredMode?: number
+  requiredMode?: number,
+  signal?: AbortSignal
 ): Promise<void> {
+  signal?.throwIfAborted()
   let target: string
   try {
     target = await fs.realpath(logicalPath)
@@ -29,11 +31,13 @@ export async function writeHookFileAtomically(
   }
   if (equal) {
     if (requiredMode !== undefined) {
+      signal?.throwIfAborted()
       await fs.chmod(target, requiredMode)
     }
     return
   }
   const parent = posix.dirname(target)
+  signal?.throwIfAborted()
   await fs.mkdir(parent, { recursive: true })
   let mode = requiredMode
   if (mode === undefined) {
@@ -51,14 +55,18 @@ export async function writeHookFileAtomically(
     }
   }
   const temporary = posix.join(parent, `.${Date.now()}-${randomUUID()}.tmp`)
+  signal?.throwIfAborted()
   const file = await fs.open(temporary, 'wx', mode)
   try {
     try {
+      signal?.throwIfAborted()
       await file.writeFile(content, 'utf8')
+      signal?.throwIfAborted()
       await fs.chmod(temporary, mode)
     } finally {
       await file.close()
     }
+    signal?.throwIfAborted()
     await fs.rename(temporary, target)
   } finally {
     await fs.unlink(temporary).catch(() => {})

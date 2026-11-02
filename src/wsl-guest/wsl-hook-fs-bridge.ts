@@ -18,11 +18,12 @@ function failure(err: unknown): WslFsFailure {
 }
 
 export function registerWslHookFsHandlers(
-  dispatcher: RelayDispatcher,
+  dispatcher: Pick<RelayDispatcher, 'onRequest'>,
   home: string,
   // Why: the home request doubles as the connect handshake; link diagnostics
   // (port fallback) ride it so the host can breadcrumb them.
-  linkStatus?: () => Record<string, unknown>
+  linkStatus?: () => Record<string, unknown>,
+  command?: { configDir: string; signal: AbortSignal }
 ): void {
   // The guest derives the only extra root; a caller cannot expand this scope.
   // Like HOME, this boundary is lexical on the trusted host-owned stdio channel.
@@ -42,8 +43,9 @@ export function registerWslHookFsHandlers(
     if (contains(homeRoot, resolved) || (allowAncestors && contains(resolved, homeRoot))) {
       return resolved
     }
-    const target = await resolveSystemClaudeHookTarget()
-    const root = posix.resolve(target.configDir)
+    const root = posix.resolve(
+      command?.configDir ?? (await resolveSystemClaudeHookTarget()).configDir
+    )
     if (contains(root, resolved) || (allowAncestors && contains(resolved, root))) {
       return resolved
     }
@@ -51,7 +53,13 @@ export function registerWslHookFsHandlers(
   }
 
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.home, async (): Promise<WslFsResult<WslHookFsHome>> => {
-    return { ok: true, home: homeRoot, ...linkStatus?.(), physicalAtomicWrite: true }
+    return {
+      ok: true,
+      home: homeRoot,
+      ...linkStatus?.(),
+      ...(command ? { claudeConfigDir: command.configDir } : {}),
+      physicalAtomicWrite: true
+    }
   })
 
   dispatcher.onRequest(
@@ -66,13 +74,20 @@ export function registerWslHookFsHandlers(
     }
   )
 
+  const mutationPath = async (raw: unknown, ancestors = false): Promise<string> => {
+    command?.signal.throwIfAborted()
+    const path = await scoped(raw, ancestors)
+    command?.signal.throwIfAborted()
+    return path
+  }
+
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.writeFile, async (params): Promise<WslFsResult> => {
     try {
       const mode = typeof params.mode === 'number' ? params.mode : undefined
-      const path = await scoped(params.path)
+      const path = await mutationPath(params.path)
       const content = String(params.content ?? '')
       await (params.physicalAtomic === true
-        ? writeHookFileAtomically(path, content, mode)
+        ? writeHookFileAtomically(path, content, mode, command?.signal)
         : fs.writeFile(path, content, { encoding: 'utf8', mode }))
       return { ok: true }
     } catch (err) {
@@ -96,7 +111,10 @@ export function registerWslHookFsHandlers(
     try {
       // Why: POSIX rename overwrites atomically — exactly the OpenSSH
       // overwrite-rename semantics the installers prefer.
-      await fs.rename(await scoped(params.src), await scoped(params.dst))
+      const src = await mutationPath(params.src)
+      const dst = await mutationPath(params.dst)
+      command?.signal.throwIfAborted()
+      await fs.rename(src, dst)
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -105,7 +123,7 @@ export function registerWslHookFsHandlers(
 
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.unlink, async (params): Promise<WslFsResult> => {
     try {
-      await fs.unlink(await scoped(params.path))
+      await fs.unlink(await mutationPath(params.path))
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -114,7 +132,7 @@ export function registerWslHookFsHandlers(
 
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.chmod, async (params): Promise<WslFsResult> => {
     try {
-      await fs.chmod(await scoped(params.path), Number(params.mode))
+      await fs.chmod(await mutationPath(params.path), Number(params.mode))
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -136,7 +154,7 @@ export function registerWslHookFsHandlers(
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.mkdir, async (params): Promise<WslFsResult> => {
     try {
       // The shared installer creates missing parents on the way to a scoped root.
-      await fs.mkdir(await scoped(params.path, true))
+      await fs.mkdir(await mutationPath(params.path, true))
       return { ok: true }
     } catch (err) {
       return failure(err)

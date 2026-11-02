@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import * as fs from 'node:fs'
-import { tmpdir } from 'node:os'
+import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -88,6 +88,7 @@ vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
   getManagedAgentHookStatuses: getManagedAgentHookStatusesMock
 }))
 
+import * as wslLocation from './account-wsl-location'
 import { main } from '../index'
 
 function readDefaultProfileState(userDataPath: string) {
@@ -141,6 +142,74 @@ describe('agent hooks CLI handler', () => {
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
     rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  it('keeps old WSL wrappers on the explicit conventional native target online and offline for on/off/status', async () => {
+    vi.spyOn(wslLocation, 'getWslAccountTarget').mockReturnValue({
+      runtime: 'wsl',
+      wslDistro: 'Legacy'
+    })
+    vi.stubEnv('HOME', join(userDataPath, 'windows-home'))
+    vi.stubEnv('USERPROFILE', join(userDataPath, 'windows-home'))
+    vi.stubEnv('ORCA_CLI_WSL_CONTEXT', '')
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/home/guest/custom')
+    vi.stubEnv('ORCA_CLAUDE_INJECTED_CONFIG_DIR', '')
+    const target = { kind: 'system-default', configDir: join(homedir(), '.claude') }
+    const { resolveSystemClaudeHookTarget } = await import('../../main/claude/claude-hook-target')
+    expect(await resolveSystemClaudeHookTarget({ target })).toEqual(target)
+    writeDataFile(userDataPath, getDefaultPersistedState(userDataPath))
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    for (const reachable of [false, true]) {
+      for (const action of ['on', 'off', 'status']) {
+        process.exitCode = undefined
+        applyAgentStatusHooksEnabledMock.mockClear()
+        getManagedAgentHookStatusesMock.mockClear().mockResolvedValue([
+          {
+            agent: 'claude',
+            state: 'not_installed',
+            configPath: join(target.configDir, 'settings.json'),
+            managedHooksPresent: false,
+            detail: null
+          }
+        ])
+        if (action !== 'status') {
+          getCliStatusMock.mockResolvedValueOnce({
+            id: 'legacy',
+            ok: true,
+            result: {
+              app: { running: reachable, pid: null },
+              runtime: { state: reachable ? 'ready' : 'not_running', reachable, runtimeId: null },
+              graph: { state: 'ready' }
+            },
+            _meta: { runtimeId: 'legacy' }
+          })
+        }
+        callMock.mockResolvedValue({
+          result: { settings: { agentStatusHooksEnabled: action !== 'off' } }
+        })
+        await main(['agent', 'hooks', action], userDataPath)
+        expect(process.exitCode).not.toBe(1)
+        if (action !== 'status' && !reachable) {
+          expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
+            action === 'on',
+            expect.any(Object),
+            { target }
+          )
+        } else {
+          expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
+          expect(getManagedAgentHookStatusesMock).toHaveBeenCalledWith({ target })
+          expect(console.log).toHaveBeenCalledWith(
+            expect.stringContaining(join(target.configDir, 'settings.json'))
+          )
+        }
+        expect(JSON.stringify(applyAgentStatusHooksEnabledMock.mock.calls)).not.toContain(
+          '/home/guest'
+        )
+        expect(JSON.stringify(getManagedAgentHookStatusesMock.mock.calls)).not.toContain(
+          '/home/guest'
+        )
+      }
+    }
   })
 
   it.each(['on', 'off'])(
