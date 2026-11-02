@@ -1,4 +1,4 @@
-import { CredentialDecryptionError } from '../integration-credential-file'
+import { CredentialDecryptionError } from '../credentials/integration-credential-file'
 import type {
   PlaneConnectArgs,
   PlaneConnectionStatus,

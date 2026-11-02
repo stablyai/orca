@@ -95,7 +95,6 @@ const withAppStoreWritePolicies = (createState: StateCreator<AppState, [], []>) 
 // Presentation ownership follows accepted buffer reconciliation; probes see the caller’s patch.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
 export const useAppStore = create<AppState>()(
-<<<<<<< HEAD
   withBrowserInitializationPresentations(
     withEditorBufferRecords(
       withAppStoreWritePolicies(
