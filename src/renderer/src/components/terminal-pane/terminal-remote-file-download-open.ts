@@ -13,11 +13,15 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-typ
  * Remote counterpart of "Open with default app": the OS can only launch a local
  * file, so the workspace copy is downloaded to a user-chosen path first.
  * False, before any download, for a granted file this client or its host cannot page; it opens in Orca instead.
+ * True without a download when a newer click superseded this one.
  */
 export async function downloadAndOpenRemoteTerminalFile(
   fileContext: RuntimeFileOperationArgs,
   filePath: string,
-  grant?: { terminalArtifactGrantId: string } | null
+  {
+    grant,
+    isCurrent = () => true
+  }: { grant?: { terminalArtifactGrantId: string } | null; isCurrent?: () => boolean } = {}
 ): Promise<boolean> {
   const name = basename(filePath) || filePath
   const { target, worktreeId } = fileContext
@@ -31,6 +35,10 @@ export async function downloadAndOpenRemoteTerminalFile(
       !(await hostStreamsGrantedFiles(target.environmentId))
     ) {
       return false
+    }
+    // Why: a newer click made while the host answered owns the outcome; this one does nothing.
+    if (!isCurrent()) {
+      return true
     }
     granted = { target, worktreeId, absolutePath: filePath, grantId: grant.terminalArtifactGrantId }
   }

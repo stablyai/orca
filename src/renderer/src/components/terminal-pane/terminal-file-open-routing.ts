@@ -227,12 +227,11 @@ export function openDetectedFilePath(
     }
 
     // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
-    if (
-      openWithSystemDefault &&
-      !canOpenWithSystemDefault &&
-      (await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, hostGrant))
-    ) {
-      return
+    if (openWithSystemDefault && !canOpenWithSystemDefault) {
+      const download = { grant: hostGrant, isCurrent: isCurrentRequest }
+      if (await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, download)) {
+        return
+      }
     }
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
