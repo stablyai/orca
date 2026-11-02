@@ -6700,11 +6700,7 @@
           "dbe2d18972": "Другие действия с {{value0}}",
           "openInOrcaBrowser": "Открыть в браузере Orca",
           "2c67730e07": "Открыть в Orca",
-          "e42941631a": "Посмотреть в Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Изменить задачу",
-          "b22f058067": "Посмотреть в GitHub",
-          "e97d8f2876": "Задача #{{value0}}",
           "moreIssueActions": "Другие действия с задачей",
           "copyLink": "Копировать ссылку",
           "copyLinkSuccess": "Скопировано: {{value0}}",
@@ -6727,8 +6723,6 @@
           "cliCreatedFromShell": "Создано через `orca worktree create`",
           "cliStartupAgent": "Запущено с {{value0}}",
           "cliCreated": "Создано через Orca CLI",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Посмотреть в Jira",
           "linkedJira": "Связано: Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -22448,7 +22442,8 @@
       "linkedCount_one": "Связано: {{count}}",
       "linkedCount_few": "Связано: {{count}}",
       "linkedCount_many": "Связано: {{count}}",
-      "linkedCount_other": "Связано: {{count}}"
+      "linkedCount_other": "Связано: {{count}}",
+      "labels": "Метки: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Обновите удалённую среду выполнения, чтобы менять ссылки рабочего пространства",

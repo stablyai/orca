@@ -5750,11 +5750,7 @@
           "93cbea12c2": "ノート",
           "dbe2d18972": "その他の {{value0}} 操作",
           "2c67730e07": "Orca で開く",
-          "e42941631a": "Linear で見る",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Issue を編集する",
-          "b22f058067": "GitHub で見る",
-          "e97d8f2876": "Issue #{{value0}}",
           "3ea2702e62": "リンク済み {{value0}} #{{value1}}",
           "b105fd3057": "リンク Linear {{value0}}",
           "3f2649eeb8": "リンクされた Issue #{{value0}}",
@@ -5777,8 +5773,6 @@
           "cliCreatedFromShell": "`orca worktree create` で作成",
           "cliStartupAgent": "{{value0}} で開始",
           "cliCreated": "Orca CLI が作成",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Jira で表示",
           "linkedJira": "リンク済み Jira {{value0}}",
           "openInOrcaBrowser": "Orca ブラウザで開く"
         },
@@ -21436,7 +21430,8 @@
       "checksNeutral": "中立",
       "allReviewChecks": "レビュー: {{count}} · チェック: {{status}}",
       "showLinked_other": "リンクされたレビューとタスク {{count}} 件を表示",
-      "linkedCount_other": "{{count}} 件リンク済み"
+      "linkedCount_other": "{{count}} 件リンク済み",
+      "labels": "ラベル: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "ワークスペースのリンクを変更するには、リモートランタイムを更新してください",

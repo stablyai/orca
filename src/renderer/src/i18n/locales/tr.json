@@ -6386,11 +6386,7 @@
           "dbe2d18972": "Daha fazla {{value0}} işlemi",
           "openInOrcaBrowser": "Orca tarayıcısında aç",
           "2c67730e07": "Orca'da aç",
-          "e42941631a": "Linear'da görüntüle",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Sorunu düzenle",
-          "b22f058067": "GitHub'da görüntüle",
-          "e97d8f2876": "Sorun #{{value0}}",
           "moreIssueActions": "Daha fazla sorun işlemi",
           "copyLink": "Bağlantıyı kopyala",
           "copyLinkSuccess": "{{value0}} kopyalandı",
@@ -6413,8 +6409,6 @@
           "cliCreatedFromShell": "`orca worktree create` ile oluşturuldu",
           "cliStartupAgent": "{{value0}} ile başlatıldı",
           "cliCreated": "Orca CLI tarafından oluşturuldu",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Jira'da görüntüle",
           "linkedJira": "Bağlı Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -21708,7 +21702,8 @@
       "showLinked_other": "Bağlantılı {{count}} inceleme ve görevi göster",
       "showLinked_one": "Bağlantılı {{count}} inceleme ve görevi göster",
       "linkedCount_other": "{{count}} bağlantılı",
-      "linkedCount_one": "{{count}} bağlantılı"
+      "linkedCount_one": "{{count}} bağlantılı",
+      "labels": "Etiketler: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Çalışma alanı bağlantılarını değiştirmek için uzak çalışma zamanını güncelleyin",

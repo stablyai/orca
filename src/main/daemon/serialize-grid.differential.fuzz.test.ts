@@ -203,7 +203,7 @@ async function describeFailures(
 // Baseline-confirmed divergences include orphan combining marks and wide-glyph reflow; shrink as fixed.
 const CI_SEEDS = 25
 const KNOWN_PREEXISTING_I2_FAILURES: Record<SerializeFuzzCategory, number[]> = {
-  normal: [4, 5, 8, 9, 14, 19, 25],
+  normal: [4, 8, 9, 14, 19, 25],
   alt: [1, 2, 3, 4, 6, 7, 8, 11, 12, 14, 17, 19, 20, 21, 22, 23],
   conpty: [4, 8, 9, 11, 19]
 }

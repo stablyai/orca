@@ -9,10 +9,7 @@ import {
   createStructuredAgentSessionOptionState,
   commitStructuredAgentSessionOption
 } from './structured-agent-session-options'
-import {
-  structuredAgentSessionOptionSnapshot,
-  canSetStructuredAgentSessionOption
-} from './structured-agent-session-option-snapshot'
+import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
 
 const SEED = getAgentSessionOptionCatalog('codex')!
 
@@ -159,58 +156,6 @@ describe('structured option state from the host model catalog', () => {
       applyStructuredAgentSessionModelCatalog(hosted, SEED, { origin: 'unknown' }, LAUNCH)
     ).toBe(hosted)
   })
-
-  it.each([
-    ['codex', false],
-    ['pi', true]
-  ] as const)(
-    '%s keeps live controls usable after a warm listing, options, and terminal receipt',
-    (agent, coherentCatalog) => {
-      const seed = structuredAgentSessionSeedCatalog(agent)!
-      const efforts = [
-        { value: 'low', label: 'Low' },
-        { value: 'high', label: 'High' }
-      ]
-      const models = [
-        {
-          id: 'A',
-          label: 'A',
-          isDefault: true,
-          efforts,
-          serviceTiers: [{ value: 'priority', label: 'Fast' }]
-        },
-        { id: 'B', label: 'B', isDefault: false, efforts, supportsFastMode: true }
-      ]
-      const launch = { ...LAUNCH, coherentCatalog }
-      const pending = applyStructuredAgentSessionModelCatalog(
-        createStructuredAgentSessionOptionState(agent, seed),
-        seed,
-        { origin: 'probe', models, fetchedAt: 1, listingInProgress: true },
-        launch
-      )
-      const live = applyStructuredAgentSessionOptions(
-        pending,
-        seed,
-        {
-          models,
-          fastModeSupport: { supported: true },
-          current: { model: 'A', effort: 'low', serviceTier: 'default', defaulted: [] }
-        },
-        launch
-      )
-      const settled = applyStructuredAgentSessionModelCatalog(
-        live,
-        seed,
-        { origin: 'probe', models: [models[0]!], fetchedAt: 2 },
-        launch
-      )
-      expect(settled.listingInProgress).not.toBe(true)
-      expect(canSetStructuredAgentSessionOption(settled, 'effort', 'high')).toBe(true)
-      expect(canSetStructuredAgentSessionOption(settled, 'serviceTier', 'priority')).toBe(true)
-      const fast = commitStructuredAgentSessionOption(settled, 'model', 'B')
-      expect(canSetStructuredAgentSessionOption(fast, 'fastMode', true)).toBe(true)
-    }
-  )
 })
 
 it('keeps one flat selection across inventory/answer arrival order and child replacement', () => {

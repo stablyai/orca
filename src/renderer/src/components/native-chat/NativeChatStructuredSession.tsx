@@ -196,7 +196,8 @@ export function NativeChatStructuredSession(
     questionAnswerInputRef,
     isVisible: props.isVisible,
     isFocusedGroup: props.isFocusedGroup,
-    composerReady: composerShown && install.slot.kind !== 'install'
+    composerReady: composerShown && install.slot.kind !== 'install',
+    surfaceReady: !composerShown || install.slot.kind === 'install'
   })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const transport = useNativeChatStructuredComposerTransport({

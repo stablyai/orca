@@ -1,5 +1,5 @@
 diff --git a/src/browser/CoreBrowserTerminal.ts b/src/browser/CoreBrowserTerminal.ts
-index 67893b7966eb095db4459b8837de9766921f36c5..3c2ac1afaeda22da4482099702d3ca673c57f4e1 100644
+index 873f7a55ecc2dd5f276ef09df79a652b7f41b990..193ab03c1d39c8ae535e972f816ecbab6e0738e5 100644
 --- a/src/browser/CoreBrowserTerminal.ts
 +++ b/src/browser/CoreBrowserTerminal.ts
 @@ -325,6 +325,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
@@ -44,7 +44,7 @@ index 67893b7966eb095db4459b8837de9766921f36c5..3c2ac1afaeda22da4482099702d3ca67
      this._helperContainer.appendChild(this._compositionView);
  
      this._mouseCoordsService = this._instantiationService.createInstance(MouseCoordsService);
-@@ -1009,7 +1028,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -1019,7 +1038,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
  
      this._onKey.fire({ key, domEvent: ev });
      this._showCursor();
@@ -55,7 +55,7 @@ index 67893b7966eb095db4459b8837de9766921f36c5..3c2ac1afaeda22da4482099702d3ca67
  
      this._keyPressHandled = true;
  
-@@ -1027,6 +1048,23 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -1037,6 +1058,23 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
     * @param ev The input event to be handled.
     */
    protected _inputEvent(ev: InputEvent): boolean {
@@ -1321,28 +1321,11 @@ index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e353738
    private _canvas: OffscreenCanvas | HTMLCanvasElement;
    private _ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
  
-diff --git a/src/browser/services/MouseService.ts b/src/browser/services/MouseService.ts
-index 353e0581da7a95c9473d6169cd9ec548bc3bfe30..a51645fb22b922f8fde5c10730d029e14b8912cd 100644
---- a/src/browser/services/MouseService.ts
-+++ b/src/browser/services/MouseService.ts
-@@ -495,9 +495,9 @@ export class MouseService implements IMouseService {
-    * to fulfill protocol and encoding restrictions.
-    */
-   private _triggerMouseEvent(e: ICoreMouseEvent): boolean {
--    // range check for col/row
--    if (e.col < 0 || e.col >= this._bufferService.cols
--      || e.row < 0 || e.row >= this._bufferService.rows) {
-+    // range check for col/row; negated so NaN (touch inertia has no clientX/Y) fails too
-+    if (!(e.col >= 0 && e.col < this._bufferService.cols
-+      && e.row >= 0 && e.row < this._bufferService.rows)) {
-       return false;
-     }
- 
 diff --git a/src/common/InputHandler.ts b/src/common/InputHandler.ts
-index 995fe7670a10f11fb9b0b42332484b038ea6c989..3df13f60209ccd097b861d94efd481988d38400f 100644
+index 30657812f49d3dd2ec706b5e0084788afa968168..a71b12e37ee7aee974337bdfd02f5b1a4be1fe35 100644
 --- a/src/common/InputHandler.ts
 +++ b/src/common/InputHandler.ts
-@@ -2468,6 +2468,7 @@ export class InputHandler extends Disposable implements IInputHandler {
+@@ -2469,6 +2469,7 @@ export class InputHandler extends Disposable implements IInputHandler {
        case 58:
          attr.extended = attr.extended.clone();
          attr.extended.underlineColor = this._updateAttrColor(attr.extended.underlineColor, accu[1], accu[3], accu[4], accu[5]);
@@ -1495,10 +1478,10 @@ index b37c1550887d467d8af0c46da96defa296ede197..9569755e6d6b112c4403f424b5d2f394
    }
  }
 diff --git a/src/common/buffer/Buffer.ts b/src/common/buffer/Buffer.ts
-index e3a88bfeb4bbf79214d799adec30cba8e4dc1b49..ca7ee6b45245a2ea5a2b027e192b98cda7ea5e36 100644
+index b3ad14ee041fac933a7f90bf66fe7985eef4beed..a0a645c42b3c8a08a699b32a46def5ed50478aad 100644
 --- a/src/common/buffer/Buffer.ts
 +++ b/src/common/buffer/Buffer.ts
-@@ -165,9 +165,9 @@ export class Buffer extends Disposable implements IBuffer {
+@@ -170,9 +170,9 @@ export class Buffer extends Disposable implements IBuffer {
      let dirtyMemoryLines = 0;
  
      // Increase max length if needed before adjustments to allow space to fill

@@ -173,7 +173,7 @@ overrides:
 
 patchedDependencies:
   '@expo/cli@55.0.36': 9ccdef43e1ef80ee4d68b4ed213c145660c2dcf4241cab6593da42f0847583c7
-  '@xterm/addon-webgl@0.20.0-beta.300': 5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9
+  '@xterm/addon-webgl@0.20.0-beta.329': 950cfe01a8340b07dc7510a2909f32d9c449542e225cff6f031490b8689c6b8c
   braces@3.0.3: c07bb14cec04bc891e1fe529720444cc9729a25117f9aaf24253cfe3132a34fd
   expo-constants@55.0.17: d04144bdf6a998301b835602c910db11740c5ebe0eaeb11d377d967a31440ff0
   expo-notifications@55.0.27: ce20843a3daad4185d7e8571788fa323ba4d11984936188790858650a61749c0
@@ -202,14 +202,14 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0(react-native@0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))
       '@xterm/addon-unicode11':
-        specifier: 0.10.0-beta.301
-        version: 0.10.0-beta.301(@xterm/xterm@6.1.0-beta.304)
+        specifier: 0.10.0-beta.330
+        version: 0.10.0-beta.330(@xterm/xterm@6.1.0-beta.336)
       '@xterm/addon-webgl':
-        specifier: 0.20.0-beta.300
-        version: 0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304)
+        specifier: 0.20.0-beta.329
+        version: 0.20.0-beta.329(patch_hash=950cfe01a8340b07dc7510a2909f32d9c449542e225cff6f031490b8689c6b8c)(@xterm/xterm@6.1.0-beta.336)
       '@xterm/xterm':
-        specifier: 6.1.0-beta.304
-        version: 6.1.0-beta.304
+        specifier: 6.1.0-beta.336
+        version: 6.1.0-beta.336
       buffer:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3237,18 +3237,18 @@ packages:
     resolution: {integrity: sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A==}
     engines: {node: '>=14.6'}
 
-  '@xterm/addon-unicode11@0.10.0-beta.301':
-    resolution: {integrity: sha512-SS5BzfbvfFIikE4xZFAtHu6n0Kl5R1ZCPx41RL2WULLSE+HFo/WmYee53tMxNK/QUjpcQWepeVB7HebCPhHnig==}
+  '@xterm/addon-unicode11@0.10.0-beta.330':
+    resolution: {integrity: sha512-Tc9R1oYVYvTAUNIsHzcis1J51reG4CHQIYeXiAS+YRMsJe9nnnR2tIW/RHh7MZiMza1w7toAp1SKH+97WgnDaQ==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.304
+      '@xterm/xterm': ^6.1.0-beta.336
 
-  '@xterm/addon-webgl@0.20.0-beta.300':
-    resolution: {integrity: sha512-BJQiOx8I+zz2woe+/E9nWprRRPevo9slPgyOd43E8o18aG307ccsyaTJoIbSu99uqfDoVLWDRLTy91ZXTFsdig==}
+  '@xterm/addon-webgl@0.20.0-beta.329':
+    resolution: {integrity: sha512-bwqMma7X4cCBfwmWqKuhxNLkIXKW0lJTapaQ0g/9Kq7n6D6VCL4dYQCQ6DoeHv27ncJD4WzeoDTCEeSn0cspfg==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.304
+      '@xterm/xterm': ^6.1.0-beta.336
 
-  '@xterm/xterm@6.1.0-beta.304':
-    resolution: {integrity: sha512-Wq9d4qFYslYQBIan+riXotdyurtREc6v+HWdAwV6Y2JSDI9eJ1dkWm/fzYb2rCGgGnM3baiYuSK4Z6OLNKLzDw==}
+  '@xterm/xterm@6.1.0-beta.336':
+    resolution: {integrity: sha512-QrvZZsffXsLW4Z3sba9GqimLvVwlb8b3W1NwZ+l6DdRnpH5pg5cFGWg2ceIburmfaGQ07YJHNekwxxlTcHZ3BA==}
 
   abab@2.0.6:
     resolution: {integrity: sha512-j2afSsaIENvHZN2B8GOpF566vZ5WVk5opAiMTvWgaQT8DkbOqsTfvNAvHoRGU2zzP8cPoqys+xHTRDWW8L+/BA==}
@@ -10727,15 +10727,15 @@ snapshots:
 
   '@xmldom/xmldom@0.9.12': {}
 
-  '@xterm/addon-unicode11@0.10.0-beta.301(@xterm/xterm@6.1.0-beta.304)':
+  '@xterm/addon-unicode11@0.10.0-beta.330(@xterm/xterm@6.1.0-beta.336)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304
+      '@xterm/xterm': 6.1.0-beta.336
 
-  '@xterm/addon-webgl@0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304)':
+  '@xterm/addon-webgl@0.20.0-beta.329(patch_hash=950cfe01a8340b07dc7510a2909f32d9c449542e225cff6f031490b8689c6b8c)(@xterm/xterm@6.1.0-beta.336)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304
+      '@xterm/xterm': 6.1.0-beta.336
 
-  '@xterm/xterm@6.1.0-beta.304': {}
+  '@xterm/xterm@6.1.0-beta.336': {}
 
   abab@2.0.6: {}
 

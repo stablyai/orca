@@ -160,7 +160,7 @@ describe('single linked reference rich hover details', () => {
       </WorktreeCardDetailsHover>
     )
     expect(screen.getByText('Task')).toBeTruthy()
-    expect(screen.getByText('State: In Progress')).toBeTruthy()
+    expect(screen.getByLabelText('State: In Progress')).toBeTruthy()
     expect(screen.queryByText('Loading Linear issue...')).toBeNull()
     expect(container.querySelector('[data-workspace-hover-reference]')).toBeNull()
   })

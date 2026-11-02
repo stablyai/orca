@@ -6004,11 +6004,7 @@
           "93cbea12c2": "Notas",
           "dbe2d18972": "Más acciones de {{value0}}",
           "2c67730e07": "Abrir en Orca",
-          "e42941631a": "Ver en Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Editar issue",
-          "b22f058067": "Ver en GitHub",
-          "e97d8f2876": "Issue #{{value0}}",
           "3ea2702e62": "Vinculado {{value0}} #{{value1}}",
           "b105fd3057": "Linear vinculado {{value0}}",
           "3f2649eeb8": "Issue vinculado #{{value0}}",
@@ -6031,8 +6027,6 @@
           "cliCreatedFromShell": "Creado a través de `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "Creado por Orca CLI",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Ver en Jira",
           "linkedJira": "Jira {{value0}} vinculado",
           "openInOrcaBrowser": "Abrir en el navegador Orca"
         },
@@ -22161,7 +22155,8 @@
       "showLinked_many": "Mostrar {{count}} revisiones y tareas vinculadas",
       "linkedCount_one": "{{count}} vinculado",
       "linkedCount_other": "{{count}} vinculados",
-      "linkedCount_many": "{{count}} vinculados"
+      "linkedCount_many": "{{count}} vinculados",
+      "labels": "Etiquetas: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Actualiza el tiempo de ejecución remoto para cambiar los enlaces del espacio de trabajo",

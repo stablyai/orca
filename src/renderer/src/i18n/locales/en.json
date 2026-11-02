@@ -6530,11 +6530,7 @@
           "dbe2d18972": "More {{value0}} actions",
           "openInOrcaBrowser": "Open in Orca browser",
           "2c67730e07": "Open in Orca",
-          "e42941631a": "View on Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Edit issue",
-          "b22f058067": "View on GitHub",
-          "e97d8f2876": "Issue #{{value0}}",
           "moreIssueActions": "More issue actions",
           "copyLink": "Copy link",
           "copyLinkSuccess": "{{value0}} copied",
@@ -6557,8 +6553,6 @@
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "Created by Orca CLI",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "View on Jira",
           "linkedJira": "Linked Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -22018,7 +22012,8 @@
       "linkedCount_other": "{{count}} linked",
       "addEmoji": "Add emoji",
       "addEmojiTooltip": "Add emoji (or type :)",
-      "noEmojiFound": "No emoji found"
+      "noEmojiFound": "No emoji found",
+      "labels": "Labels: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",
