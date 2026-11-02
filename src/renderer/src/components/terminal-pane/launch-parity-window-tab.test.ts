@@ -29,6 +29,7 @@ import {
   type WindowLaunchCase
 } from '../../../../shared/launch-parity-window-request.test-fixture'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+import { createPaneManagerOptionsTestContext } from './terminal-pane-manager-options-test-context'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -177,24 +178,16 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
   // A measured grid no lane defaults to, so the request shows the pane's size reached it.
   Object.assign(pane.terminal, PANE_GRID)
   // The xterm keyboard options the real TerminalPane builds for this tab, over the defaults (pane-dom-creation.ts).
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: building the bag and terminalOptions read only these deps, ptyDeps.startup and startupCwd.
-  const managerOptions = modules.paneOptions.createTerminalPaneManagerOptions({
-    deps: {
-      tabId: tab.id,
-      worktreeId,
-      settingsRef: { current: store.getState().settings },
-      isVisibleRef: { current: true },
-      effectiveMacOptionAsAltRef: { current: 'false' }
-    },
-    ptyDeps: { startup },
-    startupCwd: cwd
-  } as never)
+  const paneArgs = mockPanePtyArgs(pane, createManager(1), deps)
+  const optionsContext = createPaneManagerOptionsTestContext(paneArgs[2], null, cwd)
+  optionsContext.deps.settingsRef = { current: store.getState().settings }
+  const managerOptions = modules.paneOptions.createTerminalPaneManagerOptions(optionsContext)
   const { vtExtensions } = {
     ...modules.defaults.buildDefaultTerminalOptions(),
     ...managerOptions.terminalOptions?.(pane.id)
   }
   pane.terminal.options.vtExtensions = { kittyKeyboard: vtExtensions?.kittyKeyboard === true }
-  modules.pane.connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+  modules.pane.connectPanePty(...paneArgs)
   await flushAsyncTicks(20)
   const [request] = spawn.mock.calls[0] ?? []
   // Fixed ids so the table can name them; the color replies are this harness's theme.

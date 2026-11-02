@@ -105,16 +105,16 @@ function summarizeTeamKeys(
   options: { activeAllWorkspaces: boolean; multipleWorkspaces: boolean }
 ): string {
   const selectedTeams = teams.filter((team) => selectedTeamIds.has(team.id))
-  if (selectedTeams.length === 0) {
-    return 'All teams'
-  }
 
   if (options.activeAllWorkspaces && options.multipleWorkspaces) {
     const workspaceIds = new Set(selectedTeams.map((team) => team.workspaceId ?? ''))
     const keys = selectedTeams.map((team) => team.key)
     const keyCount = new Set(keys).size
     if (workspaceIds.size > 1 || keyCount < keys.length) {
-      return `${selectedTeams.length} team${selectedTeams.length === 1 ? '' : 's'}`
+      return translate('auto.components.linear.scope.selector.teamCount', '{{count}} teams', {
+        count: selectedTeams.length,
+        defaultValue_one: '{{count}} team'
+      })
     }
   }
 
@@ -138,19 +138,23 @@ export function getLinearScopeTriggerLabel({
       : null
   const allVisibleTeamsSelected =
     teams.length > 0 && teams.every((team) => selectedTeamIds.has(team.id))
-  const teamLabel =
-    teamSelectionIsStickyAll || selectedTeamIds.size === 0 || allVisibleTeamsSelected
-      ? 'All teams'
-      : summarizeTeamKeys(teams, selectedTeamIds, {
-          activeAllWorkspaces,
-          multipleWorkspaces
-        })
+  const allTeams =
+    teamSelectionIsStickyAll ||
+    allVisibleTeamsSelected ||
+    !teams.some((team) => selectedTeamIds.has(team.id))
+  const teamLabel = allTeams
+    ? translate('auto.components.linear.scope.selector.7783361266', 'All teams')
+    : summarizeTeamKeys(teams, selectedTeamIds, { activeAllWorkspaces, multipleWorkspaces })
 
   if (!multipleWorkspaces) {
     return teamLabel
   }
   if (activeAllWorkspaces) {
-    return teamLabel === 'All teams' ? 'All workspaces' : `All workspaces / ${teamLabel}`
+    const allWorkspaces = translate(
+      'auto.components.linear.scope.selector.a14ce4df2b',
+      'All workspaces'
+    )
+    return allTeams ? allWorkspaces : `${allWorkspaces} / ${teamLabel}`
   }
   return `${selectedWorkspace?.organizationName ?? 'Linear'} / ${teamLabel}`
 }

@@ -7,6 +7,7 @@ import { sendGuestCdpCommand } from './guest-cdp-command'
 import { isOrcaFrameSessionTraffic } from './guest-focused-frame-route'
 
 export class CdpDebuggerChannel {
+  private nativeDebugger: WebContents['debugger'] | null = null
   private debuggerMessageHandler: ((...args: unknown[]) => void) | null = null
   private debuggerDetachHandler: ((...args: unknown[]) => void) | null = null
   private debuggerLease: ElectronDebuggerLease | null = null
@@ -24,18 +25,16 @@ export class CdpDebuggerChannel {
     if (this.attached) {
       return
     }
+    let lease: ElectronDebuggerLease
     try {
-      this.debuggerLease = acquireElectronDebugger(this.webContents)
+      lease = acquireElectronDebugger(this.webContents)
     } catch {
       throw new Error('Could not attach debugger. DevTools may already be open for this tab.')
     }
+    const dbg = this.webContents.debugger
+    this.nativeDebugger = dbg
+    this.debuggerLease = lease
     this.attached = true
-
-    try {
-      await this.webContents.debugger.sendCommand('Page.enable', {})
-    } catch {
-      /* The page domain may not be ready yet. */
-    }
 
     this.debuggerMessageHandler = (_event: unknown, ...rest: unknown[]) => {
       const [method, params, sessionId] = rest as [
@@ -57,29 +56,46 @@ export class CdpDebuggerChannel {
       this.responder.send(msg, client)
     }
     this.debuggerDetachHandler = () => {
-      this.attached = false
-      const lease = this.debuggerLease
-      this.debuggerLease = null
-      lease?.release()
+      this.detachDebugger()
       this.onDetached()
     }
-    this.webContents.debugger.on('message', this.debuggerMessageHandler as never)
-    this.webContents.debugger.on('detach', this.debuggerDetachHandler as never)
+    dbg.on('message', this.debuggerMessageHandler)
+    dbg.on('detach', this.debuggerDetachHandler)
+
+    try {
+      await dbg.sendCommand('Page.enable', {})
+    } catch {
+      /* The page domain may not be ready yet. */
+    }
+    if (this.debuggerLease !== lease) {
+      throw new Error('Browser debugger was detached during startup')
+    }
+    if (this.webContents.isDestroyed() || !dbg.isAttached()) {
+      this.detachDebugger()
+      throw new Error('Browser tab is no longer available')
+    }
   }
 
   detachDebugger(): void {
-    if (this.debuggerMessageHandler) {
-      this.webContents.debugger.removeListener('message', this.debuggerMessageHandler as never)
-      this.debuggerMessageHandler = null
-    }
-    if (this.debuggerDetachHandler) {
-      this.webContents.debugger.removeListener('detach', this.debuggerDetachHandler as never)
-      this.debuggerDetachHandler = null
-    }
+    const dbg = this.nativeDebugger
+    const messageHandler = this.debuggerMessageHandler
+    const detachHandler = this.debuggerDetachHandler
     const lease = this.debuggerLease
+    this.nativeDebugger = null
+    this.debuggerMessageHandler = null
+    this.debuggerDetachHandler = null
     this.debuggerLease = null
-    lease?.release()
     this.attached = false
+    try {
+      if (messageHandler) {
+        dbg?.removeListener('message', messageHandler)
+      }
+      if (detachHandler) {
+        dbg?.removeListener('detach', detachHandler)
+      }
+    } finally {
+      lease?.release()
+    }
   }
 
   sendDebuggerCommand(

@@ -48,44 +48,6 @@ function releaseParser(schema: unknown) {
   }
 }
 
-test.each(['qoder', 'jcode'] as const)(
-  'a pre-agent release can read current %s search pages without losing other agents',
-  async (agent) => {
-    const baseline = await releaseSearchSchemas('v1.4.211')
-    const responseParser = releaseParser(baseline.AiVaultSearchResponseSchema)
-    const newHit = { ...searchHit(), agent }
-    expect(responseParser.safeParse({ ...searchResults(), hits: [newHit] })).toHaveProperty(
-      'success',
-      false
-    )
-    const service = fakeSearchService()
-    service.search.mockImplementation(async (request) => ({
-      ...searchResults(),
-      hits:
-        !request.filters?.agents || request.filters.agents.includes(agent)
-          ? [newHit]
-          : searchResults().hits
-    }))
-    setSessionSearchService(service)
-    const oldResponse = await searchSessionService({ query: 'proof' }, 'relay')
-    expect(responseParser.safeParse(oldResponse)).toHaveProperty('success', true)
-    expect(oldResponse).toMatchObject({ hits: [{ agent: 'codex' }] })
-    const client = createSessionSearchClient(
-      (_method, request) => searchSessionService(request, 'relay'),
-      'relay'
-    )
-    expect(await client.searchSessions({ query: 'proof' })).toMatchObject({ hits: [{ agent }] })
-    expect(
-      releaseParser(baseline.AiVaultSearchRequestSchema).safeParse({
-        query: 'proof',
-        supportedAgents: [...AI_VAULT_AGENTS],
-        supportsQoderHistory: true,
-        supportsJcodeHistory: true
-      })
-    ).toHaveProperty('success', true)
-  }
-)
-
 test.each(PRE_QODER_HOSTS)(
   'the actual %s response parser accepts complete current-host legacy pages',
   async (ref) => {

@@ -91,6 +91,7 @@ export class StoreRuntimeState {
   readonly gitUsernameCache = new Map<string, string>()
   readonly protectedSecrets = new ProtectedSecretPersistence()
   loadNeedsSave = false
+  originalExperimentalNativeChat?: { readonly experimentalNativeChat: unknown }
   flushOrThrow!: () => void
   runDurableMutation!: <T>(mutate: () => DurableProfileStateMutation<T>) => Promise<T>
   settingsChangeListeners = new Set<

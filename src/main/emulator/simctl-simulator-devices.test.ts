@@ -22,57 +22,17 @@ vi.mock('./serve-sim-execution', () => ({
   execServeSimCommand: vi.fn()
 }))
 
-import { listSimulatorDevices, shutdownSimulatorDevice } from './simctl-simulator-devices'
+import {
+  listSimulatorDevices,
+  resolveSimulatorUdid,
+  shutdownSimulatorDevice
+} from './simctl-simulator-devices'
 
 describe('listSimulatorDevices', () => {
   beforeEach(() => {
     execFileMock.mockReset()
     platformMock.mockReset()
     platformMock.mockReturnValue('darwin')
-  })
-
-  it('parses simctl devices on macOS', async () => {
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callback(
-        null,
-        JSON.stringify({
-          devices: {
-            'com.apple.CoreSimulator.SimRuntime.iOS-18-0': [
-              {
-                name: 'iPhone 17 Pro',
-                udid: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE',
-                state: 'Shutdown',
-                isAvailable: true
-              }
-            ]
-          }
-        }),
-        ''
-      )
-    })
-
-    await expect(listSimulatorDevices()).resolves.toEqual([
-      {
-        name: 'iPhone 17 Pro',
-        udid: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE',
-        state: 'Shutdown',
-        runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-18-0',
-        isAvailable: true
-      }
-    ])
-    expect(execFileMock).toHaveBeenCalledWith(
-      'xcrun',
-      ['simctl', 'list', 'devices', '-j'],
-      { timeout: 15_000 },
-      expect.any(Function)
-    )
-  })
-
-  it('returns no devices on non-macOS hosts', async () => {
-    platformMock.mockReturnValue('linux')
-
-    await expect(listSimulatorDevices()).resolves.toEqual([])
-    expect(execFileMock).not.toHaveBeenCalled()
   })
 
   it('normalizes missing simctl errors for UI and CLI callers', async () => {
@@ -92,6 +52,45 @@ describe('listSimulatorDevices', () => {
     })
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).message).not.toContain('Command failed')
+  })
+})
+
+describe('resolveSimulatorUdid', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+    platformMock.mockReturnValue('darwin')
+  })
+
+  it('prefers an exact name over an earlier device whose name only contains it', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(
+        null,
+        JSON.stringify({
+          devices: {
+            'com.apple.CoreSimulator.SimRuntime.iOS-27-0': [
+              {
+                name: 'iPhone 17e',
+                udid: '645A2204-ED7C-4253-B298-2749820B1B7E',
+                state: 'Shutdown'
+              },
+              { name: 'iPhone 17', udid: '1BD4732B-EC1A-4074-8C70-6AC369607185', state: 'Shutdown' }
+            ]
+          }
+        }),
+        ''
+      )
+    })
+    const serveSim = { command: 'serve-sim', baseArgs: [], usesElectronAsNode: false }
+
+    await expect(resolveSimulatorUdid('iPhone 17', serveSim)).resolves.toBe(
+      '1BD4732B-EC1A-4074-8C70-6AC369607185'
+    )
+    await expect(resolveSimulatorUdid('iPHONE 17', serveSim)).resolves.toBe(
+      '1BD4732B-EC1A-4074-8C70-6AC369607185'
+    )
+    await expect(resolveSimulatorUdid('17e', serveSim)).resolves.toBe(
+      '645A2204-ED7C-4253-B298-2749820B1B7E'
+    )
   })
 })
 

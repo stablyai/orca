@@ -119,7 +119,7 @@ export async function runSessionSearchPass(
       recordSessionScanIssue(issues, {
         agent: 'cursor',
         path: refusal.chatsRoot,
-        message: refusal.message
+        ...refusal.text
       })
     }
     // Discovery suppresses readdir failures; check empty roots explicitly to expose those failures.

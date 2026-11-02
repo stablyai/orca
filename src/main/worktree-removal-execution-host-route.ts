@@ -14,7 +14,10 @@ import {
   ExecutionHostNotDispatchableError,
   resolveGitRouteForHost
 } from './providers/execution-host-provider-dispatch'
-import { SshHostNotServedError } from './providers/ssh-host-not-served-error'
+import {
+  SshHostNotServedError,
+  SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE
+} from './providers/ssh-host-not-served-error'
 
 export type WorktreeRemovalRoute = { kind: 'local'; hostId: typeof LOCAL_EXECUTION_HOST_ID }
 
@@ -26,7 +29,7 @@ export function resolveWorktreeRemovalRoute(hostId: ExecutionHostId): WorktreeRe
     case 'runtime':
       throw new ExecutionHostNotDispatchableError(route.hostId)
     case 'ssh':
-      throw new SshHostNotServedError(route.connectionId)
+      throw new SshHostNotServedError(route.connectionId, SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE)
   }
 }
 

@@ -1,6 +1,8 @@
 import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
+import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-runtime-test-fixture'
+import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
@@ -15,6 +17,12 @@ import {
   type TerminalInputAckKind
 } from '../../../shared/terminal-stream-protocol'
 import { makeRequest, stubRuntime } from './terminal-multiplex-test-harness'
+
+vi.mock('../../git/worktree', () => ({
+  listWorktreesStrict: async () => [
+    { path: '/tmp/worktree-a', head: 'abc', branch: 'test', isBare: false, isMainWorktree: false }
+  ]
+}))
 
 type FrameHandler = (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
 
@@ -166,6 +174,49 @@ async function openConnection(
 }
 
 describe('terminal multiplex sequenced input across reconnects', () => {
+  it('applies a late phone policy drop without replaying withheld input', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {})
+    const write = (_id: string, data: string) => {
+      writes.push(data)
+      return true
+    }
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const streamRuntime = createRuntime([])
+    streamRuntime.getDriver = () => runtime.getDriver('pty-prompt')
+    streamRuntime.sendTerminal = (_handle, action, options) =>
+      runtime.sendTerminal(handle, action, {
+        ...options,
+        beforeWrite: () => {
+          entered.resolve()
+          return release.promise
+        }
+      })
+    const connection = await openConnection(
+      new RpcDispatcher({ runtime: streamRuntime, methods: TERMINAL_METHODS }),
+      'conn-late',
+      { capabilities: { writeUnavailable: 1, inputAck: 1 }, inputSessionId: 'pane-late' }
+    )
+    connection.sendInput(1, 'withheld')
+    await entered.promise
+    await runtime.handleMobileSubscribe('pty-prompt', 'phone-A', { cols: 45, rows: 20 })
+    release.resolve()
+    await vi.waitFor(() => expect(connection.inputAcks()).toEqual([1]))
+    expect(writes).toEqual([])
+    await runtime.reclaimTerminalForDesktop('pty-prompt')
+    connection.sendInput(1, 'withheld')
+    connection.sendInput(2, 'next')
+    await vi.waitFor(() => expect(connection.inputAcks().at(-1)).toBe(2))
+    expect(writes).toEqual(['next'])
+    expect(connection.writeUnavailableCount()).toBe(0)
+  })
+
   it('writes input replayed on a new connection exactly once, even when the dead connection delivers late', async () => {
     const writes: string[] = []
     const dispatcher = new RpcDispatcher({

@@ -29,7 +29,11 @@ const GATED_FAMILIES = [
     advice: { restrictWindowsPathSync: SECURE_ADVICE }
   },
   {
-    modules: ['src/main/git/command-runner/git-exec-file', 'src/main/git/runner'],
+    modules: [
+      'src/main/git/command-runner/git-exec-file',
+      'src/main/git/command-runner/git-exec-file-sync',
+      'src/main/git/runner'
+    ],
     advice: { gitExecFileSync: 'use gitExecFileAsync' }
   },
   {

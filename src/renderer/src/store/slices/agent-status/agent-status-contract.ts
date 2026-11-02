@@ -12,7 +12,7 @@ import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
   SleepingAgentLaunchConfig
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 
 export type RetainedAgentEntry = {
@@ -160,3 +160,11 @@ export type AgentStatusBatchTransaction = {
   apply: (update: AgentStatusBatchUpdate) => boolean
   afterCommit: (effect: () => void) => void
 }
+
+/** Ephemeral accepted live-row mutations; missing references describe creation/deletion. */
+export type AgentStatusChange = {
+  paneKey: string
+  previous: AgentStatusEntry | undefined
+  current: AgentStatusEntry | undefined
+}
+export type AgentStatusChangeListener = (changes: readonly AgentStatusChange[]) => void

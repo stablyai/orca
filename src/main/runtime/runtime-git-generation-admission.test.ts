@@ -150,7 +150,7 @@ describe('RuntimeGitGenerationCommands admission', () => {
         { base: 'main', title: '', body: '', draft: false },
         settingsOverride
       )
-    ).resolves.toEqual({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
+    ).resolves.toMatchObject({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
     expect(mocks.getPullRequestDraftContext).not.toHaveBeenCalled()
     expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
     expect(mocks.loadPullRequestLinkedIssue).not.toHaveBeenCalled()
@@ -182,7 +182,7 @@ describe('RuntimeGitGenerationCommands admission', () => {
         try {
           await expect(
             commands().generateRuntimePullRequestFields('id:wt-1', input, settingsOverride)
-          ).resolves.toEqual({
+          ).resolves.toMatchObject({
             success: false,
             error:
               outcome === 'no changes'

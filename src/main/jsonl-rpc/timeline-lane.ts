@@ -1,4 +1,4 @@
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   createProviderTimelineAssembler,
   type ProviderTimelineAssembler
@@ -36,21 +36,11 @@ export class JsonlRpcTimelineLane {
   private heldBytes = 0
   private draining = false
   private ended = false
-  private finalizing = false
   private retryTimer?: ReturnType<typeof setTimeout>
   private readonly watchers = new Set<() => void>()
 
   constructor(private readonly deps: JsonlRpcTimelineLaneDeps) {
-    this.assembler = createProviderTimelineAssembler({
-      ...deps,
-      sink: {
-        ...deps.sink,
-        tryAppendTransition: (transition) =>
-          deps.sink.tryAppendTransition(
-            this.finalizing ? { ...transition, lifecycle: true, finalTail: true } : transition
-          )
-      }
-    })
+    this.assembler = createProviderTimelineAssembler(deps)
     this.identity = createLegacyProviderTimelineIdentityScheme(deps)
   }
 
@@ -203,9 +193,7 @@ export class JsonlRpcTimelineLane {
     if (this.sealed || this.ended) {
       return
     }
-    // At most 256 held events + 128 dirty streams + this internal end: below 512 tail slots.
     this.sealed = true
-    this.finalizing = true
     this.retry()
     if (this.ended) {
       return

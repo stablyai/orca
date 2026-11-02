@@ -122,7 +122,8 @@ async function createStore() {
   }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
+  const { Store } = await import('../persistence/loading-store/store')
+  const { initDataPath } = await import('../persistence/loading-store/user-data-path')
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
@@ -184,7 +185,7 @@ describe('pausing an orphan never re-adopts it', () => {
         expectedOwner: { selector: { kind: 'ssh', targetId: 'ssh-new', targetGeneration: 7 } },
         operation: 'execute'
       })
-    ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved }))
+    ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged }))
   })
 
   it('keeps the stale generation when the same target id came back re-registered', async () => {

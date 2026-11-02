@@ -1,7 +1,7 @@
 import {
   PANEL_WATCHDOG_PING_INTERVAL_MS,
   PANEL_WATCHDOG_PONG_TIMEOUT_MS
-} from '../../../../shared/plugins/plugin-panel-bridge'
+} from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
 
 /** Ping/pong deadlines mark unresponsive panels; busy-loop containment requires a separate Chromium renderer, gated by Electron tests. */

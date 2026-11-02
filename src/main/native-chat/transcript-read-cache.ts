@@ -1,6 +1,6 @@
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
-import type { AgentType } from '../../shared/native-chat-types'
+import type { AgentType } from '../../shared/agent-status-types'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'

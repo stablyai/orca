@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -10,6 +10,9 @@ if (process.argv.includes('--version')) {
 
 const scenarioPath = process.env.ORCA_SDK_CONTRACT_SCENARIO_PATH
 const reportPath = process.env.ORCA_SDK_CONTRACT_REPORT_PATH
+// Every launch shares the report path, so a later one (e.g. model discovery) overwrites it; the
+// log keeps each launch's reports, one JSON line per write.
+const reportLogPath = process.env.ORCA_SDK_CONTRACT_REPORT_LOG_PATH
 
 const report = {
   argv: process.argv.slice(1),
@@ -29,6 +32,9 @@ const report = {
 const writeReport = () => {
   if (reportPath) {
     writeFileSync(reportPath, JSON.stringify(report))
+  }
+  if (reportLogPath) {
+    appendFileSync(reportLogPath, `${JSON.stringify(report)}\n`)
   }
 }
 // Preserve launch evidence even if the scenario never finishes.

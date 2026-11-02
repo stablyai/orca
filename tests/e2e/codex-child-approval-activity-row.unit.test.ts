@@ -11,12 +11,12 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../src/shared/agent-session-wire'
+} from '../../src/shared/agent-session/agent-session-wire'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../src/shared/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../src/shared/agent-session-journal-item-key'
+} from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { Tab } from '../../src/shared/tab-types'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { createCodexJournalTranslator } from '../../src/main/codex/codex-structured-journal-translation'
@@ -67,7 +67,7 @@ import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/compo
 import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'codex-child-approval'
 const CODEX_THREAD = 'thread-parent'

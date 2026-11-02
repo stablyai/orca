@@ -137,7 +137,7 @@ describe('mobile-file-preview-request', () => {
           cwd: '/tmp/run'
         },
         undefined,
-        { onTerminalArtifactSourceRefreshed }
+        { onTerminalArtifactSourceRefreshed, isCurrent: () => true }
       )
     ).resolves.toMatchObject({ status: 'ready', kind: 'text', content: '{"ok":true}' })
 
@@ -157,6 +157,7 @@ describe('mobile-file-preview-request', () => {
       absolutePath: '/tmp/result.json',
       grantId: 'grant-2'
     })
+    expect(client.sendRequest).toHaveBeenCalledTimes(3)
     expect(onTerminalArtifactSourceRefreshed).toHaveBeenCalledWith({
       source: 'terminalArtifact',
       worktreeId: 'wt-1',

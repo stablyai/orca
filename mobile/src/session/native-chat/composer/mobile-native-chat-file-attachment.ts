@@ -3,7 +3,7 @@ import {
   MobileFileTooLargeError,
   type PickedMobileFile
 } from '../../../platform/media-picker-contract'
-import type { AgentSessionAttachmentUploadCommitResult } from '../../../../../src/shared/agent-session-attachments'
+import type { AgentSessionAttachmentUploadCommitResult } from '../../../../../src/shared/agent-session/agent-session-attachments'
 
 export type PendingNativeChatFile = {
   readonly id: string
@@ -33,6 +33,7 @@ function nativeChatFileAttachFailureMessage(error: unknown, fileName?: string): 
 
 // Keep successfully uploaded files when a later pick/upload fails; only the failing chip is removed.
 export async function uploadPickedNativeChatFiles(args: {
+  canContinue?: () => boolean
   picked: AsyncIterable<PickedMobileFile>
   upload: (file: PickedMobileFile) => Promise<AgentSessionAttachmentUploadCommitResult>
   nextId: () => string
@@ -42,7 +43,13 @@ export async function uploadPickedNativeChatFiles(args: {
   onError: (message: string) => void
 }): Promise<void> {
   try {
+    if (args.canContinue?.() === false) {
+      return
+    }
     for await (const file of args.picked) {
+      if (args.canContinue?.() === false) {
+        break
+      }
       const id = args.nextId()
       args.onPicked({
         id,
@@ -56,6 +63,9 @@ export async function uploadPickedNativeChatFiles(args: {
       } catch (error) {
         args.onFailed(id)
         args.onError(nativeChatFileAttachFailureMessage(error, file.name))
+      }
+      if (args.canContinue?.() === false) {
+        break
       }
     }
   } catch (error) {

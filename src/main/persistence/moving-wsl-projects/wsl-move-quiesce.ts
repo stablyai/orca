@@ -29,6 +29,30 @@ export type WslMoveQuiesceDeps = {
   writeCutover: (cutover: WslMoveCutover) => void
   removeCutover: (migrationId: string) => void
   now: () => Date
+  /** Between Sleep attempts; tests skip the wait. */
+  wait?: (ms: number) => Promise<void>
+}
+
+// A Sleep can fail once and succeed when tried again; only a repeat refuses.
+const SLEEP_ATTEMPTS = 3
+const SLEEP_RETRY_MS = 1_000
+
+/** Sleeps the workspaces, again for the ones that failed; returns those that kept failing. */
+export async function sleepUntilPaused(
+  deps: Pick<WslMoveQuiesceDeps, 'sleepWorkspaces' | 'wait'>,
+  workspaceIds: readonly string[]
+): Promise<string[]> {
+  let pending = workspaceIds
+  for (let attempt = 1; ; attempt += 1) {
+    const { failedWorktreeIds } = await deps.sleepWorkspaces(pending)
+    if (failedWorktreeIds.length === 0 || attempt >= SLEEP_ATTEMPTS) {
+      return failedWorktreeIds
+    }
+    pending = failedWorktreeIds
+    await (deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
+      SLEEP_RETRY_MS * attempt
+    )
+  }
 }
 
 export type WslMoveQuiesceRefusalReason =
@@ -46,8 +70,9 @@ export type WslMoveQuiesceRefusalReason =
 export type WslMoveQuiesceResult =
   | {
       outcome: 'quiesced'
+      /** Carries `terminalRestoreHints`, so a crash after quiesce keeps them. */
       cutover: WslMoveCutover
-      // Hints stay with the caller because the journal schema cannot store them.
+      /** The whole capture, including the panes that had no folder to keep, for the preview. */
       restoreHints: WslMoveRestoreHintCapture
     }
   | {
@@ -135,7 +160,7 @@ async function quiesceUnderLock(
   }
 
   try {
-    const { failedWorktreeIds } = await deps.sleepWorkspaces(scope.workspaceIds)
+    const failedWorktreeIds = await sleepUntilPaused(deps, scope.workspaceIds)
     if (failedWorktreeIds.length > 0) {
       return refuse({ reason: 'sleep-failed', failedWorktreeIds })
     }
@@ -183,7 +208,8 @@ async function proveAndRecord(
     ...fenced,
     phase: 'quiesced',
     updatedAt: deps.now().toISOString(),
-    provenExitedSessionIds: [...sessionIds]
+    provenExitedSessionIds: [...sessionIds],
+    terminalRestoreHints: restoreHints.hints.map((hint) => ({ ...hint }))
   }
   try {
     deps.writeCutover(quiesced)

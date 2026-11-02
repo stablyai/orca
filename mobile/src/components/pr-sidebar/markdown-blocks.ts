@@ -1,3 +1,4 @@
+import { translate } from '../../i18n/mobile-i18n'
 import { createMarkdownInlineMatcher } from '../markdown-inline-matcher'
 import { splitTableRow } from '../rich-markdown/markdown-table-rows'
 
@@ -66,9 +67,16 @@ function parseSegment(text: string): MarkdownBlock[] {
     }
     if (m[1].toLowerCase() === 'details') {
       const sm = SUMMARY.exec(m[2])
-      const summary = sm ? stripHtmlTags(sm[1]).trim() : 'Details'
+      const summary = sm ? stripHtmlTags(sm[1]).trim() : ''
       const body = m[2].replace(SUMMARY, '')
-      blocks.push({ kind: 'details', summary: summary || 'Details', body: parseSegment(body) })
+      blocks.push({
+        kind: 'details',
+        // Parsed blocks can outlive the active language.
+        get summary() {
+          return summary || translate('pullRequest.markdownBlocks.details', 'Details')
+        },
+        body: parseSegment(body)
+      })
     } else {
       blocks.push({ kind: 'quote', text: stripHtmlTags(m[2]).trim() })
     }

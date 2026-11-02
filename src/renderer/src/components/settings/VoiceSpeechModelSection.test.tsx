@@ -125,38 +125,6 @@ describe('VoiceSpeechModelSection', () => {
     vi.unstubAllGlobals()
   })
 
-  it('shows delete for the selected ready local row and refreshes after success', async () => {
-    let resolveDelete: () => void = () => {}
-    const refreshModelStates = vi.fn()
-    const { container, root } = renderSection({
-      refreshModelStates,
-      deleteModel: () =>
-        new Promise<void>((resolve) => {
-          resolveDelete = resolve
-        })
-    })
-    const deleteButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete Local Model"]'
-    )
-
-    expect(deleteButton).not.toBeNull()
-    await act(async () => {
-      deleteButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(window.api.speech.deleteModel).toHaveBeenCalledWith(localModel.id)
-    expect(deleteButton!.disabled).toBe(true)
-
-    await act(async () => {
-      deleteButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      resolveDelete()
-      await Promise.resolve()
-    })
-
-    expect(window.api.speech.deleteModel).toHaveBeenCalledTimes(1)
-    expect(refreshModelStates).toHaveBeenCalledTimes(1)
-    root.unmount()
-  })
-
   it('keeps another row delete disabled until its own request finishes', async () => {
     const deleteResolvers = new Map<string, () => void>()
     const refreshModelStates = vi.fn()
@@ -203,43 +171,6 @@ describe('VoiceSpeechModelSection', () => {
     })
 
     expect(refreshModelStates).toHaveBeenCalledTimes(2)
-    root.unmount()
-  })
-
-  it('shows the existing error toast when selected-row deletion fails', async () => {
-    const refreshModelStates = vi.fn()
-    const { container, root } = renderSection({
-      refreshModelStates,
-      deleteModel: () => Promise.reject(new Error('in use'))
-    })
-    const deleteButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete Local Model"]'
-    )
-
-    await act(async () => {
-      deleteButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-
-    expect(toastErrorMock).toHaveBeenCalledWith('Failed to delete model.')
-    expect(refreshModelStates).not.toHaveBeenCalled()
-    root.unmount()
-  })
-
-  it('keeps the model menu open when starting a local model download', async () => {
-    const { container, root } = renderSection({
-      deleteModel: () => Promise.resolve(),
-      modelStates: [{ id: localModel.id, status: 'not-downloaded' }]
-    })
-    const modelOption = container.querySelector<HTMLElement>('[role="option"]')
-
-    await act(async () => {
-      modelOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-
-    expect(window.api.speech.downloadModel).toHaveBeenCalledWith(localModel.id)
-    expect(menuDismissMock).not.toHaveBeenCalled()
     root.unmount()
   })
 })

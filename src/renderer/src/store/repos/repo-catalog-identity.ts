@@ -1,7 +1,7 @@
 import type { Repo } from '../../../../shared/repo-types'
 import { applyInheritedProjectGroups } from '../../../../shared/project-group-inheritance'
 import { reconcileFetchedRepos } from '../slices/repo-identity-reconcile'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { getRepoRowIdentity } from '../slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { mergeFetchedProjectCompatibilityForHost } from '../../../../shared/project-compatibility-host-merge'
@@ -11,17 +11,25 @@ import { mergeByIdentity } from '../catalog-identity'
 export function mergeFetchedReposForHost(
   previous: readonly Repo[],
   fetched: readonly Repo[],
-  hostId: string
+  hostId: string,
+  /** The rows when the request went out; omitted, every row of the host is the answer's to drop. */
+  reposAtRequest?: readonly Repo[]
 ): readonly Repo[] {
   const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
-  const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
+  const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoRowIdentity))
+  const requested = reposAtRequest ? new Set(reposAtRequest.map(getRepoRowIdentity)) : null
   const preserved = previous.filter((repo) => {
-    const existingHostId = getRepoExecutionHostId(repo)
-    return existingHostId !== hostId || fetchedIdentities.has(getRepoHostIdentity(repo))
+    const identity = getRepoRowIdentity(repo)
+    return (
+      getRepoExecutionHostId(repo) !== hostId ||
+      fetchedIdentities.has(identity) ||
+      // Added after the request: an answer that predates it cannot drop it.
+      (requested !== null && !requested.has(identity))
+    )
   })
   return reconcileFetchedRepos(
     previous,
-    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoHostIdentity)
+    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoRowIdentity)
   )
 }
 

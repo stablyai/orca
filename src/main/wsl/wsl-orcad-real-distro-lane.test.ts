@@ -1,4 +1,4 @@
-// C10 real WSL2/systemd-on/off contract: C4 deploy, C5 RPC bridge, C6 loss/recovery, E1 deferred/forced/idle updates, then a separate survive process proves holder adoption, git/folder chat and cleanup. wsl-orcad-e2e.yml imports/runs both phases.
+// C10 real WSL2/systemd-on/off contract: C4 deploy, C5 RPC bridge, C6 loss/recovery, E1 deferred/forced/idle updates, then a separate survive process proves holder adoption, git/folder chat, a mid-reply distro stop resumed by Start and Continue, and cleanup. wsl-orcad-e2e.yml imports/runs both phases.
 // Run: ORCA_RUN_WSL_ORCAD_LANE=1 ORCA_WSL_ORCAD_LANE_PHASE=launch|survive pnpm test <this file>
 import { createHash, randomBytes } from 'node:crypto'
 import { appendFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -24,9 +24,13 @@ import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 import { readConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
 import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
+import { WslOrcadBridgeActivity } from './wsl-orcad-bridge-activity'
+import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { proveWslStructuredChat } from './wsl-orcad-structured-chat-contract'
-import { WSL_CHAT_GUEST_BIN } from './wsl-orcad-chat-provider-fixture'
+import { createLaneWslHost, proveWslMidTurnStopAndContinue } from './wsl-orcad-midturn-stop-lane'
+import { reinstallWslGuestCli, WSL_CHAT_GUEST_BIN } from './wsl-orcad-chat-provider-fixture'
 import {
   WSL_CHAT_WINDOWS_DECOY,
   WSL_CHAT_WINDOWS_DECOY_AGENTS,
@@ -79,6 +83,7 @@ receipt.wslInterop = interopChecks
 const statuses = new Map<string, WslOrcadConnectionStatus[]>()
 let visibleWork = true
 let holder: WslDistroHolder
+const bridgeActivity = new WslOrcadBridgeActivity()
 let manager: WslOrcadConnectionManager
 let supervisor: WslOrcadLivenessSupervisor | null = null
 // Per distro key; unset deploys the packaged template (ORCA_ORCAD_TEMPLATE_PATH).
@@ -254,6 +259,11 @@ function createLaneManager(): void {
   })
   manager = new WslOrcadConnectionManager({
     holder,
+    listen: (transport, listenOptions) =>
+      listenWslOrcadStdioBridge(transport, {
+        ...listenOptions,
+        events: bridgeActivity.events(listenOptions.environmentId)
+      }),
     deployAndLaunch: (distro, options) =>
       deployAndLaunchWslOrcad(distro, {
         ...options,
@@ -264,6 +274,29 @@ function createLaneManager(): void {
       console.log(`[lane] ${distro} ${JSON.stringify(status)}`)
     }
   })
+}
+
+/** One-shot RPCs open and close their own socket (the server ends it first); none is an exit. */
+async function countWatchFiresAcrossRpcs(connection: WslOrcadConnection, count: number) {
+  let fires = 0
+  let watch = bridgeActivity.watch(connection.environmentId)
+  const rearm = (): void => {
+    fires += 1
+    watch = bridgeActivity.watch(connection.environmentId)
+    watch.onExit(rearm)
+  }
+  watch.onExit(rearm)
+  for (let i = 0; i < count; i++) {
+    await rpc(connection, 'status.get')
+  }
+  // Count only once every one-shot bridge has ended; the control socket stays.
+  await waitFor(
+    'one-shot bridges to close',
+    async () => (bridgeActivity.openSockets(connection.environmentId) === 1 ? true : null),
+    10_000
+  )
+  watch.close()
+  return fires
 }
 
 /** Runs `command` in a terminal and waits for a printf-split token the echoed input never matches. */
@@ -309,7 +342,10 @@ async function proveDetachedSession(
         'date +%s%N > lane-file; git add lane-file; pwd'
     )
   ).trim()
-  await rpc(connection, 'git.commit', { worktree: `path:${repoPath}`, message: 'lane commit' })
+  await rpc(connection, 'git.commit', {
+    worktree: `path:${repoPath}`,
+    message: 'lane commit'
+  })
   const hookSock = (await guest(distro, `cat "$HOME/${LOGIN_ENV_TAG}" 2>/dev/null || true`)).trim()
   expect(hookSock, `${distro}: SSH_AUTH_SOCK seen by orcad's git`).toBe(LOGIN_ENV_SOCK)
   const created = await rpc<{ terminal: { handle: string } }>(connection, 'terminal.create', {
@@ -454,6 +490,56 @@ async function updatePhase(distro: string): Promise<Receipt> {
   return result
 }
 
+const LARGE_FILE_BYTES = 100 * 1024 * 1024
+// The editor's chunk size (runtime-paged-file-read.ts).
+const LARGE_FILE_CHUNK_BYTES = 384 * 1024
+
+/**
+ * Record-only (E7): a 100 MB file paged over the host the way the editor pages one, on the shared
+ * control socket the editor uses, with orcad's peak RSS. Failures are recorded, never asserted.
+ */
+async function measureLargeFileRead(
+  control: RemoteRuntimeSharedControlConnection,
+  orcadPid: number | null,
+  distro: string
+): Promise<Receipt> {
+  if (orcadPid === null) {
+    return { error: 'no orcad pid' }
+  }
+  try {
+    const repo = (
+      await guest(
+        distro,
+        `set -e; d="${LANE_REPO}"; head -c ${LARGE_FILE_BYTES} /dev/zero | tr '\\0' a > "$d/big.txt"; ` +
+          'printf %s "$d"'
+      )
+    ).trim()
+    // Reset the peak, so VmHWM is this read's.
+    await asRoot(distro, `echo 5 > /proc/${orcadPid}/clear_refs`)
+    const started = performance.now()
+    let chunks = 0
+    for (let offset = 0; offset < LARGE_FILE_BYTES; offset += LARGE_FILE_CHUNK_BYTES) {
+      await control.request(
+        'files.readChunk',
+        {
+          worktree: `path:${repo}`,
+          relativePath: 'big.txt',
+          offset,
+          length: LARGE_FILE_CHUNK_BYTES
+        },
+        60_000
+      )
+      chunks += 1
+    }
+    const readMs = Math.round(performance.now() - started)
+    const peak = (await guest(distro, `grep VmHWM /proc/${orcadPid}/status`)).trim()
+    await guest(distro, `rm -f "${repo}/big.txt"`)
+    return { bytes: LARGE_FILE_BYTES, chunks, readMs, orcadVmHWM: peak }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
   const result: Receipt = {}
   visibleWork = true
@@ -486,7 +572,19 @@ async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
   expect(await runningDistros()).toContain(wslDistroHolderKey(distro))
   result.rpc = await proveRuntimeRpc(connection, distro)
 
-  // Watch exit must classify orcad-exited and trigger recovery.
+  // Watch exit must classify orcad-exited and trigger recovery. The desktop always holds a
+  // control socket to a connected host; that socket is now what the liveness watch rides.
+  const control = new RemoteRuntimeSharedControlConnection(pairedConnection(connection), {
+    clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+  })
+  await control.request('status.get', undefined, 30_000)
+  if (!systemd) {
+    result.largeFileRead = await measureLargeFileRead(control, connection.pid, distro)
+  }
+  result.watchFiresOnNormalCloses = await countWatchFiresAcrossRpcs(connection, 10)
+  expect(result.watchFiresOnNormalCloses, 'normal socket closes must not read as orcad exit').toBe(
+    0
+  )
   let since = statusLog(distro).length
   started = performance.now()
   await guest(distro, `kill -9 ${connection.pid}; true`)
@@ -495,6 +593,7 @@ async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
   result.killDetectMs = Math.round(performance.now() - started)
   const ready = await waitForStatus(distro, since, 'ready', 180_000)
   result.killRecoverMs = Math.round(performance.now() - started)
+  control.close()
   expect(ready.census).not.toBeNull()
   result.census = ready.census
   const relaunched = manager.get(distro)
@@ -530,6 +629,81 @@ async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
   }
   result.orcadPid = rebooted.pid
   return result
+}
+
+/** Mid-turn holder exits are unverifiable until the process is gone; wait for the proven exit. */
+async function releaseHolder(distro: string) {
+  const released = await holder.release(distro)
+  await waitFor(
+    `the ${distro} holder to exit`,
+    async () => ((await holder.holderState(distro)) === 'exited' ? true : null),
+    10_000,
+    250
+  )
+  return released
+}
+
+/** verify-7's device script, with Start through the production host service and connector. */
+async function proveMidTurnStop(distro: string) {
+  // Hand the distro from the lane's own bridge and holder to the host service's.
+  await manager.close(distro)
+  await releaseHolder(distro)
+  // The service deploys the packaged template; point it at what this distro runs, so Add
+  // neither updates nor defers.
+  const packaged = process.env.ORCA_ORCAD_TEMPLATE_PATH
+  const running = templates.get(wslDistroHolderKey(distro))
+  if (running) {
+    process.env.ORCA_ORCAD_TEMPLATE_PATH = running
+  }
+  const host = createLaneWslHost(USER_DATA)
+  try {
+    const added = await host.service.add({ distro, startIfStopped: true })
+    if (!added.ok) {
+      throw new Error(`Adding ${distro} as a WSL host failed: ${JSON.stringify(added)}`)
+    }
+    const current = (): WslOrcadConnection => {
+      const connection = host.connector.get(distro)
+      if (!connection) {
+        throw new Error(`${distro} has no host connection`)
+      }
+      return connection
+    }
+    const chat = {
+      rpc: <T>(method: string, params?: unknown) => rpc<T>(current(), method, params),
+      guest: (command: string) => guest(distro, command)
+    }
+    const { pid } = current()
+    if (pid === null) {
+      throw new Error(`${distro} host connection has no runtime PID`)
+    }
+    // The chat contract's Windows-decoy probe deleted the guest claude; install it again.
+    const install = await reinstallWslGuestCli({ ...chat, runtimePid: pid }, 'claude')
+    const repo = `${install.home}/wsl-orcad-lane-repo`
+    return await proveWslMidTurnStopAndContinue(
+      {
+        ...chat,
+        distro,
+        environmentId: added.environmentId,
+        host,
+        pairing: () => pairedConnection(current()),
+        terminate: async () => {
+          const terminated = await wslExe(['--terminate', distro])
+          expect(terminated.code, terminated.output).toBe(0)
+        },
+        runningDistros
+      },
+      { root: install.root, worktree: `path:${repo}`, cwd: repo }
+    )
+  } finally {
+    await host.connector.disconnect(distro).catch(() => {})
+    await host.connector.releaseHolder(distro).catch(() => {})
+    await host.service.dispose()
+    if (packaged === undefined) {
+      delete process.env.ORCA_ORCAD_TEMPLATE_PATH
+    } else {
+      process.env.ORCA_ORCAD_TEMPLATE_PATH = packaged
+    }
+  }
 }
 
 async function survivePhase(): Promise<void> {
@@ -577,6 +751,7 @@ async function survivePhase(): Promise<void> {
       }
     })
   }
+  receipt.midTurnStop = await proveMidTurnStop(PLAIN)
 
   // Teardown: bridges closed, holders released, distros terminated.
   await manager.dispose()
@@ -586,14 +761,7 @@ async function survivePhase(): Promise<void> {
   const released: Receipt = {}
   receipt.released = released
   for (const { name } of DISTROS) {
-    // Mid-exit unreadable command lines are unverifiable; wait for proven holder exit.
-    released[name] = await holder.release(name)
-    await waitFor(
-      `the ${name} holder to exit`,
-      async () => ((await holder.holderState(name)) === 'exited' ? true : null),
-      10_000,
-      250
-    )
+    released[name] = await releaseHolder(name)
   }
   // The systemd distro stops while the plain one still runs, so the interop entry is shared.
   if (SYSTEMD) {
@@ -640,6 +808,7 @@ describe.runIf(RUN && process.platform === 'win32')('WSL orcad on real WSL2 dist
     async () => {
       supervisor = createWslOrcadLivenessSupervisor({
         manager,
+        bridgeActivity,
         holder,
         hasUserVisibleWork: () => visibleWork
       })

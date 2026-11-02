@@ -14,6 +14,8 @@ import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-pla
 import { powerShellCommand } from './ssh-remote-powershell'
 
 const PLATFORM_PROBE_MARKER = '__ORCA_REMOTE_PLATFORM__'
+/** The probe's marker-backed line starts with this. */
+export const UNAME_PLATFORM_PROBE_MARKER = `${PLATFORM_PROBE_MARKER} `
 const MAX_UNAME_FIELD_CHARS = 64
 const MAX_THROWN_OUTPUT_CHARS = 200
 const MAX_LOGGED_OUTPUT_CHARS = 1000
@@ -23,6 +25,15 @@ type PlatformProbeOutcome =
   | { kind: 'unsupported'; uname: string }
   | { kind: 'unparsed'; output: string }
   | { kind: 'failed'; error: unknown }
+
+/** The POSIX platform probe, for callers that fold it into a command of their own. */
+export const UNAME_PLATFORM_PROBE_COMMAND = `printf '\\n%s ' '${PLATFORM_PROBE_MARKER}'; uname -sm`
+
+/** The platform a probe's output proves; null for unsupported, unparsed or startup-noise output. */
+export function remoteHostPlatformFromUnameProbe(output: string): RemoteHostPlatform | null {
+  const outcome = parseRemotePlatformOutput(output)
+  return outcome.kind === 'detected' ? getRemoteHostPlatform(outcome.platform) : null
+}
 
 export async function detectRemoteHostPlatform(
   conn: RemoteInstallTransport,
@@ -127,10 +138,9 @@ async function detectUnamePlatform(
 ): Promise<PlatformProbeOutcome> {
   try {
     // Separate marker from startup output that may omit its trailing newline.
-    const command = `printf '\\n%s ' '${PLATFORM_PROBE_MARKER}'; uname -sm`
     const output = signal
-      ? await execCommand(conn, command, { signal })
-      : await execCommand(conn, command)
+      ? await execCommand(conn, UNAME_PLATFORM_PROBE_COMMAND, { signal })
+      : await execCommand(conn, UNAME_PLATFORM_PROBE_COMMAND)
     return parseRemotePlatformOutput(output)
   } catch (error) {
     signal?.throwIfAborted()

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _internals } from '../agent-hooks/server'
-import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
+import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import {
   closeProviderTimelineRigs,
   SESSION as ADAPTER_SESSION

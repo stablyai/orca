@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 import type {
   GetRateLimitResult,
   GitHubRateLimitSnapshot
@@ -88,11 +89,15 @@ export function useGitHubRateLimitSnapshot(
   const [hasError, setHasError] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
   const latestToken = useRef(0)
+  const hasSnapshot = useRef(false)
   const autoRefresh = options?.autoRefresh ?? true
 
   const refresh = useCallback(
     async (force = false): Promise<void> => {
       const token = ++latestToken.current
+      // A stopped WSL distro (where the CLI lives) is no failure: keep the last numbers if any.
+      const keepsLastSnapshot = (error: unknown): boolean =>
+        hasSnapshot.current && isWslDistroNotRunningRefusal(error)
       setIsFetching(true)
       try {
         const params = force ? { force: true } : undefined
@@ -106,13 +111,14 @@ export function useGitHubRateLimitSnapshot(
           return
         }
         if (res?.ok) {
+          hasSnapshot.current = true
           setSnapshot(res.snapshot)
           setHasError(false)
-        } else {
+        } else if (!keepsLastSnapshot(res?.error)) {
           setHasError(true)
         }
-      } catch {
-        if (token === latestToken.current) {
+      } catch (error) {
+        if (token === latestToken.current && !keepsLastSnapshot(error)) {
           setHasError(true)
         }
       } finally {
@@ -157,14 +163,15 @@ function GitHubRateLimitRows({
                 tone === 'warn' && 'text-amber-700 dark:text-amber-300'
               )}
             >
-              {v.remaining}{' '}
-              {translate('auto.components.github.github.rate.limit.display.f42790d150', 'of')}{' '}
-              {v.limit}{' '}
               {translate(
-                'auto.components.github.github.rate.limit.display.6da1858354',
-                'left · resets in'
-              )}{' '}
-              {formatGitHubRateLimitReset(v.resetAt)}
+                'auto.components.github.github.rate.limit.display.remainingOfLimitResetsIn',
+                '{{remaining}} of {{limit}} left · resets in {{reset}}',
+                {
+                  remaining: v.remaining,
+                  limit: v.limit,
+                  reset: formatGitHubRateLimitReset(v.resetAt)
+                }
+              )}
             </span>
           </div>
         )

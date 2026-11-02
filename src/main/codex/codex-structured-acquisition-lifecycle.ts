@@ -1,4 +1,7 @@
-import { AgentSessionAcquisitionExitUnprovenError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { isCodexAppServerHandshakeExitUnprovenError } from './app-server/codex-app-server-handshake-exit-proof'
 import {
   cancelCodexAcquisitionAttempt,
@@ -48,6 +51,12 @@ export async function closeFailedCodexAcquisition(input: {
     throw new AgentSessionAcquisitionExitUnprovenError(
       new AggregateError([input.cause, cleanupError], 'codex acquisition cleanup failed')
     )
+  }
+  if (
+    input.attempt.window.connection?.closeResult?.killDelivered &&
+    input.attempt.window.connection.closeResult.root !== 'exited'
+  ) {
+    throw new AgentSessionAcquisitionRootExitObservedError(input.cause, 'kill-delivered')
   }
   throw input.cause
 }

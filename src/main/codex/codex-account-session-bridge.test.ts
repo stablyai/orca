@@ -80,6 +80,7 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
     expect(summary).toEqual({
       scannedFiles: 2,
       linkedFiles: 2,
+      skippedFiles: 0,
       bridgedThreads: new Map([
         [THREAD_A, '2026-07-20T10-00-00'],
         [THREAD_B, '2026-07-21T10-00-00']
@@ -136,6 +137,7 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
     expect(second).toEqual({
       scannedFiles: 1,
       linkedFiles: 0,
+      skippedFiles: 0,
       bridgedThreads: new Map([[THREAD_A, '2026-07-20T10-00-00']])
     })
   })
@@ -149,7 +151,12 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
       sourceCodexHomePaths: [targetHome, targetHome]
     })
 
-    expect(summary).toEqual({ scannedFiles: 0, linkedFiles: 0, bridgedThreads: new Map() })
+    expect(summary).toEqual({
+      scannedFiles: 0,
+      linkedFiles: 0,
+      skippedFiles: 0,
+      bridgedThreads: new Map()
+    })
   })
 
   it('does not hand a rollout it failed to link to the index heal', async () => {
@@ -179,7 +186,12 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
       sourceCodexHomePaths: [join(workspaceRoot, 'missing')]
     })
 
-    expect(summary).toEqual({ scannedFiles: 0, linkedFiles: 0, bridgedThreads: new Map() })
+    expect(summary).toEqual({
+      scannedFiles: 0,
+      linkedFiles: 0,
+      skippedFiles: 0,
+      bridgedThreads: new Map()
+    })
   })
 })
 

@@ -139,28 +139,8 @@ export default function NewWorkspaceComposerCard(
     : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
-      ? 'Connect'
-      : 'Reconnect'
-  const setupConfigLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Default tab commands'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Setup and default tab commands'
-        : 'Setup script'
-  const setupRunLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands'
-        : 'Run setup command'
-  const setupAskLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands now?'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands now?'
-        : 'Run setup now?'
-  const setupRunButtonLabel = setupConfig?.kind === 'setup' ? 'Run setup now' : 'Run commands now'
-  const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
+      ? translate('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
+      : translate('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
   const agentCatalog = getAgentCatalog()
@@ -340,11 +320,6 @@ export default function NewWorkspaceComposerCard(
           onSparseEditingChange={setSparseEditing}
           sparseEditing={sparseEditing}
           branchNameInputId={branchNameInputId}
-          setupConfigLabel={setupConfigLabel}
-          setupRunLabel={setupRunLabel}
-          setupAskLabel={setupAskLabel}
-          setupRunButtonLabel={setupRunButtonLabel}
-          setupSkipButtonLabel={setupSkipButtonLabel}
           showSetupAgentStartupPolicy={showSetupAgentStartupPolicy}
           parentWorktreeId={parentWorktreeId}
           onParentWorktreeIdChange={onParentWorktreeIdChange}

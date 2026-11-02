@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/orcad-managed-runtime'
 import type { OrcadMigrationBlocker } from '../../../../shared/orcad-migration/orcad-migration-preflight'
 import { translate } from '@/i18n/i18n'
+import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../../shared/wsl-host-types'
 import { dependencyKindLabel } from './managed-server-dependency-kinds'
 
 export function migrationPhaseLabel(phase: OrcadManagedPendingMigrationRow['phase']): string {
@@ -163,6 +164,12 @@ export function managedServerOutcomeLabel(result: {
     return translate(
       'auto.components.settings.managedServers.outcome.unverifiable',
       'Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.'
+    )
+  }
+  if (code === ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE) {
+    return translate(
+      'auto.components.settings.managedServers.outcome.wslMoveRunning',
+      'Not done: a project is moving onto this server. Orca updates it once the move finishes.'
     )
   }
   if (MIGRATION_CODES.has(code)) {

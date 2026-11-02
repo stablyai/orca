@@ -15,7 +15,10 @@ import {
   collectOrcadMigrationUntransferredDependencyCensus,
   type OrcadMigrationSourceDependencyCensus
 } from './orcad-source-dependency-census'
-import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
+import {
+  collectOrcadMigrationSourceDormantState,
+  type OrcadMigrationSourceDormantInspection
+} from './orcad-source-dormant-state'
 import { readOrcadMigrationSourceScrollbackChunk } from './orcad-source-scrollback-state'
 import {
   createOrcadMigrationDeltaView,
@@ -55,6 +58,24 @@ export class OrcadSourceExportPersistence {
       runtime.terminalScrollbackSnapshotStorage,
       destinationEnvironmentId
     ).payload
+  }
+
+  /** The export plus what it could not carry, for a move that must refuse rather than drop rows. */
+  inspectOrcadMigrationSourceDormantState(
+    source: OrcadMigrationManifestSource,
+    catalog: OrcadMigrationCatalogPayload,
+    destinationEnvironmentId?: string,
+    daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
+  ): OrcadMigrationSourceDormantInspection {
+    const runtime = this[orcadSourceExportContext]
+    return collectOrcadMigrationSourceDormantState(
+      runtime.state,
+      source,
+      catalog,
+      runtime.terminalScrollbackSnapshotStorage,
+      destinationEnvironmentId,
+      daemonHistoryLeaf
+    )
   }
 
   collectOrcadMigrationSourceDrafts(manifest: OrcadMigrationManifest): OrcadMigrationSourceDrafts {

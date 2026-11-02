@@ -28,6 +28,16 @@ describe('expectsBrowserClientHosting', () => {
     expect(expectsBrowserClientHosting({ ...ELIGIBLE, preference: undefined })).toBe(true)
   })
 
+  it('hosts on this device when the server-render setting meets a server that cannot stream', () => {
+    expect(
+      expectsBrowserClientHosting({
+        ...ELIGIBLE,
+        enabled: false,
+        capabilities: CLIENT_HOST_CAPABILITIES
+      })
+    ).toBe(true)
+  })
+
   it.each([
     { name: 'client hosting is disabled', input: { enabled: false } },
     { name: 'the caller asked for a server page', input: { preference: 'server' as const } },

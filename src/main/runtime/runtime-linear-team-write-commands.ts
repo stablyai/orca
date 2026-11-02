@@ -17,6 +17,7 @@ import type {
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { RuntimeLinearDedupeCommands } from './runtime-linear-dedupe-commands'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands {
   public parseLinearAttachmentUrl(value: string): URL {
@@ -76,7 +77,8 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
 
   public async resolveLinearTeamInput(
     teamInput: string,
-    workspaceId?: (string & {}) | 'all'
+    workspaceId?: (string & {}) | 'all',
+    signal?: AbortSignal
   ): Promise<{
     id: string
     key: string
@@ -84,19 +86,20 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     workspaceId: string
     workspaceName?: string
   }> {
+    signal?.throwIfAborted()
     this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
     let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
     try {
-      teams = await listLinearTeamsOrThrow(workspaceId ?? 'all')
+      teams = await listLinearTeamsOrThrow(workspaceId ?? 'all', signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
-    const normalized = teamInput.toLocaleLowerCase()
-    const idMatches = teams.filter((team) => team.id.toLocaleLowerCase() === normalized)
+    const normalized = teamInput.toLowerCase()
+    const idMatches = teams.filter((team) => team.id.toLowerCase() === normalized)
     const matches =
       idMatches.length > 0
         ? idMatches
-        : teams.filter((team) => team.key.toLocaleLowerCase() === normalized)
+        : teams.filter((team) => team.key.toLowerCase() === normalized)
     if (matches.length === 1 && matches[0].workspaceId) {
       return {
         id: matches[0].id,
@@ -126,8 +129,10 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
   public async resolveLinearCreateTeam(
     teamInput: string | undefined,
     workspaceId: string | undefined,
-    parent: LinearAgentWriteTarget | null
+    parent: LinearAgentWriteTarget | null,
+    signal?: AbortSignal
   ): Promise<{ id: string; key: string; name: string; workspaceId: string }> {
+    signal?.throwIfAborted()
     if (!teamInput && parent?.issue.team?.id && parent.issue.team.key && parent.issue.team.name) {
       return {
         id: parent.issue.team.id,
@@ -146,7 +151,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     this.validateLinearCreateWorkspaceScope(scope)
     let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
     try {
-      teams = await listLinearTeamsOrThrow(scope ?? 'all')
+      teams = await listLinearTeamsOrThrow(scope ?? 'all', signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
@@ -157,8 +162,8 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     }
     const matches = teams.filter(
       (team) =>
-        team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-        team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
+        team.id.toLowerCase() === teamInput.toLowerCase() ||
+        team.key.toLowerCase() === teamInput.toLowerCase()
     )
     if (matches.length === 1 && matches[0].workspaceId) {
       return {
@@ -184,14 +189,14 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     if (parent) {
       let globalTeams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
       try {
-        globalTeams = await listLinearTeamsOrThrow('all')
+        globalTeams = await listLinearTeamsOrThrow('all', signal)
       } catch (error) {
         throw this.mapLinearReadFailure(error)
       }
       const globalMatch = globalTeams.find(
         (team) =>
-          team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-          team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
+          team.id.toLowerCase() === teamInput.toLowerCase() ||
+          team.key.toLowerCase() === teamInput.toLowerCase()
       )
       if (globalMatch) {
         throw linearError(
@@ -216,7 +221,8 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     }
   }
   async linearResolveCurrentIssue(
-    context?: LinearCurrentIssueContextHints
+    context?: LinearCurrentIssueContextHints,
+    signal?: AbortSignal
   ): Promise<ReturnType<typeof getLinearCurrentIssueFromWorktree>> {
     if (!this.runtimeAvailable()) {
       throw new Error('runtime_unavailable')
@@ -232,7 +238,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
             'The provided Linear worktree context does not match the caller terminal.'
           )
         }
-        worktree = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
+        worktree = await this.resolveWorkspaceSelector(`id:${terminal.worktreeId}`)
       } catch (error) {
         if (error instanceof LinearAgentAccessError) {
           throw error
@@ -263,6 +269,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
       )
     }
 
+    signal?.throwIfAborted()
     const link = getLinearCurrentIssueFromWorktree(worktree)
     if (!link.workspaceId) {
       const backfill = resolveLegacyLinearLinkWorkspace(
@@ -270,8 +277,11 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
         worktree.linkedLinearIssueOrganizationUrlKey
       )
       if (backfill?.workspaceId) {
-        // The answer still serves this lookup; persisting it waits out a WSL move.
-        if (!isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)) {
+        // The answer still serves this lookup; persisting it waits out a WSL move. Folder workspaces keep links on their own row, not in worktree metadata.
+        if (
+          parseWorkspaceKey(worktree.id)?.type !== 'folder' &&
+          !isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
+        ) {
           this.setWorktreeMeta(worktree, {
             linkedLinearIssueWorkspaceId: backfill.workspaceId,
             linkedLinearIssueOrganizationUrlKey: backfill.organizationUrlKey ?? null

@@ -1,4 +1,4 @@
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -9,6 +9,7 @@ import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-ch
 
 export type PiRpcLaunchOptions = {
   command: string
+  prefixArgs?: readonly string[]
   cwd: string
   fullAccess: boolean
   extraArgs?: readonly string[]
@@ -106,6 +107,7 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
     command: options.command,
     cwd: options.cwd,
     args: [
+      ...(options.prefixArgs ?? []),
       '--mode',
       'rpc',
       ...args,

@@ -171,4 +171,49 @@ describe('terminal backlog merge framing', () => {
       measured.mockRestore()
     }
   })
+
+  it('preserves output when partial drains compact the queue before more input arrives', () => {
+    const payloads: Payload[] = Array.from({ length: 10_000 }, (_, index) =>
+      index % 37 === 0
+        ? { type: 'resized', streamId: 1, cols: index + 1, rows: 24 }
+        : output(`${index}\u001b[0m😀\n`)
+    )
+    const backlog = createBacklog()
+    const frames: unknown[] = []
+    try {
+      for (const payload of payloads.slice(0, 5_000)) {
+        expect(backlog.hold(payload)).toBe(true)
+      }
+      while (backlog.pendingBytes > 50_000) {
+        frames.push(backlog.next(640, true))
+      }
+      const remainingBytes = backlog.pendingBytes
+      const added = payloads.slice(5_000)
+      for (const payload of added) {
+        expect(backlog.hold(payload)).toBe(true)
+      }
+      expect(backlog.pendingBytes).toBe(
+        remainingBytes + added.reduce((total, payload) => total + wireBytes(payload), 0)
+      )
+      while (backlog.held) {
+        frames.push(backlog.next(640, true))
+      }
+      expect(frames).toEqual(serializedFrames(payloads, 640, true))
+      expect(backlog.pendingBytes).toBe(0)
+      expect(backlog.next(640, true)).toBeNull()
+
+      backlog.hold(output('after drain'))
+      expect(backlog.next(640, true)).toEqual(output('after drain'))
+      backlog.hold(output('a'))
+      backlog.hold({ type: 'resized', streamId: 1, cols: 2, rows: 24 })
+      backlog.hold(output('b'))
+      expect(backlog.next(640, true)).toEqual(output('a'))
+      backlog.dispose()
+      backlog.hold(output('after reset'))
+      expect(backlog.held).toBe(true)
+      expect(backlog.next(640, true)).toEqual(output('after reset'))
+    } finally {
+      backlog.dispose()
+    }
+  })
 })

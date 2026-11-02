@@ -15,6 +15,7 @@ import type { resolveGitHubPRMergeMethods } from '../../../../../shared/github/p
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function PRActionsMergeMenu({
   itemUrl,
@@ -87,7 +88,7 @@ export function PRActionsMergeMenu({
             {getPullRequestMergeMethodLabel(method)}
           </DropdownMenuItem>
         ))}
-        <DropdownMenuItem onSelect={() => window.api.shell.openUrl(itemUrl)}>
+        <DropdownMenuItem onSelect={() => openAppHttpLink(itemUrl)}>
           <ExternalLink className="size-4" />
           {translate('auto.components.GitHubItemDialog.53fe19aefc', 'Open GitHub merge box')}
         </DropdownMenuItem>

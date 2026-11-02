@@ -1,6 +1,7 @@
 import { writeNativeChatFontSize } from '@/components/native-chat/native-chat-font-size-write'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { computeEditorFontSize, nextEditorFontZoomLevel } from '@/lib/editor-font-zoom'
+import { resolveEditorBaseFontSize } from '@/lib/editor-typography'
 import { zoomLevelToPercent } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
@@ -45,8 +46,8 @@ export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
         setEditorFontZoomLevel(next)
         void window.api.ui.set({ editorFontZoomLevel: next })
 
-        // Why: mirror the editor's base font (terminalFontSize) + clamping so the overlay percent matches the rendered size.
-        const baseFontSize = settings?.terminalFontSize ?? 13
+        // Why: mirror the editor's base font + clamping so the overlay percent matches the rendered size.
+        const baseFontSize = resolveEditorBaseFontSize(settings)
         const actual = computeEditorFontSize(baseFontSize, next)
         const percent = Math.round((actual / baseFontSize) * 100)
         dispatchZoomLevelChanged('editor', percent)

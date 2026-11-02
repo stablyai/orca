@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
@@ -17,23 +18,33 @@ export function getAutomationRunWorkspaceDisplay({
 }): AutomationRunWorkspaceDisplay {
   if (!run.workspaceId) {
     return {
-      rowLabel: 'Not launched',
-      detailLabel: 'Not launched',
+      rowLabel: translate(
+        'auto.components.automations.runWorkspaceDisplay.notLaunched',
+        'Not launched'
+      ),
+      detailLabel: translate(
+        'auto.components.automations.runWorkspaceDisplay.notLaunched',
+        'Not launched'
+      ),
       muted: true
     }
   }
   if (worktree) {
     return {
-      rowLabel: worktree.displayName,
-      detailLabel: worktree.displayName,
+      rowLabel: run.workspaceDisplayName?.trim() || worktree.displayName,
+      detailLabel: run.workspaceDisplayName?.trim() || worktree.displayName,
       muted: false,
-      title: worktree.displayName
+      title: run.workspaceDisplayName?.trim() || worktree.displayName
     }
   }
 
   const previousName = run.workspaceDisplayName?.trim()
   if (previousName) {
-    const deletedLabel = `${previousName} (no longer available)`
+    const deletedLabel = translate(
+      'auto.components.automations.runWorkspaceDisplay.namedWorkspaceGone',
+      '{{name}} (no longer available)',
+      { name: previousName }
+    )
     return {
       rowLabel: previousName,
       detailLabel: deletedLabel,
@@ -43,8 +54,14 @@ export function getAutomationRunWorkspaceDisplay({
   }
 
   return {
-    rowLabel: 'Workspace no longer available',
-    detailLabel: 'Workspace no longer available',
+    rowLabel: translate(
+      'auto.components.automations.runViewState.workspaceGone',
+      'Workspace no longer available'
+    ),
+    detailLabel: translate(
+      'auto.components.automations.runViewState.workspaceGone',
+      'Workspace no longer available'
+    ),
     muted: true
   }
 }

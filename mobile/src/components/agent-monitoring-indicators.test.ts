@@ -19,14 +19,19 @@ async function mount(element: ReactElement): Promise<ReactTestRenderer> {
   return mounted.renderer
 }
 
-const { animationLoop, animationTiming, setValue } = vi.hoisted(() => ({
+const { animationLoop, animationTiming, setValue, motion } = vi.hoisted(() => ({
   animationLoop: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
   animationTiming: vi.fn(() => ({})),
-  setValue: vi.fn()
+  setValue: vi.fn(),
+  motion: { reduced: false }
 }))
 
 vi.mock('lucide-react-native', () => ({ Activity: 'Activity' }))
 vi.mock('react-native', () => ({
+  AccessibilityInfo: {
+    isReduceMotionEnabled: () => Promise.resolve(motion.reduced),
+    addEventListener: () => ({ remove: () => {} })
+  },
   Animated: {
     Value: function Value() {
       return { interpolate: vi.fn(() => 'rotation'), setValue }
@@ -48,6 +53,7 @@ describe('mobile monitoring indicators', () => {
     animationLoop.mockClear()
     animationTiming.mockClear()
     setValue.mockClear()
+    motion.reduced = false
   })
 
   afterEach(() => {
@@ -100,6 +106,23 @@ describe('mobile monitoring indicators', () => {
         expect.anything(),
         expect.objectContaining({ useNativeDriver: true, isInteraction: false })
       ])
+    }
+  })
+
+  it('holds both working rings still and closed under Reduce Motion, like desktop', async () => {
+    motion.reduced = true
+    renderer = await mount(
+      createElement('View', null, [
+        createElement(AgentSpinner, { key: 'spinner', status: 'working' }),
+        createElement(AgentStateDot, { key: 'dot', state: 'working' })
+      ])
+    )
+
+    expect(animationLoop).not.toHaveBeenCalled()
+    const rings = findAllByHostType(renderer.root, 'AnimatedView')
+    expect(rings).toHaveLength(2)
+    for (const ring of rings) {
+      expect(ring.props.style).toContainEqual({ borderTopColor: DESKTOP_WORKING_COLOR })
     }
   })
 

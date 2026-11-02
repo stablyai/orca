@@ -1,5 +1,6 @@
 import { resolveSessionSearchLimit, SESSION_SEARCH_LIMIT_MAX } from './ai-vault-search-limit'
 import { z } from 'zod'
+import { AiVaultSessionAccountHomeSchema } from './ai-vault-session-account-home'
 import {
   AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
@@ -7,10 +8,18 @@ import {
 } from './ai-vault-types'
 import { AiVaultSearchScopeIdentitySchema } from './ai-vault-search-scope'
 
+// Hosts compare `since` as text against UTC `toISOString()` timestamps, which keep
+// milliseconds only; a dropped sub-millisecond remainder rounds up so no earlier session gets in.
+function sinceAsStoredInstant(since: string): string {
+  const subMillisecond = /\.\d{3}(\d+)/.exec(since)?.[1] ?? ''
+  const cutoffMs = Date.parse(since) + (/[1-9]/.test(subMillisecond) ? 1 : 0)
+  return new Date(cutoffMs).toISOString()
+}
+
 export const AiVaultSearchFiltersSchema = z.object({
   agents: z.array(z.enum(AI_VAULT_AGENTS)).optional(),
   scopePaths: z.array(z.string().min(1).max(4096)).max(AI_VAULT_SCOPE_PATHS_MAX_COUNT).optional(),
-  since: z.string().datetime({ offset: true }).optional(),
+  since: z.string().datetime({ offset: true }).transform(sinceAsStoredInstant).optional(),
   sort: z.enum(AI_VAULT_SEARCH_SORTS).optional()
 })
 
@@ -51,6 +60,8 @@ const executionHostIdSchema = z.string().min(1)
 
 export const AiVaultSearchHitSchema = z
   .object({
+    accountHome: AiVaultSessionAccountHomeSchema,
+    accountWslDistro: z.string().nullable().optional().catch(undefined),
     agent: z.enum(AI_VAULT_AGENTS),
     executionHostId: executionHostIdSchema.optional(),
     sessionId: z.string(),

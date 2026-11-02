@@ -112,7 +112,6 @@ describe('paired check details over real encrypted loopback transport', () => {
         getRuntimeId: () => 'paired-check-host',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         getRepoPRCheckDetails: (...args: Parameters<typeof query.getRepoPRCheckDetails>) =>
           query.getRepoPRCheckDetails(...args).finally(() => {

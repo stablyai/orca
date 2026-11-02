@@ -12,6 +12,7 @@ import {
 } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function useGitLabDetailsEditing(
   item: GitLabWorkItem | null,
@@ -154,7 +155,7 @@ export function useGitLabDetailsEditing(
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         }
       } else if (mountedRef.current) {
-        toast.error(res.error)
+        toast.error(codeHostErrorText(res))
       }
     } catch (error) {
       if (mountedRef.current) {

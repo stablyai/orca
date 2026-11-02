@@ -2,18 +2,21 @@ import {
   restoreStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent
 } from '../../launch-structured-agent-session'
-import { StructuredAgentSessionOwnerUnresolvedError } from '../../structured-agent-session-launch-errors'
+import { StructuredAgentSessionOwnerUnresolvedError } from './structured-agent-session-launch-errors'
 import {
   createStructuredLaunchCallerGroup,
   type StructuredLaunchCallerGroup
-} from '../../structured-agent-session-launch-callers'
+} from './structured-agent-session-launch-callers'
 import {
   getPersistedStructuredAgentLaunchRecord,
   setStructuredLaunchState,
   structuredLaunchIdentity,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
-import { initialStructuredLaunchSelection } from '../../structured-agent-session-launch-options'
+import {
+  initialStructuredLaunchSelection,
+  structuredLaunchSelectionController
+} from './structured-agent-session-launch-options'
 
 export function restorePersistedStructuredLaunchState(
   worktreeId: string,
@@ -70,6 +73,7 @@ export function restorePersistedStructuredLaunchState(
   }
   callers.outcome = record.lifecycle === 'failed' ? 'failed' : 'unknown'
   callers.failedAt = record.failedAt
+  structuredLaunchSelectionController(state)
   setStructuredLaunchState(state)
   return state
 }

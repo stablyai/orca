@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_ORCAD_MIGRATION_BLOB_TOTAL_BYTES,
   ORCAD_MIGRATION_BLOB_KIND_CONTRACTS,
+  advertisedOrcadMigrationBlobCapabilities,
   OrcadMigrationBlobChunkRequestSchema,
   OrcadMigrationBlobDescriptorSchema,
   assertOrcadMigrationBlobSet,
@@ -192,5 +193,21 @@ describe('orcad migration catalog state with blob uploads', () => {
         manifest
       )
     ).toThrow('orcad_migration_blob_key_invalid')
+  })
+})
+
+describe('advertised migration blob kinds', () => {
+  it('advertises only the kinds this host installs, terminal history only on a WSL host', () => {
+    expect(advertisedOrcadMigrationBlobCapabilities({ wslHost: false })).toEqual([
+      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
+      'orcad.migration-blob.terminal-restore-hints.v1',
+      'orcad.migration-blob.shell-history.v1'
+    ])
+    expect(advertisedOrcadMigrationBlobCapabilities({ wslHost: true })).toEqual([
+      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
+      'orcad.migration-blob.terminal-restore-hints.v1',
+      'orcad.migration-blob.shell-history.v1',
+      'orcad.migration-blob.terminal-history.v1'
+    ])
   })
 })

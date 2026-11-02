@@ -14,6 +14,7 @@ import { AddRemoteHostSshConfigPicker } from './AddRemoteHostSshConfigPicker'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { AddRemoteHostServerFormPanel } from './AddRemoteHostServerFormPanel'
 import { AddWslHostDialogBody } from './AddWslHostDialogBody'
+import { remoteServerPairingFailureMessage } from '@/lib/remote-server-pairing-error-copy'
 import {
   addAllSshConfigHostsToOrca,
   loadSshConfigHostsForPicker,
@@ -271,7 +272,7 @@ export function AddRemoteHostDialog({
       if (!result.ok) {
         toast.error(
           result.kind === 'environment-save-failed'
-            ? result.message
+            ? remoteServerPairingFailureMessage(result)
             : translateRemotePairingFailureDescription(
                 result.kind,
                 parsedServerLink.value.displayEndpoint

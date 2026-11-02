@@ -1,4 +1,4 @@
-import { ipcMain, Menu, type BrowserWindow } from 'electron'
+import { ipcMain, type BrowserWindow } from 'electron'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
   plainTextContextMenuTargetChannel,
@@ -16,6 +16,7 @@ import {
   matchingRichMarkdownContextMenuTableTarget,
   parseRichMarkdownContextMenuTableTarget
 } from './editable-context-menu'
+import { createEditableContextMenuPopup } from './editable-context-menu-popup'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
 import { browserRouteWebContentsRegistry } from '../browser/browser-route-session-runtime'
 import {
@@ -114,6 +115,7 @@ export function installMainWindowFocusLifecycle(args: {
     }
   }
   ipcMain.on(plainTextContextMenuTargetChannel, onPlainTextContextMenuTarget)
+  const editableContextMenuPopup = createEditableContextMenuPopup(mainWindow, rendererWebContents)
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
     const tableTarget = matchingRichMarkdownContextMenuTableTarget(
       params,
@@ -130,12 +132,13 @@ export function installMainWindowFocusLifecycle(args: {
       return
     }
     // Context menu may precede focus mirroring; trust Electron's editable params.
-    Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
+    editableContextMenuPopup.open(template, params)
   }
   rendererWebContents.on('context-menu', onMainContextMenu)
 
   // Dead renderers cannot clear focus mirrors; reset carve-outs so later lifecycles retain app shortcuts.
   const resetMarkdownEditorFocus = (): void => {
+    editableContextMenuPopup.close()
     markdownEditorFocused = false
     pendingRichMarkdownContextMenuTableTarget = null
     pendingPlainTextContextMenuTarget = false

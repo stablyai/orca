@@ -2,21 +2,21 @@ import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
-import { structuredAgentSessionStartFailureFacts } from './structured-agent-session-delivery-notices'
-import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
-import type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
+import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
+import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import type {
   StructuredAgentSessionCommandOutcome,
   StructuredAgentSessionCommandRefusalCause
-} from '../../../../shared/structured-agent-session-composer'
+} from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import {
   conversationCommandReply,
   heldConversationCommandParts,
@@ -147,7 +147,7 @@ export function structuredConversationCommandRunner(args: {
         sendPending
       }),
       causes,
-      startFailures: () => structuredAgentSessionStartFailureFacts(args.items()),
+      startFailures: () => agentSessionVisibleFailureFacts(args.items()),
       send: (command) =>
         args.send(
           command,

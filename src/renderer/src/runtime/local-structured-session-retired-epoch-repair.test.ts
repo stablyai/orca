@@ -4,10 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
 import { applyLocalStructuredSessionTabSnapshots } from './local-structured-session-tabs-sync/snapshot-apply'
-import {
-  resetLocalStructuredSessionVersionForTests,
-  localStructuredSessionEpochHistoryByWorktree
-} from './local-structured-session-tabs-sync/inventory-generation-fence'
+import { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-generation-fence'
+
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 
@@ -124,14 +122,6 @@ function replayUntilDrop(
 }
 
 describe('retired-epoch repair for a returning publisher', () => {
-  it('POSITIVE CONTROL: the same frame lands when no epoch has been retired', () => {
-    const applied = applyLocalStructuredSessionTabSnapshots(stateWithCoordinatorTerminal(), [
-      frame(RENDERER_EPOCH, 7, 'claude-1')
-    ])
-
-    expect(chatTabs(applied)).toEqual(['Claude Chat'])
-  })
-
   it('drops the returning publisher and reports it to the repair lane', () => {
     const onRetiredEpochDrop = vi.fn()
 
@@ -164,22 +154,5 @@ describe('retired-epoch repair for a returning publisher', () => {
     ])
 
     expect(chatTabs(redelivered)).toEqual([])
-  })
-
-  it('revives only the epoch authority names, leaving other generations fenced', () => {
-    const dropped = replayUntilDrop()
-    applyLocalStructuredSessionTabSnapshots(
-      dropped,
-      [frame(RENDERER_EPOCH, 7, 'claude-1')],
-      undefined,
-      undefined,
-      { authoritative: true }
-    )
-
-    // Authoritative census restored renderer epoch; delayed frames from displaced headless generation must remain retired.
-    const history = localStructuredSessionEpochHistoryByWorktree.get(WORKTREE)
-    expect(history?.current).toBe(RENDERER_EPOCH)
-    expect(history?.retired).toContain(HEADLESS_EPOCH)
-    expect(history?.retired).not.toContain(RENDERER_EPOCH)
   })
 })

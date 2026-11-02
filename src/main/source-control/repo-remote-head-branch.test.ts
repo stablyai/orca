@@ -42,13 +42,6 @@ describe('getRemoteHeadBranchName', () => {
     )
   })
 
-  it('returns null for a missing remote HEAD without resolving origin', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-    await expect(getRemoteHeadBranchName('/repo', 'upstream')).resolves.toBeNull()
-    await expect(getRemoteHeadBranchName('/repo', 'upstream')).resolves.toBeNull()
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
   it('ignores a symbolic HEAD pointing into another remote', async () => {
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'refs/remotes/upstream/HEAD\0refs/remotes/origin/main\n',

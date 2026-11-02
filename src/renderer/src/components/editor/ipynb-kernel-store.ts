@@ -147,9 +147,37 @@ export function setEnvironment(filePath: string, environment: PythonEnvironment)
   store.setState(({ environments }) => ({
     environments: { ...environments, [filePath]: environment }
   }))
+  saveEnvironments()
+}
+
+/** Adds each re-keyed choice beside its source, never over an existing one. Throws when unsaved. */
+export function copyEnvironments(
+  copyOf: (filePath: string, environment: PythonEnvironment) => [string, PythonEnvironment] | null
+): boolean {
+  const { environments } = store.getState()
+  const added: Record<string, PythonEnvironment> = {}
+  for (const [filePath, environment] of Object.entries(environments)) {
+    const copy = copyOf(filePath, environment)
+    if (copy && !Object.hasOwn(environments, copy[0]) && !Object.hasOwn(added, copy[0])) {
+      added[copy[0]] = copy[1]
+    }
+  }
+  if (Object.keys(added).length === 0) {
+    return false
+  }
+  store.setState({ environments: { ...environments, ...added } })
+  if (!saveEnvironments()) {
+    throw new Error('notebook_environments_not_saved')
+  }
+  return true
+}
+
+function saveEnvironments(): boolean {
   try {
     localStorage.setItem(ENVIRONMENTS_STORAGE_KEY, JSON.stringify(store.getState().environments))
+    return true
   } catch {
     // Storage full or unavailable: the choice still holds for this session.
+    return false
   }
 }

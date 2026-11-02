@@ -1,6 +1,6 @@
 import { expect, vi, type Mock } from 'vitest'
 import { resolve } from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../shared/repo-types'
@@ -84,7 +84,7 @@ export const worktreePath = resolve('/worktrees', 'app')
 export const pickedBranch = {
   baseBranch: 'origin/main',
   branchNameOverride: 'main',
-  branchIntent: 'open-existing'
+  branchIntent: 'open-existing-v2'
 } as const
 
 export const writtenMeta: Partial<WorktreeMeta>[] = []

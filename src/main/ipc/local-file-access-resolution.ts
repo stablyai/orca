@@ -1,6 +1,6 @@
-import { dirname, extname, isAbsolute, resolve } from 'node:path'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import type { LocalFileAccess } from '../../shared/local-file-access'
 import {
   PATH_ACCESS_DENIED_MESSAGE,
@@ -8,7 +8,7 @@ import {
   type ResolveAuthorizedPathOptions
 } from './filesystem/filesystem-auth'
 import { isDescendantOrEqual } from './filesystem/filesystem-path-containment'
-import { PREVIEWABLE_BINARY_MIME_TYPES } from './filesystem/filesystem-file-content-inspection'
+import { filePreviewForPath } from '../../shared/file-preview-kind'
 import { getDefaultFloatingWorkspacePath } from './floating-workspace-directory'
 import {
   isDeviceNamespacePath,
@@ -17,6 +17,7 @@ import {
 } from './automatic-load-path-text'
 import { NOT_A_REGULAR_FILE_MESSAGE } from './filesystem/local-regular-file-read'
 import { realpathAcrossWslDriveMount, windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { resolveProjectFolderLinkPath } from './project-folder-link-path'
 
 const USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE =
   'Access denied: a file opened by name needs an absolute path.'
@@ -26,7 +27,7 @@ const CHAT_IMAGE_TYPE_MESSAGE = 'Access denied: a chat can only show local image
 
 export async function resolveDesktopAuthorizedPath(
   targetPath: string,
-  store: Store,
+  store: RuntimeStore,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
   return resolveAuthorizedPath(targetPath, store, {
@@ -47,7 +48,7 @@ function resolveUserNamedLocalPath(targetPath: string): string {
 /** Require an existing regular user-named file; project paths retain normal canonicalization. */
 export async function resolveUserNamedRegularFile(
   targetPath: string,
-  store: Store
+  store: RuntimeStore
 ): Promise<string> {
   const filePath = await resolveLocalRequestPath(targetPath, USER_FILE_ACCESS, store, 'read')
   if (!(await stat(windowsFsPath(filePath))).isFile()) {
@@ -58,8 +59,7 @@ export async function resolveUserNamedRegularFile(
 
 // Chat uses img rendering; PDF previews need a different surface.
 function isChatImage(filePath: string): boolean {
-  const extension = extname(filePath).toLowerCase()
-  return Boolean(PREVIEWABLE_BINARY_MIME_TYPES[extension]) && extension !== '.pdf'
+  return filePreviewForPath(filePath)?.kind === 'image'
 }
 
 // Resolve path text first because devices can hide behind dot and parent segments.
@@ -101,7 +101,7 @@ async function resolveDocumentResourcePath(
 }
 
 /** Chat accepts absolute images by real target type; network shares are readable only inside registered project roots. */
-async function resolveChatImagePath(targetPath: string, store: Store): Promise<string> {
+async function resolveChatImagePath(targetPath: string, store: RuntimeStore): Promise<string> {
   if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
@@ -183,6 +183,9 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   ) {
     return { kind: 'document-folder', documentPath: access.documentPath }
   }
+  if (access.kind === 'project-folder-link') {
+    return { kind: 'project-folder-link' }
+  }
   if (
     access.kind === 'document-resource' &&
     'documentPath' in access &&
@@ -193,19 +196,25 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   return undefined
 }
 
-export type LocalRequestOperation = 'read' | 'write' | 'rename-from' | 'rename-to' | 'import-into'
+export type LocalRequestOperation =
+  | 'read'
+  | 'list'
+  | 'write'
+  | 'rename-from'
+  | 'rename-to'
+  | 'import-into'
 
 type KindRule = (targetPath: string) => Promise<string>
 
 function declaredKindRule(
   fileAccess: LocalFileAccess,
   operation: LocalRequestOperation,
-  store: Store
+  store: RuntimeStore
 ): KindRule | undefined {
   switch (fileAccess.kind) {
     case 'user-file':
-      // Only the opened document itself receives this rename access.
-      return operation !== 'import-into'
+      // Only the opened document itself receives rename access; listings need a project folder link.
+      return operation !== 'import-into' && operation !== 'list'
         ? async (targetPath) => resolveUserNamedLocalPath(targetPath)
         : undefined
     case 'document-resource':
@@ -220,6 +229,12 @@ function declaredKindRule(
       return operation === 'import-into'
         ? (targetPath) => resolveDocumentFolderPath(targetPath, fileAccess.documentPath)
         : undefined
+    case 'project-folder-link':
+      return operation === 'list'
+        ? (targetPath) =>
+            // Why project roots only: Orca's floating folder is not a project a link can lead out of.
+            resolveProjectFolderLinkPath(targetPath, (path) => resolveAuthorizedPath(path, store))
+        : undefined
   }
 }
 
@@ -227,7 +242,7 @@ function declaredKindRule(
 export async function resolveLocalRequestPath(
   targetPath: string,
   access: unknown,
-  store: Store,
+  store: RuntimeStore,
   operation: LocalRequestOperation
 ): Promise<string> {
   // Rename operates on link entries, not their resolved targets.
@@ -263,7 +278,7 @@ export async function resolveLocalRenamePaths(
   oldPath: string,
   newPath: string,
   access: unknown,
-  store: Store
+  store: RuntimeStore
 ): Promise<{ from: string; to: string }> {
   const fileAccess = parseLocalFileAccess(access)
   const renameAccess =
@@ -279,15 +294,24 @@ export async function resolveLocalRenamePaths(
 export function resolveLocalFileRequestPath(
   targetPath: string,
   access: unknown,
-  store: Store
+  store: RuntimeStore
 ): Promise<string> {
   return resolveLocalRequestPath(targetPath, access, store, 'read')
+}
+
+/** Folder listings accept only project-folder-link access beyond project roots. */
+export function resolveLocalListRequestPath(
+  targetPath: string,
+  access: unknown,
+  store: RuntimeStore
+): Promise<string> {
+  return resolveLocalRequestPath(targetPath, access, store, 'list')
 }
 
 export function resolveLocalWriteRequestPath(
   targetPath: string,
   access: unknown,
-  store: Store
+  store: RuntimeStore
 ): Promise<string> {
   return resolveLocalRequestPath(targetPath, access, store, 'write')
 }

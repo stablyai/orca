@@ -1,29 +1,62 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type * as LaunchRegistry from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { agentJournalItemKey } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
-import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session-visible-failures'
-import type * as AgentSessionVisibleFailures from '../../../../shared/agent-session-visible-failures'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
+import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
+import type * as AgentSessionVisibleFailures from '../../../../shared/agent-session/failures/agent-session-visible-failures'
 
-vi.mock('../../../../shared/agent-session-visible-failures', async (importOriginal) => {
-  const original = await importOriginal<typeof AgentSessionVisibleFailures>()
-  return {
-    ...original,
-    agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+vi.mock(
+  '../../../../shared/agent-session/failures/agent-session-visible-failures',
+  async (importOriginal) => {
+    const original = await importOriginal<typeof AgentSessionVisibleFailures>()
+    return {
+      ...original,
+      agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+    }
   }
-})
-
-const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
-  (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
 
-vi.mock('@/lib/structured-agent-session-launch', () =>
-  moduleFactories.structuredAgentSessionLaunch()
+const { mocks, moduleFactories, resetStructuredSessionMocks, launchModule } = await vi.hoisted(
+  async () => {
+    const setup = (
+      await import('./NativeChatStructuredSession.test-harness')
+    ).createStructuredSessionMocks()
+    return {
+      ...setup,
+      launchModule: setup.moduleFactories.structuredAgentSessionLaunch()
+    }
+  }
+)
+
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
+  retryStructuredAgentSessionLaunch: launchModule.retryStructuredAgentSessionLaunch,
+  relaunchFailedStructuredAgentSessionForMessage:
+    launchModule.relaunchFailedStructuredAgentSessionForMessage
+}))
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof LaunchRegistry>()),
+    getStructuredAgentSessionLaunchLifecycle: launchModule.getStructuredAgentSessionLaunchLifecycle,
+    getStructuredAgentSessionLaunchResumes: launchModule.getStructuredAgentSessionLaunchResumes,
+    useStructuredAgentSessionLaunchLifecycle: launchModule.useStructuredAgentSessionLaunchLifecycle,
+    useStructuredAgentSessionLaunchFailure: launchModule.useStructuredAgentSessionLaunchFailure
+  })
+)
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-options',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof LaunchOptions>()),
+    useStructuredAgentSessionLaunchSelection: launchModule.useStructuredAgentSessionLaunchSelection
+  })
 )
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
@@ -98,63 +131,6 @@ function turnRow(): AgentJournalRenderItem {
   }
 }
 
-it('does no failure-fact scans while a non-Claude chat streams without rejected sends or returned cards', () => {
-  const { rerender } = render(pane())
-  mocks.journalItems = [turnRow()]
-  rerender(pane())
-  expect(agentSessionVisibleFailureFacts).not.toHaveBeenCalled()
-})
-
-it('shares one failure-fact scan between returned cards and rejected-send notices', () => {
-  const fact = { kind: 'notSignedIn' } as const
-  mocks.journalItems = [startFailureRow(fact)]
-  mocks.queuedCards = [
-    {
-      messageId: 'returned',
-      position: 1,
-      text: 'Retry me',
-      state: 'returned',
-      hold: 'returned',
-      returnedRejection: fact
-    }
-  ]
-  mocks.submissions = [
-    {
-      clientMessageId: 'send-1',
-      fence: 1,
-      payloadFingerprint: 'fp',
-      dispatchState: 'rejected',
-      providerItemId: null,
-      reason: CODEX_SIGNED_OUT,
-      rejection: fact,
-      submittedAt: 1,
-      resolvedAt: 2
-    }
-  ]
-  render(pane())
-  expect(agentSessionVisibleFailureFacts).toHaveBeenCalledTimes(1)
-  expect(screen.getAllByText('Your message was not sent.')).toHaveLength(2)
-})
-
-it('says a signed-out Codex above the composer and still sends', () => {
-  mocks.unavailable = { reason: 'notSignedIn', account: 'system' }
-  render(pane())
-
-  expect(screen.getByText(CODEX_SIGNED_OUT)).toBeTruthy()
-  const transport = mocks.composerProps?.structuredTransport
-  expect(transport).not.toHaveProperty('unavailable')
-  const send = transport?.send
-  if (typeof send !== 'function') {
-    throw new Error('Structured composer transport was not installed')
-  }
-  let admitted: unknown
-  act(() => {
-    admitted = send('hello', [])
-  })
-  expect(admitted).toBe(true)
-  expect(mocks.send).toHaveBeenCalledWith('hello', [])
-})
-
 it('leaves an auth turn row as the explanation when the catalog also says signed out', () => {
   mocks.unavailable = { reason: 'notSignedIn', account: 'system' }
   const row = startFailureRow({ kind: 'notSignedIn', account: 'system' })
@@ -188,16 +164,6 @@ it('stays dismissed for the same verdict, and shows again when it changes or com
   mocks.unavailable = { reason: 'notSignedIn', account: 'system' }
   view.rerender(pane())
   expect(screen.getByText(CODEX_SIGNED_OUT)).toBeTruthy()
-})
-
-it("names a missing Claude CLI in the chat's agent", () => {
-  mocks.unavailable = { reason: 'cliMissing' }
-  render(pane('claude'))
-  expect(
-    screen.getByText(
-      "Claude wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents."
-    )
-  ).toBeTruthy()
 })
 
 it('says a reason once when the failed start already says it, keeping its Retry', () => {

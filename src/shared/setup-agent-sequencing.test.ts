@@ -8,7 +8,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   createSequencedSetupAgentCommands,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
-  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
+  type SequencedSetupAgentCommands
 } from './setup-agent-sequencing'
 
 const TEMP_DIRS: string[] = []
@@ -29,6 +31,9 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'long-path'
     })
 
+    expect(Buffer.byteLength(result.setupCommand)).toBeLessThan(256)
+    expect(result.setupCommand).not.toContain('nested-worktree')
+    expect(result.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain('nested-worktree')
     expect(result.startupCommand.length).toBeLessThan(256)
     expect(result.startupCommand).not.toContain('nested-worktree')
     expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
@@ -44,7 +49,7 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'nonce-remote'
     })
 
-    expect(result.setupCommand).toContain(
+    expect(setupScript(result)).toContain(
       'bash /remote/repo/.git/worktrees/feature/orca/setup-runner.sh'
     )
     expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
@@ -61,8 +66,8 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'nonce-wsl-shell'
     })
 
-    expect(result.setupCommand).toContain('bash /mnt/c/repo/.git/orca/setup-runner.sh')
-    expect(result.setupCommand).toContain(
+    expect(setupScript(result)).toContain('bash /mnt/c/repo/.git/orca/setup-runner.sh')
+    expect(setupScript(result)).toContain(
       '/mnt/c/repo/.git/orca/setup-runner.sh.nonce-wsl-shell.done'
     )
     expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
@@ -80,11 +85,11 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'nonce-gitbash-cmd'
     })
 
-    expect(result.setupCommand).toContain(
+    expect(setupScript(result)).toContain(
       'powershell.exe -NoProfile -NonInteractive -EncodedCommand'
     )
     expect(result.setupCommand).not.toMatch(/bash\s+\S*setup-runner/)
-    expect(decodePowerShellScript(result.setupCommand)).toContain(
+    expect(decodePowerShellScript(setupScript(result))).toContain(
       "$runner = 'C:\\repo\\.git\\orca\\setup-runner.cmd'"
     )
     // PowerShell Invoke-Expression cannot parse POSIX apostrophe escaping; bash must evaluate startup.
@@ -95,7 +100,7 @@ describe('createSequencedSetupAgentCommands', () => {
       'eval "$ORCA_SEQUENCED_STARTUP_COMMAND"'
     )
     // Why: bash writes and reads the marker here, so it needs the /c/... form of the path.
-    expect(result.setupCommand).toContain(
+    expect(setupScript(result)).toContain(
       '/c/repo/.git/orca/setup-runner.cmd.nonce-gitbash-cmd.done'
     )
     expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
@@ -198,7 +203,10 @@ describe('createSequencedSetupAgentCommands', () => {
       expect(readFileSync(markerPath, 'utf8')).toBe('stale:0\n')
 
       const setupExit = await waitForExit(
-        spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
+        spawn('bash', ['-lc', commands.setupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.setupEnv }
+        })
       )
       expect(setupExit.code).toBe(0)
 
@@ -232,7 +240,10 @@ describe('createSequencedSetupAgentCommands', () => {
       })
 
       const setupExitPromise = waitForExit(
-        spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
+        spawn('bash', ['-lc', commands.setupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.setupEnv }
+        })
       )
       const startupExit = await waitForExit(
         spawn('bash', ['-lc', commands.startupCommand], {
@@ -282,7 +293,10 @@ describe('createSequencedSetupAgentCommands', () => {
       })
 
       const setupExitPromise = waitForExit(
-        spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
+        spawn('bash', ['-lc', commands.setupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.setupEnv }
+        })
       )
       const startupExit = await waitForExit(
         spawn('bash', ['-lc', commands.startupCommand], {
@@ -330,6 +344,10 @@ describe('createSequencedSetupAgentCommands', () => {
     }
   )
 })
+
+function setupScript(commands: SequencedSetupAgentCommands): string {
+  return commands.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV] ?? commands.setupCommand
+}
 
 function makeTempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-setup-sequencing-'))

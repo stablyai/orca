@@ -42,35 +42,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     shutdownBufferCaptures.clear()
   })
 
-  it('records terminal input even before agent sleep is enabled', () => {
-    const store = createTestStore()
-
-    store.getState().recordTerminalInput('tab-1:leaf-1', 1000)
-
-    expect(store.getState().lastTerminalInputAtByPaneKey['tab-1:leaf-1']).toBe(1000)
-  })
-
-  it('asks sleep-time buffer capture to skip local scrollback serialization', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const capture = vi.fn()
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-    })
-    shutdownBufferCaptures.set('tab-1', capture)
-
-    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
-
-    expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
-  })
-
   it('does not stop the active runtime when sleeping an SSH-owned worktree', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

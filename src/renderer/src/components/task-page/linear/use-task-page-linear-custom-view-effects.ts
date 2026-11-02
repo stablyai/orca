@@ -1,3 +1,6 @@
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import { linearIssueReadError } from '@/lib/linear-read-error'
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearInOrcaEffectsModel } from './use-task-page-linear-in-orca-effects'
 import { useEffect } from 'react'
 import {
@@ -6,11 +9,7 @@ import {
 } from './task-page-linear-issue-model'
 import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
-import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type {
-  LinearCustomViewSummary,
-  LinearProjectSummary
-} from '../../../../../shared/linear/project-types'
+import type { LinearCustomViewSummary } from '../../../../../shared/linear/project-types'
 import { clampLinearIssueListLimit } from '../../../../../shared/linear/issue-read-limits'
 export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEffectsModel) {
   const {
@@ -25,7 +24,8 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     taskResumeApplied,
     selectedLinearIssueId,
     selectedLinearIssueCanFloat,
-    clearSelectedLinearIssue,
+    setSelectedLinearIssue,
+    linearSelectionRequest,
     linearMode,
     linearRefreshNonce,
     setLinearCustomViewsResult,
@@ -33,6 +33,7 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     setLinearCustomViewsError,
     selectedLinearCustomView,
     setLinearCustomViewIssuesResult,
+    linearCustomViewIssueResult: { read: consumeLinearRead, setLoading: finishLinearLoading },
     linearCustomViewIssueLimit,
     setLinearCustomViewProjectsResult,
     setLinearCustomViewContentsLoading,
@@ -78,9 +79,7 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
       })
       .catch((error) => {
         if (!cancelled) {
-          setLinearCustomViewsError(
-            error instanceof Error ? error.message : 'Failed to load views.'
-          )
+          setLinearCustomViewsError(taskProviderErrorText(linearIssueReadError(error)))
           setLinearCustomViewsLoading(false)
         }
       })
@@ -116,50 +115,62 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     setLinearCustomViewContentsLoading(true)
     setLinearCustomViewContentsError(null)
     const issueLimit = clampLinearIssueListLimit(linearCustomViewIssueLimit)
-    const request =
-      selectedLinearCustomView.model === 'issue'
-        ? listLinearCustomViewIssues(
-            selectedLinearCustomView.id,
-            selectedLinearCustomView.workspaceId,
-            issueLimit,
-            {
-              force: linearRefreshNonce > 0,
-              sourceContext: linearTaskSourceContext
+    let release = () => {}
+    if (selectedLinearCustomView.model === 'issue') {
+      release = observeLinearIssueRead(
+        listLinearCustomViewIssues(
+          selectedLinearCustomView.id,
+          selectedLinearCustomView.workspaceId,
+          issueLimit,
+          { force: linearRefreshNonce > 0, sourceContext: linearTaskSourceContext }
+        ),
+        () => !cancelled,
+        (lease, view) => {
+          if (view.kind === 'abandoned') {
+            if (!cancelled) {
+              finishLinearLoading(false)
             }
-          )
-        : listLinearCustomViewProjects(
-            selectedLinearCustomView.id,
-            selectedLinearCustomView.workspaceId,
-            LINEAR_ITEM_LIMIT,
-            {
-              force: linearRefreshNonce > 0,
-              sourceContext: linearTaskSourceContext
-            }
-          )
-    void request
-      .then((result) => {
-        if (cancelled) {
-          return
+            return
+          }
+          consumeLinearRead(lease, view, {
+            ...(view.data ? { data: view.data } : {}),
+            error:
+              view.kind === 'error'
+                ? taskProviderErrorText(linearIssueReadError(view.error))
+                : view.data?.errors?.length
+                  ? taskProviderErrorText(linearIssueReadError(view.data.errors[0].message))
+                  : null,
+            loading: view.kind === 'loading'
+          })
         }
-        if (selectedLinearCustomView.model === 'issue') {
-          setLinearCustomViewIssuesResult(result as LinearCollectionResult<LinearIssue>)
-        } else {
-          setLinearCustomViewProjectsResult(result as LinearCollectionResult<LinearProjectSummary>)
-        }
-        setLinearCustomViewContentsLoading(false)
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setLinearCustomViewContentsError(
-            error instanceof Error ? error.message : 'Failed to load view contents.'
-          )
-          setLinearCustomViewContentsLoading(false)
-        }
-      })
+      )
+    } else {
+      void listLinearCustomViewProjects(
+        selectedLinearCustomView.id,
+        selectedLinearCustomView.workspaceId,
+        LINEAR_ITEM_LIMIT,
+        { force: linearRefreshNonce > 0, sourceContext: linearTaskSourceContext }
+      )
+        .then((result) => {
+          if (!cancelled) {
+            setLinearCustomViewProjectsResult(result)
+            setLinearCustomViewContentsLoading(false)
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setLinearCustomViewContentsError(taskProviderErrorText(linearIssueReadError(error)))
+            setLinearCustomViewContentsLoading(false)
+          }
+        })
+    }
     return () => {
       cancelled = true
+      release()
     }
   }, [
+    consumeLinearRead,
+    finishLinearLoading,
     linearRefreshNonce,
     linearCustomViewIssueLimit,
     listLinearCustomViewIssues,
@@ -172,30 +183,20 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     setLinearCustomViewIssuesResult
   ])
   useEffect(() => {
-    if (!taskResumeApplied || taskSource !== 'linear') {
+    if (!taskResumeApplied || taskSource !== 'linear' || !selectedLinearIssueId) {
       return
     }
-    if (!linearConnected) {
-      clearSelectedLinearIssue()
-      return
-    }
-    if (filteredLinearIssues.length === 0) {
-      if (!selectedLinearIssueCanFloat) {
-        clearSelectedLinearIssue()
-      }
-      return
-    }
-
-    // Why: list-first — keep an open inspector only while its issue stays in the filter, not auto-open row 1; user-directed sub-issue nav stays.
+    // Why: an observed invalid selection can clear only the request it observed.
     if (
-      selectedLinearIssueId &&
-      !selectedLinearIssueCanFloat &&
-      !filteredLinearIssues.some((issue) => issue.id === selectedLinearIssueId)
+      !linearConnected ||
+      (!selectedLinearIssueCanFloat &&
+        !filteredLinearIssues.some((issue) => issue.id === selectedLinearIssueId))
     ) {
-      clearSelectedLinearIssue()
+      setSelectedLinearIssue(null, { expectedSelection: linearSelectionRequest })
     }
   }, [
-    clearSelectedLinearIssue,
+    setSelectedLinearIssue,
+    linearSelectionRequest,
     filteredLinearIssues,
     linearConnected,
     selectedLinearIssueCanFloat,

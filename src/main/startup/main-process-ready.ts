@@ -20,6 +20,7 @@ export async function initializeMainProcessReady(
   }
   try {
     await initializeReadyFoundation()
+    await state.wslMoveStartupRewriteReady
     await initializeReadyRuntimeServices()
     // Window creation can proceed while translations and the native menu initialize.
     const i18nAndMenuReady = initializeMainProcessI18nAndMenu()

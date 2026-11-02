@@ -1,8 +1,6 @@
 import type { OpenFile } from '../types/open-file'
-import type {
-  WorktreeOperationOwnerRecord,
-  WorktreeOperationRouteState
-} from '@/lib/worktree-operation-route'
+import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import { worktreeOwnerRowsTokenOf } from '@/lib/worktree-owner-rows-token'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { editorBufferIdentityOf } from './editor-buffer-identity'
 
@@ -27,52 +25,17 @@ export const EDITOR_BUFFER_ROUTE_INPUT_KEYS = [
 ] as const satisfies readonly (keyof EditorBufferRouteState)[]
 
 type RouteInputs = readonly unknown[]
-type WorktreeRows = NonNullable<WorktreeOperationRouteState['worktreesByRepo']>
 
 let epochInputs: RouteInputs = []
 let epochToken: object = {}
-
-const worktreeRouteTokens = new WeakMap<WorktreeRows, object>()
-let lastWorktreeRoute: { signature: string; token: object } | null = null
-
-function worktreeRouteSignature(worktreesByRepo: WorktreeRows): string {
-  return JSON.stringify(
-    Object.entries(worktreesByRepo).map(([bucket, rows]) => [
-      bucket,
-      rows.map((row) => {
-        // Every owner field, so a new one cannot be silently left out of the signature.
-        const owner: { [K in keyof Required<WorktreeOperationOwnerRecord>]: unknown } = {
-          id: row.id,
-          repoId: row.repoId,
-          hostId: row.hostId ?? null,
-          runtimeOwnerEnvironmentId: row.runtimeOwnerEnvironmentId ?? null
-        }
-        return Object.values(owner)
-      })
-    ])
-  )
-}
-
-/** Rank/unread/activity row patches keep the token, so they re-resolve no editor routes. */
-function worktreeRouteTokenOf(worktreesByRepo: WorktreeRows | undefined): unknown {
-  if (!worktreesByRepo) {
-    return worktreesByRepo
-  }
-  let token = worktreeRouteTokens.get(worktreesByRepo)
-  if (!token) {
-    const signature = worktreeRouteSignature(worktreesByRepo)
-    token = lastWorktreeRoute?.signature === signature ? lastWorktreeRoute.token : {}
-    lastWorktreeRoute = { signature, token }
-    worktreeRouteTokens.set(worktreesByRepo, token)
-  }
-  return token
-}
 
 function routeInputOf(
   state: Partial<EditorBufferRouteState>,
   key: (typeof EDITOR_BUFFER_ROUTE_INPUT_KEYS)[number]
 ): unknown {
-  return key === 'worktreesByRepo' ? worktreeRouteTokenOf(selectWorktreesByRepo(state)) : state[key]
+  return key === 'worktreesByRepo'
+    ? worktreeOwnerRowsTokenOf(selectWorktreesByRepo(state))
+    : state[key]
 }
 
 function routeInputsOf(state: EditorBufferRouteState): RouteInputs {

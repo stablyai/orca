@@ -20,9 +20,15 @@ import {
   resolveDaemonSessionLabel,
   resolveSnapshotSessionLabel
 } from './resource-session-labels'
+import { translate } from '@/i18n/i18n'
 
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
-export const UNATTRIBUTED_REPO_NAME = 'Unattributed'
+function getUnattributedRepoName(): string {
+  return translate(
+    'auto.components.status.bar.mergeSnapshotAndSessions.unattributed',
+    'Unattributed'
+  )
+}
 
 export function mergeSnapshotAndSessions(
   snapshot: MemorySnapshot | null,
@@ -176,7 +182,7 @@ export function mergeSnapshotAndSessions(
       ? UNATTRIBUTED_REPO_ID
       : (worktree?.repoId ?? getRepoIdFromWorktreeId(finalWorktreeId))
     const finalRepoName = isUnattributed
-      ? UNATTRIBUTED_REPO_NAME
+      ? getUnattributedRepoName()
       : ctx.repoDisplayNameById.get(finalRepoId) || finalRepoId
     const finalWorktreeName = isUnattributed
       ? session.title || session.id.slice(0, 12)
