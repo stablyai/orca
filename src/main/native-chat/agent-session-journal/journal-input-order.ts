@@ -290,7 +290,7 @@ export class JournalInputOrder {
           this.legacyPlaces === 0 &&
           !this.currentIdentity(state, card.messageId)
         ) {
-          this.cards.release(card.messageId)
+          this.lineage.cards.delete(card.messageId)
         }
       }
     }
@@ -311,7 +311,8 @@ export class JournalInputOrder {
   }
 
   private releaseHistory(state: JournalReducerState): void {
-    this.cards.releaseHistory((id) => this.currentIdentity(state, id))
+    this.lineage.releaseHistory((id) => this.currentIdentity(state, id))
+    this.cards.releaseHistory()
   }
 
   precedes(card: QueuedMessageRow, submission: AgentJournalSubmission): boolean {

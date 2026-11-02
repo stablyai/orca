@@ -109,7 +109,11 @@ export class JournalInputPlaceIndex {
     handoff: boolean,
     coordinate: AgentJournalCursor | null = card.queuedAt
   ): void {
-    this.delete(card.messageId)
+    const prior = this.entries.get(card.messageId)
+    if (prior) {
+      this.change(prior, true)
+    }
+    this.entries.delete(card.messageId)
     if (card.state === 'withdrawn') {
       return
     }
@@ -126,14 +130,6 @@ export class JournalInputPlaceIndex {
     }
     this.entries.set(card.messageId, entry)
     this.change(entry, false)
-  }
-
-  delete(messageId: string): void {
-    const prior = this.entries.get(messageId)
-    if (prior) {
-      this.change(prior, true)
-      this.entries.delete(messageId)
-    }
   }
 
   private change(entry: Entry, remove: boolean): void {
