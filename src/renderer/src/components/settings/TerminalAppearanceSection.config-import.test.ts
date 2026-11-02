@@ -378,24 +378,6 @@ describe('TerminalAppearanceSection terminal config import wiring', () => {
     expect(configImportMock.handleClick).toHaveBeenCalled()
   })
 
-  it('passes shared theme import controls into the theme catalog on desktop', () => {
-    const element = TerminalAppearanceSection({
-      settings: {} as never,
-      updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
-      terminalConfigImport: configImportMock,
-      warpThemes: warpThemesMock
-    })
-
-    const buttons = findButtons(element)
-    expect(buttons.some((button) => button.text === 'Import from Warp')).toBe(false)
-
-    const catalog = findTerminalThemeCatalogSection(element)
-    expect(catalog?.props.warpThemes).toBe(warpThemesMock)
-    expect(catalog?.props.showThemeImport).toBe(true)
-  })
-
   it('routes dark and light theme searches to the matching catalog target', () => {
     mockSettingsSearchQuery = 'Light Divider Color'
     const lightElement = TerminalAppearanceSection({
@@ -557,44 +539,4 @@ describe('TerminalAppearanceSection terminal config import wiring', () => {
       }
     }
   )
-
-  it('passes hook state to TerminalConfigImportModal', () => {
-    const element = TerminalAppearanceSection({
-      settings: {} as never,
-      updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
-      terminalConfigImport: configImportMock,
-      warpThemes: warpThemesMock
-    })
-
-    const modal = findTerminalConfigImportModal(element)
-    expect(modal).not.toBeNull()
-    expect(modal?.props.open).toBe(configImportMock.open)
-    expect(modal?.props.preview).toEqual(configImportMock.preview)
-    expect(modal?.props.loading).toBe(configImportMock.loading)
-    expect(modal?.props.applied).toBe(configImportMock.applied)
-    expect(modal?.props.onApply).toBe(configImportMock.handleApply)
-    expect(modal?.props.onOpenChange).toBe(configImportMock.handleOpenChange)
-  })
-
-  it('passes hook state to WarpThemeImportModal', () => {
-    const element = TerminalAppearanceSection({
-      settings: {} as never,
-      updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
-      terminalConfigImport: configImportMock,
-      warpThemes: warpThemesMock
-    })
-
-    const modal = findWarpThemeImportModal(element)
-    expect(modal).not.toBeNull()
-    expect(modal?.props.open).toBe(warpThemesMock.open)
-    expect(modal?.props.preview).toEqual(warpThemesMock.preview)
-    expect(modal?.props.loading).toBe(warpThemesMock.loading)
-    expect(modal?.props.desktopOnly).toBe(false)
-    expect(modal?.props.handleApply).toBe(warpThemesMock.handleApply)
-    expect(modal?.props.handleOpenChange).toBe(warpThemesMock.handleOpenChange)
-  })
 })

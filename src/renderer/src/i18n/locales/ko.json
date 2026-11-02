@@ -19852,6 +19852,9 @@
         "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
         "keepOpen": "열어 두기"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "WSL에서 실행: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {

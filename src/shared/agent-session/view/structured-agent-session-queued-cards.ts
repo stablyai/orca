@@ -28,7 +28,7 @@ import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
   type NativeChatImageLabelCopy
-} from '../../native-chat-image-label'
+} from '../../native-chat/native-chat-image-label'
 
 export type QueuedMessageCardHold =
   /** Plainly queued, also behind an open question: the question already says the agent waits. */

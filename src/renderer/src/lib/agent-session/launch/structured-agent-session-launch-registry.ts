@@ -27,7 +27,6 @@ import {
   retireStructuredAgentLaunchCancellation
 } from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
-export { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -238,8 +237,3 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
   }
   return changed
 }
-
-export {
-  markStructuredAgentSessionLaunchCancelled,
-  markStructuredAgentSessionLaunchCancelledSilently
-} from './structured-agent-session-launch-cancel'

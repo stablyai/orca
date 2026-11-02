@@ -29,7 +29,7 @@ import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/nati
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
 import { launchPromptAsMessage, shouldPruneLaunchPrompt } from './native-chat-pending'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat-pending-sends'
+import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import {
   useNativeChatPendingDelivery,
   useNativeChatOptimisticSend

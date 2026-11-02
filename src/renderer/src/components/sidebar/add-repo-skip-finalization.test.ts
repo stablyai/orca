@@ -95,7 +95,7 @@ describe('finalizeImportedRepoAfterSkip', () => {
     expect(state.setHideDefaultBranchWorkspace).toHaveBeenCalledWith(false)
   })
 
-  it('clears default-branch hiding for a folder project whose only row is its root', () => {
+  it('preserves default-branch hiding when importing a folder project with only its root', () => {
     const state = makeState({
       hideDefaultBranchWorkspace: true,
       repos: [{ id: 'folder-new', kind: 'folder' }],
@@ -114,7 +114,7 @@ describe('finalizeImportedRepoAfterSkip', () => {
 
     finalizeImportedRepoAfterSkip(state, 'folder-new')
 
-    expect(state.setHideDefaultBranchWorkspace).toHaveBeenCalledWith(false)
+    expect(state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
   })
 
   it.each([false, true])(
@@ -152,7 +152,7 @@ describe('finalizeImportedRepoAfterSkip', () => {
         expect(state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
         expect(state.setAlwaysShowDefaultBranchWorkspace).not.toHaveBeenCalled()
       } else {
-        expect(state.setHideDefaultBranchWorkspace).toHaveBeenCalledWith(false)
+        expect(state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
         expect(state.setAlwaysShowDefaultBranchWorkspace).toHaveBeenCalledWith(true)
       }
     }

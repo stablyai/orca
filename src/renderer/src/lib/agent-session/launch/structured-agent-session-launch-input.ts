@@ -1,10 +1,10 @@
+import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 import {
   getStructuredLaunchStateBySessionId,
   getPersistedStructuredAgentLaunchRecord,
-  launchStateLifecycle,
   notifyStructuredLaunchListeners
 } from './structured-agent-session-launch-registry'
 

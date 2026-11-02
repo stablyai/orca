@@ -5,7 +5,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
+import { clearNativeChatSessionOptionCacheForTests } from '../../../../shared/native-chat/input/native-chat-session-option-cache'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
 import { NativeChatComposer } from './NativeChatComposer'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'

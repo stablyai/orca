@@ -20921,6 +20921,9 @@
         "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
         "keepOpen": "Keep open"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Runs on WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {

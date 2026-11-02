@@ -19852,6 +19852,9 @@
         "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
         "keepOpen": "開いたままにする"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "WSL で実行: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {

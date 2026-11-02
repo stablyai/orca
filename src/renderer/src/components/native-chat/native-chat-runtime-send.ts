@@ -8,7 +8,7 @@ import {
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
-import type { AskAnswerKeyGroup } from '../../../../shared/native-chat-ask-answer'
+import type { AskAnswerKeyGroup } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import {
   clearConfirmDurationMs,
   clearThenWrite,
@@ -23,7 +23,7 @@ import {
 import {
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
-} from '../../../../shared/native-chat-paste-bytes'
+} from '../../../../shared/native-chat/input/native-chat-paste-bytes'
 import {
   AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
   typeAgentTuiCommand

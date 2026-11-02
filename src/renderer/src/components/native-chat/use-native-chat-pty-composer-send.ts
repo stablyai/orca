@@ -24,7 +24,7 @@ import {
 import { isSlashCommandDraft } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
-import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-pty-session-options'
 import type { NativeChatOptimisticSendOutcome } from './native-chat-composer-types'
 import {
   answerNativeChatCommandInComposer,
