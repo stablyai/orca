@@ -17,7 +17,7 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 const STRUCTURED_AGENT_SESSION_DELIVERY_SENDING: NativeChatDeliveryNotice = { sending: true }
 const NO_COMMANDS: ReadonlySet<string> = new Set()
 
-/** Show sending until provider acknowledgement, then any host-worded rejection. */
+/** Published delivery decides notices; an echo keeps sending until its host row arrives. */
 export function structuredAgentSessionDeliveryNotices(args: {
   pending: readonly StructuredAgentSessionPendingSend[]
   submissions: readonly AgentJournalSubmission[]
@@ -30,17 +30,16 @@ export function structuredAgentSessionDeliveryNotices(args: {
   // A row under the id is the host's to describe, before the sender settles from it.
   const recorded = new Set(submissions.map((submission) => submission.clientMessageId))
   for (const entry of args.pending) {
-    if (entry.phase === 'sending' && !recorded.has(entry.clientMessageId)) {
+    if (!recorded.has(entry.clientMessageId)) {
       notices.set(
         agentJournalSubmissionKey(entry.clientMessageId),
         STRUCTURED_AGENT_SESSION_DELIVERY_SENDING
       )
     }
   }
-  const shown = structuredAgentSessionRejectedShownInPlace(
-    submissions,
-    args.commandItemIds ?? NO_COMMANDS
-  )
+  const shown = submissions.some((submission) => submission.dispatchState === 'rejected')
+    ? structuredAgentSessionRejectedShownInPlace(submissions, args.commandItemIds ?? NO_COMMANDS)
+    : new Set<string>()
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
     if (submission.dispatchState === 'pending') {
