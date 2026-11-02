@@ -31,7 +31,7 @@ import { opensClaudeParentConversation } from '@/lib/claude-agent-row-view'
 import { lineageAncestorPaneKeys } from './worktree-card-agent-lineage-disclosure'
 import {
   ChildAgentsWithIdleGroup,
-  collapsedChildAgentsSignalState
+  buildCollapsedChildAgentSignalStates
 } from './worktree-card-idle-child-agents'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
@@ -159,11 +159,13 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   )
 
   const now = useNow(30_000)
-  const { rootRows: rootAgents, childrenByParentPaneKey } = useMemo(
-    () => buildAgentRowLineageTree(agents),
-    [agents]
-  )
+  const lineageTree = useMemo(() => buildAgentRowLineageTree(agents), [agents])
+  const { rootRows: rootAgents, childrenByParentPaneKey } = lineageTree
   const hasLineage = childrenByParentPaneKey.size > 0
+  const collapsedChildAgentSignalStates = useMemo(
+    () => buildCollapsedChildAgentSignalStates(childrenByParentPaneKey),
+    [childrenByParentPaneKey]
+  )
   // Persist disclosure outside component state so virtualizer/sibling-triggered remounts cannot reset it.
   const {
     expandedLineageParents,
@@ -282,7 +284,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           childAgentsExpanded={expanded}
           collapsedChildAgentsState={
             hasChildAgents && !expanded
-              ? collapsedChildAgentsSignalState(childrenByParentPaneKey, agent.paneKey)
+              ? collapsedChildAgentSignalStates.get(agent.paneKey)
               : undefined
           }
           onToggleChildAgents={canToggle ? () => toggleLineageParent(agent.paneKey) : undefined}
@@ -345,7 +347,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           childAgentsExpanded={expanded}
           collapsedChildAgentsState={
             hasChildAgents && !expanded
-              ? collapsedChildAgentsSignalState(childrenByParentPaneKey, agent.paneKey)
+              ? collapsedChildAgentSignalStates.get(agent.paneKey)
               : undefined
           }
           onToggleChildAgents={canToggle ? () => toggleLineageParent(agent.paneKey) : undefined}

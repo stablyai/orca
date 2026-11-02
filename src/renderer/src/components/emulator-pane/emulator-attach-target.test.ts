@@ -10,7 +10,7 @@ function hostError(code: string): Error {
 describe('attachWithAvdFallback', () => {
   it('reboots a vanished emulator by its AVD name only when the host no longer finds its serial', async () => {
     const onRetarget = vi.fn()
-    const attachTo = vi.fn(async (device: string) => {
+    const attachTo = vi.fn(async (device?: string) => {
       if (device === 'emulator-5554') {
         throw hostError('emulator_device_not_found')
       }
