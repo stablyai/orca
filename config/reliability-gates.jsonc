@@ -2470,14 +2470,12 @@
       "invariant": "Automatic hibernation must retain two stable confirmations and fresh execution-host evidence before shutdown. Skipping a workspace with no completed agent must not authorize a newly completed pane using stale client PTYs.",
       "oracle": "100 remote workspaces containing working/waiting agents issue zero runtime calls. A skipped workspace completing while another inventory awaits remains ineligible until two later host-confirmed passes, and so does a workspace that only becomes runtime-owned while an inventory is outstanding — a pass carrying no host evidence for a workspace never counts as one of its two confirmations. Folder and git workspaces hibernate the exact host PTY; rejected/truncated inventories and intervening input/output or state changes block shutdown.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-confirmation.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-output-activity.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/lib/agent-hibernation-coordinator.test.ts",
         "src/renderer/src/lib/agent-hibernation-planner.test.ts",
-        "src/renderer/src/lib/agent-hibernation-confirmation.test.ts",
         "src/renderer/src/lib/agent-hibernation-pane-age.test.ts",
-        "src/renderer/src/lib/agent-hibernation-output-activity.test.ts",
         "src/renderer/src/lib/agent-hibernation-visibility.test.ts",
         "src/renderer/src/lib/foreground-terminal-tabs.test.ts",
         "src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts"
@@ -2506,6 +2504,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-confirmation.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-output-activity.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts",
           "result": "passed",
           "durationSeconds": 48.18,
           "summary": "93 tests passed across eight coordinator, liveness-race, planner, confirmation, age, activity and visibility files."

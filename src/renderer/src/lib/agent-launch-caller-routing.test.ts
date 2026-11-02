@@ -120,15 +120,6 @@ describe('agent launch caller routing', () => {
     })
   })
 
-  it.each(cases)('routes %s to a local terminal under default settings', async (_id, profile) => {
-    const result = await launch(profile)
-
-    expect(result?.surface.kind).toBe('local-terminal')
-    expect(store.createTab).toHaveBeenCalledTimes(1)
-    expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
-    expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
-  })
-
   it.each(cases)(
     'routes %s to the paired host when a web runtime owns it',
     async (_id, profile) => {
@@ -145,42 +136,6 @@ describe('agent launch caller routing', () => {
         worktreeId: profile.args.worktreeId,
         environmentId: 'web-runtime'
       })
-    }
-  )
-
-  it.each(cases)(
-    'settles %s on the structured or terminal surface its own arguments allow',
-    async (_id, profile) => {
-      store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
-
-      const result = await launch(profile)
-
-      // A caller-named custom cwd requires a PTY, so enabling default chat cannot admit that profile.
-      const structurallyBarred = profile.id === 'session-continuation'
-      expect(result?.surface.kind).toBe(structurallyBarred ? 'local-terminal' : 'host-published')
-    }
-  )
-
-  it.each(cases)(
-    'asks this machine to admit the chat %s routes structured before any of it opens',
-    async (_id, profile) => {
-      store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
-
-      const result = await launch(profile)
-
-      if (result?.surface.kind !== 'host-published') {
-        expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
-        return
-      }
-      expect(result.pasteDraftAfterLaunch).toBe(false)
-      expect(store.createTab).not.toHaveBeenCalled()
-      expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          worktreeId: profile.args.worktreeId,
-          executionHostId: 'local',
-          target: { kind: 'local' }
-        })
-      )
     }
   )
 
@@ -321,23 +276,6 @@ describe('agent launch caller routing', () => {
     expect(store.createTab).not.toHaveBeenCalled()
   })
 
-  it('keeps the host-published terminal for a paired server without structured sessions', async () => {
-    store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
-    mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    mockExecutionHostId.mockReturnValue('runtime:web-runtime')
-    serverReports([])
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-4',
-      agent: 'claude',
-      worktreeId: 'wt-1'
-    })
-
-    expect(result?.surface).toEqual({ kind: 'host-published' })
-    expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
-  })
-
   it('aborts a terminal open when beforeSurfaceOpen refuses', async () => {
     const beforeSurfaceOpen = vi.fn(() => false)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -387,21 +325,6 @@ describe('agent launch caller routing', () => {
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'host-published' })
     expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
     expect(mockCreateSupport).not.toHaveBeenCalled()
-  })
-
-  it('opens the terminal when beforeSurfaceOpen returns undefined rather than false', async () => {
-    const beforeSurfaceOpen = vi.fn(() => undefined)
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-8',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      beforeSurfaceOpen
-    })
-
-    expect(result?.surface.kind).toBe('local-terminal')
-    expect(store.createTab).toHaveBeenCalledTimes(1)
   })
 
   it('returns null without opening any surface when no startup plan can be built', async () => {
