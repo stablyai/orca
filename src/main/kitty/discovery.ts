@@ -3,7 +3,7 @@ import path from 'node:path'
 import { stat } from 'node:fs/promises'
 
 function expandHome(dir: string, home: string): string {
-  return dir === '~' || dir.startsWith('~/') ? path.posix.join(home, dir.slice(1)) : dir
+  return dir === '~' || dir.startsWith('~/') ? path.join(home, dir.slice(1)) : dir
 }
 
 // Kitty's ConfigDirForName order; Kitty has no Windows build, so only an explicit directory applies there.

@@ -3,7 +3,9 @@ import { readFile, stat } from 'node:fs/promises'
 // Bound config reads to avoid loading arbitrarily large files into main.
 export const MAX_CONFIG_BYTES = 1_000_000
 
-export type ConfigFileRead = { ok: true; content: string } | { ok: false; error: string }
+export type ConfigFileRead =
+  | { ok: true; content: string }
+  | { ok: false; error: string; missing?: boolean }
 
 export async function readConfigFile(configPath: string): Promise<ConfigFileRead> {
   try {
@@ -21,6 +23,11 @@ export async function readConfigFile(configPath: string): Promise<ConfigFileRead
     return { ok: true, content: await readFile(configPath, 'utf-8') }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not read config file'
-    return { ok: false, error: `Could not read config: ${message}` }
+    const missing = err instanceof Error && 'code' in err && err.code === 'ENOENT'
+    return {
+      ok: false,
+      error: `Could not read config: ${message}`,
+      ...(missing ? { missing } : {})
+    }
   }
 }

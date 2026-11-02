@@ -1,10 +1,12 @@
 import { platform } from 'node:os'
 import path from 'node:path'
-import { readdir, stat } from 'node:fs/promises'
+import { readdir, realpath, stat } from 'node:fs/promises'
 import { readConfigFile } from '../terminal-config-import/config-file-reader'
 
 // Includes can fan out through globs; bound how much one import may read.
 const MAX_INCLUDED_FILES = 64
+const MAX_GLOB_ENTRIES = 1_000
+const MAX_TOTAL_BYTES = 4_000_000
 const AUTO_THEME_FILES = [
   'dark-theme.auto.conf',
   'light-theme.auto.conf',
@@ -67,13 +69,14 @@ async function expandGlobInclude(pattern: string): Promise<string[] | null> {
   }
   const source = path
     .basename(pattern)
-    .replace(/[.+^${}()|\\]/g, '\\$&')
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
     .replaceAll('*', '.*')
     .replaceAll('?', '.')
   const nameRe = new RegExp(`^${source}$`)
   try {
     const names = await readdir(dir)
     return names
+      .slice(0, MAX_GLOB_ENTRIES)
       .filter((name) => nameRe.test(name))
       .sort()
       .map((name) => path.join(dir, name))
@@ -96,9 +99,11 @@ export async function loadKittyConfig(entryPath: string, home: string): Promise<
   const readPaths: string[] = []
   const seen = new Set<string>()
   let firstError: string | null = null
+  let totalBytes = 0
 
   async function loadFile(filePath: string): Promise<void> {
-    const key = path.normalize(filePath)
+    // Real paths stop symlinked directories from re-including the same files.
+    const key = await realpath(filePath).catch(() => path.normalize(filePath))
     if (seen.has(key)) {
       return
     }
@@ -110,9 +115,15 @@ export async function loadKittyConfig(entryPath: string, home: string): Promise<
     const read = await readConfigFile(filePath)
     if (!read.ok) {
       firstError ??= read.error
-      if (readPaths.length > 0) {
-        unsupportedKeys.add(`include (${path.basename(filePath)}: ${read.error})`)
+      // Kitty skips missing includes silently; other failures are worth surfacing.
+      if (readPaths.length > 0 && !read.missing) {
+        unsupportedKeys.add(`include (${path.basename(filePath)} could not be read)`)
       }
+      return
+    }
+    totalBytes += read.content.length
+    if (totalBytes > MAX_TOTAL_BYTES) {
+      unsupportedKeys.add(`include (more than ${MAX_TOTAL_BYTES} bytes in total)`)
       return
     }
     readPaths.push(filePath)

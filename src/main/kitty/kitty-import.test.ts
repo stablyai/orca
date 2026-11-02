@@ -67,7 +67,8 @@ describe('Kitty config import', () => {
       ['font_family', 'monospace'],
       ['cursor_text_color', 'background'],
       ['cursor_shape', 'hollow'],
-      ['macos_option_as_alt', 'left']
+      ['macos_option_as_alt', 'left'],
+      ['constructor', '#ff0000']
     ])
     const { diff, unsupportedKeys } = mapKittyToOrca({ options, unsupportedKeys: [] }, false)
     expect(diff).toEqual({})
@@ -75,7 +76,8 @@ describe('Kitty config import', () => {
       'font_family',
       'cursor_text_color',
       'cursor_shape',
-      'macos_option_as_alt'
+      'macos_option_as_alt',
+      'constructor'
     ])
   })
 })

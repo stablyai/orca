@@ -6,33 +6,45 @@ import {
 } from '../../shared/terminal-custom-themes'
 import type { KittyConfig } from './parser'
 
-const COLOR_KEYS: Record<string, keyof TerminalColorOverrides> = {
-  foreground: 'foreground',
-  background: 'background',
-  cursor: 'cursor',
-  cursor_text_color: 'cursorAccent',
-  selection_foreground: 'selectionForeground',
-  selection_background: 'selectionBackground'
-}
+// Maps, not object literals, so option names like `constructor` cannot hit prototype keys.
+const COLOR_KEYS = new Map<string, keyof TerminalColorOverrides>([
+  ['foreground', 'foreground'],
+  ['background', 'background'],
+  ['cursor', 'cursor'],
+  ['cursor_text_color', 'cursorAccent'],
+  ['selection_foreground', 'selectionForeground'],
+  ['selection_background', 'selectionBackground'],
+  ...TERMINAL_ANSI_COLOR_KEYS.map((key, index): [string, keyof TerminalColorOverrides] => [
+    `color${index}`,
+    key
+  ])
+])
 
-const CURSOR_SHAPES: Record<string, GlobalSettings['terminalCursorStyle']> = {
-  block: 'block',
-  beam: 'bar',
-  underline: 'underline'
-}
+const CURSOR_SHAPES = new Map<string, GlobalSettings['terminalCursorStyle']>([
+  ['block', 'block'],
+  ['beam', 'bar'],
+  ['underline', 'underline']
+])
 
-const OPTION_AS_ALT: Record<string, GlobalSettings['terminalMacOptionAsAlt']> = {
-  yes: 'true',
-  both: 'true',
-  no: 'false',
-  none: 'false',
-  left: 'left',
-  right: 'right'
-}
+// Kitty lowercases these and accepts its usual boolean spellings for "both".
+const OPTION_AS_ALT = new Map<string, GlobalSettings['terminalMacOptionAsAlt']>([
+  ['y', 'true'],
+  ['yes', 'true'],
+  ['true', 'true'],
+  ['both', 'true'],
+  ['n', 'false'],
+  ['no', 'false'],
+  ['false', 'false'],
+  ['none', 'false'],
+  ['left', 'left'],
+  ['right', 'right']
+])
 
-function parseNumber(value: string): number | null {
-  const num = Number(value)
-  return value.trim() !== '' && Number.isFinite(num) ? num : null
+const DECIMAL_RE = /^-?\d+(?:\.\d+)?$/
+
+function parseNumber(value: string, min: number, max: number): number | null {
+  const num = DECIMAL_RE.test(value.trim()) ? Number(value) : Number.NaN
+  return num >= min && num <= max ? num : null
 }
 
 // `font_family` is a bare name or Kitty 0.36's `family="Name" style=...` spec; `monospace` means "system default".
@@ -44,8 +56,8 @@ function kittyFontFamily(value: string): string | null {
 
 // One value pads every side; two are vertical then horizontal; three are top, horizontal, bottom; four go clockwise from top.
 function kittyPadding(value: string): { x: number; y: number } | null {
-  const sides = value.split(/\s+/).map(parseNumber)
-  if (sides.length === 0 || sides.length > 4 || sides.some((side) => side === null || side < 0)) {
+  const sides = value.split(/\s+/).map((side) => parseNumber(side, 0, 512))
+  if (sides.length === 0 || sides.length > 4 || sides.some((side) => side === null)) {
     return null
   }
   const [top = 0, right = top, bottom = top, left = right] = sides.map((side) => side ?? 0)
@@ -59,8 +71,7 @@ function mapOption(
   diff: Partial<GlobalSettings>,
   colors: TerminalColorOverrides
 ): boolean {
-  const colorKey =
-    COLOR_KEYS[key] ?? TERMINAL_ANSI_COLOR_KEYS[Number(/^color(\d+)$/.exec(key)?.[1])]
+  const colorKey = COLOR_KEYS.get(key)
   if (colorKey) {
     const color = normalizeTerminalHexColor(value)
     if (color) {
@@ -77,29 +88,28 @@ function mapOption(
       return family !== null
     }
     case 'font_size': {
-      const size = parseNumber(value)
-      if (size !== null && size > 0) {
+      const size = parseNumber(value, 1, 200)
+      if (size !== null) {
         diff.terminalFontSize = size
       }
-      return size !== null && size > 0
+      return size !== null
     }
     case 'background_opacity': {
-      const opacity = parseNumber(value)
-      if (opacity !== null && opacity >= 0 && opacity <= 1) {
+      const opacity = parseNumber(value, 0, 1)
+      if (opacity !== null) {
         diff.terminalBackgroundOpacity = opacity
-        return true
       }
-      return false
+      return opacity !== null
     }
     case 'background_blur': {
-      const radius = parseNumber(value)
-      if (radius !== null && radius >= 0) {
+      const radius = parseNumber(value, 0, 512)
+      if (radius !== null) {
         diff.windowMaterial = radius > 0 ? 'blur' : 'translucent'
       }
-      return radius !== null && radius >= 0
+      return radius !== null
     }
     case 'cursor_shape': {
-      const style = CURSOR_SHAPES[value]
+      const style = CURSOR_SHAPES.get(value.toLowerCase())
       if (style) {
         diff.terminalCursorStyle = style
       }
@@ -107,7 +117,7 @@ function mapOption(
     }
     case 'cursor_blink_interval': {
       // The first token is seconds (0 disables, negative uses the OS rate); easing curves may follow.
-      const interval = parseNumber(value.split(/\s+/)[0] ?? '')
+      const interval = parseNumber(value.split(/\s+/)[0] ?? '', -1, 3600)
       if (interval !== null) {
         diff.terminalCursorBlink = interval !== 0
       }
@@ -122,7 +132,7 @@ function mapOption(
       return padding !== null
     }
     case 'macos_option_as_alt': {
-      const optionAsAlt = isMacOS ? OPTION_AS_ALT[value] : undefined
+      const optionAsAlt = isMacOS ? OPTION_AS_ALT.get(value.toLowerCase()) : undefined
       if (optionAsAlt) {
         diff.terminalMacOptionAsAlt = optionAsAlt
       }

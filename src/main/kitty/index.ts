@@ -15,7 +15,8 @@ const KITTY_IMPORTER: TerminalConfigImporter<KittyConfig> = {
   appName: 'Kitty',
   pickerTitle: () => translateMain('native.dialog.importKittyConfig', 'Import Kitty Config'),
   discover: findKittyConfigPaths,
-  load: (configPaths) => loadKittyConfig(configPaths[0] ?? '', homedir()),
+  // Kitty reads one kitty.conf; anything else arrives through its include directives.
+  load: ([entryPath = '']) => loadKittyConfig(entryPath, homedir()),
   map: async (config) => mapKittyToOrca(config, platform() === 'darwin')
 }
 
