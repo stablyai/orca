@@ -1,10 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import captures from './__fixtures__/declined-permission-hooks.json'
 import { normalizeHookPayload } from '../agent-hook-listener'
 import { createHookListenerState, clearPaneCacheState, movePaneCacheState } from './listener-state'
 import { makePaneKey } from '../stable-pane-id'
-import { invalidateRejectedClaudeHook } from './claude-permission-table'
+import * as PermissionTable from './claude-permission-table'
 import { markClaudeLeadTurnInterrupted } from './providers/claude-roster-state'
+
+// Count the reducer's correlation operations without production instrumentation; behavior is unchanged.
+vi.mock('./claude-permission-table', async (importOriginal) => {
+  const actual = await importOriginal<typeof PermissionTable>()
+  return {
+    ...actual,
+    sameClaudeCall: vi.fn(actual.sameClaudeCall),
+    admitClaudeCall: vi.fn(actual.admitClaudeCall),
+    retireClaudePermissions: vi.fn(actual.retireClaudePermissions)
+  }
+})
 
 const pane = makePaneKey('permission', '11111111-1111-4111-8111-111111111111')
 const session = '11111111-1111-4111-8111-111111111111'
@@ -182,7 +193,7 @@ describe('Claude permission lifetime', () => {
     send('SessionStart', { source: 'resume' })
     send('PreToolUse', { ...request, tool_use_id: 'read' })
     send('PermissionRequest', request)
-    invalidateRejectedClaudeHook(state, { 'x-orca-pane-key': pane })
+    PermissionTable.invalidateRejectedClaudeHook(state, { 'x-orca-pane-key': pane })
     expect(
       send('PreToolUse', {
         tool_name: 'Bash',
@@ -322,6 +333,64 @@ describe('Claude permission lifetime', () => {
     const ended = send('Stop', { background_tasks: [] })
     expect(ended?.payload.state).toBe('done')
     expect(ended?.claudePermissionState?.pending).toBeUndefined()
+  })
+
+  it('keeps per-event correlation work and retained state bounded from N to 10N completed calls and inventory entries', () => {
+    const spies = {
+      compare: vi.mocked(PermissionTable.sameClaudeCall),
+      admit: vi.mocked(PermissionTable.admitClaudeCall),
+      retire: vi.mocked(PermissionTable.retireClaudePermissions)
+    }
+    const count = (run: () => void) => {
+      Object.values(spies).forEach((spy) => spy.mockClear())
+      run()
+      return Object.fromEntries(
+        Object.entries(spies).map(([name, spy]) => [name, spy.mock.calls.length])
+      )
+    }
+    const measure = (n: number) => {
+      const { state, send } = harness()
+      const complete = (prompt_id: string) => {
+        for (let i = 0; i < n / 2; i++) {
+          const tool = { tool_name: 'Bash', tool_input: { command: `echo ${i}` }, prompt_id }
+          send('PreToolUse', { ...tool, tool_use_id: `${prompt_id}-${i}` })
+          send('PostToolUse', { ...tool, tool_use_id: `${prompt_id}-${i}` })
+        }
+      }
+      send('UserPromptSubmit', { prompt: 'Earlier', prompt_id: 'earlier' })
+      complete('earlier')
+      send('Stop', { prompt_id: 'earlier' })
+      send('UserPromptSubmit', { prompt: 'Current', prompt_id: 'current' })
+      complete('current')
+      const probe = { ...request, prompt_id: 'current' }
+      const siblings = [1, 2, 3].map((i) => ({ ...request, tool_use_id: `sibling-${i}` }))
+      const correlation = count(() => {
+        send('PreToolUse', { ...probe, tool_use_id: 'probe' })
+        send('PermissionRequest', probe)
+        send('PostToolBatch', {
+          prompt_id: 'current',
+          tool_calls: [{ ...request, tool_use_id: 'probe' }, ...siblings]
+        })
+      })
+      const table = state.claudePermissionByPaneKey.get(pane)
+      const retained = { calls: table?.calls.size, pending: table?.pending.length }
+      const children = (status: string) =>
+        Array.from({ length: n }, (_, i) => ({ id: `agent-${i}`, type: 'subagent', status }))
+      send('Stop', { background_tasks: children('running') })
+      const inventory = count(() => send('Stop', { background_tasks: children('completed') }))
+      return { correlation, inventory, retained }
+    }
+    const small = measure(600)
+    const large = measure(6000)
+    for (const { retained } of [small, large]) {
+      expect(retained.calls).toBeLessThanOrEqual(512)
+      expect(retained.pending).toBe(0)
+    }
+    // Three probe hooks, each scanning at most the call cap plus the pending cap.
+    expect(large.correlation.compare).toBeLessThanOrEqual(3 * (512 + 64))
+    expect(large.correlation.compare).toBeLessThan(10 * small.correlation.compare)
+    expect(large.correlation.admit).toBe(small.correlation.admit)
+    expect(large.inventory).toEqual(small.inventory)
   })
 
   it('preserves the recorded Codex decline Interrupt and next-turn approval contract', () => {
