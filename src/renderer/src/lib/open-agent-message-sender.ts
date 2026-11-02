@@ -1,6 +1,7 @@
 // Open the sender through chat or terminal-handle routes; choose feedback from the answering host’s evidence, never the sender’s address shape.
 
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 import {
@@ -153,25 +154,41 @@ export async function openOrchestrationCrewAgent(
   row: OrchestrationCrewRow,
   host: RuntimeClientTarget
 ): Promise<void> {
-  const unavailable = (detail: string) => toast.error(`${row.label}: ${detail}`)
+  const unavailable = (detail: string) =>
+    toast.error(
+      translate('components.orchestrationCrew.openFailed', '{{name}}: {{detail}}', {
+        name: row.label,
+        detail
+      })
+    )
+  const terminalExited = () =>
+    unavailable(
+      translate('components.orchestrationCrew.terminalExited', 'This terminal has exited.')
+    )
   const target = row.openTarget
   // Lookups give the sender open's remedies, named for the row the user clicked.
   const feedback: StructuredSessionOpenFeedback =
     target?.kind === 'chat'
       ? {
-          unavailable: () => unavailable('This host cannot open the chat. Try again.'),
-          gone: () => unavailable('This chat is no longer on this host.'),
-          hostCannotOpen: () => unavailable('Update Orca to open this chat.')
+          unavailable: () =>
+            unavailable(
+              translate(
+                'components.orchestrationCrew.chatUnavailable',
+                'This host cannot open the chat. Try again.'
+              )
+            ),
+          gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
+          hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen())
         }
       : {
           unavailable: () => unavailable(structuredSessionOpenFeedbackText.unavailable()),
           hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
           gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
-          terminalGone: () => unavailable('This terminal has exited.')
+          terminalGone: terminalExited
         }
   const environmentId = host.kind === 'environment' ? host.environmentId : null
   const terminalFeedback = {
-    gone: () => unavailable('This terminal has exited.'),
+    gone: terminalExited,
     lookupFailure: (failure: LookupFailure) => showLookupFailure(failure, row.label, feedback)
   }
   try {
