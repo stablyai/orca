@@ -6,6 +6,11 @@ export class TerminalIdleCursorReset {
   private escapeState = ''
   private pending = false
 
+  /** xterm's open escape boundary across every write routed through processOutput. */
+  get parserEscape(): string {
+    return this.escapeState
+  }
+
   request(): string {
     this.pending = true
     return this.takeReadyReset()
