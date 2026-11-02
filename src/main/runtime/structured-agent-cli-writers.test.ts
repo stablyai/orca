@@ -143,22 +143,13 @@ describe('canonical status store conversation admission', () => {
   it('resolves panes only to leave some out, reading the terminals once', async () => {
     const run = async (count: number, closingPaneKeys: string[]) => {
       const visits = { count: 0 }
-      // Counts every terminal record a lookup walks, which is where a per-row scan would show.
-      const counted = <V>(map: Map<string, V>): Map<string, V> =>
-        new Proxy(map, {
-          get(target, prop) {
-            const value = Reflect.get(target, prop, target)
-            if (prop === 'keys' || prop === 'entries' || prop === Symbol.iterator) {
-              return function* () {
-                for (const item of value.call(target)) {
-                  visits.count += 1
-                  yield item
-                }
-              }
-            }
-            return typeof value === 'function' ? value.bind(target) : value
-          }
-        })
+      // Counts every terminal record a lookup reads: a scan of all terminals per row reads each one.
+      class CountedMap<V> extends Map<string, V> {
+        override get(key: string): V | undefined {
+          visits.count += 1
+          return super.get(key)
+        }
+      }
       const leafId = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pane lookup reads only leafId and ptyId.
       const leaf = (i: number) => ({ leafId: leafId(i), ptyId: `pty-${i}` }) as RuntimeLeafRecord
@@ -166,8 +157,12 @@ describe('canonical status store conversation admission', () => {
       const pty = (i: number) =>
         ({ ptyId: `pty-${i}`, connected: true }) as RuntimePtyWorktreeRecord
       const indices = Array.from({ length: count }, (_, i) => i)
-      const leaves = counted(new Map(indices.map((i) => [`tab-${i}::${leafId(i)}`, leaf(i)])))
-      const ptys = counted(new Map(indices.map((i) => [`pty-${i}`, pty(i)])))
+      const leaves = new CountedMap<RuntimeLeafRecord>(
+        indices.map((i) => [`tab-${i}::${leafId(i)}`, leaf(i)])
+      )
+      const ptys = new CountedMap<RuntimePtyWorktreeRecord>(
+        indices.map((i) => [`pty-${i}`, pty(i)])
+      )
       const capturePaneOf = () => (record: { ptyId: string }) => {
         const i = Number(record.ptyId.slice(4))
         return { tabId: `tab-${i}`, paneKey: `tab-${i}:${leafId(i)}`, recordedAtGraphSequence: 0 }
