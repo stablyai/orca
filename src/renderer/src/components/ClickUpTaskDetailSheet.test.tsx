@@ -128,7 +128,7 @@ describe('ClickUp task saves', () => {
     })
     resolveRefresh(refreshed)
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledWith('abc', refreshed, null))
-    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Renamed while saving')
+    expect(screen.getByLabelText<HTMLInputElement>('Name').value).toBe('Renamed while saving')
     expect(onTaskChanged).not.toHaveBeenCalled()
   })
 
@@ -239,9 +239,9 @@ describe('ClickUp comment draft', () => {
     expect(box().value).toBe('second while pending')
     resolveComments([])
     await waitFor(() =>
-      expect(
-        (screen.getByRole('button', { name: 'Add comment' }) as HTMLButtonElement).disabled
-      ).toBe(false)
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Add comment' }).disabled).toBe(
+        false
+      )
     )
   })
 

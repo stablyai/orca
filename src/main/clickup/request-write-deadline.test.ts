@@ -13,10 +13,10 @@ import { noteClickUpRateLimitHeaders, resetClickUpRateLimitStateForTests } from 
 import { clickUpRequest } from './request'
 
 const NOW = Date.UTC(2026, 9, 29, 9, 0, 0)
-const client = {
+const client: Parameters<typeof clickUpRequest>[0] = {
   token: 'pk_test',
   workspace: { id: 'team-1', name: 'Team' }
-} as Parameters<typeof clickUpRequest>[0]
+}
 
 describe('ClickUp write queue deadline', () => {
   beforeEach(() => {

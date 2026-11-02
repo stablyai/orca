@@ -157,15 +157,13 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     [selectedRepos.length]
   )
   const nextModel = model as typeof model & {
-    clickUpWorkspaceName: string | null
     taskSourceAvailabilityNoticeByProvider: typeof taskSourceAvailabilityNoticeByProvider
     taskSourceAvailabilityNotice: typeof taskSourceAvailabilityNotice
     githubEmptyState: typeof githubEmptyState
   }
-  nextModel.clickUpWorkspaceName = clickUpWorkspaceName
   nextModel.taskSourceAvailabilityNoticeByProvider = taskSourceAvailabilityNoticeByProvider
   nextModel.taskSourceAvailabilityNotice = taskSourceAvailabilityNotice
   nextModel.githubEmptyState = githubEmptyState
-  return nextModel
+  return Object.assign(nextModel, { clickUpWorkspaceName })
 }
 export type TaskPageSourceSummaryModel = ReturnType<typeof useTaskPageSourceSummary>
