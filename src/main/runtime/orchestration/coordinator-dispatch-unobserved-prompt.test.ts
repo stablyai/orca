@@ -101,6 +101,21 @@ describe('coordinator dispatch with an unobserved prompt', () => {
     expect(runtime.prompts[0]).toContain('Your worktree path is: /tmp/coordinator-worktree')
   })
 
+  it('does not create a dispatch when the worktree selector cannot be resolved', async () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })
+    const runtime = createRuntime(null)
+    runtime.showManagedWorktree = async () => {
+      throw new Error('selector_not_found')
+    }
+
+    await expect(dispatch(runtime, task.id, [], 'id:missing')).rejects.toThrow('selector_not_found')
+
+    expect(runtime.prompts).toEqual([])
+    expect(db.getDispatchContext(task.id)).toBeUndefined()
+    expect(db.getTask(task.id)?.status).toBe('ready')
+  })
+
   it('lets a late worker report settle a dispatch whose prompt was unobserved', async () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })

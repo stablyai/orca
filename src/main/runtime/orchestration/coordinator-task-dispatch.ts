@@ -20,11 +20,7 @@ async function resolveDispatchWorktreePath(
   if (!worktree || !runtime.showManagedWorktree) {
     return undefined
   }
-  try {
-    return (await runtime.showManagedWorktree(worktree)).path
-  } catch {
-    return undefined
-  }
+  return (await runtime.showManagedWorktree(worktree)).path
 }
 
 /** The pane, process and host a Dispatch to `handle` records; the census reads the same. */
@@ -99,6 +95,9 @@ export async function dispatchTaskToWorker(params: {
     return 'stale-base-refused'
   }
 
+  // Why: resolve the selector before creating a dispatch context so a missing or stale selector
+  // cannot send a worker back to an unspecified checkout with a misleading preamble.
+  const worktreePath = await resolveDispatchWorktreePath(runtime, params.worktree)
   const dispatch = db.createDispatchContext({
     taskId: task.id,
     assigneeHandle: targetHandle,
@@ -107,8 +106,6 @@ export async function dispatchTaskToWorker(params: {
     creator: { kind: 'system' },
     maxDepth: params.nestedWorkerMaxDepth
   })
-  const worktreePath = await resolveDispatchWorktreePath(runtime, params.worktree)
-
   // Dev workers need orca-dev to reach the dev socket.
   const preamble = buildDispatchPreamble({
     taskId: task.id,
