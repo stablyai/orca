@@ -20,6 +20,7 @@ import {
   structuredAgentSessionSendSelection
 } from '../../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { firstFrameOptionState } from '@/components/native-chat/structured-agent-session-option-first-frame'
+import { SETUP_LINKED_CREATE_BUDGET_MS } from '@/components/native-chat/structured-agent-session-send-runtime'
 import {
   applyStructuredLaunchHeldOptions,
   applyStructuredLaunchExplicitOptions,
@@ -54,7 +55,11 @@ export function prepareStructuredLaunchCreateMessage(
     notifyStructuredLaunchListeners()
     return
   }
-  const firstMessage = prepareStructuredLaunchPromptForCreate(intent.sessionId, intent.target)
+  const firstMessage = prepareStructuredLaunchPromptForCreate(
+    intent.sessionId,
+    intent.target,
+    intent.params.afterWorktreeSetup ? SETUP_LINKED_CREATE_BUDGET_MS : undefined
+  )
   const { options: requested, selection } = structuredLaunchCreateOptions(state)
   const options =
     requested && state.selection.explicit && !optionsMode

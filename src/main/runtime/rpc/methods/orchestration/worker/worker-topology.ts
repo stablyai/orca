@@ -4,6 +4,7 @@ import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/nati
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { SetupRun } from '../../../../setup/setup-run'
 import { createStructuredWorkerSession } from '../../orchestration-structured-worker-session'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 
@@ -136,6 +137,20 @@ export function applyWaitForSetupOutcome(
   const setupEffect = effects.find((effect) => effect.kind === 'setup')
   if (setupEffect) {
     setupEffect.state = receipt.state
+  }
+}
+
+/** A structured worker's setup evidence is its run's own result; an unsettled run stays running. */
+export function applySetupRunOutcome(
+  receipt: WorkerSetupReceipt,
+  effects: WorkerEffect[],
+  run: SetupRun
+): void {
+  if (run.result) {
+    applyWaitForSetupOutcome(receipt, effects, {
+      satisfied: run.result.kind === 'succeeded',
+      status: 'exited'
+    })
   }
 }
 

@@ -1,4 +1,5 @@
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../../../shared/setup-agent-sequencing'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionWriteNoticeParts,
@@ -21,6 +22,8 @@ import {
 } from './structured-agent-session-pending-sends'
 
 export const STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS = 30_000
+/** A create linked to required setup answers only once setup ends: its host's deadline plus grace. */
+export const SETUP_LINKED_CREATE_BUDGET_MS = (DEFAULT_WAIT_TIMEOUT_SECONDS + 60) * 1000
 
 export type StructuredAgentSessionSendOutcome = 'recorded' | 'returned' | 'unconfirmed' | 'dropped'
 

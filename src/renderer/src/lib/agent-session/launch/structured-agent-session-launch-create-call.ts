@@ -1,4 +1,4 @@
-import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../../../../shared/setup-agent-sequencing'
+import { SETUP_LINKED_CREATE_BUDGET_MS } from '@/components/native-chat/structured-agent-session-send-runtime'
 import { AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
 import type {
   AgentSessionAttachResult,
@@ -157,9 +157,7 @@ export async function launchStructuredAgentSession(
       intent.target,
       'agentSession.create',
       params,
-      ...(params.afterWorktreeSetup
-        ? [{ timeoutMs: (DEFAULT_WAIT_TIMEOUT_SECONDS + 60) * 1000 }]
-        : [])
+      ...(params.afterWorktreeSetup ? [{ timeoutMs: SETUP_LINKED_CREATE_BUDGET_MS }] : [])
     )
   } catch (error) {
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)

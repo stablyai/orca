@@ -29,9 +29,13 @@ export function getTimeoutMsParam(params: unknown): unknown {
 export function resolveRuntimeMethodTimeoutMs(
   method: string,
   params: unknown,
-  requestTimeoutMs: number
+  requestTimeoutMs: number,
+  remote = false
 ): number {
+  // The local socket's host keepalives refresh the idle timeout through a required setup's wait;
+  // a paired runtime sends none, so its reply needs the whole setup deadline.
   if (
+    remote &&
     (method === 'agent.launch' || method === 'agent.launchReplay') &&
     typeof params === 'object' &&
     params !== null &&

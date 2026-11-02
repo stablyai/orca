@@ -195,7 +195,8 @@ describe('a fresh worker through the launch executor', () => {
     const f = fakes(run)
     const pending = place(f, { mode: STRUCTURED })
     const refused = expect(pending).rejects.toMatchObject({
-      setup: { state: 'failed' },
+      stage: 'setup_wait',
+      setup: { state: 'running' },
       cause: { outcome: { kind: 'ended', reason: 'deadline' } }
     })
     await vi.advanceTimersByTimeAsync(0)
@@ -205,6 +206,32 @@ describe('a fresh worker through the launch executor', () => {
     expect(structuredWorkerIdentities.list()).toEqual([])
     expect(run.result).toBeUndefined()
     run.settle({ kind: 'succeeded' })
+  })
+
+  it('reports a deadline after Setup succeeded as a readiness timeout with Setup succeeded', async () => {
+    vi.useFakeTimers()
+    const run = createSetupRun(true)
+    const f = fakes(run)
+    const support = Promise.withResolvers<{ supported: boolean }>()
+    f.runtime.getStructuredAgentSessionCreateSupport.mockReturnValueOnce(support.promise)
+    const failed = place(f, { mode: STRUCTURED }).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(59_999)
+    run.settle({ kind: 'succeeded' })
+    await vi.advanceTimersByTimeAsync(2)
+    support.resolve({ supported: true })
+    expect(await failed).toMatchObject({
+      stage: 'agent_readiness',
+      message: 'Agent did not become ready (timeout).',
+      setup: { state: 'succeeded' }
+    })
+    expect(f.effects.find((effect) => effect.kind === 'setup')?.state).toBe('succeeded')
+  })
+
+  it('leaves a terminal worker’s pending required Setup to its readiness wait', async () => {
+    const run = createSetupRun(true)
+    const placed = await place(fakes(run), { mode: TERMINAL })
+    expect(placed.setupReceipt.state).toBe('running')
+    run.settle({ kind: 'ended', reason: 'closed' })
   })
 
   it('fails a refused structured worker in an existing worktree instead of starting a terminal', async () => {

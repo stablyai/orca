@@ -281,7 +281,7 @@ export async function startLocalWorker(args: {
       runId: run.id,
       taskId: task.id,
       dispatchId: started.dispatch.id,
-      failedStage: error instanceof WorkerSetupGateError ? 'setup_wait' : failedStage,
+      failedStage: error instanceof WorkerSetupGateError ? error.stage : failedStage,
       error,
       setup:
         error instanceof WorkerSetupGateError

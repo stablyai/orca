@@ -107,16 +107,21 @@ export function structuredSessionNotices({
     onRetry: launch.retry,
     claudeSignIn
   })
+  // Setup's explanation says why the opening message came back; the send's own error would not.
+  const sessionErrorShown =
+    launch.failure?.code === 'agent_session_setup_not_completed' && launchNotice
+      ? null
+      : sessionError
   return [
     ...(hostPermission ? [hostPermission] : []),
     ...(availability ? [availability] : []),
-    ...(launchNotice && !sessionError ? [launchNotice] : []),
-    ...(sessionError
+    ...(launchNotice && !sessionErrorShown ? [launchNotice] : []),
+    ...(sessionErrorShown
       ? [
           {
             key: 'session',
             kind: 'error' as const,
-            text: sessionError,
+            text: sessionErrorShown,
             ...(launchNotice ? { action: launchNotice.action } : {})
           }
         ]

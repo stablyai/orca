@@ -94,7 +94,8 @@ export class RuntimeClient {
     options?: RuntimeCallOptions
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs =
-      options?.timeoutMs ?? resolveRuntimeMethodTimeoutMs(method, params, this.requestTimeoutMs)
+      options?.timeoutMs ??
+      resolveRuntimeMethodTimeoutMs(method, params, this.requestTimeoutMs, this.remote !== null)
     const orchestrationMutation = isOrchestrationMutation(method, params)
     const terminalPromptMutation = isTerminalPromptMutation(method, params)
     const legacyTerminalPrompt = options?.legacyTerminalPrompt === true && terminalPromptMutation

@@ -123,23 +123,37 @@ export async function awaitRequiredSetup(
   }
 }
 
+/** Settled results kept for late consumers; live runs are never evicted, since each ends by its own deadline. */
+const SETTLED_SETUP_RUN_HISTORY = 256
+
 export class SetupRunRegistry {
-  private readonly runs = new Map<string, SetupRun>()
+  private readonly live = new Map<string, SetupRun>()
+  private readonly settled = new Map<string, SetupRun>()
 
   readonly register = (worktreeId: string, run: SetupRun): void => {
-    this.runs.set(worktreeId, run)
-    if (this.runs.size > 256) {
-      const oldest = this.runs.keys().next().value
-      if (oldest !== undefined) {
-        this.forget(oldest)
+    this.settled.delete(worktreeId)
+    this.live.set(worktreeId, run)
+    run.onSettled(() => {
+      if (this.live.get(worktreeId) !== run) {
+        return
       }
-    }
+      this.live.delete(worktreeId)
+      this.settled.set(worktreeId, run)
+      if (this.settled.size > SETTLED_SETUP_RUN_HISTORY) {
+        const oldest = this.settled.keys().next().value
+        if (oldest !== undefined) {
+          this.settled.delete(oldest)
+        }
+      }
+    })
   }
 
-  readonly get = (worktreeId: string): SetupRun | undefined => this.runs.get(worktreeId)
+  readonly get = (worktreeId: string): SetupRun | undefined =>
+    this.live.get(worktreeId) ?? this.settled.get(worktreeId)
 
   readonly forget = (worktreeId: string): void => {
-    this.runs.get(worktreeId)?.settle({ kind: 'ended', reason: 'closed' })
-    this.runs.delete(worktreeId)
+    this.live.get(worktreeId)?.settle({ kind: 'ended', reason: 'closed' })
+    this.live.delete(worktreeId)
+    this.settled.delete(worktreeId)
   }
 }

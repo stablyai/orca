@@ -18,7 +18,10 @@ vi.mock('./worktree-creation-structured-session', () => ({
     primaryTabId: args.primaryTabId
   }))
 }))
-vi.mock('./worktree-creation-completion', () => ({ completeWorktreeCreation: vi.fn() }))
+vi.mock('./worktree-creation-completion', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  completeWorktreeCreation: vi.fn()
+}))
 
 const initialState = useAppStore.getState()
 registerWorktreeActivationReset()

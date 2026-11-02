@@ -1,4 +1,5 @@
 import { resolveRuntimeMethodTimeoutMs } from './runtime-request-timeout'
+import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../shared/setup-agent-sequencing'
 import { withCliAgentLaunchRecovery } from '../agent-launch-recovery'
 import { createServer, type Server } from 'node:net'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -73,6 +74,14 @@ describe('RuntimeClient orchestration recovery identity', () => {
     await expect(
       withCliAgentLaunchRecovery(Promise.reject(error), { operationId: 'launch', params: {} })
     ).rejects.toBe(error)
+  })
+
+  it('keeps the idle timeout for a local workspace launch, whose host keepalives refresh it', () => {
+    const launch = { agent: 'codex', target: { kind: 'create-worktree', create: {} } }
+    expect(resolveRuntimeMethodTimeoutMs('agent.launch', launch, 60_000)).toBe(60_000)
+    expect(resolveRuntimeMethodTimeoutMs('agent.launch', launch, 60_000, true)).toBe(
+      DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + 10_000
+    )
   })
 
   it('rejects a worker-start timeout whose client grace would overflow timers', () => {

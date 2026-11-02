@@ -115,6 +115,10 @@ export function trackLaunchSettlement(
         delete state.failure
       }
       if (error instanceof StructuredAgentSessionCreateRefusalError) {
+        // Setup's answer is the host's own: nothing was created, whatever a deadline guessed.
+        if (error.code === 'agent_session_setup_not_completed') {
+          state.visibilityUnknown = false
+        }
         settleStructuredLaunchRefusal(state)
       } else if (!state.visibilityUnknown) {
         settleStructuredLaunchCallers(state.callers, 'failed')

@@ -1,4 +1,4 @@
-import { awaitRequiredSetup } from '../setup/setup-run'
+import { awaitRequiredSetup, createSetupRun } from '../setup/setup-run'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { WorktreeCreate } from '../../../shared/rpc-contract/worktree-create-params'
@@ -218,4 +218,24 @@ it('retains completion emitted through runtime before the provider returns the n
   await expect(
     awaitRequiredSetup(runtime.getSetupRun(result.worktree.id), 'codex')
   ).resolves.toBeUndefined()
+})
+
+it('keeps a running required setup while 256 newer setups register and finish', async () => {
+  const runtime = new OrcaRuntimeService(
+    makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore
+  )
+  const slow = createSetupRun(true)
+  runtime.registerSetupRun('repo::slow', slow)
+  const waiting = awaitRequiredSetup(runtime.getSetupRun('repo::slow'), 'codex')
+  for (let index = 0; index < 256; index += 1) {
+    const later = createSetupRun(false)
+    runtime.registerSetupRun(`repo::later-${index}`, later)
+    later.settle({ kind: 'succeeded' })
+  }
+  slow.settle({ kind: 'succeeded' })
+  await expect(waiting).resolves.toBeUndefined()
+  expect(runtime.getSetupRun('repo::slow')).toBe(slow)
+  // Settled history stays bounded: the oldest finished run gives way.
+  expect(runtime.getSetupRun('repo::later-0')).toBeUndefined()
+  expect(runtime.getSetupRun('repo::later-255')).toBeDefined()
 })

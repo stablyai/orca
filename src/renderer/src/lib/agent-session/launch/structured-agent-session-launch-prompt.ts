@@ -149,7 +149,8 @@ export function prepareLegacyStructuredLaunchPrompts(sessionId: string): void {
 /** Transfers the first staged prompt to create, retaining the sender's deadline and bubble. */
 export function prepareStructuredLaunchPromptForCreate(
   sessionId: string,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  budgetMs?: number
 ): StructuredAgentSessionFirstMessage | undefined {
   const prompt = [...(staged.get(sessionId) ?? [])].find(
     (candidate) => !candidate.discarded && !candidate.delivery
@@ -158,7 +159,7 @@ export function prepareStructuredLaunchPromptForCreate(
     return undefined
   }
   prompt.createOwned = true
-  const sent = prompt.slot?.create(target)
+  const sent = prompt.slot?.create(target, budgetMs)
   prompt.createSend = sent ?? undefined
   prompt.delivery = sent
     ? sent.outcome.then((outcome) => {
