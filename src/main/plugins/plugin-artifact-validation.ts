@@ -181,7 +181,7 @@ async function assertExactPathSpelling(
       const actual = names.find((name) => name.toLowerCase() === lower)
       throw new Error(
         actual === undefined
-          ? `"${segment}" does not match its on-disk name`
+          ? `"${segment}" does not match its on-disk name (check case and Unicode normalization)`
           : `"${segment}" is spelled "${actual}" on disk; paths are case-sensitive on Linux`
       )
     }
