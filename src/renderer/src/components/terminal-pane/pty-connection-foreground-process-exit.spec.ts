@@ -1,3 +1,4 @@
+import type { connectPanePty } from './pty-connection'
 import { foregroundSemantics, createInitialStoreState } from './pty-connection-test-store-fixtures'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -58,7 +59,7 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
     ): Promise<{
       cacheKey: string
       pane: ReturnType<typeof createPane>
-      binding: { sampleForegroundAgentOnFocus: () => void }
+      binding: ReturnType<typeof connectPanePty>
       deps: ReturnType<typeof createDeps>
     }> {
       const { connectPanePty } = await import('./pty-connection')
@@ -97,7 +98,8 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
           })
         } else {
           mockStoreState.terminalLayoutsByTabId['tab-pty-mode-reset'] = {
-            root: { type: 'leaf', id: LEAF_1 },
+            root: { type: 'leaf', leafId: LEAF_1 },
+            expandedLeafId: null,
             activeLeafId: LEAF_1,
             ptyIdsByLeafId: { [LEAF_1]: 'replacement-pty' }
           }

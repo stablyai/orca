@@ -17,6 +17,9 @@ export class MeasuredAuthorityServer extends AgentHookServer {
 }
 
 export class MeasuredRuntime extends OrcaRuntimeService {
+  get measuredIdentitySource() {
+    return this.terminalIdentity
+  }
   get measuredPtys() {
     return this.ptysById
   }

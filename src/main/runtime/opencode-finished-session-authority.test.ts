@@ -366,7 +366,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
       pane.runtime.emitDaemonPtyTransientFact(pane.ptyId, { kind: 'command-finished', exitCode: 0 })
       expect(capture).toHaveBeenCalledTimes(1)
       if (mode === 'incarnation') {
-        original.incarnationId = 'replacement'
+        pane.runtime.measuredIdentitySource.setPtyIncarnationId(original, 'replacement')
       }
       if (mode === 'token') {
         original.launchToken = 'successor'
@@ -391,7 +391,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
         pane.runtime.advanceMeasuredLifecycle(pane.ptyId)
       }
       if (mode === 'replacement') {
-        ptys.delete(pane.ptyId)
+        pane.runtime.measuredIdentitySource.removePty(pane.ptyId)
         pane.runtime.registerPty(pane.ptyId, original.worktreeId, null, {
           ...parsePaneKey(pane.paneKey)!,
           incarnationId: 'replacement'
