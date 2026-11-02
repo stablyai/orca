@@ -1,4 +1,4 @@
-import { homedir } from 'node:os'
+import { claudeCompatibleConfigDir } from './claude-config-dir-pin'
 import { basename, extname, join, win32 } from 'node:path'
 import {
   buildManagedCommandHook,
@@ -51,7 +51,7 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
 export type NativeHookFormOptions = { execForm?: boolean }
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
-  return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
+  return join(configDir ?? claudeCompatibleConfigDir(settings.configDirName), 'settings.json')
 }
 
 export function getStatusLineScriptBaseName(settings = CLAUDE_HOOK_SETTINGS): string {
