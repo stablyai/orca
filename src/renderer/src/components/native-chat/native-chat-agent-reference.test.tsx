@@ -247,7 +247,9 @@ it('captures projected identity once for real typed-goal dispatch and Goal mode'
   const pane = editor('goals', '/goal Inspect ')
   act(() => {
     pane.input.setSelectionRange(pane.input.value.length, pane.input.value.length)
-    pane.input.insertAgentReferences!([first, second, first])
+    // A row Mention, then Mention all: the agent already in the draft is not added again.
+    pane.input.insertAgentReferences!([first])
+    pane.input.insertAgentReferences!([second, first])
     pane.editor.commands.insertContent(` ${token}`)
   })
   updateNativeChatComposerDraft(
