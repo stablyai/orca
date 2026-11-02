@@ -12,6 +12,10 @@ export const runtimeRepoListSchema = z
   .looseObject({ repos: salvagingArray(z.looseObject({ id: z.string() })) })
   .transform((reply) => reply.repos)
 
+export const sessionProjectNameSchema = z
+  .looseObject({ repo: z.looseObject({ displayName: z.string() }) })
+  .transform((reply) => reply.repo.displayName.trim())
+
 // Require the array before option construction spreads it; isMobileTuiAgent filters individual entries.
 export const detectedAgentsSchema = z.array(z.unknown())
 

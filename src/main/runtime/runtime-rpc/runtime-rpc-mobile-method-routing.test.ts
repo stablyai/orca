@@ -20,6 +20,11 @@ describe('mobile RPC method routing census', () => {
     expect(MOBILE_RPC_METHOD_ROUTES.get('status.get')).toBe('execution-host')
   })
 
+  it('reads session workspace and project names on the owning execution host', () => {
+    expect(MOBILE_RPC_METHOD_ROUTES.get('worktree.show')).toBe('execution-host')
+    expect(MOBILE_RPC_METHOD_ROUTES.get('repo.show')).toBe('execution-host')
+  })
+
   it('keeps discovery and explicit PATH refresh on the selected answering host', () => {
     expect(MOBILE_RPC_METHOD_ROUTES.get('preflight.detectAgents')).toBe('execution-host')
     expect(MOBILE_RPC_METHOD_ROUTES.get('preflight.refreshAgents')).toBe('execution-host')
