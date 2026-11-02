@@ -9,8 +9,7 @@ import {
 } from '@/lib/worktree-operation-route'
 import {
   createNativeChatTabOwnerSelector,
-  findNativeChatTabOwnerWorktreeId,
-  resolveNativeChatFileLinkContextForOwner
+  findNativeChatTabOwnerWorktreeId
 } from './native-chat-file-link'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
@@ -19,6 +18,7 @@ import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
 import { resolveOwner } from '@/lib/resolve-owner'
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
+import { firstRegisteredStructuredChatTab } from '@/lib/structured-chat-tab-index'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -50,13 +50,10 @@ type OwnerState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
-type RouteState = Omit<
-  OwnerState,
-  'tabsByWorktree' | 'unifiedTabsByWorktree' | 'structuredSessionLaunchDirectoryByTabId'
->
+type RouteState = Omit<OwnerState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>
 
-// Subscribe only to ownership inputs; derive context after Zustand filters unrelated updates.
-function selectNativeChatImageRouteState(state: AppState): RouteState {
+// Catalog routing is independent of the addressed launch pin and SSH generation.
+function selectNativeChatImageRouteState(state: AppState) {
   return {
     settings: state.settings,
     repos: state.repos,
@@ -68,8 +65,6 @@ function selectNativeChatImageRouteState(state: AppState): RouteState {
     runtimeEnvironments: state.runtimeEnvironments,
     runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
     removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
-    sshConnectionStates: state.sshConnectionStates,
-    sshStateByEnvironment: state.sshStateByEnvironment,
     activeWorktreeId: state.activeWorktreeId,
     activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
@@ -79,6 +74,8 @@ function selectNativeChatImageRouteState(state: AppState): RouteState {
 export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
   return {
     ...selectNativeChatImageRouteState(state),
+    sshConnectionStates: state.sshConnectionStates,
+    sshStateByEnvironment: state.sshStateByEnvironment,
     structuredSessionLaunchDirectoryByTabId: state.structuredSessionLaunchDirectoryByTabId,
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree
@@ -119,18 +116,25 @@ export function resolveNativeChatImageRuntimeContext(
 }
 
 export function resolveNativeChatImageRuntimeContextForOwner(
-  state: RouteState &
-    Pick<OwnerState, 'unifiedTabsByWorktree' | 'structuredSessionLaunchDirectoryByTabId'>,
+  state: RouteState & Pick<OwnerState, 'unifiedTabsByWorktree'>,
   tabId: string,
   owner: string | null
 ): NativeChatImageRuntimeContext {
-  const linkContext = resolveNativeChatFileLinkContextForOwner(state, tabId, owner)
-  if (!linkContext) {
+  return withSshExpectation(state, resolveNativeChatImageRouteContext(state, tabId, owner))
+}
+
+function resolveNativeChatImageRouteContext(
+  state: Omit<RouteState, 'sshConnectionStates' | 'sshStateByEnvironment'> &
+    Pick<OwnerState, 'unifiedTabsByWorktree'>,
+  tabId: string,
+  owner: string | null
+): NativeChatImageRuntimeContext {
+  if (!owner || !resolveNativeChatTabDirectory(state, tabId, owner)) {
     return null
   }
-  const routeResolution = isFloatingWorkspaceId(linkContext.worktreeId)
+  const routeResolution = isFloatingWorkspaceId(owner)
     ? FLOATING_WORKSPACE_ROUTE
-    : resolveWorktreeOperationRouteResult(state, linkContext.worktreeId)
+    : resolveWorktreeOperationRouteResult(state, owner)
   if (routeResolution.kind !== 'resolved') {
     return null
   }
@@ -141,18 +145,13 @@ export function resolveNativeChatImageRuntimeContextForOwner(
   if (!executionHostId) {
     return null
   }
-  const worktreePath = resolveNativeChatTabDirectory(
-    state,
-    tabId,
-    linkContext.worktreeId,
-    executionHostId
-  )
+  const worktreePath = resolveNativeChatTabDirectory(state, tabId, owner, executionHostId)
   if (!worktreePath) {
     return null
   }
   const match = resolveOwner(
     { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null },
-    { workspaceId: linkContext.worktreeId, hostId: executionHostId }
+    { workspaceId: owner, hostId: executionHostId }
   )
   const authority = match.kind === 'resolved' ? match.owner : undefined
   if (
@@ -169,19 +168,26 @@ export function resolveNativeChatImageRuntimeContextForOwner(
   }
   const context: RuntimeFileOperationArgs = {
     target: stableTargetForRoute(route.runtimeEnvironmentId),
-    worktreeId: linkContext.worktreeId,
+    worktreeId: owner,
     worktreePath,
     expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local'
   }
-  if (host.kind === 'ssh') {
+  return context
+}
+
+function withSshExpectation(
+  state: Pick<OwnerState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
+  context: NativeChatImageRuntimeContext
+): NativeChatImageRuntimeContext {
+  const host = parseExecutionHostId(context?.expectedExecutionHostId)
+  if (context && host?.kind === 'ssh') {
     try {
       const expectation = captureDirectSshMutationExpectation(
         state,
         host.targetId,
-        route.runtimeEnvironmentId
+        context.target.kind === 'environment' ? context.target.environmentId : null
       )
-      context.expectedSshTargetId = expectation.expectedSshTargetId
-      context.expectedSshConnectionGeneration = expectation.expectedSshConnectionGeneration
+      return { ...context, ...expectation }
     } catch {
       return null
     }
@@ -189,46 +195,49 @@ export function resolveNativeChatImageRuntimeContextForOwner(
   return context
 }
 
-/** Ordinary workspace directories need only the selected owner; floating also needs its tab list and pin. */
+/** Floating pins are addressed by both tab and session identity. */
 export function createNativeChatImageOwnerSelector(tabId: string) {
   const selectOwner = createNativeChatTabOwnerSelector(tabId)
   return (state: AppState) => {
     const owner = selectOwner(state)
+    const floatingTab =
+      owner && isFloatingWorkspaceId(owner)
+        ? firstRegisteredStructuredChatTab(state.unifiedTabsByWorktree[owner], tabId)
+        : undefined
     return {
       ...selectNativeChatImageRouteState(state),
       owner,
-      floatingTabs:
-        owner && isFloatingWorkspaceId(owner) && Object.hasOwn(state.unifiedTabsByWorktree, owner)
-          ? state.unifiedTabsByWorktree[owner]
-          : undefined,
-      // Why: the bridge publishes one pin per write, so the shared map would re-resolve every chat per pin.
-      launchDirectory: state.structuredSessionLaunchDirectoryByTabId[tabId]
+      floatingTab,
+      pin: floatingTab ? state.structuredSessionLaunchDirectoryByTabId[tabId] : undefined
     }
   }
 }
 
-/** Resolve inside the selector and keep an equal result's identity, so catalog/rank writes cannot rerender retained chats. */
+/** Keep equal resolved contexts stable without re-deriving routes for unrelated owner inputs. */
 export function createNativeChatImageRuntimeContextSelector(tabId: string) {
-  const selectOwnerState = createNativeChatImageOwnerSelector(tabId)
-  let ownerState: ReturnType<typeof selectOwnerState> | null = null
+  const selectOwner = createNativeChatImageOwnerSelector(tabId)
+  let previousInputs: ReturnType<typeof selectOwner> | undefined
+  let baseRoute: NativeChatImageRuntimeContext = null
   let context: NativeChatImageRuntimeContext = null
   return (state: AppState): NativeChatImageRuntimeContext => {
-    const next = selectOwnerState(state)
-    if (ownerState && shallow(ownerState, next)) {
-      return context
+    const ownerState = selectOwner(state)
+    if (!previousInputs || !shallow(previousInputs, ownerState)) {
+      previousInputs = ownerState
+      const unifiedTabsByWorktree =
+        ownerState.owner && ownerState.floatingTab
+          ? { [ownerState.owner]: [ownerState.floatingTab] }
+          : {}
+      baseRoute = resolveNativeChatImageRouteContext(
+        {
+          ...ownerState,
+          unifiedTabsByWorktree,
+          structuredSessionLaunchDirectoryByTabId: ownerState.pin ? { [tabId]: ownerState.pin } : {}
+        },
+        tabId,
+        ownerState.owner
+      )
     }
-    ownerState = next
-    // These views serve only the existing floating-directory predicate, never an owner index.
-    const unifiedTabsByWorktree =
-      next.owner && next.floatingTabs ? { [next.owner]: next.floatingTabs } : {}
-    const structuredSessionLaunchDirectoryByTabId = next.launchDirectory
-      ? { [tabId]: next.launchDirectory }
-      : {}
-    const resolved = resolveNativeChatImageRuntimeContextForOwner(
-      { ...next, unifiedTabsByWorktree, structuredSessionLaunchDirectoryByTabId },
-      tabId,
-      next.owner
-    )
+    const resolved = withSshExpectation(state, baseRoute)
     context = shallow(context, resolved) ? context : resolved
     return context
   }

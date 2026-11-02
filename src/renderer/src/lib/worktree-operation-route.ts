@@ -10,6 +10,7 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
+  findIndexedWorktrees,
   findIndexedRepoOwnerForHost,
   findIndexedWorktreeOwners,
   hasIndexedDetectedWorktree,
@@ -61,26 +62,6 @@ export type WorktreeOperationRouteState = Omit<FolderWorkspaceRuntimeOwnerState,
   removedRuntimeEnvironmentIds?: ReadonlySet<string>
 }
 
-/** Read repo AND detected catalogs: HUB owner provenance can be in either; missing it loses the required transport. */
-function ownerRecordsOnHost(
-  state: WorktreeOperationRouteState,
-  worktreeId: string,
-  executionHostId: ExecutionHostId
-): WorktreeOperationOwnerRecord[] {
-  const owners: WorktreeOperationOwnerRecord[] = []
-  for (const worktree of findIndexedWorktreeOwners(state.worktreesByRepo, worktreeId)) {
-    if (parseExecutionHostId(worktree.hostId)?.id === executionHostId) {
-      owners.push(worktree)
-    }
-  }
-  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
-    if (parseExecutionHostId(worktree.hostId)?.id === executionHostId) {
-      owners.push(worktree)
-    }
-  }
-  return owners
-}
-
 /** Active host selection proves identity, not transport. An SSH target can be proxied by a paired HUB; recover its runtime from matching owner rows (#11346). */
 function resolveActiveWorkspaceRouteResult(
   state: WorktreeOperationRouteState,
@@ -128,21 +109,57 @@ function isDirectListing(
   )
 }
 
+type HubOwners = { environmentIds: Set<string>; hasAmbiguousOwner: boolean }
+const NO_HUB_OWNERS: HubOwners = { environmentIds: new Set(), hasAmbiguousOwner: false }
+const hubOwnerIndexes = new WeakMap<
+  readonly WorktreeOperationOwnerRecord[],
+  {
+    known: readonly WorktreeOperationOwnerRecord[]
+    detected: readonly WorktreeOperationOwnerRecord[]
+    repos: WorktreeOperationRouteState['repos']
+    result: HubOwners
+  }
+>()
+
 function collectHubOwnerEnvironmentIds(
   state: WorktreeOperationRouteState,
   worktreeId: string,
   executionHostId: ExecutionHostId
-): { environmentIds: Set<string>; hasAmbiguousOwner: boolean } {
+): HubOwners {
+  const known = findIndexedWorktrees(state.worktreesByRepo, worktreeId, executionHostId)
+  const detected = findIndexedDetectedWorktrees(
+    state.detectedWorktreesByRepo,
+    worktreeId,
+    executionHostId
+  )
+  const rows = known.length ? known : detected
+  if (!rows.length) {
+    return NO_HUB_OWNERS
+  }
+  const cached = hubOwnerIndexes.get(rows)
+  if (
+    cached &&
+    cached.known === known &&
+    cached.detected === detected &&
+    cached.repos === state.repos
+  ) {
+    return cached.result
+  }
   const environmentIds = new Set<string>()
   let hasAmbiguousOwner = false
-  for (const owner of ownerRecordsOnHost(state, worktreeId, executionHostId)) {
-    const resolution = resolveExactWorktreeRoute(state, owner)
-    hasAmbiguousOwner ||= resolution.kind === 'ambiguous'
-    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
-      environmentIds.add(resolution.route.runtimeEnvironmentId)
+  // Both catalogs contribute every rival row; a singular owner lookup would lose ambiguity.
+  for (const owners of [known, detected]) {
+    for (const owner of owners) {
+      const resolution = resolveExactWorktreeRoute(state, owner)
+      hasAmbiguousOwner ||= resolution.kind === 'ambiguous'
+      if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
+        environmentIds.add(resolution.route.runtimeEnvironmentId)
+      }
     }
   }
-  return { environmentIds, hasAmbiguousOwner }
+  const result = { environmentIds, hasAmbiguousOwner }
+  hubOwnerIndexes.set(rows, { known, detected, repos: state.repos, result })
+  return result
 }
 
 // Authoritative SSH selection still needs HUB transport. Rival HUBs or contradictory transport rows remain ambiguous; dropping transport would use this app’s own SSH connection (review-5 #2).
@@ -272,11 +289,11 @@ function resolveOwnerRouteResult(
   // Every server row is stamped on arrival; focus cannot make an unstamped row remote.
   const savedRuntimes = state.runtimeEnvironments
   // A listed/detected worktree backed by an unstamped repo proves local identity, matching folder routing despite unrelated saved runtimes (#16733). Stamped rows routed above; a repo alone proves no worktree exists (#16841).
-  const localOwnerRoute = hasKnownWorktree
-    ? resolveUnstampedLocalWorktreeRoute(state, repoId)
-    : null
-  if (localOwnerRoute) {
-    return { kind: 'resolved', route: localOwnerRoute }
+  if (hasKnownWorktree && hasKnownRepo) {
+    return {
+      kind: 'resolved',
+      route: { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
+    }
   }
   // Why: no saved runtime can publish a remote ownerless row; otherwise current detected presence affirms identity under the stamped-writer invariant.
   const mayBeLegacyLocal =
@@ -289,17 +306,6 @@ function resolveOwnerRouteResult(
         route: { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
       }
     : { kind: 'missing' }
-}
-
-/** All repo rows reaching here predate owner projection (stamped rows routed above), so getRepoExecutionHostId resolves any existing row local. */
-function resolveUnstampedLocalWorktreeRoute(
-  state: WorktreeOperationRouteState,
-  repoId: string
-): WorktreeOperationRoute | null {
-  const hasUnstampedRepoRow = resolveIndexedRepoOwner(state.repos, repoId).kind !== 'missing'
-  return hasUnstampedRepoRow
-    ? { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
-    : null
 }
 
 /**

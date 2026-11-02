@@ -59,8 +59,7 @@ function openSession() {
   })
 }
 
-async function confirmResume() {
-  const session = openSession()
+async function confirmResume(session = openSession()) {
   fakes.linkOptions!.onHello({
     type: 'relay-hello',
     ok: true,
@@ -107,8 +106,11 @@ async function confirmResume() {
   return { session, confirmationRequest: request, capabilityRequest }
 }
 
-async function authenticateSession(capabilitySupported = true) {
-  const { session, confirmationRequest, capabilityRequest } = await confirmResume()
+async function authenticateSession(
+  capabilitySupported = true,
+  pendingSession?: ReturnType<typeof openSession>
+) {
+  const { session, confirmationRequest, capabilityRequest } = await confirmResume(pendingSession)
   expect(session.getState()).toBe('handshaking')
   fakes.linkOptions!.onText(
     JSON.stringify(
@@ -128,7 +130,9 @@ async function authenticateSession(capabilitySupported = true) {
     )
   )
   await vi.waitFor(() => expect(session.getState()).toBe('connected'))
-  fakes.sendText.mockClear()
+  if (!pendingSession) {
+    fakes.sendText.mockClear()
+  }
   return { session, confirmationRequest, capabilityRequest }
 }
 
@@ -313,6 +317,51 @@ describe('mobile relay RPC session', () => {
     expect(onBinaryFrame).toHaveBeenCalledWith(
       expect.objectContaining({ seq: 9, format: 'jpeg', image: new Uint8Array([1, 2, 3]) })
     )
+  })
+
+  it('keeps the configured connect default for omitted options and honors explicit timeouts', async () => {
+    vi.useFakeTimers()
+    const session = openSession()
+    const settled = vi.fn()
+    const pending = session.sendRequest('status.get').then(
+      (result) => {
+        settled(result)
+        return result
+      },
+      (error: unknown) => {
+        settled(error)
+        throw error
+      }
+    )
+    const short = session
+      .sendRequest('status.get', undefined, { timeoutMs: 5 })
+      .catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await short).toEqual(new Error('relay session connection timed out'))
+    expect(settled).not.toHaveBeenCalled()
+    expect(fakes.sendText).not.toHaveBeenCalled()
+
+    await authenticateSession(true, session)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fakes.sendText).toHaveBeenCalledTimes(3)
+    const request: { id: string; method: string } = JSON.parse(fakes.sendText.mock.calls[2]![0])
+    expect(request.method).toBe('status.get')
+    fakes.linkOptions!.onText(JSON.stringify({ id: request.id, ok: true, result: { ready: true } }))
+    await expect(pending).resolves.toEqual({ id: request.id, ok: true, result: { ready: true } })
+    expect(settled).toHaveBeenCalledOnce()
+    session.close()
+
+    fakes.sendText.mockClear()
+    const unconnected = openSession()
+    const expired = vi.fn()
+    const defaultWait = unconnected.sendRequest('status.get').catch(expired)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(expired).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    await defaultWait
+    expect(expired).toHaveBeenCalledExactlyOnceWith(new Error('relay session connection timed out'))
+    expect(fakes.sendText).not.toHaveBeenCalled()
+    unconnected.close()
   })
 
   it('rejects pending RPC work when the physical link fails', async () => {

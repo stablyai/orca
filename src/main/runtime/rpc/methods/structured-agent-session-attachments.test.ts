@@ -1,10 +1,22 @@
+import * as fs from 'node:fs/promises'
+import type { RpcResponse } from '../core'
+import { RUNTIME_CAPABILITIES as runtimeCapabilities } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
+import {
+  AttachmentTextSource,
+  ATTACHMENT_TEXT_BLOCK_BYTES,
+  type AttachmentTextRequest
+} from '../../../../shared/attachment-text-source'
+import { AttachmentTextViewport } from '../../../../shared/attachment-text-viewport'
+
 import '../unused-default-rpc-methods.test-fixture'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { RpcResponse } from '../core'
+
 import { RpcDispatcher } from '../dispatcher'
 
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
@@ -16,6 +28,16 @@ import {
   installStructuredHostStub,
   STRUCTURED_CLIENT
 } from './structured-agent-session-rpc.test-fixture'
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const original = await importOriginal<typeof fs>()
+  return {
+    ...original,
+    open: vi.fn(original.open),
+    stat: vi.fn(original.stat),
+    realpath: vi.fn(original.realpath)
+  }
+})
 
 let root: string
 let store: AgentSessionAttachmentStore
@@ -173,4 +195,143 @@ describe('agentSessionAttachment.*', () => {
       error: { message: expect.stringContaining('file_too_large') }
     })
   })
+})
+
+it('reads a committed text attachment through the registered mobile RPC and validates its complete snapshot', async () => {
+  const prefix = '\ufeffstart\r\nmiddle\rlast\n'
+  const bytes = Buffer.from(
+    [
+      prefix,
+      'a'.repeat(ATTACHMENT_TEXT_BLOCK_BYTES - Buffer.byteLength(prefix) - 1),
+      '\r\n',
+      'é🙂\r\n'.repeat(125_000),
+      'end'
+    ].join('')
+  )
+  const path = await uploadBytes('picked source.log', bytes)
+  let ranges = 0
+  const source = new AttachmentTextSource(path, async (request) => {
+    ranges++
+    const reply = await call('agentSessionAttachment.readTextChunk', request, {
+      ...CLIENT_A,
+      clientKind: 'mobile'
+    })
+    expect(isMobileE2EETextPayloadWithinLimit(JSON.stringify(reply))).toBe(true)
+    return result(reply)
+  })
+  expect(runtimeCapabilities).toContain(AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY)
+  expect(MOBILE_RPC_METHOD_ALLOWLIST.has('agentSessionAttachment.readTextChunk')).toBe(true)
+  await expect(store.readTextChunk({ path, offset: 0, length: 256 * 1024 + 1 })).rejects.toThrow()
+  await expect(
+    store.readTextChunk({ path: join(root, 'outside.txt'), offset: 0, length: 10 })
+  ).rejects.toThrow()
+  vi.mocked(fs.open).mockClear()
+  vi.mocked(fs.stat).mockClear()
+  vi.mocked(fs.realpath).mockClear()
+  expect((await source.block(0)).join('')).toMatch(/^\ufeffstart\nmiddle\nlast\n/)
+  expect((await source.block(1))[0]?.startsWith('é🙂')).toBe(true)
+  expect(await source.copyText()).toBe(bytes.toString('utf8'))
+  const saved: Uint8Array[] = []
+  for await (const chunk of source.bytes()) {
+    saved.push(chunk)
+  }
+  expect(Buffer.concat(saved)).toEqual(bytes)
+  expect(ranges).toBe(2 + 2 * Math.ceil(bytes.length / (256 * 1024)))
+  expect(fs.open).toHaveBeenCalledTimes(ranges)
+  expect(vi.mocked(fs.stat).mock.calls.length).toBeLessThanOrEqual(4 * ranges)
+  expect(vi.mocked(fs.realpath).mock.calls.length).toBeLessThanOrEqual(8 * ranges)
+  const snapshot = source.snapshot
+  await writeFile(path, Buffer.alloc(bytes.length, 97))
+  expect(
+    await call(
+      'agentSessionAttachment.readTextChunk',
+      { path, offset: 0, length: 10, expectedSnapshot: snapshot },
+      CLIENT_A
+    )
+  ).toMatchObject({ ok: false })
+  source.dispose()
+  {
+    const bytes = Buffer.from(
+      `\ufeff${'a'.repeat(ATTACHMENT_TEXT_BLOCK_BYTES - 4)}🙂é\r\n${'x'.repeat(25 * 1024 * 1024)}${'\n'.repeat(ATTACHMENT_TEXT_BLOCK_BYTES * 2)}TAIL`
+    )
+    const requests: AttachmentTextRequest[] = []
+    let hold: Promise<void> | undefined
+    let started = Promise.withResolvers<void>()
+    const path = await uploadBytes('scroll-source.log', bytes)
+    const source = new AttachmentTextSource(path, async (request) => {
+      requests.push(request)
+      started.resolve()
+      await hold
+      return result(
+        await call('agentSessionAttachment.readTextChunk', request, {
+          ...CLIENT_A,
+          clientKind: 'mobile'
+        })
+      )
+    })
+
+    const first = await source.block(0)
+    const pinnedSnapshot = source.snapshot
+    expect(requests).toHaveLength(1)
+    const second = await source.block(1)
+    expect(
+      (first.join('') + second.join('')).startsWith(
+        `\ufeff${'a'.repeat(ATTACHMENT_TEXT_BLOCK_BYTES - 4)}🙂é\n`
+      )
+    ).toBe(true)
+    await source.block(source.blockCount - 2)
+    await source.block(source.blockCount - 1)
+    expect(source.cachedBlock(0)).toBeUndefined()
+    expect(source.cachedBlock(1)).toBeUndefined()
+    const layout = new AttachmentTextViewport(source, 20, 600)
+    expect(layout.total).toBeLessThan(8_000_000)
+    const end = layout.rows(layout.total - 600)
+    expect(end.length).toBeLessThanOrEqual(256)
+    expect(end.at(-1)?.text).toBe('TAIL')
+    expect(end.every((row) => Array.from(row.text).length <= 256)).toBe(true)
+    // Evicted ranges remain reachable; viewport storms replace pending work rather than serially enqueuing it.
+    const release = Promise.withResolvers<void>()
+    hold = release.promise
+    started = Promise.withResolvers<void>()
+    const obsolete: unknown[] = [],
+      published: unknown[] = []
+    source.requestViewport([3], (error) => obsolete.push(error))
+    await started.promise
+    const before = requests.length
+    for (let block = 4; block < 104; block++) {
+      source.requestViewport([block], (error) => obsolete.push(error))
+    }
+    const ready = Promise.withResolvers<void>()
+    source.requestViewport([0, 1], (error) => {
+      published.push(error)
+      ready.resolve()
+    })
+    hold = undefined
+    release.resolve()
+    await ready.promise
+    expect(obsolete).toEqual([])
+    expect(published).toEqual([undefined])
+    expect(requests.length - before).toBe(2)
+    expect(source.cachedBlock(0)?.join('')).toBe(first.join(''))
+    expect(source.cachedBlock(1)?.join('')).toBe(second.join(''))
+    expect(requests.every((request) => request.length <= 16 * 1024)).toBe(true)
+    expect(requests.slice(1).every((request) => request.expectedSnapshot === pinnedSnapshot)).toBe(
+      true
+    )
+    const output: Uint8Array[] = []
+    for await (const chunk of source.bytes()) {
+      output.push(chunk)
+    }
+    expect(Buffer.concat(output).equals(bytes)).toBe(true)
+    await expect(source.copyText()).rejects.toThrow('too large')
+    started = Promise.withResolvers<void>()
+    const late = Promise.withResolvers<void>()
+    hold = late.promise
+    const pending = source.block(4)
+    await started.promise
+    source.dispose()
+    late.resolve()
+    await expect(pending).rejects.toThrow()
+    expect(source.cachedBlock(4)).toBeUndefined()
+  }
 })

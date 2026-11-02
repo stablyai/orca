@@ -1,3 +1,5 @@
+import { isCommittedChatAttachmentCandidate } from '../../../src/shared/native-chat-text-attachment-references'
+import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
@@ -11,6 +13,7 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
   hostId: string
   worktreeId: string
   worktreeName?: string
+  structuredAttachments?: boolean
   nativeChatSessionId: string | null
   activeHandleRef: MutableRefObject<string | null>
   terminalCwdRef: MutableRefObject<Map<string, string>>
@@ -40,6 +43,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getSessionTabs,
     hostId,
     nativeChatSessionId,
+    structuredAttachments,
     openBrowser,
     scheduleDelayedAction,
     reportChatTapFailure,
@@ -64,6 +68,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       getSessionTabs,
       hostId,
       nativeChatSessionId,
+      structuredAttachments,
       openBrowser,
       scheduleDelayedAction,
       reportChatTapFailure,
@@ -81,6 +86,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getSessionTabs,
     hostId,
     nativeChatSessionId,
+    structuredAttachments,
     openBrowser,
     router,
     scheduleDelayedAction,
@@ -133,6 +139,18 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
 
   const handleNativeChatFileTap = useCallback((pathText: string) => {
     const current = optionsRef.current
+    if (current.structuredAttachments && isCommittedChatAttachmentCandidate(pathText)) {
+      ++activationSeqRef.current
+      routerRef.current.push(
+        createMobileFilePreviewHref({
+          hostId: current.hostId,
+          worktreeId: current.worktreeId,
+          source: 'chatAttachment',
+          absolutePath: pathText
+        })
+      )
+      return
+    }
     const sourceTerminalHandle = current.activeHandleRef.current
     const nativeChatSessionId = current.nativeChatSessionId
     const nativeChatTabId = current.getActiveSessionTabId()
