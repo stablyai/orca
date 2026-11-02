@@ -3307,7 +3307,7 @@
       "providers": ["local", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "remote-runtime"],
-      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
+      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state. The test-value audit narrowed simulator-palette-search.test.ts to the recency tie, same-id host isolation, ambiguous legacy host rejection and oversized-input getter tripwire. Supplied timestamp, empty-query context ordering, host projection, alias/range, metadata matching, active-tab score, over-token/whitespace and malformed display-name fallback examples were removed. Their separate alarms are lost; retained candidate and activation contracts do not establish equivalent coverage. Historical run commands and results remain historical.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4965",
         "https://github.com/stablyai/orca/pull/15371"
@@ -3578,7 +3578,8 @@
         "The paired Electron simulator path seeds renderer state because remote web clients cannot launch a native emulator.",
         "The paired Electron journey proves a real host mirror stamp before injecting the same-id sibling state; it does not create the collision through the wire.",
         "Mixed-version behavior is covered by optional-field parsing and fail-closed legacy ambiguity, not a live old-client/new-host matrix.",
-        "The test-value audit removed the palette repository resolver examples and manual emulator local-provider routing assertion. Their historical alarms are no longer provided by these suites; the retained emulator cases cover narrower coordination boundaries. No equivalent coverage is claimed."
+        "The test-value audit removed the palette repository resolver examples and manual emulator local-provider routing assertion. Their historical alarms are no longer provided by these suites; the retained emulator cases cover narrower coordination boundaries. No equivalent coverage is claimed.",
+        "The test-value audit narrowed simulator-palette-search.test.ts to the recency tie, same-id host isolation, ambiguous legacy host rejection and oversized-input getter tripwire. Supplied timestamp, empty-query context ordering, host projection, alias/range, metadata matching, active-tab score, over-token/whitespace and malformed display-name fallback examples were removed. Their separate alarms are lost; retained candidate and activation contracts do not establish equivalent coverage. Historical run commands and results remain historical."
       ],
       "demotionRule": "Cannot promote if a same-id sibling tab duplicates, disappears, activates another host, or if ambiguous unstamped ownership is guessed."
     },
@@ -3599,7 +3600,7 @@
       "providers": ["orca-server", "direct-ssh"],
       "coveredPlatforms": ["macos", "linux", "windows"],
       "coveredProviders": ["orca-server", "direct-ssh"],
-      "coverageNotes": "A pinned exact-source harness runs the pre-#14352 reader and lifecycle service against baseline, affected-main, candidate, and fix-reverted stores. Platform-neutral tests cover store compatibility, user-cancellable cleanup, branch/ref adoption; audit885 removes the direct resume ownership predicate alarms. The direct-SSH provisioned-root Electron journey remains the live transport and destroy proof; this desktop sidecar is not mobile-facing and changes no RPC or remote wire payload. The test-value audit removed the renderer provisioned-root create-options suite. Its incomplete mode/SSH identity guard and create-option mapping alarms are no longer supplied; retained source-ref and lifecycle suites do not establish equivalent renderer guard coverage.",
+      "coverageNotes": "A pinned exact-source harness runs the pre-#14352 reader and lifecycle service against baseline, affected-main, candidate, and fix-reverted stores. Platform-neutral tests cover store compatibility, user-cancellable cleanup, branch/ref adoption; audit885 removes the direct resume ownership predicate alarms. The direct-SSH provisioned-root Electron journey remains the live transport and destroy proof; this desktop sidecar is not mobile-facing and changes no RPC or remote wire payload. The test-value audit removed the renderer provisioned-root create-options suite. Its two incomplete-identity rejection assertions are lost: one omitted workspaceRunContext and other identity fields, and one supplied the context but omitted ephemeralVmExpectedRefHead. The suite did not test successful option mapping. Retained source-ref and lifecycle suites do not establish equivalent renderer guard coverage.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4274",
         "https://github.com/stablyai/orca/pull/14352",
@@ -3755,7 +3756,7 @@
         "No packaged-build downgrade installer journey; the exact released source reader and service are executed in-process.",
         "The obsolete provisioned-root SSH adoption unit suite was retired; it no longer supplies branch/ref adoption evidence. Historical run commands and counts are preserved, and no replacement equivalence is claimed.",
         "Live Docker SSH evidence runs locally on macOS and in the changed-file PR E2E lane on Ubuntu; Windows desktop behavior is covered by the platform-neutral filesystem codec and package job.",
-        "The test-value audit removed the renderer provisioned-root create-options suite. Its incomplete mode/SSH identity guard and create-option mapping alarms are no longer supplied; retained source-ref and lifecycle suites do not establish equivalent renderer guard coverage."
+        "The test-value audit removed the renderer provisioned-root create-options suite. Its two incomplete-identity rejection assertions are lost: one omitted workspaceRunContext and other identity fields, and one supplied the context but omitted ephemeralVmExpectedRefHead. The suite did not test successful option mapping. Retained source-ref and lifecycle suites do not establish equivalent renderer guard coverage."
       ],
       "demotionRule": "Demote if a new write fails the pinned rollback reader, a downgrade lifecycle mutation is lost after re-upgrade, malformed/future metadata overwrites recoverable bytes, ordinary v1 bytes change, user stop cannot settle a destroy process tree, cleanup loses retry ownership, an unrecoverable context leaves a permanent hidden SSH registration, or the focused gate flakes without an identified harness defect."
     },
@@ -3947,7 +3948,7 @@
       "providers": ["local", "ssh", "paired-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "paired-runtime"],
-      "coverageNotes": "Deterministic store/controller tests cover local, direct-SSH, paired-runtime identity, folder workspaces, queue quiescence, stale route and connection-generation rejection, authoritative active-workspace projection, owner-derived IDs, drafts and editor maps, tab/group placement, exact watch replacement, change/delete/rename correlation, explicit save, autosave, collision refusal without activation reconciliation, provenance, and restart hot-exit persistence. Live headed/headless paired-runtime and post-establish Electron IPC remain uncollected.",
+      "coverageNotes": "Deterministic store/controller tests cover local, direct-SSH, paired-runtime identity, folder workspaces, queue quiescence, stale route and connection-generation rejection, authoritative active-workspace projection, owner-derived IDs, drafts and editor maps, tab/group placement, exact watch replacement, change/delete/rename correlation, explicit save, autosave, collision refusal without activation reconciliation, provenance, and restart hot-exit persistence. Live headed/headless paired-runtime and post-establish Electron IPC remain uncollected. The test-value audit removed the standalone runtime-workspace file-route suite. Its direct same-host sibling, folder-root, exact-SSH, outside-path and directory-routing alarms are lost. Retained editor lifecycle contracts do not establish equivalent selector coverage; historical run commands and results remain historical.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11304",
         "https://github.com/stablyai/orca/pull/11369"
@@ -3955,12 +3956,11 @@
       "invariant": "A restored absolute path owned by a same-host sibling workspace cannot read, save, watch, or persist until old saves drain, the exact route and host generations are revalidated, and one authoritative activation transaction installs the sibling owner, target projection, editor state, reconciliation, and first-activation terminal preparation; collisions and stale routes fail before activation preparation or reconciliation.",
       "oracle": "Hold an old-owner save in flight, start migration, then remove the sibling, change a folder root, or reconnect SSH and require owner migration to fail closed after quiescence. On a stable route require one coherent target-workspace projection, first-activation terminal generation preparation, destination authority for explicit save and autosave, exact watch replacement, destination-only change/delete/rename handling, owner-derived state rekeys, and hot-exit restart ownership. Seed an invalid destination tab/group model before a collision and require the target projection to remain byte-identical.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts src/renderer/src/lib/runtime-workspace-file-route.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts",
-        "src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts",
-        "src/renderer/src/lib/runtime-workspace-file-route.test.ts"
+        "src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts"
       ],
       "assertionRefs": [
         {
@@ -3979,12 +3979,6 @@
             "migration waits for the old save queue and routes later explicit and automatic saves through the destination worktree",
             "a removed sibling, changed folder root, or changed direct-SSH generation after quiescence rejects migration without changing ownership"
           ]
-        },
-        {
-          "file": "src/renderer/src/lib/runtime-workspace-file-route.test.ts",
-          "assertions": [
-            "same-host runtime, folder, local, and direct-SSH roots resolve without cross-host fallback"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -3995,7 +3989,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts src/renderer/src/lib/runtime-workspace-file-route.test.ts",
           "result": "passed",
           "durationSeconds": 3,
-          "summary": "Three deterministic files passed 20 lifecycle, stale-route, activation, ownership, host, collision, persistence, watch, and save tests."
+          "summary": "Three deterministic files passed 20 lifecycle, stale-route, activation, ownership, host, collision, persistence, watch, and save tests.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -4022,7 +4017,8 @@
       "knownGaps": [
         "Headed Electron post-establish IPC, paired headless, reconnect, and physical Windows/WSL journeys are uncollected.",
         "Cold many-repo main-process sibling discovery remains a separately measured follow-up.",
-        "Registered-workspace symlink policy remains inherited and unchanged."
+        "Registered-workspace symlink policy remains inherited and unchanged.",
+        "The test-value audit removed the standalone runtime-workspace file-route suite. Its direct same-host sibling, folder-root, exact-SSH, outside-path and directory-routing alarms are lost. Retained editor lifecycle contracts do not establish equivalent selector coverage; historical run commands and results remain historical."
       ],
       "demotionRule": "Keep experimental or demote if migration can race a save, retain source authority, fan out watches, lose dirty/editor state, accept an owner-generation change, merge a collision, or the focused contract flakes without a product or harness bug."
     },
@@ -10689,7 +10685,7 @@
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "remote-runtime", "ssh", "wsl"],
-      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project eligibility/owner capture/stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus separate paired Electron and web clients prove selected-runtime Add Project operations and disabled creation when the only listed host is blocked or unavailable; headless-server parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected. The static wrapper-rendering suite was removed during the low-value-test audit; its supplied-prop host-browser and control-visibility output assertions are no longer checked by that suite. This removal supplies no new runtime-routing evidence. The fake-React Clone hook unit suite was also retired: its captured-owner and same-ID sibling assertions no longer supply unit evidence. Historical run commands and counts remain historical; this retirement adds no runtime-routing, cross-platform, or mobile evidence.",
+      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project eligibility/owner capture/stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus separate paired Electron and web clients prove selected-runtime Add Project operations and disabled creation when the only listed host is blocked or unavailable; headless-server parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected. The static wrapper-rendering suite was removed during the low-value-test audit; its supplied-prop host-browser and control-visibility output assertions are no longer checked by that suite. This removal supplies no new runtime-routing evidence. The fake-React Clone hook unit suite was also retired: its captured-owner and same-ID sibling assertions no longer supply unit evidence. Historical run commands and counts remain historical; this retirement adds no runtime-routing, cross-platform, or mobile evidence. The test-value audit narrowed resolved-worktree-execution-host.test.ts to cache reuse and invalidation. Its direct hydrated-worktree, missing-folder, restored-owner, host-stamp and empty-runtime selection alarms are lost. Other routing and recovery suites do not establish equivalent selector coverage; historical run commands and results remain historical.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/9687",
         "https://linear.app/stably/issue/STA-4024/p1-paired-web-add-project-enables-unavailable-host-fallback-after-pr"
@@ -10970,7 +10966,8 @@
         "The exact journey is deterministic contract coverage, not a packaged Windows UI automation run.",
         "Browser/mobile handoff is covered through transient routing state and preload contracts, not a live phone browser session.",
         "The paired Add Project journey is macOS-only; native Windows was unavailable.",
-        "SSH and WSL Add Project ownership is deterministic store/controller coverage, not a live host journey."
+        "SSH and WSL Add Project ownership is deterministic store/controller coverage, not a live host journey.",
+        "The test-value audit narrowed resolved-worktree-execution-host.test.ts to cache reuse and invalidation. Its direct hydrated-worktree, missing-folder, restored-owner, host-stamp and empty-runtime selection alarms are lost. Other routing and recovery suites do not establish equivalent selector coverage; historical run commands and results remain historical."
       ],
       "demotionRule": "Demote or block release if any non-Advanced path mutates Active Server, if local reveal or Add Project depends on the durable default instead of captured workspace/host ownership, if an Add Project operation reaches a different host after it begins, or if transient host state survives restart."
     },
@@ -13282,7 +13279,7 @@
       "providers": ["ssh", "remote-runtime", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh", "remote-runtime"],
-      "coverageNotes": "Deterministic renderer coverage proves retained native and runtime SSH payloads are admitted through production routes only with valid complete authority, stale cleanup cannot unregister a replacement runtime terminal, direct SSH Git and folder panes keep their PTY bindings through disconnect and reconnect, one authority chain stops after two automatic attempts even when each timeout exceeds the rolling window, rejected acknowledgements mutate no store maps, and one shared exact attempt admits every concurrent split-pane spawn and reattach while preserving the first PTY as the tab fallback. A later sibling failure rotates the tab once, stale callbacks from the prior attempt mutate no state, split remount activity suppression is counted per leaf, primary PTY exit promotes a bound survivor or preserves an empty continuation gap for a late sibling, and primary, non-primary, or null-PTY detach preserves exact authority on both resulting tabs. Intentional pane disposal cancels its settlement timer without breaking StrictMode remount timeout ownership. A mounted remote-runtime terminal survives repeated transport partitions without changing PTY identity. A real encrypted-WebSocket oracle proves a successful reachability probe can replace a pre-ready shared-control socket without rejecting or duplicating the waiting RPC. Direct SSH coordinator tests cover immediate terminal finalization, hydration correction, damping, bounded retry, and telemetry non-interference. Client/server heartbeat tests cover timer suspension, socket generations fence stale callbacks, cold restored-terminal attachment retries, cached pixels remain unhealthy until authoritative replay, automatic retries stop after one minute, manual reconnect preserves the PTY, and pane closure releases recovery UI state. Current-transport recovery clears every error that transport surfaced without clearing or displaying a sibling pane's errors, while transport suppression, pane retention, and the rendered surface are independently bounded. Current macOS Electron journeys against an ephemeral Linux Docker SSH target cover exact-authority repo/worktree hydration, live terminal recovery after disconnect/reconnect, and eager six-terminal remount after renderer reload. A Windows remote-runtime smoke covers reachability and PTY round-trip. Multi-target live fanout, paired-close, WSL, and patched live partition journeys remain gaps.",
+      "coverageNotes": "Deterministic renderer coverage proves retained native and runtime SSH payloads are admitted through production routes only with valid complete authority, stale cleanup cannot unregister a replacement runtime terminal, direct SSH Git and folder panes keep their PTY bindings through disconnect and reconnect, one authority chain stops after two automatic attempts even when each timeout exceeds the rolling window, rejected acknowledgements mutate no store maps, and one shared exact attempt admits every concurrent split-pane spawn and reattach while preserving the first PTY as the tab fallback. A later sibling failure rotates the tab once, stale callbacks from the prior attempt mutate no state, split remount activity suppression is counted per leaf, primary PTY exit promotes a bound survivor or preserves an empty continuation gap for a late sibling, and primary, non-primary, or null-PTY detach preserves exact authority on both resulting tabs. Intentional pane disposal cancels its settlement timer without breaking StrictMode remount timeout ownership. A mounted remote-runtime terminal survives repeated transport partitions without changing PTY identity. A real encrypted-WebSocket oracle proves a successful reachability probe can replace a pre-ready shared-control socket without rejecting or duplicating the waiting RPC. Direct SSH coordinator tests cover immediate terminal finalization, hydration correction, damping, bounded retry, and telemetry non-interference. Client/server heartbeat tests cover timer suspension, socket generations fence stale callbacks, cold restored-terminal attachment retries, cached pixels remain unhealthy until authoritative replay, automatic retries stop after one minute, manual reconnect preserves the PTY, and pane closure releases recovery UI state. Current-transport recovery clears every error that transport surfaced without clearing or displaying a sibling pane's errors, while transport suppression, pane retention, and the rendered surface are independently bounded. Current macOS Electron journeys against an ephemeral Linux Docker SSH target cover exact-authority repo/worktree hydration, live terminal recovery after disconnect/reconnect, and eager six-terminal remount after renderer reload. A Windows remote-runtime smoke covers reachability and PTY round-trip. Multi-target live fanout, paired-close, WSL, and patched live partition journeys remain gaps. The test-value audit narrowed resolved-worktree-execution-host.test.ts to cache reuse and invalidation. Its direct hydrated-worktree, missing-folder, restored-owner, host-stamp and empty-runtime selection alarms are lost. Other routing and recovery suites do not establish equivalent selector coverage; historical run commands and results remain historical.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-3107",
         "https://github.com/stablyai/orca/pull/12664",
@@ -13688,7 +13685,8 @@
         "No paired-client close/non-interference journey was run for direct SSH reconnect; paired web clients intentionally remain outside coordinator ownership.",
         "WSL restore and direct SSH/WSL isolation remain inferred rather than directly covered.",
         "Linux and Windows desktop-client partition journeys using patched builds are not yet collected; the Windows smoke proves current reachability and PTY round-trip only.",
-        "Terminal-create recovery depends on providers authoritatively listing live terminal handles and worktree ownership; older runtimes do not advertise the capability and are never retried after an unknown outcome."
+        "Terminal-create recovery depends on providers authoritatively listing live terminal handles and worktree ownership; older runtimes do not advertise the capability and are never retried after an unknown outcome.",
+        "The test-value audit narrowed resolved-worktree-execution-host.test.ts to cache reuse and invalidation. Its direct hydrated-worktree, missing-folder, restored-owner, host-stamp and empty-runtime selection alarms are lost. Other routing and recovery suites do not establish equivalent selector coverage; historical run commands and results remain historical."
       ],
       "demotionRule": "Cannot promote if provider failure can close panes or if the oracle is screenshot-only."
     },
