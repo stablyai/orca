@@ -31,6 +31,17 @@ import {
   type PreparedPublicationPorts
 } from './prepared-terminal-publication'
 import { installPreparedPromptContinuation } from './prepared-terminal-prompt-delivery'
+import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+
+/** Publication never writes, kills or inspects a terminal; those members only satisfy the contract. */
+function controllerDouble(members: Partial<RuntimePtyController>): RuntimePtyController {
+  return {
+    write: () => false,
+    kill: () => false,
+    getForegroundProcess: async () => null,
+    ...members
+  }
+}
 
 vi.mock('../../../agent-hooks/managed-hook-owner-identity', async (importOriginal) => {
   const actual = await importOriginal<typeof HostIdentity>()
@@ -192,7 +203,7 @@ async function fixture(
     })
   )
   const ports: PreparedPublicationPorts = {
-    controller: {
+    controller: controllerDouble({
       preparedAgentLaunch: (request) => owner.handle(request),
       listProcesses: async () =>
         withSetup
@@ -207,7 +218,7 @@ async function fixture(
               }
             ]
           : []
-    },
+    }),
     store: { listOperationRows: () => [row], retirePreparedAgentLaunch: retire },
     createTerminal,
     placePrimary: vi.fn(async () => {}),
@@ -458,7 +469,7 @@ describe('prepared terminal publication recovery', () => {
       })
       const ports: PreparedPublicationPorts = {
         ...f.ports,
-        controller: { preparedAgentLaunch: probes },
+        controller: controllerDouble({ preparedAgentLaunch: probes }),
         store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
       }
       vi.useRealTimers()
@@ -495,7 +506,7 @@ describe('prepared terminal publication recovery', () => {
       )
       const ports: PreparedPublicationPorts = {
         ...f.ports,
-        controller: {
+        controller: controllerDouble({
           // One operation is answered by its own generation; the rest cannot reach it.
           preparedAgentLaunch: async (request) => {
             throw new Error(
@@ -504,7 +515,7 @@ describe('prepared terminal publication recovery', () => {
                 : 'agent_session_ownership_unknown'
             )
           }
-        },
+        }),
         store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
       }
       for (const pass of [1, 2]) {
@@ -553,11 +564,11 @@ describe('prepared terminal publication recovery', () => {
     const retire = vi.fn(async () => true)
     const ports: PreparedPublicationPorts = {
       ...f.ports,
-      controller: {
+      controller: controllerDouble({
         preparedAgentLaunch: async () => {
           throw reply.error
         }
-      },
+      }),
       store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
     }
     vi.useRealTimers()

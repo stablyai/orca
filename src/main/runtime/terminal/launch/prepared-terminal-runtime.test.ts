@@ -6,10 +6,23 @@ import type { InternalCreateOrAttachOptions } from '../../../daemon/terminal-hos
 import type { RawPtySpawnObserver } from '../../../daemon/pty-subprocess'
 import type { PreparedAgentLaunchDescriptor } from '../../../../shared/prepared-agent-launch'
 import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import { startPreparedWorktreeTerminals } from './prepared-worktree-terminal-start'
 import { OrcaRuntimeWithPreparedTerminals } from './prepared-terminal-runtime'
+import { forgetPreparedPromptContinuation } from './prepared-terminal-prompt-delivery'
+import { PreparedTerminalPendingError } from './prepared-terminal-pending'
 
 afterEach(() => vi.useRealTimers())
+
+/** The prepared path never writes, kills or inspects a terminal; those members only satisfy the contract. */
+function controllerDouble(members: Partial<RuntimePtyController>): RuntimePtyController {
+  return {
+    write: () => false,
+    kill: () => false,
+    getForegroundProcess: async () => null,
+    ...members
+  }
+}
 
 async function fixture() {
   vi.useFakeTimers({ now: 1_800_000_000_000 })
@@ -47,9 +60,9 @@ async function fixture() {
       }
     | undefined
   const ports = {
-    controller: {
+    controller: controllerDouble({
       preparedAgentLaunch: (request: Parameters<typeof owner.handle>[0]) => owner.handle(request)
-    },
+    }),
     store: {
       recordPreparedAgentLaunch: vi.fn(
         async (args: {
@@ -135,7 +148,19 @@ async function fixture() {
       runtime as never,
       identity
     )
-  return { owner, ports, create, notice, notifier, wait, setupObserver: () => setupObserver! }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start path reads only the record, retire and list members doubled above.
+  const startPorts = { ...ports, store: ports.store as never }
+  return {
+    owner,
+    ports,
+    startPorts,
+    runtime,
+    create,
+    notice,
+    notifier,
+    wait,
+    setupObserver: () => setupObserver!
+  }
 }
 
 describe('late prepared agent waiter', () => {
@@ -145,7 +170,7 @@ describe('late prepared agent waiter', () => {
       worktreeId: 'wt',
       targetKind: 'new-git',
       startupOptions: { command: 'codex', launchAgent: 'codex' },
-      ports: f.ports
+      ports: f.startPorts
     })
     // Provisioning the remaining configured tabs can finish after the automatic publication.
     await vi.advanceTimersByTimeAsync(0)
@@ -168,7 +193,7 @@ describe('late prepared agent waiter', () => {
       targetKind: 'new-git',
       startupOptions: { command: 'codex', launchAgent: 'codex' },
       prompts: { followup: { agent: 'codex', prompt: 'the complete task' } },
-      ports: f.ports
+      ports: f.startPorts
     })
     vi.useRealTimers()
     // A caller waiting while the creator still delivers joins it instead of reporting success.
@@ -210,7 +235,7 @@ describe('late prepared agent waiter', () => {
       // The task already rides in the command; the runtime passes an empty bundle beside it.
       startupOptions: { command: "codex 'the complete task'", launchAgent: 'codex' },
       prompts: {},
-      ports: f.ports
+      ports: f.startPorts
     })
     vi.useRealTimers()
     await vi.waitFor(() => expect(f.ports.createTerminal).toHaveBeenCalledOnce())
@@ -236,7 +261,7 @@ describe('late prepared agent waiter', () => {
         waitForAgentStartup: true
       },
       startupOptions: { command: 'codex', launchAgent: 'codex' },
-      ports: f.ports
+      ports: f.startPorts
     })
     const waiting = f.wait(started.pending)
     const outcome = expect(waiting).rejects.toThrow(
@@ -252,5 +277,71 @@ describe('late prepared agent waiter', () => {
     f.setupObserver().onData(`\n__ORCA_SETUP_COMPLETE__:x:0\n`)
     expect(f.create).toHaveBeenCalledTimes(1)
     expect(f.ports.store.retirePreparedAgentLaunch).toHaveBeenCalledOnce()
+  })
+
+  it('gives a waiter held before its join the recorded answer of a creator that wrote', async () => {
+    const f = await fixture()
+    const delivery = Promise.withResolvers<boolean>()
+    f.ports.deliverPrompts.mockReturnValueOnce(delivery.promise)
+    const started = await startPreparedWorktreeTerminals({
+      worktreeId: 'wt',
+      targetKind: 'new-git',
+      startupOptions: { command: 'codex', launchAgent: 'codex' },
+      prompts: { followup: { agent: 'codex', prompt: 'the complete task' } },
+      ports: f.startPorts
+    })
+    vi.useRealTimers()
+    await vi.waitFor(() => expect(f.ports.deliverPrompts).toHaveBeenCalledOnce())
+    // The waiter's own controller holds its acknowledgement, the step before it joins the creator.
+    const held = Promise.withResolvers<void>()
+    const acknowledging = Promise.withResolvers<void>()
+    f.runtime.ptyController = controllerDouble({
+      preparedAgentLaunch: async (request: Parameters<typeof f.owner.handle>[0]) => {
+        const reply = await f.owner.handle(request)
+        if (request.action === 'ackPublication') {
+          acknowledging.resolve()
+          await held.promise
+        }
+        return reply
+      }
+    })
+    const waiting = f.wait(started.pending)
+    await acknowledging.promise
+    // The creator writes, saves its answer and forgets its continuation before the waiter joins.
+    delivery.resolve(true)
+    await vi.waitFor(() =>
+      expect(f.ports.store.listOperationRows()[0]?.preparedLaunch).toBeUndefined()
+    )
+    held.resolve()
+    const terminal = await waiting
+    expect(terminal).toMatchObject({ handle: 'term_agent', ptyId: 'agent' })
+    expect(terminal.warning).toBeUndefined()
+    expect(f.ports.deliverPrompts).toHaveBeenCalledOnce()
+    expect(f.ports.notifyLaunchNotice).not.toHaveBeenCalled()
+    expect(f.notifier.preparedAgentLaunchNotice).not.toHaveBeenCalled()
+  })
+
+  it("keeps this main's own launch pending when neither its creator nor an answer remains", async () => {
+    const f = await fixture()
+    // The creator's publication fails, then its continuation is gone with no answer saved.
+    f.ports.createTerminal.mockRejectedValueOnce(new Error('attach failed'))
+    const started = await startPreparedWorktreeTerminals({
+      worktreeId: 'wt',
+      targetKind: 'new-git',
+      startupOptions: { command: 'codex', launchAgent: 'codex' },
+      prompts: { followup: { agent: 'codex', prompt: 'the complete task' } },
+      ports: f.startPorts
+    })
+    vi.useRealTimers()
+    await vi.waitFor(() => expect(f.ports.createTerminal).toHaveBeenCalledOnce())
+    await new Promise((resolve) => setImmediate(resolve))
+    forgetPreparedPromptContinuation(started.pending)
+
+    await expect(f.wait(started.pending)).rejects.toBeInstanceOf(PreparedTerminalPendingError)
+    // Neither success nor uncertainty is invented: the obligation stays and nothing is written.
+    expect(f.ports.store.listOperationRows()[0]?.preparedLaunch).toBeDefined()
+    expect(f.ports.deliverPrompts).not.toHaveBeenCalled()
+    expect(f.ports.notifyLaunchNotice).not.toHaveBeenCalled()
+    expect(f.notifier.preparedAgentLaunchNotice).not.toHaveBeenCalled()
   })
 })

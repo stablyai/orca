@@ -101,9 +101,9 @@ export function parsePreparedLaunchPublication(
   if (typeof value !== 'object' || value === null) {
     return undefined
   }
-  const launchConfig: unknown = Reflect.get(value, 'launchConfig')
-  const viewMode: unknown = Reflect.get(value, 'viewMode')
-  const launchToken: unknown = Reflect.get(value, 'launchToken')
+  const launchConfig = 'launchConfig' in value ? value.launchConfig : undefined
+  const viewMode = 'viewMode' in value ? value.viewMode : undefined
+  const launchToken = 'launchToken' in value ? value.launchToken : undefined
   return {
     ...(isSleepingAgentLaunchConfig(launchConfig) ? { launchConfig } : {}),
     ...(viewMode === 'chat' || viewMode === 'terminal' ? { viewMode } : {}),
@@ -112,12 +112,17 @@ export function parsePreparedLaunchPublication(
 }
 
 function isSleepingAgentLaunchConfig(value: unknown): value is SleepingAgentLaunchConfig {
-  if (typeof value !== 'object' || value === null) {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('agentArgs' in value) ||
+    !('agentEnv' in value)
+  ) {
     return false
   }
-  const agentEnv: unknown = Reflect.get(value, 'agentEnv')
+  const { agentArgs, agentEnv } = value
   return (
-    typeof Reflect.get(value, 'agentArgs') === 'string' &&
+    typeof agentArgs === 'string' &&
     typeof agentEnv === 'object' &&
     agentEnv !== null &&
     Object.values(agentEnv).every((entry) => typeof entry === 'string')

@@ -71,6 +71,51 @@ async function launchClaude(command: string | undefined) {
 }
 
 const PASTE = '\x1b[200~/review\nthis\x1b[201~'
+const INCARNATION_ID = 'prepared-claude-incarnation'
+
+/** Publishes a daemon-started Claude the way prepared publication attaches it. */
+async function attachPreparedClaude(preparedFirstPublication: boolean) {
+  const runtime = new OrcaRuntimeService(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial store double; terminal create and send read only its repo and worktree members.
+    makeStore() as never
+  )
+  const writes: string[] = []
+  runtime.setPtyController({
+    spawn: async (args) => {
+      // The pty host's commit registers first, restoring the daemon-owned agent identity.
+      runtime.registerPty(PTY_ID, args.worktreeId ?? '', null, {
+        tabId: args.tabId ?? '',
+        leafId: args.leafId ?? '',
+        incarnationId: INCARNATION_ID,
+        providerReattachLaunchIdentity: { incarnationId: INCARNATION_ID, launchAgent: 'claude' }
+      })
+      return { id: PTY_ID, incarnationId: INCARNATION_ID, isReattach: true, launchAgent: 'claude' }
+    },
+    write: (_ptyId, data) => {
+      writes.push(data)
+      return true
+    },
+    kill: () => true,
+    getForegroundProcess: async () => 'claude'
+  })
+  const { handle } = await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
+    sessionId: PTY_ID,
+    attachOnly: true,
+    expectedIncarnationId: INCARNATION_ID,
+    launchAgent: 'claude',
+    ...(preparedFirstPublication ? { preparedFirstPublication: true as const } : {})
+  })
+  vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
+  const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+  const send = (text: string) =>
+    dispatcher.dispatch({
+      id: 'rpc-send',
+      authToken: 'token',
+      method: 'terminal.send',
+      params: { terminal: handle, text, enter: true }
+    })
+  return { runtime, writes, send }
+}
 
 describe('terminal.send into a freshly launched Claude', () => {
   afterEach(() => vi.useRealTimers())
@@ -151,4 +196,33 @@ describe('terminal.send into a freshly launched Claude', () => {
       expect(writes).toEqual(['claude --resume abc', '\r'])
     }
   )
+})
+
+describe('terminal.send into a published prepared Claude', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('holds the submit after its first publication, as for a typed launch (#34580)', async () => {
+    vi.useFakeTimers()
+    const { runtime, writes, send } = await attachPreparedClaude(true)
+
+    const sending = send(PASTE)
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(writes).toEqual([])
+
+    runtime.onPtyData(PTY_ID, CLAUDE_COMPOSER_READY_OUTPUT, Date.now())
+    await vi.runAllTimersAsync()
+
+    await expect(sending).resolves.toMatchObject({ ok: true, result: { send: { accepted: true } } })
+    expect(writes).toEqual([PASTE, '\r'])
+  })
+
+  it('does not hold sends to a later reattachment of the same agent', async () => {
+    const { writes, send } = await attachPreparedClaude(false)
+
+    await expect(send(PASTE)).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: true } }
+    })
+    expect(writes).toEqual([PASTE, '\r'])
+  })
 })

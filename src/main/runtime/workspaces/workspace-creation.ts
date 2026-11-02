@@ -1,5 +1,5 @@
 import { worktreeCreateSetupReceipt } from '../runtime-worktree-create-setup-receipt'
-import { preparedWorktreeStart } from './prepared-worktree-start'
+import { preparedWorktreeStart, type PreparedStart } from './prepared-worktree-start'
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS,
@@ -34,6 +34,8 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { applyWorkspaceCreatePluginHook } from '../../plugins/hooks/workspace-create-plugin-hook'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
+  /** The prepared-terminal layer above implements it; a local create starts its agent there. */
+  abstract startSetupAgentTerminals(...args: Parameters<PreparedStart>): ReturnType<PreparedStart>
   protected abstract resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo

@@ -219,6 +219,8 @@ describe('worktree remote runtime mutations', () => {
       method: 'worktree.create',
       params: {
         repo: 'repo1',
+        // Opt-in only: an older host strips it, and the host keeps the shipped path where unsupported.
+        preparedAgentLaunch: true,
         name: 'feature',
         baseBranch: 'origin/main',
         setupDecision: 'skip',

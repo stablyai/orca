@@ -185,15 +185,17 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithPrepa
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
           }
-          // A prepared agent's first attach is this runtime's launch of it; its command ran in the host.
-          const firstAttach = launchOpts.attachOnly === true && !pty.launchAgent
           const launchedAgent = recordTerminalLaunchMetadata(
             pty,
             result,
             launch,
             launchOpts.command
           )
-          this.watchLaunchComposer(result.id, firstAttach ? pty.launchAgent : launchedAgent)
+          // Registration restores a prepared agent's identity, so only publication knows it is new.
+          this.watchLaunchComposer(
+            result.id,
+            launchOpts.preparedFirstPublication ? pty.launchAgent : launchedAgent
+          )
           if (
             launchOpts.attachOnly &&
             launchOpts.expectedIncarnationId === pty.incarnationId &&

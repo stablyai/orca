@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/prepared-agent-launch'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { PreparedTerminalPendingError } from './prepared-terminal-pending'
 
 /** The operation namespace main records prepared worktree launches under. */
 export const PREPARED_LAUNCH_ROW_CALLER = 'worktree-startup'
@@ -68,7 +69,8 @@ export function hasPreparedPrompts(
 /**
  * Publication hands the exact agent to its creator and joins the one answer; it never writes.
  * Once the creator is gone, the saved answer is the launch's answer; with none, only a launch
- * an earlier main created may have lost its prompt to the restart.
+ * an earlier main created may have lost its prompt to the restart, and this main's own launch
+ * has no answer an observer can know yet.
  */
 export function joinPreparedPromptContinuation(
   identity: PreparedAgentLaunchIdentity,
@@ -82,14 +84,16 @@ export function joinPreparedPromptContinuation(
     return continuation.answer
   }
   const saved = readPreparedLaunchAnswer(rows(), identity, terminal.incarnationId)
-  const restarted =
-    typeof descriptor.promptOwnerRef === 'string' && descriptor.promptOwnerRef !== PROMPT_OWNER_REF
-  const warning = saved
-    ? saved.warning
-    : restarted
-      ? preparedPromptUncertainText(descriptor.claim.agent)
-      : undefined
-  return Promise.resolve(warning ? { ...terminal, warning } : terminal)
+  if (saved || typeof descriptor.promptOwnerRef !== 'string') {
+    return Promise.resolve(saved?.warning ? { ...terminal, warning: saved.warning } : terminal)
+  }
+  if (descriptor.promptOwnerRef === PROMPT_OWNER_REF) {
+    return Promise.reject(new PreparedTerminalPendingError(identity))
+  }
+  return Promise.resolve({
+    ...terminal,
+    warning: preparedPromptUncertainText(descriptor.claim.agent)
+  })
 }
 
 /** The final answer the retiring transaction saved for this exact launch and agent incarnation. */
@@ -109,11 +113,12 @@ export function readPreparedLaunchAnswer(
     typeof answer !== 'object' ||
     answer === null ||
     !incarnationId ||
-    Reflect.get(answer, 'incarnationId') !== incarnationId
+    !('incarnationId' in answer) ||
+    answer.incarnationId !== incarnationId
   ) {
     return null
   }
-  const warning: unknown = Reflect.get(answer, 'warning')
+  const warning = 'warning' in answer ? answer.warning : undefined
   return typeof warning === 'string' ? { warning } : {}
 }
 

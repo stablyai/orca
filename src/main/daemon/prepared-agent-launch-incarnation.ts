@@ -48,16 +48,21 @@ export function parsePreparedLaunchGeneration(
 
 /** Unknown fields, such as an older opaque process digest, are dropped rather than compared. */
 export function parsePreparedLaunchIncarnation(value: unknown): PreparedLaunchIncarnation | null {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== 'object' || value === null || !('pid' in value)) {
     return null
   }
-  const pid: unknown = Reflect.get(value, 'pid')
+  const { pid } = value
   if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) {
     return null
   }
   const incarnation: PreparedLaunchIncarnation = { pid }
+  const facts = {
+    namespace: 'namespace' in value ? value.namespace : undefined,
+    start: 'start' in value ? value.start : undefined,
+    boot: 'boot' in value ? value.boot : undefined
+  }
   for (const key of ['namespace', 'start', 'boot'] as const) {
-    const fact: unknown = Reflect.get(value, key)
+    const fact = facts[key]
     if (typeof fact === 'string' && fact) {
       incarnation[key] = fact
     }

@@ -46,11 +46,20 @@ type PreparedOwnerRegistry = {
   index: (owner: LiveAgentSessionOwner) => void
 }
 
-export async function dispatchPreparedAgentPtyOwner(
+type PreparedDispatchOutcome =
+  | { kind: 'joined'; promise: Promise<AgentSessionClaimedSpawnResult> }
+  | { kind: 'spawned'; reserved: ReservedOwner; result: AgentSessionClaimedSpawnResult }
+  | { kind: 'failed'; reserved: ReservedOwner; error: unknown }
+
+/**
+ * Runs the one physical spawn of an exact reservation without settling it. The caller settles in
+ * its own frame, so the creator's caller always hears the outcome before any joiner.
+ */
+export async function runPreparedAgentPtyDispatch(
   registry: PreparedOwnerRegistry,
   owner: PreparedAgentPtyOwner,
   args: PreparedOwnerDispatch
-): Promise<AgentSessionClaimedSpawnResult> {
+): Promise<PreparedDispatchOutcome> {
   const requestedClaim = cloneClaim(owner.claim)
   const requestedSurface = cloneSurface(owner.surface)
   const key = agentSessionClaimKey(requestedClaim)
@@ -64,9 +73,8 @@ export async function dispatchPreparedAgentPtyOwner(
     throw new Error('agent_session_ownership_unknown')
   }
   if (reserved.dispatched) {
-    return reserved.promise
+    return { kind: 'joined', promise: reserved.promise }
   }
-  let published = false
   try {
     reserved.dispatched = true
     const spawned = await args.spawn({ generation })
@@ -113,34 +121,50 @@ export async function dispatchPreparedAgentPtyOwner(
     if (current?.ptyId !== owner.ptyId || current.generation !== owner.generation) {
       throw args.exitedDuringStart?.() ?? new Error('agent_session_exited_during_start')
     }
-    const result: AgentSessionClaimedSpawnResult = {
-      disposition: spawned.disposition ?? 'created',
-      owner: cloneOwner(owner)
+    return {
+      kind: 'spawned',
+      reserved,
+      result: { disposition: spawned.disposition ?? 'created', owner: cloneOwner(owner) }
     }
-    reserved.resolve(result)
-    published = true
-    return result
   } catch (error) {
-    reserved.reject(error)
-    throw error
-  } finally {
-    const finish = () => {
-      if (registry.reserved.get(key)?.generation === generation) {
-        registry.reserved.delete(key)
-      }
-    }
-    if (published || !args.creation) {
-      finish()
-    } else {
-      void args.creation.then(async (disposition) => {
-        if (disposition.kind === 'unknown') {
-          return
-        }
-        if (disposition.kind === 'physical' || disposition.kind === 'failed') {
-          await disposition.completion
-        }
-        finish()
-      })
+    return { kind: 'failed', reserved, error }
+  }
+}
+
+/** Shares the creator's outcome with joiners, then returns it to the creator in the same frame. */
+export function settlePreparedAgentPtyDispatch(
+  registry: PreparedOwnerRegistry,
+  owner: PreparedAgentPtyOwner,
+  outcome: PreparedDispatchOutcome,
+  creation: Promise<PtyCreationDisposition> | undefined
+): AgentSessionClaimedSpawnResult | Promise<AgentSessionClaimedSpawnResult> {
+  if (outcome.kind === 'joined') {
+    return outcome.promise
+  }
+  const key = agentSessionClaimKey(owner.claim)
+  const finish = () => {
+    if (registry.reserved.get(key)?.generation === owner.generation) {
+      registry.reserved.delete(key)
     }
   }
+  if (outcome.kind === 'spawned') {
+    outcome.reserved.resolve(outcome.result)
+    finish()
+    return outcome.result
+  }
+  outcome.reserved.reject(outcome.error)
+  if (!creation) {
+    finish()
+  } else {
+    void creation.then(async (disposition) => {
+      if (disposition.kind === 'unknown') {
+        return
+      }
+      if (disposition.kind === 'physical' || disposition.kind === 'failed') {
+        await disposition.completion
+      }
+      finish()
+    })
+  }
+  throw outcome.error
 }

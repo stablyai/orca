@@ -49,6 +49,11 @@ export type PreparedLaunchDependencies = {
   now?: () => number
 }
 
+/** Read after an await: a failed creation can retire the launch while its dispatch is in flight. */
+function isUnusedRetired(status: PreparedAgentLaunchStatus): boolean {
+  return status.retirement === 'unused-retired'
+}
+
 export abstract class PreparedAgentLaunchExecution {
   protected rows = new Map<string, AgentSessionOperationRow>()
   /** This daemon's incarnation, once read; it owns staged files for crash collection. */
@@ -204,7 +209,7 @@ export abstract class PreparedAgentLaunchExecution {
       // A failure after native dispatch is not proof that no process exists.
       if (work.physicalEnded) {
         this.settlePhysicalEnd(work)
-      } else if (!work.status.physical && work.status.retirement !== 'unused-retired') {
+      } else if (!work.status.physical && !isUnusedRetired(work.status)) {
         work.status.execution = 'unknown'
         work.status.retirement = 'unknown'
         work.status.failure = 'spawn-failed'

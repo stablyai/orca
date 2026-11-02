@@ -34,6 +34,8 @@ export type TerminalCreateOptions = {
   /** Main-only rejoin of a process already accepted by its daemon. */
   attachOnly?: boolean
   expectedIncarnationId?: PtyIncarnationId
+  /** Main-only: the first publication of a prepared agent, this runtime's one new launch of it. */
+  preparedFirstPublication?: true
   command?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string

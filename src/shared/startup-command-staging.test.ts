@@ -185,9 +185,14 @@ describe('stageStartupCommand', () => {
     expect(statSync(staged.directoryPath!).mode & 0o777).toBe(0o700)
     expect(statSync(staged.scriptPath!).mode & 0o777).toBe(0o600)
     expect(staged.command).toBe(`. '${staged.scriptPath}'`)
+    // Fixed timestamps far past the age cutoff, so the outcome never depends on the wall clock.
+    const stagedAtSeconds = 1_000_000
+    for (const path of [staged.directoryPath!, staged.scriptPath!]) {
+      utimesSync(path, stagedAtSeconds, stagedAtSeconds)
+    }
     sweepStaleStagedStartupCommands({
       directory,
-      now: Date.now() + 10 * STAGED_STARTUP_COMMAND_STALE_MS
+      now: stagedAtSeconds * 1000 + 10 * STAGED_STARTUP_COMMAND_STALE_MS
     })
     expect(readFileSync(staged.scriptPath!, 'utf8')).toContain(`cx '${'x'.repeat(600)}'`)
     discardStagedStartupCommand(staged)

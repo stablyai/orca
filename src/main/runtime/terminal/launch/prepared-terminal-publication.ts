@@ -151,8 +151,9 @@ async function publish(
     launchAgent: descriptor.claim.agent,
     ...(publication.launchConfig ? { launchConfig: publication.launchConfig } : {}),
     ...(publication.launchToken ? { launchToken: publication.launchToken } : {}),
-    // A later user view change belongs to the tab; only the first publication applies the request.
+    // Later attachments are rejoins: only the first publication applies the view and holds sends.
     ...(publication.viewMode && !status.published ? { viewMode: publication.viewMode } : {}),
+    ...(status.published ? {} : { preparedFirstPublication: true as const }),
     ...(descriptor.presentation.title ? { title: descriptor.presentation.title } : {}),
     ...(descriptor.presentation.groupId ? { targetGroupId: descriptor.presentation.groupId } : {}),
     ...(descriptor.presentation.splitPlacement?.afterTabId

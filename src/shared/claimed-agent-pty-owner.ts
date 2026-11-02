@@ -1,5 +1,6 @@
 import {
-  dispatchPreparedAgentPtyOwner,
+  runPreparedAgentPtyDispatch,
+  settlePreparedAgentPtyDispatch,
   type PreparedOwnerDispatch,
   type ReservedOwner
 } from './claimed-agent-pty-dispatch'
@@ -87,7 +88,10 @@ export class ClaimedAgentPtyOwnerRegistry {
       return { disposition: 'adopted', owner: cloneOwner({ ...result.owner, phase: 'live' }) }
     }
     reserved.creation = args.creation
-    return this.dispatchPrepared(prepared.owner, args)
+    // Settled here, not in a nested promise, so this creator's caller hears before any joiner.
+    const registry = this.dispatchRegistry()
+    const outcome = await runPreparedAgentPtyDispatch(registry, prepared.owner, args)
+    return settlePreparedAgentPtyDispatch(registry, prepared.owner, outcome, args.creation)
   }
 
   prepare(args: {
@@ -174,24 +178,25 @@ export class ClaimedAgentPtyOwnerRegistry {
     }
   }
 
-  dispatchPrepared(
+  async dispatchPrepared(
     owner: PreparedAgentPtyOwner,
     args: PreparedOwnerDispatch
   ): Promise<AgentSessionClaimedSpawnResult> {
-    return dispatchPreparedAgentPtyOwner(
-      {
-        reserved: this.reserved,
-        live: this.live,
-        release: (id, generation) => this.release(id, generation),
-        index: (owner) => {
-          const keys = this.keysByPtyId.get(owner.ptyId) ?? new Set<string>()
-          keys.add(agentSessionClaimKey(owner.claim))
-          this.keysByPtyId.set(owner.ptyId, keys)
-        }
-      },
-      owner,
-      args
-    )
+    const outcome = await runPreparedAgentPtyDispatch(this.dispatchRegistry(), owner, args)
+    return settlePreparedAgentPtyDispatch(this.dispatchRegistry(), owner, outcome, args.creation)
+  }
+
+  private dispatchRegistry() {
+    return {
+      reserved: this.reserved,
+      live: this.live,
+      release: (id: string, generation: string) => this.release(id, generation),
+      index: (owner: LiveOwner) => {
+        const keys = this.keysByPtyId.get(owner.ptyId) ?? new Set<string>()
+        keys.add(agentSessionClaimKey(owner.claim))
+        this.keysByPtyId.set(owner.ptyId, keys)
+      }
+    }
   }
 
   register(owner: AgentSessionOwnerBinding): void {
