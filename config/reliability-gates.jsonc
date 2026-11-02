@@ -11191,14 +11191,14 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the WebGL/link/search containment suites on main@1282f5c2d, adopting the #6949 atlas-recovery rename and #7133's reveal hardening tests. Core addon-load throw containment and live typed-input survival arrive with #7004 and a live follow-up. The test-value audit removed the reveal-repaint mock-routing suite, including settled-frame ordering and per-pane failure-isolation alarms. These historical assertions are no longer supplied by that suite; no equivalent coverage is claimed.",
+      "coverageNotes": "Local macOS evidence over the WebGL/link/search containment suites on main@1282f5c2d, adopting the #6949 atlas-recovery rename and #7133's reveal hardening tests. Core addon-load throw containment and live typed-input survival arrive with #7004 and a live follow-up. The test-value audit removed the reveal-repaint mock-routing suite, including settled-frame ordering and per-pane failure-isolation alarms. These historical assertions are no longer supplied by that suite; no equivalent coverage is claimed. The audit removes isolated link-provider RangeError reproduction, refresh-cancellation and failed-attach backoff examples. Retained tests cover post-resolution callback ownership, context release and context-loss resume; they do not establish equivalent coverage for the removed examples.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6852",
         "https://github.com/stablyai/orca/pull/6872",
         "https://github.com/stablyai/orca/pull/6855"
       ],
       "invariant": "Search, link, WebGL, decoration, input-protocol, or keyboard-navigation errors must not unmount the terminal surface, crash React/window, break focus, or stop PTY input/output.",
-      "oracle": "The current executable slice injects a core addon load throw and asserts pane opening continues through later addons, covers link provider throws as pane-scoped no-link results, covers search decoration positive-integer failures as false results instead of renderer crashes, and covers WebGL attach/refresh/recovery containment. Focused typed input echo after addon failure still needs a live/component follow-up.",
+      "oracle": "The current executable slice injects a core addon load throw and asserts pane opening continues through later addons, checks that a link provider throwing after it resolves does not deliver the callback twice, covers search decoration positive-integer failures as false results instead of renderer crashes, and covers WebGL attach/refresh/recovery containment. Focused typed input echo after addon failure still needs a live/component follow-up.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
       ],
@@ -11215,7 +11215,7 @@
         {
           "file": "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts",
           "assertions": [
-            "link-provider throws are reproduced and contained without escaping the surface"
+            "does not double-invoke the callback when the provider throws after resolving"
           ]
         },
         {
@@ -11227,7 +11227,8 @@
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts",
           "assertions": [
-            "WebGL teardown/refresh lifecycle stays pane-scoped and cancels on dispose"
+            "defers the DOM-renderer refit until structural replay completes",
+            "actively releases the xterm WebGL context before disposing the addon"
           ]
         },
         {
@@ -11236,9 +11237,7 @@
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
-          "assertions": [
-            "failed attach backs off and context-lost panes recover on the next rendering resume"
-          ]
+          "assertions": ["recovers a context-lost pane on the next rendering resume"]
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
@@ -11288,7 +11287,8 @@
       "knownGaps": [
         "Current command is renderer-unit containment, not live Electron typed input/output survival after addon failure.",
         "Does not yet inject WebGL dispose/reset throws and active/hidden/resumed pane focus recovery in one component-level oracle.",
-        "The test-value audit removed the reveal-repaint mock-routing suite, including settled-frame ordering and per-pane failure-isolation alarms. These historical assertions are no longer supplied by that suite; no equivalent coverage is claimed."
+        "The test-value audit removed the reveal-repaint mock-routing suite, including settled-frame ordering and per-pane failure-isolation alarms. These historical assertions are no longer supplied by that suite; no equivalent coverage is claimed.",
+        "The audit removes isolated link-provider RangeError reproduction, refresh-cancellation and failed-attach backoff examples. Retained tests cover post-resolution callback ownership, context release and context-loss resume; they do not establish equivalent coverage for the removed examples."
       ],
       "demotionRule": "Cannot promote while it only checks visual rendering."
     },
@@ -11310,10 +11310,10 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Renderer-unit coverage proves the shared xterm DOM intent path. Live Electron evidence is PR validation evidence for local macOS only until the flow has stable automation; live SSH, WSL, Linux, and Windows paths remain unproved.",
+      "coverageNotes": "The audit removes all direct scrollbar pointer-classification, dragged-viewport restoration and terminal-body exclusion examples. Retained wheel/rebuild and keyed-owner fixtures exercise related scroll-intent behavior with synthetic terminal state; they do not provide equivalent scrollbar coverage. The recorded macOS run is historical and is not a rerun of the reduced suite. Live daemon, SSH, WSL, remote-runtime, Linux and Windows scrollbar validation remains unproved.",
       "motivatingLinks": ["STA-1341"],
       "invariant": "A user-driven xterm scrollbar thumb or track scroll updates the live terminal scroll intent before tab, visibility, or layout resume enforces intent, so resume preserves the latest dragged viewport instead of an older pinned line.",
-      "oracle": "Pointerdown on .xterm-scrollbar or .xterm-slider followed by xterm viewport movement records the new pinned viewport, and enforcing current intent restores that dragged line instead of stale top intent.",
+      "oracle": "No retained unit test directly exercises scrollbar thumb/track targeting or a dragged viewport. The retained deterministic slice checks delayed wheel viewport sampling, keyed disposal/remount ownership, and wheel intent through rebuild completion or cancellation; these checks do not establish scrollbar-drag preservation.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
       ],
@@ -11322,9 +11322,15 @@
         {
           "file": "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
           "assertions": [
-            "pointer-driven .xterm-scrollbar and .xterm-slider scrolls update terminal scroll intent",
-            "a scrollbar-dragged viewport is restored instead of stale top intent",
-            "terminal body pointer activity is not treated as scrollbar intent"
+            "keeps sampling briefly after wheel so delayed xterm scroll updates win",
+            "persists native pinned growth on disposal for the next keyed replay",
+            "does not let an old terminal disposal overwrite its keyed successor",
+            "does not let a stale key-settle callback overwrite a remounted terminal",
+            "suspends intent capture and enforcement while a buffer rebuild is in flight",
+            "resyncs a $expectedKind wheel intent after a delayed rebuild",
+            "preserves a durable pin when wheel-up lands on the cleared replay buffer",
+            "keeps rebuild wheel intent when xterm classifies the same event as mouse input",
+            "does not resync deferred wheel intent from a canceled partial rebuild"
           ]
         }
       ],
@@ -11336,7 +11342,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
           "result": "passed",
           "durationSeconds": 0.3,
-          "summary": "1 test file(s) passed, 17 tests passed in this worktree."
+          "summary": "1 test file(s) passed, 17 tests passed in this worktree. Audit965 removes the direct scrollbar examples; this command/result remains historical and does not validate the reduced suite or equivalent scrollbar coverage."
         }
       ],
       "runtimeBudget": {
@@ -11348,8 +11354,8 @@
         "evidence": "New experimental gate; needs soak history before promotion."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "The new scrollbar DOM target assertions fail when only .xterm-viewport pointerdown is recognized. Needs saved CI/intentional-break artifact before blocking promotion."
+        "status": "missing",
+        "evidence": "Historical pointer-classification failure claim described examples removed by audit965. No retained red/green artifact proves the scrollbar-drag invariant."
       },
       "performanceBudget": {
         "required": true,
@@ -11361,9 +11367,10 @@
         "Attach red/green evidence for stale intent restoring the wrong viewport."
       ],
       "knownGaps": [
-        "Manifest command is deterministic renderer-unit coverage, not a live Electron scrollbar drag.",
+        "The manifest command covers narrower deterministic wheel/rebuild/keyed-owner behavior; it does not exercise scrollbar dragging or its DOM target contract.",
         "Live daemon, SSH, WSL, remote-runtime, Linux, and Windows validation is not covered by this gate.",
-        "Future xterm scrollbar DOM class changes are only caught if they break the currently modeled class contract."
+        "No retained test exercises the scrollbar DOM class contract; changes to .xterm-scrollbar or .xterm-slider targeting have no direct retained alarm.",
+        "The audit removes the direct .xterm-scrollbar/.xterm-slider pointer-target, dragged-viewport restoration and terminal-body exclusion examples, along with isolated scroll-intent scalar/snapshot examples. No retained test directly observes those removed scrollbar alarms; related wheel, rebuild and keyed-owner fixtures are not claimed equivalent."
       ],
       "demotionRule": "Demote or quarantine if the unit gate flakes without a product bug or harness bug filed to the owner."
     },
@@ -13944,7 +13951,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, xterm preedit visibility and row-occlusion behavior, Electron/CDP preedit geometry, Electron/CDP live-PTY Sogou-style repros, and macOS renderer/main slices for Preview kitty commits and layout-native Option input. The Option slice covers complete CSI-u flag fields including lock state, repeat/release event types, authoritative committed associated text, native dead-key release suppression, functional-versus-printable numpad codes, press-pinned release identity, live keyup modifiers, pending-layout text fallback, atomic layout refresh, rapid in-focus input-source changes, stable native layout characters, and both native/web preload fallbacks. Snapshot flag provenance keeps a proven 0, a proven non-zero, and an absent field distinct from daemon through the sequenced remote SnapshotStart frame. Real Linux/Sogou OS IME automation, native Windows candidate-window placement, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
+      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, xterm preedit visibility and row-occlusion behavior, Electron/CDP preedit geometry, Electron/CDP live-PTY Sogou-style repros, and macOS renderer/main slices for Preview kitty commits and layout-native Option input. The Option slice covers complete CSI-u flag fields including lock state, repeat/release event types, authoritative committed associated text, native dead-key release suppression, functional-versus-printable numpad codes, press-pinned release identity, live keyup modifiers, pending-layout text fallback, atomic layout refresh, rapid in-focus input-source changes, stable native layout characters, and both native/web preload fallbacks. Snapshot flag provenance keeps a proven 0, a proven non-zero, and an absent field distinct from daemon through the sequenced remote SnapshotStart frame. Real Linux/Sogou OS IME automation, native Windows candidate-window placement, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps. The audit removes isolated candidate-anchor width, last-column, timer-ordering and detached-textarea examples. The retained deterministic fixtures do not observe a native candidate window or establish equivalent geometry coverage; separate Electron geometry evidence remains historical.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6699",
         "https://github.com/stablyai/orca/pull/6682",
@@ -13955,7 +13962,7 @@
         "https://github.com/stablyai/orca/pull/17170"
       ],
       "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY. A live preedit must stay visible across an IME-resumed transaction, preserve every committed row-tail cell hidden by its opaque overlay, mask only a structurally verified Codex or Claude placeholder and never a row carrying typed text, keep the themed insertion caret and native candidate anchor inside the terminal at the final column, and clean up without stale overlay children or ownership classes. Layout-native Option text must preserve negotiated CSI-u alternate/associated fields and lock modifiers, distinguish repeat from press, and resolve releases with the press's primary identity plus the actual keyup modifiers without exposing a partial or stale layout refresh. An in-focus macOS input-source change must invalidate both renderer authorities before the next key can use the old source. When the snapshot source proves kitty state, macOS Preview commits must use the application's effective flags after the sequenced snapshot and every proven replay/live transition, and a claimed press delivered under report_event_types must produce exactly one matching release regardless of whether keyup arrives before or after insertText and regardless of xterm's defensive internal reset.",
-      "oracle": "Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, resumed Windows event traces reactivate the visible preedit, an opaque mid-line overlay reproduces the committed row tail it covers, arbitrary DIM output remains visible, and final-column layout keeps both caret and textarea candidate anchor within the available screen width. The candidate-anchor slice reads back the inline `textarea.style.left` xterm's own listener and Orca's anchor listener both write during one composition event, so the assertion is the position the OS would sample rather than either writer's intent. A Codex frame whose prompt row is bold and whose dimmed model footer sits below a blank gap acquires the mask class while composing; the same placeholder text without that footer, a framed-versus-unframed Claude prompt, a row of arbitrary dimmed output, and a row carrying typed text do not. The class is gone after composition end, after a blur that is not followed by a session end, and after disposal. Rendered Electron/CDP geometry independently proves the overlay reproduces every committed cell it hides, that a real Codex placeholder at column 2 is masked rather than repeated, and that the final-column caret, preedit, and textarea right edges all land inside the screen. Input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and real fcitx4/Sogou captures send only the committed candidate for Space/digit picks while ordinary typing, literal Space and digits stay available. A main/preload/renderer notification chain proves every live window invalidates immediately, the old native read settles before a coalesced refresh signal, and older refreshes are generation-fenced. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text. Real legacy IME commit preservation, native candidate-window placement, and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
+      "oracle": "Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, resumed Windows event traces reactivate the visible preedit, an opaque mid-line overlay reproduces the committed row tail it covers, arbitrary DIM output remains visible, and final-column layout keeps both caret and textarea candidate anchor within the available screen width. The retained candidate-anchor slice checks layout-read caching, deferred timer coalescing, recognized-screen follow-ups and refit refresh with deterministic DOM fixtures. A Codex frame whose prompt row is bold and whose dimmed model footer sits below a blank gap acquires the mask class while composing; the same placeholder text without that footer, a framed-versus-unframed Claude prompt, a row of arbitrary dimmed output, and a row carrying typed text do not. The class is gone after composition end, after a blur that is not followed by a session end, and after disposal. Rendered Electron/CDP geometry independently proves the overlay reproduces every committed cell it hides, that a real Codex placeholder at column 2 is masked rather than repeated, and that the final-column caret, preedit, and textarea right edges all land inside the screen. Input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and real fcitx4/Sogou captures send only the committed candidate for Space/digit picks while ordinary typing, literal Space and digits stay available. A main/preload/renderer notification chain proves every live window invalidates immediately, the old native read settles before a coalesced refresh signal, and older refreshes are generation-fenced. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text. Real legacy IME commit preservation, native candidate-window placement, and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-fcitx4-trace-replay.test.ts",
@@ -14069,8 +14076,10 @@
         {
           "file": "src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts",
           "assertions": [
-            "the candidate anchor stays on the cursor cell while the preedit fits the remaining width",
-            "an over-wide final-column preedit pulls the anchor back inside the screen, and a preedit wider than the row never anchors left of it"
+            "keeps forced layout at one read per composition across a Hangul burst",
+            "coalesces the deferred Cursor Agent re-apply to one timer per burst",
+            "keeps typed follow-ups anchored after recognizing the initial Cursor Agent screen",
+            "refreshes the deferred metrics and anchor after a refit"
           ]
         },
         {
@@ -14361,7 +14370,7 @@
           "platform": "macos",
           "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
           "result": "passed",
-          "durationSeconds": 72.0,
+          "durationSeconds": 72,
           "summary": "Electron/CDP IME repro passed: Sogou candidate selection, post-composition candidate selection, and existing Chinese IME harness passed; real Codex IME test was skipped behind ORCA_E2E_REAL_CODEX_IME."
         }
       ],
@@ -14391,7 +14400,8 @@
         "Textarea geometry is a deterministic lower-layer oracle for native candidate placement; no automated run observes the operating system's candidate window itself.",
         "Backspace/Enter during composition, JIS yen, Arabic/RTL, paste edge cases, and Windows ConPTY post-agent key reset still need representative gate coverage.",
         "An older remote host omits the optional SnapshotStart kitty field, so a new client falls back to raw commits until live negotiation is observed.",
-        "Snapshot authorities expose only the active screen's effective flags, not kitty's complete two-screen push stacks; a pop that crosses the restored boundary degrades to unknown rather than a proven value."
+        "Snapshot authorities expose only the active screen's effective flags, not kitty's complete two-screen push stacks; a pop that crosses the restored boundary degrades to unknown rather than a proven value.",
+        "The audit removes isolated candidate-anchor width, last-column, timer-ordering and detached-textarea examples. The retained deterministic fixtures do not observe a native candidate window or establish equivalent geometry coverage; separate Electron geometry evidence remains historical."
       ],
       "demotionRule": "Cannot promote if success is based only on DOM text without PTY byte/cell evidence."
     },
@@ -16288,7 +16298,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Renderer-unit convergence corpus over a real xterm parser, plus manual CDP pixel evidence on the macOS WebGL renderer. The repaint span is provider-independent because it is computed from xterm's parse, not from the transport; SSH/WSL/remote were not exercised live.",
+      "coverageNotes": "Renderer-unit convergence corpus over a real xterm parser, plus manual CDP pixel evidence on the macOS WebGL renderer. The repaint span is provider-independent because it is computed from xterm's parse, not from the transport; SSH/WSL/remote were not exercised live. The audit removes isolated unobservable-span fallback and follow-up full-grid repaint examples. The retained real-parser corpus checks observed row changes and cursor spans; it does not establish those removed fallback alarms.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/2669",
         "https://github.com/stablyai/orca/pull/4669",
@@ -16309,7 +16319,6 @@
             "every viewport row whose serialized cells changed lies inside the requested repaint span",
             "the cursor row before and after the write is inside the requested repaint span",
             "viewport scroll and alternate-screen transitions still request the whole grid",
-            "an unobservable parse span falls back to the whole grid",
             "an in-place bottom-row redraw narrows well below the full grid"
           ]
         }
@@ -16349,7 +16358,8 @@
       "knownGaps": [
         "No CI-wired pixel oracle; WebGL convergence evidence was collected manually over CDP.",
         "Windows ConPTY synchronous repair path is covered only by the shared corpus, not on a Windows runner.",
-        "SSH/WSL/remote providers were not exercised live; the span is transport-independent by construction."
+        "SSH/WSL/remote providers were not exercised live; the span is transport-independent by construction.",
+        "The audit removes isolated unobservable-span fallback and follow-up full-grid repaint examples. The retained real-parser corpus checks observed row changes and cursor spans; it does not establish those removed fallback alarms."
       ],
       "demotionRule": "Demote or block if a narrowing condition is added without a matching convergence case, if the corpus stops asserting that each case changes at least one row, or if a repaint regression is reported for in-place agent redraws."
     },
@@ -17178,7 +17188,7 @@
       "providers": ["remote-runtime", "ssh", "local", "daemon"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "Local macOS evidence covers runtime-RPC stream budgets, paired-renderer parse/discard credit, and negotiated host-side suppression for hidden paired desktop panes. Deferred credit is shared by local and remote transports, batches ACKs at 192 KiB or 4 ms, grows per-stream windows from 512 KiB to 2 MiB and aggregate windows from 2 MiB to 8 MiB, bounds queued output to 256 KiB per stream, and caps each multiplex connection at 32 active or pending streams for an 8 MiB aggregate pending-output ceiling. Deterministic tests cover replay ordering, stale generations, malformed frames, hidden panes, queue eviction, disposal, send/recovery failure, repeated pending-slot replacement, reconnect, mixed-version pause negotiation, and round-robin fairness. The opt-in benchmark models 1/20/100 ms RTT and 1/4/8 viewers, throughput, window use, completion spread and protocol-frame counts. It measures model scheduler elapsed time separately from actual @xterm/headless parser CPU/retained heap; modeled credit and ACK results do not qualify production credit enforcement. Live Android restore evidence, browser/WebGL parser measurements, and legacy JSON subscribe parity remain required. The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage.",
+      "coverageNotes": "Local macOS evidence covers runtime-RPC stream budgets, paired-renderer parse/discard credit, and negotiated host-side suppression for hidden paired desktop panes. Deferred credit is shared by local and remote transports, batches ACKs at 192 KiB or 4 ms, grows per-stream windows from 512 KiB to 2 MiB and aggregate windows from 2 MiB to 8 MiB, bounds queued output to 256 KiB per stream, and caps each multiplex connection at 32 active or pending streams for an 8 MiB aggregate pending-output ceiling. Deterministic tests cover replay ordering, stale generations, malformed frames, hidden panes, queue eviction, disposal, send/recovery failure, repeated pending-slot replacement, reconnect, mixed-version pause negotiation, and round-robin fairness. The opt-in benchmark models 1/20/100 ms RTT and 1/4/8 viewers, throughput, window use, completion spread and protocol-frame counts. It measures model scheduler elapsed time separately from actual @xterm/headless parser CPU/retained heap; modeled credit and ACK results do not qualify production credit enforcement. Live Android restore evidence, browser/WebGL parser measurements, and legacy JSON subscribe parity remain required. The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage. The audit removes the standalone auto-settle-before-deferred-claim example. Nested-owner and claimed-child completion tests remain; they do not establish that removed timing alarm.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
@@ -17279,7 +17289,7 @@
           "file": "src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts",
           "assertions": [
             "nested synchronous deliveries restore the outer credit owner",
-            "unclaimed intentional discards settle automatically while every claimed scheduler child must settle before the parent credits"
+            "every claimed scheduler child must settle before the parent credits"
           ]
         },
         {
@@ -17376,7 +17386,8 @@
         "The pure mobile decision gate does not yet prove live Android WebView scrollback restore after a chat toggle.",
         "Legacy JSON subscribe parity is undecided.",
         "The parser measurement uses @xterm/headless; browser renderer/WebGL CPU, GPU, and allocation behavior still need packaged-app performance evidence.",
-        "The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage."
+        "The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage.",
+        "The audit removes the standalone auto-settle-before-deferred-claim example. Nested-owner and claimed-child completion tests remain; they do not establish that removed timing alarm."
       ],
       "demotionRule": "Cannot promote while a supported stream path has uncapped snapshot or live-output buffering."
     },
@@ -17740,7 +17751,7 @@
       "providers": ["local", "daemon"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "A headed macOS Electron test drives explicit destructive atlas recovery while DEC 2026 output is held, then compares compositor screenshots before and after a direct full-buffer present. The same renderer choreography is provider-local, but daemon, SSH, remote-runtime, Linux, and Windows GPU runs remain gaps. The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed.",
+      "coverageNotes": "A headed macOS Electron test drives explicit destructive atlas recovery while DEC 2026 output is held, then compares compositor screenshots before and after a direct full-buffer present. The same renderer choreography is provider-local, but daemon, SSH, remote-runtime, Linux, and Windows GPU runs remain gaps. The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed. The audit removes the canvas-DPR and render-pause-release unit suites and several renderer flag/retry examples. Their isolated DPR-cache, render-service routing and display-none retry alarms are no longer registered; retained unit and historical Electron evidence do not establish equivalent coverage. No live GPU rerun accompanies this administrative update.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7133",
         "https://github.com/stablyai/orca/pull/7054"
@@ -17749,7 +17760,7 @@
       "oracle": "Hold DEC 2026, invoke explicit atlas recovery, require an atlas clear, screenshot the pane, force a direct renderer present, and assert the bounded pixel diff is immaterial. Compositor screenshots only, because WebGL canvas readback is blank with preserveDrawingBuffer disabled.",
       "commands": [
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
         "ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3"
       ],
       "testFiles": [
@@ -17757,8 +17768,6 @@
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
-        "src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts",
-        "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
         "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
       ],
       "assertionRefs": [
@@ -17774,13 +17783,6 @@
           "assertions": ["defers a heavy-reveal dpr present until the shared atlas recovery"]
         },
         {
-          "file": "src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts",
-          "assertions": [
-            "repairs when the canvas and renderer dimensions share a stale dpr cache",
-            "defers an unmeasurable WebGL canvas but accepts a renderer-less pane"
-          ]
-        },
-        {
           "file": "tests/e2e/terminal-reveal-paused-render-repro.spec.ts",
           "assertions": ["@headful atlas recovery presents a synchronized-output WebGL frame"]
         }
@@ -17793,8 +17795,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "All 98 renderer contracts passed, including same-DPR zero-scan behavior, visible-only fanout, tri-state DPR repair, deduplicated bounded retry, heavy-reveal repair, and listener cleanup. Historical command preserved after the test-value audit removed the referenced reveal/repaint or registry recovery assertions. currentCommand is an administrative link; this historical run has not validated the remaining command or equivalent coverage.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts"
+          "summary": "All 98 renderer contracts passed, including same-DPR zero-scan behavior, visible-only fanout, tri-state DPR repair, deduplicated bounded retry, heavy-reveal repair, and listener cleanup. Historical command preserved after the test-value audit removed the referenced reveal/repaint or registry recovery assertions. currentCommand is an administrative link; this historical run has not validated the remaining command or equivalent coverage. Administrative command maintenance removes deleted unit suites; the executed command and result are historical, with no rerun or equivalence claim.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
         },
         {
           "date": "2026-08-23",
@@ -17840,7 +17842,8 @@
         "The deterministic recovery test disables xterm's one-second safety timeout so the held-frame damage remains stable until recovery.",
         "The renderer-level frame injection isolates the paint failure; provider delivery and hidden-output snapshot restore have separate gates.",
         "Linux, Windows, daemon, SSH, and remote-runtime live GPU evidence is not yet recorded.",
-        "The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed."
+        "The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed.",
+        "The audit removes the canvas-DPR and render-pause-release unit suites and several renderer flag/retry examples. Their isolated DPR-cache, render-service routing and display-none retry alarms are no longer registered; retained unit and historical Electron evidence do not establish equivalent coverage. No live GPU rerun accompanies this administrative update."
       ],
       "demotionRule": "Drop from the golden suite back to nightly diagnostic if diff thresholds cannot be kept stable across CI runners."
     },
@@ -17856,7 +17859,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "A headed macOS Electron test uses a real xterm WebGL renderer and production tab reveal. It proves the coherent pre-hide canvas remains visible while DEC 2026 holds a newer buffer, then proves normal release and xterm's one-second watchdog publish complete frames. Renderer behavior is provider-neutral; live Linux, Windows, daemon, SSH, and remote-runtime GPU runs remain gaps.",
+      "coverageNotes": "A headed macOS Electron test uses a real xterm WebGL renderer and production tab reveal. It proves the coherent pre-hide canvas remains visible while DEC 2026 holds a newer buffer, then proves normal release and xterm's one-second watchdog publish complete frames. Renderer behavior is provider-neutral; live Linux, Windows, daemon, SSH, and remote-runtime GPU runs remain gaps. The audit removes isolated synchronized-frame viewport-present and render-pause-release unit examples. The historical headed Electron oracle remains recorded; retained scheduling tests do not establish equivalent render-service routing or completed-frame coverage. No live GPU rerun accompanies this administrative update.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7133",
         "https://github.com/stablyai/orca/pull/7054"
@@ -17865,14 +17868,13 @@
       "oracle": "Paint and capture a coherent frame, hide the real terminal tab, build a distinct full-screen frame while DEC 2026 is held, reveal through production, and require zero atlas clears plus pixel-equivalence with the coherent frame. Then release normally and through the one-second watchdog, requiring both compositor frames to match a direct renderer present.",
       "commands": [
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
-        "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
         "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
       ],
       "assertionRefs": [
@@ -17881,17 +17883,6 @@
           "assertions": [
             "schedules an atlas-preserving present on a light tab reveal",
             "keeps heavy atlas recovery off a plain window refocus"
-          ]
-        },
-        {
-          "file": "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
-          "assertions": ["preserves a synchronized frame on an ordinary reveal present"]
-        },
-        {
-          "file": "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
-          "assertions": [
-            "routes synchronized output through RenderService instead of the renderer",
-            "releases observer pause before requesting the synchronized frame"
           ]
         },
         {
@@ -17936,7 +17927,8 @@
       "knownGaps": [
         "The deterministic test injects full-screen marker frames through xterm rather than invoking a live model; genuine OpenCode full-window evidence separately proves the original corruption.",
         "Linux, Windows, daemon, SSH, and remote-runtime live GPU evidence is not yet recorded.",
-        "The 1.5% compositor threshold tolerates cursor and shell-prompt timing noise; exact buffer content and atlas-clear counts are asserted separately."
+        "The 1.5% compositor threshold tolerates cursor and shell-prompt timing noise; exact buffer content and atlas-clear counts are asserted separately.",
+        "The audit removes isolated synchronized-frame viewport-present and render-pause-release unit examples. The historical headed Electron oracle remains recorded; retained scheduling tests do not establish equivalent render-service routing or completed-frame coverage. No live GPU rerun accompanies this administrative update."
       ],
       "demotionRule": "Demote if ordinary reveal clears the shared atlas, the held frame stops matching its coherent baseline, release/watchdog output diverges from a direct present, or the headed oracle cannot remain deterministic."
     },
