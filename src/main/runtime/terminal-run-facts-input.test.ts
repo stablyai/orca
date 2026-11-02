@@ -8,11 +8,8 @@ import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox-pointer-pty-write'
 import { sendTerminalStreamInput } from './rpc/methods/terminal/terminal-input-delivery'
+import { deliverGeneratedTerminalInput } from './terminal/input/generated-terminal-input-delivery'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
-import {
-  pasteWorktreeStartupDraftWhenReady,
-  type WorktreeStartupReadinessHost
-} from './runtime-worktree-startup-readiness'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -223,25 +220,21 @@ describe('run facts: the controller write funnel', () => {
 })
 
 describe('run facts: a created worktree’s startup writes', () => {
-  function readinessHost(run: FreshRun): WorktreeStartupReadinessHost {
-    return {
-      getPtyId: () => PTY_ID,
-      getForegroundProcess: async () => 'aider',
-      subscribeToData: () => () => {},
-      // Why: bracketed paste enabled, then quiet, is the default draft-ready signal.
-      readRecentOutput: () => '\x1b[?2004h',
-      write: (ptyId, data, inputKind) => run.controller.write(ptyId, data, inputKind)
-    }
-  }
-
   it('reads a run whose only input was its create-time draft as untyped', async () => {
     vi.useFakeTimers()
     const run = await createFreshRun()
-    const host = readinessHost(run)
+    // Bracketed paste enabled, then quiet, is the default draft-ready signal.
+    run.runtime.onPtyData(PTY_ID, '\x1b[?2004h', Date.now())
 
-    pasteWorktreeStartupDraftWhenReady(host, run.handle, { agent: 'aider', content: 'plan it' })
-    await vi.runAllTimersAsync()
+    const staged = deliverGeneratedTerminalInput(run.runtime, run.handle, {
+      text: 'plan it',
+      submit: false,
+      agent: 'aider',
+      intent: 'startup'
+    })
+    await vi.advanceTimersByTimeAsync(2_000)
 
+    await expect(staged).resolves.toBe('staged')
     expect(run.kinds).toEqual(['launch'])
     expect(run.writes).toHaveLength(1)
     expect(run.firstUserInputAt()).toBeNull()

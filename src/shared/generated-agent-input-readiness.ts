@@ -51,6 +51,7 @@ export function waitForGeneratedAgentInput(
     let ready = false
     // Quiet counts only once the agent has enabled paste input, seen live or in the current mode.
     let quietArmed = false
+    let refusedAtSequence = -1
     let graceAt: number | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
     let hardTimer: ReturnType<typeof setTimeout> | undefined
@@ -103,10 +104,10 @@ export function waitForGeneratedAgentInput(
       checking = true
       const observedSequence = sequence
       try {
-        const marker =
-          ready ||
-          (graceAt !== null && Date.now() >= graceAt) ||
-          (await host.composerReady?.(Date.now() - lastOutput)) === true
+        const signalled = ready || (graceAt !== null && Date.now() >= graceAt)
+        // Current-screen evidence is re-read each time; it is not a one-shot signal.
+        const current = !signalled && (await host.composerReady?.(Date.now() - lastOutput)) === true
+        const marker = signalled || current
         const quiet =
           permitsQuiet &&
           (quietArmed || host.bracketedPaste?.() === true) &&
@@ -114,9 +115,20 @@ export function waitForGeneratedAgentInput(
         // Output during the read voids only quiet; a positive composer survives a busy footer, and
         // the writer rechecks the current screen before every byte.
         const quietOnly = quiet && !marker && !running
-        if ((marker || quiet || running) && (await host.accept(quietOnly))) {
-          if (!settled && (!quietOnly || observedSequence === sequence) && Date.now() < deadline) {
-            finish(true)
+        // A startup signal refused once is asked again only when the agent paints something new,
+        // as a direct observer would; a running agent has no signal and is asked on each check.
+        const askAgain = running || current || refusedAtSequence !== sequence
+        if ((marker || quiet || running) && askAgain) {
+          if (await host.accept(quietOnly)) {
+            if (
+              !settled &&
+              (!quietOnly || observedSequence === sequence) &&
+              Date.now() < deadline
+            ) {
+              finish(true)
+            }
+          } else {
+            refusedAtSequence = observedSequence
           }
         }
       } catch {
@@ -137,8 +149,12 @@ export function waitForGeneratedAgentInput(
     options.signal?.addEventListener('abort', abort, { once: true })
     hardTimer = setTimeout(() => finish(false), Math.max(0, deadline - Date.now()))
     let subscription: ReturnType<GeneratedAgentInputHost['subscribe']>
+    // A running agent needs no readiness marker: only blocking evidence is read, on each check.
+    const subscribe: GeneratedAgentInputHost['subscribe'] = running
+      ? () => () => {}
+      : host.subscribe
     try {
-      subscription = host.subscribe((data) => {
+      subscription = subscribe((data) => {
         lastOutput = Date.now()
         sequence += 1
         if (replaying) {

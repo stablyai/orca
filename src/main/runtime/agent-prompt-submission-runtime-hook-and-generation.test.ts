@@ -270,9 +270,10 @@ describe('agent prompt submission runtime hook and generation cases', () => {
       signal: controller.signal
     })
     const rejected = expect(submission).rejects.toThrow('request_aborted')
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(writes.some((data) => data.includes(AGENT_PROMPT_BRACKETED_PASTE_END))).toBe(true)
+    // Admission reads the current screen first; the paste follows within the same turn of reads.
+    await vi.waitFor(() =>
+      expect(writes.some((data) => data.includes(AGENT_PROMPT_BRACKETED_PASTE_END))).toBe(true)
+    )
     controller.abort()
     await vi.runAllTimersAsync()
     await rejected

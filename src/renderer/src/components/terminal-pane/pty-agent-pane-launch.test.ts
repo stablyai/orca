@@ -35,6 +35,11 @@ const renderer = vi.hoisted(() => {
     writes: vi.fn(async (_ptyId: string, _data: string) => true)
   }
 })
+// The local runtime admits and writes the owned prompt; the renderer hands it over once.
+const sendGeneratedTerminalInput = vi.hoisted(() =>
+  vi.fn(async (_ptyId: string, _request: { text: string }) => 'delivered')
+)
+vi.mock('@/runtime/generated-terminal-input-client', () => ({ sendGeneratedTerminalInput }))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => renderer.state,
@@ -412,6 +417,7 @@ describe('a pane that starts its own agent launch', () => {
   ] as const)(
     'settles %s from actual main spawn through renderer connect and owned prompt delivery',
     async (scenario) => {
+      sendGeneratedTerminalInput.mockClear()
       const { connectIpcPty } = await import('@/components/terminal-pane/ipc-pty-connect')
       const { awaitAgentLaunchPaneStart } = await import('@/lib/agent-launch-pane-start')
       const { noteAgentLaunchPaneClosedByUser } = await import('@/lib/agent-launch-pane-closes')
@@ -528,14 +534,10 @@ describe('a pane that starts its own agent launch', () => {
       expect(delivered).toHaveBeenCalledTimes(accepted ? 1 : 0)
       expect(renderer.state.seedNativeChatLaunchPrompt).toHaveBeenCalledTimes(accepted ? 1 : 0)
       expect(renderer.state.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
-      expect(renderer.writes.mock.calls.map(([id, data]) => [id, data])).toEqual(
-        accepted
-          ? [
-              ['pty-agent', '\x1b[200~fix checks\x1b[201~'],
-              ['pty-agent', '\r']
-            ]
-          : []
-      )
+      expect(renderer.writes).not.toHaveBeenCalled()
+      expect(
+        sendGeneratedTerminalInput.mock.calls.map(([id, request]) => [id, request.text])
+      ).toEqual(accepted ? [['pty-agent', 'fix checks']] : [])
       expect(providerSpawn).toHaveBeenCalledTimes(
         scenario === 'planner-failed' ? 0 : scenario === 'remount' ? 2 : 1
       )

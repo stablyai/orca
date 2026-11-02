@@ -214,7 +214,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     mockSshNeedsPassphrasePrompt.mockResolvedValue(false)
     mockSshGetState.mockResolvedValue({ status: 'connected' })
     mockSshConnect.mockResolvedValue({ status: 'connected' })
-    mockSubmitPromptToAgentPty.mockResolvedValue(true)
+    mockSubmitPromptToAgentPty.mockResolvedValue('delivered')
     vi.stubGlobal('window', {
       api: {
         automations: {

@@ -339,7 +339,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     })
 
     expect(mockPasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
-    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('aider')
+    // The follow-up's own refusal notice keeps the exact prompt; no second, text-less toast.
+    expect(mockShowAutomationPromptNotSentToast).not.toHaveBeenCalled()
   })
 
   it('does not toast when a follow-up prompt is delivered', async () => {
@@ -375,7 +376,11 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       | undefined
     expect(call?.onTimeout).toBeTypeOf('function')
     call?.onTimeout?.()
-    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('claude')
+    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith(
+      'claude',
+      'review this before sending',
+      undefined
+    )
   })
 
   it('does not track when follow-up prompt delivery rejects', async () => {

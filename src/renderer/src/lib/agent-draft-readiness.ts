@@ -68,7 +68,8 @@ async function readLegacyEvidence(ptyId: string): Promise<LegacyEvidence> {
   if (mounted) {
     return { screen: mounted, grid: true }
   }
-  const owner = getRemoteRuntimePtyOwner(ptyId)
+  // Only a paired host's PTY has a host screen to ask for; a local one is never legacy.
+  const owner = isRemoteRuntimePtyId(ptyId) ? getRemoteRuntimePtyOwner(ptyId) : null
   if (owner) {
     try {
       const read = await callRuntimeRpc<{ terminal: { tail: string[]; source?: string } }>(

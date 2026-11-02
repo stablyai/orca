@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { useAppStore } from '@/store'
 import { generatedInputAgentName } from '../../../shared/generated-agent-input-notice'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
@@ -69,6 +70,13 @@ export function createPasteReadinessTimeoutNotice(args: {
     wasNotified: () => notified,
     onTimeout: (certainty = 'not-sent') => {
       if (notified) {
+        return
+      }
+      const tab = (useAppStore.getState().tabsByWorktree[args.worktreeId] ?? []).find(
+        (candidate) => candidate.id === args.tabId
+      )
+      if (tab?.ptyId === null) {
+        // The pane never spawned: a launch failure, which its caller reports as the sole notice.
         return
       }
       notified = true

@@ -36,7 +36,9 @@ const fixture = vi.hoisted(() => {
       toastInfo: vi.fn(),
       toastMessage: vi.fn(),
       // The PTY's host admits and stages startup drafts; tests answer for it.
-      sendGeneratedTerminalInput: vi.fn(async () => 'staged'),
+      sendGeneratedTerminalInput: vi.fn(
+        async (_ptyId: string, _request: unknown): Promise<string> => 'staged'
+      ),
       notifyCodexPaneBoundForStaleSweep: vi.fn()
     },
     bind(next: PtyConnectionTestBindings): void {

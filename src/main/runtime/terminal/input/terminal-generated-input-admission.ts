@@ -14,6 +14,7 @@ import {
 } from '../../../../shared/generated-agent-input-admission'
 import { showsAgentComposer } from '../../../../shared/agent-input-dialog'
 import { resolvePasteReadySignal } from '../../../../shared/draft-paste-ready-scanner'
+import { showsOpenCodeAgentRow } from '../../../../shared/opencode-agent-row-scanner'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
@@ -36,6 +37,9 @@ export function boundedByDeadline<T>(read: Promise<T>, deadline: number, fallbac
     })
   ])
 }
+
+// Enter's own admission read and write fit inside this much of the remaining budget.
+const ENTER_COMMIT_MARGIN_MS = 50
 
 export type GeneratedInputWait = {
   agent: TuiAgent | null
@@ -75,6 +79,15 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     if (screen) {
       return { lines: screen.lines, alternateScreen: screen.isAlternateScreen }
     }
+    // The live grid, even a chunk behind, still shows a dialog it has painted; the write's own
+    // synchronous check reads the caught-up grid again.
+    const live = this.readLiveTerminalScreenLines(ptyId)
+    if (live) {
+      return {
+        lines: live,
+        alternateScreen: this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen === true
+      }
+    }
     return this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId)
       ? null
       : 'unknown'
@@ -99,6 +112,11 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     ) {
       throw this.generatedInputRefusal(ptyId)
     }
+  }
+
+  /** The settle wait before Enter ends with room left for Enter's own check and write. */
+  protected async withinEnterBudget(deadline: number, settle: Promise<unknown>): Promise<void> {
+    await boundedByDeadline(settle, deadline - ENTER_COMMIT_MARGIN_MS, undefined)
   }
 
   /** A caller's own guard (a foreground read) shares the operation's deadline. */
@@ -137,13 +155,16 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     agent: TuiAgent | null,
     quiet: boolean,
     deadline: number,
-    typedText?: string
+    typedText?: string,
+    intent: GeneratedInputIntent = 'startup'
   ): Promise<boolean> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const process = await boundedByDeadline(this.readGeneratedInputProcess(ptyId), deadline, {
       known: false
     } as const)
-    const screen = await boundedByDeadline(this.readGeneratedInputScreen(ptyId), deadline, null)
+    const read = await boundedByDeadline(this.readGeneratedInputScreen(ptyId), deadline, null)
+    // A grid that is not readable yet is no blocking evidence for an agent already running.
+    const screen = read === null && intent === 'running' ? 'unknown' : read
     return (
       this.getPtyLifecycleGeneration(ptyId) === generation &&
       admitsGeneratedInput({ agent, screen, process, quiet, typedText })
@@ -169,12 +190,22 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     if (isKnownReadyPromptBody(text, agent, () => screen.lines, outputClock)) {
       return true
     }
+    const bracketedPaste =
+      this.headlessTerminals.get(ptyId)?.emulator.getModes().bracketedPaste === true
+    // OpenCode's submit-ready sign, its stream scanner's agent row, read here from the painted grid;
+    // it proves a draft can land too.
+    if (
+      agent !== null &&
+      TUI_AGENT_CONFIG[agent].submitPasteReadySignal === 'opencode-agent-row' &&
+      bracketedPaste &&
+      screen.alternateScreen === true &&
+      showsOpenCodeAgentRow(screen.lines)
+    ) {
+      return true
+    }
     // A painted composer counts once the expected agent is proven in front, so a streaming turn
     // still takes input as it did before this gate; a shell prompt glyph never does.
-    if (
-      !signalAllowsCompatibilityEvidence(signal) ||
-      this.headlessTerminals.get(ptyId)?.emulator.getModes().bracketedPaste !== true
-    ) {
+    if (!signalAllowsCompatibilityEvidence(signal) || !bracketedPaste) {
       return false
     }
     const process = await boundedByDeadline(this.readGeneratedInputProcess(ptyId), deadline, {
@@ -213,7 +244,14 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
           )),
         accept: async (quiet) =>
           this.getPtyLifecycleGeneration(ptyId) === generation &&
-          (await this.generatedInputAdmitted(ptyId, wait.agent, quiet, wait.deadline))
+          (await this.generatedInputAdmitted(
+            ptyId,
+            wait.agent,
+            quiet,
+            wait.deadline,
+            undefined,
+            wait.intent
+          ))
       },
       signal,
       {
@@ -232,7 +270,12 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
       'submit' | 'generatedAgent' | 'inputDeadline' | 'observedReady' | 'generatedIntent'
     >,
     signal: AbortSignal | undefined
-  ): Promise<{ agent: TuiAgent | null; deadline: number; submit: boolean }> {
+  ): Promise<{
+    agent: TuiAgent | null
+    deadline: number
+    submit: boolean
+    intent: GeneratedInputIntent
+  }> {
     const agent = this.generatedInputAgent(ptyId, options.generatedAgent)
     const deadline = options.inputDeadline ?? Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
     const submit = options.submit !== false
@@ -242,7 +285,7 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     if (!(await this.waitForGeneratedTerminalInput(ptyId, wait))) {
       throw this.generatedInputRefusal(ptyId)
     }
-    return { agent, deadline, submit }
+    return { agent, deadline, submit, intent }
   }
 
   generatedInputRefusal(ptyId: string): Error {

@@ -469,7 +469,7 @@ describe('OpenCode submit readiness', () => {
       expect(vi.getTimerCount()).toBe(0)
     })
 
-    it('takes the box at the deadline after a refused grace once the agent is in front', async () => {
+    it('never takes the box at the deadline after a refused grace, even once the agent is in front', async () => {
       vi.useFakeTimers()
       const h = fixture()
       let shellInFront = true
@@ -477,9 +477,10 @@ describe('OpenCode submit readiness', () => {
       h.emit(BOX)
       await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS)
       expect(result.value).toBeUndefined()
+      // Nothing new is painted, and a deadline is never evidence: the agent's next signal decides.
       shellInFront = false
       await vi.advanceTimersByTimeAsync(8000 - OPENCODE_AGENT_ROW_GRACE_MS)
-      expect(result.value).toBe('pty-1')
+      expect(result.value).toBeNull()
     })
 
     it('ends at the hard deadline even when its observer never answers', async () => {

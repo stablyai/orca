@@ -612,8 +612,10 @@ describe('launchAgentInNewTab', () => {
       delivered: false,
       failureNotified: true
     })
+    // One persistent notice that names the agent and keeps the exact prompt behind Copy.
     expect(mockToastMessage).toHaveBeenCalledWith(
-      "Your prompt wasn't sent — paste it once the agent is ready."
+      expect.stringContaining("Your prompt wasn't sent to"),
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Copy prompt' }) })
     )
   })
 

@@ -57,19 +57,20 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const observationSignal = agentPromptObservationSignal(options)
     // A paused terminal refuses at once rather than after the wait; the write rechecks it.
     assertTerminalInputAdmitted(this, ptyId, options.inputSource)
+    // An agent asking for permission refuses at once, as before; other input owners are waited out.
+    const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
+    if (options.onPermission === 'wait') {
+      this.throwIfAgentPromptPermissionReturned(permissionBaseline, permissionBaseline)
+    }
+    this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     // Admission happens here, at the head of this PTY's tail; queue residency spent the same budget.
-    const { agent, deadline, submit } = await this.admitGeneratedTerminalInput(
+    const { agent, deadline, submit, intent } = await this.admitGeneratedTerminalInput(
       ptyId,
       options,
       observationSignal
     )
     assertAgentPromptRequestActive(observationSignal)
     this.assertAgentPromptGeneration(ptyId, generation)
-    const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
-    if (options.onPermission === 'wait') {
-      this.throwIfAgentPromptPermissionReturned(permissionBaseline, permissionBaseline)
-    }
-    this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
     // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
@@ -113,7 +114,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         return options.beforeWrite?.(ptyId)
       })
       await this.withinGeneratedDeadline(ptyId, deadline, waitForAgentPromptPromise(guard, signal))
-      if (!(await this.generatedInputAdmitted(ptyId, agent, false, deadline, typedText))) {
+      if (!(await this.generatedInputAdmitted(ptyId, agent, false, deadline, typedText, intent))) {
         throw this.generatedInputRefusal(ptyId)
       }
       assertWritable(signal)
@@ -150,25 +151,25 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         options.onSubmitWritten?.()
       }
       if (!submitWithPaste) {
-        // A dialog that opened, or the deadline, still withholds Enter after the paste.
-        if (renderGate) {
-          await waitForAgentPromptPromise(renderGate.wait(), deliverySignal)
-        } else if (options.composerReady) {
-          await waitForAgentPromptDelay(
-            AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + pasteIngestMs,
-            deliverySignal
-          )
-        } else {
-          const agent = this.getPtyAgent(ptyId)
-          const submitDelayMs = options.promptForSchedule
-            ? resolveAgentPromptSubmitDelayForAgent(
-                writeHostPlatform,
-                options.promptForSchedule,
-                agent
+        // A dialog that opened, or the deadline, still withholds Enter after the paste; the wait
+        // for the paste to settle ends early enough for Enter to land inside the budget.
+        await this.withinEnterBudget(
+          deadline,
+          renderGate
+            ? waitForAgentPromptPromise(renderGate.wait(), deliverySignal)
+            : waitForAgentPromptDelay(
+                options.composerReady
+                  ? AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + pasteIngestMs
+                  : options.promptForSchedule
+                    ? resolveAgentPromptSubmitDelayForAgent(
+                        writeHostPlatform,
+                        options.promptForSchedule,
+                        this.getPtyAgent(ptyId)
+                      )
+                    : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
+                deliverySignal
               )
-            : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
-          await waitForAgentPromptDelay(submitDelayMs, deliverySignal)
-        }
+        )
         try {
           await beforeWrite(deliverySignal, options.promptForSchedule)
         } catch (error) {

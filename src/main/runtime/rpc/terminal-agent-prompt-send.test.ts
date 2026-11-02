@@ -19,6 +19,7 @@ function makeRequest(params: unknown): RpcRequest {
 function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    isTerminalRunningAgent: vi.fn().mockResolvedValue(false),
     ...overrides
   } as OrcaRuntimeService
 }
@@ -94,6 +95,43 @@ describe('terminal agent prompt send RPC', () => {
       expect.objectContaining({ inputKind: 'driving', inputSource: 'programmatic' })
     )
     expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  // Cline under node has no turn settlement; its prompt still goes through the host's admission.
+  it('takes a prompt to an agent without turn settlement through the host operation', async () => {
+    const sendTerminal = vi.fn()
+    const sendTerminalAgentPrompt = vi.fn().mockResolvedValue({
+      handle: 'terminal-1',
+      accepted: true,
+      bytesWritten: 4
+    })
+    const runtime = makeRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      isTerminalRunningSettledPromptAgent: vi.fn().mockResolvedValue(false),
+      isTerminalRunningAgent: vi.fn().mockResolvedValue(true),
+      sendTerminal,
+      sendTerminalAgentPrompt
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest({
+        terminal: 'terminal-1',
+        text: 'yes',
+        enter: true,
+        agentPrompt: true,
+        client: { id: 'orca-cli', type: 'desktop' }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(sendTerminal).not.toHaveBeenCalled()
+    expect(sendTerminalAgentPrompt).toHaveBeenCalledWith(
+      'terminal-1',
+      'yes',
+      expect.objectContaining({ inputKind: 'driving', acceptQueued: true, observationTimeoutMs: 0 })
+    )
   })
 
   it('forwards the request signal to a plain send so an abandoned call stops before Enter', async () => {

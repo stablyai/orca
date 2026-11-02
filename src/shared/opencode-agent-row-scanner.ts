@@ -105,3 +105,16 @@ export function createOpenCodeAgentRowScanner(): {
     }
   }
 }
+
+/** The same row on a painted grid, for an observer that saw none of the startup bytes: a boxed
+ *  `·` row directly above the box's bottom-left corner. */
+export function showsOpenCodeAgentRow(lines: readonly string[]): boolean {
+  return lines.some((line, index) => {
+    const text = line.trimStart()
+    return (
+      text.startsWith('┃') &&
+      text.includes(AGENT_ROW_SEPARATOR) &&
+      (lines[index + 1]?.trimStart().startsWith(BOX_BOTTOM_LEFT) ?? false)
+    )
+  })
+}

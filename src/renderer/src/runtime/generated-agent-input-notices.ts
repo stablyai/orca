@@ -82,13 +82,14 @@ export function subscribeLocalGeneratedInputNotices(): () => void {
   if (typeof window.api?.runtime?.subscribe !== 'function') {
     return () => {}
   }
-  void window.api.runtime
-    .subscribe({ method: SUBSCRIBE }, (response) => receive(feed, response))
+  void Promise.resolve(
+    window.api.runtime.subscribe({ method: SUBSCRIBE }, (response) => receive(feed, response))
+  )
     .then((subscription) => {
       if (stopped) {
-        subscription.unsubscribe()
+        subscription?.unsubscribe()
       } else {
-        unsubscribe = subscription.unsubscribe
+        unsubscribe = subscription?.unsubscribe
       }
     })
     .catch(console.warn)
@@ -136,22 +137,23 @@ export function subscribeEnvironmentGeneratedInputNotices(environmentId: string)
   }
 }
 
-/** Tie a paired runtime's notice stream to its client-event subscription's lifetime. */
+/** Tie a paired runtime's notice stream to its client-event subscription's lifetime. The same
+ *  promise is returned, so the caller's cleanup runs on the same turn it always did. */
 export function withEnvironmentGeneratedInputNotices<T extends { unsubscribe: () => void }>(
   environmentId: string,
   subscription: Promise<T>
-): Promise<{ unsubscribe: () => void }> {
+): Promise<T> {
   const stopNotices = subscribeEnvironmentGeneratedInputNotices(environmentId)
-  return subscription.then(
-    (events) => ({
-      unsubscribe: () => {
+  // Registered before the caller's own handlers, so they read the extended unsubscribe.
+  subscription.then(
+    (events) => {
+      const unsubscribeEvents = events.unsubscribe
+      events.unsubscribe = () => {
         stopNotices()
-        events.unsubscribe()
+        unsubscribeEvents()
       }
-    }),
-    (error: unknown) => {
-      stopNotices()
-      throw error
-    }
+    },
+    () => stopNotices()
   )
+  return subscription
 }
