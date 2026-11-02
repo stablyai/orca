@@ -82,7 +82,7 @@ function latestMatchingMinute(
 }
 
 export function buildAutomationRrule(args: {
-  preset: Exclude<AutomationSchedulePreset, 'custom'>
+  preset: Exclude<AutomationSchedulePreset, 'once' | 'custom'>
   hour: number
   minute: number
   dayOfWeek?: number
@@ -103,7 +103,7 @@ export function buildAutomationRrule(args: {
 }
 
 export function buildAutomationCronSchedule(args: {
-  preset: Exclude<AutomationSchedulePreset, 'custom'>
+  preset: Exclude<AutomationSchedulePreset, 'once' | 'custom'>
   hour: number
   minute: number
   dayOfWeek?: number
@@ -129,6 +129,12 @@ export function nextAutomationOccurrenceAfter(
   after: number
 ): number {
   const rule = parseSchedule(rrule)
+  if (rule.kind === 'once') {
+    if (rule.runAt < dtstart || rule.runAt <= after) {
+      throw new Error('Choose a future date and time for the one-time automation.')
+    }
+    return rule.runAt
+  }
   if (rule.kind === 'cron') {
     return nextMatchingMinute(dtstart, after, (candidate) => cronMatches(rule, candidate))
   }
@@ -151,6 +157,9 @@ export function latestAutomationOccurrenceAtOrBefore(
     return null
   }
   const rule = parseSchedule(rrule)
+  if (rule.kind === 'once') {
+    return rule.runAt >= dtstart && rule.runAt <= now ? rule.runAt : null
+  }
   if (rule.kind === 'cron') {
     return latestMatchingMinute(dtstart, now, (candidate) => cronMatches(rule, candidate))
   }

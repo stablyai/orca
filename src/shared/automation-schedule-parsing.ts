@@ -1,5 +1,6 @@
 import type { AutomationSchedulePreset } from './automations-types'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
+import { parseAutomationOnceSchedule, type ParsedOnceSchedule } from './automation-once-schedule'
 
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 import {
@@ -30,7 +31,7 @@ export type ParsedCron = {
   dayOfWeekRestricted: boolean
 }
 
-export type ParsedSchedule = ParsedRrule | ParsedCron
+export type ParsedSchedule = ParsedRrule | ParsedCron | ParsedOnceSchedule
 export type { CronParseOptions }
 
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
@@ -160,15 +161,22 @@ function isAutomationCronFieldWhitespace(code: number): boolean {
 
 export function parseSchedule(schedule: string, options: CronParseOptions = {}): ParsedSchedule {
   const trimmed = schedule.trim()
+  const once = parseAutomationOnceSchedule(trimmed)
+  if (once) {
+    return once
+  }
   if (trimmed.includes('=')) {
     return parseRrule(trimmed)
   }
   return parseCronExpression(trimmed, options)
 }
 
-function scheduleRuns(schedule: string, options: CronParseOptions): boolean {
+function scheduleRuns(schedule: string, options: CronParseOptions, allowPastOnce = false): boolean {
   try {
     const parsed = parseSchedule(schedule, options)
+    if (parsed.kind === 'once') {
+      return allowPastOnce || parsed.runAt > Date.now()
+    }
     return parsed.kind !== 'cron' || cronHasPossibleOccurrence(parsed, Date.now())
   } catch {
     return false
@@ -194,7 +202,7 @@ export function isValidAutomationCronSchedule(schedule: string): boolean {
 
 // Read saved/provider-owned schedules under legacy cadence, not new-input step gates, so renames cannot force schedule re-authoring.
 export function isRunnableAutomationSchedule(schedule: string): boolean {
-  return scheduleRuns(schedule, {})
+  return scheduleRuns(schedule, {}, true)
 }
 
 export function isRunnableAutomationCronSchedule(schedule: string): boolean {
@@ -202,7 +210,7 @@ export function isRunnableAutomationCronSchedule(schedule: string): boolean {
 }
 
 export function parseAutomationRrule(rrule: string): {
-  preset: AutomationSchedulePreset
+  preset: Exclude<AutomationSchedulePreset, 'once' | 'custom'>
   hour: number
   minute: number
   dayOfWeek: number

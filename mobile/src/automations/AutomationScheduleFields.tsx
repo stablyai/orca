@@ -9,8 +9,13 @@ import { buildAutomationCronSchedule } from '../../../src/shared/automation-sche
 import { AutomationChoice, AutomationField } from './AutomationControls'
 import type { AutomationDraft } from './automation-draft'
 import { automationStyles as styles } from './automation-styles'
+import {
+  automationOnceDateInput,
+  automationOnceRunAt,
+  buildAutomationOnceSchedule
+} from '../../../src/shared/automation-once-schedule'
 
-type Cadence = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
+type Cadence = 'once' | 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
 export function AutomationScheduleFields({
   draft,
   change,
@@ -23,6 +28,7 @@ export function AutomationScheduleFields({
   const t = useMobileTranslation()
   useMobileColorScheme()
   const cadences: { value: Cadence; label: string }[] = [
+    { value: 'once', label: t('automations.once.preset', 'Once on a date') },
     { value: 'hourly', label: t('automations.mobile.hourly', 'Hourly') },
     { value: 'daily', label: t('automations.mobile.daily', 'Daily') },
     { value: 'weekdays', label: t('automations.mobile.weekdays', 'Weekdays') },
@@ -35,16 +41,37 @@ export function AutomationScheduleFields({
     )
   )
   const descriptor = describeAutomationSchedule(draft.rrule)
+  const onceDate = descriptor.kind === 'once' ? new Date(descriptor.runAt) : null
+  const [now] = useState(Date.now)
+  const [savedSchedule] = useState(draft.rrule)
+  const [date, setDate] = useState(() => automationOnceDateInput(onceDate?.getTime() ?? Date.now()))
   const [cadence, setCadence] = useState<Cadence>(
     descriptor.kind === 'invalid' ? 'custom' : descriptor.kind
   )
   const [time, setTime] = useState(
-    `${String('hour' in descriptor ? descriptor.hour : 9).padStart(2, '0')}:${String('minute' in descriptor ? descriptor.minute : 0).padStart(2, '0')}`
+    `${String(onceDate?.getHours() ?? ('hour' in descriptor ? descriptor.hour : 9)).padStart(2, '0')}:${String(onceDate?.getMinutes() ?? ('minute' in descriptor ? descriptor.minute : 0)).padStart(2, '0')}`
   )
   const [day, setDay] = useState(String('dayOfWeek' in descriptor ? descriptor.dayOfWeek : 1))
   const validTime = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)
-  function updateSchedule(nextCadence: Cadence, nextTime: string, nextDay: string) {
+  const runAt = automationOnceRunAt(date, time)
+  const onceInvalid =
+    cadence === 'once' &&
+    (runAt === null || (runAt <= now && buildAutomationOnceSchedule(runAt) !== savedSchedule))
+  function updateSchedule(
+    nextCadence: Cadence,
+    nextTime: string,
+    nextDay: string,
+    nextDate = date
+  ) {
     if (nextCadence === 'custom') {
+      return
+    }
+    if (nextCadence === 'once') {
+      const runAt = automationOnceRunAt(nextDate, nextTime)
+      change({
+        rrule: runAt === null ? '' : buildAutomationOnceSchedule(runAt),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      })
       return
     }
     if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(nextTime)) {
@@ -83,6 +110,29 @@ export function AutomationScheduleFields({
         />
       ) : (
         <>
+          {cadence === 'once' ? (
+            <>
+              <AutomationField
+                label={t('automations.once.date', 'Date (YYYY-MM-DD)')}
+                literal
+                value={date}
+                onChange={(next) => {
+                  setDate(next)
+                  updateSchedule(cadence, time, day, next)
+                }}
+                disabled={disabled}
+              />
+              <Text style={onceInvalid ? styles.error : styles.meta}>
+                {onceInvalid
+                  ? t('automations.once.futureRequired', 'Choose a valid future date and time.')
+                  : t(
+                      'automations.once.description',
+                      'Runs once, then pauses automatically. Time zone: {{timezone}}.',
+                      { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+                    )}
+              </Text>
+            </>
+          ) : null}
           <AutomationField
             label={
               cadence === 'hourly'
@@ -119,9 +169,11 @@ export function AutomationScheduleFields({
       <AutomationField
         label={t('automations.mobile.timeZone', 'Time zone')}
         literal
-        value={draft.timezone}
+        value={
+          cadence === 'once' ? Intl.DateTimeFormat().resolvedOptions().timeZone : draft.timezone
+        }
         onChange={(timezone) => change({ timezone })}
-        disabled={disabled}
+        disabled={disabled || cadence === 'once'}
       />
       <Text style={styles.meta}>
         {formatAutomationSchedule(draft.rrule)} · {draft.timezone}

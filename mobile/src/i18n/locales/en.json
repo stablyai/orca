@@ -4483,6 +4483,13 @@
         "unsupported": "The selected automation host does not support this project."
       },
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs."
+    },
+    "once": {
+      "preset": "Once on a date",
+      "date": "Date (YYYY-MM-DD)",
+      "futureRequired": "Choose a valid future date and time.",
+      "description": "Runs once, then pauses automatically. Time zone: {{timezone}}.",
+      "label": "Once on {{date}}"
     }
   },
   "auto": {

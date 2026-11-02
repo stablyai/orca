@@ -23220,6 +23220,13 @@
         "effortRepeated": "Extra arguments set the effort more than once."
       },
       "hostUpdateRequired": "Update Orca on this host to use extra arguments."
+    },
+    "once": {
+      "preset": "Once on a date",
+      "date": "Date",
+      "futureRequired": "Choose a valid future date and time.",
+      "description": "Runs once, then pauses automatically. Time zone: {{timezone}}.",
+      "label": "Once on {{date}}"
     }
   },
   "codeHost": {

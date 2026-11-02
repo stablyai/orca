@@ -16,11 +16,14 @@ import { AutomationTimeField, parseAutomationTime } from './AutomationTimeField'
 import { Field } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'
+import { automationOnceDateInput } from '../../../../shared/automation-once-schedule'
+import { AutomationOnceDateField } from './AutomationOnceDateField'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
 const AUTOMATION_WEEKDAY_VALUES = ['0', '1', '2', '3', '4', '5', '6'] as const
 
 export const AUTOMATION_SCHEDULE_PRESET_OPTIONS = [
+  ['once', 'Once on a date', 'automations.once.preset'],
   ['hourly', 'Hourly', 'auto.components.automations.AutomationSchedulePicker.55b2ef82a4'],
   ['daily', 'Daily', 'auto.components.automations.AutomationSchedulePicker.f0202f3a89'],
   ['weekdays', 'Weekdays', 'auto.components.automations.AutomationSchedulePicker.57e83307d0'],
@@ -41,7 +44,7 @@ function buildCustomScheduleSeed(draft: AutomationDraft): string {
   if (existing) {
     return draft.customSchedule
   }
-  if (draft.preset === 'custom') {
+  if (draft.preset === 'custom' || draft.preset === 'once') {
     return ''
   }
   const { hour, minute } = parseAutomationTime(draft.time)
@@ -56,9 +59,13 @@ function buildCustomScheduleSeed(draft: AutomationDraft): string {
 export function getSchedulePresetDraft(
   current: AutomationDraft,
   preset: AutomationSchedulePreset
-): Pick<AutomationDraft, 'preset' | 'customSchedule' | 'scheduleWarning'> {
+): Pick<AutomationDraft, 'preset' | 'onceDate' | 'customSchedule' | 'scheduleWarning'> {
   return {
     preset,
+    onceDate:
+      preset === 'once'
+        ? (current.onceDate ?? automationOnceDateInput(Date.now()))
+        : current.onceDate,
     customSchedule: preset === 'custom' ? buildCustomScheduleSeed(current) : current.customSchedule,
     scheduleWarning: null
   }
@@ -130,6 +137,9 @@ export function AutomationSchedulePicker({
         />
       ) : (
         <>
+          {draft.preset === 'once' ? (
+            <AutomationOnceDateField draft={draft} onDraftChange={onDraftChange} />
+          ) : null}
           {draft.preset === 'weekly' ? (
             <Field
               label={translate(

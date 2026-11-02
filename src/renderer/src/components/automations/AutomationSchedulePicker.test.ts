@@ -44,10 +44,20 @@ describe('AutomationSchedulePicker', () => {
   })
 
   it.each([
-    ['zh', ['每小时', '每天', '工作日', '每周', '自定义 cron']],
-    ['ja', ['毎時', '毎日', '平日', '毎週', 'カスタム cron']],
-    ['ko', ['매시간', '매일', '평일', '매주', '사용자 지정 cron']],
-    ['es', ['Cada hora', 'Diario', 'Días laborables', 'Semanal', 'Cron personalizado']]
+    ['zh', ['指定日期，仅运行一次', '每小时', '每天', '工作日', '每周', '自定义 cron']],
+    ['ja', ['指定日時に1回実行', '毎時', '毎日', '平日', '毎週', 'カスタム cron']],
+    ['ko', ['지정한 날짜에 한 번', '매시간', '매일', '평일', '매주', '사용자 지정 cron']],
+    [
+      'es',
+      [
+        'Una vez en una fecha',
+        'Cada hora',
+        'Diario',
+        'Días laborables',
+        'Semanal',
+        'Cron personalizado'
+      ]
+    ]
   ])('translates every cadence option in %s', async (locale, labels) => {
     await i18n.changeLanguage(locale)
     expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(getAutomationSchedulePresetLabel)).toEqual(labels)

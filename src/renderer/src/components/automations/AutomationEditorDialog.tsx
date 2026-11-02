@@ -59,6 +59,7 @@ export type AutomationDraft = {
   precheckTimeoutSeconds: string
   preset: AutomationSchedulePreset
   time: string
+  onceDate?: string
   dayOfWeek: string
   customSchedule: string
   // Validate new input strictly; do not re-judge a saved cadence that still runs.

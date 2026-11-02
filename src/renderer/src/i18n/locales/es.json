@@ -23199,6 +23199,9 @@
         "effortRepeated": "Los argumentos adicionales establecen el esfuerzo más de una vez."
       },
       "hostUpdateRequired": "Actualiza Orca en este host para usar argumentos adicionales."
+    },
+    "once": {
+      "preset": "Una vez en una fecha"
     }
   },
   "codeHost": {

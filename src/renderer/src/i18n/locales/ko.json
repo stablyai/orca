@@ -22509,6 +22509,9 @@
         "effortRepeated": "추가 인수에 추론 수준이 두 번 이상 지정되어 있습니다."
       },
       "hostUpdateRequired": "추가 인수를 사용하려면 이 호스트의 Orca를 업데이트하세요."
+    },
+    "once": {
+      "preset": "지정한 날짜에 한 번"
     }
   },
   "codeHost": {

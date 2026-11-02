@@ -7,6 +7,14 @@ import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 
 // Translate whole sentences; the shared English formatter also serves the CLI.
 function formatAutomationScheduleDescriptor(descriptor: AutomationScheduleDescriptor): string {
+  if (descriptor.kind === 'once') {
+    return translate('automations.once.label', 'Once on {{date}}', {
+      date: new Intl.DateTimeFormat(getUiIntlLocale(), {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }).format(descriptor.runAt)
+    })
+  }
   if (descriptor.kind === 'invalid') {
     return translate(
       'auto.components.automations.automation.schedule.label.086a5a9fe2',

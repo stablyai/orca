@@ -16,6 +16,10 @@ import {
 } from './automation-draft-model'
 import { saveOrcaAutomation } from './automation-orca-save'
 import type { AutomationSaveContext } from './automation-save-context'
+import {
+  automationOnceRunAt,
+  buildAutomationOnceSchedule
+} from '../../../../shared/automation-once-schedule'
 
 /** Validates editor input then runs the Orca save transaction. */
 export function createAutomationSaveAction(context: AutomationSaveContext) {
@@ -28,7 +32,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
     const scheduleEdited =
       editingAutomationId === null ||
       !draftAtOpen ||
-      (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(
+      (['preset', 'onceDate', 'time', 'dayOfWeek', 'customSchedule'] as const).some(
         (key) => draft[key] !== draftAtOpen[key]
       )
     const extrasEdited =
@@ -61,6 +65,18 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
         )
       )
       return
+    }
+    if (scheduleEdited && draft.preset === 'once') {
+      const runAt = automationOnceRunAt(draft.onceDate ?? '', draft.time)
+      if (
+        runAt === null ||
+        (runAt <= now && buildAutomationOnceSchedule(runAt) !== draft.savedSchedule)
+      ) {
+        toast.error(
+          translate('automations.once.futureRequired', 'Choose a valid future date and time.')
+        )
+        return
+      }
     }
     if (
       scheduleEdited &&

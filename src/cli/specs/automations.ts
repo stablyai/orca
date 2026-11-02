@@ -55,7 +55,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       ...AUTOMATION_STATE_FLAGS
     ],
     notes: [
-      'Trigger accepts hourly, daily, weekdays, weekly, a 5-field cron expression, or an RRULE string.',
+      'Trigger accepts hourly, daily, weekdays, weekly, a 5-field cron expression, an RRULE string, or ONCE=<UTC ISO date and time> for one run.',
       'When --repo is omitted, the CLI uses the enclosing Orca worktree when one can be resolved from cwd.',
       'Use --project, or --project-host-setup, to run on a specific project host setup. --project takes the project id or the display name from `orca project list`, and --host is only needed when the project is set up on more than one host.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',

@@ -3915,6 +3915,13 @@
         "unsupported": "所選自動化主機不支援此專案。"
       },
       "wslDistroStopped": "WSL 發行版 {{distro}} 已停止，因此這次排程執行沒有啟動它。請啟動該發行版或使用「立即執行」；它執行期間，之後的排程會照常進行。"
+    },
+    "once": {
+      "preset": "指定日期，僅執行一次",
+      "date": "日期（YYYY-MM-DD）",
+      "futureRequired": "請選擇有效的未來日期和時間。",
+      "description": "僅執行一次，觸發後自動暫停。時區：{{timezone}}。",
+      "label": "{{date}} 執行一次"
     }
   },
   "auto": {

@@ -22510,6 +22510,13 @@
         "effortRepeated": "额外参数重复设置了推理强度。"
       },
       "hostUpdateRequired": "请更新此主机上的 Orca 以使用额外参数。"
+    },
+    "once": {
+      "preset": "指定日期，仅运行一次",
+      "date": "日期",
+      "futureRequired": "请选择有效的未来日期和时间。",
+      "description": "仅运行一次，触发后自动暂停。时区：{{timezone}}。",
+      "label": "{{date}} 运行一次"
     }
   },
   "codeHost": {

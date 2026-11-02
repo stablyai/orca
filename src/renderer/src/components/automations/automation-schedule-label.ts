@@ -3,13 +3,21 @@ import {
   formatAutomationScheduleTime,
   type AutomationScheduleDescriptor
 } from '../../../../shared/automation-schedules'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'
 
 /** Translate whole schedule sentences for locale grammar; the shared English formatter also serves the CLI. */
 export function formatUiAutomationScheduleDescriptor(
   descriptor: AutomationScheduleDescriptor
 ): string {
+  if (descriptor.kind === 'once') {
+    return translate('automations.once.label', 'Once on {{date}}', {
+      date: new Intl.DateTimeFormat(getIntlLocale(), {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }).format(descriptor.runAt)
+    })
+  }
   if (descriptor.kind === 'invalid') {
     return translate(
       'auto.components.automations.automation.schedule.label.086a5a9fe2',
