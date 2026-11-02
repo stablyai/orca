@@ -139,7 +139,7 @@ test('project task prompt overrides global, persists across restart, and resets 
         throw new Error('Store unavailable')
       }
       await state.updateSettingsOrThrow({
-        experimentalNativeChat: true,
+        nativeChatProviders: { claude: true },
         defaultTuiAgent: 'claude',
         disabledTuiAgents: [],
         agentCmdOverrides: { claude: command }
