@@ -35,8 +35,13 @@ import { PLUGIN_PANEL_LIMIT, pluginPanelContributionSchema } from './plugin-pane
 import {
   pluginFieldDoc,
   PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_PANEL_BRIDGE_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
+import {
+  PLUGIN_SETTING_LIMIT,
+  pluginSettingContributionSchema
+} from './plugin-settings-contribution'
 
 /** Every `contributes` key, in manifest order. Adding a point starts here. */
 export const PLUGIN_CONTRIBUTION_POINTS = [
@@ -51,7 +56,8 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'iconThemes',
   'syntaxes',
   'customEditors',
-  'newFiles'
+  'newFiles',
+  'settings'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -67,7 +73,6 @@ export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
   hooks: 'agent hooks',
   taskSources: 'task sources',
   connections: 'account connections',
-  settings: 'plugin settings',
   statusBarItems: 'status bar items',
   sidebarCards: 'sidebar cards'
 } as const
@@ -90,8 +95,7 @@ export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
   mcpServers: 'MCP server definitions that Orca offers to the agents it launches.',
   skills: 'Agent skills shipped as files that Orca installs for the agents it launches.',
   hooks:
-    'Agent lifecycle hooks, such as before and after a tool call, for the agents Orca launches.',
-  settings: 'Typed plugin settings that Orca renders in its own settings UI.'
+    'Agent lifecycle hooks, such as before and after a tool call, for the agents Orca launches.'
 }
 
 function reservedList(purpose: string) {
@@ -197,6 +201,12 @@ export const pluginContributesFields = {
     PLUGIN_NEW_FILE_LIMIT,
     'Untitled files the user can create from the + menu and the command palette.',
     NEXT
+  ),
+  settings: contributionList(
+    pluginSettingContributionSchema,
+    PLUGIN_SETTING_LIMIT,
+    'Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`).',
+    PLUGIN_PANEL_BRIDGE_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -207,7 +217,6 @@ export const pluginReservedContributesFields = {
   hooks: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.hooks),
   taskSources: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.taskSources),
   connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections),
-  settings: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.settings),
   statusBarItems: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.statusBarItems),
   sidebarCards: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.sidebarCards)
 } satisfies Record<PluginReservedContributionPoint, z.ZodType>
@@ -241,5 +250,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   customEditors: { execution: 'sandboxed-ui', catalogType: 'editor', bindsContent: false },
   // Why data and no catalog type: a template is inert text that seeds a file the user asked for;
   // whatever opens that file (a syntax, an editor) carries its own type.
-  newFiles: { execution: 'data', catalogType: null, bindsContent: false }
+  newFiles: { execution: 'data', catalogType: null, bindsContent: false },
+  // Why sandboxed-ui: only code reads a setting, and panels are the least code there is.
+  settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false }
 }

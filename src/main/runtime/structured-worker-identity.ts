@@ -3,12 +3,14 @@ import type { AgentSessionConversationView } from '../../shared/agent-session-co
  * Random handles and leaves prevent session ids exposed in tab ids from yielding caller-supplied keys that read/consume worker mail. */
 
 import { randomUUID } from 'node:crypto'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import { isDeepStrictEqual } from 'node:util'
+import { sessionCrewChanges } from './orchestration/crew/crew-changes'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -163,8 +165,14 @@ export class StructuredWorkerIdentityRegistry {
   private readonly bySessionId = new Map<string, StructuredWorkerIdentity>()
 
   register(identity: StructuredWorkerIdentity): StructuredWorkerIdentity {
+    const changed =
+      !isDeepStrictEqual(this.byHandle.get(identity.handle), identity) ||
+      !isDeepStrictEqual(this.bySessionId.get(identity.sessionId), identity)
     this.byHandle.set(identity.handle, identity)
     this.bySessionId.set(identity.sessionId, identity)
+    if (changed) {
+      sessionCrewChanges.notify()
+    }
     return identity
   }
 
@@ -190,6 +198,7 @@ export class StructuredWorkerIdentityRegistry {
     if (this.bySessionId.get(identity.sessionId) === identity) {
       this.bySessionId.delete(identity.sessionId)
     }
+    sessionCrewChanges.notify()
   }
 
   /** Recover persisted pane key/host scope after restart; reject a key not bound to its recorded session. */
@@ -199,8 +208,12 @@ export class StructuredWorkerIdentityRegistry {
   }
 
   clear(): void {
+    const changed = this.byHandle.size > 0 || this.bySessionId.size > 0
     this.byHandle.clear()
     this.bySessionId.clear()
+    if (changed) {
+      sessionCrewChanges.notify()
+    }
   }
 }
 

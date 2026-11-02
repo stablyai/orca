@@ -12,7 +12,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import type { StructuredLaunchAttempt } from '@/lib/structured-agent-session-launch-request'
+import type { StructuredLaunchAttempt } from '@/lib/agent-session/launch/structured-agent-session-launch-request'
 import type * as WorktreeFixtures from '@/store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -393,7 +393,7 @@ it('gives static/search no agent actions while loading, retaining settings and g
       onNewBrowserTab: vi.fn()
     })
   )
-  expect(controller.result.current.agentLaunchOptions).toEqual([])
+  expect(controller.result.current.agentPickerInventory.getSnapshot()).toEqual([])
   expect(
     controller.result.current.createMenuOptions.some((option) => option.kind === 'new-terminal')
   ).toBe(true)

@@ -1,4 +1,4 @@
-import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
 import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 import { runClaudeListing, type ClaudeModelCatalogProbeDeps } from './claude-model-catalog-probe'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'

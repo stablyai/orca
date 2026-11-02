@@ -5,10 +5,17 @@ import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { fillPluginPanelShell } from '../right-sidebar/plugin-panel-design-token-css'
+import {
+  PluginFrameView,
+  pluginFrameWindowOf,
+  usablePluginFrameGuest,
+  type PluginFrameElement
+} from '../right-sidebar/plugin-frame-element'
 import { usePluginFrameHost } from '../right-sidebar/use-plugin-frame-host'
 import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { registerEditorFrameFlush } from './editor-pending-flush'
+import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import {
   createCustomEditorHost,
   type CustomEditorBinaryDocument,
@@ -52,7 +59,7 @@ export default function PluginCustomEditorFrame({
 }: PluginCustomEditorFrameProps): React.JSX.Element {
   const [refusal, setRefusal] = useState<CustomEditorEditRefusal | null>(null)
   const [saveBlocked, setSaveBlocked] = useState(false)
-  const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const frameRef = useRef<PluginFrameElement | null>(null)
   // Why random: window.name is readable inside the frame, so it must not carry the file's path.
   const [frameName] = useState(
     () => `${PLUGIN_PANEL_FRAME_NAME_PREFIX}editor:${createBrowserUuid()}`
@@ -83,19 +90,15 @@ export default function PluginCustomEditorFrame({
   const isLarge =
     (binaryDocument?.bytes.byteLength ?? content.length) > CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES
 
-  const { entry, markUnresponsive } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
-
-  const frameKey = entry.status === 'ready' ? `${editor.key}:${entry.revision}` : null
-  const entryHtml = entry.status === 'ready' ? entry.html : null
-  // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
-  const frameDocument = useMemo(
-    () => (entryHtml === null ? null : fillPluginPanelShell(entryHtml)),
-    [entryHtml]
-  )
+  const {
+    entry: liveEntry,
+    markUnresponsive,
+    remountGone
+  } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
 
   const host = useMemo(() => {
     const created = createCustomEditorHost({
-      getFrameWindow: () => iframeRef.current?.contentWindow ?? null,
+      getFrameWindow: () => pluginFrameWindowOf(frameRef.current),
       getDocument: () => ({
         text: latestRef.current.content,
         readOnly: latestRef.current.readOnly
@@ -117,12 +120,12 @@ export default function PluginCustomEditorFrame({
           latestRef.current.onDirtyHint?.(true)
         }
       },
-      onKeyChord: (chord) => {
+      onKeyChord: (chord, context) => {
         const event = new KeyboardEvent('keydown', chord)
         // Why: chords are posted by frame code, so only one riding real user input may save.
         if (
           latestRef.current.readOnly ||
-          navigator.userActivation?.isActive !== true ||
+          !context.userActivation ||
           !editorShortcutMatches('editor.save', event)
         ) {
           return
@@ -134,13 +137,28 @@ export default function PluginCustomEditorFrame({
     return created
   }, [isBinary])
 
+  const entry = useCustomEditorReloadFlush(liveEntry, host.flush)
+  const frameKey = entry.status === 'ready' ? `${editor.key}:${entry.revision}` : null
+  const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
+  const entryHtml = entry.status === 'ready' && !guest ? entry.html : null
+  // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
+  const frameDocument = useMemo(
+    () => (entryHtml === null ? null : fillPluginPanelShell(entryHtml)),
+    [entryHtml]
+  )
+
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'editor',
-    iframeRef,
+    frameRef,
     frameKey,
     sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
     editor: host.channel,
-    onUnresponsive: markUnresponsive
+    onUnresponsive: markUnresponsive,
+    onGuestGone: () => {
+      // A dead guest cannot answer the reload's flush.
+      host.reset()
+      remountGone()
+    }
   })
 
   useEffect(() => {
@@ -226,17 +244,14 @@ export default function PluginCustomEditorFrame({
           )}
         </div>
       ) : null}
-      <iframe
+      <PluginFrameView
         key={frameKey}
-        ref={iframeRef}
-        // SECURITY: never add allow-same-origin — the srcdoc frame must stay an opaque origin so
-        // plugin UI cannot reach the app DOM, storage, IPC or the file it edits.
-        sandbox="allow-scripts"
+        frameRef={frameRef}
+        guest={guest}
         name={frameName}
         srcDoc={frameDocument ?? ''}
         onLoad={onFrameLoad}
         title={editor.title}
-        className="min-h-0 w-full flex-1 border-0 bg-background"
       />
     </div>
   )

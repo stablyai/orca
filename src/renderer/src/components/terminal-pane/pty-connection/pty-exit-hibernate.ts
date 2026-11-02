@@ -10,7 +10,7 @@ import {
 import { POST_REPLAY_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
 import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'

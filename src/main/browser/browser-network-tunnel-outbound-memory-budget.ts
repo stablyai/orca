@@ -8,6 +8,9 @@ const DEFAULT_PROCESS_MAX_SOCKET_SOURCES = 32
 const DEFAULT_HOST_MAX_LEASES = 8
 const DEFAULT_PROCESS_MAX_LEASES = 64
 const DEFAULT_PROCESS_MAX_HOSTS = 32
+// Application bytes stop short of the caps so a stream failed for lack of memory can still send its Error.
+const DEFAULT_CONTROL_FRAME_RESERVE_BYTES = 64 * 1024
+const DEFAULT_CONTROL_FRAME_RESERVE_CLAIMS = 64
 
 export type BrowserNetworkTunnelOutboundSocketMemory = {
   canSend: (bytes: number, alreadyRetained?: boolean) => boolean
@@ -40,6 +43,8 @@ type BrowserNetworkTunnelOutboundMemoryBudgetOptions = {
   hostMaxLeases?: number
   processMaxLeases?: number
   processMaxHosts?: number
+  controlFrameReserveBytes?: number
+  controlFrameReserveClaims?: number
 }
 
 export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
@@ -52,6 +57,8 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
   private readonly hostMaxLeases: number
   private readonly processMaxLeases: number
   private readonly processMaxHosts: number
+  private readonly controlFrameReserveBytes: number
+  private readonly controlFrameReserveClaims: number
   private readonly hosts = new Map<string, BrowserHostMemoryState>()
   private readonly bufferedSources = new Set<() => number>()
   private retainedBytes = 0
@@ -70,6 +77,10 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
     this.hostMaxLeases = options.hostMaxLeases ?? DEFAULT_HOST_MAX_LEASES
     this.processMaxLeases = options.processMaxLeases ?? DEFAULT_PROCESS_MAX_LEASES
     this.processMaxHosts = options.processMaxHosts ?? DEFAULT_PROCESS_MAX_HOSTS
+    this.controlFrameReserveBytes =
+      options.controlFrameReserveBytes ?? DEFAULT_CONTROL_FRAME_RESERVE_BYTES
+    this.controlFrameReserveClaims =
+      options.controlFrameReserveClaims ?? DEFAULT_CONTROL_FRAME_RESERVE_CLAIMS
   }
 
   acquire(browserHostClientId: string): BrowserNetworkTunnelOutboundMemoryLease | null {
@@ -120,8 +131,8 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
     host: BrowserHostMemoryState
   ): BrowserNetworkTunnelOutboundMemoryLease {
     let active = true
-    const claim = (bytes: number): (() => void) | null => {
-      if (!active || !this.canClaim(host, bytes)) {
+    const claim = (bytes: number, reserved: boolean): (() => void) | null => {
+      if (!active || !this.canClaim(host, bytes, reserved)) {
         return null
       }
       host.retainedBytes += bytes
@@ -137,8 +148,8 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
       })
     }
     return {
-      claimApplicationBytes: claim,
-      claimQueuedBytes: claim,
+      claimApplicationBytes: (bytes) => claim(bytes, true),
+      claimQueuedBytes: (bytes) => claim(bytes, false),
       registerBufferedAmount: (readBufferedAmount) => {
         if (
           !active ||
@@ -171,11 +182,13 @@ export class BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
     }
   }
 
-  private canClaim(host: BrowserHostMemoryState, bytes: number): boolean {
+  private canClaim(host: BrowserHostMemoryState, bytes: number, reserved: boolean): boolean {
+    const reserveClaims = reserved ? this.controlFrameReserveClaims : 0
+    const reserveBytes = reserved ? this.controlFrameReserveBytes : 0
     return (
-      host.claims < this.hostMaxClaims &&
-      this.claims < this.processMaxClaims &&
-      this.canFitBytes(host, bytes, bytes)
+      host.claims + reserveClaims < this.hostMaxClaims &&
+      this.claims + reserveClaims < this.processMaxClaims &&
+      this.canFitBytes(host, bytes, bytes + reserveBytes)
     )
   }
 

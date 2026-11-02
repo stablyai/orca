@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('./structured-agent-session-client', () => ({

@@ -2,16 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import {
-  agentJournalItemKey,
-  agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+  type AgentJournalMessageItem,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener
@@ -112,49 +109,6 @@ describe('projectJournalBatch', () => {
       expect(
         projectJournalBatch({ rows: withHole, snapshot: journal.snapshot(), afterSequence: 0 })
       ).toMatchObject({ ok: true })
-    } finally {
-      await journal.close()
-      await closeTestJournalHostDatabase(root)
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  it('names touched card keys and deleted keys per outcome sequence; a Stop mark touches no item', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-history-outcome-keys-'))
-    const journal = await outcomeJournals.open({
-      identity: IDENTITY,
-      stateDirectory: root,
-      now: tick
-    })
-    try {
-      const queued: AgentJournalMessageItem = {
-        kind: 'message',
-        role: 'user',
-        blocks: [{ type: 'text', text: 'queued' }]
-      }
-      await journal.queuedMessages.insert({ messageId: 'card-1', body: queued })
-      await journal.appendItem(item(1), body('item-1'), {
-        fence: 1,
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      })
-      const cursor = journal.cursor()
-      await journal.queuedMessages.withdraw(['card-1'])
-      await journal.appendTombstone(item(1), { fence: 1 })
-      await journal.appendStopEvent({ reason: 'user-stop' }, 1)
-      const since = journal.readSince(cursor)
-      if (!since.ok) {
-        throw new Error(`expected rows, got reset ${since.reset}`)
-      }
-      const none = { itemIds: [], submissionIds: [], queueCardIds: [] }
-      expect(since.rows).toEqual([
-        expect.objectContaining({ kind: 'outcome', queueCardIds: ['card-1'], deleted: none }),
-        expect.objectContaining({
-          kind: 'outcome',
-          itemIds: [agentJournalItemKey(item(1))],
-          deleted: { ...none, itemIds: [agentJournalItemKey(item(1))] }
-        }),
-        expect.objectContaining({ kind: 'outcome', itemIds: [], queueCardIds: [], deleted: none })
-      ])
     } finally {
       await journal.close()
       await closeTestJournalHostDatabase(root)

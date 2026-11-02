@@ -10,10 +10,11 @@ import { getIntlLocale, translate } from '@/i18n/i18n'
 import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
 
-/** The manifest points shown as named rows; commands, shortcuts and events have their own lists. */
+/** The manifest points shown as named rows; commands, shortcuts, events and settings have their
+ *  own lists. */
 export type PluginContributionKind = Exclude<
   PluginContributionPoint,
-  'commands' | 'keybindings' | 'events'
+  'commands' | 'keybindings' | 'events' | 'settings'
 >
 
 /** One named thing a plugin adds, ready to show as a row. */

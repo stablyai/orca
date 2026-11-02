@@ -4,17 +4,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { expect, it, vi } from 'vitest'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import * as processSpawn from '../codex/codex-app-server-process-tree-kill'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import * as processSpawn from '../codex/app-server/codex-app-server-process-tree-kill'
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 
 vi.mock('./structured-agent-model-catalog-wiring', () => ({
   modelCatalogHostDeps: async () => ({})

@@ -13,10 +13,13 @@ import {
   isWslDistroRunning,
   isWslDistroRunningForBackgroundWork,
   noteWslDistroMayHaveStopped,
+  noteWslDistroWoken,
   noteWslDistrosRunning,
+  onWslDistroGateNote,
   readSettledConfirmedRunningWslDistros,
   WSL_STOP_SETTLE_MS
 } from './wsl-background-distro-gate'
+import { isWslUserActFor, runAsWslUserAct } from './wsl/wsl-user-act-scope'
 import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros
@@ -201,5 +204,24 @@ describe('deferUntilWslDistroRunning', () => {
     await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(2))
 
     expect(after).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('gate note listeners (E9)', () => {
+  it("never run inside the user act whose wake or stop they hear, so their work can't borrow it", async () => {
+    const insideAct: boolean[] = []
+    onWslDistroGateNote(() => insideAct.push(isWslUserActFor('Ubuntu')))
+
+    await runAsWslUserAct(
+      'Ubuntu',
+      async () => {
+        // The act's own work holds the allowance.
+        expect(isWslUserActFor('Ubuntu')).toBe(true)
+        noteWslDistroMayHaveStopped('Ubuntu')
+      },
+      { onSettled: noteWslDistroWoken }
+    )
+
+    expect(insideAct).toEqual([false, false])
   })
 })

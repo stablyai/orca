@@ -4,13 +4,13 @@ import {
 } from '../../../shared/agent-journal-tool-call-lifecycle'
 import type {
   AgentJournalItemBody,
-  AgentJournalMessageItem,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
+  AgentJournalMessageItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 import {
   isRunningAgentJournalTurn,
   readAgentJournalTurn
-} from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { cancelledJournalPromptBody } from './journal-prompt-body-bounds'
 import { endedJournalReasoning } from './journal-reasoning-row'
 

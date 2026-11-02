@@ -30,7 +30,7 @@ export function AiVaultScanIssueBanners({
         </div>
       ) : null}
       {hasNoticeRows ? (
-        // Why bounded: one notice per partly-read session can outgrow the panel and hide the list.
+        // Why bounded: host and scope notices can outgrow the panel and hide the list.
         <div
           data-testid="ai-vault-scan-notices"
           className="scrollbar-sleek max-h-24 shrink-0 overflow-y-auto"

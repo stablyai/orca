@@ -32,7 +32,7 @@ import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 import {
   structuredAgentSessionSendBody,
   agentSessionSendBodyFingerprint
-} from '../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 const scope = 'agent-session:rich-return'
 let composing = false
@@ -267,7 +267,7 @@ import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { queuedMessageWithEdit } from '../../../../shared/queued-message-edit'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
 let controller: ReturnType<typeof useStructuredAgentSessionQueuedEdit>

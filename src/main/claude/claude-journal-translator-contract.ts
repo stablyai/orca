@@ -1,18 +1,18 @@
-import type { AgentSessionContextReport } from '../../shared/agent-session-context-usage'
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
+import type { AgentSessionContextReport } from '../../shared/agent-session/agent-session-context-usage'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeChildToolQueries } from './claude-child-tool-queries'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
-import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
+import type { ClaudeJournalPrompts } from './structured/journal/claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import type { ClaudeCommandStart } from './claude-command-turn'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink

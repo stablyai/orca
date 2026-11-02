@@ -1,6 +1,7 @@
 /** Use live/unverifiable/exited evidence like SSH: loss of host-generation contact never proves death, including a structured host not yet installed. */
 
-import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { OrchestrationWorkerReadTranscriptResult } from '../../../../shared/orchestration-worker-output'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
@@ -26,7 +27,7 @@ import {
 import {
   projectStructuredItemToNativeChat,
   projectStructuredItemsToNativeChat
-} from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   observeStructuredWorker,
   requireRunningStructuredWorker,
@@ -39,7 +40,10 @@ import { structuredWorkerOwned } from '../../structured-worker-custody'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 import type { WorkerTerminalReleaseState } from '../../orchestration/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
-import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
+import {
+  closeStructuredAgentSessionChild,
+  type StructuredSessionSurfaceRuntime
+} from '../../agent-session/structured-agent-session-close'
 import {
   chatAssigneeJournal,
   type StructuredJournalSource
@@ -69,10 +73,8 @@ export type StructuredWorkerStopOutcome = {
  * Re-resolve /clear successors after each close. Unverifiable sessions remain untouched and retained. */
 export async function stopStructuredWorker(
   identity: StructuredWorkerIdentity,
-  runtime?: Pick<
-    OrcaRuntimeService,
-    'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
-  >,
+  runtime?: StructuredSessionSurfaceRuntime &
+    Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>,
   admitClose?: () => boolean
 ): Promise<StructuredWorkerStopOutcome> {
   const closed = new Set<string>()

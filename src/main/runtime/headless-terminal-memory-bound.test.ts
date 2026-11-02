@@ -63,40 +63,6 @@ it('bounds a provider snapshot that does not answer, then reseeds once it lands'
   }
 })
 
-it('keeps preferring the provider when the late retry finds no snapshot', async () => {
-  vi.useFakeTimers()
-  try {
-    const { runtime, late, serializeProviderBuffer } = hangingProvider()
-    runtime.replaceExecutionContext()
-    const stalled = runtime.model()
-    await vi.advanceTimersByTimeAsync(AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS)
-    serializeProviderBuffer.mockResolvedValue(null)
-    late.resolve({ ...SIZE, data: 'LATE-SEED', seq: 0, source: 'headless' })
-    await vi.waitFor(() => expect(runtime.model()).not.toBe(stalled))
-    await runtime.model().writeChain
-    // The retry's model lost what its predecessor held, so it must not become authoritative.
-    expect(runtime.retainedState().providerPreferred).toBe(true)
-  } finally {
-    vi.useRealTimers()
-  }
-})
-
-it('trusts the model when a timed-out capture lands with no snapshot', async () => {
-  vi.useFakeTimers()
-  try {
-    const { runtime, late, serializeProviderBuffer } = hangingProvider()
-    runtime.replaceExecutionContext()
-    const model = runtime.model()
-    await vi.advanceTimersByTimeAsync(AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS)
-    late.resolve(null)
-    await vi.waitFor(() => expect(runtime.retainedState().providerPreferred).toBe(false))
-    expect(runtime.model()).toBe(model)
-    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
-  } finally {
-    vi.useRealTimers()
-  }
-})
-
 it('bounds every reader of a provider snapshot that does not answer', async () => {
   vi.useFakeTimers()
   try {

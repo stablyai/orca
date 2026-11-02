@@ -1,7 +1,7 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRowAttribution
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import { createAgentSessionDeltaCoalescer } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from './codex-structured-journal-sink'

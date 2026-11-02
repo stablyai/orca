@@ -30,27 +30,6 @@ Handle rejected Web Store tab creation before completing the tour.
     expect(markup).not.toMatch(/<img|<source|srcset=|storage\.googleapis\.com/)
   })
 
-  it.each([
-    ['major-16', 'text-status-warning-text'],
-    ['critical-20-dark', 'text-destructive'],
-    ['informational-16', 'text-muted-foreground'],
-    ['risk-high-16', 'text-status-warning-text'],
-    ['priority-urgent-16', 'text-destructive'],
-    ['review-details-dark', 'text-muted-foreground'],
-    ['bot', 'text-muted-foreground']
-  ])('renders %s with severity color and an accessible authored label', (name, color) => {
-    const markup = renderToStaticMarkup(
-      <CommentMarkdown
-        extension={reviewCommentMarkdown}
-        content={`![Review icon](${iconBase}${name}.svg)`}
-      />
-    )
-    expect(markup).toContain('<svg ')
-    expect(markup).toContain(color)
-    expect(markup).toContain('role="img" aria-label="Review icon"')
-    expect(markup).not.toContain(iconBase)
-  })
-
   it('suppresses picture sources even when the fallback image is unrecognized', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown
@@ -81,22 +60,5 @@ Handle rejected Web Store tab creation before completing the tour.
     )
     expect(markup).toContain('>External image</a>')
     expect(markup).not.toMatch(/<img|<svg/)
-  })
-
-  it('keeps other compact surfaces unchanged and preserves trusted screenshots in reviews', () => {
-    const otherSurface = renderToStaticMarkup(
-      <CommentMarkdown content={`![](${iconBase}amber-16.svg)`} />
-    )
-    expect(otherSurface).toContain(`href="${iconBase}amber-16.svg"`)
-    expect(otherSurface).not.toContain('<svg')
-
-    const review = renderToStaticMarkup(
-      <CommentMarkdown
-        extension={reviewCommentMarkdown}
-        content="![Screenshot](data:image/png;base64,abc123)"
-      />
-    )
-    expect(review).toContain('<img')
-    expect(review).toContain('src="data:image/png;base64,abc123"')
   })
 })

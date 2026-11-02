@@ -1,4 +1,7 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 // Database and row versions evolve independently; both must reject unsupported newer content.
 
 import { createHash } from 'node:crypto'
@@ -7,10 +10,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
-  AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type Database from '../../sqlite/sync-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
@@ -22,7 +24,7 @@ import {
   insertTestJournalRowJson,
   SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalStoreSchemaTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

@@ -1,5 +1,5 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type {
   CodexDispatchEchoes,
   CodexDispatchRequestOrigin

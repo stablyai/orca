@@ -20,6 +20,7 @@ import {
   resolveNativeChatComposerDraftOwner,
   installNativeChatDraftRecord,
   type NativeChatDraftPosition,
+  nativeChatDraftPositions,
   dirtyScopes,
   hasLocalChange,
   load,
@@ -102,10 +103,6 @@ export function isNativeChatComposerDraftUnsaved(scopeKey: string): boolean {
   return !isNativeChatSetupDraft(scopeKey) && refusedScopes.has(scopeKey) && records.has(scopeKey)
 }
 
-function isEmptyDraft(draft: NativeChatComposerDraft): boolean {
-  return draft.text === '' && draft.images.length === 0
-}
-
 export function readNativeChatComposerDraft(
   scopeKey: string
 ): NativeChatComposerDraft & Pick<StoredNativeChatComposerDraft, 'owner'> {
@@ -124,6 +121,7 @@ export function finishNativeChatComposerSubmission(
       scopeKey,
       draft,
       resolveNativeChatComposerDraftOwner(scopeKey) ?? draft.owner,
+      undefined,
       true
     )
   }
@@ -152,6 +150,7 @@ export function updateNativeChatComposerDraft(
   const images = change.images ?? current.images
   const unsavedText = change.unsavedText ?? current.unsavedText
   if (
+    !position &&
     JSON.stringify(pastedTextFiles) === JSON.stringify(current.pastedTextFiles ?? {}) &&
     text === current.text &&
     sameNativeChatComposerDraftDocument(document, current.document) &&
@@ -163,7 +162,7 @@ export function updateNativeChatComposerDraft(
     }
     return
   }
-  if (isEmptyDraft({ text, images })) {
+  if (text === '' && images.length === 0) {
     installNativeChatDraftRecord(scopeKey)
     reconcileRestoredImageChecks(scopeKey, [])
     notifyScope(scopeKey)
@@ -201,30 +200,22 @@ export function updateNativeChatComposerDraft(
   }
 }
 
-function withAddition<T extends NativeChatComposerDraft>(
-  draft: T,
-  addition: NativeChatComposerDraftAddition
-): T {
-  return { ...draft, ...withNativeChatComposerDraftAddition(draft, addition) }
-}
-
 /** Replay additions over late hydration without duplicates; true means durable hand-back, allowing deletion of its source copy. */
 export function appendToNativeChatComposerDraft(
   scopeKey: string,
   addition: NativeChatComposerDraftAddition,
   owner?: NativeChatComposerDraftOwner,
+  position?: (draft: NativeChatComposerDraft) => NativeChatDraftPosition,
   independent = false
 ): boolean {
   scopeKey = currentDraftScope(scopeKey)
   const before = records.get(scopeKey)
   const current = readNativeChatComposerDraft(scopeKey)
   const placed = placeNativeChatComposerDraftAddition(current, addition)
-  const compose = independent
-    ? (base: StoredNativeChatComposerDraft) => ({
-        ...base,
-        ...withIndependentNativeChatComposerDraft(base, placed)
-      })
-    : (base: StoredNativeChatComposerDraft) => withAddition(base, placed)
+  const add = independent
+    ? withIndependentNativeChatComposerDraft
+    : withNativeChatComposerDraftAddition
+  const compose = (base: StoredNativeChatComposerDraft) => ({ ...base, ...add(base, placed) })
   const { text, images, document, pastedTextFiles } = compose({ ...current, savedAt: 0 })
   updateNativeChatComposerDraft(
     scopeKey,
@@ -236,7 +227,14 @@ export function appendToNativeChatComposerDraft(
       ...(owner ? { owner } : {})
     },
     'immediate',
-    compose
+    (loaded) => {
+      const merged = compose(loaded)
+      if (position) {
+        nativeChatDraftPositions.set(merged, position(merged))
+      }
+      return merged
+    },
+    position?.({ text, images, document, pastedTextFiles })
   )
   if (text !== current.text) {
     notifyDraftAppend(scopeKey, placed, current)

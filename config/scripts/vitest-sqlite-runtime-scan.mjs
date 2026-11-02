@@ -30,8 +30,8 @@ export const SQLITE_MODULES = [
   'src/main/native-chat/agent-session-journal/journal-host-database',
   'src/main/runtime/orchestration/db',
   'src/main/runtime/orchestration/db/orchestration-db',
-  'src/main/runtime/structured-agent-session-runtime',
-  'src/main/runtime/agent-session-record-store-slot'
+  'src/main/runtime/agent-session/structured-agent-session-runtime',
+  'src/main/runtime/agent-session/records/agent-session-record-store-slot'
 ]
 const SQLITE_MODULE_PATHS = new Set(SQLITE_MODULES.map((module) => resolve(root, module)))
 // A cheap superset of the parse below; a bare 'db' would match nearly every file.

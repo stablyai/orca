@@ -1,10 +1,12 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import { notifyNativeChatComposerState } from './native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
+import { useNotificationCardComposerClearance } from '@/lib/notification-card-composer-clearance'
 import type {
   ComposerAutocomplete,
   NativeChatPickerItem
@@ -221,6 +223,7 @@ export function NativeChatComposerField({
     if (compositionWasActive) {
       settleImeValue(textareaRef.current!)
     }
+    notifyNativeChatComposerState()
   })
   const editorCompositionStart = useLatestHandler(() => {
     if (imeEnterGesture.isComposing()) {
@@ -237,6 +240,7 @@ export function NativeChatComposerField({
     if (compositionWasActive) {
       settleImeValue(textareaRef.current!)
     }
+    notifyNativeChatComposerState()
   })
   const editorPaste = useLatestHandler(onPaste)
   const attach = useLatestHandler(onAttach)
@@ -267,13 +271,18 @@ export function NativeChatComposerField({
 
   // Stable so the memoized option pickers keep their identity.
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
-
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
+  const paneRef = useRef<HTMLDivElement>(null)
+  const columnRef = useRef<HTMLDivElement>(null)
+  // A launch prompt's popover never covers notification cards, so it needs no clearance.
+  useNotificationCardComposerClearance(paneRef, columnRef, editSession === undefined && !launch)
+
   return (
-    <div className={launch ? undefined : 'shrink-0 bg-chat-canvas'}>
+    <div ref={paneRef} className={launch ? undefined : 'shrink-0 bg-chat-pane'}>
       <div className={launch ? undefined : 'px-3 pt-2 pb-4 sm:px-4'}>
         <div
+          ref={columnRef}
           className={cn('relative w-full', !launch && 'mx-auto max-w-(--chat-content-max-width)')}
         >
           {autocomplete.mode === 'slash' ? (
@@ -338,6 +347,7 @@ export function NativeChatComposerField({
               positionTarget={positionTarget}
               imageRow={imageRow}
               inputRef={textareaRef}
+              isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
               onChange={editorChange}

@@ -1,6 +1,6 @@
 import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
-import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
+import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
@@ -30,7 +30,7 @@ import {
 import type {
   RuntimeCreateAgentSessionResult,
   RuntimeEnsureAgentSessionResult
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
 import type {
@@ -3928,6 +3928,14 @@ export function createRemoteRuntimePtyTransport(
     // Why: dedup exists to stop one outage spamming the surface; once the user dismisses it, the next occurrence is new information again.
     notifyErrorSurfaceDismissed() {
       surfacedErrorMessages.clear()
+    },
+
+    reopenAfterHostReturned() {
+      // Why only an idle pane: one already retrying or connected owns its own path back.
+      if (connecting || recovery.currentPhase !== 'idle') {
+        return false
+      }
+      return replayLastTransportEntryPoint()
     },
 
     retryRecovery() {

@@ -1,6 +1,6 @@
 import { translate } from '../i18n/mobile-i18n'
 import { assertAutomationExtraAgentArgs } from '../../../src/shared/automation-extra-agent-args-record'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { isTuiAgent } from '../../../src/shared/tui-agent-config'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { MobileAutomation } from './automation-reply-schema'
 import type { AutomationTargets } from './automation-target-inventory'
@@ -20,7 +20,7 @@ export type AutomationDraft = {
   setupDecisionEdited?: boolean
   name: string
   prompt: string
-  agentId: TuiAgent | null
+  agentId: MobileAutomation['agentId'] | null
   surface?: MobileAutomation['surface']
   setupId: string
   workspaceId: string
@@ -59,6 +59,17 @@ export function newAutomationDraft(current?: MobileAutomation): AutomationDraft 
   }
 }
 
+// The host checks arguments for an agent or surface this build doesn't know.
+function assertKnownExtraAgentArgs(draft: AutomationDraft): void {
+  const { agentId, surface } = draft
+  if (
+    isTuiAgent(agentId) &&
+    (surface === undefined || surface === 'chat' || surface === 'terminal')
+  ) {
+    assertAutomationExtraAgentArgs({ ...draft, agentId, surface })
+  }
+}
+
 export function validateAutomationDraft(
   draft: AutomationDraft,
   step: number,
@@ -83,7 +94,7 @@ export function validateAutomationDraft(
     draft.reuseSession !== (saved.reuseSession ?? false)
   ) {
     try {
-      assertAutomationExtraAgentArgs({ ...draft, agentId: draft.agentId })
+      assertKnownExtraAgentArgs(draft)
     } catch (failure) {
       return failure instanceof Error
         ? failure.message
@@ -149,7 +160,8 @@ function editableFields(draft: AutomationDraft): UpdateFields {
   return {
     name: draft.name.trim(),
     prompt: draft.prompt.trim(),
-    ...(draft.agentId ? { agentId: draft.agentId } : {}),
+    // A saved agent this build doesn't know is never written back.
+    ...(isTuiAgent(draft.agentId) ? { agentId: draft.agentId } : {}),
     rrule: draft.rrule,
     timezone: draft.timezone,
     baseBranch: draft.baseBranch || null,
@@ -184,16 +196,18 @@ export function automationDraftPatch(
   return patch
 }
 
-export function automationCreateParams(
-  draft: AutomationDraft,
-  targets: AutomationTargets,
-  creationKey?: string
-): RpcSendParams<'automation.create'> {
+type AutomationTarget = Pick<
+  RpcSendParams<'automation.create'>,
+  'repo' | 'workspaceMode' | 'workspace' | 'runContext' | 'destination'
+>
+
+// Retargeting a saved automation keeps its agent, which may be one this build doesn't know.
+function automationTarget(draft: AutomationDraft, targets: AutomationTargets): AutomationTarget {
   const setup = targets.setups.find((entry) => automationSetupKey(entry) === draft.setupId)
   if (!setup || !draft.agentId) {
     throw new AutomationDraftValidationError('project')
   }
-  assertAutomationExtraAgentArgs({ ...draft, agentId: draft.agentId })
+  assertKnownExtraAgentArgs(draft)
   const workspace = targets.workspaces.find(
     (entry) => entry.worktreeId === draft.workspaceId && workspaceMatchesSetup(entry, setup)
   )
@@ -204,12 +218,6 @@ export function automationCreateParams(
     throw new AutomationDraftValidationError('workspace')
   }
   return {
-    ...editableFields(draft),
-    baseBranch: draft.baseBranch || undefined,
-    name: draft.name.trim(),
-    prompt: draft.prompt.trim(),
-    agentId: draft.agentId,
-    creationKey,
     repo: `id:${setup.repoId}`,
     workspaceMode: draft.workspaceMode,
     ...(draft.workspaceMode === 'existing' && workspace
@@ -220,7 +228,28 @@ export function automationCreateParams(
       setup,
       draft.workspaceMode === 'existing' ? workspace : undefined,
       targets
-    ),
+    )
+  }
+}
+
+export function automationCreateParams(
+  draft: AutomationDraft,
+  targets: AutomationTargets,
+  creationKey?: string
+): RpcSendParams<'automation.create'> {
+  const target = automationTarget(draft, targets)
+  // A new automation's agent picker only offers agents this build knows.
+  if (!isTuiAgent(draft.agentId)) {
+    throw new AutomationDraftValidationError('project')
+  }
+  return {
+    ...editableFields(draft),
+    baseBranch: draft.baseBranch || undefined,
+    name: draft.name.trim(),
+    prompt: draft.prompt.trim(),
+    agentId: draft.agentId,
+    creationKey,
+    ...target,
     rrule: draft.rrule,
     dtstart: Date.now(),
     enabled: true,
@@ -243,7 +272,7 @@ export function automationUpdateParams(
   ) {
     return { id, updates }
   }
-  const target = automationCreateParams(draft, targets, '')
+  const target = automationTarget(draft, targets)
   return {
     id,
     destination: target.destination,

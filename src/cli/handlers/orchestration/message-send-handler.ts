@@ -7,7 +7,7 @@ import { WORKER_FOLLOW_UP_VIEW, type WorkerFollowUpReceipt } from './worker-star
 import { withResolvedNextCommands } from '../../orchestration-mutation-recovery'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
-import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
+import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { requireWorkerDoneSettlement } from '../orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from './mutation-request'

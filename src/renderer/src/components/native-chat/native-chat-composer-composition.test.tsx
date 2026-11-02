@@ -51,7 +51,7 @@ import {
   setNativeChatComposerDraftStorageForTests
 } from './native-chat-composer-draft-storage'
 import { promptSkillRefs } from './native-chat-prompt-document'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 
 afterEach(() => cleanup())
 
@@ -470,7 +470,7 @@ it('keeps an actual composing return through command acceptance, composition set
     )
   }
   const view = render(<JoinedField />)
-  let pending: Promise<void> | undefined
+  let pending: Promise<boolean> | undefined
   act(() => {
     pending = send!('/goal ship it', [])
   })

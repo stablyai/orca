@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
-import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-catalog'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import {
   Command,
   CommandInput,

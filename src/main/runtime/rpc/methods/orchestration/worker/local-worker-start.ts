@@ -302,7 +302,8 @@ export async function startLocalWorker(args: {
     recordStart({
       dispatchId: started.dispatch.id,
       workerAddress: terminalHandle,
-      task: task.spec
+      task: task.spec,
+      agent: agent ?? null
     })
   }
   return result

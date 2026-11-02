@@ -123,7 +123,7 @@ describe('launchAgentSessionContinuation', () => {
 it('retains the accepted route across detection, and explicit chat declines without the preference fallback', async () => {
   const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
   const { beginHostAdmittedStructuredLaunch } =
-    await import('./structured-agent-session-launch-admission')
+    await import('./agent-session/launch/structured-agent-session-launch-admission')
   for (const requestedSurface of [undefined, 'chat'] as const) {
     const detected = Promise.withResolvers<string[]>()
     ensureDetectedAgentsForWorktree.mockReturnValueOnce(detected.promise)

@@ -2,6 +2,8 @@ import type { LargeDiffRenderLimit } from './large-diff-render-limit'
 
 export type DiffViewerProps = {
   modelKey: string
+  /** Open-file ID that owns the models, so closing the file releases every view scope. */
+  modelOwnerKey?: string
   originalModelKey?: string
   modifiedModelKey?: string
   originalContent: string

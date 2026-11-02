@@ -18,6 +18,14 @@ vi.mock('react-native-svg', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ Plus: 'Plus', SlidersHorizontal: 'Sliders', X: 'X' }))
 vi.mock('../platform/keyboard-occlusion', () => ({ useKeyboardOcclusion: () => 0 }))
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
 vi.mock('../components/MobileSearchField', () => ({ MobileSearchField: 'MobileSearchField' }))
 
 import { HostBottomBar } from './host-bottom-bar'

@@ -6,17 +6,17 @@ import {
   MAX_CONTEXT_MODEL_ID_CHARS,
   type AgentSessionContextUsage,
   type AgentSessionContextWindow
-} from '../../../shared/agent-session-context-usage'
+} from '../../../shared/agent-session/agent-session-context-usage'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
   type AgentJournalTurnItem
-} from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionEventSink,

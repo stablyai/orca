@@ -2,12 +2,12 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 // Open Dispatches retain active work; chats at rest remain mail recipients until tab retirement. Process liveness and close proof remain separate.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { RunningStructuredSession } from './orchestration/structured-session-lineage'
 import { OrchestrationDb } from './orchestration/db'
 
@@ -62,6 +62,7 @@ function running(current: AgentSessionRecord): RunningStructuredSession {
 function installHost(current: AgentSessionRecord | null, tabs: string[]) {
   const host = {
     deps: {
+      logger: { warn: vi.fn() },
       store: {
         getRecord: () => current,
         getConversation: () => (current ? agentSessionConversationView(current) : null),
@@ -69,6 +70,7 @@ function installHost(current: AgentSessionRecord | null, tabs: string[]) {
         getVisibleSessionTabIndex: () => ({ present: true, sessionIds: tabs })
       }
     },
+    getSessionTabId: (id: string) => (tabs.includes(id) ? `agent-session:${id}` : null),
     hasSession: () => false,
     getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: tabs }),
     setSessionTabVisibility: vi.fn(async (_id: string, visible: boolean) => {

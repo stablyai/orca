@@ -315,7 +315,7 @@ function TabBarCreateEntrySession({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="-mx-1 flex items-center px-3">
+      <div className="tab-entry-omnibox relative -mx-1 flex items-center px-3 text-xs text-foreground">
         <Input
           ref={inputRef}
           value={query}

@@ -1,7 +1,7 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 /** Mutate journals between reads to catch in-place revisions and mid-array insertions missed by oldest-item-only cursor identity; both can silently omit or duplicate output. */
 
@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildStructuredJournalArchive } from '../../orchestration/structured-worker-journal-archive'
 import { projectSavedChatContextItems } from '../../../native-chat/agent-session-saved-prompt-text'
 import { formatWorkerTranscriptMessage } from '../../../../shared/worker-transcript-text'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 
 const hostRef: { current: unknown } = { current: null }

@@ -1,6 +1,6 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
 import { CodexJournalGoals } from './codex-structured-journal-goals'

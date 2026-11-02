@@ -4,7 +4,7 @@ import type {
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
 } from '../../shared/workspace-space-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const {
   handlers,

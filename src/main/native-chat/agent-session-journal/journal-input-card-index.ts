@@ -1,6 +1,6 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { JournalSubmissionRow } from './journal-row-schema'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
 import type { JournalInputPlace } from './journal-input-order'

@@ -18,13 +18,13 @@ import {
   isAgentSessionOperationRow,
   settleAgentSessionOperation,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session-operation-ledger'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
-} from '../../agent-session-record-store-test-harness'
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
 import { terminalStartError } from '../../../../shared/terminal-start-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'

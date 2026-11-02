@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 import { Code, Eye } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -21,7 +21,11 @@ export function MobilePreviewSourceTabs({ mode, onModeChange, previewLabel, sour
     // Expose selected tab to assistive readers; active styling alone is silent.
     <View style={styles.toolbar} accessibilityRole="tablist">
       <Pressable
-        style={[styles.toggle, mode === 'preview' && styles.toggleActive]}
+        style={({ pressed }) => [
+          styles.toggle,
+          mode === 'preview' && styles.toggleActive,
+          pressed && pressedStyle
+        ]}
         onPress={() => onModeChange('preview')}
         accessibilityRole="tab"
         // Set both native accessibilityState and web aria-selected: RN Web drops former without emitting latter.
@@ -33,7 +37,11 @@ export function MobilePreviewSourceTabs({ mode, onModeChange, previewLabel, sour
         <Text style={styles.toggleText}>{t('components.htmlPreview.preview', 'Preview')}</Text>
       </Pressable>
       <Pressable
-        style={[styles.toggle, mode === 'source' && styles.toggleActive]}
+        style={({ pressed }) => [
+          styles.toggle,
+          mode === 'source' && styles.toggleActive,
+          pressed && pressedStyle
+        ]}
         onPress={() => onModeChange('source')}
         accessibilityRole="tab"
         accessibilityState={{ selected: mode === 'source' }}
