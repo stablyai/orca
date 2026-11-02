@@ -21439,7 +21439,23 @@
       "count_other": "{{count}} running terminals"
     },
     "restartedInputNotSent": "The terminal restarted while you were typing, so some input may not have reached it. Check the new shell before typing it again.",
-    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent."
+    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent.",
+    "windowsAdministratorBanner": {
+      "unknownCount": "its running terminals",
+      "count_one": "{{count}} running terminal",
+      "count_other": "{{count}} running terminals",
+      "restarted": "Terminal service restarted as administrator.",
+      "alreadyReplaced": "The terminal service was already replaced; nothing was stopped.",
+      "failed": "Restart failed.",
+      "title": "Terminals aren’t running as administrator",
+      "body": "The terminal service started before Orca had administrator rights, so new terminals open without them until it restarts.",
+      "restart": "Restart terminals",
+      "dismiss": "Dismiss",
+      "confirmTitle": "Restart terminals as administrator?",
+      "confirmBody": "Restarting ends every process in {{sessions}}. Restored tabs open new administrator shells, and agents that support resume can be resumed afterwards. Do this when your agents are idle.",
+      "cancel": "Cancel",
+      "confirm": "Restart and end processes"
+    }
   },
   "fileExplorer": {
     "root": {

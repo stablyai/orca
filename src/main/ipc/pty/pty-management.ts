@@ -28,6 +28,7 @@ import type { DaemonEndpointIdentity } from '../../daemon/daemon-hello-protocol'
 import { sameEndpointIdentity } from '../../daemon/daemon-endpoint-incarnation'
 import type { DaemonSessionInfo } from '../../daemon/daemon-session-info'
 import type { DaemonAsyncIoStatus } from '../../../shared/daemon-async-io-health'
+import { registerWindowsStandardTerminalHostHandlers } from '../../windows/windows-administrator-terminal-host'
 
 // Poll beyond the daemon's 5s SIGTERM-to-SIGKILL ladder to avoid false refusal reports.
 // A window, not an attempt count: a wedged generation fails each listing only after the request timeout.
@@ -122,6 +123,7 @@ export function registerDaemonManagementHandlers(): void {
   ipcMain.removeHandler('pty:management:severedDaemon')
   ipcMain.removeHandler('pty:management:restartSeveredDaemon')
   ipcMain.removeHandler('pty:management:asyncIoHealth')
+  registerWindowsStandardTerminalHostHandlers()
 
   ipcMain.handle('pty:management:asyncIoHealth', async (): Promise<DaemonAsyncIoStatus> => {
     const provider = getDaemonProvider()

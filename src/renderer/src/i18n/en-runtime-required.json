@@ -2429,6 +2429,10 @@
     "severedDaemonBanner": {
       "count_one": "{{count}} running terminal",
       "count_other": "{{count}} running terminals"
+    },
+    "windowsAdministratorBanner": {
+      "count_one": "{{count}} running terminal",
+      "count_other": "{{count}} running terminals"
     }
   },
   "updates": {

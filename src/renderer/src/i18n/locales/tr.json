@@ -21293,7 +21293,23 @@
       "count_other": "Çalışan {{count}} terminal"
     },
     "restartedInputNotSent": "Siz yazarken terminal yeniden başlatıldı, bu nedenle girdilerinizin bir kısmı terminale ulaşmamış olabilir. Yeniden yazmadan önce yeni kabuğu kontrol edin.",
-    "typingBeforeStartNotSent": "Terminal başlatılırken yazılan bazı tuşlar gönderilmedi."
+    "typingBeforeStartNotSent": "Terminal başlatılırken yazılan bazı tuşlar gönderilmedi.",
+    "windowsAdministratorBanner": {
+      "unknownCount": "hizmetin çalışan terminalleri",
+      "count_one": "Çalışan {{count}} terminal",
+      "count_other": "Çalışan {{count}} terminal",
+      "restarted": "Terminal hizmeti yönetici olarak yeniden başlatıldı.",
+      "alreadyReplaced": "Terminal hizmeti zaten değiştirilmiş; hiçbir şey durdurulmadı.",
+      "failed": "Yeniden başlatılamadı.",
+      "title": "Terminaller yönetici olarak çalışmıyor",
+      "body": "Terminal hizmeti, Orca yönetici izinlerini almadan önce başlatıldı; bu nedenle yeni terminaller, hizmet yeniden başlatılana kadar bu izinler olmadan açılır.",
+      "restart": "Terminalleri yeniden başlat",
+      "dismiss": "Kapat",
+      "confirmTitle": "Terminaller yönetici olarak yeniden başlatılsın mı?",
+      "confirmBody": "Yeniden başlatma, {{sessions}} içindeki tüm süreçleri sonlandırır. Geri yüklenen sekmelerde yeni yönetici kabukları açılır ve sürdürme desteği olan ajanlar daha sonra sürdürülebilir. Bunu ajanlarınız boşta olduğunda yapın.",
+      "cancel": "İptal",
+      "confirm": "Yeniden başlat ve süreçleri sonlandır"
+    }
   },
   "fileExplorer": {
     "root": {

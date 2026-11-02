@@ -4,7 +4,6 @@ import { app } from 'electron'
 import { runProcess } from '@orca/process-host'
 import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
-import { getWindowsAdministratorStatus } from './windows-administrator-status'
 
 const RESTART_LOCAL_TERMINALS_ARG = '--orca-restart-local-terminals-as-administrator'
 // Mirrors CANCELLED_EXIT_CODE in native/windows-cli-launcher/src/administrator_restart.rs.
@@ -76,15 +75,11 @@ function formatWindowHandle(handle: Buffer | null): string {
   return handle?.length === 4 ? String(handle.readUInt32LE(0)) : '0'
 }
 
-export async function restartLocalTerminalsAfterElevation(signal: AbortSignal): Promise<void> {
+/** Consumes the restart request so an unrelated later app restart cannot end terminal work again. */
+export function consumeLocalTerminalRestartRequest(): boolean {
   if (process.platform !== 'win32' || !process.argv.includes(RESTART_LOCAL_TERMINALS_ARG)) {
-    return
+    return false
   }
-  // Consume the request so an unrelated later app restart cannot end terminal work again.
   process.argv = process.argv.filter((arg) => arg !== RESTART_LOCAL_TERMINALS_ARG)
-  if (signal.aborted || (await getWindowsAdministratorStatus()) !== true || signal.aborted) {
-    return
-  }
-  const { restartDaemon } = await import('../daemon/daemon-provider-restart')
-  await restartDaemon()
+  return true
 }

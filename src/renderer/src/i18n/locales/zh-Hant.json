@@ -20989,7 +20989,23 @@
       "count_other": "{{count}} 個正在執行的終端機"
     },
     "restartedInputNotSent": "終端機在您輸入時重新啟動，部分輸入可能未送達。請先檢視新的 shell，再重新輸入。",
-    "typingBeforeStartNotSent": "終端機啟動期間輸入的部分按鍵未送出。"
+    "typingBeforeStartNotSent": "終端機啟動期間輸入的部分按鍵未送出。",
+    "windowsAdministratorBanner": {
+      "unknownCount": "其正在執行的終端機",
+      "count_one": "{{count}} 個正在執行的終端機",
+      "count_other": "{{count}} 個正在執行的終端機",
+      "restarted": "終端機服務已以系統管理員身分重新啟動。",
+      "alreadyReplaced": "終端機服務已被替換；未停止任何行程。",
+      "failed": "重新啟動失敗。",
+      "title": "終端機未以系統管理員身分執行",
+      "body": "終端機服務在 Orca 取得系統管理員權限之前就已啟動，因此在其重新啟動之前，新的終端機會以非系統管理員權限開啟。",
+      "restart": "重新啟動終端機",
+      "dismiss": "關閉",
+      "confirmTitle": "要以系統管理員身分重新啟動終端機嗎？",
+      "confirmBody": "重新啟動會結束 {{sessions}} 中的所有行程。還原的分頁會開啟新的系統管理員殼層，支援恢復的代理程式之後可以恢復。請在代理程式空閒時執行此操作。",
+      "cancel": "取消",
+      "confirm": "重新啟動並結束行程"
+    }
   },
   "fileExplorer": {
     "root": {
