@@ -18908,6 +18908,7 @@
           "noActiveWorkspace": "Impossible d’exécuter « {{action}} » — aucun espace de travail n’est actif.",
           "workspaceDisconnected": "Impossible d’exécuter « {{action}} » — l’espace de travail est déconnecté.",
           "noTabGroup": "Impossible d’exécuter « {{action}} » — aucun groupe d’onglets n’est disponible.",
+          "noActiveTerminal": "Impossible d’exécuter « {{action}} » — aucun panneau de terminal n’est actif.",
           "noMovableChat": "Impossible d’exécuter « {{action}} » — aucun chat déplaçable n’est actif.",
           "clientUnsupported": "Impossible d’exécuter « {{action}} » — ce client et cet environnement d’exécution ne le prennent pas en charge."
         }
@@ -21827,6 +21828,18 @@
       "body": "Le travail en arrière-plan sur cet ordinateur est bloqué. La saisie et les nouveaux terminaux peuvent ne pas fonctionner. Le redémarrage du service de terminal met fin à ses terminaux et commandes en cours d'exécution.",
       "review": "Vérifier les options de redémarrage",
       "title": "Le service de terminal doit peut-être être redémarré"
+    },
+    "copyMode": {
+      "selecting": "Mode copie · Sélection",
+      "active": "Mode copie",
+      "move": "Déplacer",
+      "select": "Sélectionner",
+      "copy": "Copier",
+      "exit": "Quitter : {{keys}}",
+      "copyFailed": "Impossible de copier la sélection du terminal. Réessayez.",
+      "openFailed": "Impossible d’ouvrir le mode copie du terminal. Réessayez.",
+      "enter": "Activer le mode copie",
+      "description": "Sélectionnez et copiez le texte du terminal avec le clavier."
     },
     "claudeDiffPanelNotice": {
       "gotIt": "J'ai compris",

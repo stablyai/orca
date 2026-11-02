@@ -18214,6 +18214,7 @@
           "noActiveWorkspace": "无法运行“{{action}}” — 没有活动的工作区。",
           "workspaceDisconnected": "无法运行“{{action}}” — 工作区已断开连接。",
           "noTabGroup": "无法运行“{{action}}” — 没有可用的标签页组。",
+          "noActiveTerminal": "无法运行“{{action}}” — 没有活动的终端窗格。",
           "noMovableChat": "无法运行“{{action}}” — 没有活动且可移动的聊天。",
           "clientUnsupported": "无法运行“{{action}}” — 此客户端和运行时不支持该操作。"
         }
@@ -21164,6 +21165,18 @@
       "body": "此计算机上的后台工作已停滞。输入和新终端可能无法工作。重新启动终端服务会结束其正在运行的终端和命令。",
       "review": "查看重新启动选项",
       "title": "终端服务可能需要重新启动"
+    },
+    "copyMode": {
+      "selecting": "复制模式 · 选择中",
+      "active": "复制模式",
+      "move": "移动",
+      "select": "选择",
+      "copy": "复制",
+      "exit": "退出：{{keys}}",
+      "copyFailed": "无法复制终端选区，请重试。",
+      "openFailed": "无法进入终端复制模式，请重试。",
+      "enter": "进入复制模式",
+      "description": "使用键盘选择并复制终端文本。"
     },
     "claudeDiffPanelNotice": {
       "gotIt": "知道了",

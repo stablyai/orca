@@ -18214,6 +18214,7 @@
           "noActiveWorkspace": "“{{action}}” 실행 불가 — 활성 워크스페이스가 없습니다.",
           "workspaceDisconnected": "“{{action}}” 실행 불가 — 워크스페이스 연결이 끊어졌습니다.",
           "noTabGroup": "“{{action}}” 실행 불가 — 사용 가능한 탭 그룹이 없습니다.",
+          "noActiveTerminal": "“{{action}}” 실행 불가 — 활성 터미널 창이 없습니다.",
           "noMovableChat": "“{{action}}” 실행 불가 — 이동 가능한 활성 채팅이 없습니다.",
           "clientUnsupported": "“{{action}}” 실행 불가 — 이 클라이언트와 런타임에서 지원하지 않습니다."
         }
@@ -21163,6 +21164,18 @@
       "body": "이 컴퓨터의 백그라운드 작업이 멈췄습니다. 입력과 새 터미널이 작동하지 않을 수 있습니다. 터미널 서비스를 다시 시작하면 실행 중인 터미널과 명령이 종료됩니다.",
       "review": "다시 시작 옵션 검토",
       "title": "터미널 서비스를 다시 시작해야 할 수 있습니다"
+    },
+    "copyMode": {
+      "selecting": "복사 모드 · 선택 중",
+      "active": "복사 모드",
+      "move": "이동",
+      "select": "선택",
+      "copy": "복사",
+      "exit": "종료: {{keys}}",
+      "copyFailed": "터미널 선택 영역을 복사하지 못했습니다. 다시 시도하세요.",
+      "openFailed": "터미널 복사 모드를 열지 못했습니다. 다시 시도하세요.",
+      "enter": "복사 모드 시작",
+      "description": "키보드로 터미널 텍스트를 선택하고 복사합니다."
     },
     "claudeDiffPanelNotice": {
       "gotIt": "확인",

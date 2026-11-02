@@ -153,7 +153,7 @@ function getXtermWebglCanvas(webglAddon: WebglAddon): HTMLCanvasElement | undefi
     : undefined
 }
 
-function releaseXtermWebglContext(webglAddon: ManagedPaneInternal['webglAddon']): void {
+export function releaseXtermWebglContext(webglAddon: WebglAddon | null): void {
   try {
     // Windows/ANGLE may retain driver contexts after canvas removal; explicitly lose them to avoid Chromium’s active-context budget on rapid activation (#6874).
     const renderer = (webglAddon as unknown as XtermWebglAddonInternals | null)?._renderer

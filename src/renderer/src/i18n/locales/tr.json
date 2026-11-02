@@ -18855,6 +18855,7 @@
           "noActiveWorkspace": "“{{action}}” çalıştırılamıyor — etkin çalışma alanı yok.",
           "workspaceDisconnected": "“{{action}}” çalıştırılamıyor — çalışma alanının bağlantısı kesildi.",
           "noTabGroup": "“{{action}}” çalıştırılamıyor — kullanılabilir sekme grubu yok.",
+          "noActiveTerminal": "“{{action}}” çalıştırılamıyor — etkin terminal bölmesi yok.",
           "noMovableChat": "“{{action}}” çalıştırılamıyor — taşınabilir etkin sohbet yok.",
           "clientUnsupported": "“{{action}}” çalıştırılamıyor — bu istemci ve çalışma zamanı bunu desteklemiyor."
         }
@@ -21287,7 +21288,10 @@
       "count_other": "Çalışan {{count}} terminal"
     },
     "restartedInputNotSent": "Siz yazarken terminal yeniden başlatıldı, bu nedenle girdilerinizin bir kısmı terminale ulaşmamış olabilir. Yeniden yazmadan önce yeni kabuğu kontrol edin.",
-    "typingBeforeStartNotSent": "Terminal başlatılırken yazılan bazı tuşlar gönderilmedi."
+    "typingBeforeStartNotSent": "Terminal başlatılırken yazılan bazı tuşlar gönderilmedi.",
+    "copyMode": {
+      "openFailed": "Terminal kopyalama modu açılamadı. Yeniden deneyin."
+    }
   },
   "fileExplorer": {
     "root": {

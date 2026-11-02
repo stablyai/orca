@@ -93,8 +93,8 @@ export function resolveLogicalCellOffsetLine(
   return lineY
 }
 
-function readReflowedRowCellCount(
-  terminal: Terminal,
+export function readReflowedRowCellCount(
+  terminal: Pick<Terminal, 'cols'>,
   lines: ReflowLineReader,
   lineY: number
 ): number {

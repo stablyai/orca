@@ -127,6 +127,7 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.fileExplorerCopyRelativePath', 'Copy relative file path'),
   'fileExplorer.delete': () => translate('keybindings.title.fileExplorerDelete', 'Delete file'),
   'settings.search': () => translate('keybindings.title.settingsSearch', 'Search Settings'),
+  'terminal.enterCopyMode': () => translate('terminal.copyMode.enter', 'Enter Copy Mode'),
   'terminal.copySelection': () =>
     translate('keybindings.title.terminalCopySelection', 'Copy terminal selection'),
   'terminal.selectAll': () =>
