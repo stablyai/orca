@@ -187,6 +187,7 @@ orca terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
 orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 orca terminal create --worktree active --title "tests" --command "npm test" --json
+orca terminal create --worktree active --command "./start-agent.sh" --command-agent claude --view-mode chat --json
 orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
 orca terminal rename --terminal <handle> --title "runner" --json
 orca terminal set-pane-title --terminal <handle> --title "reviewer" --json
@@ -196,6 +197,8 @@ orca terminal close --worktree active --all --json
 ```
 
 Omit `--terminal` to target the active terminal in the current worktree. Read before sending when you are not sure what the terminal is waiting for.
+
+To start an agent, prefer `orca agent launch`. When your own `--command` must start it, such as a wrapper script, add `--command-agent <agent> --view-mode chat` to `terminal create` to open that agent in the Chat UI view. Orca does not rewrite the command, and refuses the create before starting anything when it cannot show that agent as a chat.
 
 Close stops the process as part of removing the terminal. Use `--terminal <handle>` for one
 terminal, or `--worktree <selector> --all` to durably close every terminal in exactly that

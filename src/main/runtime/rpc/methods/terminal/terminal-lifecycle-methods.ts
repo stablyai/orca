@@ -1,5 +1,6 @@
 import { terminalCreateFeatureRequirement } from '../../agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal-image-viewer-env'
+import { terminalCreateChatViewParamsRefusal } from '../../../terminal-chat-view-host-support'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import { defineMethod } from '../../core'
@@ -79,6 +80,10 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           )
         }
       }
+      const chatViewRefusal = terminalCreateChatViewParamsRefusal(params)
+      if (chatViewRefusal) {
+        throw chatViewRefusal
+      }
       const terminal = await runtime.dedupeTerminalCreate(
         pairedDeviceId ?? clientId ?? 'local',
         params.worktree,
@@ -101,6 +106,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
             ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+            ...(params.viewMode ? { viewMode: params.viewMode } : {}),
+            ...(params.commandAgent ? { commandAgent: params.commandAgent } : {}),
             ...(params.terminalKittyKeyboardProtocol === true
               ? { terminalKittyKeyboardProtocol: true }
               : {}),

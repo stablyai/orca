@@ -5,6 +5,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'agent-wait': "--agent-wait           Add each agent row's terminal wait verdict to JSON output",
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
   command: '--command <text>       Command to run in the terminal on startup',
+  'command-agent': '--command-agent <agent> Agent that --command starts, for --view-mode chat',
   comment: '--comment <text>       Comment stored in Orca metadata',
   cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
   action: '--action <name>       Secondary accessibility action name',
@@ -69,6 +70,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   surface:
     '--surface chat|terminal Start the agent as a chat or in a terminal, instead of your setting',
   shell: '--shell <shell>        Windows shell the terminal itself runs as',
+  'view-mode': '--view-mode chat|terminal Show the new terminal as a Chat UI or a terminal',
   terminal: '--terminal <handle>  Runtime-issued terminal handle',
   text: '--text <text>          Text payload to send or type',
   'text-stdin': '--text-stdin          Read text payload from stdin',
