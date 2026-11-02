@@ -106,6 +106,16 @@ describe('TrustDialogStatusObserver', () => {
     }
   )
 
+  it('re-aims the trust card when the cursor moves in the terminal', async () => {
+    const { prompts, recording, write } = await pane('codex-0-158-0-trustprompt', 'codex')
+    await write(recording)
+    // Down in the terminal: Codex repaints its choices with the cursor on "2. Quit".
+    await write('\x1b[9;1H\x1b[2K  1. Trust and continue\x1b[10;1H\x1b[2K› 2. Quit')
+    await vi.advanceTimersByTimeAsync(1_000)
+    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'codex')
+    expect(card?.kind === 'approval' && card.approval.options[0]?.send).toBe('\x1b[A\r')
+  })
+
   it('ignores the dialog wording quoted in ordinary output', async () => {
     const { published, write } = await pane('codex-0-158-0-trustprompt', 'codex')
     const reply = [

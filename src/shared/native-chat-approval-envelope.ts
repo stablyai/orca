@@ -12,11 +12,10 @@ export type NativeChatApprovalEnvelope = {
 const ESCAPE = String.fromCharCode(27)
 const TRUST_KEYS_RE = new RegExp(`^(?:${ESCAPE}\\[[AB])*\r$`)
 
-/** Read the approval envelope published in agentStatus.interactivePrompt on PermissionRequest. */
-export function parseNativeChatApprovalEnvelope(
+function readEnvelopeField(
   interactivePrompt: string | undefined | null,
-  agent?: string
-): NativeChatApprovalEnvelope | null {
+  key: string
+): object | null {
   if (!interactivePrompt) {
     return null
   }
@@ -26,11 +25,20 @@ export function parseNativeChatApprovalEnvelope(
   } catch {
     return null
   }
-  if (typeof parsed !== 'object' || parsed === null || !('approval' in parsed)) {
+  if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
-  const approval = parsed.approval
-  if (typeof approval !== 'object' || approval === null || !('tool' in approval)) {
+  const field: unknown = Object.entries(parsed).find(([name]) => name === key)?.[1]
+  return typeof field === 'object' && field !== null ? field : null
+}
+
+/** Read the approval envelope published in agentStatus.interactivePrompt on PermissionRequest. */
+export function parseNativeChatApprovalEnvelope(
+  interactivePrompt: string | undefined | null,
+  agent?: string
+): NativeChatApprovalEnvelope | null {
+  const approval = readEnvelopeField(interactivePrompt, 'approval')
+  if (!approval || !('tool' in approval)) {
     return null
   }
   const tool = approval.tool
@@ -54,20 +62,8 @@ export function buildNativeChatFolderTrustPrompt(trustSend: string): string {
 export function parseNativeChatFolderTrustEnvelope(
   interactivePrompt: string | undefined | null
 ): { trustSend: string; exitSend: string } | null {
-  if (!interactivePrompt) {
-    return null
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(interactivePrompt)
-  } catch {
-    return null
-  }
-  if (typeof parsed !== 'object' || parsed === null || !('folderTrust' in parsed)) {
-    return null
-  }
-  const trust = parsed.folderTrust
-  if (typeof trust !== 'object' || trust === null || !('trustSend' in trust)) {
+  const trust = readEnvelopeField(interactivePrompt, 'folderTrust')
+  if (!trust || !('trustSend' in trust)) {
     return null
   }
   const trustSend = trust.trustSend

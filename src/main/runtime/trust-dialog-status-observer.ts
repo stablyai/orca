@@ -31,6 +31,8 @@ type PaneScan = {
   resolvingAgent?: boolean
   /** The waiting row we published, identified by its receipt stamp like hook-silence rechecks. */
   owned?: { agent: 'claude' | 'codex'; receivedAt: number }
+  /** Keys our card sends; republished when the terminal moves the cursor. */
+  trustKeys?: string | null
   misses: number
   outputSinceRead?: boolean
   readTimer?: ReturnType<typeof setTimeout>
@@ -154,6 +156,7 @@ export class TrustDialogStatusObserver {
     }
     // Chat views answer this card; without it a sent message's Return picks the highlighted "No, exit".
     const keys = trustChoiceKeys(emulator)
+    pane.trustKeys = keys
     this.deps.publish(ptyId, {
       state: 'waiting',
       agentType: agent,
@@ -190,7 +193,7 @@ export class TrustDialogStatusObserver {
 
   /** Returns whether another read is due. */
   private async read(ptyId: string, pane: PaneScan): Promise<boolean> {
-    const owned = pane.owned
+    let owned = pane.owned
     const emulator = this.deps.getEmulator(ptyId)
     if (this.panes.get(ptyId) !== pane || !owned) {
       return false
@@ -212,6 +215,11 @@ export class TrustDialogStatusObserver {
       return false
     }
     pane.misses = 0
+    const keys = trustChoiceKeys(emulator)
+    if (keys && keys !== pane.trustKeys) {
+      this.publishWaiting(ptyId, pane, owned.agent, emulator)
+      owned = pane.owned ?? owned
+    }
     // A killed agent can leave its frame above the shell prompt; only a proven shell foreground settles it.
     const foreground = await this.deps.readLaunchedAgentForeground(ptyId, owned.agent)
     if (this.panes.get(ptyId) !== pane) {
