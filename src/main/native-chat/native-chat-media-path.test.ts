@@ -93,15 +93,20 @@ function setup(ids = ['provider-1']) {
 }
 
 describe('Grok session-owned media resolution', () => {
-  it('recovers the recorded manually copied screenshot, preserving literal percent path bytes', async () => {
-    const directory = await session('provider-1')
-    const path = await image(directory)
-    await image(cwd, 'different workspace image')
-    const result = await setup().resolve()
-    expect(result).toEqual({ kind: 'matched', absolutePath: path })
-    expect(path).toContain('%2F')
-    expect(await readFile(path, 'utf8')).toBe('session image')
-  })
+  it.each([imagePath, `./${imagePath}`])(
+    'recovers session screenshots with literal percent path bytes: %s',
+    async (relativePath) => {
+      const directory = await session('provider-1')
+      const path = await image(directory)
+      await image(cwd, 'different workspace image')
+      const fixture = setup()
+      fixture.request.pathText = relativePath
+      const result = await fixture.resolve()
+      expect(result).toEqual({ kind: 'matched', absolutePath: path })
+      expect(path).toContain('%2F')
+      expect(await readFile(path, 'utf8')).toBe('session image')
+    }
+  )
 
   it('uses inherited images from summary-attested fork ancestry and deduplicates chain entries', async () => {
     const parent = await session('parent')

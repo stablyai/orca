@@ -51,7 +51,7 @@ const NONE: NativeChatMediaPathResolution = { kind: 'none' }
 const AMBIGUOUS: NativeChatMediaPathResolution = { kind: 'ambiguous' }
 
 function mediaPathParts(pathText: string): string[] | null {
-  const parts = pathText.replace(/\\/g, '/').split('/')
+  const parts = pathText.replace(/\\/g, '/').replace(/^\.\//, '').split('/')
   return parts[0] === 'images' &&
     parts.length > 1 &&
     parts.every((part) => part.length > 0 && part !== '.' && part !== '..' && !/[:\0]/.test(part))
