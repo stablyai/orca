@@ -63,6 +63,45 @@ afterEach(() => {
 })
 
 describe('useChecksPanelPolling live behavior', () => {
+  it('keeps the parent pipeline beside its jobs and follows a parent-only status change', async () => {
+    const reply = (status: string, checkStatus: string) => ({
+      item: { projectRef: { host: 'gitlab.com', path: 'g/p' } },
+      pipeline: { id: 99, status, checkStatus, webUrl: 'https://gitlab.com/g/p/-/pipelines/99' },
+      pipelineJobs: [
+        {
+          id: 7,
+          name: 'unit',
+          stage: 'test',
+          status: 'success',
+          webUrl: 'https://gitlab.com/g/p/-/jobs/7',
+          duration: 3
+        }
+      ],
+      comments: []
+    })
+    const jobRow = expect.objectContaining({ name: 'test: unit', conclusion: 'success' })
+    const model = createModel()
+    const { result } = renderHook(() => useChecksPanelPolling(model))
+
+    gitlab.fetchDetails.mockResolvedValueOnce(reply('running', 'pending'))
+    await act(async () => result.current.fetchGitLabDetails({ mrNumberOverride: 17 }))
+    expect(model.setChecks).toHaveBeenLastCalledWith(
+      [jobRow],
+      expect.objectContaining({ name: 'Pipeline #99', conclusion: 'pending' })
+    )
+
+    model.pollIntervalRef.current = 120_000
+    gitlab.fetchDetails.mockResolvedValueOnce(reply('failed', 'failure'))
+    await act(async () => result.current.fetchGitLabDetails({ mrNumberOverride: 17 }))
+    expect(model.setChecks).toHaveBeenLastCalledWith([jobRow], {
+      name: 'Pipeline #99',
+      status: 'completed',
+      conclusion: 'failure',
+      url: 'https://gitlab.com/g/p/-/pipelines/99'
+    })
+    expect(model.pollIntervalRef.current).toBe(60_000)
+  })
+
   it('gates installation by panel visibility and cleans the active poller', () => {
     const model = createModel({ isPanelVisible: false })
     const hook = renderHook(({ input }) => useChecksPanelPolling(input), {

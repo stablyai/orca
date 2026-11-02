@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import {
+  CHECK_STATUS,
   MERGEABLE_STATE,
   prCount,
   prNullableText,
@@ -51,6 +52,15 @@ export const gitlabWorkItemDetailSchema = z
       })
     ),
     assignees: prStringList('assignees'),
+    pipeline: salvagedOptional(
+      'pipeline',
+      z.looseObject({
+        id: z.number().int().positive(),
+        status: z.string(),
+        checkStatus: salvagedOptional('checkStatus', z.enum(CHECK_STATUS)),
+        webUrl: prNullableText('webUrl')
+      })
+    ),
     pipelineJobs: salvagedOptional(
       'pipelineJobs',
       salvagingArray(

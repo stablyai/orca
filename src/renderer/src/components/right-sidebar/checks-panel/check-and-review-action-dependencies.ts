@@ -27,6 +27,7 @@ export type ChecksPanelCheckAndReviewActionsInput = Pick<
     | 'fetchPRChecks'
     | 'fetchPRComments'
     | 'fetchPRForBranch'
+    | 'gitLabPipelineCheck'
     | 'gitLabProjectRefRef'
     | 'isFixingChecksWithAI'
     | 'localExecutionScope'

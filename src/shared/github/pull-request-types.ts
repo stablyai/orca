@@ -107,6 +107,8 @@ export type ProviderCheckSummary = {
   failed: number
   pending: number
   neutral: number
+  /** 'pipeline' when the state is a GitLab pipeline's own verdict, so its counts are not check counts. */
+  scope?: 'pipeline'
 }
 
 export type GitHubPRReviewSummary = {

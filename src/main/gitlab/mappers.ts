@@ -102,7 +102,10 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
 }
 
 // A mergeable manual pipeline has no automatic work outstanding, but its manual stage has not passed.
-function settleManualPipelineStatus(data: GitLabMRRaw, pipelineStatus: CheckStatus): CheckStatus {
+export function settleManualPipelineStatus(
+  data: GitLabMRRaw,
+  pipelineStatus: CheckStatus
+): CheckStatus {
   const raw = (data.head_pipeline ?? data.pipeline)?.status?.toLowerCase()
   return raw === 'manual' &&
     data.detailed_merge_status === 'mergeable' &&
@@ -276,6 +279,7 @@ function classifyPipelineString(status: string): CheckStatus {
     s === 'created' ||
     s === 'pending' ||
     s === 'running' ||
+    s === 'waiting_for_callback' ||
     s === 'waiting_for_resource' ||
     s === 'preparing' ||
     s === 'scheduled'

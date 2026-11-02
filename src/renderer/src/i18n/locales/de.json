@@ -13997,6 +13997,7 @@
                 "baseCommitLabel": "Basis-Commit:",
                 "failingChecks_one": "{{count}} fehlgeschlagener Check",
                 "failingChecks_other": "{{count}} fehlgeschlagene Checks",
+                "pipelineFailed": "{{name}} fehlgeschlagen",
                 "pendingChecks_one": "{{count}} Check ausstehend",
                 "pendingChecks_other": "{{count}} Checks ausstehend",
                 "unresolvedChecks_one": "{{count}} Check ungeklärt",

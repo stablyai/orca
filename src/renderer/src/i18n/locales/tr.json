@@ -13983,6 +13983,7 @@
                 "baseCommitLabel": "temel commit:",
                 "failingChecks_one": "{{count}} başarısız kontrol",
                 "failingChecks_other": "{{count}} başarısız kontrol",
+                "pipelineFailed": "{{name}} başarısız oldu",
                 "pendingChecks_one": "{{count}} kontrol bekliyor",
                 "pendingChecks_other": "{{count}} kontrol bekliyor",
                 "unresolvedChecks_one": "{{count}} çözülmemiş kontrol",

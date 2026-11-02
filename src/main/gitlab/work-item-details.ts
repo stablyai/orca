@@ -4,7 +4,12 @@ import type {
   GitLabWorkItemDetails
 } from '../../shared/gitlab-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
-import { mapIssueToWorkItem, mapMRToWorkItem } from './mappers'
+import {
+  derivePipelineStatus,
+  mapIssueToWorkItem,
+  mapMRToWorkItem,
+  settleManualPipelineStatus
+} from './mappers'
 import { mapGitLabUser, type GitLabRawUser } from './gitlab-assignable-user-mapping'
 import { encodedProject } from './project-path-encoding'
 import { fetchDiscussions, flattenDiscussions } from './mr-discussion-notes'
@@ -28,11 +33,14 @@ type GitLabRawIssue = Parameters<typeof mapIssueToWorkItem>[0] & {
   assignees?: { username?: string | null }[] | null
 }
 
+type GitLabRawPipeline = { id?: number; status?: string; web_url?: string | null }
+
 type GitLabRawMR = Parameters<typeof mapMRToWorkItem>[0] & {
   description?: string | null
   sha?: string
   diff_refs?: { base_sha?: string; head_sha?: string; start_sha?: string } | null
-  head_pipeline?: { id?: number } | null
+  head_pipeline?: GitLabRawPipeline | null
+  pipeline?: GitLabRawPipeline | null
   reviewers?: GitLabRawUser[] | null
 }
 
@@ -136,7 +144,8 @@ async function fetchMRDetails(
     const { repoId: _repoId, ...rest } = full
     return rest
   })()
-  const pipelineId = mrRaw.head_pipeline?.id
+  const rawPipeline = mrRaw.head_pipeline ?? mrRaw.pipeline
+  const pipelineId = rawPipeline?.id
   const pipelineJobs =
     typeof pipelineId === 'number'
       ? await fetchPipelineJobs(
@@ -172,6 +181,17 @@ async function fetchMRDetails(
     baseSha: mrRaw.diff_refs?.base_sha,
     startSha: mrRaw.diff_refs?.start_sha,
     files,
+    ...(typeof pipelineId === 'number'
+      ? {
+          pipeline: {
+            id: pipelineId,
+            status: rawPipeline?.status ?? '',
+            // The MR aggregate's own rule on this same reply, so both read one verdict.
+            checkStatus: settleManualPipelineStatus(mrRaw, derivePipelineStatus(rawPipeline)),
+            webUrl: rawPipeline?.web_url ?? null
+          }
+        }
+      : {}),
     ...(pipelineJobs !== undefined ? { pipelineJobs } : {}),
     reviewers,
     ...(approvalState ? { approvalState } : {})

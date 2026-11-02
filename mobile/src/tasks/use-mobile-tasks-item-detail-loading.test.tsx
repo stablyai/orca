@@ -46,6 +46,25 @@ const statusChanges: { field: string; source: Partial<GitLabWorkItem> }[] = [
 ]
 
 describe('GitLab task detail hydration', () => {
+  it('keeps a failed parent pipeline failing on the selected item and task row', async () => {
+    const fixture = await mount(hydratedItem())
+    await fixture.transport.answer(
+      success({
+        ...GITLAB_DETAILS,
+        pipeline: {
+          id: 99,
+          status: 'failed',
+          checkStatus: 'failure',
+          webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
+        }
+      })
+    )
+
+    const checksSummary = { state: 'failure', scope: 'pipeline' }
+    expect(fixture.state().actionItem?.source).toMatchObject({ checksSummary })
+    expect(fixture.state().items[0]?.source).toMatchObject({ checksSummary })
+  })
+
   it('settles repeated identical replies and keeps the loaded sheet readable', async () => {
     const fixture = await mount()
     for (let round = 0; round < 6; round += 1) {

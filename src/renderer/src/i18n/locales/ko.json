@@ -13364,6 +13364,7 @@
                 "baseCommitLabel": "기본 커밋:",
                 "failingChecks_one": "실패한 검사 {{count}}개",
                 "failingChecks_other": "실패한 검사 {{count}}개",
+                "pipelineFailed": "{{name}} 실패",
                 "pendingChecks_one": "대기 중인 검사 {{count}}개",
                 "pendingChecks_other": "대기 중인 검사 {{count}}개",
                 "unresolvedChecks_one": "미해결 검사 {{count}}개",
