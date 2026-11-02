@@ -31,6 +31,7 @@ type AlignArgs<S extends MobileNativeChatScrollNode> = {
 
 export type MobileNativeChatPreviousAlign<S extends MobileNativeChatScrollNode> = {
   aligning: { current: boolean }
+  cancelAlign: () => void
   hasPreviousMessage: (keys: readonly string[]) => boolean
   revealPreviousMessage: (keys: readonly string[], animated: boolean) => void
   finishPendingAlign: (s: S) => void
@@ -74,6 +75,11 @@ export function useMobileNativeChatPreviousAlign<S extends MobileNativeChatScrol
     const from = s.scrollTop
     const started = performance.now()
     const step = (now: number): void => {
+      // A touch or another jump may have cancelled this frame after it was queued.
+      if (!aligning.current) {
+        alignFrame.current = 0
+        return
+      }
       const t = Math.min(1, (now - started) / ALIGN_MS)
       const eased = 1 - (1 - t) ** 3
       write(s, from + (to - from) * eased)
@@ -138,6 +144,15 @@ export function useMobileNativeChatPreviousAlign<S extends MobileNativeChatScrol
     [alignRow]
   )
 
+  const cancelAlign = useCallback(() => {
+    if (alignFrame.current !== 0) {
+      cancelAnimationFrame(alignFrame.current)
+      alignFrame.current = 0
+    }
+    aligning.current = false
+    pendingAlign.current = null
+  }, [])
+
   const finishPendingAlign = useCallback(
     (s: S) => {
       const pending = pendingAlign.current
@@ -162,5 +177,5 @@ export function useMobileNativeChatPreviousAlign<S extends MobileNativeChatScrol
     [alignRow]
   )
 
-  return { aligning, hasPreviousMessage, revealPreviousMessage, finishPendingAlign }
+  return { aligning, cancelAlign, hasPreviousMessage, revealPreviousMessage, finishPendingAlign }
 }
