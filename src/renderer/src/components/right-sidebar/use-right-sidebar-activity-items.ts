@@ -41,6 +41,7 @@ export function useRightSidebarActivityItems({
   const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
+  const agentsShortcut = useShortcutLabel('sidebar.agents.toggle')
   const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
   // Hide Git-only tabs for folder workspaces.
   const activeWorktree = useAppStore((s) =>
@@ -83,7 +84,7 @@ export function useRightSidebarActivityItems({
         id: 'vault',
         icon: AgentSessionHistoryIcon,
         title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
-        shortcut: ''
+        shortcut: agentsShortcut === 'Unassigned' ? '' : agentsShortcut
       },
       {
         id: 'workspaces',
@@ -128,6 +129,7 @@ export function useRightSidebarActivityItems({
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
     [
+      agentsShortcut,
       checksShortcut,
       explorerShortcut,
       pluginPanelErrors,

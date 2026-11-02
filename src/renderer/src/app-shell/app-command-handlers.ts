@@ -297,6 +297,13 @@ export function createAppCommandHandlers(
           : revealRightSidebarTab('sidebar.sourceControl.toggle', 'source-control')
     ],
     ['sidebar.checks.toggle', () => revealRightSidebarTab('sidebar.checks.toggle', 'checks')],
-    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')]
+    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')],
+    [
+      'sidebar.agents.toggle',
+      () =>
+        canRevealRightSidebar
+          ? claim('sidebar.agents.toggle', () => actions.showAiVaultSearch())
+          : false
+    ]
   ])
 }

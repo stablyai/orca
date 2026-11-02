@@ -22717,6 +22717,7 @@
       "sidebarSourceControlToggle": "Show Source Control",
       "sidebarChecksToggle": "Show Checks",
       "sidebarPortsToggle": "Show Ports",
+      "sidebarAgentsToggle": "Show Agents",
       "sidebarSleepingWorkspacesToggle": "Toggle Sleeping Workspaces",
       "sidebarFocusWorktreeList": "Focus worktree list",
       "floatingTerminalToggle": "Toggle Floating Terminal",

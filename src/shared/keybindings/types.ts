@@ -49,6 +49,7 @@ export type KeybindingActionId =
   | 'sidebar.sourceControl.toggle'
   | 'sidebar.checks.toggle'
   | 'sidebar.ports.toggle'
+  | 'sidebar.agents.toggle'
   | 'sidebar.sleepingWorkspaces.toggle'
   | 'sidebar.childWorkspaces.toggle'
   | 'sidebar.focusWorktreeList'
