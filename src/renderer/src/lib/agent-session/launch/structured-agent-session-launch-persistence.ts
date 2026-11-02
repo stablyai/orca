@@ -23,8 +23,10 @@ let loaded = false
 // Writes inside a batch update the records at once and save them once, at the batch's end.
 let batchDepth = 0
 let batchDirty = false
-// Slot ids read inside a batch until a record changes: a batch drawing many tabs scans once each.
-const batchSlotIds = new Map<string, ReadonlySet<string>>()
+// Slot ids by workspace and group, indexed in one pass the first time a batch reads them and
+// dropped when a record changes: a batch drawing tabs in many workspaces scans the records once.
+let batchSlotIndex: Map<string, Set<string>> | undefined
+const NO_SLOT_IDS: ReadonlySet<string> = new Set()
 
 function load(): void {
   if (loaded) {
@@ -112,7 +114,7 @@ function serializeTombstone(sessionId: string, executionHostId: ExecutionHostId)
 }
 
 function writeRecords(): void {
-  batchSlotIds.clear()
+  batchSlotIndex = undefined
   if (batchDepth > 0) {
     batchDirty = true
     return
@@ -164,7 +166,7 @@ export function batchStructuredAgentLaunchRecordWrites(update: () => void): void
   } finally {
     batchDepth -= 1
     if (batchDepth === 0) {
-      batchSlotIds.clear()
+      batchSlotIndex = undefined
       if (batchDirty) {
         batchDirty = false
         writeRecords()
@@ -178,26 +180,52 @@ export function readStructuredAgentLaunchRecords(): readonly StructuredAgentLaun
   return [...records.values()]
 }
 
-export function structuredLaunchSlotIds(worktreeId: string, groupId?: string): ReadonlySet<string> {
-  const key = `${worktreeId}\0${groupId ?? ''}`
-  const kept = batchSlotIds.get(key)
-  if (kept) {
-    return kept
+function slotKey(worktreeId: string, groupId?: string): string {
+  return `${worktreeId}\0${groupId ?? ''}`
+}
+
+function isLaunchSlot(record: StructuredAgentLaunchPersistedRecord): boolean {
+  return record.executionHostId === 'local' && record.lifecycle !== 'failed'
+}
+
+function indexSlotIds(): Map<string, Set<string>> {
+  const index = new Map<string, Set<string>>()
+  for (const record of readStructuredAgentLaunchRecords()) {
+    const address = record.surfaceAddress
+    if (!address || !isLaunchSlot(record)) {
+      continue
+    }
+    const tabId = structuredAgentSessionTabId(record.sessionId)
+    const keys = [slotKey(address.worktreeId)]
+    if (address.targetGroupId) {
+      keys.push(slotKey(address.worktreeId, address.targetGroupId))
+    }
+    for (const key of keys) {
+      const ids = index.get(key)
+      if (ids) {
+        ids.add(tabId)
+      } else {
+        index.set(key, new Set([tabId]))
+      }
+    }
   }
-  const ids = new Set(
+  return index
+}
+
+export function structuredLaunchSlotIds(worktreeId: string, groupId?: string): ReadonlySet<string> {
+  if (batchDepth > 0) {
+    batchSlotIndex ??= indexSlotIds()
+    return batchSlotIndex.get(slotKey(worktreeId, groupId)) ?? NO_SLOT_IDS
+  }
+  return new Set(
     readStructuredAgentLaunchRecords().flatMap((record) =>
-      record.executionHostId === 'local' &&
-      record.lifecycle !== 'failed' &&
+      isLaunchSlot(record) &&
       record.surfaceAddress?.worktreeId === worktreeId &&
       (!groupId || record.surfaceAddress.targetGroupId === groupId)
         ? [structuredAgentSessionTabId(record.sessionId)]
         : []
     )
   )
-  if (batchDepth > 0) {
-    batchSlotIds.set(key, ids)
-  }
-  return ids
 }
 
 export function readStructuredAgentLaunchRecord(
@@ -287,7 +315,7 @@ export function retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted
 
 export function resetStructuredAgentLaunchPersistenceForTests(): void {
   records.clear()
-  batchSlotIds.clear()
+  batchSlotIndex = undefined
   tombstones.clear()
   remoteTombstoneCancelledAt.clear()
   loaded = false

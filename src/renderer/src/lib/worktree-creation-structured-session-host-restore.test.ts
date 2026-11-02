@@ -448,16 +448,36 @@ describe('restoring held host launches at startup', () => {
 
 describe('restoring many held launches at once', () => {
   type Cost = { flushes: number; serializedRows: number; addressReads: number }
+  type Spread = 'one failed workspace' | 'pending across workspaces'
+
+  const launchedIn = (spread: Spread, count: number, index: number): string =>
+    spread === 'one failed workspace' ? worktree.id : `${worktree.id}-${count}-${index}`
 
   /** Restores `count` held launches through settled layout, counting full journal writes, rows
    *  they serialize, and every read of a row's address (the scans that place slots). */
-  async function restoreCost(count: number): Promise<Cost> {
+  async function restoreCost(spread: Spread, count: number): Promise<Cost> {
     resetStructuredAgentLaunchRegistryForTests()
     resetStructuredAgentLaunchPersistenceForTests()
+    useAppStore.setState({ unifiedTabsByWorktree: {}, groupsByWorktree: {}, tabsByWorktree: {} })
     const prefix = `codex-batch-${count}`
     const rows = Array.from({ length: count }, (_, index) =>
-      row(`${prefix}-${index}`, 'local', { hostLaunchOperationId: `host-op-${prefix}-${index}` })
+      row(`${prefix}-${index}`, 'local', {
+        hostLaunchOperationId: `host-op-${prefix}-${index}`,
+        surfaceAddress: { worktreeId: launchedIn(spread, count, index), precedingTabIds: [] },
+        // A pending row is still a reserved slot; a failed one is not.
+        ...(spread === 'one failed workspace' ? {} : { lifecycle: 'pending' })
+      })
     )
+    if (spread === 'pending across workspaces') {
+      useAppStore.setState({
+        worktreesByRepo: {
+          [worktree.repoId]: rows.map((_, index) => ({
+            ...worktree,
+            id: launchedIn(spread, count, index)
+          }))
+        }
+      })
+    }
     localStorage.setItem(LAUNCHES, JSON.stringify(rows))
     let addressReads = 0
     for (const record of readStructuredAgentLaunchRecords()) {
@@ -473,9 +493,9 @@ describe('restoring many held launches at once', () => {
     const flushed = writes.mock.calls.filter(([key]) => key === LAUNCHES)
     writes.mockRestore()
     expect(
-      (useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).filter((tab) =>
-        tab.entityId.startsWith(prefix)
-      )
+      Object.values(useAppStore.getState().unifiedTabsByWorktree)
+        .flat()
+        .filter((tab) => tab.entityId.startsWith(prefix))
     ).toHaveLength(count)
     return {
       flushes: flushed.length,
@@ -484,30 +504,34 @@ describe('restoring many held launches at once', () => {
     }
   }
 
-  it('writes the journal a constant number of times and reads each row a bounded number of times', async () => {
-    const small = await restoreCost(3)
-    useAppStore.setState({ unifiedTabsByWorktree: {}, groupsByWorktree: {}, tabsByWorktree: {} })
-    const large = await restoreCost(30)
+  it.each(['one failed workspace', 'pending across workspaces'] as const)(
+    'writes the journal a constant number of times and reads each row a bounded number of times (%s)',
+    async (spread) => {
+      const small = await restoreCost(spread, 3)
+      const large = await restoreCost(spread, 30)
 
-    // One batch, one write at most: a main-drawn chat's slot moves into its group once.
-    expect(large.flushes).toBe(small.flushes)
-    expect(large.flushes).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 1 : 0)
-    expect(large.serializedRows).toBe(large.flushes * 30)
-    // Linear in the rows: ten times the rows costs at most ten times the reads.
-    expect(large.addressReads).toBeLessThanOrEqual(10 * small.addressReads)
+      // One batch, one write at most: a main-drawn chat's slot moves into its group once.
+      expect(large.flushes).toBe(small.flushes)
+      expect(large.flushes).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 1 : 0)
+      expect(large.serializedRows).toBe(large.flushes * 30)
+      // Linear in the rows: ten times the rows costs at most ten times the reads.
+      expect(large.addressReads).toBeLessThanOrEqual(10 * small.addressReads)
 
-    // Restoring again changes no address, so nothing is written.
-    const writes = vi.spyOn(localStorage, 'setItem')
-    restoreStructuredLaunchSurfaces()
-    await main.settle()
-    expect(writes.mock.calls.filter(([key]) => key === LAUNCHES)).toEqual([])
-    writes.mockRestore()
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // The one write is a real move: each row now names the group its chat was drawn in.
-      const chat = chatTabs('codex-batch-30-29')[0]!
-      expect(savedLaunch('codex-batch-30-29')).toMatchObject({
-        surfaceAddress: { targetGroupId: chat.groupId }
-      })
+      // Restoring again changes no address, so nothing is written.
+      const writes = vi.spyOn(localStorage, 'setItem')
+      restoreStructuredLaunchSurfaces()
+      await main.settle()
+      expect(writes.mock.calls.filter(([key]) => key === LAUNCHES)).toEqual([])
+      writes.mockRestore()
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The one write is a real move: each row now names the group its chat was drawn in.
+        const chat = Object.values(useAppStore.getState().unifiedTabsByWorktree)
+          .flat()
+          .find((tab) => tab.entityId === 'codex-batch-30-29')!
+        expect(savedLaunch('codex-batch-30-29')).toMatchObject({
+          surfaceAddress: { targetGroupId: chat.groupId }
+        })
+      }
     }
-  })
+  )
 })
