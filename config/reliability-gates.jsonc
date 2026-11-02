@@ -11232,9 +11232,7 @@
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
-          "assertions": [
-            "continues recovery when a manager throws after scheduling"
-          ]
+          "assertions": ["continues recovery when a manager throws after scheduling"]
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
@@ -17557,9 +17555,7 @@
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
-          "assertions": [
-            "preserves the glyph atlas when a fullscreen Space becomes visible"
-          ]
+          "assertions": ["preserves the glyph atlas when a fullscreen Space becomes visible"]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts",
@@ -17569,27 +17565,19 @@
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
-          "assertions": [
-            "limits atlas recovery to explicit renderer lifecycle events"
-          ]
+          "assertions": ["limits atlas recovery to explicit renderer lifecycle events"]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts",
-          "assertions": [
-            "persists and recovers after the same cells stay missing twice"
-          ]
+          "assertions": ["persists and recovers after the same cells stay missing twice"]
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
-          "assertions": [
-            "recovers a context-lost pane on the next rendering resume"
-          ]
+          "assertions": ["recovers a context-lost pane on the next rendering resume"]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
-          "assertions": [
-            "keeps hidden synchronized output off the global atlas recovery path"
-          ]
+          "assertions": ["keeps hidden synchronized output off the global atlas recovery path"]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts",
