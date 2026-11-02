@@ -12,6 +12,39 @@ import {
 
 export type AgentLaunchSetupFooterHandle = { launch: (surface: AgentPickerSurface) => void }
 
+/** Chat and Terminal live on the setup popover. The filled button is the one Enter commits. */
+export function AgentLaunchSurfaceButtons({
+  entry,
+  disabled,
+  primary,
+  onSelect
+}: {
+  entry: AgentPickerEntry
+  disabled?: boolean
+  primary: AgentPickerSurface
+  onSelect: (surface: AgentPickerSurface) => void
+}): React.JSX.Element {
+  return (
+    <>
+      {agentPickerButtonOrder(entry).map((next) => (
+        <Button
+          key={next}
+          type="button"
+          size="xs"
+          disabled={disabled}
+          variant={next === primary ? 'default' : 'outline'}
+          onClick={() => onSelect(next)}
+        >
+          {next === 'chat'
+            ? translate('agentPicker.launchChat', 'Launch chat')
+            : translate('agentPicker.launchTerminal', 'Launch terminal')}
+          {next === primary ? <CornerDownLeft className="size-3 opacity-60" /> : null}
+        </Button>
+      ))}
+    </>
+  )
+}
+
 /** The optional first prompt and the Launch buttons, which send whatever it holds. */
 export function AgentLaunchSetupFooter({
   entry,
@@ -51,23 +84,12 @@ export function AgentLaunchSetupFooter({
         />
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
-        {agentPickerButtonOrder(entry).map((next) => (
-          <Button
-            key={next}
-            type="button"
-            size="xs"
-            disabled={disabled}
-            variant={next === entry.defaultSurface ? 'default' : 'outline'}
-            onClick={() => launch(next)}
-          >
-            {next === 'chat'
-              ? translate('agentPicker.launchChat', 'Launch chat')
-              : translate('agentPicker.launchTerminal', 'Launch terminal')}
-            {next === entry.defaultSurface ? (
-              <CornerDownLeft className="size-3 opacity-60" />
-            ) : null}
-          </Button>
-        ))}
+        <AgentLaunchSurfaceButtons
+          entry={entry}
+          disabled={disabled}
+          primary={entry.defaultSurface}
+          onSelect={launch}
+        />
       </div>
     </>
   )

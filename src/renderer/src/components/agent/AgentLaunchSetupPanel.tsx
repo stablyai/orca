@@ -6,7 +6,6 @@ import {
 import { useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
-import { Button } from '@/components/ui/button'
 import {
   Command,
   CommandInput,
@@ -22,7 +21,11 @@ import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOpt
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { AgentPermissionMenu } from '../settings/AgentPermissionChoiceControls'
-import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
+import {
+  AgentLaunchSetupFooter,
+  AgentLaunchSurfaceButtons,
+  type AgentLaunchSetupFooterHandle
+} from './AgentLaunchSetupFooter'
 import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
 import {
   acceptAgentPickerArguments,
@@ -364,14 +367,14 @@ export function AgentLaunchSetupPanel({
       </div>
       {mode === 'select' ? (
         <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
-          <Button
-            type="button"
-            size="xs"
+          <AgentLaunchSurfaceButtons
+            entry={entry}
             disabled={disabled}
-            onClick={() => handleUse(draft.surface)}
-          >
-            {translate('agentPicker.use', 'Use')}
-          </Button>
+            primary={draft.surface}
+            onSelect={(surface) => {
+              void handleUse(surface)
+            }}
+          />
         </div>
       ) : (
         <AgentLaunchSetupFooter

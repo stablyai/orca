@@ -44,7 +44,12 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
     launchChoice: { route: 'structured-native-chat' }
   })
   expect(mocks.launch.mock.calls[0][0].launchChoice.requestedSurface).toBeUndefined()
-  fireEvent.click(screen.getByRole('radio', { name: 'Terminal' }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls.at(-1)?.[0].launchChoice).toMatchObject({
     route: 'terminal-tui',

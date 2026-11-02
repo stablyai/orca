@@ -50,7 +50,9 @@ export function pickerLaunchRow(
 type Launch = (
   row: NewTabAgentMenuRow,
   draft?: AgentPickerDraft,
-  entry?: AgentPickerEntry
+  entry?: AgentPickerEntry,
+  /** Select mode: set only when a Chat or Terminal button changes the form's surface. */
+  surface?: AgentPickerSurface
 ) => boolean | void | Promise<boolean>
 
 function keepSetupFocus(event: PointerEvent<HTMLDivElement>) {
@@ -330,7 +332,13 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         }
       }}
       onUse={(draft) => {
-        const result = runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
+        // Same surface as the form: accept the draft without a new route event.
+        const committed = (initial ?? selected ?? source)?.surface ?? entry.defaultSurface
+        const chosen = mode === 'select' && draft.surface !== committed ? draft.surface : undefined
+        const result =
+          chosen === undefined
+            ? runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
+            : runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry, chosen)
         if (result !== false) {
           // The row click dismisses Radix only; the operation above owns acceptance.
           dismissing.current = true

@@ -206,7 +206,7 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
     )
   }
   fireEvent.change(input, { target: { value: '--dangerously-skip-permissions --verbose' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
   let reject = (_error: Error): void => {}
   persist.mockImplementationOnce(
     () =>
@@ -223,7 +223,7 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
   // Actual global writer publishes only after success; failed selection must retain this later edit.
   input = await openSetup()
   fireEvent.change(input, { target: { value: '--verbose newer' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
   await act(async () => reject(new Error('disk unavailable')))
   await waitFor(() =>
     expect(console.error).toHaveBeenCalledWith(
@@ -314,7 +314,7 @@ it('isolates equal recipe drafts, invalidates Discard and saves permission-only 
   dismiss()
   input = await open(first)
   expect(input).toHaveProperty('value', '--unaccepted')
-  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
   fireEvent.click(first.getByRole('button', { name: 'Discard' }))
   input = await open(first)
   expect(input).toHaveProperty('value', '--verbose')
@@ -324,7 +324,7 @@ it('isolates equal recipe drafts, invalidates Discard and saves permission-only 
   fireEvent.click(
     screen.getAllByRole('menuitemradio').find((item) => item.textContent?.startsWith('Ask'))!
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
   fireEvent.click(first.getByRole('button', { name: 'Save' }))
   await waitFor(() =>
     expect(
@@ -613,24 +613,36 @@ it.each([
         name: agent === 'claude' ? 'Configure Claude' : 'Configure Codex'
       })
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
     await act(async () => {})
     expect(read()).toEqual(before)
-    fireEvent.click(row().getByRole('radio', { name: 'Chat' }))
+    await open()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: agent === 'claude' ? 'Configure Claude' : 'Configure Codex'
+      })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Launch chat' }))
     await waitFor(() => expect(read()).toEqual({ ...before, surface: 'chat' }))
-    expect(row().getByRole('radio', { name: 'Chat' }).getAttribute('aria-checked')).toBe('true')
+    expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain('Chat')
     await open()
     fireEvent.click(
       screen.getByRole('menuitem', { name: new RegExp(agent === 'claude' ? '^Claude' : '^Codex') })
     )
     await act(async () => {})
     expect(read()).toEqual({ ...before, surface: 'chat' })
-    fireEvent.click(row().getByRole('radio', { name: 'Terminal' }))
+    await open()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: agent === 'claude' ? 'Configure Claude' : 'Configure Codex'
+      })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
     await waitFor(() => expect(read()).toEqual({ ...before, surface: 'terminal' }))
     view.unmount()
     view = mount()
     expect(read()).toEqual({ ...before, surface: 'terminal' })
-    expect(row().getByRole('radio', { name: 'Terminal' }).getAttribute('aria-checked')).toBe('true')
+    expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain('Terminal')
     view.unmount()
   }
 )
@@ -683,8 +695,8 @@ it.each([false, true])(
     fireEvent.click(screen.getByRole('menuitem', { name: /^Codex/ }))
     const initialSurface = chatDefault ? 'Chat' : 'Terminal'
     await waitFor(() =>
-      expect(row().getByRole('radio', { name: initialSurface }).getAttribute('aria-checked')).toBe(
-        'true'
+      expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain(
+        initialSurface
       )
     )
     expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual({
@@ -692,7 +704,11 @@ it.each([false, true])(
       commandInputTemplate: 'current {basePrompt}',
       ...(chatDefault ? { surface: 'chat' } : {})
     })
-    fireEvent.click(row().getByRole('radio', { name: chatDefault ? 'Terminal' : 'Chat' }))
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: chatDefault ? 'Launch terminal' : 'Launch chat' })
+    )
     const saved = {
       agentId: 'codex',
       commandInputTemplate: 'current {basePrompt}',
@@ -703,11 +719,9 @@ it.each([false, true])(
     )
     view.unmount()
     view = mount()
-    expect(
-      row()
-        .getByRole('radio', { name: chatDefault ? 'Terminal' : 'Chat' })
-        .getAttribute('aria-checked')
-    ).toBe('true')
+    expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain(
+      chatDefault ? 'Terminal' : 'Chat'
+    )
     expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual(saved)
     view.unmount()
   }

@@ -4,7 +4,6 @@ import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
 import { memo, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,7 +76,14 @@ export const AgentLaunchPicker = memo(
       (entry && entry.catalog.origin !== 'unknown'
         ? entry.catalog.models.find((model) => model.id === choices?.model)?.label
         : undefined) ?? choices?.model
-    const summary = [modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
+    const chosenSurface = draft?.surface ?? entry?.defaultSurface
+    const surfaceLabel =
+      entry && entry.surfaces.length > 1 && chosenSurface
+        ? chosenSurface === 'chat'
+          ? translate('agentPicker.chat', 'Chat')
+          : translate('agentPicker.terminal', 'Terminal')
+        : undefined
+    const summary = [surfaceLabel, modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -121,12 +127,13 @@ export const AgentLaunchPicker = memo(
                 disabled={disabled}
                 setupDisabled={setupDisabled}
                 onSelectAgent={setSelected}
-                runLaunch={(row, draft, entry) =>
+                runLaunch={(row, draft, entry, surface) =>
                   onPick(
                     row.agent,
                     draft,
                     entry,
-                    !draft && row.kind === 'chat' ? 'chat' : undefined
+                    // Setup buttons pass a changed surface. A chat row with no draft is the chat choice.
+                    surface ?? (!draft && row.kind === 'chat' ? 'chat' : undefined)
                   )
                 }
               />
@@ -137,30 +144,6 @@ export const AgentLaunchPicker = memo(
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-        {entry && entry.surfaces.length > 1 ? (
-          <ToggleGroup
-            type="single"
-            value={draft?.surface ?? entry.defaultSurface}
-            disabled={disabled}
-            aria-label={translate('agentPicker.openIn', 'Open in')}
-            className="grid w-full grid-cols-2"
-            onValueChange={(surface) => {
-              if (surface === 'chat' || surface === 'terminal') {
-                onPick(
-                  entry.agent,
-                  { ...(draft ?? agentPickerDraft(entry)), surface },
-                  entry,
-                  surface
-                )
-              }
-            }}
-          >
-            <ToggleGroupItem value="chat">{translate('agentPicker.chat', 'Chat')}</ToggleGroupItem>
-            <ToggleGroupItem value="terminal">
-              {translate('agentPicker.terminal', 'Terminal')}
-            </ToggleGroupItem>
-          </ToggleGroup>
-        ) : null}
       </div>
     )
   },

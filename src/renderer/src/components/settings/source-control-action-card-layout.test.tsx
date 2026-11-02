@@ -163,7 +163,7 @@ it('edits launch arguments in the common setup and keeps the recipe when chat av
   const input = screen.getByRole('textbox', { name: 'Arguments' })
   expect(input).toHaveProperty('value', '--saved')
   fireEvent.change(input, { target: { value: '--draft' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
   act(() => configure({ nativeChatProviders: { claude: true } }))
   expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
   act(() => configure({ nativeChatProviders: {} }))
@@ -502,7 +502,7 @@ it('keeps the complete staged global setup across a template-only edit and appli
     '--latest-pending'
   )
   expect(screen.queryByRole('button', { name: 'Remove --model sonnet' })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
   expect(template).toHaveProperty('value', 'New unrelated template')
   await open()
   expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty(

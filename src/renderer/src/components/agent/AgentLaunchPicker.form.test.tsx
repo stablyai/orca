@@ -138,7 +138,9 @@ it.each(['button', 'enter'] as const)(
       })
     } else {
       fireEvent.click(
-        [...document.querySelectorAll('button')].find((button) => button.textContent === 'Use')!
+        [...document.querySelectorAll('button')].find(
+          (button) => button.textContent === 'Launch terminal'
+        )!
       )
     }
     expect(launch).toHaveBeenCalledExactlyOnceWith(initial)
@@ -180,11 +182,15 @@ it('rebases accepted recipe receipts and retires independent form scopes with eq
   showForm('first')
   open()
   fireEvent.change(document.querySelector('textarea')!, { target: { value: '--accepted' } })
-  fireEvent.click([...document.querySelectorAll('button')].find((b) => b.textContent === 'Use')!)
+  fireEvent.click(
+    [...document.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+  )
   expect(launch.mock.calls.at(-1)?.[0].recipeEdits.changed).toBe(true)
   open()
   expect(document.querySelector('textarea')).toHaveProperty('value', '--accepted')
-  fireEvent.click([...document.querySelectorAll('button')].find((b) => b.textContent === 'Use')!)
+  fireEvent.click(
+    [...document.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+  )
   expect(launch.mock.calls.at(-1)?.[0].recipeEdits.changed).toBe(false)
   open()
   fireEvent.change(document.querySelector('textarea')!, { target: { value: '--unaccepted' } })

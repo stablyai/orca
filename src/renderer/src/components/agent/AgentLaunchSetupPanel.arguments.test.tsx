@@ -94,7 +94,9 @@ it.each(['direct Use', 'blur then Use'] as const)(
       fireEvent.blur(input)
     }
     fireEvent.click(
-      [...host.querySelectorAll('button')].find((button) => button.textContent === 'Use')!
+      [...host.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Launch terminal'
+      )!
     )
     expect(onUse).toHaveBeenCalledOnce()
     const accepted = onUse.mock.calls[0][0]
@@ -144,7 +146,9 @@ it.each(['pending click', 'blur then click'] as const)(
       }
       fireEvent.click(remove)
       fireEvent.click(
-        [...host.querySelectorAll('button')].find((button) => button.textContent === 'Use')!
+        [...host.querySelectorAll('button')].find(
+          (button) => button.textContent === 'Launch terminal'
+        )!
       )
       expect(
         accepted.mock.calls.filter(
@@ -313,7 +317,9 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
     expect(changes.mock.calls.at(-1)?.[0].pendingArguments).toHaveLength(17 + textCopies * 9)
     clear()
     fireEvent.click(
-      [...host.querySelectorAll('button')].find((button) => button.textContent === 'Use')!
+      [...host.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Launch terminal'
+      )!
     )
     const acceptance = counts()
     const accepted = onUse.mock.calls.at(-1)![0]
