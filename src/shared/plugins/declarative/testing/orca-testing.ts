@@ -20,6 +20,13 @@ export { hostError } from './testing-host'
 export { test, describe, beforeEach, afterEach } from 'node:test'
 export { default as assert } from 'node:assert/strict'
 export { stored } from './testing-panel'
+export { mockEditorHost } from './testing-editor-host'
+export type {
+  MockEditorEdit,
+  MockEditorFile,
+  MockEditorHost,
+  MockEditorHostOptions
+} from './testing-editor-host'
 export type { MockHost, MockHostOptions, MockHostRefusal } from './testing-host'
 export type { TestWorker, WorkerModule } from './testing-worker'
 export type { TestPanel, PanelIssue, PersistedState } from './testing-panel'

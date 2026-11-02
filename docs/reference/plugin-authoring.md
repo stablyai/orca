@@ -367,6 +367,30 @@ Theme changes do not reload the frame: the shell updates the `--orca-*` variable
 `light`/`dark` class on `<html>` in place and emits `theme`. Restyle from the variables, or
 listen with `orca.on('theme', …)`, to follow it.
 
+`orca plugin check` checks each custom editor without running it or Orca: from the `entry` it
+follows local `<script src>` files, inline module scripts and relative imports, and fails at
+`file:line:column` on a syntax error (`editor_syntax`), a missing file (`editor_missing_file`), an
+import Orca refuses (`editor_import`), string `eval` or `Function` (`editor_eval`, refused by the
+frame) and a file over its limit (`editor_too_large`). `--json` lists them under `editors`.
+
+To test an editor's sync logic in Node, `mockEditorHost` from `orca/testing` installs
+`globalThis.orca` with the real document API and `session()` over an in-memory file:
+
+```ts
+import { assert, mockEditorHost, test } from 'orca/testing'
+
+test('keeps an agent write', async () => {
+  const host = mockEditorHost({ text: '{"elements":[]}' }) // or { bytes }, plus { readOnly, colorScheme }
+  await import('./sync.ts') // your code calls orca.document.session()
+  host.replace('{"elements":[1]}') // an outside change
+  host.conflictNext() // the next edit is refused with `conflict`
+  await host.flush() // as a save does
+  assert.equal(host.edits.length, 1) // every applyEdit, refused ones with `refused: code`
+  host.setTheme('light')
+  host.dispose()
+})
+```
+
 ## 2. Load it while you work
 
 From the plugin folder, run:

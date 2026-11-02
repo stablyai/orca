@@ -12,6 +12,7 @@ declare module 'orca/testing' {
     Undeclared
   } from 'orca'
   import type { OrcaWorkerApi, PluginEventName, PluginEvents } from 'orca/worker'
+  import type { EditorContent, OrcaFrameApi } from 'orca/frame'
 
   /** One element of the drawn panel. Actions take it, or a query that finds it. */
   export type TestElement = {
@@ -91,6 +92,52 @@ declare module 'orca/testing' {
    */
   export function mockHost(options?: MockHostOptions): MockHost
   export function hostError(code: string, message?: string, retryAfterMs?: number): HostError
+  /** The file a mock custom editor host starts with. */
+  export type MockEditorFile = { text: string } | { bytes: ArrayBuffer | Uint8Array }
+  export type MockEditorHostOptions = {
+    readOnly?: boolean
+    /** Default `dark`. */
+    colorScheme?: 'light' | 'dark'
+    /** Default `en-US`. */
+    locale?: string
+    /** Bytes documents: the manifest suffix that matched, e.g. `xlsx`. */
+    fileType?: string
+  }
+  export type MockEditorEdit = {
+    baseVersion: number
+    content: EditorContent
+    /** The refusal's code, such as `conflict`; absent when Orca applied the edit. */
+    refused?: string
+  }
+  export type MockEditorHost = {
+    /** The frame API, also installed as `globalThis.orca`. */
+    readonly orca: OrcaFrameApi
+    /** The file as Orca holds it now; undefined for a bytes file. */
+    readonly text: string | undefined
+    readonly bytes: Uint8Array | undefined
+    /** Rises with each document sent to the editor. */
+    readonly version: number
+    /** Every `applyEdit`, in order, refused ones included. */
+    readonly edits: readonly MockEditorEdit[]
+    /** An outside change, such as an agent writing the file. */
+    replace(next: string | ArrayBuffer | Uint8Array): void
+    /** Refuses the next edit with `conflict`, after landing `outside` first when given. */
+    conflictNext(outside?: string | ArrayBuffer | Uint8Array): void
+    /** As a save does: asks the editor for pending edits and waits for its answer (1 s). */
+    flush(): Promise<void>
+    setTheme(colorScheme: 'light' | 'dark'): void
+    /** Removes `globalThis.orca`. */
+    dispose(): void
+  }
+  /**
+   * A stand-in for Orca's custom editor host, backed by an in-memory file: installs
+   * `globalThis.orca` with the real frame shell's document API and `session()`, so sync logic
+   * tests in Node. Answers only document calls. One at a time: a new one disposes the last.
+   */
+  export function mockEditorHost(
+    file: MockEditorFile,
+    options?: MockEditorHostOptions
+  ): MockEditorHost
   /** A persisted value an older version wrote, to test an atom's `migrate`. */
   export function stored(value: unknown, version: number): unknown
 

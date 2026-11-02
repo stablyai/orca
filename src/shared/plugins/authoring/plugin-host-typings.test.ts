@@ -135,6 +135,18 @@ await panel.post('todos.changed', { count: 'one' })
 assert.deepEqual(panel.persisted.storage, host.data().storage)
 `
 
+const EDITOR_TEST = `
+import { assert, mockEditorHost } from 'orca/testing'
+const host = mockEditorHost({ text: 'a' }, { colorScheme: 'light' })
+const doc = await host.orca.document!.session({ debounceMs: 0 })
+doc.change(doc.value + 'b')
+host.conflictNext('outside')
+await host.flush()
+assert.equal(host.text, 'ab')
+host.edits[0]?.refused satisfies string | undefined
+host.dispose()
+`
+
 describe('author typings', () => {
   it('checks in the host typings generated from the host API table', () => {
     const checkedIn = readFileSync(path.join(REPO_ROOT, PLUGIN_HOST_TYPINGS_FILE), 'utf8')
@@ -149,7 +161,8 @@ describe('author typings', () => {
       'main.ts': WORKER_MAIN,
       'src/panel.tsx': COMPONENTS_PANEL,
       'src/protocol.ts': PROTOCOL,
-      'src/panel.test.ts': PANEL_TEST
+      'src/panel.test.ts': PANEL_TEST,
+      'editor/sync.test.ts': EDITOR_TEST
     })
     expect(authorTypingsDiagnostics(program)).toEqual([])
   })

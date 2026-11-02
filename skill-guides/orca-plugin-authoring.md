@@ -109,6 +109,10 @@ fingerprint Orca did not give you. New capabilities or changed commands print a 
 - A worker's `main` must `export default function activate(orca)`.
 - A worker save restarts the worker and drops its in-memory state; keep counters and caches you need across saves in `orca.storage`.
 - A plugin holds at most 2,000 files and 50 MiB; each transpiled file 1 MiB.
+- Custom editors: sync with `orca.document.session()`. `plugin check` fails on an editor's syntax
+  errors, missing files, refused imports and `eval`/`new Function` without running it; test its
+  sync in Node with `mockEditorHost({ text })` from `orca/testing` (`replace`, `conflictNext`,
+  `flush`, `edits`).
 
 ## Conditional references
 

@@ -169,6 +169,9 @@ export async function load(url: string, context: unknown, nextLoad: NextLoad): P
   return { format: 'module', source: transpiled.code, shortCircuit: true }
 }
 
+// `orca plugin check` imports this bundle for its static editor check; Node's hooks ignore it.
+export { checkPluginEditorEntry } from './plugin-editor-static-check'
+
 /** The same transform, for a Vite plugin (`orca plugin test` with the plugin's own vitest). */
 export function transformPluginSourceForTest(path: string, source: string): string {
   const transpiled = transpilePluginSource(path, source)
