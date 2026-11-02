@@ -191,6 +191,10 @@ declare module 'orca/host' {
     "agent.launch.before": { event: { agent: string; workspaceId: string | null; workspaceKind: "worktree" | "folder" | null; terminalId?: string; command: string; env: Record<string, string> }; result: { deny: string } }
     /** Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or `orca terminal send` to an agent. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it. */
     "agent.prompt.before": { event: { agent: string | null; terminalId: string; prompt: string; inputKind: "driving" | "orchestration" | "launch" }; result: { deny: string } }
+    /** An agent in an Orca terminal is about to run a tool. Claude Code waits for the answer: return `{ deny }` to refuse the call (the agent sees the reason) or change `input` with `next`; the person is still asked as usual. Other agents only report the call, so their results are ignored. Agents on SSH or WSL hosts are not hooked yet. */
+    "agent.tool.before": { event: { agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JsonValue; callId?: string }; result: { deny: string } }
+    /** An agent in an Orca terminal finished a tool call (successfully or not). Observe only: Orca does not wait for it. */
+    "agent.tool.after": { event: { agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JsonValue; callId?: string; output?: JsonValue }; result: never }
   }
   export type PluginHookName = keyof PluginHooks
 }
