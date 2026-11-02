@@ -81,7 +81,6 @@ function ComposerBody({
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: draft,
     allowWithoutTarget: true,
-    imageReferences: true,
     caret: 0,
     disabled,
     isComposing: () => false,
@@ -106,7 +105,6 @@ function ComposerBody({
       <div>
         <NativeChatPromptEditor
           scopeKey={draft}
-          imageRow={attachments.imageAttachments.map(({ id }) => id)}
           inputRef={textareaRef}
           initialValue="untouched draft"
           disabled={false}
@@ -326,7 +324,7 @@ describe('native chat composer drop scoping', () => {
       '/repro/second.png'
     ])
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-    expect(target.textContent).toBe('Image #1 Image #2 untouched draft')
+    expect(target.textContent).toBe('untouched draft')
 
     view.unmount()
     const returned = render(<ComposerProbe pane="chat-b" />)

@@ -12,8 +12,6 @@ import {
   type NativeChatQueuedEditDraft
 } from './native-chat-queued-edit-draft'
 import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
-import { promptMarkersToImageReferences } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import { nativeChatImageRowIds } from './native-chat-composer-image-references'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -157,7 +155,7 @@ export function changeNativeChatQueuedEditText(
     updateNativeChatComposerDraft(
       edit.scopeKey,
       {
-        text: promptMarkersToImageReferences(text, nativeChatImageRowIds(edit.scopeKey)),
+        text,
         document: undefined
       },
       'immediate'

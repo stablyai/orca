@@ -1,4 +1,6 @@
+import { nativeChatDraftScopeBelongsToTab } from './native-chat-composer-draft-scope'
 import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
+import { nativeChatDraftWithoutLegacyImages } from './native-chat-composer-legacy-images'
 // Own complete unsent drafts in memory so each write repairs storage from one authoritative record.
 
 import type { JSONContent } from '@tiptap/react'
@@ -142,8 +144,11 @@ export function updateNativeChatComposerDraft(
     return
   }
   const current = records.get(scopeKey) ?? EMPTY_DRAFT
-  const text = change.text ?? current.text
-  const document = 'document' in change ? change.document : current.document
+  const proposedText = change.text ?? current.text
+  const proposedDocument = 'document' in change ? change.document : current.document
+  const { text, document } = proposedDocument
+    ? nativeChatDraftWithoutLegacyImages(proposedText, proposedDocument)
+    : { text: proposedText, document: proposedDocument }
   const pastedTextFiles = Object.fromEntries(
     Object.entries(change.pastedTextFiles ?? current.pastedTextFiles ?? {}).filter(([id]) =>
       text.includes(nativeChatPastedTextToken(id))
@@ -177,6 +182,7 @@ export function updateNativeChatComposerDraft(
   const owner = current.owner ?? change.owner ?? resolveOwner?.(scopeKey)
   const record: DraftRecord = {
     text,
+    textFormat: 'literal',
     ...(Object.keys(pastedTextFiles).length ? { pastedTextFiles } : {}),
     ...(document ? { document } : {}),
     // Why: an unchanged row keeps its identity, so typing does not re-render every image consumer.
@@ -225,7 +231,11 @@ export function appendToNativeChatComposerDraft(
     },
     'immediate',
     (loaded) => {
-      const merged = { ...loaded, ...withNativeChatComposerDraftAddition(loaded, placed) }
+      const merged: DraftRecord = {
+        ...loaded,
+        ...withNativeChatComposerDraftAddition(loaded, placed),
+        textFormat: 'literal'
+      }
       if (position) {
         nativeChatDraftPositions.set(merged, position(merged))
       }
@@ -266,13 +276,6 @@ export function clearNativeChatComposerDraftIfUnchanged(
   return true
 }
 
-const STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX = 'agent-session:'
-
-/** A structured chat's draft belongs to its conversation, so it outlives the tab showing it. */
-export function structuredAgentSessionDraftScopeKey(sessionId: string): string {
-  return `${STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX}${sessionId}`
-}
-
 function deleteDraftsWhere(
   matches: (scopeKey: string, draft: StoredNativeChatComposerDraft | undefined) => boolean
 ): void {
@@ -294,25 +297,9 @@ export function deleteNativeChatComposerDraft(scopeKey: string): void {
   deleteDraftsWhere((key) => key === scopeKey)
 }
 
-/** The conversation a structured chat's draft belongs to, or null for a pane's draft. */
-export function structuredAgentSessionIdOfDraftScope(scopeKey: string): string | null {
-  return scopeKey.startsWith(STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX)
-    ? scopeKey.slice(STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX.length)
-    : null
-}
-
-/** A pane key is `<tabId>:<leaf>`; the leaf is a UUID, while a tab id may hold ':' itself. */
-export function nativeChatDraftScopeTabId(scopeKey: string): string {
-  return scopeKey.slice(0, scopeKey.lastIndexOf(':'))
-}
-
 /** Delete closed-tab pane drafts; conversation-scoped drafts outlive their tabs. */
 export function deleteNativeChatComposerDraftsForTab(tabId: string): void {
-  deleteDraftsWhere(
-    (scopeKey) =>
-      !scopeKey.startsWith(STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX) &&
-      nativeChatDraftScopeTabId(scopeKey) === tabId
-  )
+  deleteDraftsWhere((scopeKey) => nativeChatDraftScopeBelongsToTab(scopeKey, tabId))
 }
 
 /** Drops every draft written in a workspace the user removed, open and closed chats alike. */
@@ -342,3 +329,9 @@ export {
   closeNativeChatEditDraft,
   type NativeChatEditDraftDestination
 } from './native-chat-composer-draft-memory'
+
+export {
+  structuredAgentSessionDraftScopeKey,
+  structuredAgentSessionIdOfDraftScope,
+  nativeChatDraftScopeTabId
+} from './native-chat-composer-draft-scope'
