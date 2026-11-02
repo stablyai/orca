@@ -153,10 +153,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
                     : runExpectingPageUrl(
                         expectedUrl,
                         target.browserPageId,
-                        () => {
-                          gate()
-                          return this.livePageUrls(target)
-                        },
+                        () => this.livePageUrls(target),
                         () => execute(session, target)
                       )
                 const act = (): Promise<T> =>

@@ -212,7 +212,7 @@ describe('commands that expect a page URL', () => {
     finishAhead()
 
     await ahead.catch(() => undefined)
-    await expect(queued).rejects.toMatchObject({ code: expect.stringMatching(/^browser_(tab|no)/) })
+    await expect(queued).rejects.toMatchObject({ code: 'browser_tab_not_found' })
     expect(commands).not.toContainEqual(['click', '@e3'])
   })
 
@@ -248,6 +248,44 @@ describe('commands that expect a page URL', () => {
       data: { actualUrl: B, mayHaveStarted: true }
     })
     expect(send.mock.calls.filter(([method]) => method === 'Runtime.callFunctionOn')).toEqual([])
+  })
+
+  it('rechecks between typed runs, so keys after a navigating Enter never land', async () => {
+    guest.debugger.sendCommand.mockImplementation(async (method, params) => {
+      if (method === 'Input.dispatchKeyEvent' && (params as { key?: string }).key === 'Enter') {
+        url = B
+      }
+      return {}
+    })
+
+    await expect(expecting(A, () => bridge.type('one\ntwo'))).rejects.toMatchObject({
+      data: { actualUrl: B, mayHaveStarted: true }
+    })
+
+    const keys = guest.debugger.sendCommand.mock.calls
+      .filter(([method]) => method === 'Input.dispatchKeyEvent')
+      .map(([, params]) => (params as { key?: string }).key)
+    expect(keys).toContain('Enter')
+    expect(keys).not.toContain('t')
+  })
+
+  it('rechecks after finding where a guest’s keys go, right before they are sent', async () => {
+    guest.getType.mockReturnValue('webview')
+    guest.debugger.sendCommand.mockImplementation(async () => {
+      url = B
+      return {}
+    })
+
+    await expect(expecting(A, () => bridge.keypress('Enter'))).rejects.toMatchObject({
+      data: { actualUrl: B, mayHaveStarted: false }
+    })
+
+    expect(guest.sendInputEvent).not.toHaveBeenCalled()
+    expect(
+      guest.debugger.sendCommand.mock.calls.filter(
+        ([method]) => method === 'Input.dispatchKeyEvent'
+      )
+    ).toEqual([])
   })
 
   it('stops inserting chunks once the route moves', async () => {
@@ -286,18 +324,25 @@ describe('commands that expect a page URL', () => {
     expect(result).toMatchObject({ browserPageId: PAGE, checkedUrl: A, effects: { url: B } })
   }, 15_000)
 
-  it('does not tell an SSH host the URL of a page it may not drive', async () => {
-    url = 'https://desktop.local/secret'
+  it('does not tell an SSH host the URL of a page that moved somewhere it may not drive', async () => {
+    const SECRET = 'file:///Users/me/secret.pdf'
+    // The last await before the input goes out.
+    bridge = makeBridge({
+      showAgentPointer: async () => {
+        url = SECRET
+      }
+    })
 
     const failure = await runInRemoteCliBrowserScope(
       'workspace',
-      () => expecting(A, () => bridge.click('@e3')),
+      () => expecting(A, () => bridge.mouseMove(1, 2)),
       undefined,
-      () => false
+      () => url !== SECRET
     ).catch((error: unknown) => error)
 
-    expect(failure).toMatchObject({ code: expect.stringMatching(/desktop_browser_bridge/) })
+    expect(failure).toMatchObject({ code: 'desktop_browser_bridge_unrouted' })
     expect(JSON.stringify(failure)).not.toContain('secret')
+    expect((failure as Error).message).not.toContain('secret')
   })
 
   it('checks a dialog answer before it reaches the page', async () => {

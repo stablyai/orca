@@ -83,7 +83,6 @@ export abstract class AgentBrowserBridgeKeyCommands extends AgentBrowserBridgeCa
       let run: Record<string, unknown>[] = []
       const flush = async (): Promise<void> => {
         if (run.length > 0) {
-          assertExpectedPageUrlForStep()
           await dispatchPageKeyEvents(wc, run, send, guardFocus)
           run = []
         }

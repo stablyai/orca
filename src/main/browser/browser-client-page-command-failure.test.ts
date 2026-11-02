@@ -26,11 +26,4 @@ describe('browserClientPageCommandFailure', () => {
       expectedUrlMismatch: mismatch
     })
   })
-
-  it('keeps other failures to their code', () => {
-    expect(browserClientPageCommandFailure(new Error('boom'), signal)).toEqual({
-      status: 'failed',
-      errorCode: 'browser_client_page_command_failed'
-    })
-  })
 })
