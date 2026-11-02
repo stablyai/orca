@@ -36,7 +36,8 @@ export function useNativeChatUsageLimitAutoContinue(
   const readCutState = useCallback(() => {
     const current = feed.getSnapshot().get(sessionId)?.usageLimitContinue
     return resetsAt !== undefined &&
-      current?.turnItemId === turnItemId &&
+      current !== undefined &&
+      current.turnItemId === turnItemId &&
       current.resetsAt === resetsAt
       ? current.state
       : undefined

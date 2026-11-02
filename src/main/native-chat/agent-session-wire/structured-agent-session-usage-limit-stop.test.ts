@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -11,6 +14,15 @@ import { createCodexJournalTranslator } from '../../codex/codex-structured-journ
 import * as reducer from '../agent-session-journal/journal-reducer'
 import * as stoppedCut from '../agent-session-journal/journal-stopped-usage-limit-cut'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -379,4 +391,51 @@ describe('journal commit work after a Stop', () => {
       expect(counts).toMatchObject({ scans: 1, renders: 0, indexes: 0 })
     }
   )
+})
+
+it('records a Stop and its limited end in a conversation opened without a record store', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'usage-limit-storeless-'))
+  try {
+    const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'storeless' }))
+    const opened = await openTestAttachConversation(openTestJournalHostDatabase(root))(record)
+    const fence = record.lease.runtimeFence
+    await opened.stops.accept({
+      event: { reason: 'user-stop', turnId: 'turn-1' },
+      fence,
+      liveTurnId: () => null
+    })
+    const turnKey = { provider: 'orca' as const, clientMessageId: 'storeless-turn' }
+    const turnItemId = agentJournalItemKey(turnKey)
+    await opened.appendItem(
+      turnKey,
+      {
+        kind: 'turn',
+        turnId: 'turn-1',
+        state: 'completed',
+        outcome: 'failure',
+        startedAt: 1,
+        completedAt: 2
+      },
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    // There is nothing to withdraw without a store; the revealing commit still lands.
+    await opened.appendItem(
+      { provider: 'orca', clientMessageId: 'storeless-limit' },
+      {
+        kind: 'status',
+        ...agentSessionFailureWords(
+          agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: 60_000 } }),
+          { surface: 'row' }
+        )
+      },
+      { fence, turnScope: { kind: 'turn', turnItemId } }
+    )
+    expect(latestUsageLimitContinueIdentity(opened.snapshot())).toEqual({
+      turnItemId,
+      resetsAt: 60_000
+    })
+  } finally {
+    await closeTestJournalHostDatabase(root)
+    await rm(root, { recursive: true, force: true })
+  }
 })

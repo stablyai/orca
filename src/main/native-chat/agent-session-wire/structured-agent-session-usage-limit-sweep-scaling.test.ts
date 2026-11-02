@@ -6,6 +6,7 @@ import {
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { StructuredAgentSessionUsageLimitContinue } from './structured-agent-session-usage-limit-continue'
+import type { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 
 const NOW = 1_800_000_000_000
 const cutOf = (id: string): NativeChatUsageLimitCut => ({
@@ -44,7 +45,11 @@ function sweepHost(chats: { loaded: number; unloaded: number; broken?: number })
     return cutOf(id)
   })
   const publish = vi.fn()
-  const send = vi.fn(async () => ({
+  const send = vi.fn<
+    (
+      params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
+    ) => ReturnType<typeof sendStructuredAgentSessionTurn>
+  >(async () => ({
     ok: false as const,
     refusal: refuse(
       'execution_owner_reconciling',

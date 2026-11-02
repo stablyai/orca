@@ -9,6 +9,7 @@ import { openAgentSessionJournal } from '../agent-session-journal/journal-store-
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import {
   attachFingerprintFields,
   journalIdentityFor,
@@ -93,10 +94,17 @@ export async function openStructuredAgentSessionConversationJournal(
     expectedRuntimeFence: fence
   })
   const identity = journalIdentityFor(record, params)
+  const { store } = deps
   const journal = await openAgentSessionJournal({
     identity,
     database: deps.journalDatabase,
-    withdrawStoppedCut: (cut) => deps.store.usageLimitContinueCancelReceipt(sessionId, cut)
+    // Without a record store (acquisition-only opens) there is no continuation to withdraw.
+    ...(store
+      ? {
+          withdrawStoppedCut: (cut: UsageLimitContinueIdentity) =>
+            store.usageLimitContinueCancelReceipt(sessionId, cut)
+        }
+      : {})
   })
   try {
     // A handed-over row found here stays doubt: it reads as sent, and nothing narrows it later.
