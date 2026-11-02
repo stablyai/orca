@@ -421,6 +421,24 @@ describe('custom editor document channel', () => {
     await expect(flushed).resolves.toBe(false)
   })
 
+  it('commits a held edit when a save starts, and every edit during the save at once', async () => {
+    const { host, onEdit, send, answers, answerFlushes } = setup({ text: 'a', maxEdits: 1 })
+    send(READY)
+    send(edit('b', 1, 22))
+    send(edit('c', 1, 23))
+    expect(answers(23)).toEqual([])
+    const flushed = host.flush()
+    // The frame answers a save only once its edits settle, so the held one commits first.
+    expect(onEdit).toHaveBeenLastCalledWith('c')
+    expect(answers(23)).toEqual([{ orca: 1, kind: 'res', id: 23, result: null }])
+    send(edit('d', 1, 24))
+    expect(onEdit).toHaveBeenLastCalledWith('d')
+    answerFlushes()
+    await expect(flushed).resolves.toBe(true)
+    send(edit('e', 1, 25))
+    expect(answers(25)).toEqual([])
+  })
+
   it('never spends the edit budget on chords or flush replies', () => {
     const { onEdit, send } = setup({ text: 'a', maxEdits: 1 })
     send(READY)
