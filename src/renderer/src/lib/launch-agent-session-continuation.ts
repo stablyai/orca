@@ -163,6 +163,14 @@ export async function launchAgentSessionContinuation({
   if (!result || 'refused' in result) {
     return false
   }
+  // A launch still waiting on its host has opened nothing yet: the handoff counts once a chat or
+  // terminal exists, so a declined or cancelled one leaves the dialog open to retry.
+  if (result.surface.kind === 'host-published' && result.structuredSettlement) {
+    const settled = await result.structuredSettlement
+    if (settled.kind === 'cancelled' || settled.kind === 'failed') {
+      return false
+    }
+  }
 
   if (result.promptDeliveryResult) {
     void result.promptDeliveryResult

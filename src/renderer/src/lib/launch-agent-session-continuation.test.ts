@@ -167,3 +167,45 @@ it('retains the accepted route across detection, and explicit chat declines with
     expect(fallback).toHaveBeenCalledTimes(requestedSurface ? 0 : 1)
   }
 })
+
+it('keeps the handoff open, without a message, when the declined chat’s terminal waits on its host', async () => {
+  const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+  const { beginHostAdmittedStructuredLaunch } =
+    await import('./agent-session/launch/structured-agent-session-launch-admission')
+  const { structuredLaunchTerminalFromOutcome } =
+    await import('./agent-session/launch/structured-launch-terminal-outcome')
+  toast.error.mockClear()
+  toast.success.mockClear()
+  launchAgentInNewTab.mockImplementationOnce((args) => {
+    // The host declines before any chat exists; its terminal fallback is declined while connecting.
+    const launch = beginHostAdmittedStructuredLaunch({
+      plan: args.agentSessionLaunchPlan,
+      hooks: {},
+      worktreeId: 'wt-1',
+      executionHostId: 'local',
+      target: { kind: 'local' },
+      openAdmitted: vi.fn(),
+      onHostDeclined: () =>
+        structuredLaunchTerminalFromOutcome({
+          refused: { delivered: false, failureNotified: true }
+        })
+    })
+    return {
+      surface: { kind: 'host-published' },
+      pasteDraftAfterLaunch: false,
+      structuredSettlement: launch.settlement,
+      promptDeliveryResult: launch.promptDeliveryResult
+    }
+  })
+  await expect(
+    launchAgentSessionContinuation({
+      agent: 'claude',
+      prompt: 'continue',
+      worktreeId: 'wt-1',
+      launchSource: 'sidebar',
+      launchChoice: { agent: 'claude', route: 'structured-native-chat', executionHostId: 'local' }
+    })
+  ).resolves.toBe(false)
+  expect(toast.error).not.toHaveBeenCalled()
+  expect(toast.success).not.toHaveBeenCalled()
+})
