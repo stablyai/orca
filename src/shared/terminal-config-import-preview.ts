@@ -2,11 +2,14 @@ import type { GlobalSettings } from './global-settings-types'
 import type { TerminalThemeSlot } from './terminal-color-overrides'
 import { withImportedTerminalColorOverrides } from './terminal-theme-selection'
 
-/** Where a Ghostty import reads from: Ghostty's own config locations, or a file the user picks. */
-export type GhosttyImportSource = { kind: 'auto' } | { kind: 'chooseFile' }
+/** Terminal apps whose config Orca can import. */
+export type TerminalConfigImportFormat = 'ghostty' | 'kitty'
 
-/** What a Ghostty config import would change, shown before the user accepts it. */
-export type GhosttyImportPreview = {
+/** Where an import reads from: the app's own config locations, or a file the user picks. */
+export type TerminalConfigImportSource = { kind: 'auto' } | { kind: 'chooseFile' }
+
+/** What a terminal config import would change, shown before the user accepts it. */
+export type TerminalConfigImportPreview = {
   found: boolean
   /** The user dismissed the file picker; nothing was read. */
   canceled?: boolean
@@ -14,15 +17,15 @@ export type GhosttyImportPreview = {
   configPaths?: string[]
   diff: Partial<GlobalSettings>
   unsupportedKeys: string[]
-  /** Theme name per slot the config's `theme` selects; when set, the diff's override bags are already per slot. */
+  /** Theme name per slot the config selects; when set, the diff's override bags are already per slot. */
   terminalThemes?: Partial<Record<TerminalThemeSlot, string>>
   error?: string
 }
 
-/** Settings to write when the user accepts a Ghostty import preview. */
-export function ghosttyImportSettingsUpdate(
+/** Settings to write when the user accepts an import preview. */
+export function terminalConfigImportSettingsUpdate(
   settings: Parameters<typeof withImportedTerminalColorOverrides>[0],
-  preview: GhosttyImportPreview,
+  preview: TerminalConfigImportPreview,
   systemPrefersDark: boolean
 ): Partial<GlobalSettings> {
   return preview.terminalThemes
