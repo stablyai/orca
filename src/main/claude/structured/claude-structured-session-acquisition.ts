@@ -2,7 +2,7 @@ import type { AgentSessionAcquisition } from '../../native-chat/agent-session-wi
 import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from '../claude-replay-turn-resolution'
-import { claudeStartedUnechoedSend } from '../claude-command-lifecycle'
+import { claudeRootWorkSend } from '../claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from '../claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
 import {
@@ -70,14 +70,10 @@ export async function acquireClaudeSession({
   const translator = createClaudeSessionJournalTranslator(
     input.events,
     String(input.fence),
-    {
-      attempt,
-      initProof,
-      callbacks,
-      sessionId
-    },
+    { attempt, initProof, callbacks, sessionId },
     () => (liveSession && sessions.get(sessionId) === liveSession ? liveSession : null),
-    (message) => startup.accept(claudeStartupResultError(message))
+    (message) => startup.accept(claudeStartupResultError(message)),
+    deps.now
   )
   const contextActivity = translator?.contextActivity ?? 0
   const recordTurnEnd = claudeTurnResumePointWriter(sessionId, sessions, deps)
@@ -128,7 +124,7 @@ export async function acquireClaudeSession({
     const observedAt =
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
-    const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
+    const startedSend = !startsTurn && liveSession ? claudeRootWorkSend(liveSession) : null
     // Retain send ownership during publication until the host receives its settlement.
     const session = liveSession
     const reported = session?.unreportedSettlements

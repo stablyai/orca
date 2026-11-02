@@ -16,9 +16,9 @@ import {
 import {
   dispatch,
   eventually,
+  openTurn,
   send,
   sendUnechoed,
-  statusTexts,
   stop
 } from './structured-agent-session-claude-stop-contract-test-actions'
 
@@ -30,179 +30,212 @@ async function turns() {
   })
 }
 
-async function precompact() {
-  const connection = fixture.claude.connections[0]!
-  let activity: AgentSessionTurnActivity | null = null
+async function watchActivity() {
+  const seen: (AgentSessionTurnActivity | null)[] = []
   await fixture.host.subscribe({
     id: 'precompact-reader',
     sessionId: SESSION,
     emit: (event) => {
       if ('activity' in event && event.activity !== undefined) {
-        activity = event.activity
+        seen.push(event.activity)
       }
     }
   })
+  return { seen, current: () => seen.at(-1) ?? null }
+}
+
+function status(connection: FakeConnection, value: 'compacting' | null, uuid: string) {
+  frame(connection, { type: 'system', subtype: 'status', status: value, uuid })
+}
+
+function sessionState(connection: FakeConnection, state: 'idle' | 'running') {
+  frame(connection, { type: 'system', subtype: 'session_state_changed', state })
+}
+
+function lifecycle(connection: FakeConnection, state: string, commandUuid: unknown) {
+  frame(connection, { type: 'command_lifecycle', state, command_uuid: commandUuid })
+}
+
+/** Claude Code 2.1.310 send THREE: the handoff precedes the previous command's completed/idle tail. */
+async function precompactAfterPriorTurn(withLifecycle: boolean) {
+  const connection = fixture.claude.connections[0]!
+  await openTurn(connection, 'Say the word TWO.')
+  const prior = connection.sent.at(-1)!
+  frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'prior-result' })
+  const activity = await watchActivity()
   const clientMessageId = await sendUnechoed(connection)
   const written = connection.sent.at(-1)!
-  // Claude Code 2.1.310: started (2 ms), init (8 ms), compacting (14 ms), echo (14,266 ms).
-  frame(connection, {
-    type: 'command_lifecycle',
-    state: 'started',
-    command_uuid: written.uuid,
-    uuid: 'command-started'
-  })
+  const [, opened] = await turns()
+  if (withLifecycle) {
+    lifecycle(connection, 'completed', prior.uuid)
+  }
+  sessionState(connection, 'idle')
+  sessionState(connection, 'running')
+  if (withLifecycle) {
+    lifecycle(connection, 'queued', written.uuid)
+    lifecycle(connection, 'started', written.uuid)
+  }
   frame(connection, {
     type: 'system',
     subtype: 'init',
     uuid: 'cycle-init',
     capabilities: CAPABILITIES
   })
-  frame(connection, {
-    type: 'system',
-    subtype: 'status',
-    status: 'compacting',
-    uuid: 'pre-echo-compaction'
-  })
-  return { connection, written, clientMessageId, activity: () => activity }
+  return { connection, written, clientMessageId, opened: opened!, activity }
 }
 
-function clearCompaction(connection: FakeConnection) {
-  frame(connection, { type: 'system', subtype: 'status', status: null, uuid: 'compaction-ended' })
-}
-
-it('shows compaction before the echo and keeps one turn through the captured reply order', async () => {
-  const run = await precompact()
-  const [opened] = await turns()
-  expect(opened).toMatchObject({
-    turnId: 'pre-echo-compaction',
-    state: 'running',
-    userItemId: agentJournalSubmissionKey(run.clientMessageId)
-  })
-  expect(run.activity()).toEqual({
-    turnId: opened!.turnId,
-    text: 'Compacting the conversation'
-  })
-
-  clearCompaction(run.connection)
-  await fixture.host.flushStreamedEvents(SESSION)
-  expect(run.activity()).toBeNull()
-  frame(run.connection, { ...run.written, parent_tool_use_id: null })
-  frame(run.connection, { type: 'system', subtype: 'compact_boundary', uuid: 'compact-boundary' })
-  frame(run.connection, {
-    type: 'user',
-    uuid: 'compacted-context',
-    parent_tool_use_id: null,
-    message: { role: 'user', content: [{ type: 'text', text: 'Conversation summary' }] }
-  })
-  frame(run.connection, {
-    type: 'assistant',
-    uuid: 'reply',
-    parent_tool_use_id: null,
-    message: { role: 'assistant', content: [{ type: 'text', text: 'THREE' }] }
-  })
-  frame(run.connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'result' })
-  frame(run.connection, {
-    type: 'command_lifecycle',
-    state: 'completed',
-    command_uuid: run.written.uuid
-  })
-  frame(run.connection, { type: 'system', subtype: 'session_state_changed', state: 'idle' })
-
-  expect(await turns()).toEqual([
-    expect.objectContaining({
-      ...opened,
-      state: 'completed',
-      outcome: 'success',
-      completedAt: expect.any(Number)
+it.each([
+  ['with lifecycle receipts, 14 s compaction', true, false],
+  ['without lifecycle receipts, zero-length compaction', false, true]
+])(
+  'owns the send from its handoff and shows compaction before the echo, %s',
+  async (_label, withLifecycle, zeroLength) => {
+    const run = await precompactAfterPriorTurn(withLifecycle)
+    expect(run.opened).toMatchObject({
+      turnId: run.written.uuid,
+      state: 'running',
+      userItemId: agentJournalSubmissionKey(run.clientMessageId),
+      requestedAt: expect.any(Number)
     })
-  ])
-  expect(run.activity()).toBeNull()
-  expect(await dispatch(run.clientMessageId)).toMatchObject({ state: 'accepted' })
-})
+    // The previous command's late idle is not this run's end.
+    expect((await turns()).at(-1)).toEqual(run.opened)
 
-it('adopts the first echo and folds a second batched echo before any reply', async () => {
-  const run = await precompact()
-  const [opened] = await turns()
-  expect(opened?.turnId).toBe('pre-echo-compaction')
-  const second = await send('Then say FOUR.')
-  await eventually(() => expect(run.connection.sent).toHaveLength(2))
-  const secondWritten = run.connection.sent.at(-1)!
-  clearCompaction(run.connection)
-  // An init before the echo must not prevent identity-based adoption.
-  frame(run.connection, { type: 'system', subtype: 'init', uuid: 'post-compact-init' })
-  frame(run.connection, { ...run.written, parent_tool_use_id: null })
-  frame(run.connection, { ...secondWritten, parent_tool_use_id: null })
-
-  expect(await turns()).toEqual([opened])
-  expect(await dispatch(run.clientMessageId)).toMatchObject({ state: 'accepted' })
-  expect(await dispatch(second)).toMatchObject({ state: 'accepted' })
-  frame(run.connection, {
-    type: 'result',
-    subtype: 'success',
-    is_error: false,
-    uuid: 'batched-result'
-  })
-  expect(await turns()).toEqual([
-    expect.objectContaining({
-      ...opened,
-      state: 'completed',
-      outcome: 'success',
-      completedAt: expect.any(Number)
+    status(run.connection, 'compacting', 'pre-echo-compaction')
+    expect(run.activity.seen).toContainEqual({
+      turnId: run.written.uuid,
+      text: 'Compacting the conversation'
     })
-  ])
-})
+    if (!zeroLength) {
+      await fixture.host.flushStreamedEvents(SESSION)
+      expect(run.activity.current()).toMatchObject({ text: 'Compacting the conversation' })
+    }
+    status(run.connection, null, 'compaction-ended')
+    await fixture.host.flushStreamedEvents(SESSION)
+    expect(run.activity.current()).toBeNull()
 
-it('interrupts one pre-echo compaction turn despite the captured late echo and cancelled lifecycle', async () => {
-  const run = await precompact()
-  expect(await turns()).toHaveLength(1)
-  // Real auto-compaction Stop: interrupt -> status clear -> replay -> error result -> cancelled -> idle.
-  fixture.claude.routes.interrupt = () => {
-    clearCompaction(run.connection)
     frame(run.connection, { ...run.written, parent_tool_use_id: null })
+    frame(run.connection, { type: 'system', subtype: 'compact_boundary', uuid: 'compact-boundary' })
     frame(run.connection, {
       type: 'user',
-      uuid: 'interrupted-marker',
+      uuid: 'compacted-context',
       parent_tool_use_id: null,
-      message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] }
+      message: { role: 'user', content: [{ type: 'text', text: 'Conversation summary' }] }
     })
-    frame(run.connection, INTERRUPTED_RESULT)
     frame(run.connection, {
-      type: 'command_lifecycle',
-      state: 'cancelled',
-      command_uuid: run.written.uuid
+      type: 'assistant',
+      uuid: 'reply',
+      parent_tool_use_id: null,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'THREE' }] }
     })
-    frame(run.connection, { type: 'system', subtype: 'session_state_changed', state: 'idle' })
-    return { still_queued: [], cancelled: [] }
-  }
-  await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
-  await laneDrained()
+    frame(run.connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'result' })
+    if (withLifecycle) {
+      lifecycle(run.connection, 'completed', run.written.uuid)
+    }
+    sessionState(run.connection, 'idle')
 
+    const [, ...current] = await turns()
+    expect(current).toEqual([
+      expect.objectContaining({
+        ...run.opened,
+        state: 'completed',
+        outcome: 'success',
+        completedAt: expect.any(Number)
+      })
+    ])
+    expect(run.activity.current()).toBeNull()
+    expect(await dispatch(run.clientMessageId)).toEqual({ state: 'accepted', reason: null })
+  }
+)
+
+it('hands a follow-up over during pre-echo compaction and keeps both sends in one run', async () => {
+  const connection = fixture.claude.connections[0]!
+  const first = await sendUnechoed(connection)
+  const written = connection.sent.at(-1)!
+  status(connection, 'compacting', 'pre-echo-compaction')
+  const [opened] = await turns()
+  expect(opened).toMatchObject({ turnId: written.uuid, state: 'running' })
+
+  // The run exists, so the follow-up is not held until the first echo.
+  const second = await send('Then say FOUR.')
+  await eventually(() => expect(connection.sent).toHaveLength(2))
+  const secondWritten = connection.sent.at(-1)!
+  status(connection, null, 'compaction-ended')
+  // An init before the echoes changes the provider cycle, not the run's identity.
+  frame(connection, { type: 'system', subtype: 'init', uuid: 'post-compact-init' })
+  frame(connection, { ...written, parent_tool_use_id: null })
+  frame(connection, { ...secondWritten, parent_tool_use_id: null })
+
+  expect(await turns()).toEqual([opened])
+  expect(await dispatch(first)).toMatchObject({ state: 'accepted' })
+  expect(await dispatch(second)).toMatchObject({ state: 'accepted' })
+  frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'batched-result' })
   expect(await turns()).toEqual([
-    expect.objectContaining({
-      turnId: 'pre-echo-compaction',
-      state: 'interrupted',
-      outcome: 'cancellation'
-    })
+    expect.objectContaining({ ...opened, state: 'completed', outcome: 'success' })
   ])
-  expect(run.activity()).toBeNull()
-  expect(await dispatch(run.clientMessageId)).toMatchObject({ state: 'accepted' })
-  expect(
-    (await statusTexts()).filter((text) => text.includes('may not have been delivered'))
-  ).toEqual([])
 })
 
-it('opens no turn for compaction without a started send or from a child frame', async () => {
+it.each([
+  ['an untargeted Stop', false],
+  ['a Stop naming the visible run', true]
+])(
+  'interrupts one pre-echo compaction run with %s through the captured late echo and cancelled lifecycle',
+  async (_label, targeted) => {
+    const connection = fixture.claude.connections[0]!
+    const activity = await watchActivity()
+    const clientMessageId = await sendUnechoed(connection)
+    const written = connection.sent.at(-1)!
+    lifecycle(connection, 'started', written.uuid)
+    status(connection, 'compacting', 'pre-echo-compaction')
+    const [opened] = await turns()
+    // Real auto-compaction Stop: interrupt -> status clear -> replay -> error result -> cancelled -> idle.
+    fixture.claude.routes.interrupt = () => {
+      status(connection, null, 'compaction-ended')
+      frame(connection, { ...written, parent_tool_use_id: null })
+      frame(connection, {
+        type: 'user',
+        uuid: 'interrupted-marker',
+        parent_tool_use_id: null,
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: '[Request interrupted by user]' }]
+        }
+      })
+      frame(connection, INTERRUPTED_RESULT)
+      lifecycle(connection, 'cancelled', written.uuid)
+      sessionState(connection, 'idle')
+      return { still_queued: [], cancelled: [] }
+    }
+    await expect(stop(targeted ? opened!.turnId : undefined)).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: true }
+    })
+    await laneDrained()
+
+    expect(await turns()).toEqual([
+      expect.objectContaining({
+        turnId: written.uuid,
+        state: 'interrupted',
+        outcome: 'cancellation'
+      })
+    ])
+    expect(activity.current()).toBeNull()
+    // Delivered, not in doubt: no "may not have been delivered" return to the composer.
+    expect(await dispatch(clientMessageId)).toEqual({ state: 'accepted', reason: null })
+  }
+)
+
+it('gives root compaction without a send to the resumed provider and never opens from a child frame', async () => {
   const connection = fixture.claude.connections[0]!
   const compacting = {
     type: 'system',
     subtype: 'status',
     status: 'compacting',
-    uuid: 'orphan-compaction'
+    uuid: 'autonomous-compaction'
   }
-  frame(connection, compacting)
-  await sendUnechoed(connection)
-  const written = connection.sent.at(-1)!
-  frame(connection, { type: 'command_lifecycle', state: 'started', command_uuid: written.uuid })
   frame(connection, { ...compacting, parent_tool_use_id: 'child-tool' })
   expect(await turns()).toEqual([])
+  frame(connection, compacting)
+  expect(await turns()).toEqual([
+    expect.objectContaining({ turnId: 'autonomous-compaction', state: 'running' })
+  ])
 })

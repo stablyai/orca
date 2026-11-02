@@ -100,6 +100,8 @@ function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor
     commandTurnId: null,
     beginCommand: vi.fn(),
     forgetCommand: vi.fn(),
+    offerInput: vi.fn(),
+    withdrawInput: vi.fn(),
     commandInterruptRequested: vi.fn(),
     flush: vi.fn(),
     contextActivity: 0,
@@ -113,6 +115,11 @@ function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor
     dispose: vi.fn()
   }
   return session
+}
+
+/** The first send's run is owned from its handoff, under the uuid Orca wrote. */
+function handedOver(connection: { sent: Record<string, unknown>[] }): string {
+  return String(connection.sent[0]?.uuid)
 }
 
 /** Leave timers unadvanced to expose Stop delays from pending bookkeeping. */
@@ -149,7 +156,7 @@ describe('Claude turn ownership', () => {
       body: USER_MESSAGE,
       fence: 7
     })
-    expect(runningTurnId(bodies)).toBe('echo-turn')
+    expect(runningTurnId(bodies)).toBe(handedOver(connection))
     completeTurn(connection, 'result-1')
     expect(runningTurnId(bodies)).toBeNull()
 
@@ -172,12 +179,12 @@ describe('Claude turn ownership', () => {
       body: USER_MESSAGE,
       fence: 7
     })
-    expect(runningTurnId(bodies)).toBe('echo-turn')
+    expect(runningTurnId(bodies)).toBe(handedOver(connection))
     completeTurn(connection, 'result-1')
     expect(runningTurnId(bodies)).toBeNull()
 
     await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'echo-turn', fence: 7 })
+      adapter.cancelTurn({ sessionId: 'session-1', turnId: handedOver(connection), fence: 7 })
     ).resolves.toEqual({ cancelled: false })
     expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
   })
@@ -192,7 +199,7 @@ describe('Claude turn ownership', () => {
       body: USER_MESSAGE,
       fence: 7
     })
-    expect(runningTurnId(bodies)).toBe('echo-turn')
+    expect(runningTurnId(bodies)).toBe(handedOver(connection))
     const sendFirst = connection.send
     connection.send = async (message, beforeDispatch) => {
       if (connection.sent.length > 0) {
@@ -213,7 +220,7 @@ describe('Claude turn ownership', () => {
 
     await expect(
       outcomeAtOnce(() =>
-        adapter.cancelTurn({ sessionId: 'session-1', turnId: 'echo-turn', fence: 7 })
+        adapter.cancelTurn({ sessionId: 'session-1', turnId: handedOver(connection), fence: 7 })
       )
     ).resolves.toEqual({ cancelled: true })
     expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(true)
@@ -234,13 +241,13 @@ describe('Claude turn ownership', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-      expect(runningTurnId(bodies)).toBe('echo-turn')
+      expect(runningTurnId(bodies)).toBe(handedOver(connection))
 
       await expect(
         outcomeAtOnce(() =>
           adapter.cancelTurn({
             sessionId: 'session-1',
-            turnId: 'echo-turn',
+            turnId: handedOver(connection),
             fence: 7,
             dispatchStatus: { state: 'unknown', recovered: false }
           })
@@ -304,10 +311,10 @@ describe('Claude turn ownership', () => {
       body: USER_MESSAGE,
       fence: 7
     })
-    expect(runningTurnId(bodies)).toBe('echo-turn')
+    expect(runningTurnId(bodies)).toBe(handedOver(connection))
 
     await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'echo-turn', fence: 7 })
+      adapter.cancelTurn({ sessionId: 'session-1', turnId: handedOver(connection), fence: 7 })
     ).resolves.toEqual({ cancelled: true })
     expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(true)
   })
@@ -394,7 +401,7 @@ describe('Claude turn ownership', () => {
     expect(runningTurnId(bodies)).toBe('provider-turn')
 
     await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'echo-turn', fence: 7 })
+      adapter.cancelTurn({ sessionId: 'session-1', turnId: handedOver(connection), fence: 7 })
     ).resolves.toEqual({ cancelled: false })
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'not-a-turn', fence: 7 })

@@ -1,4 +1,4 @@
-// Captured Claude 2.1.280 early-steer ordering: follow-ups wait for the opening echo before joining its turn.
+// Captured Claude 2.1.280 early-steer ordering: follow-ups join the turn their opening handoff owns.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -212,18 +212,15 @@ it('reads a send as accepted across its echo, never in doubt, so a worker start 
   expect(agentSessionSendSubmission((await answer)?.value)?.dispatchState).toBe('accepted')
 })
 
-it('holds a follow-up until the echo opens the turn, then folds it in, drawn inside that turn', async () => {
+it('hands a follow-up over once the handoff opens the turn, then folds it in, drawn inside that turn', async () => {
   const connection = claude.connections[0]!
   const first = await send('FIRST prompt')
   await eventually(() => expect(written(connection, 'FIRST prompt')).toBeDefined())
   const steer = await send('STEER prompt')
-  await eventually(() =>
-    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-  )
-
-  expect(written(connection, 'STEER prompt')).toBeUndefined()
-  const queued = (await snapshot()).submissions.find((entry) => entry.clientMessageId === steer)
-  expect(queued?.handedOverAt).toBeUndefined()
+  // The first send's run exists from its handoff, so the follow-up does not wait for the echo.
+  await eventually(() => expect(written(connection, 'STEER prompt')).toBeDefined())
+  const handed = (await snapshot()).submissions.find((entry) => entry.clientMessageId === steer)
+  expect(handed?.handedOverAt).toBeDefined()
 
   const firstFrame = written(connection, 'FIRST prompt')!
   frame(connection, {
@@ -234,7 +231,6 @@ it('holds a follow-up until the echo opens the turn, then folds it in, drawn ins
     capabilities: CAPABILITIES
   })
   frame(connection, { ...firstFrame, isReplay: true, parent_tool_use_id: null })
-  await eventually(() => expect(written(connection, 'STEER prompt')).toBeDefined())
   const steerFrame = written(connection, 'STEER prompt')!
   frame(connection, {
     type: 'assistant',
@@ -307,15 +303,12 @@ it('holds a follow-up until the echo opens the turn, then folds it in, drawn ins
 })
 
 // Provider idle facts end acknowledgement waits; elapsed time cannot prove delivery.
-it('releases the follow-up when the CLI goes idle on a started send it never echoed', async () => {
+it('ends the run and doubts a started send when the CLI goes idle without echoing it', async () => {
   const connection = claude.connections[0]!
   const first = await send('FIRST prompt')
   await eventually(() => expect(written(connection, 'FIRST prompt')).toBeDefined())
   const steer = await send('STEER prompt')
-  await eventually(() =>
-    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-  )
-  expect(written(connection, 'STEER prompt')).toBeUndefined()
+  await eventually(() => expect(written(connection, 'STEER prompt')).toBeDefined())
 
   frame(connection, {
     type: 'system',
@@ -333,8 +326,10 @@ it('releases the follow-up when the CLI goes idle on a started send it never ech
   })
   frame(connection, { type: 'system', subtype: 'session_state_changed', state: 'idle' })
 
-  await eventually(() => expect(written(connection, 'STEER prompt')).toBeDefined())
-  const submissions = (await snapshot()).submissions
+  const { items, submissions } = await snapshot()
+  expect(items.flatMap((item) => (item.body.kind === 'turn' ? [item.body.state] : []))).toEqual([
+    'completed'
+  ])
   expect(submissions.find((entry) => entry.clientMessageId === first)).toMatchObject({
     dispatchState: 'unknown',
     reason: DISPATCH_DOUBT_PROVIDER_IDLE
@@ -459,7 +454,7 @@ async function stoppedWithUnprovenClose(): Promise<FakeConnection> {
   return connection
 }
 
-it('sends a message that joins an unproven Stop close to the resumed child, and holds the next until its echo', async () => {
+it('sends a message that joins an unproven Stop close to the resumed child, and the next one after it', async () => {
   const connection = await stoppedWithUnprovenClose()
 
   await send('Carry on.')
@@ -469,25 +464,11 @@ it('sends a message that joins an unproven Stop close to the resumed child, and 
     expect(written(started, 'Carry on.')).toBeDefined()
     return started
   })
-  const later = await send('And this.')
-  await eventually(() =>
-    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-  )
-  expect(written(connection, 'Carry on.')).toBeUndefined()
-  expect(written(resumed, 'And this.')).toBeUndefined()
-  expect(
-    (await snapshot()).submissions.find((entry) => entry.clientMessageId === later)?.handedOverAt
-  ).toBeUndefined()
-
-  frame(resumed, {
-    type: 'system',
-    subtype: 'init',
-    uuid: 'init-resumed',
-    model: 'claude-sonnet-5',
-    capabilities: CAPABILITIES
-  })
-  frame(resumed, { ...written(resumed, 'Carry on.')!, isReplay: true, parent_tool_use_id: null })
+  await send('And this.')
+  // The resumed child's run exists from the first handoff; nothing reaches the stopped child.
   await eventually(() => expect(written(resumed, 'And this.')).toBeDefined())
+  expect(written(connection, 'Carry on.')).toBeUndefined()
+  expect(written(connection, 'And this.')).toBeUndefined()
 })
 
 async function sendChoice(

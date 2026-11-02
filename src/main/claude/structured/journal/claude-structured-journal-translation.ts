@@ -29,7 +29,10 @@ import {
 import { ClaudeOpenTurn } from '../../claude-open-turn'
 import { claudeCommandCurrentTurn, observeClaudeCommandFrame } from '../../claude-command-turn'
 import { ClaudeContextFacts } from '../../claude-context-facts'
-import { claudeSessionStateEndsTurn } from '../../claude-session-state-turn-over'
+import {
+  claudeSessionStateEndsTurn,
+  claudeSessionStateRuns
+} from '../../claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from '../../claude-child-tool-queries'
 import { journalClaudeMessage } from '../../claude-message-journaling'
@@ -181,6 +184,8 @@ export function createClaudeJournalTranslator(
         if (isRootClaudeFrame(event.message)) {
           if (event.message.type === 'system' && event.message.subtype === 'init') {
             turn.observeProviderCycleStart()
+          } else if (claudeSessionStateRuns(event.message)) {
+            turn.observeProviderRunning()
           } else if (
             event.startsTurn === true ||
             event.message.type === 'assistant' ||
@@ -247,7 +252,9 @@ export function createClaudeJournalTranslator(
         if (claudeSessionStateEndsTurn(event.message)) {
           corrections.abandon()
           // No verdict: the CLI said the turn is over, not how it ended.
-          turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
+          if (turn.settlesAtIdle) {
+            turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
+          }
         }
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)
@@ -263,13 +270,15 @@ export function createClaudeJournalTranslator(
       return turn.command ? turn.id : null
     },
     beginCommand: (start) => turn.beginCommand(claudeCommandCurrentTurn(start)),
+    offerInput: (input) => turn.offerInput(input, deps.now?.() ?? Date.now()),
+    withdrawInput: (clientMessageId) => turn.withdrawInput(clientMessageId),
     forgetCommand: (turnId) => turn.forgetCommand(turnId),
     commandInterruptRequested: (turnId) => turn.commandInterruptRequested(turnId),
     get openTurnInLiveProviderCycle() {
       return turn.openedInLiveProviderCycle
     },
     get openTurnHasInputWork() {
-      return turn.isOpen && turn.inputChoiceWorkObserved
+      return turn.hasInputWork
     },
     flush,
     childToolOwner: childQueries.childToolOwner,

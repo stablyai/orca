@@ -3,6 +3,7 @@ import { ClaudeControlRequestError } from '../claude-agent-sdk-control-requests'
 import { claudeUnwrittenUserMessageError } from '../claude-agent-sdk-user-message-queue'
 import {
   acquired,
+  claudeFrame,
   fakeClaude,
   PROVIDER_SESSION_ID,
   USER_MESSAGE
@@ -131,26 +132,34 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       body: USER_MESSAGE,
       fence: 7
     })
+    const earlier = String(claude.connections[0].sent[0]?.uuid)
+    claudeFrame(claude.connections[0], {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      uuid: 'result-T'
+    })
     await adapter.dispatch({
       sessionId: 'session-1',
       clientMessageId: 'client-U',
       body: USER_MESSAGE,
       fence: 7
     })
+    const later = String(claude.connections[0].sent[1]?.uuid)
 
     await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-T', fence: 7 })
+      adapter.cancelTurn({ sessionId: 'session-1', turnId: earlier, fence: 7 })
     ).resolves.toEqual({ cancelled: false })
     expect(claude.connections[0].calls.filter((call) => call.subtype === 'interrupt')).toHaveLength(
       0
     )
 
     await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-U', fence: 6 })
+      adapter.cancelTurn({ sessionId: 'session-1', turnId: later, fence: 6 })
     ).resolves.toEqual({ cancelled: false })
 
     await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-U', fence: 7 })
+      adapter.cancelTurn({ sessionId: 'session-1', turnId: later, fence: 7 })
     ).resolves.toEqual({ cancelled: true })
     expect(claude.connections[0].calls.filter((call) => call.subtype === 'interrupt')).toHaveLength(
       1
@@ -159,11 +168,11 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
 
   // Session-scoped interrupt must remain available while a later send awaits its echo.
   it.each([
-    ['names the running turn', { turnId: 'turn-T' }],
-    ['names no turn', {}]
+    ['names the running turn', true],
+    ['names no turn', false]
   ])(
     'stops an acknowledged turn when the Stop %s, while a later send is unacknowledged',
-    async (_label, target) => {
+    async (_label, named) => {
       const claude = fakeClaude({ replayUuids: ['turn-T', null] })
       const settled = vi.fn()
       const adapter = await acquired(claude, {}, [], settled)
@@ -191,6 +200,8 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       ).resolves.toMatchObject({ state: 'admitted' })
       expect(claude.connections[0].sent).toHaveLength(2)
 
+      // The run is owned from the first handoff, under the uuid Orca wrote.
+      const target = named ? { turnId: String(claude.connections[0].sent[0]?.uuid) } : {}
       await expect(
         adapter.cancelTurn({ sessionId: 'session-1', fence: 7, ...target })
       ).resolves.toEqual({ cancelled: true })

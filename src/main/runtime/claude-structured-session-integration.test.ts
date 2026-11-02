@@ -568,9 +568,10 @@ describe('a structured Claude session over agentSession.*', () => {
       await vi.waitFor(() => expect(connection.sent).toHaveLength(1))
       connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
 
+      // The send's run was open from its handoff when the provider ended.
       expect((await inFlight).submission).toMatchObject({
         dispatchState: 'unknown',
-        reason: 'provider_exited_before_acknowledgement'
+        reason: 'provider_ended_before_acknowledgement'
       })
       await waitForStructuredAgentSessionRecovery()
       expect(claude.connections).toHaveLength(1)

@@ -42,7 +42,8 @@ const claude = { current: fakeClaude({ replayUuid: null }) }
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-echo-working-'))
   resetHostTestOperationIds()
-  claude.current = fakeClaude({ replayUuid: null })
+  // The prior cycle's init precedes the send, so a previous result can still trail the handoff.
+  claude.current = fakeClaude({ replayUuid: null, initProof: 'init' })
   const lifecycle: Promise<void>[] = []
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -144,11 +145,12 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   await settled()
   const connection = claude.current.connections[0]!
   if (backlog) {
-    // Queue the previous result immediately ahead of the new echo in the same read.
+    // Queue the previous result immediately ahead of the new echo in the same read; it names its own send.
     connection.handlers.onMessage?.({
       type: 'result',
       subtype: 'success',
       uuid: 'result-0',
+      user_message_uuids: ['previous-send'],
       session_id: PROVIDER_SESSION_ID,
       duration_ms: 1,
       duration_api_ms: 1,

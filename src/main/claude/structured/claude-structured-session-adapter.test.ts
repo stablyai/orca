@@ -247,8 +247,9 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         uuid: 'late-turn-1'
       }
     })
+    // The run is owned from the handoff, under the uuid Orca wrote.
     await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'late-turn-1', fence: 7 })
+      adapter.cancelTurn({ sessionId: 'session-1', turnId: String(sent.uuid), fence: 7 })
     ).resolves.toEqual({ cancelled: true })
   })
 
