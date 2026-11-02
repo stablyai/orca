@@ -5,7 +5,8 @@ import {
   DropdownMenuShortcut
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { NativeChatProviderSessionIdMenuItem } from './NativeChatProviderSessionIdMenuItem'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 
@@ -15,15 +16,13 @@ export function NativeChatStructuredPaneMenuItems({
   splitShortcutLabels,
   resolveOrcaSessionId
 }: {
-  pane: { tabId: string; worktreeId: string; groupId: string }
+  pane: { tabId: string; worktreeId: string; groupId: string; providerSessionId?: string }
   leadingSeparator: boolean
   splitShortcutLabels?: { right: string; down: string }
   resolveOrcaSessionId?: () => Promise<string | null>
 }): React.JSX.Element {
   const actions = useStructuredChatPaneActions(pane.tabId, pane.worktreeId, pane.groupId)
-  const hasSplitPanes = useAppStore(
-    (state) => (state.groupsByWorktree[pane.worktreeId]?.length ?? 0) > 1
-  )
+  const closeShortcut = useShortcutLabel('tab.close')
   return (
     <>
       {leadingSeparator ? <DropdownMenuSeparator /> : null}
@@ -37,18 +36,24 @@ export function NativeChatStructuredPaneMenuItems({
         {translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down')}
         <DropdownMenuShortcut>{splitShortcutLabels?.down}</DropdownMenuShortcut>
       </DropdownMenuItem>
-      {resolveOrcaSessionId ? (
+      {pane.providerSessionId || resolveOrcaSessionId ? (
         <>
           <DropdownMenuSeparator />
-          <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
+          {pane.providerSessionId ? (
+            <NativeChatProviderSessionIdMenuItem sessionId={pane.providerSessionId} />
+          ) : null}
+          {resolveOrcaSessionId ? (
+            <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
+          ) : null}
         </>
       ) : null}
-      {hasSplitPanes && actions.canClosePane ? (
+      {actions.canClosePane ? (
         <>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={actions.onClosePane}>
             <X />
             {actions.closeLabel}
+            <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut>
           </DropdownMenuItem>
         </>
       ) : null}

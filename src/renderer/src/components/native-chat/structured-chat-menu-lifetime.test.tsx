@@ -35,6 +35,7 @@ function Host({ index }: { index: number }) {
       target: { kind: 'local' }
     },
     handOff: { available: false, preparing: false, open: () => {}, reset: () => {}, dialog: null },
+    sessionContext: { messages: [], epoch: null },
     ownerWorktreeId: 'owner',
     rootRef,
     composerRef: createRef(),
@@ -104,7 +105,8 @@ it.each([6, 60])('bounds retained menu work at %i chats', async (size) => {
   expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
     expect.stringContaining('Split Chat Right'),
     expect.stringContaining('Split Chat Down'),
-    'Copy Orca Session ID'
+    'Copy Orca Session ID',
+    expect.stringContaining('Close tab')
   ])
   const opened = renders
   const extra = measure(writes[0]) - baseline[0]
