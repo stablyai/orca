@@ -23,6 +23,9 @@ import {
 import { ClaudeTerminalSessionNameSync } from './claude-terminal-session-name-sync'
 import { readClaudeTranscriptCustomTitle } from '../claude/claude-terminal-session-name'
 import { createLaunchedAgentWriteGuard } from './launched-agent-write-guard'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { terminalIdOf, type WindowLayoutCommand } from './runtime-layout-apply'
+import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { RuntimeTerminalRename } from '../../shared/runtime-terminal-contracts'
 
 // A draft or a long turn holds the rename; past this the user's newer intent is unknown.
@@ -112,6 +115,28 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   /** A tab named in the window: its Claude pane takes the name as its session name. */
   syncClaudeSessionNameForTab(tabId: string, title: string | null): void {
     this.claudeSessionNames.tabRenamed(tabId, title)
+  }
+
+  /** The partitions holding a window layout command's tab, or its workspace's for a workspace command. */
+  protected layoutHostIdsFor(worktreeId: string, tabId: string | null): ExecutionHostId[] {
+    return tabId !== null
+      ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+      : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat()
+  }
+
+  /** A window rename main applied, in apply order, so a later rename always wins. */
+  protected syncClaudeSessionNameAfterLayoutApply(
+    command: WindowLayoutCommand,
+    reply: LayoutApplyReply
+  ): void {
+    if (!reply.ok || command.type !== 'renameTab' || command.kind !== 'custom') {
+      return
+    }
+    const hostId = this.layoutHostIdsFor(command.workspace, command.tabId)[0]
+    const tabId = hostId
+      ? terminalIdOf(this.requireStore(), hostId, command.workspace, command.tabId)
+      : command.tabId
+    this.claudeSessionNames.tabRenamed(tabId, command.title)
   }
 
   override async renameTerminal(

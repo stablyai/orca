@@ -158,16 +158,13 @@ export class ClaudeTerminalSessionNameSync {
     if (this.lastTitleNames.get(paneKey) !== claudeTitleName(title)) {
       return
     }
-    if (!name) {
-      // A fresh session may hold its rename in memory until its first turn writes the transcript.
+    // Claude also titles its window from auto-generated topics; only a recorded /rename names the tab.
+    if (!name || !claudeTitleShowsName(title, name)) {
+      // A shown rename can precede its transcript record; recheck at the pane's next turn change.
       this.unconfirmedTitles.set(paneKey, title)
       return
     }
     this.unconfirmedTitles.delete(paneKey)
-    // Claude also titles its window from auto-generated topics; only a recorded /rename names the tab.
-    if (!claudeTitleShowsName(title, name)) {
-      return
-    }
     const tabId = parsePaneKey(paneKey)?.tabId
     if (!tabId || this.soleClaudePane(tabId) !== paneKey) {
       return

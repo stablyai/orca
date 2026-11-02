@@ -1,4 +1,6 @@
 import { readTranscriptSlice, transcriptFileStat } from '../native-chat/wsl-transcript-fs-access'
+import { isSpinnerFrameGlyph } from '../../shared/agent-decorative-title-signature'
+import { CLAUDE_IDLE } from '../../shared/terminal-title-agent-type'
 
 // Claude appends `custom-title` on each /rename, so the latest one sits near the end.
 const TRANSCRIPT_TAIL_BYTES = 256 * 1024
@@ -16,8 +18,13 @@ export function claudeRenameCommand(name: string): string {
 /** The name a Claude window title shows, without its one-glyph status prefix (spinner frames share it). */
 export function claudeTitleName(title: string): string {
   const shown = title.trim()
-  const match = /^(\S{1,2}) +(.+)$/u.exec(shown)
-  return match && !/[\p{L}\p{N}]/u.test(match[1]) ? match[2] : shown
+  const match = /^(\S) +(.+)$/u.exec(shown)
+  return match && isClaudeStatusGlyph(match[1]) ? match[2] : shown
+}
+
+// Only Claude's own idle and spinner glyphs: a name like `# urgent` keeps its punctuation.
+function isClaudeStatusGlyph(glyph: string): boolean {
+  return glyph === CLAUDE_IDLE || isSpinnerFrameGlyph(glyph.codePointAt(0) ?? 0)
 }
 
 /** Claude's window title is the session name, optionally behind a one-glyph status prefix. */

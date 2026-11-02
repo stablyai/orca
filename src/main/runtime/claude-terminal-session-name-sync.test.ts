@@ -158,6 +158,20 @@ describe('ClaudeTerminalSessionNameSync', () => {
     expect(sendCommand).toHaveBeenCalledTimes(2)
   })
 
+  it('names the tab once the transcript catches up with a second rename', async () => {
+    let recorded: string | null = 'first'
+    const { sync, renamed } = harness({ readCustomTitle: async () => recorded })
+    sync.observeTitle(PANE, '✳ first')
+    await settle()
+    sync.observeTitle(PANE, '✳ second')
+    await settle()
+    recorded = 'second'
+    sync.observeTitle(PANE, '⠂ second')
+    sync.observeTurnChange(PANE)
+    await settle()
+    expect(renamed).toEqual(['first', 'second'])
+  })
+
   it('does not name a tab with several Claude panes from one of them', async () => {
     const { claudeRenames, renamed } = harness({
       listRows: () => [
@@ -202,6 +216,9 @@ describe('Claude transcript names', () => {
   it('matches a title with or without the status glyph', () => {
     expect(claudeTitleShowsName('my name', 'my name')).toBe(true)
     expect(claudeTitleShowsName('✳ my name', 'my name')).toBe(true)
+    expect(claudeTitleShowsName('◐ my name', 'my name')).toBe(true)
     expect(claudeTitleShowsName('not my name', 'my name')).toBe(false)
+    expect(claudeTitleShowsName('# urgent', 'urgent')).toBe(false)
+    expect(claudeTitleShowsName('# urgent', '# urgent')).toBe(true)
   })
 })

@@ -71,7 +71,7 @@ function isStandaloneGlyph(title: string, index: number): boolean {
 }
 
 // Why: braille (most agents) plus quarter circles (Claude Code 2.1.228+, #13889).
-function isSpinnerFrameGlyph(code: number): boolean {
+export function isSpinnerFrameGlyph(code: number): boolean {
   return (code >= 0x2800 && code <= 0x28ff) || (code >= 0x25d0 && code <= 0x25d3)
 }
 
