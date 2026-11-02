@@ -329,3 +329,62 @@ describe('Hermes readiness with the battery read-out', () => {
     await expect(waitForTranscriptIdle(pane, 8_000)).rejects.toThrow('timeout')
   })
 })
+
+describe('Hermes readiness on the classic screen (#35883)', () => {
+  // The classic screen (hermes without --tui, e.g. `hermes -p <profile>
+  // --model <model>`) paints no `─ ready │` status row. Idle shows the prompt
+  // row with one of the empty-composer placeholders from locales/en.yaml
+  // (placeholder.p01–p11, rotating) and the bottom bar's right segment reads
+  // `/ commands · @ files · ! shell`. The rows below come from the issue's
+  // captured screen; presentations no recording covers use paneShowing by
+  // house precedent.
+  it('settles on the classic idle screen captured in the issue', async () => {
+    // The captured screen is wider than the 120-column paneShowing fixture;
+    // the bottom-bar gap is compressed to fit, keeping every painted segment.
+    const pane = await paneShowing([
+      'reviewer ❯ Explain this error and how to fix it',
+      '────────────────────────────────────────────────────────────',
+      ' ☤ review · ctx -- · [░░░░░░░░░░] -- · 1s · ⏲ 0s    / commands · @ files · ! shell'
+    ])
+    await expect(waitForTranscriptIdle(pane, 550)).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it.each([
+    'Ask anything, or type / for commands…',
+    "Summarize what's in this folder",
+    'Plan a feature, then build it step by step',
+    'What changed in this repo recently?',
+    'Type / to browse commands, or Ctrl+P for the palette'
+  ])('settles on the rotating placeholder %s', async (placeholder) => {
+    const pane = await paneShowing([
+      `reviewer ❯ ${placeholder}`,
+      '────────────────────────────────────────────────────────────',
+      ' ☤ review · ctx -- · [░░░░░░░░░░] -- · 1s · ⏲ 0s    / commands · @ files · ! shell'
+    ])
+    await expect(waitForTranscriptIdle(pane, 550)).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('settles without a profile prefix and without the separator rule line', async () => {
+    const pane = await paneShowing([
+      '❯ Explain this error and how to fix it',
+      ' ☤ review · ctx -- · [░░░░░░░░░░] -- · 1s · ⏲ 0s    / commands · @ files · ! shell'
+    ])
+    await expect(waitForTranscriptIdle(pane, 550)).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it.each([
+    [
+      'a running turn',
+      '❯ type to redirect this turn · Tab queues it for after',
+      ' ☤ review · ctx -- · [░░░░░░░░░░] -- · 12s · ⏲ 3s    enter interrupt · tab queue · ctrl+c stop'
+    ],
+    [
+      'a draft',
+      'reviewer ❯ my own draft text',
+      ' ☤ review · ctx -- · [░░░░░░░░░░] -- · 1s · ⏲ 0s    / commands · @ files · ! shell'
+    ]
+  ])('does not settle on %s', async (_stage, composerRow, barRow) => {
+    const pane = await paneShowing([composerRow, '──────────────────────', barRow])
+    await expect(waitForTranscriptIdle(pane, 8_000)).rejects.toThrow('timeout')
+  })
+})
