@@ -83,6 +83,9 @@ export function mergeUpdatedProjectCompatibilityProject(
       project.localWindowsRuntimePreference = localWindowsRuntimePreference
     }
   }
+  if ('defaultTuiAgent' in updates && updates.defaultTuiAgent === undefined) {
+    delete project.defaultTuiAgent
+  }
   return project
 }
 

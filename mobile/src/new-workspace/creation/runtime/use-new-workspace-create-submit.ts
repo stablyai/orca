@@ -1,3 +1,4 @@
+import { resolveMobileNewWorkspaceDefaultAgent } from './new-workspace-project-default-agent'
 import { settingsRead } from '../../../settings/mobile-settings-read-operations'
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
@@ -47,20 +48,19 @@ import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambigu
 import type { NewWorktreeDrawerView } from '../modal/use-new-worktree-drawer-navigation'
 import { suggestCreatureNameForPaths as getSuggestedCreatureName } from '../../../../../src/shared/worktree/naming/worktree-name-suggestion'
 
-type Composer = ReturnType<typeof useMobileComposerSource>
-
 export function useNewWorkspaceCreateSubmit(args: {
   client: RpcClient | null
   repos: readonly MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   selectedAgent: NewWorktreeAgentOption
+  agentOverridden: boolean
   setSelectedAgent: (agent: NewWorktreeAgentOption) => void
   setAgentOverridden: (overridden: boolean) => void
   runtimeSettings: NewWorktreeRuntimeSettings | null
   setRuntimeSettings: (settings: NewWorktreeRuntimeSettings) => void
   detectedAgentIds: Set<string> | null
   sshGate: WorkspaceSshGate
-  composer: Composer
+  composer: ReturnType<typeof useMobileComposerSource>
   note: string
   existingWorktreePaths?: readonly string[]
   retiredWorktreeNames: RetiredNameRegistry
@@ -147,6 +147,7 @@ export function useNewWorkspaceCreateSubmit(args: {
         // The runtime validates the same setting before spawning.
       }
       if (
+        args.agentOverridden &&
         args.selectedAgent.id !== '__blank__' &&
         !isMobileTuiAgentEnabled(args.selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
       ) {
@@ -157,7 +158,6 @@ export function useNewWorkspaceCreateSubmit(args: {
         args.setError('Selected agent is disabled. Choose an enabled agent before creating.')
         return
       }
-
       const trimmedName = args.composer.name.trim()
       const baseName =
         trimmedName ||
@@ -176,11 +176,18 @@ export function useNewWorkspaceCreateSubmit(args: {
       const setupRepo =
         createRepoId === selectedRepo.id
           ? selectedRepo
-          : args.repos.find((repo) => repo.id === createRepoId)
+          : args.repos.find(
+              (repo) =>
+                repo.id === createRepoId &&
+                getRepoExecutionHostId(repo) === getRepoExecutionHostId(selectedRepo)
+            )
       if (!setupRepo) {
         args.setError("This item's project isn't available on this host.")
         return
       }
+      const agent = args.agentOverridden
+        ? normalizeWorkspaceAgent(args.selectedAgent.id)
+        : (await resolveMobileNewWorkspaceDefaultAgent(client, setupRepo)).agent
       let setupDecision: WorkspaceCreateSetupDecision = 'inherit'
       if (options.setupOverride) {
         setupDecision = options.setupOverride
@@ -219,8 +226,6 @@ export function useNewWorkspaceCreateSubmit(args: {
       if (!(await saveStartupPolicy(client, setupRepo, args.setupWait, args.setError))) {
         return
       }
-      const createdWithAgentId =
-        args.selectedAgent.id !== '__blank__' ? args.selectedAgent.id : undefined
       const trimmedNote = args.note.trim() || undefined
       const result = selection
         ? await createWorkspaceFromComposerSource({
@@ -229,7 +234,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             targetRepoId: selectedRepo.id,
             setupDecision,
             approvedSetupHash: setupApproval?.approvedSetupHash,
-            agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
+            agent: { choice: agent ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
@@ -245,7 +250,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             repoId: selectedRepo.id,
             baseName,
             nameWasGenerated: !trimmedName,
-            createdWithAgentId,
+            createdWithAgentId: agent === 'blank' ? undefined : (agent ?? undefined),
             comment: trimmedNote,
             setupDecision,
             approvedSetupHash: setupApproval?.approvedSetupHash,

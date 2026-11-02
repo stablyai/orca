@@ -4,6 +4,8 @@
 // v2 makes prompt delivery an outcome union and top-level warnings the only supported shape.
 export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v2' as const
 
+export const PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY = 'project.default-agent.v1' as const
+
 // Optional identity support on agent.launch; mobile replay across replacement hosts requires the new method.
 export const AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY = 'agent.launch.replay.v1' as const
 
@@ -78,6 +80,7 @@ export const AGENT_LAUNCH_SETUP_TRUST_MISMATCH_RUNTIME_CAPABILITY =
   'agent.launch.setup-trust-mismatch.v1' as const
 
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
+  PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
   AGENT_LAUNCH_CHOICES_CAPABILITY,

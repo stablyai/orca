@@ -36,7 +36,7 @@ Never use heredocs (<<) or here-strings (<<<); they can hang the shell.
 If send, reply or worker-start fails, do only what the CLI prints and keep that file unchanged. Never retry on your own or with a new ID.
 
 ```text
-ORCA orchestration worker-start --environment local --spec "<task>" --worktree current --agent <agent>
+ORCA orchestration worker-start --environment local --spec "<task>" --worktree current --agent default
 ```
 
 `--environment local` keeps a command on this machine's Orca whatever
@@ -46,10 +46,14 @@ Run's Tasks and workers (`run-create`, `task-create`, `task-list`,
 `worker-list`) so they reach the same Orca; a start on a paired server takes
 `--on <server>` instead.
 
-`<agent>` is an Orca agent id: one the user named, else the agent you are
-running as when the worker shares your execution host. Otherwise, such as a
-different SSH/WSL host or `--on`, ask the user. `worker-start` does not check
-that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
+Use an explicit agent ID when the user names one. Otherwise, use `--agent default`
+to resolve the target project on the execution host, including SSH/WSL and `--on`.
+The coordinator agent and project do not choose for the target. Default resolution
+checks availability before creation or dispatch; explicit IDs retain their usual
+launch validation and do not change the saved project default. Blank Terminal, an
+unavailable configured agent, or an older host unable to resolve defaults fails
+before workspace creation or dispatch. `worker-start` still requires `--agent`
+or `--terminal`.
 
 - Start independent workers at the same time, up to about 4 at once, and
   start the rest as those return. Separate tool calls often run one after
@@ -66,14 +70,14 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
   (`ORCA repo list --json` gives the id). If nothing needs to come back to you
   (the user will work in those chats), don't start workers; per workspace run
-  `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
+  `ORCA worktree create --name <name> --no-parent --agent default --prompt "<brief>" --json`
   and end your turn.
 - Pick the machine before you start when the user named another machine for
   this project, now or earlier in this Run, when the work is for another
   project, or when your workspace has no project: load
   `references/placement-and-remote.md` ("Which machine"). Otherwise your
   current workspace's project runs where you are, with no host check.
-- Add `--model` only if the user named one.
+- Add `--model` only if the user named one; for example, `--agent claude --model opus --effort high`.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use
