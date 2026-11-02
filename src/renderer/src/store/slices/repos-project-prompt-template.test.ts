@@ -24,7 +24,9 @@ it('rejects unapplied templates from older hosts and accepts an explicit reset',
   ).toBe(false)
   expect(store.getState().projects[0]?.linkedWorkItemPromptTemplate).toBe('{url} /old')
   expect(
-    await store.getState().updateProject(project.id, { linkedWorkItemPromptTemplate: null }, 'local')
+    await store
+      .getState()
+      .updateProject(project.id, { linkedWorkItemPromptTemplate: null }, 'local')
   ).toBe(true)
   expect(store.getState().projects[0]?.linkedWorkItemPromptTemplate).toBeUndefined()
 })

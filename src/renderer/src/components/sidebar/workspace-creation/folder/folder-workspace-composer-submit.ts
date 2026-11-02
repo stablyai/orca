@@ -31,7 +31,7 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/
 import { useAppStore } from '@/store/index'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
-import { getLinkedWorkItemPromptTemplate } from '@/lib/work-items/linked-work-item-context'
+import { getDesktopLinkedWorkItemPromptTemplate } from '@/lib/work-items/linked-work-item-context'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchFact,
@@ -82,7 +82,13 @@ export async function submitFolderWorkspaceCreate({
     linkedWorkItem
   })
   const launchState = useAppStore.getState()
-  const promptTemplate = getLinkedWorkItemPromptTemplate(launchState)
+  const promptTemplate = linkedWorkItem
+    ? getDesktopLinkedWorkItemPromptTemplate(
+        launchState,
+        linkedWorkItem.repoId,
+        getRepoExecutionHostId(projectGroup)
+      )
+    : undefined
   const launchHost = getFolderWorkspaceAgentLaunchFact(
     launchState,
     readRuntimeStatuses(),
