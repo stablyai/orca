@@ -197,11 +197,11 @@ describe('ACP compaction settlement', () => {
   })
 
   it.each([
-    { cause: 'recorded provider APIError', errorName: 'APIError', item: 'turn-failure:' },
+    { cause: 'recorded provider APIError', errorName: 'APIError', item: 'turn-failure' },
     {
       cause: 'local unsupported-operation',
       errorName: 'provider.unsupported-operation',
-      item: 'compaction:'
+      item: 'compaction'
     }
   ])(
     "fails a compaction OpenCode answered with its $cause, in the agent's words",
@@ -220,7 +220,10 @@ describe('ACP compaction settlement', () => {
       const text = 'Internal error: CAPTURE_PROVIDER_400'
       expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toEqual([
         expect.objectContaining({
-          itemId: expect.stringContaining(item),
+          // The saved provider item id encodes its `item:turn` key twice.
+          itemId: expect.stringContaining(
+            encodeURIComponent(encodeURIComponent(`${item}:${command.turnId}`))
+          ),
           turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(command.identity) },
           body:
             errorName === 'APIError'
