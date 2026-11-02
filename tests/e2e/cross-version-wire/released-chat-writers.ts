@@ -51,17 +51,11 @@ async function released(ref: string) {
   const load = async <T>(path: string, name: string): Promise<T> =>
     releaseModuleExport<T>(await importReleaseCheckoutModule(checkout, path), name)
   const fact = await load<typeof agentSessionFailureFact>(
-    existsSync(join(checkout.root, 'src/shared/agent-session/failures/agent-session-failure.ts'))
-      ? 'src/shared/agent-session/failures/agent-session-failure.ts'
-      : 'src/shared/agent-session-failure.ts',
+    'src/shared/agent-session/failures/agent-session-failure.ts',
     'agentSessionFailureFact'
   )
   const words = await load<typeof agentSessionFailureWords>(
-    existsSync(
-      join(checkout.root, 'src/shared/agent-session/failures/agent-session-failure-words.ts')
-    )
-      ? 'src/shared/agent-session/failures/agent-session-failure-words.ts'
-      : 'src/shared/agent-session-failure-words.ts',
+    'src/shared/agent-session/failures/agent-session-failure-words.ts',
     'agentSessionFailureWords'
   )
   return {
@@ -71,14 +65,7 @@ async function released(ref: string) {
       'createTrackedJournalOpener'
     ),
     claude: await load<typeof createClaudeJournalTranslator>(
-      existsSync(
-        join(
-          checkout.root,
-          'src/main/claude/structured/journal/claude-structured-journal-translation.ts'
-        )
-      )
-        ? 'src/main/claude/structured/journal/claude-structured-journal-translation.ts'
-        : 'src/main/claude/claude-structured-journal-translation.ts',
+      'src/main/claude/structured/journal/claude-structured-journal-translation.ts',
       'createClaudeJournalTranslator'
     ),
     codex: await load<typeof createCodexJournalTranslator>(
