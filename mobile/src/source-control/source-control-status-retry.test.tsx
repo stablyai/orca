@@ -33,7 +33,6 @@ vi.mock('./MobileSourceControlHubCommitsPage', () => ({
 vi.mock('./MobileSourceControlNextStepBar', () => ({ MobileSourceControlNextStepBar: () => null }))
 vi.mock('./use-mobile-source-control-next-step', () => ({
   useMobileSourceControlNextStep: () => ({
-    offersMerge: false,
     view: { kind: 'hidden' },
     notice: null,
     agentNotice: null,

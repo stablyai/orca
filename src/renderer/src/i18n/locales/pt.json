@@ -4011,6 +4011,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Não foi possível salvar o local das contas. Tente novamente.",
           "c2d2751587": "Remover Conta",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "Remover Conta do Claude?",

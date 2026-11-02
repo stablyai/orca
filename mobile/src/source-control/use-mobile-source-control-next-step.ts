@@ -253,11 +253,10 @@ export function useMobileSourceControlNextStep({
       : step.kind === 'resolve_conflicts'
         ? 'resolve-conflicts'
         : null
-  // On the PR tab the body's own AI button already shows this launcher's notice.
-  const agentNotice =
-    triageKey && !showWorkflowErrors
-      ? { ...triage.noticeFor(triageKey), availability: triage.availability }
-      : null
+  // The bar's agent button is the only one on either tab, so its launch notice shows under it.
+  const agentNotice = triageKey
+    ? { ...triage.noticeFor(triageKey), availability: triage.availability }
+    : null
   const workflowError = showWorkflowErrors
     ? (state.actionError ?? state.commitFailureRecovery?.error ?? null)
     : null

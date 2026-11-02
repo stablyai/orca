@@ -7208,6 +7208,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Impossible d’enregistrer l’emplacement des comptes. Réessayez.",
           "c2d2751587": "Supprimer le compte",
           "dbb9626ed1": "Annuler",
           "63843e37e2": "Supprimer le compte Claude ?",
