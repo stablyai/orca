@@ -8,8 +8,7 @@ import {
 } from './tab-create-entry-action'
 import {
   configuredAgentPickerLaunchOption,
-  findMatchingTabAgentLaunchOptions,
-  matchingAgentPickerLaunchOptions
+  matchingAgentLaunchOptions
 } from './tab-agent-launch-options'
 import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
 import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
@@ -58,6 +57,7 @@ function TabBarCreateEntrySession({
   onQueryChange,
   onQueueSwitchFocus,
   onSelectMenuOption,
+  terminalPending,
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
   const [query, setQuery] = useState('')
@@ -153,11 +153,8 @@ function TabBarCreateEntrySession({
     () =>
       terminalQueryMode
         ? EMPTY_AGENT_OPTIONS
-        : [
-            ...matchingAgentPickerLaunchOptions(agentPickerEntries ?? [], query),
-            ...findMatchingTabAgentLaunchOptions(query, agentOptions)
-          ],
-    [agentOptions, agentPickerEntries, query, terminalQueryMode]
+        : matchingAgentLaunchOptions(agentPickerEntries, agentOptions, query, terminalPending),
+    [agentOptions, agentPickerEntries, query, terminalPending, terminalQueryMode]
   )
 
   const disabled = !onOpenEntry
@@ -390,15 +387,16 @@ function TabBarCreateEntrySession({
                     ? (draft) =>
                         submitOption({
                           kind: 'agent',
-                          option: configuredAgentPickerLaunchOption(option.option, draft)
+                          option: configuredAgentPickerLaunchOption(
+                            option.option,
+                            draft,
+                            terminalPending
+                          )
                         })
                     : undefined
                 }
-                disabled={
-                  disabled ||
-                  pending ||
-                  (option.kind === 'agent' && option.option.disabled === true)
-                }
+                terminalPending={terminalPending}
+                disabled={disabled || pending}
                 loading={pending && index === activeSelectedIndex}
                 onClick={() => {
                   setSelectionGuidance(null)

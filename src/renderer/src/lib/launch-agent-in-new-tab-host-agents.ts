@@ -40,7 +40,11 @@ export type LaunchAgentInNewTabResult = {
 
 export type AgentTabLaunchOutcome =
   | LaunchAgentInNewTabResult
-  | { refused: StructuredPromptDeliveryResult }
+  | {
+      refused: StructuredPromptDeliveryResult
+      /** What to do instead, when the caller's visible surface presents the refusal itself. */
+      recovery?: string
+    }
 
 export function shouldQueueTerminalFocusAfterMenuClose(
   result: NonNullable<LaunchAgentInNewTabResult>

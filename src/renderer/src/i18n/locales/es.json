@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Conéctate al host SSH de este espacio de trabajo e inténtalo de nuevo.",
+    "sshUnavailable": "El inicio en terminal no está disponible en este host SSH. Abre un terminal en el espacio de trabajo e inicia el agente allí.",
+    "reconnectServer": "Vuelve a conectarte al servidor Orca de este espacio de trabajo e inténtalo de nuevo.",
+    "updateServer": "Actualiza Orca en el servidor de este espacio de trabajo e inténtalo de nuevo.",
+    "checkSettings": "Revisa los ajustes de inicio del agente e inténtalo de nuevo.",
+    "invalidArgs": "Los argumentos de la CLI de {{value0}} tienen una comilla sin cerrar. Corrígelos e inténtalo de nuevo.",
     "opencode": {
       "updateRequired": "Esta versión de OpenCode no puede iniciarse de forma segura con el modelo elegido. Actualiza OpenCode a una versión compatible u omite la selección de modelo.",
       "invalidConfig": "OpenCode no pudo aplicar este modelo a la configuración de inicio. Revisa la configuración de inicio de OpenCode y vuelve a intentarlo, u omite la selección de modelo.",
@@ -417,7 +423,6 @@
       "actionModel": {
         "on": "Activado",
         "off": "Desactivado",
-        "invalidArgs": "Los argumentos de CLI de {{value0}} no son válidos. Corrígelos en Ajustes → Source Control AI.",
         "model": "Modelo",
         "agentDefault": "Predeterminado del agente",
         "effortDefault": "Predeterminado",
@@ -1000,9 +1005,7 @@
           "agent": {
             "launch": {
               "027228a06b": "No se encontró un espacio de trabajo para estos checks.",
-              "fb6c294e85": "No se pudo generar el comando de inicio del agente.",
               "03c1d61f83": "No se puede abrir el espacio de trabajo adjunto a estos checks.",
-              "822bf52295": "No se puede resolver la plataforma de inicio del espacio de trabajo.",
               "dfb4dd7c00": "No se encontró el espacio de trabajo adjunto a estos checks.",
               "9f00d7df0c": "El prompt de corrección de checks está vacío. Actualiza los ajustes de Source Control AI.",
               "2ebf794906": "No se detectó ningún agente de IA habilitado en este host de espacio de trabajo.",
@@ -2661,7 +2664,6 @@
         "a2a279b32a": "El guardado agotó el tiempo de espera o falló. Corrige los errores antes de cerrar.",
         "46e08bc5c8": "Este archivo tiene cambios no guardados.",
         "61ed600d29": "\"{{value0}}\" tiene cambios no guardados. ¿Quieres guardar antes de cerrar?",
-        "e57db40c11": "No se pudo generar el comando de inicio para {{value0}}.",
         "5b2c1a9e44": "No se detectó ninguna CLI de agente; instala una o elige un agente predeterminado en Ajustes.",
         "b7c1f0a934": "No se pudo contactar con un host remoto, así que Orca no puede saber si el trabajo sigue en ejecución allí. ¿Cerrar la ventana de todos modos?",
         "quitSnapshotSaveFailed": "Salida cancelada: no se pudo guardar la instantánea de la sesión ({{value0}}).",
@@ -3759,7 +3761,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Ajustes de Agents…",
             "ec2adf093e": "Iniciar {{value0}} en un nuevo terminal",
-            "465e432ef1": "No se pudo generar el comando de inicio para {{value0}}.",
             "e518f544b1": "No se detectaron agentes",
             "8dea9b5cdf": "No hay agentes habilitados",
             "chatNotInstalled": "No instalado",
@@ -13948,7 +13949,6 @@
                     },
                     "d481ab22f9": "El agente de AI guardado no está disponible. Usa Inicio personalizado para elegir otro agente.",
                     "9bbd9077a2": "No hay agentes de AI habilitados. Configura agentes en Configuración.",
-                    "5540ff50cc": "No se pudo construir el comando de inicio del agente.",
                     "216f762bd7": "No se pudo resolver la conexión del espacio de trabajo.",
                     "success": "Se inició un agente de AI para el fallo de {{value0}}."
                   }
@@ -15179,7 +15179,6 @@
             "3f4ca29961": "Maximizar el espacio de trabajo flotante",
             "1c79cba25d": "Restaurar el espacio de trabajo flotante",
             "648352c51f": "Abrir {{value0}} en el espacio de trabajo flotante",
-            "82da3701e7": "No se pudo crear el comando de inicio para {{value0}}.",
             "109870e023": "Maximizar",
             "b5686fee1e": "Restaurar"
           }

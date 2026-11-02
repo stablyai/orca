@@ -51,7 +51,8 @@ export function EntryActionRow({
   onClick,
   onUseAgent,
   option,
-  selected
+  selected,
+  terminalPending
 }: {
   disabled?: boolean
   id: string
@@ -61,8 +62,10 @@ export function EntryActionRow({
   onClick: () => void
   option: ActiveOption
   selected: boolean
+  terminalPending?: boolean
 }): React.JSX.Element {
   const presentation = getActionPresentation(option, labelOverride)
+  const launchDisabled = disabled || (option.kind === 'agent' && option.option.disabled === true)
 
   const row = (
     <div className="flex items-center gap-1">
@@ -71,7 +74,7 @@ export function EntryActionRow({
         id={id}
         role="option"
         aria-selected={selected}
-        disabled={disabled}
+        disabled={launchDisabled}
         className={cn(
           // Why min-w-0: a long agent setup must truncate so the row's › stays inside the menu.
           'flex h-6 w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
@@ -109,6 +112,7 @@ export function EntryActionRow({
           entry={option.option.pickerEntry}
           initial={option.option.setup}
           disabled={disabled}
+          terminalBlocked={terminalPending}
           onUse={onUseAgent}
         />
       ) : null}

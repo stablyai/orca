@@ -22,6 +22,7 @@ import {
   editAgentPickerSpeed,
   editAgentPickerPanelText
 } from '../../../../shared/agent-launch-picker-arguments'
+import { terminalPendingLabel } from '../tab-bar/new-tab-agent-menu-model'
 import { agentPickerSpeedIsOpaque } from '../../../../shared/agent-launch-picker-speed'
 import { editAgentPickerPermission } from '../../../../shared/agent-launch-picker-permission'
 import {
@@ -42,12 +43,14 @@ export function AgentLaunchSetupPanel({
   entry,
   initial,
   disabled,
+  terminalBlocked,
   onDraftChange,
   onUse
 }: {
   entry: AgentPickerEntry
   initial?: AgentPickerDraft
   disabled?: boolean
+  terminalBlocked?: boolean
   onDraftChange?: (draft: AgentPickerDraft) => void
   onUse: (draft: AgentPickerDraft) => void
 }) {
@@ -161,7 +164,14 @@ export function AgentLaunchSetupPanel({
       onAction={() => {}}
     />
   )
-  const use = (surface: AgentPickerSurface) => onUse({ ...draft, surface })
+  const waitReason = (surface: AgentPickerSurface) =>
+    surface === 'terminal' && terminalBlocked ? terminalPendingLabel() : undefined
+  const surfaceDisabled = (surface: AgentPickerSurface) => disabled || !!waitReason(surface)
+  const use = (surface: AgentPickerSurface) => {
+    if (!surfaceDisabled(surface)) {
+      onUse({ ...draft, surface })
+    }
+  }
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
   return (
     <div
@@ -366,7 +376,9 @@ export function AgentLaunchSetupPanel({
             key={surface}
             type="button"
             size="xs"
-            disabled={disabled}
+            disabled={surfaceDisabled(surface)}
+            title={waitReason(surface)}
+            aria-description={waitReason(surface)}
             variant={surface === entry.defaultSurface ? 'default' : 'outline'}
             onClick={() => use(surface)}
           >

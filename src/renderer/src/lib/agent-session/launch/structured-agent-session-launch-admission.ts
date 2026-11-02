@@ -30,6 +30,7 @@ import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structur
 import { readAgentInventoryForTarget } from '@/lib/agent-detection-target-inventory'
 import { structuredChatUnavailableText } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
+import { structuredLaunchTerminalFromOutcome } from './structured-launch-terminal-outcome'
 
 export type AgentTerminalLaunchCompletion = {
   outcome: WebRuntimeTerminalCreateOutcome
@@ -39,6 +40,8 @@ export type AgentTerminalLaunchCompletion = {
 /** What a host's "no" opens instead: the terminal the launch would have opened had it known. */
 export type StructuredLaunchTerminal = {
   opened: boolean
+  /** Why the terminal could not open, for the visible chat that presents it. */
+  refusal?: string
   tabId?: string
   completion?: Promise<AgentTerminalLaunchCompletion>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
@@ -138,33 +141,30 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
 }): Promise<StructuredLaunchTerminal> {
   // Loaded late: the new-tab launcher begins these launches.
   const { launchAgentInNewTabWithOutcome } = await import('@/lib/launch-agent-in-new-tab')
-  const result = launchAgentInNewTabWithOutcome({
-    ...args.terminal,
-    agent: args.plan.agent,
-    worktreeId: args.worktreeId,
-    // The saved choice the chat would have seeded applies to its terminal as flags.
-    ...(args.plan.launchOptions ? { sessionOptions: args.plan.launchOptions } : {}),
-    ...(args.targetGroupId ? { groupId: args.targetGroupId } : {}),
-    ...(args.terminal?.activate !== false && args.plan.prompt ? { prompt: args.plan.prompt } : {}),
-    ...(args.plan.promptDelivery ? { promptDelivery: args.plan.promptDelivery } : {}),
-    ...(args.plan.onPromptDelivered ? { onPromptDelivered: args.plan.onPromptDelivered } : {}),
-    ...(args.plan.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
-    agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
-      route: 'terminal-tui',
-      requestId: args.plan.requestId,
+  return structuredLaunchTerminalFromOutcome(
+    launchAgentInNewTabWithOutcome({
+      ...args.terminal,
+      // A terminal opened behind the visible chat leaves its refusal to that chat's notice.
+      ...(args.terminal?.activate === false ? { presentsRefusal: true as const } : {}),
       agent: args.plan.agent,
-      worktreeId: args.worktreeId
+      worktreeId: args.worktreeId,
+      // The saved choice the chat would have seeded applies to its terminal as flags.
+      ...(args.plan.launchOptions ? { sessionOptions: args.plan.launchOptions } : {}),
+      ...(args.targetGroupId ? { groupId: args.targetGroupId } : {}),
+      ...(args.terminal?.activate !== false && args.plan.prompt
+        ? { prompt: args.plan.prompt }
+        : {}),
+      ...(args.plan.promptDelivery ? { promptDelivery: args.plan.promptDelivery } : {}),
+      ...(args.plan.onPromptDelivered ? { onPromptDelivered: args.plan.onPromptDelivered } : {}),
+      ...(args.plan.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
+      agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
+        route: 'terminal-tui',
+        requestId: args.plan.requestId,
+        agent: args.plan.agent,
+        worktreeId: args.worktreeId
+      })
     })
-  })
-  if (result && 'refused' in result) {
-    return { opened: false, promptDeliveryResult: Promise.resolve(result.refused) }
-  }
-  return {
-    opened: result !== null,
-    ...(result?.surface.kind === 'local-terminal' ? { tabId: result.surface.tabId } : {}),
-    ...(result?.terminalCompletion ? { completion: result.terminalCompletion } : {}),
-    ...(result?.promptDeliveryResult ? { promptDeliveryResult: result.promptDeliveryResult } : {})
-  }
+  )
 }
 
 /** A declined chat falls back to its agent's terminal only where that CLI may be installed. */

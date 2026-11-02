@@ -204,7 +204,10 @@ export async function runSourceControlAgentActionStart({
       launchPlatform,
       launchSource
     })
-    launched = Boolean(result)
+    if (!result || 'refused' in result) {
+      return false
+    }
+    launched = true
     if (result?.surface.kind === 'local-terminal') {
       focusTerminalTabSurface(result.surface.tabId)
     }

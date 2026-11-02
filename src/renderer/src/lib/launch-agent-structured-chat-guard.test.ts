@@ -132,7 +132,13 @@ describe('structured chat adoption guard on the launch path', () => {
       finish()
     }
     await Promise.allSettled(pending)
-    await Promise.all(owned.splice(0).map((result) => result?.structuredSettlement))
+    await Promise.all(
+      owned
+        .splice(0)
+        .map((result) =>
+          result && !('refused' in result) ? result.structuredSettlement : undefined
+        )
+    )
     await main.settle()
     expect(lateCreates).toEqual([])
     expect(layoutApplyTestTransport.pendingCount).toBe(0)
@@ -158,6 +164,9 @@ describe('structured chat adoption guard on the launch path', () => {
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toMatchObject({
       surface: { kind: 'host-published' },
@@ -202,6 +211,9 @@ describe('structured chat adoption guard on the launch path', () => {
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toMatchObject({ surface: { kind: 'host-published' } })
     await result?.structuredSettlement
@@ -224,6 +236,9 @@ describe('structured chat adoption guard on the launch path', () => {
       agent: 'claude',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toMatchObject({ surface: { kind: 'host-published' } })
     await result?.structuredSettlement
@@ -259,6 +274,9 @@ describe('structured chat adoption guard on the launch path', () => {
       prompt: 'start this task',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(mockCreateTab).not.toHaveBeenCalled()
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
@@ -316,6 +334,9 @@ describe('structured chat adoption guard on the launch path', () => {
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface).toEqual({ kind: 'local-terminal', tabId: 'tab-1' })
     expect(mockLaunchStructuredCodexSession).not.toHaveBeenCalled()
@@ -339,6 +360,9 @@ describe('structured chat adoption guard on the launch path', () => {
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toMatchObject({
       surface: { kind: 'host-published' },
@@ -371,6 +395,9 @@ describe('structured chat adoption guard on the launch path', () => {
       prompt: 'start this task',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
@@ -399,11 +426,17 @@ describe('structured chat adoption guard on the launch path', () => {
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (first && 'refused' in first) {
+      throw new Error('Expected an opened launch')
+    }
     const second = launchAgentInNewTab({
       requestId: 'double-click',
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (second && 'refused' in second) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(first).toMatchObject({ surface: { kind: 'host-published' } })
     expect(second).toMatchObject({ surface: { kind: 'host-published' } })
@@ -426,6 +459,9 @@ describe('structured chat adoption guard on the launch path', () => {
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.structuredSettlement).resolves.toEqual({
       kind: 'structured',
@@ -482,6 +518,9 @@ describe('structured chat adoption guard on the launch path', () => {
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (unknown && 'refused' in unknown) {
+      throw new Error('Expected an opened launch')
+    }
     await expect(unknown?.structuredSettlement).resolves.toEqual({
       kind: 'visibility-unknown',
       sessionId: firstIntent.sessionId
@@ -519,6 +558,9 @@ describe('structured chat adoption guard on the launch path', () => {
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (next && 'refused' in next) {
+      throw new Error('Expected an opened launch')
+    }
     await expect(next?.structuredSettlement).resolves.toEqual({
       kind: 'structured',
       sessionId: secondIntent.sessionId
@@ -546,6 +588,9 @@ describe('structured chat adoption guard on the launch path', () => {
       worktreeId: 'wt-1',
       prompt: 'start this task'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toMatchObject({ surface: { kind: 'host-published' } })
     await expect(result?.promptDeliveryResult).resolves.toEqual({
@@ -569,6 +614,9 @@ describe('structured chat adoption guard on the launch path', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,

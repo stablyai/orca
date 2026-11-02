@@ -37,6 +37,7 @@ vi.mock('@/store', async () => {
     terminalLayoutsByTabId: {},
     runtimePaneTitlesByTabId: {},
     ptyIdsByTabId: {},
+    getKnownWorktreeById: () => undefined,
     openSettingsPage: vi.fn(),
     openSettingsTarget: vi.fn()
   }
@@ -341,9 +342,7 @@ it.each(['chat', 'cli'] as const)(
           delivered: outcome === 'delivered'
         })
       }
-      expect(toastError).toHaveBeenCalledTimes(
-        outcome === 'unconfirmed' || outcome === 'no-command' ? 1 : 0
-      )
+      expect(toastError).toHaveBeenCalledTimes(outcome === 'unconfirmed' ? 1 : 0)
       if (outcome === 'unconfirmed') {
         expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Couldn't send to"), {
           description: expect.stringContaining(

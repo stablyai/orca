@@ -17,7 +17,7 @@ function launchAgentTab(
   agent: TuiAgent,
   { groupId, focusIntent }: AgentTabLaunchContext
 ): void {
-  const result = launchAgentInNewTab({
+  launchAgentInNewTab({
     requestId: newAgentLaunchRequestId(),
     focusIntent,
     agent,
@@ -25,15 +25,6 @@ function launchAgentTab(
     groupId,
     launchSource: 'shortcut'
   })
-  if (!result) {
-    toast.error(
-      translate(
-        'auto.components.Terminal.e57db40c11',
-        'Could not build launch command for {{value0}}.',
-        { value0: agent }
-      )
-    )
-  }
 }
 
 /** Launch a resolved new-agent-tab shortcut in the pane it was pressed in, waiting on detection if needed. */

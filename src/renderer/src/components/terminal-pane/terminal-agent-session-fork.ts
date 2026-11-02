@@ -289,7 +289,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   })
   const settled = await settleAgentTabLaunch(result)
   const delivery =
-    result?.promptDeliveryResult ??
+    (result && !('refused' in result) ? result.promptDeliveryResult : undefined) ??
     (settled.kind === 'structured' ? settled.promptDeliveryResult : undefined)
   if (
     (settled.kind !== 'terminal' && settled.kind !== 'structured') ||

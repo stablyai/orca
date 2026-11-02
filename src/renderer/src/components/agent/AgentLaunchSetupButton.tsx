@@ -34,6 +34,7 @@ export function AgentLaunchSetupButton({
   initial,
   renderAnchor,
   disabled,
+  terminalBlocked,
   open: controlledOpen,
   replacedByAnotherSetup = false,
   onOpenChange,
@@ -43,6 +44,8 @@ export function AgentLaunchSetupButton({
   initial?: AgentPickerDraft
   renderAnchor?: (trigger: ReactElement) => ReactElement
   disabled?: boolean
+  /** The host is still connecting: the terminal launch stays shown but waits. */
+  terminalBlocked?: boolean
   open?: boolean
   replacedByAnotherSetup?: boolean
   onOpenChange?: (open: boolean) => void
@@ -161,6 +164,7 @@ export function AgentLaunchSetupButton({
             entry={entry}
             initial={sessionDrafts.get(draftKey) ?? initial}
             disabled={disabled}
+            terminalBlocked={terminalBlocked}
             onDraftChange={(draft) => sessionDrafts.set(draftKey, draft)}
             onUse={(draft) => {
               onUse(draft)

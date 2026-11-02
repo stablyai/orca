@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Connectez-vous à l’hôte SSH de cet espace de travail, puis réessayez.",
+    "sshUnavailable": "Le lancement dans un terminal est indisponible sur cet hôte SSH. Ouvrez un terminal dans l’espace de travail et démarrez-y l’agent.",
+    "reconnectServer": "Reconnectez-vous au serveur Orca de cet espace de travail, puis réessayez.",
+    "updateServer": "Mettez à jour Orca sur le serveur de cet espace de travail, puis réessayez.",
+    "checkSettings": "Vérifiez les paramètres de lancement de l’agent, puis réessayez.",
+    "invalidArgs": "Les arguments CLI de {{value0}} contiennent un guillemet non fermé. Corrigez-les, puis réessayez.",
     "opencode": {
       "updateRequired": "Cette version d’OpenCode ne peut pas démarrer de façon sûre avec le modèle choisi. Mettez OpenCode à jour vers une version compatible ou ne précisez pas de modèle.",
       "invalidConfig": "OpenCode n’a pas pu appliquer ce modèle à la configuration de lancement. Vérifiez la configuration de lancement d’OpenCode et réessayez, ou ne précisez pas de modèle.",
@@ -637,7 +643,6 @@
       "actionModel": {
         "on": "Activé",
         "off": "Désactivé",
-        "invalidArgs": "Les arguments CLI de {{value0}} sont invalides. Corrigez-les dans Paramètres → Source Control AI.",
         "model": "Modèle",
         "agentDefault": "Par défaut de l'agent",
         "effortDefault": "Par défaut",
@@ -1220,9 +1225,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Impossible de trouver un espace de travail pour ces vérifications.",
-              "fb6c294e85": "Impossible de construire la commande de lancement de l'agent.",
               "03c1d61f83": "Impossible d'ouvrir l'espace de travail associé à ces vérifications.",
-              "822bf52295": "Impossible de résoudre la plateforme de lancement de l'espace de travail.",
               "dfb4dd7c00": "Impossible de trouver l'espace de travail associé à ces vérifications.",
               "9f00d7df0c": "Le prompt de correction des checks est vide. Mettez à jour les paramètres d'IA du contrôle de code source.",
               "2ebf794906": "Aucun agent IA activé n'a été détecté sur l'hôte de cet espace de travail.",
@@ -2885,7 +2888,6 @@
         "a2a279b32a": "L'enregistrement a expiré ou échoué. Corrigez les erreurs avant de fermer.",
         "46e08bc5c8": "Ce fichier contient des modifications non enregistrées.",
         "61ed600d29": "« {{value0}} » contient des modifications non enregistrées. Voulez-vous enregistrer avant de fermer ?",
-        "e57db40c11": "Impossible de construire la commande de lancement pour {{value0}}.",
         "5b2c1a9e44": "Aucun CLI d'agent détecté — installez-en un ou choisissez un agent par défaut dans les paramètres.",
         "b7c1f0a934": "Un hôte distant n'a pas pu être atteint, Orca ne peut donc pas savoir si le travail est toujours en cours là-bas. Fermer la fenêtre quand même ?",
         "quitSnapshotSaveFailed": "Quitter annulé : l'instantané de session n'a pas pu être enregistré ({{value0}}).",
@@ -3983,7 +3985,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Paramètres de l'agent…",
             "ec2adf093e": "Lancer {{value0}} dans un nouveau terminal",
-            "465e432ef1": "Impossible de construire la commande de lancement pour {{value0}}.",
             "e518f544b1": "Aucun agent détecté",
             "8dea9b5cdf": "Aucun agent activé",
             "chatNotInstalled": "Non installé",
@@ -14172,7 +14173,6 @@
                     },
                     "d481ab22f9": "L'agent IA enregistré est indisponible. Utilisez « Personnaliser le lancement » pour choisir un autre agent.",
                     "9bbd9077a2": "Aucun agent IA activé. Configurez les agents dans les paramètres.",
-                    "5540ff50cc": "Impossible de construire la commande de lancement de l'agent.",
                     "216f762bd7": "Impossible de résoudre la connexion de l'espace de travail.",
                     "success": "Un agent IA a été lancé pour l'échec de {{value0}}."
                   }
@@ -15403,7 +15403,6 @@
             "3f4ca29961": "Agrandir l'espace de travail flottant",
             "1c79cba25d": "Restaurer l'espace de travail flottant",
             "648352c51f": "Ouvrir {{value0}} dans l'espace de travail flottant",
-            "82da3701e7": "Impossible de construire la commande de lancement pour {{value0}}.",
             "109870e023": "Agrandir",
             "b5686fee1e": "Restaurer"
           }

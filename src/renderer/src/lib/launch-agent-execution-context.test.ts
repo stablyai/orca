@@ -85,7 +85,7 @@ describe('resolveAgentLaunchExecutionContext from a Windows client', () => {
       }),
       { worktreeId: 'repo::/srv/repo' }
     )
-    expect(context).toBeNull()
+    expect(context).toMatchObject({ unavailable: { kind: 'withheld' } })
   })
 
   it('withholds a direct SSH launch until the relay reports the host OS', () => {
@@ -97,7 +97,7 @@ describe('resolveAgentLaunchExecutionContext from a Windows client', () => {
       }),
       { worktreeId: 'repo::C:\\repo' }
     )
-    expect(context).toBeNull()
+    expect(context).toMatchObject({ unavailable: { kind: 'withheld' } })
   })
 
   it('reads a nested SSH target from the Orca server that reaches it', () => {

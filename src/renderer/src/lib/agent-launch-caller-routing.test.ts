@@ -59,8 +59,13 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? mockCreateSupport() : new Promise(() => undefined)
 }))
-const { mockToastInfo } = vi.hoisted(() => ({ mockToastInfo: vi.fn() }))
-vi.mock('sonner', () => ({ toast: { info: mockToastInfo, error: vi.fn(), success: vi.fn() } }))
+const { mockToastInfo, mockToastError } = vi.hoisted(() => ({
+  mockToastInfo: vi.fn(),
+  mockToastError: vi.fn()
+}))
+vi.mock('sonner', () => ({
+  toast: { info: mockToastInfo, error: mockToastError, success: vi.fn() }
+}))
 vi.mock(
   '@/lib/agent-session/launch/structured-agent-session-launch-admission',
   async (importOriginal) => ({
@@ -200,6 +205,9 @@ describe('agent launch caller routing', () => {
       agent: 'claude',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface.kind).toBe('host-published')
     expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledExactlyOnceWith(
@@ -229,6 +237,9 @@ describe('agent launch caller routing', () => {
       promptDelivery: 'submit-after-ready',
       agentArgs: '--model sonnet'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
@@ -265,6 +276,9 @@ describe('agent launch caller routing', () => {
       promptDelivery: 'submit-after-ready',
       agentArgs: '--model sonnet'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(store.createTab).not.toHaveBeenCalled()
@@ -315,6 +329,9 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       onStructuredHostDeclined
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
     expect(onStructuredHostDeclined).toHaveBeenCalledOnce()
@@ -333,6 +350,9 @@ describe('agent launch caller routing', () => {
       agent: 'claude',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
@@ -348,6 +368,9 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'local-terminal' })
@@ -365,6 +388,9 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'host-published' })
@@ -382,6 +408,9 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'host-published' })
@@ -399,15 +428,17 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface.kind).toBe('local-terminal')
     expect(store.createTab).toHaveBeenCalledTimes(1)
   })
 
-  it('returns null without opening any surface when no startup plan can be built', async () => {
+  it('refuses invalid arguments once, saying what to fix, before any surface opens', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    // Unbalanced argument quoting must abort before any surface opens.
     const result = launchAgentInNewTab({
       requestId: 'request-9',
       agent: 'codex',
@@ -415,7 +446,10 @@ describe('agent launch caller routing', () => {
       agentArgs: "--model 'gpt-5.5"
     })
 
-    expect(result).toBeNull()
+    expect(result).toEqual({ refused: { delivered: false, failureNotified: true } })
+    expect(mockToastError).toHaveBeenCalledExactlyOnceWith(
+      'The CLI arguments for Codex have an unclosed quote. Fix them, then try again.'
+    )
     expect(store.createTab).not.toHaveBeenCalled()
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
   })

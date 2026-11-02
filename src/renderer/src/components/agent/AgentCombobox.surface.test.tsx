@@ -41,9 +41,9 @@ function renderPicker(
   model: NewTabAgentMenuModel,
   value: TuiAgent | null,
   surface?: AgentLaunchSurface
-): { onPick: ReturnType<typeof vi.fn> } {
+): { onPick: ReturnType<typeof vi.fn>; rerender: (next: NewTabAgentMenuModel) => void } {
   const onPick = vi.fn()
-  const element: ReactElement = (
+  const element = (model: NewTabAgentMenuModel): ReactElement => (
     <AgentCombobox
       agents={AGENT_CATALOG.filter((agent) => agent.id !== 'grok')}
       value={value}
@@ -69,8 +69,8 @@ function renderPicker(
       }}
     />
   )
-  render(element, { wrapper: TooltipProvider })
-  return { onPick }
+  const view = render(element(model), { wrapper: TooltipProvider })
+  return { onPick, rerender: (next) => view.rerender(element(next)) }
 }
 
 function option(text: string): HTMLElement {
@@ -132,6 +132,23 @@ describe('AgentCombobox surface rows', () => {
     fireEvent.click(screen.getByRole('combobox'))
     fireEvent.click(option('Gemini'))
     expect(onPick).toHaveBeenLastCalledWith('gemini', 'terminal')
+  })
+
+  it('shows a waiting terminal with its reason, and an earlier keyboard arm does not pick it', () => {
+    const { onPick, rerender } = renderPicker(settled(CHAT_ROWS), 'claude')
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.keyDown(screen.getByPlaceholderText('Search agents...'), { key: 'ArrowRight' })
+    rerender({ ...settled(CHAT_ROWS), terminalPending: true })
+    fireEvent.keyDown(screen.getByPlaceholderText('Search agents...'), { key: 'Enter' })
+    expect(onPick).not.toHaveBeenCalled()
+    const terminal = screen.getByRole('button', { name: 'Start Claude in a terminal' })
+    expect(terminal.hasAttribute('disabled')).toBe(true)
+    expect(terminal.getAttribute('aria-description')).toBe('Connecting…')
+    expect(option('Gemini').getAttribute('aria-disabled')).toBe('true')
+    expect(option('Gemini').textContent).toContain('Connecting…')
+    // The arm is gone, so Enter keeps the chat the row already offers.
+    fireEvent.keyDown(screen.getByPlaceholderText('Search agents...'), { key: 'Enter' })
+    expect(onPick).toHaveBeenCalledExactlyOnceWith('claude', 'chat')
   })
 
   it('shows a terminal pick as the CLI and keeps its button lit on reopen', () => {

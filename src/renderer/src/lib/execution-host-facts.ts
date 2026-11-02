@@ -5,6 +5,7 @@ import {
 } from '../../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
+import { runtimeHostContactForEntry } from '../../../shared/runtime-host-contact'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { isWslUncPath } from '../../../shared/wsl-paths'
@@ -27,7 +28,17 @@ export type ExecutionHostPlatformFact =
       /** A paired server's own Windows terminal shell, when it reported one. */
       terminalWindowsShell?: string | null
     }
-  | { kind: 'withheld'; reason: string }
+  | {
+      kind: 'withheld'
+      reason: string
+      recovery:
+        | 'connectSsh'
+        | 'sshUnavailable'
+        | 'reconnectServer'
+        | 'updateServer'
+        | 'refreshProjects'
+      pending?: boolean
+    }
 
 type HostFactsState = Pick<
   AppState,
@@ -69,6 +80,17 @@ function resolveLocalPlatform(
   return workspacePath && isWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
 }
 
+/** A paired server still being reached may yet report the facts a launch needs. */
+function runtimeContactPending(state: HostFactsState, environmentId: string | null): boolean {
+  const contact = environmentId
+    ? runtimeHostContactForEntry(state.runtimeStatusByEnvironmentId.get(environmentId))
+    : null
+  return (
+    contact?.verdict === 'unverifiable' &&
+    ['checking', 'transport-connecting'].includes(contact.reason)
+  )
+}
+
 function resolveHostPlatform(
   state: HostFactsState,
   args: {
@@ -83,7 +105,7 @@ function resolveHostPlatform(
 ): ExecutionHostPlatformFact {
   const { host } = args
   if (!host) {
-    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD }
+    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD, recovery: 'refreshProjects' }
   }
   if (host.kind === 'local') {
     const platform = resolveLocalPlatform(args.projectRuntime(), args.workspacePath)
@@ -98,10 +120,18 @@ function resolveHostPlatform(
       : state.sshConnectionStates.get(sshTargetId)
     return sshState?.remotePlatform
       ? { kind: 'known', platform: sshState.remotePlatform, hostKind: 'ssh' }
-      : { kind: 'withheld', reason: SSH_PLATFORM_WITHHELD }
+      : {
+          kind: 'withheld',
+          reason: SSH_PLATFORM_WITHHELD,
+          recovery: sshState?.status === 'connected' ? 'sshUnavailable' : 'connectSsh',
+          pending:
+            ['connecting', 'reconnecting', 'deploying-relay'].includes(sshState?.status ?? '') ||
+            sshState?.managedServer?.kind === 'setting-up' ||
+            runtimeContactPending(state, ownerEnvironmentId)
+        }
   }
   if (host.kind !== 'runtime') {
-    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD }
+    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD, recovery: 'refreshProjects' }
   }
   const status = lastVerifiedRuntimeStatus(
     state.runtimeStatusByEnvironmentId.get(host.environmentId)
@@ -109,7 +139,12 @@ function resolveHostPlatform(
   const hostPlatform = status?.hostPlatform
   if (!hostPlatform) {
     const reason = status ? RUNTIME_PLATFORM_UPDATE : RUNTIME_PLATFORM_WITHHELD
-    return { kind: 'withheld', reason }
+    return {
+      kind: 'withheld',
+      reason,
+      recovery: status ? 'updateServer' : 'reconnectServer',
+      pending: runtimeContactPending(state, host.environmentId)
+    }
   }
   // Why: a WSL UNC workspace on a Windows server runs its agents inside that distro.
   const platform =

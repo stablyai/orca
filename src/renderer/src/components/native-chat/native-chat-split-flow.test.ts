@@ -48,7 +48,7 @@ it.each(['right', 'down'] as const)(
     const layout = store.getState().layoutByWorktree[worktreeId]
     launch.mockReturnValue(null)
     expect(runNativeChatSplitTarget(target, direction)).toBe(true)
-    expect(toast.error).toHaveBeenLastCalledWith('Could not build launch command for Codex.')
+    expect(toast.error).not.toHaveBeenCalled()
     expect(store.getState().layoutByWorktree[worktreeId]).toEqual(layout)
   }
 )

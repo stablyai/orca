@@ -11,6 +11,7 @@ import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-lau
 import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
+import { structuredLaunchTerminalFromOutcome } from '@/lib/agent-session/launch/structured-launch-terminal-outcome'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 
 type StructuredFromNewTab = {
@@ -29,7 +30,7 @@ export function launchStructuredAgentFromNewTab(args: {
   beforeSurfaceOpen?: LaunchAgentInNewTabArgs['beforeSurfaceOpen']
   onHostDeclined?: () => StructuredLaunchTerminal
   openTerminal: (terminalPlan: AgentSessionLaunchPlan, activate?: false) => AgentTabLaunchOutcome
-}): StructuredFromNewTab | null {
+}): StructuredFromNewTab | Extract<AgentTabLaunchOutcome, { refused: unknown }> | null {
   const { plan, beforeSurfaceOpen } = args
   if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
     return null
@@ -45,36 +46,29 @@ export function launchStructuredAgentFromNewTab(args: {
       if (args.onHostDeclined) {
         return args.onHostDeclined()
       }
-      const terminal = args.openTerminal(
-        adoptAgentSessionLaunchVerdict({
-          route: 'terminal-tui',
-          requestId: plan.requestId,
-          agent: plan.agent,
-          worktreeId: args.worktreeId
-        }),
-        activate
+      return structuredLaunchTerminalFromOutcome(
+        args.openTerminal(
+          adoptAgentSessionLaunchVerdict({
+            route: 'terminal-tui',
+            requestId: plan.requestId,
+            agent: plan.agent,
+            worktreeId: args.worktreeId
+          }),
+          activate
+        )
       )
-      if (terminal && 'refused' in terminal) {
-        return { opened: false, promptDeliveryResult: Promise.resolve(terminal.refused) }
-      }
-      return {
-        opened: terminal !== null,
-        ...(terminal?.surface.kind === 'local-terminal' ? { tabId: terminal.surface.tabId } : {}),
-        ...(terminal?.terminalCompletion ? { completion: terminal.terminalCompletion } : {}),
-        ...(terminal?.promptDeliveryResult
-          ? { promptDeliveryResult: terminal.promptDeliveryResult }
-          : {})
-      }
     }
   })
-  return (
-    launch && {
-      surface: launch.tab
-        ? { kind: 'local-chat', tabId: launch.tab.id }
-        : { kind: 'host-published' },
-      pasteDraftAfterLaunch: false,
-      structuredSettlement: launch.settlement,
-      ...(launch.promptDeliveryResult ? { promptDeliveryResult: launch.promptDeliveryResult } : {})
-    }
-  )
+  return launch
+    ? {
+        surface: launch.tab
+          ? { kind: 'local-chat', tabId: launch.tab.id }
+          : { kind: 'host-published' },
+        pasteDraftAfterLaunch: false,
+        structuredSettlement: launch.settlement,
+        ...(launch.promptDeliveryResult
+          ? { promptDeliveryResult: launch.promptDeliveryResult }
+          : {})
+      }
+    : { refused: { delivered: false, failureNotified: true } }
 }

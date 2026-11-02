@@ -24,6 +24,7 @@ import {
   SurfaceAgentItems,
   surfaceCommandValues,
   useSurfaceRowArming,
+  surfaceAnswerPending,
   type AgentComboboxSurfaceRows
 } from './agent-combobox-surface-items'
 
@@ -266,7 +267,7 @@ export default function AgentCombobox({
               aria-expanded={open}
               onKeyDown={handleTriggerKeyDown}
               // Why: the "(CLI)" suffix depends on the host's answer; it never pops in on a settled field.
-              disabled={disabled || (surfaceRows?.selection.ready === false && value !== null)}
+              disabled={disabled || (surfaceAnswerPending(surfaceRows) && value !== null)}
               className={cn(
                 // Retain room for long labels; py-0 clears default vertical padding to center content in h-8/h-9.
                 'h-8 justify-between px-3 py-0 text-xs font-normal',

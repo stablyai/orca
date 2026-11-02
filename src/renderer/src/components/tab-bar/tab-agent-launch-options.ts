@@ -9,6 +9,7 @@ import { orderAgentLaunchPickerAgents } from '../../../../shared/agent-launch-pi
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import { terminalPendingReason } from './new-tab-agent-menu-model'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
@@ -194,17 +195,47 @@ export function matchingAgentPickerLaunchOptions(
   })
 }
 
+/** Picker options are only disabled by readiness, so the configured surface decides it afresh. */
 export function configuredAgentPickerLaunchOption(
   option: TabAgentLaunchOption,
-  draft: AgentPickerDraft
+  draft: AgentPickerDraft,
+  terminalPending?: boolean
 ): TabAgentLaunchOption {
-  return {
-    ...option,
-    row: {
-      agent: draft.agent,
-      kind: draft.surface === 'chat' ? 'chat' : 'cli',
-      executionHostId: option.row?.executionHostId
+  return terminalReadyOption(
+    {
+      ...option,
+      disabled: undefined,
+      reason: undefined,
+      row: {
+        agent: draft.agent,
+        kind: draft.surface === 'chat' ? 'chat' : 'cli',
+        executionHostId: option.row?.executionHostId
+      },
+      setup: draft
     },
-    setup: draft
-  }
+    terminalPending
+  )
+}
+
+function terminalReadyOption(
+  option: TabAgentLaunchOption,
+  terminalPending: boolean | undefined
+): TabAgentLaunchOption {
+  const reason = terminalPendingReason(terminalPending, option.row)
+  return reason ? { ...option, disabled: true, reason } : option
+}
+
+/** The agent options a query lists; each one's surface waits the same way while the host connects. */
+export function matchingAgentLaunchOptions(
+  entries: readonly AgentPickerEntry[] | undefined,
+  options: readonly TabAgentLaunchOption[],
+  query: string,
+  terminalPending: boolean | undefined
+): TabAgentLaunchOption[] {
+  const ready = (option: TabAgentLaunchOption) => terminalReadyOption(option, terminalPending)
+  // Readiness applies before ranking, so a waiting terminal never outranks a usable chat.
+  return [
+    ...matchingAgentPickerLaunchOptions(entries ?? [], query).map(ready),
+    ...findMatchingTabAgentLaunchOptions(query, options.map(ready))
+  ]
 }
