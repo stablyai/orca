@@ -422,4 +422,67 @@ describe('orca.document.session', () => {
     expect(replaced).not.toHaveBeenCalled()
     expect(posted().at(-1)).toEqual({ orca: 1, kind: 'res', id: 4, result: null })
   })
+
+  it('merges a disk change made under unsaved edits, and tells Orca it does', async () => {
+    const merge = vi.fn(
+      (base: string, outside: string, mine: string) => `${outside}|${mine}|${base}`
+    )
+    const { session, fromHost, replaced, edits, posted } = await open({ debounceMs: 0, merge })
+    expect(posted()).toContainEqual(
+      expect.objectContaining({ kind: 'evt', event: 'editor.merges' })
+    )
+    session.change('a+mine')
+    await settle()
+    fromHost(accept(0))
+    await settle()
+    // Accepted into the tab's buffer, still unsaved: the agent writes the file on disk.
+    fromHost({
+      ...doc(2, 'a+agent'),
+      payload: {
+        version: 2,
+        readOnly: false,
+        content: { kind: 'text', text: 'a+agent' },
+        ancestor: { kind: 'text', text: 'a' }
+      }
+    })
+    await settle()
+    expect(merge).toHaveBeenCalledWith('a', 'a+agent', 'a+mine')
+    expect(replaced).toHaveBeenLastCalledWith('a+agent|a+mine|a')
+    expect(edits().at(-1)).toMatchObject({
+      params: { baseVersion: 2, content: { kind: 'text', text: 'a+agent|a+mine|a' } }
+    })
+  })
+
+  it('never claims to merge without a merge function', async () => {
+    const { posted } = await open({ debounceMs: 0 })
+    expect(posted().some((message) => message.event === 'editor.merges')).toBe(false)
+  })
+
+  it('moves nothing when a disk merge throws, so the next edit cannot acknowledge it', async () => {
+    const merge = vi.fn(() => {
+      throw new Error('cannot merge')
+    })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { session, fromHost, edits, replaced } = await open({ debounceMs: 0, merge })
+      fromHost({
+        ...doc(2, 'a+agent'),
+        payload: {
+          version: 2,
+          readOnly: false,
+          content: { kind: 'text', text: 'a+agent' },
+          ancestor: { kind: 'text', text: 'a' }
+        }
+      })
+      await settle()
+      expect(replaced).not.toHaveBeenCalled()
+      expect(session.value).toBe('a')
+      session.change('a+typed')
+      await settle()
+      // Still against the document before the merge: Orca refuses it and keeps its banner.
+      expect(edits().at(-1)).toMatchObject({ params: { baseVersion: 1 } })
+    } finally {
+      error.mockRestore()
+    }
+  })
 })

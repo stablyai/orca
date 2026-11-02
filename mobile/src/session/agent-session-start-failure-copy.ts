@@ -5,6 +5,12 @@ import type {
 import { translate } from '../i18n/mobile-i18n'
 
 export const START_FAILURE_COPY = {
+  savedConversationMissing: (values) =>
+    translate(
+      'session.failure.savedConversationMissing',
+      "{{agent}} couldn't find this chat's saved conversation.",
+      values
+    ),
   theAgent: (values) => translate('session.failure.theAgent', 'The agent', values),
   providerStartFailed: (values) =>
     translate(

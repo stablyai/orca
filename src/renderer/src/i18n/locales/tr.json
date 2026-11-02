@@ -215,7 +215,10 @@
       "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "accept": "Ana makine olarak çalıştır",
-      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın."
+      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın.",
+      "existingTitle": "{{distro}} ana makinesine ekle (önerilir)",
+      "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
+      "existingAccept": "Ana makineye ekle"
     }
   },
   "app": {
@@ -19058,6 +19061,7 @@
       "failureWords": {
         "theAgent": "Ajan",
         "providerStartFailed": "{{agent}}, başlatılması tamamlanmadan durdu.",
+        "savedConversationMissing": "{{agent}} bu sohbetin kayıtlı konuşmasını bulamadı.",
         "runCommandAgain": "/{{command}} komutunu yeniden çalıştırın.",
         "sendToTryAgain": "Tekrar denemek için mesajınızı gönderin.",
         "sendAgainToTryOnceMore": "Tekrar denemek için mesajınızı yeniden gönderin.",
@@ -22588,7 +22592,8 @@
       "changed": "Daha önce taşındı, ardından burada Orca'nın eski bir sürümü tarafından değiştirildi. Yeniden taşınmaz.",
       "chatsStay": "Mevcut sohbetler bu bilgisayarda kalır. Bu projedeki yeni sohbetler WSL ana makinesinde başlar.",
       "browserLoginsConflict": "Ana makinenin tarayıcı profili zaten kullanımda olduğundan tarayıcı oturumları aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın.",
-      "browserLoginsNotCarried": "Tarayıcı oturumları bu ana makineye aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın."
+      "browserLoginsNotCarried": "Tarayıcı oturumları bu ana makineye aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın.",
+      "why": "Çalışma artık dosyalarınızın yanında, Linux içinde yürür; bu sayede terminaller, Git ve dosya değişiklikleri daha hızlı ve daha güvenilir olur. Projeleriniz değişmez ve herhangi bir projeyi “Bu bilgisayarda yeniden kullan” ile geri taşıyabilirsiniz."
     },
     "cancel": "İptal",
     "progress": {

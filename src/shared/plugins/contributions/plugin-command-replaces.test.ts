@@ -102,5 +102,8 @@ describe('consent for a replacement', () => {
     const replacing = fingerprint([{ id: 'tasks', title: 'Tasks', replaces: 'view.tasks' }])
     expect(replacing).not.toBe(plain)
     expect(fingerprint([{ id: 'other', title: 'Other' }])).toBe(plain)
+    const tasks = { id: 'tasks', title: 'Tasks', replaces: 'view.tasks' }
+    const ports = { id: 'ports', title: 'Ports', replaces: 'sidebar.ports.toggle' }
+    expect(fingerprint([ports, tasks])).toBe(fingerprint([tasks, ports]))
   })
 })
