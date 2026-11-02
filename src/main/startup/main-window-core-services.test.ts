@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ClaudeUsagePollingSettings as SettingsUpdate } from '../claude-accounts/claude-usage-polling-policy'
 
 const {
   attachMainWindowServicesMock,
@@ -13,7 +14,7 @@ const {
     flushPendingOrThrowAsync: vi.fn(async () => {}),
     writeLatestProfileStateJsonExportAsync: vi.fn(async () => {}),
     getSettings: vi.fn(() => ({})),
-    onSettingsChanged: vi.fn((_listener: (updates: object) => void) => () => {}),
+    onSettingsChanged: vi.fn((_listener: (updates: SettingsUpdate) => void) => () => {}),
     getSshTargets: vi.fn(() => [{ id: 'ssh-1', reconnectOnLaunch: false }])
   }
   return {
@@ -230,7 +231,7 @@ describe('serve usage polling', () => {
   it('does not poll when every usage feature is off, then starts when one turns on', () => {
     state.isServeMode = true
     store.getSettings.mockImplementation(() => usageOff)
-    let listener: ((updates: object) => void) | undefined
+    let listener: ((updates: SettingsUpdate) => void) | undefined
     store.onSettingsChanged.mockImplementation((callback) => {
       listener = callback
       return () => {
@@ -259,7 +260,7 @@ describe('serve usage polling', () => {
     )
 
     closed?.()
-    listener?.({ claudeModelPolicy: { enabled: false } })
+    listener?.({ claudeAutoSwitchEnabled: false })
     expect(start).toHaveBeenCalledTimes(1)
   })
 })
