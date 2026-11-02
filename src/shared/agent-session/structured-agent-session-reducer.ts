@@ -95,6 +95,8 @@ export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   actionablePromptIds?: string[]
   /** Host main-agent work state; older hosts derive from items/submissions. */
   working?: boolean
+  /** Whole-journal tasks. Older hosts omit the field. */
+  taskList?: AgentSessionHistoryPage['taskList']
   /** Bump when a live turn revision falls outside the window so whole-journal turn readers refresh. */
   unloadedTurnRevisions?: number
 }

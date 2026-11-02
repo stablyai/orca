@@ -5,7 +5,6 @@ import {
 } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
-  applyAppend,
   createNativeChatMerger,
   replaceList
 } from '../../../../shared/native-chat/native-chat-merge'
@@ -17,13 +16,17 @@ import {
   type NativeChatOlderPageResult
 } from './native-chat-pagination'
 import type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
+import type { NativeChatTaskSeedList } from '../../../../shared/native-chat/input/native-chat-claude-task-updates'
 import { getNativeChatSessionTransport } from './native-chat-session-transport'
 import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
 import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
+import { applyNativeChatLiveFrame, type NativeChatSubagentSeed } from './native-chat-live-frame'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
 import { takeNativeChatOpenWake } from './native-chat-open-wake'
+import { useSubagentPageRead } from './native-chat-subagent-page-read'
+import { nextNativeChatSubscriptionId } from './native-chat-subscription-id'
 
 export type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
 
@@ -47,13 +50,6 @@ const USER_PAGING = { wakeWslDistro: true } as const
 // Keep the base axis stable through non-ready reads.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
 
-let subscriptionCounter = 0
-
-function nextSubscriptionId(): string {
-  subscriptionCounter += 1
-  return `native-chat-${subscriptionCounter}-${Date.now()}`
-}
-
 // New transcripts may take minutes to flush (#8401); explicit host-pending frames override this guessed retry window.
 export const NOTFOUND_RETRY_WINDOW_MS = 60_000
 
@@ -68,6 +64,8 @@ export function useNativeChatLiveSession(
   )
   const [read, setRead] = useState<ReadState>({ phase: 'loading' })
   const [hasMore, setHasMore] = useState(false)
+  const [taskList, setTaskList] = useState<NativeChatTaskSeedList | null>(null)
+  const [subagentSeed, setSubagents] = useState<NativeChatSubagentSeed>(null)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [olderHistoryGeneration, setOlderHistoryGeneration] = useState(0)
   const [transcriptLifecycle, transcriptLifecycleControl] = useNativeChatTranscriptLifecycle()
@@ -132,10 +130,8 @@ export function useNativeChatLiveSession(
     }
 
     let cancelled = false
-    // Authoritative frames outrank the independent read seed.
-    let frameArrived = false
-    // Host-confirmed missing transcripts are expected until flushed, not errors.
-    let transcriptPending = false
+    // Authoritative frames outrank the independent read seed. Pending is expected until the host flushes.
+    const streamFlags = { frameArrived: false, transcriptPending: false }
     const retryTimer = createNativeChatReadRetryTimer()
     const retryStartedAt = Date.now()
     const activeSessionId = sessionId
@@ -147,23 +143,25 @@ export function useNativeChatLiveSession(
     replaceList(appendMergerRef.current, [])
     setAppended([])
     setHasMore(false)
+    setTaskList(null)
+    setSubagents(null)
     const wake = { wakeWslDistro: takeNativeChatOpenWake(latestPaneKey.current, sourceKey) }
 
     // Seed independently for silent streams, but never overwrite an authoritative frame.
     function loadSession(attempt: number): void {
-      if (!latestEnabled.current || frameArrived || transcriptPending) {
+      if (!latestEnabled.current || streamFlags.frameArrived || streamFlags.transcriptPending) {
         return
       }
       void transport
         .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined, wake)
         .then((result) => {
-          if (cancelled || !latestEnabled.current || frameArrived) {
+          if (cancelled || !latestEnabled.current || streamFlags.frameArrived) {
             return
           }
           if (result && 'error' in result) {
             if (result.notFound) {
               // The live stream owns confirmed missing-file recovery; older hosts need bounded seed retries.
-              if (transcriptPending) {
+              if (streamFlags.transcriptPending) {
                 return
               }
               if (Date.now() - retryStartedAt < NOTFOUND_RETRY_WINDOW_MS) {
@@ -180,7 +178,7 @@ export function useNativeChatLiveSession(
           setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
         })
         .catch((err: unknown) => {
-          if (!cancelled && latestEnabled.current && !frameArrived) {
+          if (!cancelled && latestEnabled.current && !streamFlags.frameArrived) {
             setRead({ phase: 'error', error: err instanceof Error ? err.message : String(err) })
           }
         })
@@ -188,7 +186,7 @@ export function useNativeChatLiveSession(
 
     loadSession(0)
 
-    const subscriptionId = nextSubscriptionId()
+    const subscriptionId = nextNativeChatSubscriptionId()
     const closeStream = openNativeChatTranscriptStream(
       transport,
       {
@@ -197,41 +195,28 @@ export function useNativeChatLiveSession(
         sessionId,
         transcriptPath: transcriptPath ?? undefined,
         limit: limitRef.current,
-        wakeWslDistro: wake.wakeWslDistro
+        wakeWslDistro: wake.wakeWslDistro,
+        capabilities: { taskList: 1 }
       },
       (frame) => {
         if (cancelled || !latestEnabled.current) {
           return
         }
-        if (frame.type === 'snapshot' || frame.type === 'replacement') {
-          // Snapshots/inode replacements start authoritative generations that stale pagination must not repaint.
-          transcriptEpochRef.current += 1
-          setOlderHistoryGeneration(transcriptEpochRef.current)
-          setLoadingEarlier(false)
-          if ('error' in frame && frame.error) {
-            // Error frames carry no transcript; leave the independent seed eligible to repair the pane.
-            setRead({ phase: 'error', error: frame.error })
-            return
-          }
-          if (frame.type === 'snapshot' && frame.pending === true) {
-            // Pending ends the spinner without consuming the in-flight seed or appended tail.
-            transcriptPending = true
-            // The host resolve poll owns recovery; stop duplicate renderer filesystem probes.
-            retryTimer.cancel()
-            setRead({ phase: 'awaiting' })
-            return
-          }
-          frameArrived = true
-          transcriptLifecycleControl.replace(frame.lifecycle)
-          replaceList(appendMergerRef.current, frame.messages)
-          setAppended([])
-          setRead({ phase: 'ready', messages: appendMergerRef.current.list })
-          setHasMore(frame.hasMore)
-          return
-        }
-        transcriptLifecycleControl.append(frame.lifecycle)
-        // Bound the deduped append tail; the base read/assembler still cover trimmed turns.
-        setAppended(applyAppend(appendMergerRef.current, frame.messages, limitRef.current))
+        applyNativeChatLiveFrame(frame, {
+          setTaskList,
+          setSubagents,
+          epochRef: transcriptEpochRef,
+          setOlderHistoryGeneration,
+          setLoadingEarlier,
+          setRead,
+          setAppended,
+          setHasMore,
+          appendMerger: appendMergerRef.current,
+          limitRef,
+          retryTimer,
+          lifecycle: transcriptLifecycleControl,
+          flags: streamFlags
+        })
       }
     )
 
@@ -300,6 +285,8 @@ export function useNativeChatLiveSession(
     return promise
   }, [agent, sessionId, transcriptPath, transport, hasMore, read, transcriptLifecycleControl])
 
+  const readSubagentPage = useSubagentPageRead(transport, agent, sessionId, transcriptPath)
+
   // Keep status-only hook updates from rerunning the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES
   const { assembledMessages, normalizedMessages } = useNativeChatAssembledMessages({
@@ -329,7 +316,10 @@ export function useNativeChatLiveSession(
       loadingEarlier,
       olderHistoryGeneration,
       loadEarlier,
-      readPhase: read.phase
+      readPhase: read.phase,
+      taskList,
+      subagentSeed,
+      readSubagentPage
     }
   }, [
     normalizedMessages,
@@ -345,6 +335,9 @@ export function useNativeChatLiveSession(
     loadingEarlier,
     olderHistoryGeneration,
     loadEarlier,
-    appended
+    appended,
+    taskList,
+    subagentSeed,
+    readSubagentPage
   ])
 }

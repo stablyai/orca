@@ -245,6 +245,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     /** The host's prompts still waiting on the person and its working answer. */
     hostWork: transportState.hostWork,
     subagentRoster: transportState.subagentRoster,
+    taskList: transportState.taskList,
     messages,
     status: transportEnabled ? state.status : 'ready',
     /** Last send-return reason; failed reads use readRefusal, never raw read error text. */

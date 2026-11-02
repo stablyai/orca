@@ -12,8 +12,10 @@ import type {
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
 } from '../../../../../src/shared/native-chat/native-chat-types'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useNow } from '../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { useMobileNativeChatOpenSubagent } from '../input/mobile-native-chat-open-subagent'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
@@ -60,6 +62,8 @@ export function MobileNativeChatSubagentGroup({
   onToggle?: (groupId: string) => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const onOpenSubagent = useMobileNativeChatOpenSubagent()
   const header = nativeChatSubagentGroupHeader(block.agents, say)
   if (header.total === 0) {
     return null
@@ -113,8 +117,8 @@ export function MobileNativeChatSubagentGroup({
       {open
         ? block.agents.map((agent) => {
             const state = normalizeSubagentState(agent.state)
-            return (
-              <View key={agent.id} testID="subagent-group-entry" style={styles.entry}>
+            const body = (
+              <>
                 <View style={[styles.dot, stateDotStyle(state)]} />
                 <Text
                   style={[styles.entryLabel, state === 'idle' && styles.entryLabelIdle]}
@@ -128,6 +132,28 @@ export function MobileNativeChatSubagentGroup({
                     ? ` · ${formatSubagentTokens(agent.tokens)}`
                     : null}
                 </Text>
+              </>
+            )
+            if (onOpenSubagent) {
+              return (
+                <Pressable
+                  key={agent.id}
+                  testID="native-chat-open-subagent"
+                  accessibilityRole="button"
+                  accessibilityLabel={t('chat.activity.openSubagent', 'Open {{name}}', {
+                    name: agent.label
+                  })}
+                  hitSlop={6}
+                  style={({ pressed }) => [styles.entry, pressed && styles.pressed]}
+                  onPress={() => onOpenSubagent(agent.id)}
+                >
+                  {body}
+                </Pressable>
+              )
+            }
+            return (
+              <View key={agent.id} testID="subagent-group-entry" style={styles.entry}>
+                {body}
               </View>
             )
           })

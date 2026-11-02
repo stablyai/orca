@@ -7,7 +7,12 @@ import {
   type SubscribeNativeChatTranscriptArgs
 } from '../../../native-chat/transcript-watch'
 import { nativeChatTranscriptPathOnExecutionHost } from '../../../native-chat/ssh-transcript-path'
+import {
+  publishTranscriptTaskList,
+  scanNativeChatTranscriptTasks
+} from '../../../native-chat/native-chat-transcript-task-scan'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import { windowNativeChatWithChildren } from '../../../native-chat/transcript-subagent-children'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 import {
   boundNativeChatRpcPageByBytes,
@@ -45,7 +50,7 @@ function windowTranscript(
   limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
 ): NativeChatMessage[] {
   const window = Math.min(Math.max(limit, 1), MOBILE_NATIVE_CHAT_MAX_WINDOW)
-  return messages.length > window ? messages.slice(-window) : messages.slice()
+  return windowNativeChatWithChildren(messages, window)
 }
 
 function pageForClient(
@@ -72,21 +77,31 @@ export const NATIVE_CHAT_METHODS = [
     params: NativeChatSession,
     handler: async (params, { runtime, clientKind, signal }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const transcriptPath = nativeChatTranscriptPathOnExecutionHost(
+        runtime.getAgentProviderSessionRows(),
+        params.sessionId,
+        params.transcriptPath
+      )
       const result = await readNativeChatTranscriptTail(
         {
           agent: params.agent,
           sessionId: params.sessionId,
-          transcriptPath: nativeChatTranscriptPathOnExecutionHost(
-            runtime.getAgentProviderSessionRows(),
-            params.sessionId,
-            params.transcriptPath
-          ),
+          transcriptPath,
           limit,
           beforeOffset: params.beforeOffset,
-          sourceOrder: params.capabilities?.transcriptSourceOrder === 1
+          sourceOrder: params.capabilities?.transcriptSourceOrder === 1,
+          ...(params.subagentId ? { subagentId: params.subagentId } : {})
         },
         signal
       )
+      const taskList =
+        params.subagentId || params.capabilities?.taskList !== 1
+          ? null
+          : await scanNativeChatTranscriptTasks(
+              params.agent,
+              params.sessionId,
+              transcriptPath
+            ).catch(() => null)
       return 'messages' in result
         ? {
             ...pageForClient(
@@ -97,7 +112,8 @@ export const NATIVE_CHAT_METHODS = [
               limit,
               params.agent
             ),
-            ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
+            ...(result.lifecycle ? { lifecycle: result.lifecycle } : {}),
+            ...(taskList ? { taskList } : {})
           }
         : result
     }
@@ -139,14 +155,32 @@ export const NATIVE_CHAT_METHODS = [
       if (closed) {
         return
       }
+      const transcriptPath = nativeChatTranscriptPathOnExecutionHost(
+        runtime.getAgentProviderSessionRows(),
+        params.sessionId,
+        params.transcriptPath
+      )
+      const publishTasks = (): void => {
+        if (params.capabilities?.taskList !== 1) {
+          return
+        }
+        publishTranscriptTaskList({
+          agent: params.agent,
+          sessionId: params.sessionId,
+          filePath: transcriptPath,
+          stillCurrent: () => !closed,
+          emit: (seed) =>
+            emit({
+              type: 'task-list',
+              taskList: seed.taskList,
+              ...(seed.subagents ? { subagents: seed.subagents } : {})
+            })
+        })
+      }
       const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
         agent: params.agent,
         sessionId: params.sessionId,
-        transcriptPath: nativeChatTranscriptPathOnExecutionHost(
-          runtime.getAgentProviderSessionRows(),
-          params.sessionId,
-          params.transcriptPath
-        ),
+        transcriptPath,
         initialLimit: limit,
         sourceOrder: params.capabilities?.transcriptSourceOrder === 1,
         onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
@@ -160,6 +194,9 @@ export const NATIVE_CHAT_METHODS = [
             ...(error ? { error } : {}),
             ...(lifecycle ? { lifecycle } : {})
           })
+          if (!error) {
+            publishTasks()
+          }
         },
         ...(params.capabilities?.transcriptPending === 1
           ? {
@@ -179,6 +216,7 @@ export const NATIVE_CHAT_METHODS = [
             ...pageForClient(messages, hasMore, beforeOffset, clientKind, limit, params.agent),
             ...(lifecycle ? { lifecycle } : {})
           })
+          publishTasks()
         },
         onAppend: (messages, lifecycle) => {
           if (closed) {

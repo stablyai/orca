@@ -695,7 +695,9 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
 
     expect(subscribe).toHaveBeenCalledWith(
       'nativeChat.subscribe',
-      expect.objectContaining({ capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 } }),
+      expect.objectContaining({
+        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, taskList: 1 }
+      }),
       expect.any(Function)
     )
     expect(renders.at(-1)).toMatchObject({

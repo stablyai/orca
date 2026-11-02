@@ -5,8 +5,11 @@ import type { StructuredAgentSessionHostSupport } from '../mobile-structured-age
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from '../use-mobile-structured-agent-session'
 import { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
+import type { MobileNativeChatShownSession } from './mobile-native-chat-controller-contract'
 import type { MobileNativeChatResolution } from './mobile-native-chat-eligibility'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+import { useMobileTranscriptTaskList } from './use-mobile-transcript-task-list'
+import { useMobileNativeChatSubagentReader } from './input/read-mobile-native-chat-subagent-page'
 
 // Run both hooks in fixed order and starve the inactive lane’s identity so flips preserve cached transcripts.
 export function useMobileNativeChatSessionLane({
@@ -40,7 +43,7 @@ export function useMobileNativeChatSessionLane({
   onActionResolved?: () => void
 }): {
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
-  session: ReturnType<typeof useMobileNativeChatSession>
+  session: MobileNativeChatShownSession
   sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
 } {
   const appendComposerText = useCallback(
@@ -56,6 +59,12 @@ export function useMobileNativeChatSessionLane({
     sessionId: structured ? sessionId : null,
     commandsOnRequest: hostSupport?.commandsOnRequest === true,
     enabled: enabled && connState === 'connected'
+  })
+  const readSubagentPage = useMobileNativeChatSubagentReader({
+    client: structured ? null : client,
+    agent: structured ? null : agent,
+    sessionId: structured ? null : sessionId,
+    transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)
   })
   const bridgeSession = useMobileNativeChatSession({
     client,
@@ -82,9 +91,26 @@ export function useMobileNativeChatSessionLane({
     onQueuedEditNotice,
     ...(onActionResolved ? { onActionResolved } : {})
   })
+  // Claude's journal import stops at 1024 ops, so older tasks live only in the transcript file.
+  const journal = structuredSession.session
+  const fileTaskList = useMobileTranscriptTaskList({
+    client:
+      structured &&
+      agent === 'claude' &&
+      (journal.status === 'ready' || journal.status === 'error') &&
+      !journal.taskList
+        ? client
+        : null,
+    agent,
+    sessionId,
+    transcriptPath: resolution?.transcriptPath ?? null
+  })
+  const baseSession = structured ? structuredSession.session : bridgeSession
+  const shownSession =
+    baseSession.taskList || !fileTaskList ? baseSession : { ...baseSession, taskList: fileTaskList }
   return {
     structuredSession,
-    session: structured ? structuredSession.session : bridgeSession,
+    session: { ...shownSession, readSubagentPage },
     sessionCommands
   }
 }

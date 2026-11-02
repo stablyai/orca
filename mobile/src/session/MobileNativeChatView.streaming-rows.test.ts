@@ -21,11 +21,25 @@ import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { MobileNativeChatView } from './native-chat/MobileNativeChatView'
 import { MobileNativeChatRowContent } from './native-chat/transcript/MobileNativeChatRowItemSource'
 
+vi.mock('react-native-reanimated', () => ({
+  default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
+  Easing: { bezier: () => (t: number) => t },
+  ReduceMotion: { Never: 'never' },
+  useReducedMotion: () => false,
+  useSharedValue: (value: unknown) => ({ value }),
+  useAnimatedStyle: () => ({}),
+  useAnimatedRef: () => ({ current: null }),
+  useAnimatedScrollHandler: () => () => {},
+  withTiming: (to: unknown) => to,
+  withSpring: (to: unknown) => to,
+  runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+  cancelAnimation: () => {}
+}))
 vi.mock('react-native', async () => ({
   ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   ActivityIndicator: 'ActivityIndicator',
   ScrollView: 'ScrollView',
-  Platform: { OS: 'web' },
+  Platform: { OS: 'web', select: (specifics: { ios?: unknown }) => specifics.ios },
   Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',

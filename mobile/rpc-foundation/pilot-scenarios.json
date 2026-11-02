@@ -20845,7 +20845,8 @@
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
               "transcriptPending": 1,
-              "transcriptSourceOrder": 1
+              "transcriptSourceOrder": 1,
+              "taskList": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -20960,7 +20961,8 @@
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
               "transcriptPending": 1,
-              "transcriptSourceOrder": 1
+              "transcriptSourceOrder": 1,
+              "taskList": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },

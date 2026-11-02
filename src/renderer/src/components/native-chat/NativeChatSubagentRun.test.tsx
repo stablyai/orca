@@ -3,12 +3,13 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock
 } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
+import { NativeChatOpenSubagentProvider } from './native-chat-transcript-frame'
 import { NativeChatToolRun } from './NativeChatToolRun'
 
 afterEach(cleanup)
@@ -140,6 +141,22 @@ describe('NativeChatSubagentRun', () => {
     const row = screen.getByRole('button')
     expect(row).toHaveTextContent('stopped')
     expect(row.textContent).not.toContain('·')
+  })
+
+  it('opens a completed roster child from its row', () => {
+    const onOpen = vi.fn()
+    const threadId = '01a19905-3734-7941-9a1b-e256ccbdb54d'
+    render(
+      <NativeChatOpenSubagentProvider onOpen={onOpen}>
+        <NativeChatSubagentRun
+          block={group([{ id: threadId, label: 'sample_greeting', state: 'completed' }])}
+        />
+      </NativeChatOpenSubagentProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByRole('button', { name: 'Open sample_greeting' }))
+    expect(onOpen).toHaveBeenCalledWith(threadId)
   })
 })
 

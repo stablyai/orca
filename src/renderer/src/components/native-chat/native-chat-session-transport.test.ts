@@ -190,7 +190,7 @@ describe('runtime subscribe', () => {
     expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
       expect.objectContaining({
         params: expect.objectContaining({
-          capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
+          capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, taskList: 1 }
         })
       }),
       expect.any(Object)

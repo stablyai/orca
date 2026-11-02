@@ -10,6 +10,7 @@ import {
   isUndrawnProviderFrameMessage
 } from '../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { projectNativeChatTaskListFrames } from '../../../../src/shared/native-chat/input/native-chat-task-list-frames'
+import { linkUnrecordedSubagentSpawns } from '../../../../src/shared/native-chat/input/native-chat-unlinked-subagent-spawn'
 import { foldSubagentItems } from '../../../../src/shared/native-chat/transcript/native-chat-subagent-items'
 import { prepareNativeChatMessages } from '../../../../src/shared/native-chat/transcript/native-chat-message-preparation'
 import {
@@ -93,26 +94,43 @@ export type MobileNativeChatPendingItem = {
   sentAt?: number
 }
 
-export function foldMobileNativeChatMessages(
+function foldPreparedMobileNativeChatMessages(
   messages: readonly NativeChatMessage[],
   agent: AgentType
 ): NativeChatMessage[] {
-  // Filter child/noise rows before folding so they cannot split tool runs; project plan updates afterward so they cannot consume another call’s result.
-  return projectNativeChatTaskListFrames(
-    stripNoiseMessages(
-      foldToolMessages(
-        foldSubagentItems(
-          prepareNativeChatMessages(
-            messages.filter(
-              (message) =>
-                isRootAgentJournalItem(message) && !isUndrawnProviderFrameMessage(message)
-            ),
-            agent
+  // Drop undrawn frames before folding so they cannot split a tool run. Project plan updates afterward so they cannot consume another call's result.
+  return linkUnrecordedSubagentSpawns(
+    projectNativeChatTaskListFrames(
+      stripNoiseMessages(
+        foldToolMessages(
+          foldSubagentItems(
+            prepareNativeChatMessages(
+              messages.filter((message) => !isUndrawnProviderFrameMessage(message)),
+              agent
+            )
           )
         )
       )
     )
   ).filter((message) => !isWordlessProviderFrameMessage(message))
+}
+
+export function foldMobileNativeChatMessages(
+  messages: readonly NativeChatMessage[],
+  agent: AgentType
+): NativeChatMessage[] {
+  return foldPreparedMobileNativeChatMessages(
+    messages.filter((message) => isRootAgentJournalItem(message)),
+    agent
+  )
+}
+
+/** One agent's rows, including a subagent's. The root fold drops those so they do not mix into the conversation. */
+export function foldMobileNativeChatAgentMessages(
+  messages: readonly NativeChatMessage[],
+  agent: AgentType
+): NativeChatMessage[] {
+  return foldPreparedMobileNativeChatMessages(messages, agent)
 }
 
 export function buildMobileNativeChatTransientData({

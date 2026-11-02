@@ -140,6 +140,10 @@
             "isError": false,
             "callId": "call-1",
             "fullOutputItemId": "full-1",
+            "subagent": {
+              "id": "agent-1",
+              "state": "completed"
+            },
             "editPatch": {
               "filePath": "a.ts",
               "hunks": [
@@ -986,6 +990,10 @@
               "isError": false,
               "callId": "call-1",
               "fullOutputItemId": "full-1",
+              "subagent": {
+                "id": "agent-1",
+                "state": "completed"
+              },
               "editPatch": {
                 "filePath": "a.ts",
                 "hunks": [

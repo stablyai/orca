@@ -51,6 +51,7 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 }))
 vi.mock('../../../hooks/use-now', () => ({ useNow: () => 70_000 }))
 
+import { MobileNativeChatOpenSubagentProvider } from '../input/mobile-native-chat-open-subagent'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 
 function roster(
@@ -182,6 +183,28 @@ describe('mobile transcript roster row', () => {
     expect(open.root.findAll((node) => byTestId(node, 'subagent-group-entry')).map(textOf)).toEqual(
       ['reviewcompleted · 9k', 'testsfailed · 3k']
     )
+  })
+
+  it('opens a roster child from its row when the transcript can show it', () => {
+    const onOpen = vi.fn<(agentId: string | null) => void>()
+    act(() => {
+      renderer = create(
+        <MobileNativeChatOpenSubagentProvider onOpen={onOpen}>
+          <MobileNativeChatMessage
+            message={roster(
+              [{ id: 'child-1', label: 'sample_greeting', state: 'completed' }],
+              'Ran 1 subagent'
+            )}
+            subagentGroupsOpen={new Set(['group-1'])}
+          />
+        </MobileNativeChatOpenSubagentProvider>
+      )
+    })
+    const entry = renderer!.root.findAll((node) => byTestId(node, 'native-chat-open-subagent'))
+    expect(entry).toHaveLength(1)
+    expect(entry[0]?.props.accessibilityLabel).toBe('Open sample_greeting')
+    act(() => entry[0]?.props.onPress())
+    expect(onOpen).toHaveBeenCalledWith('child-1')
   })
 })
 

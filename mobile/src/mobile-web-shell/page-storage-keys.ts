@@ -45,11 +45,31 @@ export const PAGE_STORAGE_EXACT_KEYS = [
  */
 export const NEGOTIATED_PAGE_STORAGE_KEYS = ['orca:terminalSplitLayout'] as const
 
+/** Prefixes added after pages stopped sharing one allowlist. Declared as the prefix, not each id. */
+const DISMISSED_SUBAGENTS_STORAGE_PREFIX = 'orca:dismissedSubagents:'
+
+export const NEGOTIATED_PAGE_STORAGE_PREFIXES = [DISMISSED_SUBAGENTS_STORAGE_PREFIX] as const
+
+function negotiatedPageStorageKey(key: string): boolean {
+  return (
+    NEGOTIATED_PAGE_STORAGE_KEYS.some((negotiated) => negotiated === key) ||
+    NEGOTIATED_PAGE_STORAGE_PREFIXES.some(
+      (prefix) => key.startsWith(prefix) && key.length > prefix.length
+    )
+  )
+}
+
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */
 export function pageReadsStorageKey(key: string, declared: readonly string[] | null): boolean {
-  return (
-    !NEGOTIATED_PAGE_STORAGE_KEYS.some((negotiated) => negotiated === key) ||
-    (declared?.includes(key) ?? false)
+  if (!negotiatedPageStorageKey(key)) {
+    return true
+  }
+  if (declared?.includes(key)) {
+    return true
+  }
+  return NEGOTIATED_PAGE_STORAGE_PREFIXES.some(
+    (prefix) =>
+      key.startsWith(prefix) && key.length > prefix.length && (declared?.includes(prefix) ?? false)
   )
 }
 
@@ -70,7 +90,8 @@ export const PAGE_STORAGE_KEY_PREFIXES = [
   'orca:pins:',
   'orca:nativeChatTabs:',
   'orca:terminalLiveInputDisabled:',
-  'orca:terminalDrafts:'
+  'orca:terminalDrafts:',
+  DISMISSED_SUBAGENTS_STORAGE_PREFIX
 ] as const
 
 export const PAGE_STORAGE_MAX_VALUE_CHARS = 16 * 1024
@@ -111,7 +132,8 @@ export function pageRouteWorkspace(
 const WORKSPACE_KEY_PREFIXES = [
   'orca:nativeChatTabs:',
   'orca:terminalLiveInputDisabled:',
-  'orca:terminalDrafts:'
+  'orca:terminalDrafts:',
+  DISMISSED_SUBAGENTS_STORAGE_PREFIX
 ] as const
 
 function workspaceScopedKey(prefix: string, hostId: string, worktreeId: string): string {

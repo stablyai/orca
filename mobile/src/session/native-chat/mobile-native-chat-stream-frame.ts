@@ -17,6 +17,10 @@ export type MobileNativeChatStreamFrame = {
   message?: string
   // Provider turn boundary; hosts before #9121 omit it.
   lifecycle?: NativeChatTurnLifecycle
+  // Whole-file task list. Older clients ignore this frame type.
+  taskList?: unknown
+  // Whole-file subagent roster carried on the same frame.
+  subagents?: unknown
 }
 
 export type AppliedMobileNativeChatFrame =

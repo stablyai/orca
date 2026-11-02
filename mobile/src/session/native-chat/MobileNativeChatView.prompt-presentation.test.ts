@@ -14,7 +14,7 @@ vi.mock('react-native', async () => {
     ...(await import('../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
-    Platform: { OS: 'ios' },
+    Platform: { OS: 'ios', select: (specifics: { ios?: unknown }) => specifics.ios },
     Keyboard: { dismiss: vi.fn() },
     FlatList: React.forwardRef((props, ref) => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])
