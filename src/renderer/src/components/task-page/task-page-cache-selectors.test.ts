@@ -16,7 +16,8 @@ import {
   reconcileTaskPagePagesWithWorkItemsCache,
   selectTaskPageWorkItemsCacheEntries,
   shouldResetTaskPagePaginationAfterLandingRefresh,
-  shouldReplaceTaskPageItemsAfterRefresh
+  shouldReplaceTaskPageItemsAfterRefresh,
+  type TaskPageRepoCacheRowInput
 } from './task-page-cache-selectors'
 import {
   createTaskPageDialogWorkItemReader,
@@ -32,7 +33,7 @@ function entry<T>(data: T): CacheEntry<T> {
 function repoRow(fields: Pick<Repo, 'id' | 'path'> & Partial<Repo>): Repo {
   return { displayName: fields.path, badgeColor: '#000', addedAt: 1, ...fields }
 }
-const rowKey = (repo: Repo, scope?: string, owner = repo.id) =>
+const rowKey = (repo: Repo, scope?: string | null, owner = repo.id) =>
   workItemsCacheKey(owner, 20, '', scope, githubTaskBinding(repo))
 
 function workItem(id: string, repoId: string): GitHubWorkItem {
@@ -189,7 +190,7 @@ describe('task page cache selectors', () => {
       fetchedAt: 1,
       sources: { ...sources, ineligible: true as const }
     }
-    const pairedScopes = [
+    const pairedScopes: { repoFields: Partial<TaskPageRepoCacheRowInput>; scope: string }[] = [
       { repoFields: { executionHostId: 'runtime:paired' }, scope: 'runtime:paired' },
       { repoFields: { connectionId: 'devbox' }, scope: 'ssh:devbox' },
       {

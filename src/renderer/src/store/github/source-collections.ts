@@ -142,7 +142,7 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
   }
   accept(
     attempt: Attempt,
-    envelope: Pick<ListWorkItemsResult<unknown>, 'sources' | 'issueSourceFellBack'>,
+    envelope: ListWorkItemsResult<unknown>,
     query: string,
     firstPage: boolean
   ) {
