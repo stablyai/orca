@@ -291,6 +291,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getLocalPtyProviderMock.mockReturnValue({})
 
     const runtimeStub = {
+      registerSetupRun: vi.fn(),
+      getSetupRun: vi.fn(),
       resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
       hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
       getOrStartRemoteTrackingBaseRefresh: vi.fn().mockResolvedValue({ ok: true }),
