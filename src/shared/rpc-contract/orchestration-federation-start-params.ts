@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { OptionalWorkerLaunchPreference } from './orchestration-worker-start-params'
+import { WorkerRoleName } from '../orchestration-worker-roles'
 
 export const FederationAttachStartParams = z.object({
   /** Omitted by v1.4.198 coordinators; the worker host then mints a stub home Run. */
@@ -22,8 +23,21 @@ export const FederationAttachStartParams = z.object({
   setupSource: z.enum(['explicit_request', 'orchestration_default']).optional(),
   terminal: OptionalString,
   agent: OptionalString,
+  role: WorkerRoleName.optional(),
   model: OptionalWorkerLaunchPreference,
   effort: OptionalWorkerLaunchPreference,
+  fastMode: z.boolean().optional(),
   timeoutMs: OptionalFiniteNumber,
   devMode: z.boolean().optional()
+})
+
+export const FederationWorkerLaunchParams = FederationAttachStartParams.omit({
+  runId: true,
+  dispatchId: true,
+  taskId: true,
+  taskSpec: true,
+  depth: true,
+  protocolVersion: true,
+  timeoutMs: true,
+  devMode: true
 })
