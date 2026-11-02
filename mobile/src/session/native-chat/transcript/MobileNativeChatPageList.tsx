@@ -238,12 +238,7 @@ export function MobileNativeChatPageList({
       }
     }
   })
-  useEffect(
-    () => () => {
-      clearTimeout(settleTimer.current)
-    },
-    []
-  )
+  useEffect(() => () => clearTimeout(settleTimer.current), [])
 
   const drawAndFetch = useCallback(
     (s: Scroller) => {
@@ -386,7 +381,10 @@ export function MobileNativeChatPageList({
       if (!s) {
         return
       }
-      const byReader = own.current === null || Math.abs(s.scrollTop - own.current) >= 1
+      // The jump's own frames and the momentum stop are not the reader taking over.
+      const byReader =
+        !align.aligning.current &&
+        (own.current === null || Math.abs(s.scrollTop - own.current) >= 1)
       own.current = null
       if (byReader) {
         readerScrolledAt.current = Date.now()
