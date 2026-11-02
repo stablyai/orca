@@ -1,7 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import {
+  useCustomEditorViewStore,
+  type ActivePluginCustomEditor
+} from '@/store/plugin-custom-editors'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { fillPluginPanelShell } from '../right-sidebar/plugin-panel-design-token-css'
@@ -15,6 +18,8 @@ import { usePluginFrameHost } from '../right-sidebar/use-plugin-frame-host'
 import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { registerEditorFrameFlush } from './editor-pending-flush'
+import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
+import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
 import {
   createCustomEditorHost,
   type CustomEditorBinaryDocument,
@@ -89,20 +94,11 @@ export default function PluginCustomEditorFrame({
   const isLarge =
     (binaryDocument?.bytes.byteLength ?? content.length) > CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES
 
-  const { entry, markUnresponsive, remountGone } = usePluginFrameEntry(
-    'editor',
-    editor.pluginKey,
-    editor.id
-  )
-
-  const frameKey = entry.status === 'ready' ? `${editor.key}:${entry.revision}` : null
-  const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
-  const entryHtml = entry.status === 'ready' && !guest ? entry.html : null
-  // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
-  const frameDocument = useMemo(
-    () => (entryHtml === null ? null : fillPluginPanelShell(entryHtml)),
-    [entryHtml]
-  )
+  const {
+    entry: liveEntry,
+    markUnresponsive,
+    remountGone
+  } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
 
   const host = useMemo(() => {
     const created = createCustomEditorHost({
@@ -145,6 +141,16 @@ export default function PluginCustomEditorFrame({
     return created
   }, [isBinary])
 
+  const entry = useCustomEditorReloadFlush(liveEntry, host.flush)
+  const frameKey = entry.status === 'ready' ? `${editor.key}:${entry.revision}` : null
+  const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
+  const entryHtml = entry.status === 'ready' && !guest ? entry.html : null
+  // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
+  const frameDocument = useMemo(
+    () => (entryHtml === null ? null : fillPluginPanelShell(entryHtml)),
+    [entryHtml]
+  )
+
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'editor',
     frameRef,
@@ -152,7 +158,11 @@ export default function PluginCustomEditorFrame({
     sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
     editor: host.channel,
     onUnresponsive: markUnresponsive,
-    onGuestGone: remountGone
+    onGuestGone: () => {
+      // A dead guest cannot answer the reload's flush.
+      host.reset()
+      remountGone()
+    }
   })
 
   useEffect(() => {
@@ -193,6 +203,19 @@ export default function PluginCustomEditorFrame({
           { value0: editor.title }
         )}
       </FrameMessage>
+    )
+  }
+  // An isolated-only editor never runs in the srcdoc fallback main hands back without a guest.
+  if (entry.status === 'ready' && !guest && editor.frame === 'isolated') {
+    return (
+      <PluginEditorNeedsDesktopNotice
+        title={editor.title}
+        onOpenSource={
+          fileId === undefined
+            ? undefined
+            : () => useCustomEditorViewStore.getState().setChoice(fileId, 'source')
+        }
+      />
     )
   }
   if (entry.status === 'error') {

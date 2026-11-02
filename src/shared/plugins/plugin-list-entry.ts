@@ -31,6 +31,8 @@ export type PluginHostCustomEditor = {
   priority: 'default' | 'option'
   /** Absent on hosts that predate byte editors: text. */
   contentKind?: 'text' | 'bytes'
+  /** Absent on hosts that predate the field: `any`. */
+  frame?: 'any' | 'isolated'
   /** orca-plugin-image URL of the editor's tab icon; absent when it declares none. */
   icon?: string
 }

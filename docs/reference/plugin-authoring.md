@@ -302,6 +302,12 @@ the buffer, dirty state, saving, the external-change banner, read-only tabs and 
 paired host) files; the frame only gets the document, never a path. Editor and panel plugins are
 trusted code, and an editor can read every file it opens, so install ones you trust.
 
+Set `"frame": "isolated"` (needs `engines.orca` `>=1.4.248`) for an editor that needs the
+desktop app's isolated frame, such as one that loads a large library. Browser clients, and the
+desktop app with isolated frames switched off, then never run it in the fallback frame: the file
+opens in Source with "This editor needs the Orca desktop app". The default, `any`, runs wherever
+the client can.
+
 An editor's `window.orca` adds `document`:
 
 ```js

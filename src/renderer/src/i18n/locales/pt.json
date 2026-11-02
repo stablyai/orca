@@ -316,6 +316,7 @@
     "scanIssues": {
       "issuesOmitted": "Outros problemas da verificação foram omitidos.",
       "sessionMetadataUnreadable": "Não foi possível ler os metadados das sessões nesta verificação.",
+      "transcriptTooLarge": "Uma conversa de {{label}} é grande demais para carregar no Histórico de sessões. Tente retomá-la diretamente no {{label}}.",
       "openCodeScannerUnavailable": "O histórico do OpenCode foi ignorado porque seu verificador em segundo plano não pôde ser iniciado; o aplicativo continua respondendo.",
       "openCodeScanIncomplete": "A verificação do histórico do OpenCode não foi concluída: {{detail}}",
       "openCodeWslReaderPreparing": "Preparando o leitor SQLite do WSL. Atualize o Vault após a conclusão da configuração.",
@@ -2677,7 +2678,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "A sessão estruturada do agente ainda não está disponível. Tente novamente em um momento.",
         "gone": "Este chat não está mais neste host, então não pode ser reaberto aqui.",
-        "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado."
+        "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado.",
+        "worktreeDeleted": "A worktree foi excluída.",
+        "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Receitas de raiz provisionada não suportam sparse checkout."

@@ -155,6 +155,7 @@ An editor for the listed files, shown in the editor tab beside Source. It must l
 | `entry` | string | yes | 1.4.245 | HTML file rendered inside an editor frame, like a panel, or a `.ts`/`.tsx` module that Orca transpiles and loads in a generated page (needs `engines.orca` `>=1.4.246`). It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"editor/index.html"` |
 | `priority` | `"default"` \| `"option"` | no | 1.4.245 | `default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`. Example: `"default"` |
 | `contentKind` | `"text"` \| `"bytes"` | no | 1.4.245 | `text` (the default) sends the file as text and accepts full-text edits. `bytes` sends the file's raw bytes, for binary formats such as spreadsheets, and accepts full-byte edits. Example: `"bytes"` |
+| `frame` | `"any"` \| `"isolated"` | no | 1.4.248 | `any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app. Example: `"isolated"` |
 
 ## NewFileContribution
 

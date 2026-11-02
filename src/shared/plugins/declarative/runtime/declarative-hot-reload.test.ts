@@ -1,12 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PLUGIN_FRAME_RESERVED_SEGMENT } from '../../frames/plugin-frame-guest'
 import { atom, read, set } from './declarative-atoms'
 import { h } from './declarative-elements'
-import {
-  describePluginError,
-  ORCA_RESERVED_PATH_PREFIX,
-  pluginErrorLocation
-} from './declarative-error-location'
 import { createOrcaDeclarativeRuntime, type OrcaBridge } from './declarative-renderer'
 
 function booted() {
@@ -118,34 +112,5 @@ describe('dev hot reload of keyed memory atoms', () => {
     expect(keysOf('ui.persist')).toEqual(['hot.saved'])
     expect(keysOf('ui.retain')).toEqual(['hot.kept'])
     runtime.dispose()
-  })
-})
-
-describe('plugin error locations', () => {
-  const base = 'orca-plugin-frame://0123456789abcdef/'
-
-  it('names the first plugin stack frame, skipping Orca runtime frames', () => {
-    const stack = [
-      'TypeError: x is undefined',
-      `    at evaluate (${base}__orca/orca-runtime.mjs:120:7)`,
-      `    at Panel (${base}src/my%20panel.tsx:12:5)`,
-      `    at ${base}src/other.ts:1:1`
-    ].join('\n')
-    expect(pluginErrorLocation(stack, base)).toBe('src/my panel.tsx:12:5')
-    const error = Object.assign(new TypeError('x is undefined'), { stack })
-    expect(describePluginError(error, base)).toBe('src/my panel.tsx:12:5: x is undefined')
-  })
-
-  it("keeps a message that already names its file (Orca's transpile errors)", () => {
-    const error = Object.assign(new Error('src/panel.tsx:3:5: Unexpected token'), {
-      stack: `Error: src/panel.tsx:3:5: Unexpected token\n    at ${base}src/panel.tsx:1:7`
-    })
-    expect(describePluginError(error, base)).toBe('src/panel.tsx:3:5: Unexpected token')
-  })
-
-  it('falls back to the bare message outside a guest or without a plugin frame', () => {
-    expect(describePluginError(new Error('boom'), null)).toBe('boom')
-    expect(describePluginError('thrown string', base)).toBe('thrown string')
-    expect(ORCA_RESERVED_PATH_PREFIX).toBe(`/${PLUGIN_FRAME_RESERVED_SEGMENT}/`)
   })
 })

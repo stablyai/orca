@@ -1312,7 +1312,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "구조화된 에이전트 세션은 아직 사용할 수 없습니다. 잠시 후 다시 시도하세요.",
         "gone": "이 채팅은 더 이상 이 호스트에 없으므로 여기에서 다시 열 수 없습니다.",
-        "hostCannotOpen": "Orca가 업데이트될 때까지 이 채팅을 다시 열 수 없습니다."
+        "hostCannotOpen": "Orca가 업데이트될 때까지 이 채팅을 다시 열 수 없습니다.",
+        "worktreeDeleted": "워크트리가 삭제되었습니다.",
+        "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "프로비저닝된 루트 레시피는 스파스 체크아웃을 지원하지 않습니다."
@@ -20828,6 +20830,7 @@
     "scanIssues": {
       "issuesOmitted": "추가 스캔 문제는 생략되었습니다.",
       "sessionMetadataUnreadable": "이번 스캔에서 세션 메타데이터를 읽지 못했습니다.",
+      "transcriptTooLarge": "{{label}} 대화가 너무 커서 세션 기록에 불러올 수 없습니다. {{label}}에서 직접 이어서 진행해 보세요.",
       "openCodeScannerUnavailable": "백그라운드 스캐너를 시작할 수 없어 OpenCode 기록을 건너뛰었습니다. 앱은 계속 응답합니다.",
       "openCodeScanIncomplete": "OpenCode 기록 스캔이 완료되지 않았습니다: {{detail}}",
       "openCodeWslReaderPreparing": "WSL SQLite 리더를 준비하는 중입니다. 설정이 끝나면 Vault를 새로고침하세요.",

@@ -1764,7 +1764,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Die strukturierte Agenten-Sitzung ist noch nicht verfügbar. In Kürze erneut versuchen.",
         "gone": "Dieser Chat befindet sich nicht mehr auf diesem Host und kann hier daher nicht erneut geöffnet werden.",
-        "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden."
+        "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden.",
+        "worktreeDeleted": "Der Worktree wurde gelöscht.",
+        "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Rezepte mit bereitgestelltem Stammverzeichnis unterstützen keinen Sparse-Checkout."
@@ -21171,6 +21173,7 @@
     "scanIssues": {
       "issuesOmitted": "Weitere Probleme beim Scannen wurden ausgelassen.",
       "sessionMetadataUnreadable": "Sitzungsmetadaten konnten bei diesem Scan nicht gelesen werden.",
+      "transcriptTooLarge": "Eine Unterhaltung mit {{label}} ist zu groß, um im Sitzungsverlauf geladen zu werden. Stattdessen direkt in {{label}} fortsetzen, falls möglich.",
       "openCodeScannerUnavailable": "Der OpenCode-Verlauf wurde übersprungen, weil der Hintergrundscanner nicht starten konnte; die App reagiert weiterhin.",
       "openCodeScanIncomplete": "Der Scan des OpenCode-Verlaufs wurde nicht abgeschlossen: {{detail}}",
       "openCodeWslReaderPreparing": "Das SQLite-Leseprogramm für WSL wird vorbereitet. Nach Abschluss der Einrichtung Vault aktualisieren.",
