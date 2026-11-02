@@ -47,13 +47,36 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
   previous: AgentHookEventPayload | undefined,
   fromHook = true,
   retireBinding = false,
-  rootVerdict?: HookProcessVerdict
+  rootVerdict?: HookProcessVerdict,
+  /** The relay's pane binding for a root verdict, echoed on the owner it proves. */
+  rootBinding?: string
 ) {
   const context = readHookSessionContext(incoming, fromHook)
   if (previous && !sameAgentStatusTerminalOwner(previous, incoming)) {
     previous = undefined
   }
   const exit = incoming.agentPresence?.ended === true
+  const sender = incoming.agentPresence?.process
+  const prior = previous?.agentPresence
+  // Why: a fallback was recorded without proof; once this host proves its process is not the
+  // pane's own job it keeps the status and loses the process. A relay withdrawing its own
+  // fallback forwards the process-less association it kept, which this host mirrors.
+  const withdrawn = Boolean(
+    fromHook &&
+    prior?.fallback &&
+    !prior.ended &&
+    prior.process &&
+    (sender
+      ? isSameAgentProcess(prior.process, sender) &&
+        (rootVerdict === 'nested' || rootVerdict === 'competing' || rootVerdict === 'unattached')
+      : !exit && Boolean(incoming.connectionId) && incoming.agentPresence?.agent === prior.agent)
+  )
+  if (withdrawn && prior && previous) {
+    previous = {
+      ...previous,
+      agentPresence: { agent: prior.agent, ...(prior.session ? { session: prior.session } : {}) }
+    }
+  }
   // Why: the execution host proved this process is the pane's own agent, which outranks an
   // association that never proved a process, whatever its agent or session.
   const acquired = fromHook && rootVerdict === 'root' && !exit
@@ -81,21 +104,38 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
   }
   const previousBinding =
     previous && owner !== recorded ? { ...previous, agentPresence: owner } : previous
-  const refused = fromHook && (rootVerdict === 'nested' || rootVerdict === 'competing')
-  // An unreadable acquisition attempt proves nothing about the sender's process.
-  const event =
-    fromHook && rootVerdict === 'unknown' && !exit
-      ? { ...context.event, agentPresence: undefined }
-      : context.event
-  // Why: the pane's proven root exiting ends the same agent's unproven record it could never
-  // prove; only its own exit retires it, once, without first naming it a live owner.
+  const refused =
+    fromHook && !withdrawn && (rootVerdict === 'nested' || rootVerdict === 'competing')
+  const owned =
+    recorded &&
+    !recorded.ended &&
+    (!previous?.providerSessionOnly || hasSeparateHookSessionAdmission(recorded.agent))
+  let event = context.event
+  if (acquired && event.agentPresence) {
+    const { fallback: _fallback, ...proved } = event.agentPresence
+    event = { ...event, agentPresence: rootBinding ? { ...proved, paneRoot: rootBinding } : proved }
+  } else if (
+    fromHook &&
+    !exit &&
+    (rootVerdict === 'unknown' || rootVerdict === 'unattached') &&
+    !(recorded?.process && sender && isSameAgentProcess(recorded.process, sender))
+  ) {
+    // Unproven evidence records nothing over an association; into an empty slot a generic unknown
+    // keeps main's captured process as a fallback, while an unverified tmux session stays status-only.
+    event =
+      rootVerdict === 'unknown' && !owned && event.agentPresence?.process
+        ? { ...event, agentPresence: { ...event.agentPresence, fallback: true as const } }
+        : { ...event, agentPresence: undefined }
+  }
+  // Why: the pane's proven root exiting ends the same agent's unproven or fallback record it
+  // could never prove; only its own exit retires it, once, without first naming it a live owner.
   const retiring =
     fromHook &&
     exit &&
     rootVerdict === 'root' &&
     !previous?.providerSessionOnly &&
     !recorded?.ended &&
-    !recorded?.process &&
+    (!recorded?.process || recorded.fallback) &&
     recorded?.agent === incoming.agentPresence?.agent
       ? recorded
       : undefined
@@ -108,6 +148,7 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
           ...incoming.agentPresence,
           agent: retiring.agent,
           ...(session ? { session } : {}),
+          ...(rootBinding ? { paneRoot: rootBinding } : {}),
           ended: true as const
         }
       }
@@ -177,10 +218,12 @@ function transitionHookPresence(
         : undefined
     }
     if (sender && owner.process && isSameAgentProcess(sender, owner.process)) {
+      // The owner's own hook keeps how it was recorded: a fallback is never proved by itself.
       const session = owner.session
-      return session
-        ? { ...incoming, agentPresence: { ...owner, ...incoming.agentPresence, session } }
-        : incoming
+      return {
+        ...incoming,
+        agentPresence: { ...owner, ...incoming.agentPresence, ...(session ? { session } : {}) }
+      }
     }
     // Why: nested agents inherit ORCA_PANE_KEY; their hooks update status, never ownership.
     return incoming.agentPresence === owner ? incoming : { ...incoming, agentPresence: owner }

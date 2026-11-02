@@ -1,6 +1,11 @@
 import { previewHookPresence } from '../shared/agent-hook-presence-transition'
 import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
-import { readHookProcessVerdict } from '../shared/agent-hook-owner-presence'
+import {
+  readHookProcessEvidence,
+  restateHookRoot,
+  type HookRootAcquisition
+} from '../shared/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../shared/hook-process-root-evidence'
 import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
@@ -33,6 +38,26 @@ export type RelayHookAdmissionOptions = {
   onAccepted?: (event: AgentHookEventPayload) => void
 }
 
+/** The relay's acquisition: a late answer restates the pane's cached row, which forwards like any
+ *  change, so the desktop heals too. */
+export function relayHookRootAcquisition(
+  read: HookRootEvidenceReader | undefined,
+  state: HookListenerState,
+  apply: (event: AgentHookEventPayload) => unknown
+): HookRootAcquisition | undefined {
+  return (
+    read && {
+      read,
+      reconcile: (completion) => {
+        const event = restateHookRoot(state, completion, 'AgentProcessExit')
+        if (event) {
+          apply(event)
+        }
+      }
+    }
+  )
+}
+
 export function applyRelayHookEvent(
   host: RelayHookAdmissionHost,
   incoming: AgentHookEventPayload,
@@ -45,10 +70,16 @@ export function applyRelayHookEvent(
     return undefined
   }
   const previous = host.state.lastStatusByPaneKey.get(incoming.paneKey)
+  const evidence = readHookProcessEvidence(host.state, previous, {
+    paneKey: incoming.paneKey,
+    process: incoming.agentPresence?.process
+  })
   if (
     previous &&
     !previous.providerSessionOnly &&
     sameAgentStatusTerminalOwner(previous, incoming) &&
+    // A proved root replaces a fallback owner instead of yielding to it.
+    evidence?.verdict !== 'root' &&
     hasOtherAgentProcessOwner(previous.agentPresence, {
       agent: incoming.payload.agentType ?? 'unknown',
       process: incoming.agentPresence?.process
@@ -65,10 +96,8 @@ export function applyRelayHookEvent(
     previous,
     true,
     false,
-    readHookProcessVerdict(host.state, previous, {
-      paneKey: incoming.paneKey,
-      process: incoming.agentPresence?.process
-    })
+    evidence?.verdict,
+    evidence?.binding
   )
   const transitioned = preview.transitioned && {
     ...preview.transitioned,

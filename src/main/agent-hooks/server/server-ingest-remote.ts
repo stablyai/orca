@@ -255,6 +255,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     const event: IncomingAgentHookEvent = {
       paneKey,
       agentPresence: readAgentProcessPresence(envelope.agentPresence),
+      ...this.relaySessions.rootProof(trimmedConnectionId, physicalPaneKey, envelope.agentPresence),
       source: effectiveSource,
       ...(restartedAuthority?.authorityRestartId
         ? { authorityRestartId: restartedAuthority.authorityRestartId }

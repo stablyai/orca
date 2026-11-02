@@ -1,6 +1,6 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
-import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
+import { checkHookOwnerPresence, restateHookRoot } from '../../../shared/agent-hook-owner-presence'
 import type { HookRootEvidenceReader } from '../../../shared/hook-process-root-evidence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
@@ -20,21 +20,50 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     this.readHookRootEvidence = reader
   }
 
-  /** A hook's own preflight probing the pane's recorded owner on behalf of a live sender. */
-  protected challengeHookOwner(paneKey: string): Promise<unknown> {
-    return this.checkAgentPresence(paneKey)
-  }
+  /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
+   *  owner's exit neither answers for the pane nor is forgotten. */
+  protected readonly undecidedOwnerChallenges = new Map<string, number>()
 
   /** HTTP and spool hooks share one ownership preflight before provider folds. */
   protected checkHookOwner(source: AgentHookSource, body: unknown): Promise<unknown> | undefined {
-    return checkHookOwnerPresence(
+    const challenges = this.undecidedOwnerChallenges
+    let challenged: string | undefined
+    const read = this.readHookRootEvidence
+    const pending = checkHookOwnerPresence(
       this.state,
       source,
       body,
       this.env,
-      (paneKey) => this.challengeHookOwner(paneKey),
-      this.readHookRootEvidence
+      (paneKey) => {
+        challenged = this.resolvePaneKeyAlias(paneKey)
+        challenges.set(challenged, (challenges.get(challenged) ?? 0) + 1)
+        return this.checkAgentPresence(paneKey)
+      },
+      read && {
+        read,
+        // A late answer re-applies the pane's current row with the authority it settles.
+        reconcile: (completion) => {
+          const event = this.statusHooksEnabled
+            ? restateHookRoot(this.state, completion)
+            : undefined
+          if (event) {
+            this.applyNormalizedStatus(event)
+          }
+        }
+      }
     )
+    // The caller admits or refuses the hook as soon as this settles, with no await in between.
+    return pending?.finally(() => {
+      if (!challenged) {
+        return
+      }
+      const remaining = (challenges.get(challenged) ?? 1) - 1
+      if (remaining > 0) {
+        challenges.set(challenged, remaining)
+      } else {
+        challenges.delete(challenged)
+      }
+    })
   }
 
   protected override applyNormalizedStatus(

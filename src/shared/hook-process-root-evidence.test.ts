@@ -48,7 +48,7 @@ function io(
   } satisfies HookPaneProcessIo
 }
 
-function read(deps: HookPaneProcessIo, pid: number, tmux?: { socket: string; pane: string }) {
+function evidence(deps: HookPaneProcessIo, pid: number, tmux?: { socket: string; pane: string }) {
   return readHookRootEvidence(
     {
       paneKey: 'pane',
@@ -59,6 +59,10 @@ function read(deps: HookPaneProcessIo, pid: number, tmux?: { socket: string; pan
     },
     deps
   )
+}
+
+async function read(deps: HookPaneProcessIo, pid: number, tmux?: { socket: string; pane: string }) {
+  return (await evidence(deps, pid, tmux))?.verdict
 }
 
 describe('a hook process read against its pane root', () => {
@@ -279,17 +283,40 @@ describe('a hook process behind tmux in its pane', () => {
     ],
     ['refuses an inner pane the outer client does not show', [{ selected: '%2' }], 'competing'],
     [
-      'proves nothing when the selection changes during the read',
+      'shows status only when the selection changes during the read',
       [{ selected: '%1', innerPid: 4042 }, { selected: '%2' }],
-      'unknown'
+      'unattached'
     ],
-    ['proves nothing when no single outer client is attached', [null], 'unknown']
+    ['shows status only when no single outer client is attached', [null], 'unattached']
   ])('%s', async (_name, bridges, verdict) => {
     expect(await read(io(rows, { bridges }), 4043, tmux)).toBe(verdict)
   })
 
-  it('proves nothing without the hook’s tmux hint', async () => {
-    expect(await read(io(rows), 4043)).toBe('unknown')
+  // A session detached from the pane, which now shows its shell: main showed its status.
+  const detached = table({ ttys004: 101, ttys011: 4043 }, [
+    ROOT,
+    SHELL,
+    [4041, 1, 4041, 'tmux', 'Ss', '??'],
+    [4042, 4041, 4042, '-zsh', 'Ss', 'ttys011'],
+    [4043, 4042, 4043, 'claude', 'S+', 'ttys011']
+  ])
+
+  it.each<[string, ProcessTableRow[], { socket: string; pane: string } | undefined]>([
+    ['without the hook’s tmux hint (an older hook script)', rows, undefined],
+    ['detached from a pane that shows its shell', detached, tmux],
+    ['detached, from an older hook script', detached, undefined]
+  ])('shows status without a process %s', async (_name, procs, hint) => {
+    expect(await read(io(procs), 4043, hint)).toBe('unattached')
+  })
+
+  it('refuses a hint from an editor terminal process that runs under no tmux server', async () => {
+    const foreign = table({ ttys004: 101, ttys009: 5001 }, [
+      ROOT,
+      SHELL,
+      [5000, 1, 5000, '/Applications/Code.app/Contents/MacOS/Code Helper', 'S', '??'],
+      [5001, 5000, 5001, 'claude', 'S+', 'ttys009']
+    ])
+    expect(await read(io(foreign), 5001, tmux)).toBe('competing')
   })
 })
 
@@ -298,6 +325,11 @@ describe('the pane root binding', () => {
     const deps = { ...io([]), resolveRoot: vi.fn(async () => 'legacy' as const) }
     expect(await read(deps, 4001)).toBeUndefined()
     expect(deps.probe).not.toHaveBeenCalled()
+  })
+
+  it('names the binding a root was read against', async () => {
+    const rows = table({ ttys004: 4001 }, [ROOT, SHELL, CLAUDE])
+    expect(await evidence(io(rows), 4001)).toEqual({ verdict: 'root', binding: 'inc-1' })
   })
 
   it('proves nothing for a missing binding or a sender that is not the hook’s process', async () => {

@@ -1,4 +1,7 @@
-import type { RelayHookAdmissionOptions } from './agent-hook-event-admission'
+import {
+  relayHookRootAcquisition,
+  type RelayHookAdmissionOptions
+} from './agent-hook-event-admission'
 import { admitRelayOpenCodeTui } from './agent-hook-request'
 import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
 import type { HookRootEvidenceReader } from '../shared/hook-process-root-evidence'
@@ -39,6 +42,7 @@ export function ingestRelayHookSpoolRecord(
     return
   }
   const body = buildSpoolHookBody(record)
+  const source = record.source
   const apply = () => {
     if (host.isCurrent && !host.isCurrent()) {
       throw new Error('Relay hook spool replay interrupted')
@@ -67,7 +71,11 @@ export function ingestRelayHookSpoolRecord(
         body,
         env,
         host.checkAgentPresence,
-        host.readHookRootEvidence
+        relayHookRootAcquisition(host.readHookRootEvidence, state, (event) =>
+          host.apply(event, source, hookBodyEnv(body), hookBodyVersion(body), {
+            checkPresence: false
+          })
+        )
       )
     : undefined
   return pending ? pending.then(apply) : apply()

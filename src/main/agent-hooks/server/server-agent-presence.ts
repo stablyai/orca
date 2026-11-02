@@ -26,9 +26,14 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
   >()
   private readonly claudeContinuations = new ClaudeSessionContinuationTracker()
 
-  /** The relay on this link asked for a pane root, so it proves roots before naming owners. */
-  noteRelayProvesPaneRoots(connectionId: string): void {
-    this.relaySessions.noteProvesPaneRoots(connectionId)
+  /** Issue pane-root bindings for a relay's request on the link generation current when it
+   *  asked; a link restart during the read issues nothing. */
+  relayPaneRootIssuer(
+    connectionId: string
+  ): (paneKey: string, incarnation: string, isCurrent: () => boolean) => string | undefined {
+    const generation = this.relaySessions.generation(connectionId)
+    return (paneKey, incarnation, isCurrent) =>
+      this.relaySessions.issuePaneRoot(connectionId, generation, paneKey, incarnation, isCurrent)
   }
 
   /** A hook proves its sender alive; only another process can challenge the owner. */
@@ -36,23 +41,18 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     const sender = event.agentPresence?.process
     const owner = row.agentPresence
     if (sender && owner?.process && !owner.ended && !isSameAgentProcess(sender, owner.process)) {
-      void this.challengeHookOwner(this.resolvePaneKeyAlias(row.paneKey))
+      const paneKey = this.resolvePaneKeyAlias(row.paneKey)
+      const challenges = this.ownerChallengesByLiveSender
+      challenges.set(paneKey, (challenges.get(paneKey) ?? 0) + 1)
+      void this.checkAgentPresence(paneKey).finally(() => {
+        const remaining = (challenges.get(paneKey) ?? 1) - 1
+        if (remaining > 0) {
+          challenges.set(paneKey, remaining)
+        } else {
+          challenges.delete(paneKey)
+        }
+      })
     }
-  }
-
-  /** The challenging hook's sender is alive in the pane, which outlives the owner it probes,
-   *  even while that hook still awaits its own acquisition evidence. */
-  protected override challengeHookOwner(paneKey: string): Promise<unknown> {
-    const challenges = this.ownerChallengesByLiveSender
-    challenges.set(paneKey, (challenges.get(paneKey) ?? 0) + 1)
-    return this.checkAgentPresence(paneKey).finally(() => {
-      const remaining = (challenges.get(paneKey) ?? 1) - 1
-      if (remaining > 0) {
-        challenges.set(paneKey, remaining)
-      } else {
-        challenges.delete(paneKey)
-      }
-    })
   }
 
   // A live sender means the owner's exit cannot establish pane exit.
@@ -105,6 +105,11 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     // A replaced owner's probe result counts only if its exit was retained.
     if (verdict !== null && verdict !== 'exited') {
       return verdict
+    }
+    // Why: a hook still deciding whether it succeeds the owner may yet occupy the pane; its
+    // admission forgets the exit, its refusal leaves the exit to answer.
+    if (this.undecidedOwnerChallenges.has(this.resolvePaneKeyAlias(paneKey))) {
+      return 'unverifiable'
     }
     const exit =
       this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(paneKey)) ??

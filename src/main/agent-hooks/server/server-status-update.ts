@@ -69,11 +69,10 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       recordedRow,
       (origin === 'hook' || origin === 'launch') && !restated,
       retireBinding,
-      // A proving relay forwards a process only after its own pane-root proof; its PID is never
-      // probed here. An older relay's first prover keeps the baseline: it never displaces a record.
+      // A relay's owner is root proof only with the binding this link issued for the pane; its
+      // PID is never probed here. Without it the baseline never displaces a record.
       incoming.connectionId
-        ? this.relaySessions.provesPaneRoots(incoming.connectionId) &&
-          needsHookRootEvidence(recordedRow, sender)
+        ? incoming.rooted && needsHookRootEvidence(recordedRow, sender)
           ? 'root'
           : undefined
         : readHookProcessVerdict(this.state, recordedRow, {
@@ -87,7 +86,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       return undefined
     }
     const enrichedTransition = { ...rootIdentityIncoming, ...transitioned }
-    const { authorityRestartId, codexRosterAuthority, ...payload } = enrichedTransition
+    const { authorityRestartId, codexRosterAuthority, rooted: _, ...payload } = enrichedTransition
     if (!this.canWriteLegacyStatusRow(payload)) {
       return undefined
     }

@@ -104,7 +104,8 @@ const readBridgePaneRoot = createWslBridgePaneRootReader(
   createLocalPtyInventoryReader({
     getPtyId: getPtyIdForPaneKey,
     listProcesses: () => getLocalPtyProvider().listProcesses()
-  })
+  }),
+  getPtyIdForPaneKey
 )
 
 export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
@@ -143,11 +144,8 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     return agentHookServer.ingestRemote(capped as IngestEnvelope, connectionId)
   },
   beginRelaySession: (connectionId) => agentHookServer.beginRemoteRelaySession(connectionId),
-  resolvePaneRoot: (connectionId, distro, paneKey) => {
-    // Asking proves this relay checks pane roots before it forwards a process as the pane's owner.
-    agentHookServer.noteRelayProvesPaneRoots(connectionId)
-    return readBridgePaneRoot(distro, paneKey)
-  },
+  resolvePaneRoot: (connectionId, distro, paneKey) =>
+    readBridgePaneRoot(agentHookServer.relayPaneRootIssuer(connectionId), distro, paneKey),
   bindInterruptReconciliation: (mux, connectionId, isCurrent) =>
     bindRemoteClaudeInterruptReconciliation(agentHookServer, mux, connectionId, isCurrent),
   installHooks: installRemoteManagedAgentHooks,

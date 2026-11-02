@@ -77,6 +77,26 @@ describe.skipIf(process.platform === 'win32')('authenticated local tmux root res
     expect((await resolve('pane'))?.incarnation).toBe('replacement')
   })
 
+  it('re-reads a snapshot that predates a pane’s PTY once, not on every miss', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    const listProcesses = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([row])
+    const resolve = createLocalHookPaneRootResolver(
+      createLocalPtyInventoryReader({
+        getPtyId: (paneKey) => (paneKey === 'pane' ? 'pty' : 'gone'),
+        listProcesses
+      })
+    )
+    expect(await resolve('pane', undefined)).toBeNull()
+    vi.setSystemTime(1500)
+    // The PTY spawned after the cached snapshot: a cached miss is not an answer.
+    expect(await resolve('pane', undefined)).toEqual({ pid: 123, incarnation: 'generation' })
+    expect(listProcesses).toHaveBeenCalledTimes(2)
+    vi.setSystemTime(1600)
+    expect(await resolve('gone', undefined)).toBeNull()
+    expect(listProcesses).toHaveBeenCalledTimes(2)
+  })
+
   it('names a hook pane root from the provider, before reattach too, and keeps older PTYs legacy', async () => {
     const rows: PtyProcessInfo[] = [
       { ...row, paneKey: 'restored' },
@@ -110,11 +130,19 @@ describe.skipIf(process.platform === 'win32')('authenticated local tmux root res
       createLocalPtyInventoryReader({
         getPtyId: (paneKey) => paneKey,
         listProcesses: async () => rows
-      })
+      }),
+      (paneKey) => paneKey
     )
-    expect(await read('Ubuntu', 'new')).toEqual({ root: wslGuestRoot, incarnation: 'generation' })
-    expect(await read('Ubuntu', 'old')).toEqual({ legacy: true })
+    const issue = vi.fn((_pane: string, incarnation: string) => `1/${incarnation}`)
+    expect(await read(issue, 'Ubuntu', 'new')).toEqual({
+      root: wslGuestRoot,
+      incarnation: '1/generation'
+    })
+    expect(await read(issue, 'Ubuntu', 'old')).toEqual({ legacy: true })
     // Another distro's relay never learns this PTY's root.
-    expect(await read('Debian', 'new')).toEqual({})
+    expect(await read(issue, 'Debian', 'new')).toEqual({})
+    // Only a returned root binds; a link replaced during the read gets nothing.
+    expect(issue).toHaveBeenCalledOnce()
+    expect(await read(() => undefined, 'Ubuntu', 'new')).toEqual({})
   })
 })

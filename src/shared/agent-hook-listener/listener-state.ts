@@ -252,21 +252,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
-}
-
-/** Keep claim-bearing caches aligned with clearPaneCacheState: stored rows and latches can assert state; prompt/tool/transcript caches only render it. */
-export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
-  return (
-    state.lastStatusByPaneKey.has(paneKey) ||
-    state.claudeSubagentRosterByPaneKey.has(paneKey) ||
-    state.claudeLeadStateByPaneKey.has(paneKey) ||
-    state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-    state.claudeActiveSessionCronPaneKeys.has(paneKey) ||
-    state.claudeLaunchedBackgroundTasksByPaneKey.has(paneKey) ||
-    state.claudeSessionOwnerByPaneKey.has(paneKey) ||
-    state.codexSubagentRosterByPaneKey.has(paneKey) ||
-    state.codexLeadStateByPaneKey.has(paneKey)
-  )
+  // A disposed pane's unfinished evidence and exit intent die with it.
+  deletePaneScopedCacheEntry(state.hookRootAttempts, paneKey)
 }
 
 export function movePaneCacheState(
@@ -348,4 +335,5 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
   state.hermesTurnByPaneKey.clear()
+  state.hookRootAttempts.clear()
 }

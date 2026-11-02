@@ -14,7 +14,10 @@ import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-sc
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { bindOpenCodeTuiSession } from '../shared/agent-hook-listener/opencode-session-registry'
 import type { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
-import type { RelayHookAdmissionOptions } from './agent-hook-event-admission'
+import {
+  relayHookRootAcquisition,
+  type RelayHookAdmissionOptions
+} from './agent-hook-event-admission'
 import { CLAUDE_AGENT_VIEW_PATH } from '../shared/claude-agent-view'
 
 export async function handleRelayHookRequest(
@@ -92,7 +95,11 @@ export async function handleRelayHookRequest(
       hookBody,
       options.env,
       options.checkAgentPresence,
-      options.readHookRootEvidence
+      relayHookRootAcquisition(options.readHookRootEvidence, options.state, (event) =>
+        options.applyEvent(event, source, hookBodyEnv(hookBody), hookBodyVersion(hookBody), {
+          checkPresence: false
+        })
+      )
     )
     if (!options.isCurrent()) {
       res.writeHead(204)

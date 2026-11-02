@@ -1,4 +1,4 @@
-import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
+import { isProcessExitSessionEnd, parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import type { HookListenerState } from './agent-hook-listener/listener-state'
 import type { AgentHookSource } from './agent-hook-relay'
@@ -6,74 +6,87 @@ import {
   hasOtherAgentProcessOwner,
   isSameAgentProcess,
   readHookAgentProcess,
-  type AgentProcessIdentity
+  type AgentProcessIdentity,
+  type AgentProcessPresence
 } from './agent-process-presence'
 import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
-import { beforeDeadline, monotonicNow } from './deadline-settle-notifier'
 import {
   hookProcessKey,
   type HookProcessVerdict,
-  type HookRootAttempt,
-  type HookRootEvidenceReader,
-  type HookRootEvidenceRequest
+  type HookRootEvidence
 } from './hook-process-root-evidence'
+import {
+  attemptHookRootEvidence,
+  readHookRootAttempt,
+  type HookRootAcquisition,
+  type HookRootCompletion
+} from './hook-root-attempts'
 import { readTmuxHookPane, readTmuxHookPaneHint } from './tmux-client-attachment'
 
-// One entry per process that tried to acquire a pane; an evicted entry only costs a re-read.
-const MAX_HOOK_ROOT_ATTEMPTS = 256
-// The hook's curl gives up after 1.5s and spools its event; every hook joining one attempt shares
-// this single answer deadline, and the attempt keeps running for the hooks after it.
-const HOOK_ROOT_ANSWER_MS = 500
-// A root verdict rests on the pane's foreground, which can change; consume it only while fresh.
-const ROOT_VERDICT_FRESH_MS = 10_000
-// Retrying unproven evidence once per turn bounds the cost to turns, never tool calls.
-const TURN_EVENTS = new Set(['SessionStart', 'UserPromptSubmit'])
+export type { HookRootAcquisition, HookRootCompletion } from './hook-root-attempts'
 
-/** A process-bearing hook into a pane with no live proven owner acquires new authority, so it
- *  must show it belongs to the pane's own job, whether or not a row exists yet. */
+function recordedOwner(
+  previous: AgentHookEventPayload | undefined
+): AgentProcessPresence | undefined {
+  return previous?.providerSessionOnly ? undefined : previous?.agentPresence
+}
+
+/** A process-bearing hook acquires new authority unless the pane's owner is a live process that
+ *  proved itself, so it must show it belongs to the pane's own job: into an absent or weak record,
+ *  over a fallback (which a proved root replaces) or a suspended owner, and after an exit. */
 export function needsHookRootEvidence(
   previous: AgentHookEventPayload | undefined,
   process: AgentProcessIdentity | undefined
 ): process is AgentProcessIdentity {
-  const owner = previous?.providerSessionOnly ? undefined : previous?.agentPresence
-  return Boolean(
-    process &&
-    // A retired owner's own process is refused outright, never re-examined.
-    !(owner?.process && (!owner.ended || isSameAgentProcess(owner.process, process)))
-  )
-}
-
-function hookRootKey(paneKey: string, process: AgentProcessIdentity): string {
-  return `${paneKey}\n${hookProcessKey(process)}`
-}
-
-function usableVerdict(attempt: HookRootAttempt): HookProcessVerdict | undefined {
-  if (attempt.pending) {
-    // An answer that missed its deadline is not evidence yet; it grants nothing.
-    return 'unknown'
+  const owner = recordedOwner(previous)
+  if (!process) {
+    return false
   }
-  return attempt.verdict === 'root' &&
-    monotonicNow() - (attempt.completedAt ?? -Infinity) > ROOT_VERDICT_FRESH_MS
-    ? 'unknown'
-    : attempt.verdict
+  if (!owner?.process || owner.fallback) {
+    return true
+  }
+  // A retired owner's own process is refused outright, never re-examined.
+  return (owner.ended || owner.suspended) === true && !isSameAgentProcess(owner.process, process)
 }
 
-/** The execution host's verdict on this hook's process for the pane. Undefined keeps the legacy
+/** The association a late answer must still find; status-only updates leave it unchanged. */
+function associationOf(previous: AgentHookEventPayload | undefined): string {
+  const owner = recordedOwner(previous)
+  return owner
+    ? [
+        owner.agent,
+        owner.process ? hookProcessKey(owner.process) : '',
+        owner.ended,
+        owner.suspended,
+        owner.fallback
+      ].join('|')
+    : ''
+}
+
+/** The execution host's evidence on this hook's process for the pane. Undefined keeps the legacy
  *  path: no evidence applies, or this host or endpoint cannot bind the pane's root. */
+export function readHookProcessEvidence(
+  state: HookListenerState,
+  previous: AgentHookEventPayload | undefined,
+  hook: { paneKey: string; process: AgentProcessIdentity | undefined }
+): HookRootEvidence | undefined {
+  if (!needsHookRootEvidence(previous, hook.process)) {
+    return undefined
+  }
+  return readHookRootAttempt(state, hook.paneKey, hook.process)
+}
+
 export function readHookProcessVerdict(
   state: HookListenerState,
   previous: AgentHookEventPayload | undefined,
   hook: { paneKey: string; process: AgentProcessIdentity | undefined }
 ): HookProcessVerdict | undefined {
-  if (!needsHookRootEvidence(previous, hook.process)) {
-    return undefined
-  }
-  const attempt = state.hookRootAttempts.get(hookRootKey(hook.paneKey, hook.process))
-  return attempt ? usableVerdict(attempt) : undefined
+  return readHookProcessEvidence(state, previous, hook)?.verdict
 }
 
-/** Refuse before provider folds: the retired owner's own late hook, or a process the execution
- *  host proved is nested under, competing with or foreign to the pane's agent. */
+/** Refuse before provider folds: the retired owner's own late hook, a process the execution host
+ *  proved is nested under, competing with or foreign to the pane's agent, or any unproved process
+ *  replacing a suspended owner. */
 export function readHookProcessAdmission(
   state: HookListenerState,
   rows: ReadonlyMap<string, AgentHookEventPayload>,
@@ -84,12 +97,20 @@ export function readHookProcessAdmission(
   }
 ): { refused: boolean; verdict: HookProcessVerdict | undefined } {
   const previous = readLocalHookOwnerRow(rows, hook.paneKey, hook.worktreeId)
-  const owner = previous?.agentPresence
+  const owner = recordedOwner(previous)
   const verdict = readHookProcessVerdict(state, previous, hook)
   const retired = Boolean(
     hook.process && owner?.ended && owner.process && isSameAgentProcess(owner.process, hook.process)
   )
-  return { refused: retired || verdict === 'nested' || verdict === 'competing', verdict }
+  const displacesSuspended = Boolean(owner?.suspended && !owner.ended && verdict !== undefined)
+  return {
+    refused:
+      retired ||
+      verdict === 'nested' ||
+      verdict === 'competing' ||
+      (displacesSuspended && verdict !== 'root'),
+    verdict
+  }
 }
 
 /** The pane's committed row when a hook posted on this host could belong to it. */
@@ -125,54 +146,54 @@ function readHookPaneOwner(
   )
   return {
     envelope,
-    owner: previous && !previous.providerSessionOnly ? previous.agentPresence : undefined,
+    previous,
+    owner: recordedOwner(previous),
     sender: { agent: source, process: readHookAgentProcess(source, envelope.record.agentProcess) }
   }
 }
 
-/** Join the pane's current attempt, or start one when this hook may: a first try, a turn
- *  boundary after unproven evidence, a stale root, or an exit, which needs fresh proof. */
-function attemptHookRootEvidence(
+/** The pane's current row carrying what a late answer settles: the candidate acquires, upgrades
+ *  its fallback, retires the weak record on its recorded exit, or loses a fallback it was proved
+ *  not to own. Restated as a suspension change is, with no event name or prompt, so nothing
+ *  replays or notifies. Undefined when the association it was read against has moved on. */
+export function restateHookRoot(
   state: HookListenerState,
-  read: HookRootEvidenceReader,
-  request: HookRootEvidenceRequest,
-  eventName: unknown
-): Promise<unknown> | undefined {
-  const key = hookRootKey(request.paneKey, request.process)
-  const attempts = state.hookRootAttempts
-  const existing = attempts.get(key)
-  if (existing?.pending) {
-    return beforeDeadline(existing.pending, existing.answerBy)
+  completion: HookRootCompletion,
+  exitEventName?: string
+): AgentHookEventPayload | undefined {
+  const { attempt, process } = completion
+  const row = readLocalHookOwnerRow(
+    state.lastStatusByPaneKey,
+    completion.paneKey,
+    completion.worktreeId
+  )
+  if (!row || row.payload.agentType !== completion.agent) {
+    return undefined
   }
-  // Lineage under another agent outlives every turn; other answers can change.
+  const owner = recordedOwner(row)
+  const ownFallback = Boolean(
+    owner?.fallback && owner.process && isSameAgentProcess(owner.process, process)
+  )
+  const verdict = readHookProcessVerdict(state, row, completion)
+  const exit = verdict === 'root' && attempt.exit === true
   if (
-    existing &&
-    (existing.verdict === 'nested' ||
-      (eventName !== 'SessionEnd' &&
-        (existing.verdict === 'root'
-          ? usableVerdict(existing) === 'root'
-          : typeof eventName !== 'string' || !TURN_EVENTS.has(eventName))))
+    (!ownFallback && associationOf(row) !== attempt.association) ||
+    (verdict !== 'root' && (!ownFallback || verdict === 'unknown' || verdict === undefined))
   ) {
     return undefined
   }
-  const attempt: HookRootAttempt = { answerBy: monotonicNow() + HOOK_ROOT_ANSWER_MS }
-  const pending = read(request)
-    .catch(() => 'unknown' as const)
-    .then((verdict) => {
-      attempt.verdict = verdict
-      attempt.completedAt = monotonicNow()
-      attempt.pending = undefined
-    })
-  attempt.pending = pending
-  attempts.delete(key)
-  attempts.set(key, attempt)
-  for (const oldest of attempts.keys()) {
-    if (attempts.size <= MAX_HOOK_ROOT_ATTEMPTS) {
-      break
+  return {
+    ...row,
+    isReplay: undefined,
+    hookEventName: exit ? exitEventName : undefined,
+    hasExplicitPrompt: undefined,
+    agentPresence: {
+      agent: completion.agent,
+      process,
+      sessionOwner: true,
+      ...(exit ? { ended: true as const } : {})
     }
-    attempts.delete(oldest)
   }
-  return beforeDeadline(pending, attempt.answerBy)
 }
 
 /** Confirm an old owner's exit on its execution host before accepting a replacement, then read
@@ -183,7 +204,7 @@ export function checkHookOwnerPresence(
   body: unknown,
   env: string,
   check: (paneKey: string) => Promise<unknown>,
-  readRootEvidence?: HookRootEvidenceReader
+  acquisition?: HookRootAcquisition
 ): Promise<unknown> | undefined {
   const hook = readHookPaneOwner(state, source, body, env)
   if (!hook) {
@@ -198,14 +219,14 @@ export function checkHookOwnerPresence(
       envelope.paneKey,
       envelope.worktreeId
     )
-    if (!readRootEvidence || !needsHookRootEvidence(previous, process)) {
+    if (!acquisition || !needsHookRootEvidence(previous, process)) {
       return undefined
     }
     const tmux =
       readTmuxHookPane(envelope.record.tmux) ?? readTmuxHookPaneHint(envelope.record.tmuxPane)
     return attemptHookRootEvidence(
       state,
-      readRootEvidence,
+      acquisition,
       {
         paneKey: envelope.paneKey,
         worktreeId: envelope.worktreeId,
@@ -213,7 +234,11 @@ export function checkHookOwnerPresence(
         process,
         ...(tmux ? { tmux } : {})
       },
-      envelope.eventName
+      {
+        eventName: envelope.eventName,
+        exit: isProcessExitSessionEnd(envelope.eventName, envelope.hookPayloadRecord),
+        association: associationOf(previous)
+      }
     )
   }
   // A suspended owner may have resumed without emitting another hook.
@@ -232,6 +257,13 @@ export function isOwnerProviderGuestHook(
 ): boolean {
   const hook = readHookPaneOwner(state, source, body, env)
   return Boolean(
-    hook && hook.owner?.agent === source && hasOtherAgentProcessOwner(hook.owner, hook.sender)
+    hook &&
+    hook.owner?.agent === source &&
+    hasOtherAgentProcessOwner(hook.owner, hook.sender) &&
+    // A proved root replaces the owner's fallback rather than speaking as its guest.
+    readHookProcessVerdict(state, hook.previous, {
+      paneKey: hook.envelope.paneKey,
+      process: hook.sender.process
+    }) !== 'root'
   )
 }

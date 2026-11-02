@@ -11,16 +11,26 @@ import type { TmuxHookPane } from './tmux-client-attachment'
 
 /** What the execution host can prove about a hook's process relative to the pane it names.
  *  `root`: the pane's own agent. `nested`: another agent runs it. `competing`: another job or
- *  terminal holds the pane. `unknown`: the evidence is missing or ambiguous. */
-export type HookProcessVerdict = 'root' | 'nested' | 'competing' | 'unknown'
+ *  terminal holds the pane. `unknown`: the evidence is missing or ambiguous. `unattached`: it runs
+ *  in a tmux session the pane cannot be shown to display, so its status applies without a process. */
+export type HookProcessVerdict = 'root' | 'nested' | 'competing' | 'unknown' | 'unattached'
 
-/** One bounded evidence read; hooks joining it share its single answer deadline. */
+/** A verdict and, for a root, the pane binding it was read against. */
+export type HookRootEvidence = { verdict: HookProcessVerdict; binding?: string }
+
+/** One bounded evidence read per pane and process; every hook of that process shares the first
+ *  attempt's answer deadline, retries included. */
 export type HookRootAttempt = {
-  /** Undefined once complete: this pane's execution host cannot bind its root (legacy path). */
-  verdict?: HookProcessVerdict
-  completedAt?: number
+  /** The latest completed answer; null once this pane's executor proved it cannot bind roots. */
+  evidence?: HookRootEvidence | null
   pending?: Promise<void>
   answerBy: number
+  /** The hook named a tmux pane, so an unfinished read means status without a process. */
+  tmux: boolean
+  /** The pane's recorded association when the read started; a late answer applies only to it. */
+  association: string
+  /** A process-ending SessionEnd that missed its answer; a late root retires once, with no hook. */
+  exit?: true
 }
 
 /** The root process of the PTY a pane runs in, named by that PTY's owning provider. */
@@ -33,12 +43,14 @@ export type HookRootEvidenceRequest = {
   agent: string
   process: AgentProcessIdentity
   tmux?: TmuxHookPane
+  /** Ends queued reads once the attempt outlives its work budget. */
+  signal?: AbortSignal
 }
 
 /** Undefined: this pane's executor or endpoint predates root binding, so the legacy path applies. */
 export type HookRootEvidenceReader = (
   request: HookRootEvidenceRequest
-) => Promise<HookProcessVerdict | undefined>
+) => Promise<HookRootEvidence | undefined>
 
 /** The inner pane an outer pane's foreground tmux client shows. */
 export type TmuxPaneBridge = { selected: string; innerPid?: number }
@@ -107,8 +119,27 @@ function foregroundRole(rows: readonly ProcessTableRow[]): 'agent' | 'shell' | '
 
 type Walk = 'reached' | 'outside' | 'nested' | 'unknown'
 /** A sender on another terminal than the pane's: `foreign` when the pane shows its shell or an
- *  agent (it bridges nowhere), `bridged` when its foreground may be a bridge (tmux, screen, sudo). */
-type OtherTerminal = 'foreign' | 'bridged'
+ *  agent (it bridges nowhere), `bridged` when its foreground may be a bridge (screen, sudo), `tmux`
+ *  when the sender runs under a tmux server and the pane does not show an agent. */
+type OtherTerminal = 'foreign' | 'bridged' | 'tmux'
+
+function isTmuxServer(row: ProcessTableRow): boolean {
+  const token = firstToken(row.command)
+  return /^tmux:?$/.test(token.slice(token.lastIndexOf('/') + 1))
+}
+
+/** The sender's own ancestry runs through a tmux server: the inner-session context a hint alone
+ *  cannot establish. */
+function underTmux(byPid: ReadonlyMap<number, ProcessTableRow>, sender: ProcessTableRow): boolean {
+  let row: ProcessTableRow | undefined = sender
+  for (let depth = 0; row && depth < MAX_ANCESTRY_DEPTH; depth++) {
+    if (isTmuxServer(row)) {
+      return true
+    }
+    row = row.ppid > 1 ? byPid.get(row.ppid) : undefined
+  }
+  return false
+}
 
 function walkToRoot(
   byPid: ReadonlyMap<number, ProcessTableRow>,
@@ -180,7 +211,14 @@ export function classifyPaneHookProcess(input: {
     return 'unknown'
   }
   const role = foregroundRole(foreground)
-  return role === 'agent' || role === 'shell' ? 'foreign' : 'bridged'
+  if (role === 'agent') {
+    return 'foreign'
+  }
+  // Why: a detached tmux session's sender is unverifiable, not foreign, when the pane shows a shell.
+  if (underTmux(byPid, sender)) {
+    return 'tmux'
+  }
+  return role === 'shell' ? 'foreign' : 'bridged'
 }
 
 async function collectRows(
@@ -234,40 +272,50 @@ async function classifyAgainst(
 export async function readHookRootEvidence(
   request: HookRootEvidenceRequest,
   io: HookPaneProcessIo
-): Promise<HookProcessVerdict | undefined> {
+): Promise<HookRootEvidence | undefined> {
   const root = await io.resolveRoot(request.paneKey, request.worktreeId)
   if (root === 'legacy') {
     return undefined
   }
-  // The probe pins PID reuse to the hook's start identity before rows name its lineage.
-  if (!root || (await io.probe(request.process)) !== 'live') {
-    return 'unknown'
-  }
-  const verdict = await classifyAgainst(io, root.pid, request)
-  const { tmux } = request
-  // Only a pane whose foreground may bridge (a tmux client) can show another terminal's agent.
-  if (verdict !== 'bridged' || !tmux || !io.readTmux) {
-    return settleOtherTerminal(verdict)
-  }
-  // A tmux server may predate the pane, so only the outer pane's foreground client links them.
-  const bridge = await io.readTmux(tmux.socket, root.pid, tmux.pane)
-  if (!bridge) {
-    return 'unknown'
-  }
-  if (bridge.selected !== tmux.pane) {
-    return 'competing'
-  }
-  const inner = bridge.innerPid
-  const innerVerdict = inner ? await classifyAgainst(io, inner, request) : 'unknown'
-  const recheck = await io.readTmux(tmux.socket, root.pid, tmux.pane)
-  if (recheck?.selected !== tmux.pane || recheck.innerPid !== inner) {
-    return 'unknown'
-  }
-  return settleOtherTerminal(innerVerdict)
+  const verdict = root
+    ? await readAgainstRoot(request, io, root.pid)
+    : request.tmux
+      ? 'unattached'
+      : 'unknown'
+  return verdict === 'root' && root ? { verdict, binding: root.incarnation } : { verdict }
 }
 
-function settleOtherTerminal(verdict: HookProcessVerdict | OtherTerminal): HookProcessVerdict {
-  return verdict === 'foreign' ? 'competing' : verdict === 'bridged' ? 'unknown' : verdict
+async function readAgainstRoot(
+  request: HookRootEvidenceRequest,
+  io: HookPaneProcessIo,
+  rootPid: number
+): Promise<HookProcessVerdict> {
+  const { tmux } = request
+  // The probe pins PID reuse to the hook's start identity before rows name its lineage.
+  if ((await io.probe(request.process)) !== 'live') {
+    return tmux ? 'unattached' : 'unknown'
+  }
+  const verdict = await classifyAgainst(io, rootPid, request)
+  if (verdict !== 'bridged' && verdict !== 'tmux') {
+    return verdict === 'foreign' ? 'competing' : verdict
+  }
+  // Only the outer pane's foreground client links a tmux server, which may predate the pane.
+  if (!tmux || !io.readTmux) {
+    return verdict === 'tmux' ? 'unattached' : 'unknown'
+  }
+  const bridge = await io.readTmux(tmux.socket, rootPid, tmux.pane)
+  if (bridge && bridge.selected !== tmux.pane) {
+    return 'competing'
+  }
+  const inner = bridge?.innerPid
+  const innerVerdict = inner ? await classifyAgainst(io, inner, request) : 'unknown'
+  const recheck = inner ? await io.readTmux(tmux.socket, rootPid, tmux.pane) : undefined
+  if (recheck?.selected !== tmux.pane || recheck.innerPid !== inner) {
+    return 'unattached'
+  }
+  return innerVerdict === 'root' || innerVerdict === 'nested' || innerVerdict === 'competing'
+    ? innerVerdict
+    : 'unattached'
 }
 
 export function hookProcessKey(process: AgentProcessIdentity): string {

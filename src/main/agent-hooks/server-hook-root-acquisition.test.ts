@@ -1,196 +1,36 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentHookServer } from './server'
-import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
-import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
-import type { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import { describe, expect, it, vi } from 'vitest'
+import type { AgentHookServer } from './server'
+import { PANE } from './server.test-fixtures'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import {
-  readHookRootEvidence,
-  type HookPaneProcessIo
-} from '../../shared/hook-process-root-evidence'
-import type { ProcessTableRow } from '../../shared/process-table-snapshot'
+  NOW,
+  CLAUDE,
+  NESTED,
+  BACKGROUND,
+  SHIM,
+  io,
+  live,
+  probe,
+  paths,
+  attempts,
+  codexTurn,
+  capture,
+  createServer,
+  runningPane,
+  hook,
+  observe,
+  type RootTestServer,
+  registerRootTestHarness
+} from './server-hook-root.test-fixtures'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
+vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: vi.fn() }))
 
-const live = new Set<number>()
-const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>())
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
-
-const NOW = Date.UTC(2026, 10, 1, 12)
-const TTY = 'ttys004'
-type Proc = [pid: number, ppid: number, pgid: number, command: string, stat?: string, tty?: string]
-// Recorded macOS shapes: the pane root is login(1); Claude's Bash tool runs commands in a new
-// session with no terminal (`Ss`, `??`), so a nested run sits outside the pane's terminal.
-const ROOT: Proc = [100, 90, 100, '/usr/bin/login -flpq u /bin/zsh -l', 'Ss']
-const SHELL: Proc = [101, 100, 101, '-zsh', 'S']
-const CLAUDE: Proc = [49969, 101, 49969, 'claude', 'S+']
-const NESTED: Proc[] = [
-  [
-    49975,
-    49969,
-    49975,
-    "/bin/zsh -c source '/Users/u/.claude/shell-snapshots/s.sh' && eval 'claude -p summarize'",
-    'Ss',
-    '??'
-  ],
-  [49980, 49975, 49975, 'claude -p summarize', 'S', '??']
-]
-const BACKGROUND: Proc = [49990, 101, 49990, 'claude -p "nightly report"', 'S']
-
-let rows: ProcessTableRow[] = []
-const io = {
-  resolveRoot: vi.fn<HookPaneProcessIo['resolveRoot']>(async () => ({
-    pid: 100,
-    incarnation: 'inc-1'
-  })),
-  probe: (identity: AgentProcessIdentity) => probe(identity),
-  readProcesses: vi.fn(async (pids: readonly number[]) =>
-    rows.filter((row) => pids.includes(row.pid))
-  ),
-  readTerminal: vi.fn(async (tty: string) => rows.filter((row) => row.tty === tty))
-}
-
-const servers: AgentHookServer[] = []
-const paths: string[] = []
-
-beforeEach(() => {
-  // Only the clock is fixed; the hook server's sockets keep real timers.
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(NOW)
-})
-
-afterEach(() => {
-  for (const server of servers.splice(0)) {
-    server.stop()
-  }
-  for (const path of paths.splice(0)) {
-    rmSync(path, { recursive: true, force: true })
-  }
-  live.clear()
-  rows = []
-  vi.clearAllMocks()
-  probe.mockReset()
-  vi.useRealTimers()
-})
-
-class RootTestServer extends AgentHookServer {
-  exits = 0
-
-  override reconcileEndedProcessForPaneKeys(
-    ...args: Parameters<AgentHookServer['reconcileEndedProcessForPaneKeys']>
-  ): number {
-    this.exits++
-    return super.reconcileEndedProcessForPaneKeys(...args)
-  }
-
-  presence() {
-    return this.state.lastStatusByPaneKey.get(PANE)?.agentPresence
-  }
-
-  foldedPrompt() {
-    return this.state.lastPromptByPaneKey.get(PANE)
-  }
-
-  receivedAt() {
-    const row = this.state.lastStatusByPaneKey.get(PANE)
-    return row && 'receivedAt' in row && typeof row.receivedAt === 'number' ? row.receivedAt : 0
-  }
-
-  row() {
-    return this.getStatusSnapshot().find(
-      (entry) => entry.paneKey === PANE && !entry.providerSessionOnly
-    )
-  }
-}
-
-function startOf(pid: number): string {
-  return `Sun Nov  1 00:${String(pid % 60).padStart(2, '0')}:23 2026`
-}
-
-// Shaped like the Claude hook's X-Orca-Agent-Process capture.
-function capture(pid: number): AgentProcessIdentity {
-  return { pid, platform: 'darwin', startTime: startOf(pid) }
-}
-
-async function createServer(userDataPath?: string): Promise<RootTestServer> {
-  probe.mockImplementation(async (identity) =>
-    identity && live.has(identity.pid) ? 'live' : 'unverifiable'
-  )
-  const server = new RootTestServer()
-  servers.push(server)
-  server.setHookRootEvidenceReader((request) => readHookRootEvidence(request, io))
-  await server.start({ env: 'production', ...(userDataPath ? { userDataPath } : {}) })
-  return server
-}
-
-/** The pane's processes; `foreground` holds the pane terminal's foreground group. */
-function runningPane(foreground: number, ...procs: Proc[]): void {
-  rows = [ROOT, SHELL, ...procs].map(([pid, ppid, pgid, command, stat = 'S', tty = TTY]) => ({
-    pid,
-    ppid,
-    pgid,
-    tpgid: tty === TTY ? foreground : 0,
-    stat,
-    tty,
-    command
-  }))
-  for (const [pid] of procs) {
-    live.add(pid)
-  }
-}
-
-const attempts = () => io.resolveRoot.mock.calls.length
-
-async function hook(
-  server: AgentHookServer,
-  event: string,
-  options: {
-    session?: string
-    pid?: number | null
-    prompt?: string
-    reason?: string
-    source?: string
-  } = {}
-): Promise<void> {
-  const pid = options.pid === undefined ? 49969 : options.pid
-  const response = await postHookEvent(
-    server,
-    buildBody(
-      {
-        hook_event_name: event,
-        ...(event === 'SessionStart' ? { source: 'startup' } : {}),
-        ...(options.session !== undefined ? { session_id: options.session } : {}),
-        ...(options.reason ? { reason: options.reason } : {}),
-        ...(options.prompt ? { prompt: options.prompt } : {})
-      },
-      pid === null ? {} : { agentProcess: JSON.stringify(capture(pid)) }
-    ),
-    `/hook/${options.source ?? 'claude'}`
-  )
-  expect(response.status).toBe(204)
-}
-
-function observe(
-  server: AgentHookServer,
-  state: 'working' | 'waiting' | 'done',
-  agentType = 'claude',
-  origin?: 'process'
-): void {
-  server.ingestTerminalStatus({
-    paneKey: PANE,
-    tabId: 'tab-1',
-    worktreeId: 'wt-1',
-    connectionId: null,
-    ...(origin ? { origin } : {}),
-    payload: { state, prompt: '', agentType }
-  })
-}
-
-const codexTurn = (server: AgentHookServer, prompt = 'task') =>
-  hook(server, 'UserPromptSubmit', { session: 'cx', pid: null, prompt, source: 'codex' })
+registerRootTestHarness()
 
 describe('a pane without a proven owner', () => {
   it.each<[string, (server: RootTestServer) => Promise<void> | void]>([
@@ -260,16 +100,13 @@ describe('a pane without a proven owner', () => {
     expect(server.presence()).toMatchObject({ process: capture(49969), session: 'session-a' })
   })
 
-  it('shows a spawning shim’s status without naming its process the owner', async () => {
+  it('shows a spawning shim’s status over an unproven record without naming its process', async () => {
     const server = await createServer()
-    runningPane(
-      49960,
-      [49960, 101, 49960, 'claude', 'S+'],
-      [49969, 49960, 49960, 'node /Users/u/.volta/tools/image/claude-code/cli.js', 'S+']
-    )
+    runningPane(49960, ...SHIM)
+    await hook(server, 'UserPromptSubmit', { session: 'older', pid: null, prompt: 'Old task' })
     await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Shim task' })
     expect(server.row()).toMatchObject({ state: 'working', prompt: 'Shim task' })
-    expect(server.presence()).toEqual({ agent: 'claude', session: 'session-a' })
+    expect(server.presence()).toEqual({ agent: 'claude', session: 'older' })
   })
 
   it.each([['parent'], [undefined]])(
@@ -333,7 +170,7 @@ describe('a pane without a proven owner', () => {
 
   it('applies an unreadable acquisition as a hook without a process, then retries next turn', async () => {
     const server = await createServer()
-    observe(server, 'waiting')
+    await hook(server, 'UserPromptSubmit', { session: 'older', pid: null, prompt: 'old' })
     await hook(server, 'UserPromptSubmit', { session: 'older', prompt: 'next' })
     expect(server.row()).toMatchObject({ state: 'working', prompt: 'next' })
     expect(server.presence()).toEqual({ agent: 'claude', session: 'older' })
@@ -528,6 +365,7 @@ describe('a retired owner', () => {
 })
 
 describe('relayed panes', () => {
+  const RELAY = 'wsl:Ubuntu'
   const envelope = {
     paneKey: PANE,
     tabId: 'tab-1',
@@ -539,49 +377,100 @@ describe('relayed panes', () => {
     payload: { state: 'working', prompt: 'Parent task', agentType: 'claude' }
   }
   const child = { pid: 4006, platform: 'linux' as const, startTime: 'boot:4006' }
+  const nested = { agent: 'claude', process: child, session: 'nested', sessionOwner: true }
+  const issue = (server: AgentHookServer, pane = PANE, isCurrent = () => true) =>
+    server.relayPaneRootIssuer(RELAY)(pane, 'inc-1', isCurrent)
 
-  it('adopts a pane-root-proving relay’s owner over an unproven host record, without probing it', async () => {
+  it('adopts the owner a relay stamped with this link’s binding, without probing it', async () => {
     const server = await createServer()
-    server.ingestRemote(envelope, 'wsl:Ubuntu')
-    server.noteRelayProvesPaneRoots('wsl:Ubuntu')
+    server.ingestRemote(envelope, RELAY)
+    const paneRoot = issue(server)
+    // The acquiring forward is lost; the owner's next forward carries the same stamp and heals.
     server.ingestRemote(
-      { ...envelope, agentPresence: { agent: 'claude', process: child, session: 'parent' } },
-      'wsl:Ubuntu'
+      {
+        ...envelope,
+        hookEventName: 'PostToolUse',
+        agentPresence: { agent: 'claude', process: child, session: 'parent', paneRoot }
+      },
+      RELAY
     )
     expect(server.presence()).toMatchObject({ process: child, session: 'parent' })
+    expect(server.presence()).not.toHaveProperty('paneRoot')
     expect(probe).not.toHaveBeenCalled()
     expect(attempts()).toBe(0)
   })
 
-  it('keeps an older relay’s replayed first prover from owning the pane or ending it', async () => {
+  it.each<[string, (server: AgentHookServer) => string | undefined]>([
+    ['no binding (a legacy or empty answer)', () => undefined],
+    [
+      'another pane’s binding',
+      (server) => issue(server, makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222'))
+    ],
+    [
+      'a binding from before the link restarted',
+      (server) => {
+        const answer = server.relayPaneRootIssuer(RELAY)
+        const stale = answer(PANE, 'inc-1', () => true)
+        server.beginRemoteRelaySession(RELAY)
+        // An answer still in flight across the restart binds nothing either.
+        expect(answer(PANE, 'inc-1', () => true)).toBeUndefined()
+        return stale
+      }
+    ],
+    ['a binding whose PTY the pane no longer runs', (server) => issue(server, PANE, () => false)]
+  ])('keeps a relayed nested run with %s from owning or ending the pane', async (_name, stamp) => {
     const server = await createServer()
-    server.ingestRemote(envelope, 'wsl:Ubuntu')
-    server.noteRelayProvesPaneRoots('wsl:Ubuntu')
-    // The relay restarts as a build that never asks for pane roots, then replays a nested run.
-    server.beginRemoteRelaySession('wsl:Ubuntu')
-    const nested = { agent: 'claude', process: child, session: 'nested', sessionOwner: true }
+    server.ingestRemote(envelope, RELAY)
+    const paneRoot = stamp(server)
+    const presence = { ...nested, ...(paneRoot ? { paneRoot } : {}) }
     server.ingestRemote(
       {
         ...envelope,
         isReplay: true,
         providerSession: { provider: 'claude', id: 'nested' },
-        agentPresence: nested,
+        agentPresence: presence,
         payload: { ...envelope.payload, prompt: 'Nested task' }
       },
-      'wsl:Ubuntu'
+      RELAY
     )
     server.ingestRemote(
       {
         ...envelope,
         hookEventName: 'SessionEnd',
         providerSession: { provider: 'claude', id: 'nested' },
-        agentPresence: { ...nested, ended: true }
+        agentPresence: { ...presence, ended: true }
       },
-      'wsl:Ubuntu'
+      RELAY
     )
     expect(server.presence()).toEqual({ agent: 'claude', session: 'parent' })
     expect(server.row()).toMatchObject({ state: 'working' })
     expect(server.exits).toBe(0)
+  })
+
+  it('records a relayed fallback only into an empty pane, where a stamped root replaces it', async () => {
+    const server = await createServer()
+    const fallback = { ...nested, fallback: true }
+    server.ingestRemote(envelope, RELAY)
+    server.ingestRemote({ ...envelope, agentPresence: fallback }, RELAY)
+    expect(server.presence()).toEqual({ agent: 'claude', session: 'parent' })
+    server.clearPaneState(PANE, { forgetAgentExit: true })
+    server.ingestRemote({ ...envelope, agentPresence: fallback }, RELAY)
+    expect(server.presence()).toMatchObject({ process: child, fallback: true })
+    const root = { pid: 4001, platform: 'linux' as const, startTime: 'boot:4001' }
+    server.ingestRemote(
+      {
+        ...envelope,
+        agentPresence: {
+          agent: 'claude',
+          process: root,
+          session: 'parent',
+          paneRoot: issue(server)
+        }
+      },
+      RELAY
+    )
+    expect(server.presence()).toMatchObject({ process: root, session: 'parent' })
+    expect(server.presence()?.fallback).toBeUndefined()
   })
 })
 

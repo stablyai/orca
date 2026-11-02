@@ -18,6 +18,8 @@ export function createLocalPtyInventoryReader(options: InventoryOptions): LocalP
   let pending: Promise<PtyProcessInfo[]> | undefined
   let inventory: PtyProcessInfo[] = []
   let capturedAt = -Infinity
+  // The snapshot a miss already forced; a pane still missing from it waits for the next one.
+  let forcedAt = -Infinity
   const read = async (): Promise<PtyProcessInfo[]> => {
     if (Date.now() - capturedAt < 1000) {
       return inventory
@@ -36,15 +38,29 @@ export function createLocalPtyInventoryReader(options: InventoryOptions): LocalP
     }
     return pending
   }
+  const find = (rows: PtyProcessInfo[], paneKey: string, id: string | undefined | null) => {
+    // Before a restored pane reattaches, the provider's own spawn record still names its PTY.
+    const spawned = id ? [] : rows.filter((entry) => entry.paneKey === paneKey)
+    return (id ? rows.find((entry) => entry.id === id) : spawned.length === 1 && spawned[0]) || null
+  }
   return async (paneKey, lookup) => {
     const id = options.getPtyId(paneKey)
     if (!id && !lookup?.bySpawnPaneKey) {
       return null
     }
-    const rows = await read()
-    // Before a restored pane reattaches, the provider's own spawn record still names its PTY.
-    const spawned = id ? [] : rows.filter((entry) => entry.paneKey === paneKey)
-    const row = id ? rows.find((entry) => entry.id === id) : spawned.length === 1 && spawned[0]
+    const cachedAt = capturedAt
+    let row = find(await read(), paneKey, id)
+    // A snapshot taken before this PTY spawned (or reported its guest root) is no answer for it.
+    if (
+      (!row || (row.wslDistro && !row.wslGuestRoot)) &&
+      cachedAt !== -Infinity &&
+      cachedAt === capturedAt &&
+      cachedAt !== forcedAt
+    ) {
+      capturedAt = -Infinity
+      row = find(await read(), paneKey, id)
+      forcedAt = capturedAt
+    }
     return row && options.getPtyId(paneKey) === id ? row : null
   }
 }
@@ -89,18 +105,37 @@ export function createLocalHookPaneRootResolver(
   }
 }
 
-/** What a WSL relay may anchor a pane to: the guest root its bridge PTY recorded at launch. A
- *  PTY from an owner that records none keeps the relay on its legacy path. */
+/** Binds a returned root to the relay link that asked; undefined once that link was replaced. */
+export type RelayPaneRootIssuer = (
+  paneKey: string,
+  incarnation: string,
+  isCurrent: () => boolean
+) => string | undefined
+
+/** What a WSL relay may anchor a pane to: the guest root its bridge PTY recorded at launch, under a
+ *  binding the relay echoes on the owner it proves. A PTY from an owner that records none keeps the
+ *  relay on its legacy path; nothing but a returned root binds. */
 export function createWslBridgePaneRootReader(
-  readInventory: LocalPtyInventoryReader
-): (distro: string, paneKey: string) => Promise<Record<string, unknown>> {
-  return async (distro, paneKey) => {
+  readInventory: LocalPtyInventoryReader,
+  getPtyId: (paneKey: string) => string | undefined | null
+): (
+  issue: RelayPaneRootIssuer,
+  distro: string,
+  paneKey: string
+) => Promise<Record<string, unknown>> {
+  return async (issue, distro, paneKey) => {
     const row = await readInventory(paneKey, { bySpawnPaneKey: true }).catch(() => null)
     if (row?.wslDistro !== distro) {
       return {}
     }
-    return row.wslGuestRoot && row.incarnationId
-      ? { root: row.wslGuestRoot, incarnation: row.incarnationId }
-      : { legacy: true }
+    if (!row.wslGuestRoot || !row.incarnationId) {
+      return { legacy: true }
+    }
+    const binding = issue(
+      paneKey,
+      row.incarnationId,
+      () => (getPtyId(paneKey) ?? row.id) === row.id
+    )
+    return binding ? { root: row.wslGuestRoot, incarnation: binding } : {}
   }
 }
