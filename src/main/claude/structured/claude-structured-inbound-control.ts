@@ -1,6 +1,6 @@
 import type { CanUseTool, OnUserDialog, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePromptRegistry } from '../claude-prompt-registry'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import {
   claudePermissionPresentation,
   claudePermissionSubject
@@ -10,7 +10,22 @@ export type ClaudePermissionCallbackDeps = {
   sessionId: string
   prompts: ClaudePromptRegistry
   emit: (event: ClaudeStructuredSessionEvent) => void
+  /** Read per request, so a mode change mid-chat applies to the next ask. */
+  reported: Pick<ClaudeSession['reportedOptions'], 'reportedPermissionMode'>
+  live: () => Pick<ClaudeSession, 'launchIntent'> | null
 }
+
+/** Claude's own report wins; before its first report, the mode Orca launched it with. */
+function runsWithFullAccess(deps: ClaudePermissionCallbackDeps): boolean {
+  const launched = deps.live()?.launchIntent?.permissionMode
+  const mode =
+    deps.reported.reportedPermissionMode ??
+    (launched === 'bypassPermissions' ? 'full-access' : null)
+  return mode === 'full-access'
+}
+
+/** Questions and plan approval need the user's answer, not a permission; Full access never answers them. */
+const USER_ANSWERED_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode'])
 
 function denySafeResult(toolUseId: string | undefined): PermissionResult {
   return {
@@ -25,8 +40,16 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
   canUseTool: CanUseTool
   onUserDialog: OnUserDialog
 } {
-  const canUseTool: CanUseTool = (toolName, input, options) =>
-    new Promise<PermissionResult | null>((resolve) => {
+  const canUseTool: CanUseTool = (toolName, input, options) => {
+    // Full access approves Claude's own asks too (ask rules, ask-answering hooks, built-in safety checks).
+    if (toolName && !USER_ANSWERED_TOOLS.has(toolName) && runsWithFullAccess(deps)) {
+      return Promise.resolve({
+        behavior: 'allow',
+        updatedInput: input,
+        ...(options.toolUseID ? { toolUseID: options.toolUseID } : {})
+      })
+    }
+    return new Promise<PermissionResult | null>((resolve) => {
       let cancel = (): void => {}
       const settle = (response: PermissionResult | null): void => {
         options.signal.removeEventListener('abort', cancel)
@@ -67,6 +90,7 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
       options.signal.addEventListener('abort', cancel, { once: true })
       deps.emit({ type: 'prompt', sessionId: deps.sessionId, prompt })
     })
+  }
 
   const onUserDialog: OnUserDialog = () => Promise.resolve({ behavior: 'cancelled' })
 
