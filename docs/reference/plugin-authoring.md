@@ -468,9 +468,10 @@ panels and custom editors, and `import type { OrcaWorkerApi } from 'orca/worker'
 `activate(orca)` (in JavaScript, `/** @param {import('orca/worker').OrcaWorkerApi} orca */`).
 `orca.host.call` checks each method's params and result, and only offers the methods your
 surface may call; `orca.events.on` types each [event payload](plugin-host-api.md#events).
-Development folders skip their top-level `.orca/` and `node_modules/` (they never count toward the
-size limits below there, and editing them never re-reviews the plugin or remounts its frames); an install still
-hashes every file it copies, so do not commit them.
+Development folders skip every `.orca/`, `.git/` and `node_modules/`, at any depth (such as a
+nested `build/node_modules/`): they never count toward the size limits below, and editing them
+never re-reviews the plugin or remounts its frames. An install still hashes every file it copies
+except the root `.git/`, so do not commit them.
 
 A plugin folder holds at most 2,000 files and 50 MiB in total. A panel or custom editor `entry`
 is at most 10 MiB, and each `.ts`, `.tsx`, `.mts` or `.jsx` file Orca transpiles at most 1 MiB;
@@ -480,7 +481,10 @@ In the desktop app, a panel's or custom editor's `console.error` and `console.wa
 exceptions and unhandled rejections (and a components panel's render or mount errors) also land
 in `orca plugin logs`, as `[frame] <file>:<line> <message>` with the path relative to the plugin
 folder and stack traces shortened the same way. At most 20 such lines per plugin every 10 s are
-kept; past that one notice is logged and the rest are dropped. `orca plugin dev inspect
+kept; past that one notice is logged and the rest are dropped. Requests Orca blocks (anything off the plugin's
+own files, refused by the frame's network fence or content policy) do not count toward that:
+they are logged once per kind and origin with a count, every 5 s and when the frame closes, such
+as `[frame] blocked font-src https://unpkg.com (x48): plugin frames have no network`. `orca plugin dev inspect
 <publisher.id>` opens DevTools for each of the plugin's open frames.
 
 ## 3. Validate
