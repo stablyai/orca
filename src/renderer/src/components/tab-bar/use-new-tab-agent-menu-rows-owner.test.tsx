@@ -26,8 +26,16 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
 } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { useAgentMenuObservation, useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
+import {
+  useAgentMenuObservation,
+  useNewTabAgentMenuRows,
+  type AgentMenuRowsTarget
+} from './use-new-tab-agent-menu-rows'
 import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
+import { createAgentMenuTerminalPendingSelector } from './agent-menu-launch-facts'
+import { connectedRuntimeStatus } from '@/runtime/paired-runtime-environment-test-fixture'
+import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/runtime-host-status'
+import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 const initial = useAppStore.getState()
 afterEach(() => {
   cleanup()
@@ -296,12 +304,14 @@ function countIdReads<T extends { id: string }>(rows: T[], onRead: () => void): 
 }
 
 /** Closed pickers, each counting its own renders once mount effects settle. */
-async function mountPickers(targets: { worktreeId: string; detection: AgentDetectionTarget }[]) {
+async function mountPickers(
+  targets: { target: string | AgentMenuRowsTarget; detection: AgentDetectionTarget }[]
+) {
   const renders = targets.map(() => 0)
-  const hooks = targets.map(({ worktreeId: id, detection }, index) =>
+  const hooks = targets.map(({ target, detection }, index) =>
     renderHook(() => {
       renders[index] += 1
-      return useAgentMenuObservation(id, false, detection)
+      return useAgentMenuObservation(target, false, detection)
     })
   )
   await act(async () => {})
@@ -411,9 +421,7 @@ it.each([1, 10])(
       )
     }
     const pickers = await mountPickers(
-      groups.flatMap(({ detection }, group) =>
-        ids[group].map((id) => ({ worktreeId: id, detection }))
-      )
+      groups.flatMap(({ detection }, group) => ids[group].map((id) => ({ target: id, detection })))
     )
     const perGroup = <T,>(values: T[]) =>
       groups.map((_, group) => [...new Set(values.slice(group * scale, (group + 1) * scale))])
@@ -494,7 +502,7 @@ it.each([1, 10])(
       detectedAgentIds: ['codex']
     })
     const pickers = await mountPickers(
-      repoIds.map((id) => ({ worktreeId: `${id}::C:\\${id}`, detection: { kind: 'local' } }))
+      repoIds.map((id) => ({ target: `${id}::C:\\${id}`, detection: { kind: 'local' } }))
     )
     // Rendering resolves each workspace's Windows runtime from its project.
     expect(visits).toBeGreaterThan(0)
@@ -512,3 +520,137 @@ it.each([1, 10])(
     pickers.unmount()
   }
 )
+
+it.each([1, 10])(
+  'resolves distinct repo targets from one shared index, cold and after another host republishes (x%i)',
+  async (scale) => {
+    setLocalRuntimeCapabilitiesForTests([])
+    let visits = 0
+    const countVisit = () => {
+      visits += 1
+    }
+    const box: Repo = { ...TEST_REPO, connectionId: 'box', executionHostId: 'ssh:box' }
+    const third: Repo = { ...TEST_REPO, connectionId: 'third', executionHostId: 'ssh:third' }
+    const targets = Array.from({ length: 2 * scale }, (_, index) => `t${index}`)
+    const repos = countIdReads(
+      [
+        ...targets.map((id) => ({ ...box, id })),
+        ...Array.from({ length: 18 * scale }, (_, index) => ({ ...third, id: `f${index}` }))
+      ],
+      countVisit
+    )
+    useAppStore.setState({
+      ...initial,
+      settings: { ...getDefaultSettings('/home/me'), agentDefaultSurface: 'terminal' },
+      remoteDetectedAgentIds: { box: ['codex'] },
+      sshConnectionStates: direct(connecting('box'), connecting('other'))
+    })
+    const visitsFor = async (update: () => void) => {
+      visits = 0
+      await act(async () => update())
+      return visits
+    }
+    // Replaces another host's row, as a fresh repos snapshot does.
+    const republish = (id: string) => () =>
+      useAppStore.setState((state) => ({
+        repos: state.repos.map((row, index) =>
+          index === state.repos.length - 1 ? countIdReads([{ ...third, id }], countVisit)[0] : row
+        )
+      }))
+    // Store subscribers outside the picker read repos on publication; measure them unmounted.
+    const storeOnly = {
+      cold: await visitsFor(() => useAppStore.setState({ repos })),
+      republish: await visitsFor(republish('late0'))
+    }
+    // Workspaces not created yet: each picker launches on its repo's host.
+    const prospective = (repoId: string) => ({
+      target: { workspace: { kind: 'git-worktree' as const, repoId, executionHostId: 'ssh:box' } },
+      detection: { kind: 'ssh' as const, connectionId: 'box' }
+    })
+    visits = 0
+    const pickers = await mountPickers([
+      ...targets.map(prospective),
+      // The repeated-target control: many pickers on one repo add no index work of their own.
+      ...targets.map(() => prospective('t0'))
+    ])
+    const cold = visits
+    expect(pickers.pending()).toEqual(Array(2 * targets.length).fill(true))
+    const settled = [...pickers.renders]
+    const pickerVisits = (await visitsFor(republish('late1'))) - storeOnly.republish
+    // One shared index per snapshot (about 1.2 reads per repo today), not a catalog scan per
+    // distinct target: 20 targets x 200 repos would be 4,000 at x10.
+    expect(cold).toBeLessThanOrEqual(2 * repos.length)
+    expect(pickerVisits).toBeLessThanOrEqual(2 * repos.length)
+    expect(pickers.renders).toEqual(settled)
+    pickers.unmount()
+  }
+)
+
+it("re-derives a cached host when the workspace's owner moves in a new snapshot", async () => {
+  setLocalRuntimeCapabilitiesForTests([])
+  const local: Repo = { ...TEST_REPO, id: 'r1', path: '/work' }
+  const owned = (hostId: 'local' | 'ssh:box') => ({
+    repos: [
+      hostId === 'local' ? local : { ...local, connectionId: 'box', executionHostId: hostId }
+    ],
+    worktreesByRepo: {
+      r1: [makeWorktree({ id: 'r1::/work', repoId: 'r1', hostId, path: '/work' })]
+    }
+  })
+  useAppStore.setState({
+    ...initial,
+    settings: { ...getDefaultSettings('/home/me'), agentDefaultSurface: 'terminal' },
+    ...owned('local'),
+    detectedAgentIds: ['codex'],
+    remoteDetectedAgentIds: { box: ['codex'] },
+    sshConnectionStates: direct(connecting('box'), connecting('other'))
+  })
+  const pending = createAgentMenuTerminalPendingSelector({ worktreeId: 'r1::/work' })
+  expect(pending(useAppStore.getState())).toBe(false)
+  // The move arrives as one publication while `box` is still connecting.
+  useAppStore.setState(owned('ssh:box'))
+  expect(pending(useAppStore.getState())).toBe(true)
+  useAppStore.setState({ sshConnectionStates: direct(linux('box'), connecting('other')) })
+  expect(pending(useAppStore.getState())).toBe(false)
+  useAppStore.setState({ sshConnectionStates: direct(connecting('box'), connecting('other')) })
+  expect(pending(useAppStore.getState())).toBe(true)
+  useAppStore.setState(owned('local'))
+  expect(pending(useAppStore.getState())).toBe(false)
+})
+
+it('waits on a paired server only while contact is checking without a reported OS', () => {
+  const worktree = makeWorktree({
+    id: 'r1::/srv',
+    repoId: 'r1',
+    hostId: 'runtime:srv',
+    runtimeOwnerEnvironmentId: 'srv'
+  })
+  const answered = connectedRuntimeStatus('srv-runtime', 1).status
+  // The host status snapshot the client publishes as it reaches the server.
+  const contact = (verification: 'checking' | 'verified', status: RuntimeStatus | null) => ({
+    runtimeStatusByEnvironmentId: new Map([
+      [
+        'srv',
+        runtimeEnvironmentStatusFromSnapshot({
+          environmentId: 'srv',
+          pairingRevision: 1,
+          sequence: 1,
+          checkedAt: 1,
+          status,
+          verification,
+          transport: verification === 'verified' ? 'ready' : 'connecting'
+        })
+      ]
+    ])
+  })
+  useAppStore.setState({
+    ...initial,
+    repos: [{ ...TEST_REPO, id: 'r1', executionHostId: 'runtime:srv' }],
+    worktreesByRepo: { r1: [worktree] },
+    ...contact('checking', null)
+  })
+  const pending = createAgentMenuTerminalPendingSelector({ worktreeId: worktree.id })
+  expect(pending(useAppStore.getState())).toBe(true)
+  useAppStore.setState(contact('verified', answered && { ...answered, hostPlatform: 'linux' }))
+  expect(pending(useAppStore.getState())).toBe(false)
+})
