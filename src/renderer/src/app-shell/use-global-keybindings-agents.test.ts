@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type * as PluginPanels from '@/store/plugin-panels'
 import { AI_VAULT_SCOPE_STEP_EVENT } from '@/components/right-sidebar/ai-vault-scope-state'
+import type { KeybindingActionId } from '../../../shared/keybindings'
 import { useGlobalKeybindings } from './use-global-keybindings'
 import { useAppChromeLayout } from './use-app-chrome-layout'
 import { useFloatingWorkspacePanel } from './use-floating-workspace-panel'
@@ -29,11 +30,7 @@ beforeEach(() => {
   })
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   window.addEventListener(AI_VAULT_SCOPE_STEP_EVENT, record)
-  useAppStore.setState({
-    activeView: 'terminal',
-    activeWorktreeId: 'main',
-    keybindings: { 'sidebar.agents.scopeNext': ['Ctrl+PageDown'] }
-  })
+  useAppStore.setState({ activeView: 'terminal', activeWorktreeId: 'main', rightSidebarOpen: true })
 })
 
 afterEach(() => {
@@ -45,11 +42,21 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function pressCtrlPageDownIn(searchHost: HTMLElement): void {
+function pressInSearchField(
+  actionId: KeybindingActionId,
+  chord: string,
+  init: KeyboardEventInit,
+  inSidebarPanel = true
+): KeyboardEvent {
+  useAppStore.setState({ keybindings: { [actionId]: [chord] } })
+  const host = document.createElement('div')
+  if (inSidebarPanel) {
+    host.dataset.aiVaultPanel = 'true'
+  }
   const search = document.createElement('input')
   search.dataset.fileSearchInput = 'true'
-  searchHost.append(search)
-  document.body.append(searchHost)
+  host.append(search)
+  document.body.append(host)
   search.focus()
   renderHook(() =>
     useGlobalKeybindings({
@@ -57,25 +64,35 @@ function pressCtrlPageDownIn(searchHost: HTMLElement): void {
       floatingWorkspace: useFloatingWorkspacePanel()
     })
   )
-  const event = new KeyboardEvent('keydown', {
-    key: 'PageDown',
-    code: 'PageDown',
-    ctrlKey: true,
-    bubbles: true,
-    cancelable: true
-  })
+  const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
   Object.defineProperty(event, 'getModifierState', { value: () => false })
   search.dispatchEvent(event)
+  return event
 }
 
+const ctrlPageDown = { key: 'PageDown', code: 'PageDown', ctrlKey: true }
+
 it('runs a Ctrl scope chord from the sidebar Agents search field', () => {
-  const panel = document.createElement('div')
-  panel.dataset.aiVaultPanel = 'true'
-  pressCtrlPageDownIn(panel)
+  pressInSearchField('sidebar.agents.scopeNext', 'Ctrl+PageDown', ctrlPageDown)
   expect(steps).toEqual([1])
 })
 
 it('leaves the same chord with the field outside the sidebar Agents panel', () => {
-  pressCtrlPageDownIn(document.createElement('div'))
+  pressInSearchField('sidebar.agents.scopeNext', 'Ctrl+PageDown', ctrlPageDown, false)
   expect(steps).toEqual([])
+})
+
+it('runs a Ctrl Show Agents chord from the sidebar Agents search field and closes the sidebar', () => {
+  pressInSearchField('sidebar.agents.toggle', 'Ctrl+PageDown', ctrlPageDown)
+  expect(useAppStore.getState().rightSidebarOpen).toBe(false)
+})
+
+it('keeps an Option dead key with the search field even when it is bound', () => {
+  const event = pressInSearchField('sidebar.agents.scopeNext', 'Alt+E', {
+    key: 'Dead',
+    code: 'KeyE',
+    altKey: true
+  })
+  expect(steps).toEqual([])
+  expect(event.defaultPrevented).toBe(false)
 })

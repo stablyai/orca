@@ -1,5 +1,6 @@
 import { AI_VAULT_SCOPE_STEP_EVENT } from '@/components/right-sidebar/ai-vault-scope-state'
 import { focusActiveTabSurface } from '@/lib/focus-active-tab-surface'
+import { textKeyComposesCharacter } from '@/lib/file-search-shortcut-policy'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 
 export const AGENTS_SHORTCUT_ACTION_IDS = [
@@ -11,6 +12,18 @@ export const AGENTS_SHORTCUT_ACTION_IDS = [
 // Why: once focus returns to a tab, the scope chords belong to tab switching again.
 function agentsPanelHasFocus(): boolean {
   return document.activeElement?.closest('[data-ai-vault-panel]') != null
+}
+
+// Why: a chord bound to an Agents action runs from the focused Agents search field, except keys that type or compose a character.
+export function agentsPanelClaimsChord(
+  matchShortcut: (actionId: KeybindingActionId) => boolean,
+  input: Parameters<typeof textKeyComposesCharacter>[0]
+): boolean {
+  return (
+    AGENTS_SHORTCUT_ACTION_IDS.some((actionId) => matchShortcut(actionId)) &&
+    agentsPanelHasFocus() &&
+    !textKeyComposesCharacter(input)
+  )
 }
 
 export function agentsScopeShortcutOwnsChord(

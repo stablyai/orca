@@ -15,6 +15,17 @@ type TextKeyEvent = {
   getModifierState?: (key: string) => boolean
 }
 
+export function textKeyComposesCharacter(event: TextKeyEvent): boolean {
+  return Boolean(
+    event.isComposing ||
+    event.key === 'Process' ||
+    event.key === 'Dead' ||
+    event.altGraph ||
+    event.getModifierState?.('AltGraph') ||
+    (getShortcutPlatform() === 'darwin' && event.altKey && (!event.metaKey || event.ctrlKey))
+  )
+}
+
 export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
   if (!isEditableTarget(event.target)) {
     return false
@@ -25,19 +36,10 @@ export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
   ) {
     return true
   }
-  if (
-    event.isComposing ||
-    event.key === 'Process' ||
-    event.key === 'Dead' ||
-    event.altGraph ||
-    event.getModifierState?.('AltGraph')
-  ) {
+  if (textKeyComposesCharacter(event)) {
     return true
   }
   const isMac = getShortcutPlatform() === 'darwin'
-  if (event.altKey && isMac && (!event.metaKey || event.ctrlKey)) {
-    return true
-  }
   const modifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
   if (!modifier) {
     return true
