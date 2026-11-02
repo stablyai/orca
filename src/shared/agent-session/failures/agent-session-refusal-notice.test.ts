@@ -5,6 +5,7 @@ import {
   agentSessionWriteNoticeParts
 } from './agent-session-refusal-notice'
 import { agentSessionFailureSentence } from './agent-session-failure-words'
+import { readAgentSessionRefusalDetails } from './agent-session-refusal-details'
 import {
   agentSessionRefusalFailure,
   parseAgentSessionWriteFailure
@@ -106,7 +107,10 @@ describe('an expired attachment refusal', () => {
   const notice = (details: unknown): string =>
     agentSessionWriteNoticeEnglish(
       agentSessionWriteNoticeParts(
-        agentSessionRefusalFailure({ code: 'agent_session_operation_invalid', details }),
+        agentSessionRefusalFailure({
+          code: 'agent_session_operation_invalid',
+          details: readAgentSessionRefusalDetails('agent_session_operation_invalid', details)
+        }),
         'composer-send'
       )
     )
