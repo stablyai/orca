@@ -19,6 +19,7 @@ afterEach(() => {
 /** Evidence that completes `ms` after it starts, the way a slow host's reads do. */
 function slowReader(ms: number, verdict: HookProcessVerdict) {
   return vi.fn<HookRootEvidenceReader>(
+    // ast-grep-ignore: test-no-real-time-wait -- fake timers drive this simulated read delay
     () => new Promise((resolve) => setTimeout(() => resolve(verdict), ms))
   )
 }
