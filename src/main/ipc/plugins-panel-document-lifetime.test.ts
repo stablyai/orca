@@ -7,7 +7,6 @@ import { z } from 'zod'
 import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
 import { panelSessionTokenSchema } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { Store } from '../persistence/loading-store/store'
-import { PluginStatusBarState } from '../plugins/status-bar/plugin-status-bar-state'
 import { PluginContentVerifier } from '../plugins/plugin-content-integrity'
 import type { ValidDiscoveredPlugin } from '../plugins/plugin-discovery'
 import { PluginPanelController } from '../plugins/panels/plugin-panel-controller'
@@ -123,7 +122,7 @@ async function harness(
     whenReady: options.whenReady ?? (async () => {}),
     findApprovedPlugin: () => null,
     getDiscovered: () => [],
-    options: { statusBar: new PluginStatusBarState() }
+    options: {}
   }
   registerPluginHandlers(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: frame entry handlers read only getSettings for the isolation switch.
