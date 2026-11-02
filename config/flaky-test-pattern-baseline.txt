@@ -561,7 +561,6 @@
 1 test-no-real-time-wait:tests/e2e/fixtures/daemon-generation-reconnect-client.ts
 4 test-no-real-time-wait:tests/e2e/floating-workspace-reopen-webgl-recovery.spec.ts
 4 test-no-real-time-wait:tests/e2e/floating-workspace-shared-glyph-atlas.spec.ts
-1 test-no-real-time-wait:tests/e2e/git-no-upstream-polling-churn.spec.ts
 2 test-no-real-time-wait:tests/e2e/github-project-board.spec.ts
 1 test-no-real-time-wait:tests/e2e/golden-core-flows.spec.ts
 1 test-no-real-time-wait:tests/e2e/headless-paired-remote-terminal-reveal-grid.spec.ts
@@ -1376,8 +1375,6 @@
 2 test-timeout-needs-reason:tests/e2e/headless-serve-browser-tab-restart.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-serve-chat-tab-placement.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-serve-cli-terminal-retention-parity.spec.ts
-1 test-timeout-needs-reason:tests/e2e/headless-serve-focused-terminal-create.spec.ts
-1 test-timeout-needs-reason:tests/e2e/headless-serve-mobile-chat-tab-order.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-serve-mobile-markdown.spec.ts
 3 test-timeout-needs-reason:tests/e2e/headless-serve-mobile-native-chat-identity.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-serve-session-history-naming-requests.spec.ts
