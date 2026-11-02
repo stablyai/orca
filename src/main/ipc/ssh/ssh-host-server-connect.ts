@@ -1,7 +1,10 @@
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type {
+  KnownRuntimeEnvironment,
+  RuntimeSshAccessOperation
+} from '../../../shared/runtime-environments'
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject,
@@ -21,13 +24,14 @@ import { broadcastSshState, getPublicSshState } from './ssh-renderer-broadcast'
 import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
 import { isSshSessionStartFailure } from '../../ssh/ssh-session-start-failure'
 import { describeSshConnectFailure } from '../../ssh/ssh-connect-failure-next-step'
+import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-target-fingerprint'
 
 export async function decideHostServer(target: SshTarget): Promise<HostServerOnConnectResult> {
   const portsOnly = portsOnlyEnvironmentOf(target)
-  if (portsOnly?.pendingSshAccessOperation?.operation === 'unlink') {
-    // Why: the Ports tab left with the access, so a connect would restore forwards nothing shows.
+  if (portsOnly?.pendingSshAccessOperation) {
+    // Why: the Ports tab shows only committed access, so a connect would restore forwards nothing shows.
     throw new Error(
-      `Stopping SSH access for ${portsOnly.name} did not finish. Retry it in Settings before connecting ${target.label}.`
+      `The SSH access change for ${portsOnly.name} didn't finish. Retry or cancel it in Settings before connecting ${target.label}.`
     )
   }
   if (portsOnly) {
@@ -49,12 +53,25 @@ export async function decideHostServer(target: SshTarget): Promise<HostServerOnC
 /** The paired server whose SSH access, linked or pending, uses this host only for forwards. */
 function portsOnlyEnvironmentOf(target: SshTarget): KnownRuntimeEnvironment | undefined {
   const environmentId = getManagedOrcadFenceEnvironmentId(target)
+  const environments = listEnvironments(getAppEnvironment().getPath('userData'))
   const environment = environmentId
-    ? listEnvironments(getAppEnvironment().getPath('userData')).find((e) => e.id === environmentId)
-    : undefined
+    ? environments.find((e) => e.id === environmentId)
+    : environments.find((e) => isRetryableOn(e.pendingSshAccessOperation, target))
   return (environment?.sshAccess ?? environment?.pendingSshAccessOperation)?.portsOnly
     ? environment
     : undefined
+}
+
+/** A change that stopped while the host had no fence, which Retry can still finish on this host. */
+function isRetryableOn(
+  operation: RuntimeSshAccessOperation | undefined,
+  target: SshTarget
+): boolean {
+  return (
+    operation?.sshTargetId === target.id &&
+    operation.sshTargetGeneration === target.generation &&
+    operation.targetFingerprint === fingerprintRuntimeSshTarget(target)
+  )
 }
 
 /** Rechecks a host another desktop's update held during this connect, until the fence clears. */

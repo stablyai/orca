@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
+import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-target-fingerprint'
 
 const mocks = vi.hoisted(() => {
   const environments: unknown[] = []
@@ -26,27 +27,27 @@ vi.mock('./ssh-ipc-context', () => ({
 
 const { decideHostServer } = await import('./ssh-host-server-connect')
 
-const target: SshTarget = {
+const released: SshTarget = {
   id: 'ssh-1',
   label: 'Box',
   host: 'box',
   port: 22,
   username: 'me',
-  orcadFence: { environmentId: 'env-1' }
+  generation: 1
 }
-const access = { sshTargetId: 'ssh-1', sshTargetGeneration: 1, remotePort: 6768 }
+const target: SshTarget = { ...released, orcadFence: { environmentId: 'env-1' } }
+const access = {
+  sshTargetId: 'ssh-1',
+  sshTargetGeneration: 1,
+  remotePort: 6768,
+  targetFingerprint: fingerprintRuntimeSshTarget(target)
+}
 
 beforeEach(() => vi.clearAllMocks())
 
 describe('connecting the SSH host a paired server uses only for its ports', () => {
-  it.each([
-    ['linked', { sshAccess: { ...access, portsOnly: true } }],
-    [
-      'still linking',
-      { pendingSshAccessOperation: { ...access, operation: 'link', portsOnly: true } }
-    ]
-  ])('dials only the SSH connection when %s, never deciding a server', async (_state, link) => {
-    mocks.environments = [{ id: 'env-1', ...link }]
+  it('dials only the SSH connection once linked, never deciding a server', async () => {
+    mocks.environments = [{ id: 'env-1', sshAccess: { ...access, portsOnly: true } }]
     await expect(decideHostServer(target)).resolves.toEqual({
       route: 'managed',
       environmentId: 'env-1'
@@ -55,7 +56,27 @@ describe('connecting the SSH host a paired server uses only for its ports', () =
     expect(mocks.resolve).not.toHaveBeenCalled()
   })
 
-  it('refuses the host while stopping its SSH access is unfinished, so no forwards restore', async () => {
+  it.each([
+    ['linking', 'link', target],
+    ['stopping', 'unlink', target],
+    // An unlink can stop after releasing the host's fence and before it completes.
+    ['stopping past the release', 'unlink', released]
+  ])('refuses the host while %s is unfinished, so no forwards restore', async (_s, op, host) => {
+    mocks.environments = [
+      {
+        id: 'env-1',
+        name: 'Lab',
+        pendingSshAccessOperation: { ...access, operation: op, portsOnly: true }
+      }
+    ]
+    await expect(decideHostServer(host)).rejects.toThrow(
+      "The SSH access change for Lab didn't finish."
+    )
+    expect(mocks.connect).not.toHaveBeenCalled()
+    expect(mocks.resolve).not.toHaveBeenCalled()
+  })
+
+  it('decides the server of a released host edited since, which Retry can no longer finish', async () => {
     mocks.environments = [
       {
         id: 'env-1',
@@ -63,11 +84,8 @@ describe('connecting the SSH host a paired server uses only for its ports', () =
         pendingSshAccessOperation: { ...access, operation: 'unlink', portsOnly: true }
       }
     ]
-    await expect(decideHostServer(target)).rejects.toThrow(
-      'Stopping SSH access for Lab did not finish.'
-    )
-    expect(mocks.connect).not.toHaveBeenCalled()
-    expect(mocks.resolve).not.toHaveBeenCalled()
+    await decideHostServer({ ...released, host: 'box.example' })
+    expect(mocks.resolve).toHaveBeenCalledOnce()
   })
 
   it('still decides the server of a host whose SSH access carries the connection', async () => {
