@@ -80,3 +80,27 @@ it('recognizes bypass selection rows without treating the selected option as a c
 it('does not confuse a cancellable input dialog with a running-turn footer', () => {
   expect(findAgentInputDialogIndex('Enter your API key\n❯ \nEsc to cancel')).not.toBeNull()
 })
+
+it.each([
+  ['qoder-trust-dialog', 100, 32],
+  ['cline-3-0-66-permission', 120, 40],
+  ['antigravity-dialog-model-picker', 120, 40],
+  ['antigravity-1-2-14-trust-dialog', 120, 40]
+])(
+  'refuses the recorded dialog %s, whose menu or key choices own input',
+  async (name, cols, rows) => {
+    const { ruledScreenLines } = await finalReplayFrame(name, cols, rows)
+    expect(findAgentInputDialogIndex(ruledScreenLines.join('\n'))).not.toBeNull()
+  }
+)
+
+it('treats the text it just typed as composer content, however it reads', () => {
+  const typed = 'Document this UI:\nPress enter to confirm'
+  const screen = '❯ Document this UI:\n  Press enter to confirm\n? for shortcuts'
+  expect(findAgentInputDialogIndex(screen, typed)).toBeNull()
+  expect(
+    findAgentInputDialogIndex('❯ Explain why users should allow press enter to continue')
+  ).toBeNull()
+  // The same rows are a dialog when this operation did not type them.
+  expect(findAgentInputDialogIndex(screen)).not.toBeNull()
+})

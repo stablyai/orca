@@ -112,15 +112,18 @@ it('never answers a dialog that appears between paste and Enter and reports unce
 })
 
 it('does not type after a caller deadline expires between readiness and writing', async () => {
+  let release = (): void => {}
   const result = pasteDraftToAgentPtyWhenReady({
     ...args,
-    beforePaste: async () => {
-      // Readiness comes at once from the painted composer; this check outlasts the budget.
-      await new Promise((resolve) => setTimeout(resolve, 3100))
-      return true
-    }
+    // Readiness comes at once from the painted composer; this check is held past the budget.
+    beforePaste: () =>
+      new Promise<boolean>((resolve) => {
+        release = () => resolve(true)
+      })
   })
-  await vi.advanceTimersByTimeAsync(3500)
+  await vi.advanceTimersByTimeAsync(3100)
+  release()
+  await vi.advanceTimersByTimeAsync(400)
   await expect(result).resolves.toBe(false)
   expect(f.write).not.toHaveBeenCalled()
   expect(f.notice).toHaveBeenCalledWith(

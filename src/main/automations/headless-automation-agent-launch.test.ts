@@ -429,7 +429,8 @@ describe('headless automation agent launch', () => {
       agent: 'claude',
       freshLaunch: false,
       text: 'fix the flaky test',
-      unprovableHost: 'write-unless-shell'
+      unprovableHost: 'write-unless-shell',
+      onOutcome: expect.any(Function)
     })
     expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
     expect(launched).toEqual({
@@ -442,16 +443,34 @@ describe('headless automation agent launch', () => {
     })
   })
 
-  it('launches fresh when the idle agent did not take the prompt', async () => {
+  it('launches fresh only when the reused terminal was gone before any write', async () => {
     const runtime = harness()
-    deliverTerminalAgentLaunchPrompt.mockResolvedValue(false)
+    deliverTerminalAgentLaunchPrompt.mockImplementation(async (args) => {
+      ;(args.onOutcome as (outcome: string) => void)('target-gone')
+      return false
+    })
 
     const launched = await launch(runtime, { reuseSession: true }, [previousRun()])
 
-    expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalledTimes(1)
     expect(runtime.launchAgentTerminal).toHaveBeenCalledTimes(1)
     expect(launched.terminalHandle).toBe('term_existing')
   })
+
+  it.each(['not-sent', 'unconfirmed'])(
+    'fails the run instead of sending the prompt to a second session when it was %s',
+    async (outcome) => {
+      const runtime = harness()
+      deliverTerminalAgentLaunchPrompt.mockImplementation(async (args) => {
+        ;(args.onOutcome as (result: string) => void)(outcome)
+        return false
+      })
+
+      await expect(launch(runtime, { reuseSession: true }, [previousRun()])).rejects.toThrow(
+        /Claude/
+      )
+      expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([
     ['its pane now holds another PTY', { ptyId: 'pty-restarted' }],

@@ -116,4 +116,33 @@ describe('generated input admission', () => {
     await vi.advanceTimersByTimeAsync(1000)
     await expect(result).resolves.toBe(false)
   })
+
+  it('keeps a positive composer when ordinary output arrives during the acceptance read', async () => {
+    const f = fixture()
+    let answer: (ready: boolean) => void = () => {}
+    f.accept.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve
+        })
+    )
+    f.emit(MARKER)
+    await vi.advanceTimersByTimeAsync(0)
+    // A busy footer repaints while a slow process read is in flight.
+    f.emit('\x1b[2K working')
+    answer(true)
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(f.result).resolves.toBe(true)
+  })
+
+  it('never counts silence as readiness before the agent enables paste input', async () => {
+    vi.useFakeTimers()
+    const result = waitForGeneratedAgentInput(
+      { subscribe: () => () => {}, accept: async () => true },
+      'render-quiet-after-bracketed-paste',
+      { timeoutMs: 5000 }
+    )
+    await vi.advanceTimersByTimeAsync(5000)
+    await expect(result).resolves.toBe(false)
+  })
 })
