@@ -3,6 +3,10 @@ import { parsePluginManifest } from '../manifest/plugin-manifest'
 import { derivePluginExecutionProfile } from './plugin-execution-profile'
 import { pluginStatusBarItemPatchSchema } from './plugin-status-bar-item-contribution'
 import { pluginContributionSummary } from './plugin-contribution-summary'
+import {
+  buildPluginApprovalRequest,
+  formatPluginApprovalMessage
+} from '../approval/plugin-cli-approval'
 
 function manifest(statusBarItems: unknown[], engines = '>=1.4.248') {
   return {
@@ -64,6 +68,31 @@ describe('contributes.statusBarItems', () => {
       { kind: 'statusBarItems', name: '3 open' },
       { kind: 'statusBarItems', name: 'quiet' }
     ])
+  })
+
+  it('lists items in the dev-load and inspect approval, and binds the fingerprint to them', () => {
+    const subject = (items: unknown[]) => {
+      const parsed = parsePluginManifest(manifest(items))
+      if (!parsed.ok) {
+        throw new Error(parsed.error)
+      }
+      return {
+        pluginKey: 'dev:status-demo',
+        manifest: parsed.manifest,
+        consentFingerprint: 'c',
+        contentIdentity: 'h',
+        isDev: true
+      }
+    }
+    const request = buildPluginApprovalRequest(
+      subject([{ id: 'tasks', text: '3 open' }]),
+      'dev-load'
+    )
+    expect(formatPluginApprovalMessage(request)).toContain('statusBarItems "3 open"')
+    expect(
+      buildPluginApprovalRequest(subject([{ id: 'tasks', text: '4 open' }]), 'dev-load')
+        .approvalFingerprint
+    ).not.toBe(request.approvalFingerprint)
   })
 
   it('needs an engines floor that reads the field', () => {
