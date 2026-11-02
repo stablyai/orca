@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -32,7 +32,7 @@ type Session = NonNullable<
   >
 >
 type SenderNamingDeps = ConstructorParameters<typeof RuntimeOrchestrationSenderNames>[0]
-type HookRow = ReturnType<SenderNamingDeps['getAgentStatusSnapshotForPane']>[number]
+type HookRow = NonNullable<ReturnType<SenderNamingDeps['getAgentStatusSnapshotForPane']>>[number]
 
 let db: OrchestrationDb
 let session: Session

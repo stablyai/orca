@@ -277,4 +277,35 @@ describe('orca plugin shot', () => {
       )
     ).rejects.toMatchObject({ code: 'runtime_unsupported' })
   })
+
+  it('passes pendingRequests and restored on, and notes them in text', async () => {
+    const call = vi
+      .fn()
+      .mockResolvedValue(
+        shotReply({ pendingRequests: 2, actions: [{ ok: true }], restored: false })
+      )
+    await PLUGIN_VIEW_HANDLERS['plugin shot'](
+      context(['plugin', 'shot', 'acme.todos', '--act', '{"press":{"text":"Add"}}'], call, { cwd })
+    )
+    expect(JSON.parse(stdout.join('')).result).toMatchObject({
+      pendingRequests: 2,
+      actions: [{ ok: true }],
+      restored: false
+    })
+    const text = formatPluginShot({
+      path: '/w/a.png',
+      pluginKey: 'acme.todos',
+      panelId: 'todos',
+      width: 300,
+      height: 600,
+      theme: 'dark',
+      themeApplied: false,
+      settled: true,
+      errors: [],
+      pendingRequests: 2,
+      restored: false
+    })
+    expect(text).toContain('2 host call(s) (plugin.request included) were unanswered after 3s')
+    expect(text).toContain('its acted state was not put back')
+  })
 })

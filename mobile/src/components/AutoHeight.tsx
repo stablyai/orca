@@ -8,7 +8,10 @@ import Animated, {
   type SharedValue
 } from 'react-native-reanimated'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
-import { BOTTOM_DRAWER_EASING, BOTTOM_DRAWER_HEIGHT_DURATION_MS } from './bottom-drawer-constants'
+import {
+  BOTTOM_DRAWER_EASING,
+  BOTTOM_DRAWER_HEIGHT_DURATION_MS
+} from './bottom-drawer/bottom-drawer-constants'
 // The same 200 ms as Reduce Motion's cross-fade: content fades while its box eases.
 import { REDUCED_MOTION_FADE_MS as CONTENT_FADE_MS } from './sheet-motion-values'
 

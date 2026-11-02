@@ -12,7 +12,7 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from '../runtime/structured-agent-session-runtime'
+} from '../runtime/agent-session/structured-agent-session-runtime'
 import { acpScriptedChild } from './acp-scripted-child.test-fixture'
 
 let stateDirectory: string | undefined

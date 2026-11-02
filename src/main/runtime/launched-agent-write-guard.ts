@@ -11,7 +11,12 @@ export type LaunchedAgentWriteGuardRuntime = Pick<
   'readLaunchedAgentForeground' | 'subscribeToTerminalData'
 > &
   Partial<
-    Pick<OrcaRuntimeService, 'launchedAgentHostProvesAgent' | 'launchedAgentHostProvesShellAlone'>
+    Pick<
+      OrcaRuntimeService,
+      | 'launchedAgentHostProvesAgent'
+      | 'launchedAgentHostProvesShellAlone'
+      | 'launchedAgentTerminalIdentity'
+    >
   >
 
 /** refuse: write only on agent proof. write-unless-shell: permit unknown. write-if-shell-provable: permit unknown only where a lone shell is provable. */
@@ -32,6 +37,8 @@ export function createLaunchedAgentWriteGuard(
   let disposed = false
   let current: {
     ptyId: string
+    identity: unknown
+    incarnation: unknown
     proven: boolean
     shellMayHaveReturned: boolean
     unsubscribe: () => void
@@ -49,12 +56,30 @@ export function createLaunchedAgentWriteGuard(
     if (disposed) {
       throw new Error('request_aborted')
     }
-    if (current?.ptyId === ptyId && current.proven && !current.shellMayHaveReturned) {
+    const identity = runtime.launchedAgentTerminalIdentity?.(ptyId)
+    const incarnation =
+      identity && typeof identity === 'object' && 'incarnationId' in identity
+        ? identity.incarnationId
+        : undefined
+    if (
+      current?.ptyId === ptyId &&
+      current.identity === identity &&
+      current.incarnation === incarnation &&
+      current.proven &&
+      !current.shellMayHaveReturned
+    ) {
       return
     }
     clearWatch()
     let carry = ''
-    const watch = { ptyId, proven: false, shellMayHaveReturned: false, unsubscribe: (): void => {} }
+    const watch = {
+      ptyId,
+      identity,
+      incarnation,
+      proven: false,
+      shellMayHaveReturned: false,
+      unsubscribe: (): void => {}
+    }
     current = watch
     // Subscribe before probing so shell return during the read cannot be missed.
     watch.unsubscribe = runtime.subscribeToTerminalData(ptyId, (data) => {
@@ -69,7 +94,15 @@ export function createLaunchedAgentWriteGuard(
         ptyId,
         agent
       )
-      if (disposed || current !== watch) {
+      if (
+        disposed ||
+        current !== watch ||
+        runtime.launchedAgentTerminalIdentity?.(ptyId) !== identity ||
+        (identity &&
+          typeof identity === 'object' &&
+          'incarnationId' in identity &&
+          identity.incarnationId !== incarnation)
+      ) {
         throw new Error('request_aborted')
       }
       if (foreground === 'agent') {

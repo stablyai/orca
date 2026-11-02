@@ -1,0 +1,274 @@
+import { randomUUID } from 'node:crypto'
+import { observePtyForeground } from '../../pty/pty-master-foreground-observation'
+import type * as pty from 'node-pty'
+import type { IPtyProvider, PtySpawnOptions } from '../pty-provider-contract'
+import type { PtyProcessInfo } from '../pty-process-info'
+import type { PtySpawnResult } from '../pty-spawn-result'
+import {
+  WRITE_ACCEPTED,
+  writeRefused,
+  type WriteSettlement
+} from '../../../shared/pty-write-settlement'
+import {
+  confirmLocalPtyForegroundProcess,
+  confirmLocalPtyShellForeground,
+  getLocalPtyForegroundProcess,
+  hasLocalPtyChildProcesses,
+  inspectLocalPtyChildProcesses
+} from './local-pty-foreground-inspection'
+import type { LocalPtyProviderOptions } from './local-pty-provider-types'
+import type { PtyProcessInspection, PtyProcessInspectionOptions } from '../pty-process-inspection'
+import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal-osc-color-reply'
+import {
+  _resetPtyOwnerHostColorsForTest,
+  setPtyOwnerHostColors
+} from '../../../shared/pty-owner-color-query-colors'
+import {
+  advanceLoadGeneration,
+  clearPtyState,
+  pendingLocalPtySpawns,
+  ptyProcesses,
+  ptyIncarnations,
+  resetLoadGeneration,
+  type DataCallback,
+  type ExitCallback
+} from './local-pty-provider-state'
+import {
+  clearLocalPtyBuffer,
+  closeLocalPtyStartupQueryAuthority,
+  getDefaultLocalPtyShell,
+  getLocalPtyAppliedSize,
+  getLocalPtyCwd,
+  getLocalPtyProcess,
+  getLocalPtyProfiles,
+  listLocalPtyProcesses,
+  onLocalPtyData,
+  onLocalPtyExit,
+  pauseLocalPtyProducer,
+  resizeLocalPty,
+  resumeLocalPtyProducer,
+  sendLocalPtySignal,
+  writeLocalPty
+} from './local-pty-session-operations'
+import { spawnLocalPty } from './local-pty-spawn'
+import { cancelAllPendingLocalPtySpawns } from './local-pty-spawn-state'
+import { killAllLocalPtys, killOrphanedLocalPtys, shutdownLocalPty } from './local-pty-termination'
+
+export class LocalPtyProvider implements IPtyProvider {
+  private readonly foregroundAuthority = randomUUID()
+  private foregroundEpoch = 0
+  private opts: LocalPtyProviderOptions
+
+  constructor(opts: LocalPtyProviderOptions = {}) {
+    this.opts = opts
+  }
+
+  /** Reconfigure the provider with new hooks (e.g. after window re-creation). */
+  configure(opts: LocalPtyProviderOptions): void {
+    this.opts = opts
+  }
+
+  spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
+    return spawnLocalPty(args, () => this.opts)
+  }
+
+  // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.
+  async attach(_id: string): Promise<void> {}
+  hasPty(id: string): boolean {
+    return ptyProcesses.has(id)
+  }
+  getPtyAvailability = (id: string): boolean => this.hasPty(id)
+
+  write(id: string, data: string): boolean {
+    return writeLocalPty(id, data)
+  }
+
+  // In-process node-pty owns the write endpoint; its synchronous answer settles delivery.
+  writeWithSettlement(id: string, data: string): WriteSettlement {
+    return writeLocalPty(id, data) ? WRITE_ACCEPTED : writeRefused('provider_refused_write')
+  }
+  resize(id: string, cols: number, rows: number): void {
+    resizeLocalPty(id, cols, rows)
+  }
+
+  pauseProducer(id: string): void {
+    pauseLocalPtyProducer(id)
+  }
+
+  resumeProducer(id: string): void {
+    resumeLocalPtyProducer(id)
+  }
+
+  getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    return getLocalPtyAppliedSize(id)
+  }
+
+  shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    return shutdownLocalPty(id, opts)
+  }
+
+  sendSignal(id: string, signal: string): Promise<void> {
+    return sendLocalPtySignal(id, signal)
+  }
+
+  getCwd(id: string): Promise<string> {
+    return getLocalPtyCwd(id)
+  }
+  async getInitialCwd(_id: string): Promise<string> {
+    return ''
+  }
+  clearBuffer(id: string): Promise<void> {
+    return clearLocalPtyBuffer(id)
+  }
+  // A direct PTY keeps no terminal model of its own.
+  async resetInputModes(_id: string): Promise<void> {}
+  closeStartupQueryAuthority(id: string): number {
+    return closeLocalPtyStartupQueryAuthority(id)
+  }
+  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+    setPtyOwnerHostColors(colors)
+  }
+  acknowledgeDataEvent(_id: string, _charCount: number): void {
+    /* no flow control for local */
+  }
+
+  hasChildProcesses(id: string): Promise<boolean> {
+    return hasLocalPtyChildProcesses(id)
+  }
+
+  supportsForegroundObservation(_id: string): boolean {
+    return true
+  }
+
+  async inspectProcess(
+    id: string,
+    options?: PtyProcessInspectionOptions
+  ): Promise<PtyProcessInspection> {
+    const proc = ptyProcesses.get(id)
+    const incarnation = ptyIncarnations.get(id)
+    if (
+      !proc ||
+      !incarnation ||
+      (options?.expectedIncarnationId && options.expectedIncarnationId !== incarnation)
+    ) {
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable'
+      }
+    }
+    if (options?.foregroundOnly === true) {
+      const requestedAt = Date.now()
+      const sample = await observePtyForeground(
+        proc,
+        () => ptyProcesses.get(id) === proc && ptyIncarnations.get(id) === incarnation
+      )
+      return {
+        foregroundProcess: sample.verdict === 'observed' ? sample.processName : null,
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable',
+        foregroundObservation: {
+          ...sample,
+          ptyId: id,
+          ptyIncarnationId: incarnation,
+          authorityGeneration: this.foregroundAuthority,
+          observationEpoch: ++this.foregroundEpoch,
+          capturedAgeMs: Math.max(0, Date.now() - requestedAt)
+        }
+      }
+    }
+    const foregroundProcess = await (process.platform === 'win32' && options?.steadyState !== true
+      ? confirmLocalPtyForegroundProcess(id, true)
+      : getLocalPtyForegroundProcess(id))
+    // A steady-state poll never decides adoption or close, so it may read the cached process table.
+    const childProcessEvidence = await inspectLocalPtyChildProcesses(
+      id,
+      options?.steadyState !== true,
+      options?.ignoreDetached === true
+    )
+    // Neither asynchronous inspection may publish a replacement pane's identity.
+    if (ptyProcesses.get(id) !== proc || ptyIncarnations.get(id) !== incarnation) {
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable'
+      }
+    }
+    return {
+      foregroundProcess,
+      hasChildProcesses: childProcessEvidence !== 'no-children',
+      childProcessEvidence
+    }
+  }
+
+  getForegroundProcess(id: string): Promise<string | null> {
+    return getLocalPtyForegroundProcess(id)
+  }
+
+  confirmForegroundProcess(id: string): Promise<string | null> {
+    return confirmLocalPtyForegroundProcess(id)
+  }
+
+  confirmShellForeground(id: string): Promise<boolean> {
+    return confirmLocalPtyShellForeground(id)
+  }
+
+  async serialize(_ids: string[]): Promise<string> {
+    return '{}'
+  }
+  async revive(_state: string): Promise<void> {
+    /* re-spawning handles local revival */
+  }
+
+  async listProcesses(opts?: { ptyIds?: readonly string[] }): Promise<PtyProcessInfo[]> {
+    const rows = await listLocalPtyProcesses()
+    return opts?.ptyIds ? rows.filter((row) => opts.ptyIds?.includes(row.id)) : rows
+  }
+
+  getDefaultShell(): Promise<string> {
+    return getDefaultLocalPtyShell(() => this.opts)
+  }
+
+  getProfiles(): Promise<{ name: string; path: string }[]> {
+    return getLocalPtyProfiles()
+  }
+
+  onData(callback: DataCallback): () => void {
+    return onLocalPtyData(callback)
+  }
+
+  // Local PTYs don't replay -- this is for remote reconnection
+  onReplay(_callback: (payload: { id: string; data: string }) => void): () => void {
+    return () => {}
+  }
+
+  onExit(callback: ExitCallback): () => void {
+    return onLocalPtyExit(callback)
+  }
+
+  killOrphanedPtys(currentGeneration: number): { id: string }[] {
+    return killOrphanedLocalPtys(currentGeneration)
+  }
+
+  advanceGeneration(): number {
+    return advanceLoadGeneration()
+  }
+
+  getPtyProcess(id: string): pty.IPty | undefined {
+    return getLocalPtyProcess(id)
+  }
+
+  killAll(): void {
+    killAllLocalPtys()
+  }
+}
+
+export function _resetLocalPtyProviderStateForTest(): void {
+  cancelAllPendingLocalPtySpawns()
+  pendingLocalPtySpawns.clear()
+  for (const id of ptyProcesses.keys()) {
+    clearPtyState(id)
+  }
+  resetLoadGeneration()
+  _resetPtyOwnerHostColorsForTest()
+}

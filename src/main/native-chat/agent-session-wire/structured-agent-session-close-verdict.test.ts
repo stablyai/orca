@@ -12,7 +12,7 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { describeNativeChatTurnStatus } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { selectStructuredAgentSettledTurns } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {

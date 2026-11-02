@@ -17,11 +17,11 @@ import type { RuntimeServiceCommandSurface } from './runtime-service-command-sur
 import type { RuntimeSkillCommandSurface } from './runtime-skill-command-contract'
 import type { RuntimePerforceCommandSurface } from './runtime-perforce-commands'
 
-export type PtyIncarnationHandleRecord = {
+export type PtyIncarnationHandleRecord = Readonly<{
   handle: string
   incarnationId: string | null
   leafKey: string
-}
+}>
 
 export type RuntimeWorktreeScanCache = {
   generation: number

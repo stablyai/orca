@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { assignmentLeaseKeyId } from './assignment/assignment-lease.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import {
   encodeMembership,
   type CellAdmissionMembership

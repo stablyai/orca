@@ -8,7 +8,7 @@ import type {
   NativeChatSessionStatus,
   NativeChatTurnLifecycle
 } from './native-chat-types'
-import { LIFECYCLE_CLOCK_SKEW_SLACK_MS } from '../native-chat-clock-skew'
+import { LIFECYCLE_CLOCK_SKEW_SLACK_MS } from './transcript/native-chat-clock-skew'
 
 export type NativeChatLiveMergeInput = {
   /** Already deduped, ordered, and transcript-normalized by the live assembler. */

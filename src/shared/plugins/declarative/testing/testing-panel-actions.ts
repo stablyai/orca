@@ -1,3 +1,7 @@
+import {
+  pluginTableVisibleColumns,
+  type PluginTableBreakpoint
+} from '../plugin-declarative-table-columns'
 import type { MockHost } from './testing-host'
 import type { TestElement, TestQuery } from './testing-tree'
 import type { ControlValue, createValueControls } from './testing-value-controls'
@@ -215,6 +219,31 @@ export function createPanelActions({
       return treeItems(tree)
         .map((item) => item.key)
         .filter((key) => expandedOf(tree).has(key))
+    },
+    /** The keys of a Table's columns Orca shows at `width` px (wide when omitted), after `hideBelow`. */
+    columnsOf: (target: Target, view: { width?: number } = {}): string[] => {
+      const table = resolve(target, 'columnsOf')
+      expectType(table, 'Table', 'columnsOf')
+      const columns = Array.isArray(table.props.columns) ? table.props.columns : []
+      const keyed = columns.flatMap(
+        (column: unknown): { key: string; hideBelow?: PluginTableBreakpoint }[] => {
+          if (typeof column !== 'object' || column === null || !('key' in column)) {
+            return []
+          }
+          const hideBelow = 'hideBelow' in column ? column.hideBelow : undefined
+          return typeof column.key === 'string'
+            ? [
+                {
+                  key: column.key,
+                  hideBelow: hideBelow === 'sm' || hideBelow === 'md' ? hideBelow : undefined
+                }
+              ]
+            : []
+        }
+      )
+      return pluginTableVisibleColumns(keyed, view.width ?? Number.POSITIVE_INFINITY).map(
+        (column) => column.key
+      )
     },
     /** The keys of a Table's rows, in the order Orca draws them. */
     rowsOf: (target: Target): string[] => {

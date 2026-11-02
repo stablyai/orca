@@ -141,6 +141,7 @@ export function buildDefaultSettings(args: {
     agentDefaultSurface: 'terminal',
     nativeChatResumeWorkOnRestart: false,
     nativeChatQueueFollowUps: true,
+    nativeChatAutoContinueAfterUsageLimit: false,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
     nativeChatInheritShellEnvironment: true,
@@ -273,6 +274,7 @@ export function buildDefaultSettings(args: {
     experimentalEphemeralVms: false,
     experimentalConnectors: false,
     experimentalWslHosts: false,
+    experimentalOrchestrationPanel: false,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,

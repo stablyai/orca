@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { SessionInfo } from '../daemon/types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const getDaemonProviderMock = vi.fn()
 vi.mock('../daemon/daemon-provider-state', () => ({

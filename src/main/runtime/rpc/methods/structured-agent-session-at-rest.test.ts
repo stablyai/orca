@@ -24,7 +24,7 @@ import {
   REST_TEST_THREAD,
   restTestSend
 } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import { editPersistedTestAgentSessionStore } from '../../agent-session-record-store-test-harness'
+import { editPersistedTestAgentSessionStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcResponse } from '../core'
 import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 

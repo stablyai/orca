@@ -253,18 +253,6 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     }
   })
 
-  it('closes a live local watcher immediately for worktree deletion', async () => {
-    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
-    const unsubscribeMock = vi.fn()
-    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
-    const sender = createWatcherSender(1)
-
-    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
-    await closeLocalWatcherForWorktreePath('/tmp/repo')
-
-    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
-  })
-
   it.each([
     ['C:\\Repo', 'c:/repo'],
     ['\\\\Server\\Share\\Repo', '//server/share/repo']

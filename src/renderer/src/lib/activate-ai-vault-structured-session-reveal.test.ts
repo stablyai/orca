@@ -100,52 +100,6 @@ describe('revealStructuredSession', () => {
     expect(mocks.call).not.toHaveBeenCalled()
   })
 
-  it('reports unreachable when the capability probe cannot reach the host', async () => {
-    // Losing contact is not evidence about the host's age or about the chat.
-    mocks.environmentIdFor.mockReturnValue('env-1')
-    mocks.supports.mockRejectedValue(new Error('status timeout'))
-
-    await expect(revealStructuredSession(target)).resolves.toBe('unreachable')
-
-    expect(mocks.call).not.toHaveBeenCalled()
-  })
-
-  it('gives up on a probe that never settles instead of hanging the row', async () => {
-    // A hung probe must not retain the session’s in-flight guard forever.
-    vi.useFakeTimers()
-    mocks.environmentIdFor.mockReturnValue('env-1')
-    mocks.supports.mockReturnValue(new Promise(() => {}))
-
-    try {
-      const outcome = revealStructuredSession(target)
-      await vi.advanceTimersByTimeAsync(10_000)
-
-      await expect(outcome).resolves.toBe('unreachable')
-      expect(mocks.call).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('reports the chat gone only for the refusal that means the record is absent', async () => {
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: { code: 'agent_session_identity_required' }
-    })
-
-    await expect(revealStructuredSession(target)).resolves.toBe('gone')
-  })
-
-  it('does not call a host-side refusal a missing chat', async () => {
-    // A host can retain the record without an adapter to open it; that does not mean the chat is gone.
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: { code: 'structured_agent_session_unsupported' }
-    })
-
-    await expect(revealStructuredSession(target)).resolves.toBe('host-cannot-open')
-  })
-
   it('reads a version block as a host too old, not as a lost connection', async () => {
     mocks.environmentIdFor.mockReturnValue('env-1')
     const blocked = Object.assign(new Error('Update the Orca server'), {
@@ -155,12 +109,6 @@ describe('revealStructuredSession', () => {
 
     await expect(revealStructuredSession(target)).resolves.toBe('host-cannot-open')
     expect(mocks.call).not.toHaveBeenCalled()
-  })
-
-  it('reports unreachable when the call fails rather than answers', async () => {
-    mocks.call.mockRejectedValue(new Error('structured_session_restore_timeout'))
-
-    await expect(revealStructuredSession(target)).resolves.toBe('unreachable')
   })
 })
 

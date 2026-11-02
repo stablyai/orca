@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as producers from '../journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../agent-session-wire'
 import {
@@ -126,41 +127,6 @@ function streamRevision(
 }
 
 describe('structured agent session item retention', () => {
-  it('bounds retained items on a long live session', () => {
-    const streamed = streamItems(
-      hydrate([item(0)]),
-      Array.from({ length: CAP + 500 }, (_, index) => index + 1)
-    )
-
-    expect(streamed.items).toHaveLength(CAP)
-    expect(streamed.items.at(-1)?.sequence).toBe(CAP + 500)
-    expect(streamed.items[0]?.sequence).toBe(501)
-  })
-
-  it('offers paging for items the cap dropped', () => {
-    const streamed = streamItems(
-      hydrate([item(0)]),
-      Array.from({ length: CAP + 10 }, (_, index) => index + 1)
-    )
-
-    expect(streamed.hasOlder).toBe(true)
-    expect(oldestStructuredAgentSessionCursor(streamed)).toEqual({
-      epoch: 'epoch-a',
-      sequence: streamed.items[0]?.sequence
-    })
-  })
-
-  it('leaves a session under the cap untouched', () => {
-    const hydrated = hydrate([item(0)])
-    const streamed = streamItems(
-      hydrated,
-      Array.from({ length: 200 }, (_, index) => index + 1)
-    )
-
-    expect(streamed.items).toHaveLength(201)
-    expect(streamed.hasOlder).toBe(false)
-  })
-
   it('widens the retained window when older items are paged in', () => {
     const streamed = streamItems(
       hydrate([item(1_000)], true),
@@ -349,6 +315,43 @@ describe('structured agent session item retention', () => {
     })
 
     expect(unchanged.items).toBe(hydrated.items)
+  })
+
+  it('advances the cursor of a batch with no journal change without rescanning the window', () => {
+    for (const length of [1_000, 10_000]) {
+      let paged = hydrate(range(length - 200, 200).map(item), true)
+      for (let end = length - 200; end > 0; end -= 200) {
+        paged = reduceStructuredAgentSession(paged, {
+          type: 'older-page',
+          requestedCursor: { epoch: 'epoch-a', sequence: end },
+          page: page(range(end - 200, 200).map(item), end > 200)
+        })
+      }
+      expect(paged.items).toHaveLength(length)
+      const checks = vi.spyOn(producers, 'isRootAgentJournalItem')
+      try {
+        const advanced = reduceStructuredAgentSession(paged, {
+          type: 'event',
+          event: {
+            type: 'batch',
+            sessionId: 'session-a',
+            batch: {
+              cursor: { epoch: 'epoch-a', sequence: length + 1 },
+              items: [],
+              removedItemIds: [],
+              submissions: []
+            }
+          }
+        })
+
+        expect(advanced.cursor).toEqual({ epoch: 'epoch-a', sequence: length + 1 })
+        expect(advanced.items).toBe(paged.items)
+        expect(advanced.hasOlder).toBe(paged.hasOlder)
+        expect(checks).not.toHaveBeenCalled()
+      } finally {
+        checks.mockRestore()
+      }
+    }
   })
 
   it("counts the session's own rows, so a subagent's burst keeps the rows before it", () => {

@@ -1,5 +1,5 @@
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Before start, new-chat options must match the workspace catalog's first model/effort frame so the picker stays stable.
 
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

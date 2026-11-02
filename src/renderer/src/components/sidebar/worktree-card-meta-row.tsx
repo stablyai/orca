@@ -6,6 +6,8 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import CacheTimer from './CacheTimer'
 import { WorktreeHostContextBadge } from './WorktreeHostContextBadge'
+import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
+import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import { conflictOperationLabel } from './WorktreeCardHelpers'
 import { TruncatedSidebarLabel } from './truncated-sidebar-label'
 import { getDirectoryName } from './worktree-card-model'
@@ -44,6 +46,9 @@ export function WorktreeCardMetaRow({
     showMetaRowDetails,
     detailsAndPorts
   } = presentation
+  const wslDistro = useWslHostDistro(
+    showHostContextBadge ? getWorktreeExecutionHostId(worktree, repo) : null
+  )
 
   return (
     <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
@@ -58,7 +63,12 @@ export function WorktreeCardMetaRow({
           </div>
         )}
 
-        {showHostContextBadge && <WorktreeHostContextBadge label={contextLabel ?? ''} />}
+        {showHostContextBadge &&
+          (wslDistro ? (
+            <WslHostMark distro={wslDistro} />
+          ) : (
+            <WorktreeHostContextBadge label={contextLabel ?? ''} />
+          ))}
 
         {showIdentityInNewCard ? (
           <TruncatedSidebarLabel

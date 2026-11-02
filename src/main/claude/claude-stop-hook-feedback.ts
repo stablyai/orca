@@ -1,4 +1,4 @@
-import { hookOutcomeRowBody } from '../../shared/agent-session-hook-outcome'
+import { hookOutcomeRowBody } from '../../shared/agent-session/journal/agent-session-hook-outcome'
 import type { AgentJournalPlainStatusItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   claudeRecord,

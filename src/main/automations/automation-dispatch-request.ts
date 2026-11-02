@@ -7,7 +7,7 @@ import type {
   AutomationPrecheckResult
 } from '../../shared/automations-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import type { HeadlessAutomationDispatchContext } from './headless-dispatch-runner'

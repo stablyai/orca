@@ -40,6 +40,7 @@ import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
+import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
 import { setRuntimeFileWriteGuard } from './runtime/runtime-file-mutation-client'
 import { checkoutPerforceFileBeforeWrite } from './lib/perforce-checkout-before-write'
@@ -127,6 +128,7 @@ function App(): React.JSX.Element {
           document.body
         )}
         <PlainSshTerminalPanels />
+        <PluginShotReplayMount />
       </TooltipProvider>
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />

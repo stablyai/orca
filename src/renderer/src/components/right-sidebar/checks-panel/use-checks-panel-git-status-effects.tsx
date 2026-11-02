@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { useEffect, useRef } from 'react'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
@@ -310,6 +311,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     void getHostedReviewCreationEligibility({
       repoPath: repo.path,
       repoId: repo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
       ...(activeWorktreePath ? { worktreePath: activeWorktreePath } : {}),
       branch,
       base: repo.worktreeBaseRef ?? null,

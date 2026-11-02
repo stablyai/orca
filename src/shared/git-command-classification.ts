@@ -4,6 +4,7 @@
 const ALWAYS_READ_SUBCOMMANDS = new Set([
   'blame',
   'cat-file',
+  'check-attr',
   'check-ref-format',
   'check-ignore',
   'describe',

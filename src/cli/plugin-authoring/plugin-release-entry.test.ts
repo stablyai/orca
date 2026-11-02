@@ -79,6 +79,18 @@ describe('orca plugin release-entry', () => {
     expect(result.note).toContain('uncommitted changes')
   })
 
+  it('gives no entry when the commit lacks a file the manifest declares', async () => {
+    const repo = await tempRoot()
+    await git(repo, ['init', '--quiet'])
+    await createPluginFromTemplate({ dir: repo, template: 'theme', publisher: 'acme' })
+    await git(repo, ['add', 'orca-plugin.json'])
+    await git(repo, ['commit', '--quiet', '-m', 'manifest only'])
+
+    const result = await releaseFor(repo)
+    expect(result.entry).toBeUndefined()
+    expect(result.note).toContain('themes/dark.json')
+  })
+
   it('explains why there is no entry outside Git or before the first commit', async () => {
     const outside = join(await tempRoot(), 'loose')
     await createPluginFromTemplate({ dir: outside, template: 'theme', publisher: 'acme' })

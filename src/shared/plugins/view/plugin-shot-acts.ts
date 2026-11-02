@@ -2,13 +2,17 @@ import { z } from 'zod'
 
 /**
  * `orca plugin shot --act`: input run against the live components panel before the capture, in
- * the test kit's vocabulary (`press(query)`, `type(query, text, { replace, submit })`,
- * `select(query, value)`, `toggle(query)`). Queries match as the kit's do, with plain strings.
+ * the test kit's vocabulary: `press(query)`, `type(query, text, { replace, submit })`,
+ * `select(query, value)`, `toggle(query)`, `slide(query, value)`, and the Table and Tree verbs
+ * (`sort`, `selectRows`, `activateRow`, `loadMore`, `expand`, `collapse`, `selectItem`,
+ * `activateItem`). Queries match as the kit's do, with plain strings.
  */
 
 export const PLUGIN_SHOT_MAX_ACTS = 20
 const QUERY_TEXT_MAX = 200
 const TYPE_TEXT_MAX = 500
+// A Table's `selectRows`; well above a person's multi-select.
+const PLUGIN_SHOT_MAX_ROW_KEYS = 200
 
 const queryText = z.string().min(1).max(QUERY_TEXT_MAX)
 
@@ -26,6 +30,8 @@ export const pluginShotQuerySchema = z
 
 export type PluginShotQuery = z.infer<typeof pluginShotQuerySchema>
 
+const keyText = z.string().min(1).max(QUERY_TEXT_MAX)
+
 const ACT_SCHEMAS = {
   press: z.strictObject({ press: pluginShotQuerySchema }),
   type: z.strictObject({
@@ -35,14 +41,35 @@ const ACT_SCHEMAS = {
     submit: z.boolean().optional()
   }),
   select: z.strictObject({ select: pluginShotQuerySchema, value: z.string().max(QUERY_TEXT_MAX) }),
-  toggle: z.strictObject({ toggle: pluginShotQuerySchema })
+  toggle: z.strictObject({ toggle: pluginShotQuerySchema }),
+  slide: z.strictObject({ slide: pluginShotQuerySchema, value: z.number().finite() }),
+  sort: z.strictObject({ sort: pluginShotQuerySchema, column: keyText }),
+  selectRows: z.strictObject({
+    selectRows: pluginShotQuerySchema,
+    keys: z.array(keyText).max(PLUGIN_SHOT_MAX_ROW_KEYS)
+  }),
+  activateRow: z.strictObject({ activateRow: pluginShotQuerySchema, key: keyText }),
+  loadMore: z.strictObject({ loadMore: pluginShotQuerySchema }),
+  expand: z.strictObject({ expand: pluginShotQuerySchema, key: keyText }),
+  collapse: z.strictObject({ collapse: pluginShotQuerySchema, key: keyText }),
+  selectItem: z.strictObject({ selectItem: pluginShotQuerySchema, key: keyText }),
+  activateItem: z.strictObject({ activateItem: pluginShotQuerySchema, key: keyText })
 }
 
 export const pluginShotActSchema = z.union([
   ACT_SCHEMAS.press,
   ACT_SCHEMAS.type,
   ACT_SCHEMAS.select,
-  ACT_SCHEMAS.toggle
+  ACT_SCHEMAS.toggle,
+  ACT_SCHEMAS.slide,
+  ACT_SCHEMAS.sort,
+  ACT_SCHEMAS.selectRows,
+  ACT_SCHEMAS.activateRow,
+  ACT_SCHEMAS.loadMore,
+  ACT_SCHEMAS.expand,
+  ACT_SCHEMAS.collapse,
+  ACT_SCHEMAS.selectItem,
+  ACT_SCHEMAS.activateItem
 ])
 
 export type PluginShotAct = z.infer<typeof pluginShotActSchema>
@@ -57,7 +84,21 @@ export const pluginShotActResultSchema: z.ZodType<PluginShotActResult> = z.union
   z.object({ ok: z.literal(false), error: z.string().max(2000) })
 ])
 
-const VERBS = ['press', 'type', 'select', 'toggle'] as const
+const VERBS = [
+  'press',
+  'type',
+  'select',
+  'toggle',
+  'slide',
+  'sort',
+  'selectRows',
+  'activateRow',
+  'loadMore',
+  'expand',
+  'collapse',
+  'selectItem',
+  'activateItem'
+] as const satisfies readonly (keyof typeof ACT_SCHEMAS)[]
 
 function issueOf(index: number, value: unknown): string {
   const where = `action ${index + 1}`

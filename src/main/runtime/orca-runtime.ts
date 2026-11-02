@@ -20,8 +20,8 @@ import type {
   AgentLaunchPaneVerdict
 } from '../../shared/agent-launch-pane-verdict'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
 import { WorkspaceLayoutStream, type WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'

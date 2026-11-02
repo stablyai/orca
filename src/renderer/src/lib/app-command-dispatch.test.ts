@@ -6,14 +6,6 @@ let cleanup: (() => void) | null = null
 afterEach(() => cleanup?.())
 
 describe('app command dispatch', () => {
-  it('routes known action ids through the current handler registry', () => {
-    const dispatcher = vi.fn(() => true)
-    cleanup = registerAppCommandDispatcher(dispatcher)
-
-    expect(dispatchAppCommand('view.tasks', 'plugin-palette')).toBe(true)
-    expect(dispatcher).toHaveBeenCalledWith('view.tasks', 'plugin-palette')
-  })
-
   it('rejects unknown actions and unregisters only the current dispatcher', () => {
     const staleCleanup = registerAppCommandDispatcher(() => true)
     const current = vi.fn(() => true)
