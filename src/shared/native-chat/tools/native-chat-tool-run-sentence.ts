@@ -69,6 +69,15 @@ export function nativeChatToolRunClauses(
   return [...counts].map(([category, count]) => ({ category, count }))
 }
 
+// Only these languages start a mid-sentence clause lowercase; German nouns and others keep their casing.
+const LOWERCASE_CONTINUATION_LANGUAGES = new Set(['en', 'es', 'fr', 'pt', 'ru', 'tr'])
+
+export function continueNativeChatToolRunClause(clause: string, locale: string): string {
+  return LOWERCASE_CONTINUATION_LANGUAGES.has(locale.split('-')[0].toLowerCase())
+    ? `${clause.charAt(0).toLocaleLowerCase(locale)}${clause.slice(1)}`
+    : clause
+}
+
 /** Capitalize only the first clause; locale-lowercase later first characters while preserving internal acronyms. */
 export function joinNativeChatToolRunClauses(
   clauses: readonly string[],
