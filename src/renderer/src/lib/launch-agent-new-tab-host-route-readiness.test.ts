@@ -121,7 +121,9 @@ describe('an AI button whose agent is ready before the host answers', () => {
     await vi.advanceTimersByTimeAsync(10)
     expect(testState.sendGeneratedTerminalInput).toHaveBeenCalledExactlyOnceWith(
       'pty-1',
-      expect.objectContaining({ text: 'resolve the conflicts', submit: true, intent: 'startup' })
+      expect.objectContaining({ text: 'resolve the conflicts', submit: true, intent: 'startup' }),
+      // No takeover cancellation: a launch prompt is not held keys.
+      undefined
     )
     await expect(promptDeliveryResult).resolves.toEqual({ delivered: true, failureNotified: false })
     expect(testState.appState.seedNativeChatLaunchPrompt).toHaveBeenCalledOnce()

@@ -32,7 +32,6 @@ export class GeneratedInputObservation {
   private tailText = ''
   private replaying = true
   private pending = ''
-  private pendingTruncated = false
   private dispose: (() => void) | undefined
   private closed = false
   /** Output count; a startup signal refused once is asked again only after new output. */
@@ -58,12 +57,11 @@ export class GeneratedInputObservation {
       this.lastOutput = Date.now()
       this.sequence += 1
       if (this.replaying) {
-        // Kept in order and bounded while the replay is read; what overflows is older than
-        // any tail could keep, and losing it forfeits any readiness seen before it.
+        // Kept in order until the replay is read. Output arriving proves the subscription is
+        // live, so past the bound the replay is read now rather than any output being dropped.
         this.pending += data
         if (this.pending.length > PENDING_CHARS) {
-          this.pending = this.pending.slice(-PENDING_CHARS)
-          this.pendingTruncated = true
+          this.applyReplay(feed)
         }
         return
       }
@@ -76,18 +74,23 @@ export class GeneratedInputObservation {
     }
     this.dispose = dispose
     this.lastOutput = Date.now()
+    this.applyReplay(feed)
+  }
+
+  /** Output from before the subscription, then what arrived while it was set up, in order. */
+  private applyReplay(feed: GeneratedInputObservationFeed): void {
+    if (!this.replaying) {
+      return
+    }
+    this.replaying = false
     const replay = feed.replay?.()
     if (replay) {
       this.scan(replay)
-    }
-    if (this.pendingTruncated) {
-      this.forgetReadiness()
     }
     if (this.pending) {
       this.scan(this.pending)
       this.pending = ''
     }
-    this.replaying = false
   }
 
   close(): void {
