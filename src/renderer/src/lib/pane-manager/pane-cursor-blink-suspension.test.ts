@@ -39,6 +39,7 @@ function createTestPane(options: { cursorBlink?: boolean } = {}): TestPane {
   })
   terminal.open(host)
   terminal.focus()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this DOM fixture provides the fields used by suspend/resume.
   const pane = {
     id: 1,
     terminal,
