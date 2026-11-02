@@ -7,6 +7,7 @@ import { getPsParentProcessAsync } from './daemon-process-identity-query'
 import { MAC_TERMINAL_HOST_EXECUTABLE } from './macos-daemon-bundle'
 import { canLaunchMacDaemonFromStableBundle } from './macos-daemon-launchd'
 import { PROTOCOL_VERSION } from './types'
+import { DAEMON_LOGIN_SESSION_WATCH_ARG } from './daemon-login-session-watch-arg'
 
 const LAUNCHD_PID = 1
 
@@ -64,10 +65,7 @@ export async function getMacDaemonTccAttributionHealth(
       tokenPath,
       protocolVersion
     )
-    if (!parsedPid) {
-      return 'unknown'
-    }
-    if (!parsedPid.spawnerExecPath) {
+    if (!parsedPid?.spawnerExecPath) {
       return 'unknown'
     }
     if (!existsSync(parsedPid.spawnerExecPath)) {
@@ -84,7 +82,9 @@ export async function getMacDaemonTccAttributionHealth(
     // Once the forking app exits, tccd sees each new child as its own session, so session-scoped grants never stick (#12971).
     // Only hosts that a restart moves onto the launchd helper report it; forking again would sever again.
     return parent.parentPid === LAUNCHD_PID &&
-      canLaunchMacDaemonFromStableBundle(parent.commandLine.includes('--login-session-watch'))
+      canLaunchMacDaemonFromStableBundle(
+        parent.commandLine.includes(DAEMON_LOGIN_SESSION_WATCH_ARG)
+      )
       ? 'severed'
       : 'intact'
   })()

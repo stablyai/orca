@@ -2,6 +2,7 @@ import { runProcess } from '@orca/process-host'
 import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
 import { PROTOCOL_VERSION } from './daemon-protocol-version'
 import { macDaemonJobLabel } from './macos-daemon-job-label'
+import { DAEMON_LOGIN_SESSION_WATCH_ARG } from './daemon-login-session-watch-arg'
 
 export type RetiredMacDaemonJob = {
   service: string
@@ -91,7 +92,7 @@ export async function readMacDaemonRecoveryJob(
     pid <= 1 ||
     !launchNonce ||
     launchNonce.startsWith('--') ||
-    !args.includes('--login-session-watch') ||
+    !args.includes(DAEMON_LOGIN_SESSION_WATCH_ARG) ||
     argument('--socket') !== socketPath ||
     argument('--token') !== getDaemonTokenPath(runtimeDir, protocolVersion) ||
     argument('--pid-record') !== pidPath

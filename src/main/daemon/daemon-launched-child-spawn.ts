@@ -16,6 +16,7 @@ import {
 } from './daemon-appimage-generation-launch'
 import { daemonLogArgs } from './daemon-launch-paths'
 import { TERMINAL_SPAWN_ADMISSION_ARG } from './terminal-spawn-gate'
+import { DAEMON_LOGIN_SESSION_WATCH_ARG } from './daemon-login-session-watch-arg'
 
 // Idle terminal polling churns short-lived strings; uncapped, V8 grows the young generation to 64 MB semispaces (~120 MB resident).
 export const DAEMON_V8_FLAGS = ['--max-semi-space-size=4'] as const
@@ -69,7 +70,7 @@ export function buildDaemonScriptArgs(
     getAppEnvironment().getVersion(),
     '--spawner-exec-path',
     spawnerExecPath,
-    ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
+    ...(macosLoginSessionWatch ? [DAEMON_LOGIN_SESSION_WATCH_ARG] : []),
     ...(options.spawnAdmission === 'enforce' ? [TERMINAL_SPAWN_ADMISSION_ARG, 'enforce'] : []),
     ...daemonLogArgs()
   ]
