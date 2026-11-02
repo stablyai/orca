@@ -219,7 +219,7 @@ export class TrustDialogStatusObserver {
     }
     pane.misses = 0
     const keys = trustChoiceKeys(emulator)
-    if (keys && keys !== pane.trustKeys) {
+    if (keys !== pane.trustKeys) {
       this.publishWaiting(ptyId, pane, owned.agent, emulator)
       owned = pane.owned ?? owned
     }

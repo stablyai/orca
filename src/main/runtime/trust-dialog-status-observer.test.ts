@@ -140,6 +140,17 @@ describe('TrustDialogStatusObserver', () => {
     expect(card?.kind === 'approval' && card.approval.options[0]?.send).toBe('\x1b[A\r')
   })
 
+  it('drops the trust choice when a repaint hides the highlight', async () => {
+    const { prompts, recording, write } = await pane('codex-0-158-0-trustprompt', 'codex')
+    await write(recording)
+    await write('\x1b[9;1H\x1b[2K  1. Trust and continue')
+    await vi.advanceTimersByTimeAsync(1_000)
+    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'codex')
+    expect(card?.kind === 'approval' && card.approval.options).toEqual([
+      { label: 'Exit', send: '\x1b' }
+    ])
+  })
+
   // A send would still hit the highlighted choice, so the card keeps Exit and locks terminal sends.
   it('offers only Exit when no highlighted choice is visible', async () => {
     const { prompts, recording, write } = await pane('codex-0-158-0-trustprompt', 'codex')
@@ -225,10 +236,11 @@ describe('TrustDialogStatusObserver', () => {
     // The shell prompt lands inside the stale frame, so the screen still shows the dialog.
     await write('user@host repo $ ')
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(['waiting'])
+    // The prompt pushes the choices apart, so the card falls back to Exit-only but stays waiting.
+    expect(published).toEqual(['waiting', 'waiting'])
     foreground.mockResolvedValue('shell')
     await write(' ')
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(published).toEqual(['waiting', 'done'])
+    expect(published).toEqual(['waiting', 'waiting', 'done'])
   })
 })
