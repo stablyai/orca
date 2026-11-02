@@ -16,6 +16,7 @@ import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolu
 import { withTimeoutResult } from '../../runtime-async-boundaries'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 
 export type SwitchTerminalSpawn = {
   agent: TuiAgent
@@ -130,8 +131,10 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       ? this.switchTerminalClaim(workspace, args.agent, providerSession)
       : undefined
     try {
-      if (claim) {
-        await this.ptyController?.prepareAgentSessionOwner?.(claim)
+      const preparing = claim ? this.ptyController?.prepareAgentSessionOwner?.(claim) : undefined
+      if (preparing) {
+        // A join waits on another create; the switch's deadline bounds it, as nothing stopped yet.
+        await waitForPromiseWithSignal(preparing, args.signal)
       }
     } catch (error) {
       if (isClaimHeldElsewhere(error)) {
