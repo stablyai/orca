@@ -14,7 +14,11 @@ function fixture(name: string): { recording: string; cols: number; rows: number 
 const CODEX_COMPOSER = '\x1b[2J\x1b[H\u203a Ask Codex to do anything\r\n  gpt-5 \u00b7 ~/repo\r\n'
 const SHELL_PROMPT = '\x1b[J\r\nuser@host repo $ '
 
-async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'claude') {
+async function createTrustDialogPane(
+  name: string,
+  launchAgent: TuiAgent = 'claude',
+  overrides: Partial<Parameters<typeof createTranscriptPane>[0]> = {}
+) {
   const { recording, cols, rows: gridRows } = fixture(name)
   const rows = new Map<string, AgentStatusIpcPayload>()
   const published: string[] = []
@@ -26,7 +30,8 @@ async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'clau
       foregroundProcess: '2.1.310',
       launchAgent,
       size: { cols, rows: gridRows },
-      data: ''
+      data: '',
+      ...overrides
     },
     {
       onTerminalAgentStatus: ({ paneKey, payload }) => {
@@ -66,9 +71,13 @@ describe('TrustDialogStatusObserver', () => {
     vi.useRealTimers()
   })
 
-  async function pane(name: string, launchAgent?: TuiAgent) {
+  async function pane(
+    name: string,
+    launchAgent?: TuiAgent,
+    overrides?: Partial<Parameters<typeof createTranscriptPane>[0]>
+  ) {
     vi.useFakeTimers()
-    const created = await createTrustDialogPane(name, launchAgent)
+    const created = await createTrustDialogPane(name, launchAgent, overrides)
     cleanups.push(async () => {
       await created.runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
     })
@@ -86,6 +95,21 @@ describe('TrustDialogStatusObserver', () => {
     await write(recording, size)
     await vi.advanceTimersByTimeAsync(2_000)
     expect(published).toEqual(expected)
+  })
+
+  // Native Claude typed into a shell: its foreground name is its version until a scan reads its argv.
+  it('publishes the trust card for hand-typed native Claude without storing its identity', async () => {
+    const { runtime, published, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      {
+        launchAgent: undefined,
+        confirmedForegroundProcess: 'claude'
+      }
+    )
+    await write(recording)
+    expect(published).toEqual(['waiting'])
+    expect(runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent).not.toBe('claude')
   })
 
   // Keys verified against Claude Code 2.1.316: digits do nothing, Down+Enter trusts, Enter alone exits.
