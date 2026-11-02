@@ -2,7 +2,7 @@ import './mock-descendant-sweep'
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { SETUP_STATUS_FILE_ENV } from '../../shared/observed-setup-launch'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isPreparedAgentLaunchStatus } from '../../shared/prepared-agent-launch'
 import { fingerprintPreparedAgentLaunch } from './prepared-agent-launch-payload'
 import { HeadlessEmulator } from './headless-emulator'
@@ -10,6 +10,9 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
+// Only Date is faked, starting at a fixed instant and still advancing: the host, its timers and the
+// Setup it watches run on real time, while the launch's deadline and operation id are fixed.
+const NOW = 1_800_000_000_000
 const COLS = 40
 const ROWS = 6
 const FAILED = 'Setup failed, so Codex was not started. Fix Setup, then start Codex from a new tab.'
@@ -17,8 +20,12 @@ const FAILED = 'Setup failed, so Codex was not started. Fix Setup, then start Co
 describe('the Setup failure line written into a live shell', () => {
   let host: TerminalHost | undefined
 
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW, shouldAdvanceTime: true })
+  })
   afterEach(async () => {
     await host?.dispose()
+    vi.useRealTimers()
   })
 
   it('lands above the prompt the shell already drew, keeping its typed input and cursor', async () => {
@@ -57,12 +64,12 @@ describe('the Setup failure line written into a live shell', () => {
       setup: {
         spawn: { sessionId: 'setup', cols: COLS, rows: ROWS },
         attemptId,
-        deadline: Date.now() + 7_200_000
+        deadline: NOW + 7_200_000
       }
     }
     const prepared = await host.preparedAgentLaunch({
       action: 'prepare',
-      operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
+      operationId: `${NOW}-${randomUUID().replaceAll('-', '')}`,
       fingerprint: fingerprintPreparedAgentLaunch(payload),
       claim: {
         kind: 'fresh-launch',

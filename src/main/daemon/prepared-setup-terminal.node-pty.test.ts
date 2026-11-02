@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isPreparedAgentLaunchStatus } from '../../shared/prepared-agent-launch'
 import { createObservedSetupCommand } from '../../shared/observed-setup-launch'
 import { fingerprintPreparedAgentLaunch } from './prepared-agent-launch-payload'
@@ -11,6 +11,9 @@ import { HeadlessEmulator } from './headless-emulator'
 import { createPtySubprocess } from './pty-subprocess'
 import { TerminalHost } from './terminal-host'
 
+// Only Date is faked, starting at a fixed instant and still advancing: the host, its timers and the
+// Setup it watches run on real time, while the launch's deadline and operation id are fixed.
+const NOW = 1_800_000_000_000
 const COLS = 100
 const ROWS = 30
 const FAILED = 'Setup failed, so Codex was not started. Fix Setup, then start Codex from a new tab.'
@@ -18,9 +21,13 @@ const BASH = '/bin/bash'
 
 let host: TerminalHost | undefined
 let home: string | undefined
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: NOW, shouldAdvanceTime: true })
+})
 afterEach(async () => {
   await host?.dispose()
   host = undefined
+  vi.useRealTimers()
   if (home) {
     rmSync(home, { recursive: true, force: true })
   }
@@ -98,12 +105,12 @@ describe.skipIf(process.platform === 'win32' || spawnSync(BASH, ['--version']).s
               command: launcher.command
             },
             attemptId,
-            deadline: Date.now() + 7_200_000
+            deadline: NOW + 7_200_000
           }
         }
         const prepared = await host.preparedAgentLaunch({
           action: 'prepare',
-          operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
+          operationId: `${NOW}-${randomUUID().replaceAll('-', '')}`,
           fingerprint: fingerprintPreparedAgentLaunch(payload),
           claim: {
             kind: 'fresh-launch',
