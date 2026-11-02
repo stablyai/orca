@@ -7,8 +7,13 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { selectRecoveryDelivery } from '../agent-session-context-transfer-text'
-import { closeContextTransfers } from '../agent-session-journal/context-transfer-repository'
+import { renderRecoveryItem, selectRecoveryDelivery } from '../agent-session-context-transfer-text'
+import {
+  closeContextTransfers,
+  writeContextTransfer
+} from '../agent-session-journal/context-transfer-repository'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { deriveContextTransferState } from '../agent-session-journal/context-transfer-state'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
@@ -106,6 +111,97 @@ it('keeps reopen, send, marked output and clear independent of retained closed h
     expectSameKeyedWork(small[phase], large[phase])
   }
   expect({ small: small.clearWrites, large: large.clearWrites }).toEqual({ small: 1, large: 1 })
+})
+
+async function refusedAttemptsWork(refused: number) {
+  const fixture = await contextTransferFixture()
+  fixtures.push(fixture)
+  const { journal } = await fixture.recoverSavedChat(async () => ({ kind: 'unsupported' }))
+  fixture.dispatch.mockResolvedValueOnce({
+    state: 'rejected',
+    ...agentSessionFailureWords(agentSessionFailureFact('cancelled', { neverReachedAgent: true }), {
+      surface: 'rejection'
+    })
+  })
+  const first = await fixture.accept('Refused before it reached the agent')
+  await eventually(async () =>
+    expect((await fixture.submission(first))?.dispatchState).toBe('rejected')
+  )
+  const attempt = journal.contextTransfers
+    .read()
+    .find((row) => row.kind === 'delivery' && row.outcome?.kind === 'refused-before-write')
+  if (attempt?.kind !== 'delivery') {
+    throw new Error('Missing refused attempt')
+  }
+  // Each later known refusal retains one more attempt of this shape on the same owed target.
+  journal.contextTransfers.commit((db) => {
+    for (let i = 1; i < refused; i++) {
+      writeContextTransfer(db, {
+        ...attempt,
+        id: `refused-${i}`,
+        carrierInputId: `refused-carrier-${i}`
+      })
+    }
+  })
+  const db = openTestJournalHostDatabase(fixture.root).db
+  const facts = instrumentContextTransferFacts(db)
+  journal.contextTransfers.reopen()
+  const reopen = { ...facts.counts }
+  facts.reset()
+  const retry = await fixture.accept('Retry with the saved number')
+  await eventually(async () =>
+    expect((await fixture.submission(retry))?.dispatchState).toBe('accepted')
+  )
+  const retried = { ...facts.counts }
+  expect(JSON.stringify(fixture.dispatch.mock.calls.at(-1)![0].body)).toContain('42')
+  expect(
+    deriveContextTransferState(
+      journal.contextTransfers.facts(),
+      fixture.store.requireWritableRecord(SESSION).providerHandleChain
+    ).kind
+  ).toBe('settled')
+  return { reopen, retried }
+}
+
+it('reopens and retries an owed target with the same keyed work at 20 or 200 known refusals', async () => {
+  const small = await refusedAttemptsWork(20)
+  const large = await refusedAttemptsWork(200)
+  expect(small.reopen).toMatchObject({ decodes: 0, transferQueries: 1 })
+  expectSameKeyedWork(small.reopen, large.reopen)
+  expectSameKeyedWork(small.retried, large.retried)
+})
+
+async function injectedReplayWork(items: number) {
+  const { fixture, journal, native } = await settledRecovery()
+  const records = journal.contextTransfers.read()
+  const delivery = records.find((row) => row.kind === 'delivery' && row.mode === 'inject')
+  const handoff = records.find((row) => row.kind === 'handoff')
+  const message = handoff?.kind === 'handoff' ? handoff.capture.messages[0] : undefined
+  if (delivery?.kind !== 'delivery' || !message) {
+    throw new Error('Missing injected history')
+  }
+  const echo = renderRecoveryItem(delivery.id, message)
+  const db = openTestJournalHostDatabase(fixture.root).db
+  const facts = instrumentContextTransferFacts(db)
+  await journal.appendLifecycleBatch({
+    settlementId: `replay-${items}`,
+    fence: fixture.store.requireWritableRecord(SESSION).lease.runtimeFence,
+    mutations: Array.from({ length: items }, (_, ordinal) => ({
+      kind: 'item' as const,
+      identity: { provider: 'codex' as const, threadId: native(), turnId: 'replay', ordinal },
+      body: { ...hostTestMessage(echo), role: message.role },
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }))
+  })
+  expect(JSON.stringify(journal.snapshot())).not.toContain(echo)
+  return { ...facts.counts }
+}
+
+it('decodes the injected history a replay echoes once per batch, at 10 or 100 echoed items', async () => {
+  const small = await injectedReplayWork(10)
+  const large = await injectedReplayWork(100)
+  expect(small.decodes).toBeGreaterThan(0)
+  expectSameKeyedWork(small, large)
 })
 
 function savedView(base: AgentJournalSnapshot, items: number, text: string) {

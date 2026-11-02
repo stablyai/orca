@@ -94,21 +94,31 @@ function query<T>(run: () => T): T {
   }
 }
 
-// Decoded rows live only until the transaction that may change them ends, or a write replaces them.
-const decodedRows = new WeakMap<Database.Database, Map<string, ContextTransferRecord>>()
+// Decoded rows and format checks live only until the transaction that may change them ends, or a write replaces them.
+const decoded = new WeakMap<
+  Database.Database,
+  { rows: Map<string, ContextTransferRecord>; formatChecked: Set<string> }
+>()
+
+function memo(db: Database.Database) {
+  let value = decoded.get(db)
+  if (!value) {
+    value = { rows: new Map(), formatChecked: new Set() }
+    decoded.set(db, value)
+  }
+  return value
+}
 
 export function forgetContextTransferRows(db: Database.Database): void {
-  decodedRows.delete(db)
+  decoded.delete(db)
 }
 
 export function forgetContextTransferRow(db: Database.Database, id: string): void {
-  decodedRows.get(db)?.delete(id)
+  decoded.get(db)?.rows.delete(id)
 }
 
 /** Keyed reads of one chat's transfer facts; SQL on this connection is the only authority. */
 export class ContextTransferFacts {
-  private formatChecked = false
-
   constructor(
     private readonly db: Database.Database,
     readonly sessionId: string
@@ -116,14 +126,15 @@ export class ContextTransferFacts {
 
   /** A row in a format this build doesn't write refuses the chat rather than being skipped. */
   checkFormat(): void {
-    if (this.formatChecked) {
+    const checked = memo(this.db).formatChecked
+    if (checked.has(this.sessionId)) {
       return
     }
     const foreign = this.db.prepare(SQL.foreignFormat).get(this.sessionId)
     if (foreign) {
       unreadableContextTransfer()
     }
-    this.formatChecked = true
+    checked.add(this.sessionId)
   }
 
   any(): boolean {
@@ -133,9 +144,9 @@ export class ContextTransferFacts {
 
   record(id: string): ContextTransferRecord | undefined {
     this.checkFormat()
-    const memo = decodedRows.get(this.db)?.get(id)
-    if (memo) {
-      return memo.sessionId === this.sessionId ? memo : undefined
+    const known = decoded.get(this.db)?.rows.get(id)
+    if (known) {
+      return known.sessionId === this.sessionId ? known : undefined
     }
     const row = this.db.prepare(SQL.byId).get(id)
     if (!row || row.session_id !== this.sessionId) {
@@ -223,12 +234,7 @@ export class ContextTransferFacts {
   }
 
   private remember<T extends ContextTransferRecord>(record: T): T {
-    let rows = decodedRows.get(this.db)
-    if (!rows) {
-      rows = new Map()
-      decodedRows.set(this.db, rows)
-    }
-    rows.set(record.id, record)
+    memo(this.db).rows.set(record.id, record)
     return record
   }
 }

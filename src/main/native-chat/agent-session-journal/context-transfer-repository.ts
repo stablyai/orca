@@ -12,6 +12,7 @@ import {
   ContextTransferFacts,
   decodeContextTransferRow,
   forgetContextTransferRow,
+  forgetContextTransferRows,
   unreadableContextTransfer
 } from './context-transfer-facts'
 
@@ -171,6 +172,7 @@ export class ContextTransferRepository {
   ) {}
   /** Opening refuses a chat holding rows in a format this build doesn't write. */
   reopen(): void {
+    forgetContextTransferRows(this.database.db)
     this.facts().checkFormat()
   }
   facts(): ContextTransferFacts {
