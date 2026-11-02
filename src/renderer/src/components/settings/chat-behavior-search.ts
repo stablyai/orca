@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from './settings-search'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './native-chat-resume-setting-target'
+import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from './native-chat-usage-limit-continue-setting-target'
 
 export const getChatBehaviorTitle = (): string =>
   translate('components.settings.nativeChat.behaviorTitle', 'Behavior')
@@ -20,6 +21,21 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
     keywords: [
       translate('components.settings.nativeChat.resumeSearchUpdate', 'update'),
       translate('components.settings.nativeChat.resumeSearchRelaunch', 'relaunch')
+    ]
+  },
+  autoContinueAfterUsageLimit: {
+    targetSectionId: NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID,
+    title: translate(
+      'components.settings.nativeChat.usageLimitContinueTitle',
+      'Continue chats automatically when a usage limit resets'
+    ),
+    description: translate(
+      'components.settings.nativeChat.usageLimitContinueCopy',
+      'Orca sends "Continue where you left off." when the limit resets. Applies to all chats with a known reset time.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.usageLimitContinueSearchLimit', 'usage limit'),
+      translate('components.settings.nativeChat.usageLimitContinueSearchReset', 'reset')
     ]
   },
   queueFollowUps: {

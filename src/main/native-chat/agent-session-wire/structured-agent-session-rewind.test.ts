@@ -1,4 +1,5 @@
 import {
+  expectGoalRowsThroughHydration,
   expectAtomicRewindCompletion,
   expectGoalRowRewindRecovery,
   expectLargeRetainedPrefixRewind,
@@ -20,6 +21,11 @@ import {
   agentJournalSubmissionKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import {
+  expectUsageLimitRewindCancellation,
+  expectUsageLimitCompletionRollback,
+  expectReopenedUsageLimitCancellation
+} from './structured-agent-session-rewind-usage-limit.test-fixture'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
@@ -214,6 +220,31 @@ async function params(itemId: string, epoch?: string) {
 const LATE = { provider: 'codex' as const, threadId: HOST_TEST_THREAD, turnId: 'late', ordinal: 0 }
 
 describe('host rewind', () => {
+  it('keeps an older limited turn idle when rewind removes its superseding message', async () => {
+    vi.spyOn(store, 'cancelUsageLimitContinue').mockRejectedValue(
+      new Error('optional cancel unavailable')
+    )
+    host.deps.usageLimitAutoContinue = {
+      isEnabled: () => true,
+      isWorkspaceAsleep: () => false,
+      subscribe: () => () => {}
+    }
+    const target = await seed()
+    await store.setSessionTabVisibility(HOST_TEST_SESSION, true)
+    await expectUsageLimitRewindCancellation({ host, store, target, params, clock })
+    const retained = (await host.journalSnapshot(HOST_TEST_SESSION)).items.find(
+      (item) => item.body.kind === 'message' && item.body.role === 'user'
+    )!
+    rewind.mockResolvedValueOnce({ ok: false, reason: 'provider-refused' })
+    expect(await host.rewind(caller, await params(retained.itemId))).toMatchObject({ ok: false })
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('refused')
+    await host.flushAllStreamedEvents()
+    store = await openTestAgentSessionRecordStore(directory)
+    host = new StructuredAgentSessionHost({ ...host.deps, store })
+    clock += 75_000
+    await expectReopenedUsageLimitCancellation(host, store)
+  })
+
   it('answers a saved rewind after floor damage without another provider rewind', async () => {
     const request = await params(await seed())
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
@@ -595,78 +626,7 @@ describe('host rewind', () => {
   })
 
   it('keeps host-stamped turn and goal rows through a Codex provider hydration', async () => {
-    expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
-    const message = (turnId: string) => ({
-      provider: 'codex' as const,
-      threadId: HOST_TEST_THREAD,
-      turnId,
-      ordinal: 0
-    })
-    const turnRow = (turnId: string) => ({
-      provider: 'legacy' as const,
-      agent: 'codex',
-      sessionId: HOST_TEST_SESSION,
-      recordId: `turn-lifecycle:${turnId}`
-    })
-    const goalRow = {
-      provider: 'orca' as const,
-      clientMessageId: `codex-goal:${'a'.repeat(64)}:${'b'.repeat(64)}:${'c'.repeat(64)}`
-    }
-    const goalBody = {
-      kind: 'status' as const,
-      text: 'Goal set: Keep the retained evidence.',
-      providerFrame: {
-        provider: 'codex',
-        kind: 'notification:thread/goal/updated',
-        payload: { head: '{}', byteLength: 2, digest: 'd'.repeat(64), truncated: false }
-      }
-    }
-    const keptTurn = {
-      kind: 'turn' as const,
-      turnId: 'kept',
-      state: 'completed' as const,
-      userItemId: agentJournalItemKey(message('kept')),
-      startedAt: HOST_TEST_NOW - 9_000,
-      completedAt: HOST_TEST_NOW - 4_000,
-      durationMs: 5_000
-    }
-    sink.appendItem(message('kept'), hostTestMessage('kept'), {
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-    sink.appendItem(goalRow, goalBody, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    sink.appendItem(turnRow('kept'), keptTurn, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    sink.appendItem(message('drop'), hostTestMessage('drop'), {
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-    sink.appendItem(
-      turnRow('drop'),
-      { ...keptTurn, turnId: 'drop', durationMs: 1_000 },
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    sink.appendItem(
-      message('tip'),
-      { ...hostTestMessage('tip'), role: 'assistant' },
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    await host.flushStreamedEvents(HOST_TEST_SESSION)
-
-    expect(
-      await host.rewind(caller, await params(agentJournalItemKey(message('drop'))))
-    ).toMatchObject({
-      ok: true
-    })
-
-    expect(
-      (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
-        itemId,
-        body
-      }))
-    ).toEqual([
-      { itemId: agentJournalItemKey(message('kept')), body: hostTestMessage('kept') },
-      { itemId: agentJournalItemKey(goalRow), body: goalBody },
-      { itemId: agentJournalItemKey(turnRow('kept')), body: keptTurn }
-    ])
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+    await expectGoalRowsThroughHydration({ host, store, sink: () => sink, params })
   })
 
   it('refuses an unsupported item before saving, preserving known history through a Codex provider hydration', async () => {
@@ -802,5 +762,21 @@ describe('host rewind', () => {
 
   it('commits context and completion atomically before a post-commit crash', async () => {
     await expectAtomicRewindCompletion({ host, store, seed, params, attachAndStart })
+  })
+
+  it('rolls back a failed logical rewind completion and recovers usage-limit cancellation once', async () => {
+    ;({ host, store } = await expectUsageLimitCompletionRollback({
+      host,
+      store,
+      seed,
+      params,
+      attachAndStart,
+      directory,
+      rewind,
+      now: () => clock,
+      advanceClock: () => {
+        clock += 75_000
+      }
+    }))
   })
 })

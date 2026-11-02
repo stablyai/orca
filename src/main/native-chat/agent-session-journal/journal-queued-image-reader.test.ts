@@ -638,7 +638,7 @@ it('keeps proven unwritten input waiting after both old-process hold writes fail
   expect(journal.queuedMessages.attemptEnded('unwritten')).toBe(false)
   expect(journal.queuedMessages.list()).toEqual([])
   const settlements = new StructuredAgentSessionSendSettlement(() => ({
-    submissions: () => journal.submissions(),
+    submission: (id) => journal.submission(id),
     cursor: () => journal.cursor(),
     attemptEnded: (id) => journal.queuedMessages.attemptEnded(id),
     activeTurnId: () => current().activeTurnId()

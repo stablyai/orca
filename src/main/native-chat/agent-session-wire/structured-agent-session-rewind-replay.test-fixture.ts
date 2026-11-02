@@ -7,6 +7,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session/record
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
+  HOST_TEST_NOW,
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
   hostTestAttachParams,
@@ -211,6 +212,88 @@ export async function expectGoalRowRewindRecovery({
   ).toEqual([
     { itemId: agentJournalItemKey(message('kept')), body: hostTestMessage('kept') },
     { itemId: agentJournalItemKey(goalRow), body: goalBody }
+  ])
+  expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+}
+
+export async function expectGoalRowsThroughHydration({
+  host,
+  store,
+  sink,
+  params
+}: Pick<RewindReplayFixture, 'host' | 'store' | 'params'> & {
+  sink: () => StructuredAgentSessionEventSink
+}) {
+  expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  const message = (turnId: string) => ({
+    provider: 'codex' as const,
+    threadId: HOST_TEST_THREAD,
+    turnId,
+    ordinal: 0
+  })
+  const turnRow = (turnId: string) => ({
+    provider: 'legacy' as const,
+    agent: 'codex',
+    sessionId: HOST_TEST_SESSION,
+    recordId: `turn-lifecycle:${turnId}`
+  })
+  const goalRow = {
+    provider: 'orca' as const,
+    clientMessageId: `codex-goal:${'a'.repeat(64)}:${'b'.repeat(64)}:${'c'.repeat(64)}`
+  }
+  const goalBody = {
+    kind: 'status' as const,
+    text: 'Goal set: Keep the retained evidence.',
+    providerFrame: {
+      provider: 'codex',
+      kind: 'notification:thread/goal/updated',
+      payload: { head: '{}', byteLength: 2, digest: 'd'.repeat(64), truncated: false }
+    }
+  }
+  const keptTurn = {
+    kind: 'turn' as const,
+    turnId: 'kept',
+    state: 'completed' as const,
+    userItemId: agentJournalItemKey(message('kept')),
+    startedAt: HOST_TEST_NOW - 9_000,
+    completedAt: HOST_TEST_NOW - 4_000,
+    durationMs: 5_000
+  }
+  sink().appendItem(message('kept'), hostTestMessage('kept'), {
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
+  sink().appendItem(goalRow, goalBody, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+  sink().appendItem(turnRow('kept'), keptTurn, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+  sink().appendItem(message('drop'), hostTestMessage('drop'), {
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
+  sink().appendItem(
+    turnRow('drop'),
+    { ...keptTurn, turnId: 'drop', durationMs: 1_000 },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  sink().appendItem(
+    message('tip'),
+    { ...hostTestMessage('tip'), role: 'assistant' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await host.flushStreamedEvents(HOST_TEST_SESSION)
+
+  expect(
+    await host.rewind(caller, await params(agentJournalItemKey(message('drop'))))
+  ).toMatchObject({
+    ok: true
+  })
+
+  expect(
+    (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
+      itemId,
+      body
+    }))
+  ).toEqual([
+    { itemId: agentJournalItemKey(message('kept')), body: hostTestMessage('kept') },
+    { itemId: agentJournalItemKey(goalRow), body: goalBody },
+    { itemId: agentJournalItemKey(turnRow('kept')), body: keptTurn }
   ])
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
 }

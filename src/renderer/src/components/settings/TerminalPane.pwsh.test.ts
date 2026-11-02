@@ -131,8 +131,8 @@ vi.mock('./TerminalWindowSection', () => ({
   }
 }))
 
-vi.mock('./GhosttyImportModal', () => ({
-  GhosttyImportModal: function GhosttyImportModal() {
+vi.mock('./TerminalConfigImportModal', () => ({
+  TerminalConfigImportModal: function TerminalConfigImportModal() {
     return null
   }
 }))

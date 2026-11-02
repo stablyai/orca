@@ -106,18 +106,23 @@ vi.mock('../ui/select', async () => {
 
 import { AppearancePane } from './AppearancePane'
 import { TooltipProvider } from '../ui/tooltip'
+import type { UseTerminalConfigImportReturn } from './useTerminalConfigImport'
 
 const mountedRoots: Root[] = []
 
-function createGhosttyStub() {
+function createTerminalConfigImportStub(): UseTerminalConfigImportReturn {
   return {
-    loading: false,
+    format: 'ghostty',
+    open: false,
     preview: null,
-    error: null,
-    open: vi.fn(),
-    close: vi.fn(),
-    refresh: vi.fn(),
-    apply: vi.fn()
+    loading: false,
+    choosingFile: false,
+    applied: false,
+    applyError: null,
+    handleClick: vi.fn(),
+    handleChooseFile: vi.fn(),
+    handleApply: vi.fn(),
+    handleOpenChange: vi.fn()
   }
 }
 
@@ -163,7 +168,7 @@ async function renderAppearancePane(
             terminalFontSuggestions={[]}
             onRequestFontSuggestions={options.onRequestFontSuggestions}
             systemPrefersDark={false}
-            ghostty={createGhosttyStub() as never}
+            terminalConfigImport={createTerminalConfigImportStub()}
             warpThemes={createWarpThemesStub() as never}
           />
         </TooltipProvider>
@@ -192,7 +197,7 @@ async function rerenderAppearancePane(
             fontSuggestions={[]}
             terminalFontSuggestions={[]}
             systemPrefersDark={false}
-            ghostty={createGhosttyStub() as never}
+            terminalConfigImport={createTerminalConfigImportStub()}
             warpThemes={createWarpThemesStub() as never}
           />
         </TooltipProvider>

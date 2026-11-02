@@ -134,6 +134,8 @@ export type StructuredPromptDeliveryResult = {
   failureNotified: boolean
   /** Not sent, and waiting in the new chat's composer, which now owns the text. */
   inComposer?: true
+  /** An admitted recipient took ownership before it was explicitly discarded. */
+  recipientOwned?: true
   /** Nobody could confirm it went: the host may hold it. */
   unconfirmed?: true
   /** Another send of the chat held its one slot, so this one never went. */

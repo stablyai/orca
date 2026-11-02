@@ -605,7 +605,7 @@
         "inheritFont": "IDE yazı tipiyle aynı",
         "fontPreviewLabel": "Sohbet yazı tipi önizlemesi",
         "fontPreview": "Pijamalı hasta yağız şoföre çabucak güvendi.",
-        "title": "Sohbet",
+        "title": "Sohbet arayüzü",
         "textSize": "Metin boyutu",
         "textSizeDescription": "Mesajlar, araç etkinlikleri ve mesaj kutusu. Sohbet içindeki {{increase}} / {{decrease}} kısayolları da bu ayarı değiştirir.",
         "codeTextSize": "Kod metni boyutu",
@@ -8068,7 +8068,6 @@
           "9d3e56ca36": "Değişiklikleri Uygula",
           "f96688b6bc": "İptal",
           "b7ddae600c": "Tamam",
-          "e4bda7ce6f": "Bu sistemde Ghostty yapılandırması bulunamadı.",
           "b58d4c9051": "Desteklenmeyen anahtarlar",
           "674b5ccd6b": "İçe aktarılacak yeni ayar yok, mevcut ayarlarınız zaten eşleşiyor.",
           "a4c5dec640": "Güncellenecek ayarlar",
@@ -23085,6 +23084,8 @@
     "arguments": "Argümanlar",
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
-    "launchTerminal": "Terminal başlat"
+    "launchTerminal": "Terminal başlat",
+    "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
+    "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @"
   }
 }

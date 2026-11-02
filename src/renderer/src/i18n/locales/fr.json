@@ -391,7 +391,7 @@
         "inheritFont": "Même police que l’IDE",
         "fontPreviewLabel": "Aperçu de la police du chat",
         "fontPreview": "Le vif renard brun saute par-dessus le chien paresseux.",
-        "title": "Chat",
+        "title": "Interface de chat",
         "textSize": "Taille du texte",
         "textSizeDescription": "Messages, activité des outils et zone de message. {{increase}} / {{decrease}} dans un chat modifient aussi ce réglage.",
         "codeTextSize": "Taille du texte du code",
@@ -7953,7 +7953,6 @@
           "9d3e56ca36": "Appliquer les modifications",
           "f96688b6bc": "Annuler",
           "b7ddae600c": "Terminé",
-          "e4bda7ce6f": "Aucune configuration Ghostty trouvée sur ce système.",
           "b58d4c9051": "Clés non prises en charge",
           "674b5ccd6b": "Aucun nouveau réglage à importer — vos réglages actuels correspondent déjà.",
           "a4c5dec640": "Réglages à mettre à jour",
@@ -20058,6 +20057,13 @@
         "switchAccount": "Changer de compte",
         "addAccount": "Ajouter un compte…",
         "accountUnavailable": "Cette conversation ne peut pas passer à un autre compte. Transférez-la à un autre agent."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "Impossible d’annuler la reprise automatique. Réessayez.",
+        "openSetting": "Reprendre automatiquement à la réinitialisation des limites",
+        "cancelled": "Orca ne reprendra pas ce chat automatiquement.",
+        "scheduled": "Orca reprendra ce chat à {{time}}.",
+        "cancel": "Ne pas reprendre"
       }
     },
     "tab": {
@@ -20503,7 +20509,12 @@
         "queueSearchSteer": "orienter",
         "shellEnvSearchVariables": "variables d'environnement",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "usageLimitContinueTitle": "Reprendre automatiquement les chats quand une limite d’utilisation est réinitialisée",
+        "usageLimitContinueCopy": "Orca envoie « Continue where you left off. » quand la limite est réinitialisée. S’applique à tous les chats dont l’heure de réinitialisation est connue.",
+        "usageLimitContinueSearchLimit": "limite d’utilisation",
+        "usageLimitContinueSearchReset": "réinitialisation",
+        "usageLimitContinueToggleLabel": "Activer ou désactiver la reprise des chats à la réinitialisation d’une limite"
       }
     },
     "agentChildRow": {
@@ -22991,7 +23002,9 @@
     "toggleArguments": "Afficher ou masquer les arguments",
     "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
-    "legacyModelCount": "{{total}} modèles"
+    "legacyModelCount": "{{total}} modèles",
+    "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
+    "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers"
   },
   "wslMove": {
     "entry": {

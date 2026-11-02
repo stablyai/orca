@@ -18,7 +18,7 @@ export function prepareJournalOutcomeWrite(
   rows: readonly JournalRow[],
   savedAt: number,
   finishFold?: (draft: JournalReducerState) => void
-): { adopt: () => JournalReducerState } {
+): { state: JournalReducerState; adopt: () => JournalReducerState } {
   const previous = journalOutcomeSource(db, live.sessionId, live.epoch)
   const source =
     previous ?? startJournalOutcomeLog(db, live.sessionId, live.epoch, live.lastSequence, savedAt)
@@ -35,7 +35,7 @@ export function prepareJournalOutcomeWrite(
     finishFold
   )
   advanceJournalOutcomeSource(db, live.sessionId, live.epoch, transition.state.lastSequence)
-  return { adopt: transition.adopt }
+  return transition
 }
 
 /** Epoch builders use the same transition encoder; the epoch's journal rows hold only its marker. */

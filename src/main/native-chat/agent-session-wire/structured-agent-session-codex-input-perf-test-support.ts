@@ -13,6 +13,7 @@ export function measureCodexInputWork(
   const { sessions, conversationDelivery } = host.collaboratorsForTests()
   const journal = sessions.get(SESSION)!.journal
   const copies = vi.spyOn(journal, 'submissions')
+  const named = vi.spyOn(journal, 'submission')
   const settlement = host['clientDelivery']['sendSettlement']
   const published = vi.spyOn(settlement, 'publish')
   const reportSamples: {
@@ -22,6 +23,8 @@ export function measureCodexInputWork(
     remaining: number
     publishes: number
     submissions: number
+    lookups: string[]
+    expectedLookup: string | undefined
   }[] = []
   const delivered: Promise<void>[] = []
   const handle = host.handleAdapterEvent
@@ -46,9 +49,12 @@ export function measureCodexInputWork(
     }
     const firstCopy = copies.mock.results.length
     const firstPublish = published.mock.calls.length
+    const firstLookup = named.mock.calls.length
     const delivery = handle(event)
     reportSamples.push({
       ...before,
+      expectedLookup: waiter?.clientMessageId,
+      lookups: named.mock.calls.slice(firstLookup).map(([id]) => id),
       remaining: waiters?.size ?? 0,
       publishes: published.mock.calls.length - firstPublish,
       submissions: copies.mock.results
@@ -123,7 +129,8 @@ export function measureCodexInputWork(
           remaining: 1,
           publishes: 1
         })
-        expect(work.reportSubmissions).toBeGreaterThanOrEqual(population + 2)
+        expect(work.reportSubmissions).toBe(0)
+        expect(reportSamples[0]?.lookups).toEqual([reportSamples[0]?.expectedLookup])
       } else {
         expect(
           plans.mock.calls.reduce((sum, [changes]) => sum + changes.length, 0)
@@ -143,6 +150,7 @@ export function measureCodexInputWork(
     } finally {
       for (const mock of [
         reports,
+        named,
         published,
         copies,
         bodies,

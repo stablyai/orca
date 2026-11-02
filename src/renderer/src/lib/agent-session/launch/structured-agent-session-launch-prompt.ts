@@ -24,13 +24,19 @@ type StagedDelivery = Omit<StructuredPromptDeliveryResult, 'inComposer' | 'failu
   failureNotified?: boolean
 }
 
+function promptDeliveryResult(outcome: StagedDelivery): StructuredPromptDeliveryResult {
+  return {
+    ...outcome,
+    inComposer: outcome.inComposer ? true : undefined,
+    failureNotified: outcome.failureNotified ?? false
+  }
+}
+
 export type StructuredLaunchPromptOptions = {
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
 }
-
-type LaunchReceipt = StructuredAgentLaunchReceipt
 
 /** Share one staged-text send across launch callers; reserve the chat send slot at click so typed messages cannot overtake it before create. */
 export type StagedStructuredLaunchPrompt = {
@@ -47,6 +53,7 @@ export type StagedStructuredLaunchPrompt = {
   settleCreate: (outcome: StagedDelivery) => void
   /** Its launch was cancelled: never sent, never given back. */
   discarded?: true
+  recipientDiscarded?: true
   /** Settles once it is discarded, so its callers need not wait on a create that may never end. */
   whenDiscarded: Promise<void>
   discard: () => void
@@ -108,6 +115,9 @@ export function discardStructuredLaunchPrompts(sessionId: string): void {
   for (const prompt of staged.get(sessionId) ?? []) {
     prompt.slot?.release()
     prompt.discarded = true
+    if (prompt.slot && !prompt.callerKeepsText) {
+      prompt.recipientDiscarded = true
+    }
     prompt.discard()
   }
   staged.delete(sessionId)
@@ -127,7 +137,8 @@ export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
     }
     unstage(prompt)
     prompt.discarded = true
-    handBackStagedPrompt(prompt)
+    const inComposer = handBackStagedPrompt(prompt)
+    prompt.settleCreate({ delivered: false, inComposer, failureNotified: true })
     prompt.discard()
   }
 }
@@ -185,12 +196,11 @@ function handBackStagedPrompt(prompt: StagedStructuredLaunchPrompt): boolean {
     return false
   }
   try {
-    handBackStructuredAgentSessionMessage(
+    return handBackStructuredAgentSessionMessage(
       prompt.sessionId,
       `launch-${prompt.sessionId}`,
       structuredAgentSessionSendBody(prompt.text, [])
     )
-    return true
   } catch (error) {
     console.error(
       '[native-chat-send] a launch message could not be put back in the composer',
@@ -205,7 +215,7 @@ function handBackStagedPrompt(prompt: StagedStructuredLaunchPrompt): boolean {
 
 function sendStagedPrompt(
   prompt: StagedStructuredLaunchPrompt,
-  receipt: LaunchReceipt,
+  receipt: StructuredAgentLaunchReceipt,
   target: RuntimeClientTarget
 ): Promise<StagedDelivery> {
   prompt.delivery ??= (async () => {
@@ -233,7 +243,7 @@ function sendStagedPrompt(
 }
 
 export function settleStructuredAgentLaunchPrompt(args: {
-  launchResult: Promise<LaunchReceipt>
+  launchResult: Promise<StructuredAgentLaunchReceipt>
   target: RuntimeClientTarget
   options: StructuredLaunchPromptOptions
   stagedPrompt: StagedStructuredLaunchPrompt | null
@@ -258,10 +268,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
         prompt.settleCreate(result)
         unstage(prompt)
         prompt.discarded = true
-        return {
-          ...result,
-          ...(result.inComposer ? { inComposer: true as const } : { inComposer: undefined })
-        }
+        return promptDeliveryResult(result)
       }
       if (prompt.createOwned) {
         prompt.createSend?.settle(
@@ -270,18 +277,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
             : { kind: 'unconfirmed' }
         )
       }
-      const { delivered, inComposer, unconfirmed, busy } = await sendStagedPrompt(
-        prompt,
-        receipt,
-        args.target
-      )
-      return {
-        delivered,
-        failureNotified: false,
-        ...(inComposer ? { inComposer: true as const } : {}),
-        ...(unconfirmed ? { unconfirmed } : {}),
-        ...(busy ? { busy } : {})
-      }
+      return promptDeliveryResult(await sendStagedPrompt(prompt, receipt, args.target))
     },
     (error: unknown) => {
       if (prompt?.createOwned) {
@@ -300,19 +296,25 @@ export function settleStructuredAgentLaunchPrompt(args: {
       if (prompt && !prompt.discarded && !prompt.delivery) {
         unstage(prompt)
         prompt.discarded = true
-        handBackStagedPrompt(prompt)
+        const inComposer = handBackStagedPrompt(prompt)
+        return {
+          delivered: false,
+          failureNotified: true,
+          ...(inComposer ? { inComposer: true as const } : {})
+        }
       }
-      throw error
+      // The reserved sender may already have returned/retained the input during create rejection.
+      return prompt?.delivery
+        ? prompt.delivery.then((outcome) =>
+            promptDeliveryResult({ ...outcome, failureNotified: true })
+          )
+        : { delivered: false, failureNotified: true }
     }
   )
   const result = prompt
     ? Promise.race([
         settled,
-        prompt.whenCreateSettled.then(({ inComposer, ...outcome }) => ({
-          ...outcome,
-          failureNotified: outcome.failureNotified ?? false,
-          ...(inComposer ? { inComposer: true as const } : {})
-        })),
+        prompt.whenCreateSettled.then(promptDeliveryResult),
         prompt.whenDiscarded.then((): StructuredPromptDeliveryResult => ({
           delivered: false,
           failureNotified: true
@@ -323,6 +325,8 @@ export function settleStructuredAgentLaunchPrompt(args: {
     if (outcome.delivered) {
       args.options.onPromptDelivered?.()
     }
-    return outcome
+    return prompt?.recipientDiscarded
+      ? { ...outcome, recipientOwned: true as const, failureNotified: true }
+      : outcome
   })
 }
