@@ -7,13 +7,17 @@ import { getChatLaunchSearchEntries } from '@/components/settings/chat/chat-laun
 import { getChatPermissionSearchEntry } from '@/components/settings/chat/chat-permission-search'
 import { getInputPaneSearchEntries } from '@/components/settings/input/input-search'
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications/notifications-search'
-import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts/shortcuts-search'
+import {
+  getShortcutsPaneSearchEntries,
+  getShortcutsPaneTitleSearchEntry
+} from '@/components/settings/shortcuts/shortcuts-search'
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { BarChart3, Bell, Keyboard, MessageSquare, Palette, TextCursorInput } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
+/** Builds interface settings with the localized Shortcuts label used as its searchable pane title. */
 export function buildInterfaceSettingsSections({
   isMac,
   isWindows,
@@ -24,6 +28,7 @@ export function buildInterfaceSettingsSections({
   mobileEmulatorCreationEnabled
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
+  const shortcutsPaneTitle = getShortcutsPaneTitleSearchEntry()
   return [
     {
       id: 'appearance',
@@ -89,7 +94,7 @@ export function buildInterfaceSettingsSections({
       : []),
     {
       id: 'shortcuts',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.94295ebfb3', 'Shortcuts'),
+      title: shortcutsPaneTitle.title,
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.dcd0d9b74f',
         'Keyboard shortcuts for common actions.'
