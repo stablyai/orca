@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -42,6 +43,7 @@ export function WslHostStoppedNotice({
       role="status"
       data-wsl-host-stopped-notice={environmentId}
     >
+      <LinuxPenguinIcon className="mb-1 size-7 opacity-50" data-wsl-host-stopped-icon="" />
       <span>
         {translate('components.native-chat.hostOutage.stopped', '{{distro}} is stopped', {
           distro

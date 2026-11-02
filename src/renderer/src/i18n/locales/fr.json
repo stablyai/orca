@@ -20649,6 +20649,9 @@
         "finished": "Worker temporaire d’orchestration terminé · Fermeture dans {{countdown}}",
         "keepOpen": "Garder ouvert"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "S’exécute dans WSL : {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {

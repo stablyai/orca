@@ -21516,6 +21516,9 @@
         "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
         "keepOpen": "Manter aberto"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Executa no WSL: {{distro}} (Linux)"
     }
   },
   "csv": {

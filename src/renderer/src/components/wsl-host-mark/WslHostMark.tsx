@@ -1,0 +1,76 @@
+import React from 'react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { cn } from '@/lib/utils'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  isWslHostRuntimeEnvironment,
+  type OrcadDeploymentLink
+} from '../../../../shared/runtime-environments'
+
+/** The distro a WSL host runs in; null for any other host, including an unknown runtime id. */
+export function selectWslHostDistro(
+  state: {
+    runtimeEnvironments: readonly {
+      id: string
+      orcadDeployment?: OrcadDeploymentLink | null
+    }[]
+  },
+  hostId: string | null | undefined
+): string | null {
+  const host = parseExecutionHostId(hostId)
+  if (host?.kind !== 'runtime') {
+    return null
+  }
+  const environment = state.runtimeEnvironments.find(
+    (candidate) => candidate.id === host.environmentId
+  )
+  return environment && isWslHostRuntimeEnvironment(environment)
+    ? environment.orcadDeployment.distro
+    : null
+}
+
+export function useWslHostDistro(hostId: string | null | undefined): string | null {
+  return useAppStore((state) => selectWslHostDistro(state, hostId))
+}
+
+export function wslHostRunsOnLabel(distro: string): string {
+  return translate('components.wslHostMark.runsOn', 'Runs on WSL: {{distro}} (Linux)', { distro })
+}
+
+/** Stands in for a WSL host's text badge on project and workspace rows. */
+export function WslHostMark({
+  distro,
+  className,
+  withTooltip = true
+}: {
+  distro: string
+  className?: string
+  /** Off where the row already has its own identity tooltip. */
+  withTooltip?: boolean
+}): React.JSX.Element {
+  const label = wslHostRunsOnLabel(distro)
+  const mark = (
+    <span
+      role="img"
+      aria-label={label}
+      data-wsl-host-mark={distro}
+      className={cn('inline-flex shrink-0 items-center text-muted-foreground', className)}
+    >
+      <LinuxPenguinIcon className="size-3.5" />
+    </span>
+  )
+  if (!withTooltip) {
+    return mark
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{mark}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}

@@ -19844,6 +19844,9 @@
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
         "keepOpen": "保持打开"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "在 WSL 上运行：{{distro}}（Linux）"
     }
   },
   "dashboardPopout": {

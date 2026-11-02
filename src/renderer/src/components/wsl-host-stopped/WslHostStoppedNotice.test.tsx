@@ -28,6 +28,10 @@ describe('WslHostStoppedNotice', () => {
       <WslHostStoppedNotice environmentId="wsl:ubuntu" distro="Ubuntu" onStarted={onStarted} />
     )
     expect(view.getByText('Ubuntu is stopped')).toBeTruthy()
+    // The penguin leads, decorative: the text already names the distro.
+    const icon = view.container.querySelector('[data-wsl-host-stopped-icon]')
+    expect(icon?.getAttribute('aria-hidden')).toBe('true')
+    expect(view.getByRole('status').firstElementChild).toBe(icon)
     expect(start).not.toHaveBeenCalled()
 
     const button = view.getByRole('button', { name: 'Start' })
