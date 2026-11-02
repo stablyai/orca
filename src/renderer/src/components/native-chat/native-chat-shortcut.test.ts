@@ -1,54 +1,53 @@
-import { describe, it, expect } from 'vitest'
+import { it, expect } from 'vitest'
+
 import {
   getEffectiveKeybindingsForDefinition as effective,
-  getKeybindingDefinition
+  getKeybindingDefinition,
+  keybindingMatchesAction
 } from '../../../../shared/keybindings'
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 
-type Combo = Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>
-
-function combo(overrides: Partial<Combo>): Combo {
-  return { key: 'j', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...overrides }
-}
-
-describe('matchesNativeChatToggleShortcut', () => {
-  it('matches Cmd+Shift+J on Mac', () => {
-    expect(
-      matchesNativeChatToggleShortcut(combo({ metaKey: true, shiftKey: true }), 'darwin')
-    ).toBe(true)
-  })
-
-  it('does not match Ctrl+Shift+J on Mac (wrong primary modifier)', () => {
-    expect(
-      matchesNativeChatToggleShortcut(combo({ ctrlKey: true, shiftKey: true }), 'darwin')
-    ).toBe(false)
-  })
-
-  it('matches Ctrl+Shift+J on Windows/Linux', () => {
-    expect(matchesNativeChatToggleShortcut(combo({ ctrlKey: true, shiftKey: true }), 'win32')).toBe(
+it.each(['win32', 'linux'] as const)(
+  'keeps the default chat toggle separate from the %s worktree palette',
+  (platform) => {
+    const toggleInput = { key: 'F11', code: 'F11', ctrlKey: true, shiftKey: true }
+    expect(matchesNativeChatToggleShortcut(toggleInput, platform, {})).toBe(true)
+    // IME composition reports key 'Process'; the physical F11 code must still match.
+    expect(matchesNativeChatToggleShortcut({ ...toggleInput, key: 'Process' }, platform, {})).toBe(
       true
     )
-  })
-
-  it('requires the shift modifier', () => {
-    expect(matchesNativeChatToggleShortcut(combo({ metaKey: true }), 'darwin')).toBe(false)
-  })
-
-  it('rejects when alt is held', () => {
+    expect(matchesNativeChatToggleShortcut({ ...toggleInput, altKey: true }, platform, {})).toBe(
+      false
+    )
+    expect(matchesNativeChatToggleShortcut({ key: 'j', ctrlKey: true }, platform, {})).toBe(false)
     expect(
-      matchesNativeChatToggleShortcut(
-        combo({ metaKey: true, shiftKey: true, altKey: true }),
-        'darwin'
+      keybindingMatchesAction('worktree.palette', { key: 'j', ctrlKey: true }, platform, {})
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'worktree.palette',
+        { key: 'j', ctrlKey: true, shiftKey: true },
+        platform,
+        {}
       )
-    ).toBe(false)
-  })
-
-  it('rejects a different key', () => {
+    ).toBe(true)
+    const palette = getKeybindingDefinition('worktree.palette')
+    if (!palette) {
+      throw new Error('Missing worktree palette')
+    }
+    expect(effective(palette, platform, {})).toEqual(['Mod+Shift+J'])
     expect(
-      matchesNativeChatToggleShortcut(combo({ key: 'k', metaKey: true, shiftKey: true }), 'darwin')
+      matchesNativeChatToggleShortcut({ key: 'j', ctrlKey: true, shiftKey: true }, platform, {
+        'worktree.palette': []
+      })
+    ).toBe(true)
+    expect(
+      matchesNativeChatToggleShortcut(toggleInput, platform, {
+        'terminal.toggleNativeChat': ['Mod+Alt+Y']
+      })
     ).toBe(false)
-  })
-})
+  }
+)
 
 it('bounds warm saved-alias work and invalidates on snapshot replacement; dynamic definitions bypass memo', () => {
   const measure = (size: number) => {

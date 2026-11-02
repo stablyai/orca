@@ -9,7 +9,7 @@ import { Store } from '../persistence/loading-store/store'
 import { createSqliteTestStore, closeTestStores } from '../persistence/persistence-test-harness'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { isOrchestrationRetryRequestId } from '../../shared/orchestration-retry-request-id'
@@ -33,7 +33,7 @@ import {
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
 
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
@@ -53,7 +53,9 @@ async function runBuiltCli(
   args: string[],
   extraEnv: Record<string, string> = {}
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [CLI_PATH, ...args], {
+  // These tests read the full receipt, not the concise agent view.
+  const fullArgs = args[0] === 'orchestration' ? [...args, '--full'] : args
+  const child = spawn(process.execPath, [CLI_PATH, ...fullArgs], {
     env: {
       ...process.env,
       ORCA_USER_DATA_PATH: userDataPath,
@@ -609,7 +611,7 @@ describeIfBuilt('native caller subprocess over durable records', () => {
         INSERT INTO agent_session_tabs (tab_id, session_id, position) VALUES (?, ?, 1)
       `)
         .run(structuredAgentSessionTabId(invalidId), invalidId)
-      closeTestJournalHostDatabase(rig.root)
+      await closeTestJournalHostDatabase(rig.root)
       store = await openTestAgentSessionRecordStore(rig.root)
       host = new StructuredAgentSessionHost({
         ...rig.host.deps,

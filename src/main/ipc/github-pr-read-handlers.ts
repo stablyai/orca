@@ -11,7 +11,7 @@ import {
   resolveReviewThread,
   setPRCommentReaction
 } from '../github/client'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   assertRegisteredGitHubRepo,
   getGitHubLocalGitOptionArgs,
@@ -54,6 +54,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
         noCache?: boolean
         /** Refresh or a check action: a user act that may start a stopped WSL distro. */
         wakeWslDistro?: boolean
+        userRefresh?: boolean
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
@@ -67,7 +68,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
             args.prNumber,
             args.headSha,
             args.prRepo ?? null,
-            { noCache: args.noCache },
+            { noCache: args.noCache, ...(args.userRefresh === true ? { userRefresh: true } : {}) },
             getGitHubRepoConnectionId(repo),
             ...getGitHubLocalGitOptionArgs(store, repo)
           ),

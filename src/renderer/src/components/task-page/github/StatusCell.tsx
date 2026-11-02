@@ -161,7 +161,8 @@ export function GHStatusCell({
                     repo: parsedOwnerRepo.repo,
                     host: githubProjectHost(parsedOwnerRepo.host),
                     number: item.number,
-                    updates
+                    updates,
+                    wakeWslDistro: true
                   })
             }
             if (!repo) {

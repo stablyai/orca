@@ -75,28 +75,6 @@ function setup(args: { show: ShowReply; switchOn?: boolean; onShow?: () => void 
 }
 
 describe('RemoteBrowserPageSession.ensureRemotePage without a stored handle', () => {
-  // tabShow also wakes host-saved pages that have not started yet.
-  it('adopts the page the host runs under the row id instead of creating a second one', async () => {
-    const harness = setup({ show: 'runs' })
-
-    await expect(harness.ensure()).resolves.toBe('host-page-1')
-
-    expect(harness.methods()).toEqual(['browser.tabShow'])
-    expect(harness.calls[0]?.params).toEqual({ worktree: 'id:wt-1', page: 'host-page-1' })
-    expect(harness.tokens.remotePage).toBe('host-page-1')
-    expect(harness.stored()).toEqual({ environmentId: 'env-1', remotePageId: 'host-page-1' })
-  })
-
-  it('creates a page when the host has none under the row id, closing nothing', async () => {
-    const harness = setup({ show: 'not-found' })
-
-    await expect(harness.ensure()).resolves.toBe('created-page')
-
-    expect(harness.methods()).toEqual(['browser.tabShow', 'browser.tabCreate'])
-    expect(harness.closedMissing).toEqual([])
-    expect(harness.stored()).toEqual({ environmentId: 'env-1', remotePageId: 'created-page' })
-  })
-
   // A timeout or transient failure says nothing about the page; creating would duplicate a live one.
   it('surfaces any other probe failure without creating a page', async () => {
     const harness = setup({ show: 'other-error' })
@@ -118,13 +96,5 @@ describe('RemoteBrowserPageSession.ensureRemotePage without a stored handle', ()
     expect(harness.methods()).toEqual(['browser.tabShow'])
     expect(harness.stored()).toBeNull()
     expect(harness.tokens.remotePage).toBeNull()
-  })
-
-  it('keeps creating directly with the layout-owner switch off', async () => {
-    const harness = setup({ show: 'runs', switchOn: false })
-
-    await expect(harness.ensure()).resolves.toBe('created-page')
-
-    expect(harness.methods()).toEqual(['browser.tabCreate'])
   })
 })

@@ -10,7 +10,7 @@ import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requ
 import type {
   RuntimeEnsureAgentSessionResult,
   RuntimeEnsureAgentSessionRequest
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import type { SubprocessHandle } from '../daemon/session-subprocess-handle'
 import { TerminalHost } from '../daemon/terminal-host'

@@ -10,6 +10,13 @@ import {
   trackRunningAgentLaunchPane
 } from '../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../shared/agent-launch-pane-verdict'
+import { endPaneAgentLaunch } from './ipc/spawn-agent-launch-end'
+import { createPtyIpcSpawnState } from './ipc/spawn-state'
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import {
+  formatTerminalStartFailure,
+  terminalStartError
+} from '../../../shared/terminal-start-failure'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -130,6 +137,61 @@ describe('a pane whose process belongs to an agent launch', () => {
   }
 
   const PANE_ADDRESS = { worktreeId, tabId, leafId }
+
+  it.each([false, true])(
+    'keeps typed capacity verdict ownership and the suppression sentinel (dispatched=%s)',
+    async (dispatched) => {
+      const runtime = new OrcaRuntimeService()
+      vi.spyOn(runtime, 'reportAgentLaunchPaneVerdict')
+      const running = trackRunningAgentLaunchPane(pane)
+      const unexpected = (): never => {
+        throw new Error('unexpected spawn dependency')
+      }
+      const ctx = createPtyIpcSpawnState(
+        {
+          runtime,
+          getLocalPtyStartupPromise: unexpected,
+          adoptStablePane: unexpected,
+          assertWorkspaceAcceptsNewPty: unexpected,
+          resolvePtySpawnStartupCwd: unexpected,
+          transitionSpawnHiddenRendererPtyDeliveryState: unexpected,
+          trustedTerminalHandleEnv: new Set(),
+          sendPtySpawnedToRenderer: unexpected,
+          syncPtyBackgroundedDelivery: unexpected,
+          stopReplacedPty: unexpected,
+          prepareCodexResumeHome: unexpected,
+          resolveCodexResumeLaunch: unexpected,
+          noCodexResumeLaunch: unexpected,
+          reconcileSharedRuntimeResumeHome: unexpected,
+          stripSequencedStartupResumeArgv: unexpected
+        },
+        { cols: 80, rows: 24 }
+      )
+      ctx.paneAgentLaunch = {
+        runtime,
+        address: PANE_ADDRESS,
+        paneKey,
+        running,
+        dispatched,
+        refuseIfClosed() {}
+      }
+      const error = endPaneAgentLaunch(ctx, {
+        error: terminalStartError('agent_session_exited_during_start', {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        })
+      })
+      expect(error?.message).toBe(AGENT_LAUNCH_PANE_REFUSED_CODE)
+      expect(formatTerminalStartFailure(error)).toBeUndefined()
+      expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledExactlyOnceWith(PANE_ADDRESS, {
+        kind: dispatched ? 'unconfirmed' : 'not-started',
+        ...(!dispatched ? { code: 'agent_session_exited_during_start' } : {}),
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      })
+      expect(ctx.paneAgentLaunch).toBeNull()
+    }
+  )
 
   it('waits for the launch instead of spawning while it runs, then tells the window it settled', async () => {
     const providerSpawn = vi.fn(async () => ({ id: 'pty-after-launch' }))

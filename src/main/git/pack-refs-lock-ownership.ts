@@ -1,4 +1,4 @@
-import { readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import {
@@ -11,9 +11,6 @@ const ABANDONED_LOCK_AGE_MS = PACK_REFS_TIMEOUT_MS
 
 /** Beyond this a recorded pid may have been recycled, so it stops being evidence of life. */
 const PID_REUSE_HORIZON_MS = 24 * 60 * 60_000
-
-/** The ref tree is wide but shallow; this only stops a pathological walk. */
-const REF_LOCK_SCAN_CEILING = 4096
 
 /**
  * Recover locks attributed by an Orca marker only after an age and owner-liveness check.
@@ -35,8 +32,6 @@ export class PackRefsLockOwnership {
     if (!reclaim.ok) {
       return reclaim
     }
-    // Git does not clean per-ref locks stranded by an earlier process.
-    await this.reclaimStrandedRefLocks(now)
     try {
       await writeFile(this.markerPath, JSON.stringify({ pid: process.pid }), 'utf-8')
     } catch {
@@ -96,53 +91,9 @@ export class PackRefsLockOwnership {
     await rm(this.markerPath, { force: true }).catch(() => {})
     return { ok: true }
   }
-
-  /** An old marker and dead owner permit recovery of empty per-ref locks stranded before signal cleanup registration. */
-  private async reclaimStrandedRefLocks(now: number): Promise<void> {
-    const marker = await readOwnerMarker(this.markerPath)
-    if (marker === null || isProcessAlive(marker.pid)) {
-      return
-    }
-    const markerAgeMs = await fileAgeMs(this.markerPath, now)
-    if (markerAgeMs === null || markerAgeMs < ABANDONED_LOCK_AGE_MS) {
-      return
-    }
-    const path = isWindowsAbsolutePathLike(this.markerPath) ? win32 : posix
-    const pending = [path.join(path.dirname(this.markerPath), 'refs')]
-    let visited = 0
-    while (pending.length > 0) {
-      const directory = pending.pop()
-      if (directory === undefined || (visited += 1) > REF_LOCK_SCAN_CEILING) {
-        return
-      }
-      let entries: { name: string; isDirectory: () => boolean }[]
-      try {
-        entries = await readdir(directory, { withFileTypes: true })
-      } catch {
-        continue
-      }
-      for (const entry of entries) {
-        const full = path.join(directory, entry.name)
-        if (entry.isDirectory()) {
-          pending.push(full)
-        } else if (entry.name.endsWith('.lock') && (await isEmptyFile(full))) {
-          await rm(full, { force: true }).catch(() => {})
-        }
-      }
-    }
-  }
 }
 
 export type PackRefsLockClaim = { ok: true } | { ok: false; reason: string }
-
-// Empty files are candidates for O_EXCL strands; ownership/age checks happen before scanning.
-async function isEmptyFile(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).size === 0
-  } catch {
-    return false
-  }
-}
 
 async function readOwnerMarker(path: string): Promise<{ pid: number } | null> {
   try {

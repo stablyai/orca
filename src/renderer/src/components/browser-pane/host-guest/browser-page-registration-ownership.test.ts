@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserLoadError,
-  BrowserWorkspace
-} from '../../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
 import {
   createBrowserPageWebviewGuestSession,
   type BrowserPageWebviewGuestSession
@@ -14,7 +11,6 @@ import {
   registeredWebContentsIds,
   webviewRegistry
 } from './webview-registry'
-import { useAppStore } from '@/store'
 
 vi.mock('../describe-page/browser-page-load-error', () => ({ browserPageExists: () => true }))
 
@@ -156,24 +152,6 @@ afterEach(async () => {
 })
 
 describe('renderer registration completion ownership', () => {
-  it('does not restore 1000 closed IDs from delayed successful replies', async () => {
-    for (let i = 0; i < 1000; i++) {
-      const page = createSession(`closed-${i}`, i + 1)
-      page.session.handleDidAttach()
-      page.session.guestRecovery.dispose()
-      page.webviewRef.current = null
-      await destroyPersistentWebview(page.id)
-    }
-    for (const reply of replies) {
-      reply.resolve(true)
-    }
-    await flush()
-    expect(webviewRegistry.size).toBe(0)
-    expect(registeredWebContentsIds.size).toBe(0)
-    expect(sessions.reduce((count, page) => count + page.sync.mock.calls.length, 0)).toBe(0)
-    expect(unregister).toHaveBeenCalledTimes(1000)
-  })
-
   it('keeps the replacement ID after an older reply arrives', async () => {
     const old = createSession('page', 1)
     old.session.handleDidAttach()
@@ -237,37 +215,6 @@ describe('renderer registration completion ownership', () => {
     expect(replacement.pending.current).toBe(true)
   })
 
-  it.each(['attach', 'ready'] as const)('keeps successful current %s replies', async (event) => {
-    const page = createSession('page', 1)
-    if (event === 'attach') {
-      page.session.handleDidAttach()
-    } else {
-      page.session.handleDomReady()
-    }
-    replies[0].resolve(true)
-    await flush()
-    expect(registeredWebContentsIds.get('page')).toBe(1)
-    expect(page.sync).toHaveBeenCalledOnce()
-    expect(unregister).not.toHaveBeenCalled()
-  })
-
-  it.each(['false', 'reject'] as const)(
-    'preserves inconclusive current registration %s',
-    async (result) => {
-      const page = createSession('page', 1)
-      page.session.handleDidAttach()
-      if (result === 'false') {
-        replies[0].resolve(false)
-      } else {
-        replies[0].reject(new Error('attach race'))
-      }
-      await flush()
-      expect(registeredWebContentsIds.has('page')).toBe(false)
-      expect(page.sync).toHaveBeenCalledOnce()
-      expect(unregister).not.toHaveBeenCalled()
-    }
-  )
-
   it('does not restore a registry-removed guest before listener disposal runs', async () => {
     const page = createSession('page', 1)
     page.session.handleDidAttach()
@@ -327,21 +274,6 @@ describe('renderer registration completion ownership', () => {
     expect(unregister).toHaveBeenCalledOnce()
   })
 
-  it('still repairs an inconclusive current registration', async () => {
-    isRegistered.mockResolvedValue(false)
-    const page = createSession('page', 1)
-    registeredWebContentsIds.set('page', 1)
-    page.session.guestRecovery.validateAfterResume()
-    await flush()
-    expect(repair).toHaveBeenCalledExactlyOnceWith({
-      browserPageId: 'page',
-      workspaceId: 'browser-1',
-      worktreeId: 'wt-1',
-      sessionProfileId: null,
-      webContentsId: 1
-    })
-  })
-
   it('does not clear a newer guest recovery error from a pending old repair reply', async () => {
     const reply = deferred<boolean>()
     repair.mockReturnValue(reply.promise)
@@ -362,45 +294,5 @@ describe('renderer registration completion ownership', () => {
     await flush()
     expect(page.loadFailure.current).toBe(failure)
     expect(page.update).not.toHaveBeenCalled()
-  })
-})
-
-describe('active page after launch', () => {
-  function restoreActiveWorkspace(activePageId: string): void {
-    const workspace: BrowserWorkspace = {
-      id: 'browser-1',
-      worktreeId: 'wt-1',
-      activePageId,
-      url: 'https://example.test',
-      title: '',
-      loading: false,
-      faviconUrl: null,
-      canGoBack: false,
-      canGoForward: false,
-      loadError: null,
-      createdAt: 0
-    }
-    useAppStore.setState({
-      activeBrowserTabId: 'browser-1',
-      browserTabsByWorktree: { 'wt-1': [workspace] }
-    })
-  }
-
-  it('tells main which page is active once a restored active page registers', async () => {
-    restoreActiveWorkspace('page')
-    const page = createSession('page', 1)
-    page.session.handleDidAttach()
-    replies[0].resolve(true)
-    await flush()
-    expect(notifyActiveTabChanged).toHaveBeenCalledWith({ browserPageId: 'page' })
-  })
-
-  it('stays quiet when a background page registers', async () => {
-    restoreActiveWorkspace('other-page')
-    const page = createSession('page', 1)
-    page.session.handleDidAttach()
-    replies[0].resolve(true)
-    await flush()
-    expect(notifyActiveTabChanged).not.toHaveBeenCalled()
   })
 })

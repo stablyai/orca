@@ -100,6 +100,6 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
 
     await list(new Map(), false)
 
-    expect(logged.at(-1)).toContain('Scope: Run run_bound (bound to this terminal)')
+    expect(logged.at(-1)).toContain('scope.run=run_bound scope.source=bound')
   })
 })

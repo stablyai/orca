@@ -5,7 +5,7 @@ import type {
   AgentJournalToolCallItem,
   AgentJournalToolCallState,
   AgentJournalTurnLifecycleState
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 
 export type AgentJournalToolCallLifecycle = AgentJournalToolCallState | 'interrupted'
 

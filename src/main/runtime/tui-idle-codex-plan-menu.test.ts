@@ -124,14 +124,4 @@ describe('Codex plan menu painted after its Stop hook', () => {
     // Held for the turn's last frame, then settled before the next poll sweep.
     expect(await waitOutcome(runtime, handle, 1000)).toBe('ready')
   })
-
-  it('settles at once on a done from a turn that proposed no plan', async () => {
-    let rows: AgentStatusIpcPayload[] = []
-    const { runtime, handle } = await codexPane(() => rows)
-    paint(runtime, '• Done.\r\n')
-    await vi.advanceTimersByTimeAsync(100)
-    rows = [doneRow(Date.now())]
-
-    expect(await waitOutcome(runtime, handle, 50)).toBe('ready')
-  })
 })

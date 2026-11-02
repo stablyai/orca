@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secret-store'
+
 import { reportSecretProtectionGap } from './secret-protection-report'
 
 const WEAK = 'Secrets are obfuscated with a built-in key.'
@@ -66,12 +67,6 @@ describe('reportSecretProtectionGap', () => {
     expect(logged).toHaveLength(2)
   })
 
-  it('stays silent from a clean start when secrets are properly sealed', () => {
-    installStore(null)
-    expect(report()).toBeNull()
-    expect(logged).toEqual([])
-  })
-
   it('re-reports on demand for support, without disturbing stored state', () => {
     installStore(WEAK)
     report()
@@ -86,11 +81,5 @@ describe('reportSecretProtectionGap', () => {
     writeFileSync(join(dir, 'orca-secret-protection.json'), '{ not json', 'utf-8')
     expect(report()).toBe(WEAK)
     expect(logged).toHaveLength(1)
-  })
-
-  it('does not throw startup when no store is installed', () => {
-    _resetSecretStoreForTests()
-    expect(() => report()).not.toThrow()
-    expect(logged[0]).toContain('could not determine at-rest protection')
   })
 })

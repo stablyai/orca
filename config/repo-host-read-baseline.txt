@@ -31,8 +31,6 @@
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-ownership.ts
 2 src/main/persistence/restoring-sessions/folder-scope-migration.ts
 1 src/main/persistence/restoring-sessions/tab-terminal-pane-binding-repair.ts
-2 src/main/persistence/scheduling-automations/automation-definition-operations.ts
-1 src/main/persistence/scheduling-automations/automation-owner-projection.ts
 1 src/main/persistence/tracking-repos/local-worktree-metadata-scan-expectation.ts
 1 src/main/persistence/tracking-repos/worktree-metadata-normalization.ts
 1 src/main/ports/ssh-advertised-url-enrichment.ts
@@ -48,7 +46,6 @@
 1 src/main/workspace-space-worktree-row.ts
 1 src/main/worktree-create-base-prefetch.ts
 2 src/main/worktree-name-retirement.ts
-1 src/shared/automation-execution-target.ts
 1 src/shared/endpoint-catalog-adoption.ts
 1 src/shared/folder-workspace-execution-host.ts
 1 src/shared/github/github-cache-key.ts

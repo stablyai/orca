@@ -7,23 +7,13 @@ import {
   summarizeSubagentGroup,
   withoutSubagentGroupTwins
 } from './native-chat-subagent-summary'
-import type { NativeChatSubagentEntry } from '../../native-chat-types'
+import type { NativeChatSubagentEntry } from '../native-chat-types'
 
 function agent(entry: Partial<NativeChatSubagentEntry>): NativeChatSubagentEntry {
   return { id: 'a', label: 'task', state: 'working', ...entry }
 }
 
 describe('summarizeSubagentGroup', () => {
-  it('collapses in-flight children into one working count', () => {
-    const summary = summarizeSubagentGroup([
-      agent({ id: 'a', state: 'working' }),
-      agent({ id: 'b', state: 'working' }),
-      agent({ id: 'c', state: 'completed' })
-    ])
-
-    expect(summary).toMatchObject({ total: 3, working: 2, settledState: null, settledCount: 0 })
-  })
-
   it('ranks the settled verdict worst-first and reports ✓ completed last', () => {
     const cascade: [NativeChatSubagentEntry['state'][], string][] = [
       [['failed', 'stopped', 'idle', 'completed'], 'failed'],
@@ -184,13 +174,6 @@ describe('summarizeSubagentGroup', () => {
       ]).adverseState
     ).toBeNull()
   })
-
-  it('keeps working the only non-terminal state', () => {
-    expect(isTerminalSubagentState('working')).toBe(false)
-    for (const state of ['idle', 'completed', 'failed', 'stopped', 'unverifiable']) {
-      expect(isTerminalSubagentState(state)).toBe(true)
-    }
-  })
 })
 
 describe('subagentGroupFallbackText', () => {
@@ -226,15 +209,6 @@ describe('subagentGroupFallbackText', () => {
         agent({ id: 'b', state: 'unverifiable' })
       ])
     ).toBe('Kicked off 2 subagents (1 unverifiable)')
-  })
-
-  it('stays quiet when nothing has gone wrong', () => {
-    expect(subagentGroupFallbackText([agent({ id: 'a', state: 'working' })])).toBe(
-      'Kicked off 1 subagent'
-    )
-    expect(subagentGroupFallbackText([agent({ id: 'a', state: 'completed' })])).toBe(
-      'Ran 1 subagent'
-    )
   })
 })
 

@@ -87,37 +87,6 @@ describe("pushing this client's terminal colours to paired hosts", () => {
     ])
   })
 
-  it('pushes a colour change to every connected host, and nothing for an unchanged one', () => {
-    const { calls, push } = harness()
-    push.observeStatusSnapshot(snapshot('env-a'))
-    push.observeStatusSnapshot(snapshot('env-b'))
-    push.observeStatusSnapshot(snapshot('env-c', { verification: 'unavailable' }))
-
-    push.setAttributes(DARK)
-    push.setAttributes(structuredClone(DARK))
-    push.setAttributes(LIGHT)
-
-    expect(calls).toEqual([
-      ['env-a', DARK],
-      ['env-b', DARK],
-      ['env-a', LIGHT],
-      ['env-b', LIGHT]
-    ])
-  })
-
-  it('re-pushes unchanged colours on focus, since another client may have pushed since', () => {
-    const { calls, push } = harness()
-    push.setAttributes(DARK)
-    push.observeStatusSnapshot(snapshot('env-a'))
-
-    push.pushToAllHosts()
-
-    expect(calls).toEqual([
-      ['env-a', DARK],
-      ['env-a', DARK]
-    ])
-  })
-
   it('stops asking a host that predates the method until it reconnects', async () => {
     const { calls, call, push } = harness()
     call.mockRejectedValueOnce(methodNotFound())

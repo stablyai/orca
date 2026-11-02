@@ -345,7 +345,7 @@ const ADVICE =
 
 // Why test support too: harnesses and fixtures seed settings for tests; they never route host work.
 const TEST_SUPPORT_PATH =
-  /(?:\.(?:test|spec)(?:-fixture|-support)?|-test-(?:harness|fixtures?))\.tsx?$/
+  /(?:\.(?:(?:test|spec)(?:-fixture|-support)?|fixture)|-test-(?:harness|fixtures?))\.tsx?$/
 
 export function isScannedPath(rel) {
   return /\.(ts|tsx)$/.test(rel) && !TEST_SUPPORT_PATH.test(rel)

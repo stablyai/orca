@@ -1,8 +1,9 @@
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
-import { structuredAgentSessionCreateParams } from '../../../../shared/structured-agent-session-create'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
+import { structuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import {
   createRestTestRig,
   type RestTestRig
@@ -35,12 +36,17 @@ const CLIENT = {
 }
 
 let rig: RestTestRig
-const retireTab = vi.fn(() => true)
+let raw: { worktreeId: string; tabId: string } | null = null
+const retireTab = vi.fn(() => {
+  raw = null
+  return true
+})
 
 beforeEach(async () => {
   mocks.layoutOwnerIsMain = true
   resetStructuredAgentSessionClosesBeforeCreateForTests()
   retireTab.mockClear()
+  raw = null
   rig = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
   setStructuredAgentSessionHost(rig.host)
 })
@@ -63,9 +69,17 @@ function createParams() {
 const create = (overrides: Record<string, unknown> = {}) =>
   call('agentSession.create', createParams(), CLIENT, {
     retireStructuredAgentSessionTabFromSnapshot: retireTab,
+    currentLocalStructuredSessionPresentation: () => raw,
+    removeCapturedStructuredSessionSavedTabs: vi.fn(),
     ...overrides
   })
-const close = () => call('agentSession.close', { sessionId: SESSION }, CLIENT)
+const close = () =>
+  call('agentSession.close', { sessionId: SESSION }, CLIENT, {
+    currentLocalStructuredSessionPresentation: () => raw,
+    captureStructuredAgentSessionPresentation: () => ({ raw, saved: [] }),
+    retireStructuredAgentSessionTabFromSnapshot: retireTab,
+    removeCapturedStructuredSessionSavedTabs: vi.fn()
+  })
 
 const refusedAsClosed = {
   ok: true,
@@ -127,14 +141,24 @@ describe('a close that reaches main before its create', () => {
   it('a close while the create commits closes the chat as it lands', async () => {
     let closing: Promise<unknown> | undefined
     const result = await create({
-      publishStructuredAgentSessionTab: vi.fn(async () => {
-        closing = close()
-      })
+      publishStructuredAgentSessionTab: vi.fn(
+        async (input: Parameters<OrcaRuntimeService['publishStructuredAgentSessionTab']>[0]) => {
+          raw = { worktreeId: 'workspace-1', tabId: `agent-session:${SESSION}` }
+          input.capture?.({
+            tableId: rig.host.getSessionTabId(SESSION),
+            presentation: {
+              raw: { worktreeId: 'workspace-1', tabId: `agent-session:${SESSION}` },
+              saved: []
+            }
+          })
+          closing = close()
+        }
+      )
     })
     await closing
 
     expect(result).toMatchObject(refusedAsClosed)
-    expect(retireTab).toHaveBeenCalledWith(SESSION)
+    expect(retireTab).toHaveBeenCalledWith(SESSION, `agent-session:${SESSION}`, 'workspace-1')
     expect(rig.store.getSessionTabId(SESSION)).toBeNull()
     expect(rig.host.hasSession(SESSION)).toBe(false)
   })
@@ -142,18 +166,30 @@ describe('a close that reaches main before its create', () => {
   it('a close before a create that fails past commit still closes what it made', async () => {
     let closing: Promise<unknown> | undefined
     const result = await create({
-      publishStructuredAgentSessionTab: vi.fn(async () => {
-        // Not awaited: the close's stop queues behind this create.
-        closing = close()
-        await vi.waitFor(() => expect(structuredAgentSessionClosedBeforeCreate(SESSION)).toBe(true))
-        throw new Error('tab write failed')
-      })
+      publishStructuredAgentSessionTab: vi.fn(
+        async (input: Parameters<OrcaRuntimeService['publishStructuredAgentSessionTab']>[0]) => {
+          raw = { worktreeId: 'workspace-1', tabId: `agent-session:${SESSION}` }
+          input.capture?.({
+            tableId: rig.host.getSessionTabId(SESSION),
+            presentation: {
+              raw: { worktreeId: 'workspace-1', tabId: `agent-session:${SESSION}` },
+              saved: []
+            }
+          })
+          // Not awaited: the close's stop queues behind this create.
+          closing = close()
+          await vi.waitFor(() =>
+            expect(structuredAgentSessionClosedBeforeCreate(SESSION)).toBe(true)
+          )
+          throw new Error('tab write failed')
+        }
+      )
     })
 
     await closing
     expect(result).toMatchObject(refusedAsClosed)
     expect(rig.store.getRecord(SESSION)).not.toBeNull()
-    expect(retireTab).toHaveBeenCalledWith(SESSION)
+    expect(retireTab).toHaveBeenCalledWith(SESSION, `agent-session:${SESSION}`, 'workspace-1')
     expect(rig.host.hasSession(SESSION)).toBe(false)
   })
 

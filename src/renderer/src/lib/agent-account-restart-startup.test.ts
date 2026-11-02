@@ -91,19 +91,6 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
     expect(startup.resumeProviderSession?.id).toBe(SESSION_ID)
   })
 
-  it('keeps the account-switch marks that make main repin the launch home', () => {
-    seedAgentStatus({
-      agentType: 'codex',
-      state: 'done',
-      providerSession: { key: 'session_id', id: SESSION_ID }
-    })
-
-    const startup = build()
-
-    expect(startup.launchAgent).toBe('codex')
-    expect(startup.startupCommandDelivery).toBe('shell-ready')
-  })
-
   it('relaunches the configured command without adding defaults when no session is recorded', () => {
     const command = String.raw`& 'C:\Program Files\Codex\codex.exe'`
     useAppStore.setState({
@@ -250,33 +237,6 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(startup?.env?.CLAUDE_DEFAULT_ONLY).toBeUndefined()
   })
 
-  it('still applies the configured default arguments to an unrecorded Codex launch', () => {
-    seedAgentStatus({
-      agentType: 'codex',
-      state: 'done',
-      providerSession: { key: 'session_id', id: SESSION_ID }
-    })
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/home/dev'), agentDefaultArgs: { codex: '--search' } }
-    })
-
-    expect(buildPaneAccountRestartStartup('codex', pane)?.command).toContain('--search')
-  })
-
-  it('keeps a recorded Claude launch config on resume', () => {
-    seedAgentStatus({
-      agentType: 'claude',
-      state: 'done',
-      providerSession: { key: 'session_id', id: SESSION_ID }
-    })
-    useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
-      agentArgs: '--model opus',
-      agentEnv: {}
-    })
-
-    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toContain('--model')
-  })
-
   // #31545: `cd pkg && claude` must come back in pkg, not the tab's start folder.
   it('resumes a Claude started in another folder from that folder', () => {
     seedAgentStatus({
@@ -367,12 +327,6 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     }
   })
 
-  it('reports no resume when the Claude pane has no session id', () => {
-    seedAgentStatus({ agentType: 'claude', state: 'done' })
-
-    expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()
-  })
-
   it('never resumes a Codex session as Claude', () => {
     seedAgentStatus({
       agentType: 'codex',
@@ -425,3 +379,36 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     }
   )
 })
+
+it.each(['claude', 'codex'] as const)(
+  'does not seed a continuing %s account restart from the authored map',
+  (agent) => {
+    projectRuntimeContext = undefined
+    seedAgentStatus({
+      agentType: agent,
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/test'),
+        agentPermissionDefault: 'own',
+        agentLaunchChoices: { [agent]: { model: 'fresh-only', options: { effort: 'high' } } },
+        agentDefaultArgs: { [agent]: '--model literal' },
+        agentDefaultEnv: { [agent]: { KEEP: 'yes' } }
+      }
+    })
+    const pane = { tabId: TAB_ID, leafId: LEAF_ID, worktreeId: WORKTREE_ID }
+    const startup = buildPaneAccountRestartStartup(agent, pane)
+    expect(startup?.command).toContain(SESSION_ID)
+    expect(startup?.command).not.toContain('fresh-only')
+    expect(startup?.command).not.toContain('high')
+    // The established hand-started Claude path has no configured fallback; Codex retains it.
+    expect(startup?.command.includes('literal')).toBe(agent === 'codex')
+    useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
+      agentArgs: '--model recorded',
+      agentEnv: { RECORDED: 'yes' }
+    })
+    expect(buildPaneAccountRestartStartup(agent, pane)?.command).toContain('recorded')
+  }
+)
