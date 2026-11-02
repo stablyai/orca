@@ -162,7 +162,7 @@ describe('native saved-context recovery delivery', () => {
     const id = await fixture.accept('Use the number now')
     await eventually(() => expect(fixture.dispatch).toHaveBeenCalledTimes(2))
     const encoded = fixture.dispatch.mock.calls.at(-1)![0].body
-    const sink = fixture.acquire.mock.calls.at(-1)![0].events
+    const sink = fixture.acquire.mock.calls.at(-1)![0].events!
     const identity = { provider: 'codex' as const, threadId: native(), turnId: 'echo', ordinal: 0 }
     const db = openTestJournalHostDatabase(fixture.root).db
     db.exec(`CREATE TEMP TRIGGER refuse_inline_receipt BEFORE INSERT ON agent_session_context_transfers
@@ -196,6 +196,41 @@ describe('native saved-context recovery delivery', () => {
         fixture.store.requireWritableRecord(SESSION).providerHandleChain
       ).kind
     ).toBe('uncertain')
+  })
+  it('words a failed context write as an Orca fault and an unproved history write as undelivered', async () => {
+    const inject = vi.fn<NonNullable<StructuredAgentSessionAdapter['injectHistoricalContext']>>(
+      async () => {
+        throw new Error('connection reset')
+      }
+    )
+    await fixture.recoverSavedChat(inject)
+    const db = openTestJournalHostDatabase(fixture.root).db
+    db.exec(`CREATE TEMP TRIGGER refuse_delivery BEFORE INSERT ON agent_session_context_transfers
+      WHEN NEW.kind = 'delivery' BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
+    let local: string
+    try {
+      local = await fixture.accept('First try')
+      await eventually(async () =>
+        expect((await fixture.submission(local))?.dispatchState).toBe('rejected')
+      )
+    } finally {
+      db.exec('DROP TRIGGER refuse_delivery')
+    }
+    expect(await fixture.submission(local)).toMatchObject({
+      rejection: { kind: 'hostFault', neverReachedAgent: true },
+      reason: "Orca ran into a problem, so this didn't go through. Try again."
+    })
+    expect(inject).not.toHaveBeenCalled()
+
+    const unproved = await fixture.accept('Second try')
+    await eventually(async () =>
+      expect((await fixture.submission(unproved))?.dispatchState).toBe('rejected')
+    )
+    expect(inject).toHaveBeenCalledOnce()
+    expect(await fixture.submission(unproved)).toMatchObject({
+      rejection: { kind: 'notDelivered', neverReachedAgent: true },
+      reason: 'This message was not delivered. Send it again to continue.'
+    })
   })
   it('parks Q behind known live work, then the real completion commit wakes idle replacement without replaying unknown P', async () => {
     const { native } = await fixture.recoverSavedChat(async () => ({ kind: 'unsupported' }))

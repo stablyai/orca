@@ -65,7 +65,7 @@ export async function beginSubmissionHandover(
     )
     return null
   }
-  let carrier = prepareRecoveryCarrier(ctx, clientMessageId)
+  let carrier = prepareRecoveryCarrier(ctx, submission)
   // Join only current turns; persist stopped-history carry before writing to the provider.
   const turnScope = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   let carried = carriedStoppedHistory(ctx, turnScope, submission, body)
@@ -109,7 +109,7 @@ export async function beginSubmissionHandover(
   const prepareFresh = async (fence: number): Promise<AgentJournalMessageItem> => {
     ctx.fence = fence
     carried = carriedStoppedHistory(ctx, AGENT_JOURNAL_THREAD_SCOPE, submission, body)
-    carrier = prepareRecoveryCarrier(ctx, clientMessageId)
+    carrier = prepareRecoveryCarrier(ctx, submission)
     if (carrier.required) {
       return dispatchBody
     }
