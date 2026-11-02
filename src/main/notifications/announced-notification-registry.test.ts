@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { StructuredAttentionOrigin } from '../../shared/agent-session/agent-session-attention'
-import { createAnnouncedNotificationRegistry } from './announced-notification-registry'
+import {
+  createAnnouncedNotificationRegistry,
+  worktreeAnnouncementSubject
+} from './announced-notification-registry'
 
 const journalOrigin: StructuredAttentionOrigin = {
   scope: {
@@ -51,6 +54,11 @@ describe('createAnnouncedNotificationRegistry', () => {
         ['pane-a', ['id-1', 'id-2']],
         ['pane-c', ['id-4']]
       ])
+    // An exclusive pane reports no other-worktree entries; the mixed one does.
+    expect(taken.map((group) => [group.paneKey, group.hasOtherWorktreeEntries])).toEqual([
+      ['pane-a', false],
+      ['pane-c', false]
+    ])
     // Taken once: a second acknowledgement finds nothing, and other worktrees keep theirs.
     expect(registry.takeByWorktree('repo::/w')).toEqual([])
     expect(registry.take('pane-b').map((entry) => entry.id)).toEqual(['id-3'])
@@ -60,7 +68,17 @@ describe('createAnnouncedNotificationRegistry', () => {
     const registry = createAnnouncedNotificationRegistry()
     registry.record('pane-a', 'id-1', undefined, 'repo::/w1')
     registry.record('pane-a', 'id-2', undefined, 'repo::/w2')
-    registry.takeByWorktree('repo::/w1')
+    const [taken] = registry.takeByWorktree('repo::/w1')
+    expect(taken.hasOtherWorktreeEntries).toBe(true)
     expect(registry.take('pane-a').map((entry) => entry.id)).toEqual(['id-2'])
+  })
+
+  it('takes pane-less worktree announcements filed under the synthetic subject', () => {
+    const registry = createAnnouncedNotificationRegistry()
+    registry.record(worktreeAnnouncementSubject('repo::/w'), 'id-paneless', undefined, 'repo::/w')
+    const taken = registry.takeByWorktree('repo::/w')
+    expect(taken.map((group) => [group.paneKey, group.entries.map((entry) => entry.id)]))
+      .toEqual([[worktreeAnnouncementSubject('repo::/w'), ['id-paneless']]])
+    expect(registry.takeByWorktree('repo::/w')).toEqual([])
   })
 })

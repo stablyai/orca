@@ -19,7 +19,8 @@ import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import {
   createAnnouncedNotificationRegistry,
-  setSessionAnnouncedNotificationRegistry
+  setSessionAnnouncedNotificationRegistry,
+  worktreeAnnouncementSubject
 } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
@@ -167,9 +168,23 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     platform: process.platform,
     now: () => Date.now(),
     recordAnnounced: (request) => {
-      if (request.paneKey && request.notificationId) {
+      if (!request.notificationId) {
+        return
+      }
+      if (request.paneKey) {
         announced.record(
           request.paneKey,
+          request.notificationId,
+          request.structuredOrigin,
+          request.worktreeId
+        )
+        return
+      }
+      // Worktree-scoped announcements have no pane; file them under a synthetic
+      // subject so a whole-worktree acknowledgement can still retire them (#37328).
+      if (request.worktreeId) {
+        announced.record(
+          worktreeAnnouncementSubject(request.worktreeId),
           request.notificationId,
           request.structuredOrigin,
           request.worktreeId

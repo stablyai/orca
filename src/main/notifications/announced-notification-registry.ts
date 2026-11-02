@@ -29,7 +29,17 @@ export type AnnouncedNotificationRegistry = {
   /** Take every announcement scoped to this worktree; a CLI ack reads the whole worktree. */
   takeByWorktree: (
     worktreeId: string
-  ) => readonly { paneKey: string; entries: readonly AnnouncedNotification[] }[]
+  ) => readonly {
+    paneKey: string
+    entries: readonly AnnouncedNotification[]
+    /** The pane group still holds another worktree's announcements. */
+    hasOtherWorktreeEntries: boolean
+  }[]
+}
+
+/** Pane-less worktree announcements are filed under this synthetic subject. */
+export function worktreeAnnouncementSubject(worktreeId: string): string {
+  return `worktree:${worktreeId}`
 }
 
 export function createAnnouncedNotificationRegistry(limits?: {
@@ -73,7 +83,11 @@ export function createAnnouncedNotificationRegistry(limits?: {
       return selected
     },
     takeByWorktree: (worktreeId) => {
-      const taken: { paneKey: string; entries: AnnouncedNotification[] }[] = []
+      const taken: {
+        paneKey: string
+        entries: AnnouncedNotification[]
+        hasOtherWorktreeEntries: boolean
+      }[] = []
       for (const [paneKey, ids] of idsBySubject) {
         const matching = ids.filter((entry) => entry.worktreeId === worktreeId)
         if (matching.length === 0) {
@@ -85,7 +99,7 @@ export function createAnnouncedNotificationRegistry(limits?: {
         } else {
           idsBySubject.delete(paneKey)
         }
-        taken.push({ paneKey, entries: matching })
+        taken.push({ paneKey, entries: matching, hasOtherWorktreeEntries: kept.length > 0 })
       }
       return taken
     }

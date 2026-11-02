@@ -21,14 +21,20 @@ export function dismissAnnouncedNotificationsForWorktree(
   const ids = new Set<string>()
   // Announcements without a journal origin also live on the phone relay.
   const genericMobileIds = new Set<string>()
-  for (const { paneKey, entries } of retiredByPane) {
+  for (const { paneKey, entries, hasOtherWorktreeEntries } of retiredByPane) {
     for (const entry of entries) {
       ids.add(entry.id)
       if (!entry.origin) {
         genericMobileIds.add(entry.id)
       }
     }
-    removeReadMacosNotifications(paneKey, entries)
+    // A shared pane group still holds another worktree's notifications; remove
+    // only this worktree's positioned ids so the group keeps its other members.
+    removeReadMacosNotifications(
+      paneKey,
+      entries,
+      hasOtherWorktreeEntries ? { onlyIds: true } : undefined
+    )
   }
   let dismissed = 0
   for (const id of ids) {

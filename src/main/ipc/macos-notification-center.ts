@@ -24,12 +24,18 @@ export function macosNotificationIdentity(
 // Remove without a live object; close cannot work after retention expiry or restart.
 export function removeReadMacosNotifications(
   paneKey: string,
-  retired: readonly AnnouncedNotification[]
+  retired: readonly AnnouncedNotification[],
+  options?: {
+    /** Skip the group removal when the pane group still holds another worktree's notifications. */
+    onlyIds?: boolean
+  }
 ): void {
   if (process.platform !== 'darwin') {
     return
   }
-  Notification.removeGroup(paneGroupId(paneKey))
+  if (!options?.onlyIds) {
+    Notification.removeGroup(paneGroupId(paneKey))
+  }
   const ids = retired.filter((entry) => entry.origin).map((entry) => entry.id)
   if (ids.length > 0) {
     Notification.remove(ids)
