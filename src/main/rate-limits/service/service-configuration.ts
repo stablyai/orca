@@ -81,6 +81,11 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.liveClaudeAccountResolver = resolver
   }
 
+  /** Answers whether System Default signs for the given managed account. */
+  setClaudeSystemDefaultCoverageResolver(resolver: (accountId: string) => boolean): void {
+    this.claudeSystemDefaultCoverageResolver = resolver
+  }
+
   setInactiveCodexAccountsResolver(resolver: () => InactiveCodexAccountInfo[]): void {
     this.inactiveCodexAccountsResolver = resolver
     this.inactiveCodexAccountsGeneration += 1

@@ -177,6 +177,9 @@ export function createProviderAccountServices(
       claudeRuntimeAuth.router.accountHome(id)
     )
   )
+  rateLimits.setClaudeSystemDefaultCoverageResolver((accountId) =>
+    claudeRuntimeAuth.router.coveredBySystemDefault(accountId)
+  )
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()
     const activeIds = new Set(

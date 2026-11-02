@@ -107,6 +107,15 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     this.lastClaudeAuthSnapshot = nextSnapshot
   }
 
+  // Why not provenance alone: `system` covers any account System Default signs for, not one id.
+  private billedClaudeAccountIsSelected(billed: string, provenance: string): boolean {
+    const profile = /^profile:([^:]+)/.exec(provenance)?.[1]
+    if (profile) {
+      return profile === billed
+    }
+    return this.claudeSystemDefaultCoverageResolver?.(billed) ?? false
+  }
+
   ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
     // Why first: a session of another managed account reports that account's own quota; keeping it
     // gives auto-switch a fresh reading between polls.
@@ -134,7 +143,16 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     // Why: attribution needs the selected account's config dir; until a fetch cycle captures it, drop posts rather than guess the account.
     // A billed post already names its account, so a missing or mismatched spawn folder does not drop it.
     const snapshot = this.lastClaudeAuthSnapshot
-    if (!billed) {
+    if (billed) {
+      // A billed post for an account that is neither inactive nor selected belongs to no bar here.
+      if (!snapshot || !this.billedClaudeAccountIsSelected(billed, snapshot.provenance)) {
+        console.debug('[rate-limits] dropped live Claude usage: billed account is not selected', {
+          billingAccountId: billed,
+          snapshotProvenance: snapshot?.provenance ?? null
+        })
+        return
+      }
+    } else {
       if (!snapshot) {
         console.debug('[rate-limits] dropped live Claude usage: no auth snapshot yet', {
           eventConfigDir: event.configDir

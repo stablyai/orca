@@ -17,7 +17,7 @@ export function renderClaudeAutoSwitchSetting(
   const title = translate('accounts.claude.autoSwitch', 'Switch accounts before a usage limit')
   const description = translate(
     'accounts.claude.autoSwitchDescription',
-    'When the selected account passes 90% of its 5-hour or weekly limit, Orca switches to the account with the most room left, as if you had switched by hand.'
+    'When the selected account passes 95% of its 5-hour limit or 90% of its weekly limit, Orca switches to the account with the most room left, as if you had switched by hand.'
   )
   return (
     <SearchableSetting

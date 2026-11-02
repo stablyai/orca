@@ -274,4 +274,54 @@ describe('RateLimitService live Claude usage routing', () => {
     expect(selected.getState().claude?.session?.usedPercent).toBe(44)
     expect(selected.getState().inactiveClaudeAccounts).toEqual([])
   })
+
+  it('leaves the bar alone when a billed post names an account that is neither inactive nor selected', async () => {
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+    mockFreshBackgroundProviderFetches()
+    const rateLimits = service()
+    rateLimits.setClaudeAuthPreparationResolver(async () => ({
+      configDir: HOMES.a,
+      envPatch: { CLAUDE_CONFIG_DIR: HOMES.a },
+      provenance: 'profile:a'
+    }))
+    await rateLimits.refresh()
+    const before = rateLimits.getState().claude
+    rateLimits.ingestLiveClaudeRateLimits({
+      configDir: HOMES.a,
+      fiveHour: { used_percentage: 99 },
+      sevenDay: { used_percentage: 98 },
+      billingAccountId: 'z'
+    })
+    const state = rateLimits.getState()
+    expect(state.claude).toBe(before)
+    expect(state.inactiveClaudeAccounts).toEqual([])
+  })
+
+  it('accepts a billed post on System Default only for an account the user folder covers', async () => {
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+    mockFreshBackgroundProviderFetches()
+    const rateLimits = service()
+    rateLimits.setClaudeSystemDefaultCoverageResolver((accountId) => accountId === 'a')
+    rateLimits.setClaudeAuthPreparationResolver(async () => ({
+      configDir: HOMES.a,
+      envPatch: {},
+      provenance: 'system'
+    }))
+    await rateLimits.refresh()
+    const before = rateLimits.getState().claude
+    rateLimits.ingestLiveClaudeRateLimits({
+      configDir: HOMES.a,
+      fiveHour: { used_percentage: 61 },
+      sevenDay: null,
+      billingAccountId: 'z'
+    })
+    expect(rateLimits.getState().claude).toBe(before)
+    rateLimits.ingestLiveClaudeRateLimits({
+      configDir: HOMES.a,
+      fiveHour: { used_percentage: 62 },
+      sevenDay: null,
+      billingAccountId: 'a'
+    })
+    expect(rateLimits.getState().claude?.session?.usedPercent).toBe(62)
+  })
 })
