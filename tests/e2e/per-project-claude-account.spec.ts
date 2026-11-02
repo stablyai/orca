@@ -112,6 +112,7 @@ test.describe('Per-project Claude account', () => {
     orcaPage,
     electronApp
   }) => {
+    // Several Claude launches, each waiting up to 30s for the stand-in to report its config dir.
     test.setTimeout(180_000)
     await waitForSessionReady(orcaPage)
     const worktreeId = await waitForActiveWorktree(orcaPage)
@@ -217,13 +218,15 @@ test.describe('Per-project Claude account', () => {
       // Radix opens only on a pointermove it receives; the account roster loads on first open.
       const hoverTab = async (): Promise<void> => {
         await trigger.hover({ position: { x: 10, y: 6 } })
-        await orcaPage.waitForTimeout(250)
-        await trigger.hover({ position: { x: 30, y: 6 } })
+        const box = await trigger.boundingBox()
+        if (box) {
+          await orcaPage.mouse.move(box.x + 30, box.y + 6, { steps: 5 })
+        }
       }
       await hoverTab()
       await expect(tooltip).toBeVisible({ timeout: 10_000 })
       await orcaPage.mouse.move(600, 600)
-      await orcaPage.waitForTimeout(600)
+      await expect(tooltip).toBeHidden()
       await hoverTab()
       await expect(tooltip).toContainText(` · ${PERSONAL.email}`, { timeout: 10_000 })
       await saveScreenshot(orcaPage, 'd-tab-tooltip-pinned-account')

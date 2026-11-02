@@ -166,7 +166,7 @@ describe('agentStatus:getSnapshot IPC', () => {
     // The renderer has not reattached the pane yet; only the persisted layout names its PTY.
     registerAgentHookHandlers(undefined, {
       getPtyIdForPaneKey: () => undefined,
-      workspaceSession: {
+      sessionStore: {
         getWorkspaceSession: () => ({
           terminalLayoutsByTabId: {
             'tab-1': { ptyIdsByLeafId: { '11111111-1111-4111-8111-111111111111': 'wt@@pty-1' } }

@@ -1,14 +1,19 @@
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-account-preference'
 import { readClaudePinnedLaunchErrorCode } from '../../../../shared/claude/claude-pinned-launch-error'
+import type { RefObject } from 'react'
 import type { PtyPaneStartup } from './pty-connection-types'
+import type { PtyTransport } from './pty-transport-types'
 
 type RefusedStartup = NonNullable<PtyPaneStartup>
+export type RefusedLaunchPaneHost = RefObject<Map<number, PtyTransport>>
 
 // Why a WeakMap on the pane's stable transports ref: a new hook would shift TerminalPane's
 // hook order, and the map must live exactly as long as that pane host.
-const refusedStartupsByPaneHost = new WeakMap<object, Map<number, RefusedStartup>>()
+const refusedStartupsByPaneHost = new WeakMap<RefusedLaunchPaneHost, Map<number, RefusedStartup>>()
 
-export function refusedClaudeLaunchStartupsFor(paneHost: object): Map<number, RefusedStartup> {
+export function refusedClaudeLaunchStartupsFor(
+  paneHost: RefusedLaunchPaneHost
+): Map<number, RefusedStartup> {
   let startups = refusedStartupsByPaneHost.get(paneHost)
   if (!startups) {
     startups = new Map()

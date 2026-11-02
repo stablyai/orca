@@ -4,13 +4,14 @@ import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-
 import type { PtyPaneStartup } from './pty-connection-types'
 import {
   refusedClaudeLaunchStartupsFor,
+  type RefusedLaunchPaneHost,
   startRefusedPaneOnActiveClaudeAccount
 } from './refused-claude-launch-recovery'
 
 /** The refusal toast's "Start on active account": the refused pane again, or a new Claude tab. */
 export function startPaneOnActiveClaudeAccount(input: {
   paneId: number
-  paneHost: object
+  paneHost: RefusedLaunchPaneHost
   worktreeId: string
   restartPane: (paneId: number, startup: PtyPaneStartup) => void
 }): void {

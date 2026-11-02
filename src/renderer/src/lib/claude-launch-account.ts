@@ -6,6 +6,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from '@/store/types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { getIndexedRepoMap, getIndexedWorktreeById } from '@/store/worktree-repo-index'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { claudeAccountPinningUnsupportedReasonInState } from '@/components/settings/repository-claude-account'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -40,11 +41,11 @@ export function findLaunchRepo(
   workspace: { repoId?: string; worktreeId?: string }
 ): Repo | undefined {
   const { worktreeId } = workspace
+  const worktreesByRepo = selectWorktreesByRepo(state)
   const repoId =
     workspace.repoId ??
     (worktreeId
-      ? ((state.worktreesByRepo &&
-          getIndexedWorktreeById(state.worktreesByRepo, worktreeId)?.repoId) ??
+      ? ((worktreesByRepo && getIndexedWorktreeById(worktreesByRepo, worktreeId)?.repoId) ??
         getRepoIdFromWorktreeId(worktreeId))
       : undefined)
   return repoId && state.repos ? getIndexedRepoMap(state.repos).get(repoId) : undefined
