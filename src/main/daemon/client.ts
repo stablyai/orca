@@ -53,6 +53,7 @@ export class DaemonClient {
   private connectionAttemptGeneration = 0
   private daemonIdentity: DaemonEndpointIdentity | null = null
   private daemonResizeModel: string | null | undefined
+  private savedRestorePrivateStartup = false
   private observedAuthenticatedDisconnect = false
 
   private pendingRequests = new DaemonPendingRequests()
@@ -82,6 +83,9 @@ export class DaemonClient {
   getDaemonResizeModel(): string | null | undefined {
     return this.daemonResizeModel
   }
+
+  /** Whether the connected daemon's shells can own a saved restore's start. */
+  supportsSavedRestorePrivateStartup = (): boolean => this.savedRestorePrivateStartup
 
   hasObservedAuthenticatedDisconnect(): boolean {
     return this.observedAuthenticatedDisconnect
@@ -166,6 +170,7 @@ export class DaemonClient {
       this.observedAuthenticatedDisconnect = false
       this.daemonIdentity = controlIdentity
       this.daemonResizeModel = controlHello.resizeModel
+      this.savedRestorePrivateStartup = controlHello.savedRestorePrivateStartup
       this.disconnectArmed = true
       this.connectionGeneration++
 
@@ -323,6 +328,7 @@ export class DaemonClient {
     this.connected = false
     this.daemonIdentity = null
     this.daemonResizeModel = null
+    this.savedRestorePrivateStartup = false
     this.cleanupActiveSocketListeners()
 
     this.pendingRequests.rejectAll('Connection lost')

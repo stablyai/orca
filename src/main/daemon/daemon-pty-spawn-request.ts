@@ -1,4 +1,5 @@
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import { withoutSavedRestoreLaunch } from '../../shared/saved-restore-dispatch'
 import type { ColdRestorePayload } from './cold-restore-payload-cache'
 import type { DaemonAuditObservation } from './daemon-audit-classifier'
 import {
@@ -119,7 +120,12 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         cols: context.effectiveCols,
         rows: context.effectiveRows,
         cwd: context.attachOnly ? undefined : context.effectiveCwd,
-        env: context.attachOnly ? undefined : opts.env,
+        // An older daemon gets the plain resume, never startup inputs its shells can't own.
+        env: context.attachOnly
+          ? undefined
+          : this.client.supportsSavedRestorePrivateStartup()
+            ? opts.env
+            : withoutSavedRestoreLaunch(opts.env),
         envToDelete: context.attachOnly ? undefined : opts.envToDelete,
         command: context.attachOnly ? undefined : opts.command,
         startupCommandDelivery: context.attachOnly ? undefined : opts.startupCommandDelivery,

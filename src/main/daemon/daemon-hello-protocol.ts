@@ -27,4 +27,6 @@ export type HelloResponse = {
   streamFraming?: string
   /** How this daemon's live emulators resize (daemon-history-replay-pty.ts); absent means xterm's. */
   resizeModel?: string
+  /** Its shells can own a saved restore's start; absent means send the plain resume only. */
+  savedRestorePrivateStartup?: true
 }
