@@ -21,4 +21,25 @@ describe('requestViewerZoom', () => {
     expect(requestViewerZoom('reset')).toBe(false)
     expect(onZoom).toHaveBeenCalledTimes(1)
   })
+
+  it('respects popupOnly requests so pane viewers ignore them while popup viewers handle them', () => {
+    const onPaneZoom = vi.fn()
+    const onPopupZoom = vi.fn()
+    const paneRef: { current: HTMLElement | null } = { current: document.body }
+    const popupRef: { current: HTMLElement | null } = { current: document.body }
+
+    const stopPane = listenForViewerZoomRequests(onPaneZoom, paneRef, 'pane')
+    // Pane viewer ignores popupOnly requests
+    expect(requestViewerZoom('in', { popupOnly: true })).toBe(false)
+    expect(onPaneZoom).not.toHaveBeenCalled()
+
+    // When popup viewer registers, popupOnly request reaches it
+    const stopPopup = listenForViewerZoomRequests(onPopupZoom, popupRef, 'popup')
+    expect(requestViewerZoom('in', { popupOnly: true })).toBe(true)
+    expect(onPopupZoom).toHaveBeenCalledWith('in')
+    expect(onPaneZoom).not.toHaveBeenCalled()
+
+    stopPopup()
+    stopPane()
+  })
 })

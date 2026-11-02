@@ -13,6 +13,11 @@ import { requestViewerZoom } from '@/components/editor/viewer-zoom-request'
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onTerminalZoom((direction) => {
+      // Why: an open popup viewer (chat image, diagram dialog) claims zoom across all tab types (#37489).
+      if (requestViewerZoom(direction, { popupOnly: true })) {
+        return
+      }
+
       const store = useAppStore.getState()
       const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel, settings } =
         store

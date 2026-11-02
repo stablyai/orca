@@ -138,6 +138,7 @@ describe('registerZoomIpcBridge', () => {
       nativeChatAppearance?: NativeChatAppearanceSettings
       editorFontZoomLevel?: number
       viewerTakesZoom?: boolean
+      popupViewerTakesZoom?: boolean
     } = {}
   ) {
     const {
@@ -147,7 +148,8 @@ describe('registerZoomIpcBridge', () => {
       uiZoomLevel = 0,
       editorFontZoomLevel = 0,
       nativeChatAppearance,
-      viewerTakesZoom = false
+      viewerTakesZoom = false,
+      popupViewerTakesZoom = false
     } = args
 
     const applyUIZoom = vi.fn()
@@ -159,7 +161,14 @@ describe('registerZoomIpcBridge', () => {
       Object.assign(settings, updates)
     })
 
-    const requestViewerZoom = vi.fn(() => viewerTakesZoom)
+    const requestViewerZoom = vi.fn(
+      (_direction: 'in' | 'out' | 'reset', options?: { popupOnly?: boolean }) => {
+        if (options?.popupOnly) {
+          return popupViewerTakesZoom
+        }
+        return viewerTakesZoom || popupViewerTakesZoom
+      }
+    )
     const dispatchBrowserPageZoom = vi.fn()
     vi.doMock('@/components/browser-pane/host-guest/browser-page-zoom', () => ({
       dispatchBrowserPageZoom
@@ -346,8 +355,23 @@ describe('registerZoomIpcBridge', () => {
 
     zoom.fire('in')
 
-    expect(zoom.requestViewerZoom).not.toHaveBeenCalled()
+    expect(zoom.requestViewerZoom).toHaveBeenCalledWith('in', { popupOnly: true })
+    expect(zoom.requestViewerZoom).not.toHaveBeenCalledWith('in')
     expect(zoom.applyUIZoom).toHaveBeenCalledWith(0.5)
+  })
+
+  it('hands zoom to an open popup viewer over any tab (#37489)', async () => {
+    const zoom = await mountZoomBridge({
+      activeTabType: 'terminal',
+      activeElement: makeTarget({ chatClosest: true }),
+      popupViewerTakesZoom: true
+    })
+
+    zoom.fire('in')
+
+    expect(zoom.requestViewerZoom).toHaveBeenCalledWith('in', { popupOnly: true })
+    expect(zoom.updateSettings).not.toHaveBeenCalled()
+    expect(zoom.applyUIZoom).not.toHaveBeenCalled()
   })
 
   it('clamps app zoom at the supported maximum', async () => {

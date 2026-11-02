@@ -2,12 +2,19 @@ import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-worksp
 
 export type ViewerZoomDirection = 'in' | 'out' | 'reset'
 
+export type ViewerZoomRequestOptions = {
+  popupOnly?: boolean
+}
+
 const VIEWER_ZOOM_REQUEST_EVENT = 'orca:viewer-zoom-request'
 
-/** Offers an app zoom command to the focused pane's PDF or image; true when a viewer took it. */
-export function requestViewerZoom(direction: ViewerZoomDirection): boolean {
+/** Offers an app zoom command to an open popup viewer or the focused pane's PDF/image; true when a viewer took it. */
+export function requestViewerZoom(
+  direction: ViewerZoomDirection,
+  options?: ViewerZoomRequestOptions
+): boolean {
   const event = new CustomEvent(VIEWER_ZOOM_REQUEST_EVENT, {
-    detail: direction,
+    detail: { direction, popupOnly: options?.popupOnly === true },
     cancelable: true,
     bubbles: true
   })
@@ -31,7 +38,20 @@ export function listenForViewerZoomRequests(
     ) {
       return
     }
-    const direction: unknown = event instanceof CustomEvent ? event.detail : null
+    const detail: unknown = event instanceof CustomEvent ? event.detail : null
+    const direction =
+      typeof detail === 'string'
+        ? detail
+        : typeof detail === 'object' && detail !== null && 'direction' in detail
+          ? (detail as { direction: unknown }).direction
+          : null
+    const popupOnly =
+      typeof detail === 'object' && detail !== null && 'popupOnly' in detail
+        ? (detail as { popupOnly: unknown }).popupOnly === true
+        : false
+    if (popupOnly && priority !== 'popup') {
+      return
+    }
     if (direction === 'in' || direction === 'out' || direction === 'reset') {
       event.preventDefault()
       if (priority === 'popup') {
