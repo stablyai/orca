@@ -72,6 +72,14 @@ describe('createProgramStatusOscScanner', () => {
     expect(scan('\x07\x1b]7501;state=done\x07')).toMatchObject([{ report: { state: 'done' } }])
   })
 
+  it('keeps a body at the cap whose ST is split between ESC and backslash', () => {
+    const scan = createProgramStatusOscScanner()
+    const body = `state=idle:x=${'x'.repeat(4074)}`
+    expect(body.length).toBe(4087)
+    expect(scan(`\x1b]7501;${body}\x1b`)).toEqual([])
+    expect(scan('\\')).toMatchObject([{ report: { state: 'idle' } }])
+  })
+
   it('applies the byte cap to a multi-byte body split across chunks', () => {
     const scan = createProgramStatusOscScanner()
     const body = `state=idle:x=${'é'.repeat(2037)}`

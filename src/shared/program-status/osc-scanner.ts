@@ -126,7 +126,9 @@ export function createProgramStatusOscScanner(): (data: string) => ProgramStatus
       const bodyStart = esc + PROGRAM_STATUS_OSC_PREFIX.length
       const terminator = findOscTerminator(combined, bodyStart, bodyStart + MAX_BODY_LENGTH + 1)
       if (terminator === null) {
-        if (combined.length - bodyStart <= MAX_BODY_LENGTH) {
+        // Why +1: a trailing ESC may open the ST of a body already at the cap.
+        const retainable = MAX_BODY_LENGTH + (combined.endsWith('\x1b') ? 1 : 0)
+        if (combined.length - bodyStart <= retainable) {
           // Own the partial frame so it stops pinning the chunk it was sliced from.
           pending = ownRetainedString(combined.slice(esc))
           break
