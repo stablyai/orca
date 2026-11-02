@@ -8,13 +8,21 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 
 const mocks = vi.hoisted(() => {
   const mainStarts: unknown[] = []
-  return { createSupport: vi.fn(), mainStarts }
+  return {
+    createSupport: vi.fn(),
+    create: vi.fn((_params: unknown): Promise<unknown> => new Promise(() => undefined)),
+    mainStarts
+  }
 })
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string) =>
-    method === 'agentSession.createSupport' ? mocks.createSupport() : new Promise(() => undefined)
+  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string, params: unknown) =>
+    method === 'agentSession.createSupport'
+      ? mocks.createSupport()
+      : method === 'agentSession.create'
+        ? mocks.create(params)
+        : new Promise(() => undefined)
   )
 }))
 
@@ -216,4 +224,59 @@ describe('a background worktree create whose own machine declines the chat', () 
     ).toEqual([])
     expect(state.activeWorktreeId).toBe(LOCAL_OTHER.id)
   })
+})
+
+describe('a linked background create whose own machine declines the chat before setup ends', () => {
+  it.each([
+    ['succeeds', 'structured_agent_session_unsupported', 1],
+    ['fails', 'agent_session_setup_not_completed', 0]
+  ] as const)(
+    'starts the agent terminal only once setup %s and the host still declines',
+    async (_setup, refusal, terminals) => {
+      mocks.createSupport.mockResolvedValue({ supported: false, reason: 'agent' })
+      const reply = Promise.withResolvers<unknown>()
+      mocks.create.mockReturnValueOnce(reply.promise)
+      seedThisMachine()
+
+      await launchStructuredWorktreeSession({
+        afterWorktreeSetup: true,
+        creationId: 'creation-1',
+        request: REQUEST,
+        agentLaunchRoute: 'structured-native-chat',
+        worktreeId: LOCAL_CREATED.id,
+        shouldActivateOnCompletion: false,
+        activation: false,
+        primaryTabId: null
+      })
+
+      await vi.waitFor(() =>
+        expect(mocks.create).toHaveBeenCalledWith(
+          expect.objectContaining({ afterWorktreeSetup: true })
+        )
+      )
+      expect(useAppStore.getState().tabsByWorktree[LOCAL_CREATED.id] ?? []).toEqual([])
+      reply.resolve({ ok: false, refusal: { code: refusal, message: 'refused' } })
+
+      await vi.waitFor(() =>
+        expect(useAppStore.getState().tabsByWorktree[LOCAL_CREATED.id] ?? []).toHaveLength(
+          terminals
+        )
+      )
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const tabs = useAppStore.getState().tabsByWorktree[LOCAL_CREATED.id] ?? []
+      expect(tabs).toHaveLength(terminals)
+      const chats = (useAppStore.getState().unifiedTabsByWorktree[LOCAL_CREATED.id] ?? []).filter(
+        (candidate) => candidate.contentType === 'agent-session'
+      )
+      if (terminals) {
+        expect(startupOf(tabs[0]!.id)).toMatchObject({
+          command: "claude --model opus 'fix the flaky test'"
+        })
+        // The terminal replaced the chat, so the opening message is not offered again.
+        expect(chats).toEqual([])
+      } else {
+        expect(chats).toHaveLength(1)
+      }
+    }
+  )
 })

@@ -69,6 +69,10 @@ async function requireHostCreateSupport(
     )
   }
   if (support.kind === 'declined' || support.kind === 'workspace-unresolved') {
+    // A linked create's host answers support only after its setup succeeds.
+    if (intent.params.afterWorktreeSetup) {
+      return undefined
+    }
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(
       'structured_agent_session_unsupported',
@@ -179,11 +183,16 @@ export async function launchStructuredAgentSession(
       result.refusal.createAttemptRefusedBeforeCommit === true &&
       refusal !== undefined &&
       isAgentSessionCreateAdmissionRefusal(refusal)
-    // Attempt proof cannot settle an earlier create whose reply was lost.
+    // Attempt proof cannot settle an earlier create whose reply was lost, nor can a linked
+    // create's later decline, which would otherwise open a terminal beside it.
+    const linkedDeclineAfterUnknown =
+      priorCreateOutcomeUnknown &&
+      params.afterWorktreeSetup === true &&
+      code === 'structured_agent_session_unsupported'
     if (
       code !== 'agent_session_setup_not_completed' &&
       !attemptRefusedBeforeCommit &&
-      !isDefinitiveAgentSessionCreateRefusal(code) &&
+      (!isDefinitiveAgentSessionCreateRefusal(code) || linkedDeclineAfterUnknown) &&
       ownerVerdict !== 'exited'
     ) {
       // Keep the focus intent: the session may exist, and recovery still has to adopt it.

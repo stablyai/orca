@@ -29,10 +29,15 @@ export function nativeChatPendingAttachmentSnapshot(
 }
 
 export function nativeChatComposerHasUserContent(scopeKey: string): boolean {
-  const draft = readNativeChatComposerDraft(scopeKey)
   return (
-    draft.text.trim() !== '' ||
-    draft.images.length > 0 ||
+    readNativeChatComposerDraft(scopeKey).text.trim() !== '' ||
+    nativeChatComposerHasAttachments(scopeKey)
+  )
+}
+
+export function nativeChatComposerHasAttachments(scopeKey: string): boolean {
+  return (
+    readNativeChatComposerDraft(scopeKey).images.length > 0 ||
     nativeChatPendingAttachmentSnapshot(scopeKey).length > 0
   )
 }

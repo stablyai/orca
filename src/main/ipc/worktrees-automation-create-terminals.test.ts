@@ -128,13 +128,14 @@ describe('automation creates: main provisions setup and default tabs', () => {
       if (fails) {
         createSetupRunnerScriptMock.mockRejectedValueOnce(new Error('write failed'))
       }
-      const result = await handlers['worktrees:create'](null, {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create handler answers with the created worktree.
+      const result = (await handlers['worktrees:create'](null, {
         repoId: 'repo-1',
         name: 'improve-dashboard',
         setupDecision: 'run',
         promisedAgentChat: true
-      })
-      expect(result.chatAwaitsSetup).toBe(true)
+      })) as { worktree: { id: string } }
+      expect(result).toMatchObject({ chatAwaitsSetup: true })
       expect(result).not.toHaveProperty('setup')
       expect(result).not.toHaveProperty('defaultTabs')
       const run = runtime.getSetupRun(result.worktree.id)

@@ -62,12 +62,9 @@ type AdmittedLaunch = {
 
 const DELIVERED: StructuredPromptDeliveryResult = { delivered: true, failureNotified: false }
 const NOT_DELIVERED: StructuredPromptDeliveryResult = { delivered: false, failureNotified: false }
-const NOT_DELIVERED_NOTIFIED: StructuredPromptDeliveryResult = {
-  delivered: false,
-  failureNotified: true
-}
+const NOT_DELIVERED_NOTIFIED = { ...NOT_DELIVERED, failureNotified: true }
 
-function notifyExplicitChatFailure(agent: TuiAgent, reason?: string): void {
+export function notifyExplicitChatFailure(agent: TuiAgent, reason?: string): void {
   toast.error(
     translate(
       'auto.components.tab.bar.QuickLaunchButton.chatUnavailableAfterSelection',
@@ -145,7 +142,10 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
     // The saved choice the chat would have seeded applies to its terminal as flags.
     ...(args.plan.launchOptions ? { sessionOptions: args.plan.launchOptions } : {}),
     ...(args.targetGroupId ? { groupId: args.targetGroupId } : {}),
-    ...(args.terminal?.activate !== false && args.plan.prompt ? { prompt: args.plan.prompt } : {}),
+    // A linked launch's terminal replaces its chat after setup, so it carries the opening message.
+    ...((args.terminal?.activate !== false || args.plan.afterWorktreeSetup) && args.plan.prompt
+      ? { prompt: args.plan.prompt }
+      : {}),
     ...(args.plan.promptDelivery ? { promptDelivery: args.plan.promptDelivery } : {}),
     ...(args.plan.onPromptDelivered ? { onPromptDelivered: args.plan.onPromptDelivered } : {}),
     ...(args.plan.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
@@ -262,7 +262,8 @@ export function beginHostAdmittedStructuredLaunch(args: {
           notified: true
         }
       }
-      if (admission.kind === 'declined') {
+      // A linked launch's host decides support after its setup succeeds; its create gets that answer.
+      if (admission.kind === 'declined' && !plan.afterWorktreeSetup) {
         const noCli = !declinedTerminalCanOpen(
           plan.agent,
           args.worktreeId,

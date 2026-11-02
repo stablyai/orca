@@ -38,9 +38,12 @@ const mocks = vi.hoisted(() => {
         cancel: () => void
       } | null
     >(),
-    activateAndRevealWorktree: vi.fn<(worktreeId: string, options?: unknown) => unknown>()
+    activateAndRevealWorktree: vi.fn<(worktreeId: string, options?: unknown) => unknown>(),
+    toastError: vi.fn()
   }
 })
+
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError, info: vi.fn() } }))
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(vi.fn<() => unknown>(), {
@@ -161,6 +164,20 @@ describe('launchStructuredWorktreeSession', () => {
     if (!visible) {
       expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
     }
+  })
+
+  it('starts no terminal when the layout refuses a chat linked to required setup', async () => {
+    mocks.state.pendingWorktreeCreations = {
+      'creation-1': { phase: 'creating', heldChatMessage: 'Add a test', request }
+    }
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      args.onTabOpenSettled?.(null, 'layout-refused')
+      return launchHandle()
+    })
+
+    await launchStructuredWorktreeSession({ ...baseArgs, afterWorktreeSetup: true })
+    expect(mocks.launchAgentInNewTabWithOutcome).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledOnce()
   })
 
   it.each(['workspace', 'view'] as const)(

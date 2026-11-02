@@ -22,8 +22,15 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
-import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  nativeChatComposerHasAttachments,
+  nativeChatComposerHasUserContent
+} from '@/components/native-chat/native-chat-pending-attachment-cache'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 export function openDeclinedTerminal(
@@ -86,7 +93,20 @@ export async function openTerminalForDeclinedChat(
     return settlement
   }
   const scopeKey = structuredAgentSessionDraftScopeKey(tab.entityId)
-  const typed = nativeChatComposerHasUserContent(scopeKey)
+  // A linked launch's opening message comes back to the composer on refusal; the terminal carries it.
+  const opening = args.plan.afterWorktreeSetup ? args.plan.prompt?.trim() : undefined
+  const userTyped = (): boolean =>
+    nativeChatComposerHasUserContent(scopeKey) &&
+    !(
+      opening &&
+      readNativeChatComposerDraft(scopeKey).text.trim() === opening &&
+      !nativeChatComposerHasAttachments(scopeKey)
+    )
+  const typed = userTyped()
+  // Text the person left unsent stays in the chat rather than beside a terminal holding the prompt.
+  if (typed && args.plan.afterWorktreeSetup) {
+    return settlement
+  }
   const attempt = launchState?.callers
   const terminal = await openDeclinedTerminal(args, worktreeId, target, false)
   const completed = terminal.completion
@@ -97,6 +117,10 @@ export async function openTerminalForDeclinedChat(
       }
   if (completed.outcome.status !== 'created') {
     return settlement
+  }
+  if (opening && !userTyped()) {
+    // The terminal now holds the opening message; the chat must not offer to send it again.
+    updateNativeChatComposerDraft(scopeKey, { text: '', images: [] }, 'immediate')
   }
   const state = useAppStore.getState()
   let current = source()
@@ -159,7 +183,7 @@ export async function openTerminalForDeclinedChat(
     !group.tabOrder.includes(current.id) ||
     group.tabOrder.indexOf(replacement.id) !== group.tabOrder.indexOf(current.id) + 1 ||
     typed ||
-    nativeChatComposerHasUserContent(scopeKey)
+    userTyped()
   ) {
     notifyHostDeclined(args.plan.agent, false)
     return settlement

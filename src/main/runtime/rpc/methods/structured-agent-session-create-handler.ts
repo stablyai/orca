@@ -1,10 +1,15 @@
-import { awaitRequiredSetup, AgentLaunchSetupNotCompletedError } from '../../setup/setup-run'
+import {
+  awaitRequiredSetup,
+  AgentLaunchSetupNotCompletedError,
+  type SetupRun
+} from '../../setup/setup-run'
 import type { StructuredSessionSurface } from '../../agent-session/structured-agent-session-close'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import type { z } from 'zod'
 import {
   agentSessionRefusalError,
-  refuseUnclassified
+  refuseUnclassified,
+  type AgentSessionWireRefusal
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { agentSessionFingerprintConflict } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
@@ -70,6 +75,13 @@ export async function handleStructuredAgentSessionCreate(
       reason: 'requestMalformed'
     })
   }
+  // Native support is decided after the linked setup succeeds, so a refusal past here may open a terminal.
+  if ('worktree' in params && params.afterWorktreeSetup) {
+    const refusal = await awaitLinkedCreateSetup(params, ctx)
+    if (refusal) {
+      return { ok: false, refusal }
+    }
+  }
   // Before attach, return refusals instead of throwing so clients can distinguish no effects from unknown outcomes.
   const prepared = await resolveUncommittedStructuredCreate(async () => {
     if ('worktree' in params) {
@@ -112,49 +124,6 @@ export async function handleStructuredAgentSessionCreate(
   if (structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)) {
     return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
   }
-  if ('worktree' in params && params.afterWorktreeSetup && prepared.tab) {
-    const operation = prepared.host.deps.store.getOperationRow(
-      callerFor(ctx).callerKey,
-      params.envelope.clientOperationId
-    )
-    // Operation rows are admitted inside commit, after setup; its ledger owns every replay.
-    if (!operation) {
-      const closed = new AbortController()
-      const unsubscribe = subscribeStructuredAgentSessionClose(params.envelope.sessionId, () =>
-        closed.abort()
-      )
-      try {
-        const run = ctx.runtime.getSetupRun(prepared.tab.workspaceId)
-        if (!run) {
-          throw new AgentLaunchSetupNotCompletedError(
-            { kind: 'ended', reason: 'observation_lost' },
-            params.agent
-          )
-        }
-        await awaitRequiredSetup(
-          run,
-          params.agent,
-          ctx.signal ? AbortSignal.any([ctx.signal, closed.signal]) : closed.signal
-        )
-      } catch (error) {
-        if (closed.signal.aborted) {
-          return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
-        }
-        if (!(error instanceof AgentLaunchSetupNotCompletedError)) {
-          throw error
-        }
-        return {
-          ok: false,
-          refusal: refuseUnclassified('agent_session_setup_not_completed', error.message)
-        }
-      } finally {
-        unsubscribe()
-      }
-    }
-    if (structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)) {
-      return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
-    }
-  }
   return commitStructuredAgentSessionCreate({
     runtime: ctx.runtime,
     caller: callerFor(ctx),
@@ -166,4 +135,65 @@ export async function handleStructuredAgentSessionCreate(
       ? { tabPlacement: params.tabPlacement }
       : {})
   })
+}
+
+/** A create linked to its workspace's required setup waits for that exact run before native
+ *  preparation; an operation this host already admitted is a replay and its ledger answers. */
+async function awaitLinkedCreateSetup(
+  params: z.infer<typeof CreateParams> & { worktree: string },
+  ctx: RpcContext
+): Promise<AgentSessionWireRefusal | null> {
+  const setupNotCompleted = (error: AgentLaunchSetupNotCompletedError) =>
+    refuseUnclassified('agent_session_setup_not_completed', error.message)
+  let run: SetupRun | undefined
+  try {
+    await ensureHostInstalled(ctx)
+    if (
+      requireHost(ctx).deps.store.getOperationRow(
+        callerFor(ctx).callerKey,
+        params.envelope.clientOperationId
+      )
+    ) {
+      return null
+    }
+    run = ctx.runtime.getSetupRun(
+      (await ctx.runtime.resolveRuntimeFileTarget(params.worktree)).worktree.id
+    )
+  } catch (error) {
+    // Nothing before setup may read as a native refusal, which would permit a terminal.
+    console.warn('[agent-session] linked create could not find its setup', error)
+  }
+  if (!run) {
+    return setupNotCompleted(
+      new AgentLaunchSetupNotCompletedError(
+        { kind: 'ended', reason: 'observation_lost' },
+        params.agent
+      )
+    )
+  }
+  const closed = new AbortController()
+  const unsubscribe = subscribeStructuredAgentSessionClose(params.envelope.sessionId, () =>
+    closed.abort()
+  )
+  try {
+    if (structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)) {
+      return structuredAgentSessionClosedBeforeCreateRefusal()
+    }
+    await awaitRequiredSetup(
+      run,
+      params.agent,
+      ctx.signal ? AbortSignal.any([ctx.signal, closed.signal]) : closed.signal
+    )
+    return null
+  } catch (error) {
+    if (closed.signal.aborted) {
+      return structuredAgentSessionClosedBeforeCreateRefusal()
+    }
+    if (!(error instanceof AgentLaunchSetupNotCompletedError)) {
+      throw error
+    }
+    return setupNotCompleted(error)
+  } finally {
+    unsubscribe()
+  }
 }

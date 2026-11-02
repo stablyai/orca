@@ -1,4 +1,5 @@
 import { createSetupRun } from '../../setup/setup-run'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -314,3 +315,51 @@ it('releases a disconnected linked-create waiter without losing Setup or its ope
     result: { ok: true }
   })
 })
+
+it.each(['succeeded', 'failed'] as const)(
+  'a linked chat asks for native support only after setup %s',
+  async (outcome) => {
+    const run = createSetupRun(true)
+    const waiting = Promise.withResolvers<void>()
+    const resolveIntent = vi.fn(async () => {
+      throw agentSessionRefusalError('structured_agent_session_unsupported', {
+        reason: 'hostUnsupported'
+      })
+    })
+    const creating = call(
+      'agentSession.create',
+      structuredAgentSessionCreateParams({
+        sessionId: SESSION,
+        worktree: 'id:workspace-1',
+        agent: 'codex',
+        afterWorktreeSetup: true,
+        randomUuid: () => '00000000-0000-0000-0000-0000000000fa',
+        now: NOW
+      }),
+      CLIENT,
+      {
+        getSetupRun: () => {
+          waiting.resolve()
+          return run
+        },
+        resolveStructuredAgentSessionCreateIntent: resolveIntent
+      }
+    )
+    await waiting.promise
+    expect(resolveIntent).not.toHaveBeenCalled()
+    run.settle(outcome === 'succeeded' ? { kind: 'succeeded' } : { kind: 'failed', exitCode: 1 })
+    expect(await creating).toMatchObject({
+      ok: true,
+      result: {
+        ok: false,
+        refusal: {
+          code:
+            outcome === 'succeeded'
+              ? 'structured_agent_session_unsupported'
+              : 'agent_session_setup_not_completed'
+        }
+      }
+    })
+    expect(resolveIntent).toHaveBeenCalledTimes(outcome === 'succeeded' ? 1 : 0)
+  }
+)

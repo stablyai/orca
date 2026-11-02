@@ -164,8 +164,8 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       worktreeId,
       executionHostId: owner.executionHostId,
       target: owner.target,
-      openAdmitted: (seedOptions) =>
-        open(
+      openAdmitted: (seedOptions) => {
+        const launch = open(
           beginLocalProvisionalLaunch({
             ...args,
             target: {
@@ -176,7 +176,18 @@ export function beginStructuredAgentSessionProvisionalLaunch(
             },
             beforeOpen: undefined
           })
-        ),
+        )
+        const tab = launch?.tab
+        // A linked launch learns support only after its setup: the host's decline then replaces it.
+        return tab && args.plan.afterWorktreeSetup
+          ? {
+              ...launch,
+              settlement: launch.settlement.then((settlement) =>
+                openTerminalForDeclinedChat(args, worktreeId, owner, tab, settlement)
+              )
+            }
+          : launch
+      },
       onHostDeclined: (target) => openDeclinedTerminal(args, worktreeId, target),
       ...(args.declinedOpensCallerSurface ? { declinedOpensCallerSurface: true as const } : {})
     })

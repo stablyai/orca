@@ -231,6 +231,7 @@ export function dispatcher(
   Object.assign(runtimeCalls, {
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
     structuredAgentSessionLaunchSeedOptions: vi.fn(() => undefined),
+    resolveRuntimeFileTarget: vi.fn(async () => ({ worktree: { id: 'workspace-1' } })),
     resolveStructuredAgentSessionCreateIntent: vi.fn(async (params) => ({
       envelope: params.envelope,
       location: {

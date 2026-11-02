@@ -8,7 +8,10 @@ import {
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
+import {
+  notifyExplicitChatFailure,
+  type StructuredLaunchTerminal
+} from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
@@ -68,7 +71,7 @@ function openBackgroundDeclinedTerminal(
     { activateCreatedTabs: false, createNewTerminalForStartup: true }
   )
   mountCreatedWorktreeStartupTabsInBackground(args.worktreeId)
-  return { opened: tabId !== null }
+  return tabId === null ? { opened: false } : { opened: true, tabId }
 }
 
 export async function launchStructuredWorktreeSession(
@@ -148,7 +151,10 @@ export async function launchStructuredWorktreeSession(
         )
       }
       let recoveryProvidesSurface = false
-      if (primaryTabId === null && plan.prompt && layoutRefused) {
+      // A linked launch has no setup answer here, so a refused layout starts no agent.
+      if (primaryTabId === null && layoutRefused && plan.afterWorktreeSetup) {
+        notifyExplicitChatFailure(agent)
+      } else if (primaryTabId === null && plan.prompt && layoutRefused) {
         const { launchAgentInNewTabWithOutcome } = await import('@/lib/launch-agent-in-new-tab')
         if (abandoned.signal.aborted || isCancelled()) {
           launch.cancel()
