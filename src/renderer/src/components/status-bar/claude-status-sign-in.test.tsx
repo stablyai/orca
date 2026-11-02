@@ -1,3 +1,4 @@
+import type * as ProviderAccountsClient from '@/runtime/runtime-provider-accounts-client'
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
@@ -39,7 +40,8 @@ function snapshot(): ClaudeRateLimitAccountsState {
 }
 
 vi.mock('sonner', () => ({ toast: { error: toastError, info: vi.fn(), success: vi.fn() } }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/runtime-provider-accounts-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProviderAccountsClient>()),
   fetchProviderAccountsSnapshot: vi.fn(async () => ({
     claude: snapshot(),
     codex: { accounts: [], activeAccountId: null },
@@ -128,9 +130,7 @@ async function openAccounts(): Promise<void> {
       iconOnly: false
     })
   )
-  // A remote server's roster arrives with the snapshot, not settings.
-  fireEvent.click(await screen.findByText('old@example.com'))
-  await waitFor(() => expect(screen.getAllByText('old@example.com').length).toBe(2))
+  await screen.findByRole('menuitem', { name: /old@example.com/ })
 }
 
 describe('status bar Claude account that needs a sign-in', () => {
@@ -155,7 +155,8 @@ describe('status bar Claude account that needs a sign-in', () => {
 
   it('marks it and signs in to it inline, without selecting anything', async () => {
     await openAccounts()
-    expect(screen.getByText('Sign in again to use this account')).toBeTruthy()
+    // The sign-in marker arrives with the async account snapshot, after the settings-backed rows.
+    expect(await screen.findByText('Sign in again to use this account')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
     await waitFor(() => expect(reauthenticate).toHaveBeenCalledWith({ accountId: 'old' }))
     expect(reauthenticate).toHaveBeenCalledTimes(1)
@@ -226,7 +227,6 @@ describe('status bar Claude account that needs a sign-in', () => {
         })
       )
     )
-    fireEvent.click(await screen.findByText('old@example.com'))
     expect(await screen.findByText('Sign in again to use this account')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
     await waitFor(() => expect(reauthenticate).toHaveBeenCalledWith({ accountId: 'old' }))
@@ -236,7 +236,7 @@ describe('status bar Claude account that needs a sign-in', () => {
   it('offers no sign-in on a remote server, which this device cannot sign in for', async () => {
     activeRuntimeEnvironmentId = 'env-1'
     await openAccounts()
+    expect(await screen.findByText('Sign in again to use this account')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Sign in/ })).toBeNull()
-    expect(screen.getByText('Sign in again to use this account')).toBeTruthy()
   })
 })

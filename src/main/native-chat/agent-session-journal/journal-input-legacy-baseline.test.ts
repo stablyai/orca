@@ -14,10 +14,10 @@ import { expect, it, vi } from 'vitest'
 import {
   claudeProviderHandle,
   agentSessionJournalProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalReducerState } from './journal-reducer'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { holdUnsentSends } from './journal-unsent-send-hold'
 import {
   createTrackedJournalOpener,
@@ -33,7 +33,8 @@ const message = (text: string): AgentJournalMessageItem => ({
   blocks: [{ type: 'text', text }]
 })
 
-it.each([10, 100])(
+// Bounds are linear in n plus small constants; 4x already exposes superlinear indexing.
+it.each([10, 40])(
   'indexes the initial legacy writer shape without promoting foreign/null comparison N=%i',
   async (n) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-legacy-baseline-'))

@@ -49,7 +49,9 @@ vi.mock('../cli/wsl-cli-registration-operation', () => ({
   runSerializedWslCliRegistrationOperation: vi.fn()
 }))
 
-vi.mock('../persistence', () => ({ getCanonicalUserDataPath: vi.fn() }))
+vi.mock('../persistence/loading-store/user-data-path', () => ({
+  getCanonicalUserDataPath: vi.fn()
+}))
 
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: mocks.hydrateShellPath,

@@ -1,5 +1,5 @@
 import type { BrowserClientAutomationMethod } from '../../shared/browser-client-automation-protocol'
-import type { AgentBrowserBridge } from './agent-browser-bridge'
+import type { AgentBrowserBridge } from './agent-browser/agent-browser-bridge'
 import type { BrowserGuestRegistration, BrowserManager } from './browser-manager'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
 import type { BrowserRoutePageGuestIdentity } from './browser-route-page-authority'

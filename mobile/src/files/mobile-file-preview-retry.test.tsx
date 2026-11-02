@@ -32,7 +32,13 @@ vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 })
 }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Save: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronLeft: 'Icon',
+  CircleAlert: 'Icon',
+  FileText: 'Icon',
+  Save: 'Icon',
+  WifiOff: 'Icon'
+}))
 vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false, push })
 }))
@@ -82,7 +88,7 @@ function retryButtons(rendered: ReactTestRenderer): ReactTestInstance[] {
     .filter((node) =>
       node
         .findAll((text) => String(text.type) === 'Text')
-        .some((text) => text.props.children === 'Retry')
+        .some((text) => text.props.children === 'Reconnect')
     )
 }
 
@@ -91,7 +97,7 @@ describe('the file preview Retry while the host is unreachable', () => {
     transport.forceReconnect = null
     const rendered = await render()
     expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
     ).not.toHaveLength(0)
     expect(retryButtons(rendered)).toHaveLength(0)
   })
@@ -128,7 +134,7 @@ describe('the file preview Retry while the host is unreachable', () => {
       rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview').props.content
     ).toBe('# Recovered preview')
     expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
     ).toHaveLength(0)
   })
 })

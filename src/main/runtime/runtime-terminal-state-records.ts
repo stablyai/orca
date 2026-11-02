@@ -3,7 +3,7 @@ import type { AgentStatusState } from '../../shared/agent-status-types'
 import type {
   TerminalLaunchResult,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
@@ -17,10 +17,9 @@ import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contra
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from './terminal-wait-tail-state'
 import type { TerminalCommandPaint } from './terminal-command-paint'
-import type { CliWriterConversation } from './structured-agent-cli-writers'
 import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
-import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 
 type RuntimeTerminalTailState = {
   tailBuffer: string[]
@@ -41,10 +40,19 @@ export type PtyRegistrationClaim = {
   exitedIncarnations: Set<PtyIncarnationId | null>
 }
 
-export type RuntimeLeafRecord = RuntimeSyncedLeaf &
+export type RuntimeWorktreeTerminalSleepState = {
+  worktreeId: string
+  generation: number
+  phase: 'stopping' | 'partial' | 'sleeping'
+  ptyIds: string[]
+  terminalHandles: string[]
+  terminalHandlesByPtyId: Record<string, string[]>
+}
+
+export type RuntimeLeafRecord = Readonly<RuntimeSyncedLeaf> &
   RuntimeTerminalTailState & {
-    ptyGeneration: number
-    connected: boolean
+    readonly ptyGeneration: number
+    readonly connected: boolean
     writable: boolean
     lastOutputAt: number | null
     lastExitCode: number | null
@@ -57,19 +65,19 @@ export type RuntimeLeafRecord = RuntimeSyncedLeaf &
   }
 
 export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
-  ptyId: string
-  incarnationId: PtyIncarnationId | null
-  worktreeId: string
-  connectionId: string | null
+  readonly ptyId: string
+  readonly incarnationId: PtyIncarnationId | null
+  readonly worktreeId: string
+  readonly connectionId: string | null
   runtimeSessionOwned: boolean
-  isWsl: boolean | null
-  wslDistro: string | null
+  readonly isWsl: boolean | null
+  readonly wslDistro: string | null
   /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
-  tabId?: string | null
+  readonly tabId?: string | null
   /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
-  paneKey?: string | null
+  readonly paneKey?: string | null
   /** Window-owned L80 graphSequence when paneKey was recorded; newer surfaces have no graph statement that could contradict them (pty-recorded-surface-topology.ts). */
-  surfaceRecordedAtGraphSequence?: number
+  readonly surfaceRecordedAtGraphSequence?: number
   savedTerminalLaunchResult?: {
     incarnationId: PtyIncarnationId | null
     launchConfig: SleepingAgentLaunchConfig | null
@@ -85,13 +93,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   /** Identify flagged unmanaged --command panes before foreground reads; null for adopted/restored panes. */
   launchCommandAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
-  /** Conversations the `incarnationId` execution reported; a later row can't hide them. In memory only. */
-  cliConversations?: {
-    incarnationId: PtyIncarnationId | null
-    byKey: Map<string, CliWriterConversation>
-  }
   foregroundAgent: TerminalAgent | null
-  connected: boolean
+  readonly connected: boolean
   disconnectedAt: number | null
   lastExitCode: number | null
   lastExitCause: TerminalExitCause | null

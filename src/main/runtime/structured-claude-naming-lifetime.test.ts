@@ -6,7 +6,7 @@ import * as transcriptNaming from '../claude/claude-provider-session-rename'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { stopCreatedChat } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
 import { HOST_TEST_SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
 import {
   createClaudeNamingRuntime,
   nativeNamingTitle,

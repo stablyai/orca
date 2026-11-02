@@ -9,9 +9,9 @@ import { createElement, Fragment } from 'react'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../src/shared/agent-session-record.test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session-mutation-envelope'
+} from '../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AiVaultListResult, AiVaultSession } from '../../src/shared/ai-vault-types'
 import {
   projectStructuredAiVaultSessions,
@@ -21,7 +21,7 @@ import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
-} from '../../src/main/runtime/agent-session-record-store-test-harness'
+} from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store'
 import {
   openTestJournalHostDatabase,
@@ -33,7 +33,7 @@ import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/age
 import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createStructuredChatNamingHandler } from '../../src/main/native-chat/structured-chat-naming'
 import { PI_RPC_AGENT } from '../../src/main/pi/rpc-agent-definition'
-import type { AgentSessionStatusEvent } from '../../src/shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../src/shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store'
 import {
   getStructuredAgentSessionStatusFeed,

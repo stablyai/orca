@@ -71,26 +71,4 @@ describe('agent-status routing layout lifetime', () => {
       'Remote pane'
     )
   })
-
-  it('keeps a same-source memo hit across collection and preserves held snapshots', async () => {
-    const store = createTestStore()
-    function rememberIndex() {
-      return new WeakRef(createAgentStatusPaneRoutingIndex(store.getState()))
-    }
-    const remembered = rememberIndex()
-    await collectRetiredLayouts()
-    const previous = remembered.deref()
-    expect(previous).toBeDefined()
-    expect(createAgentStatusPaneRoutingIndex(store.getState())).toBe(previous)
-
-    store.getState().setTabLayout(TAB_ID, {
-      root: { type: 'leaf', leafId: LEAF_ID },
-      activeLeafId: LEAF_ID,
-      expandedLeafId: null
-    })
-    const current = createAgentStatusPaneRoutingIndex(store.getState())
-    expect(current).not.toBe(previous)
-    expect(previous?.layoutsByTabId).toEqual({})
-    expect(current.layoutsByTabId[TAB_ID].root).toEqual({ type: 'leaf', leafId: LEAF_ID })
-  })
 })

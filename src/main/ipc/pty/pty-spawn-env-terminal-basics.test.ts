@@ -7,7 +7,7 @@ import {
 } from './pty-ipc-mock-registry'
 import { TEST_CODEX_HOME } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { LocalPtyProvider } from '../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../../pty/windows-path-registry-reader'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-hook-relay-manager'
@@ -19,11 +19,11 @@ import {
 } from '../../../shared/jcode-runtime-dir'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { selectShellStartupFeatures } from '../../shell-startup-features'
-import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
 import {
-  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
-  PI_CLIPBOARD_OSC52_ENV
-} from './host-env/remote-viewer-clipboard-env'
+  REMOTE_VIEWER_CLIPBOARD_ENV,
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION
+} from '../../../shared/remote-viewer-clipboard-env'
+import { PI_CLIPBOARD_OSC52_ENV } from './host-env/remote-viewer-clipboard-env'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

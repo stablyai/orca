@@ -13,12 +13,12 @@ import type { AgentLaunchRouteStore } from '@/lib/agent-launch-route-input'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
-  AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { AutomationSurfaceField } from './AutomationSurfaceField'
 import { automationChatSupport, automationDraftSurface } from './automation-launch-surface'

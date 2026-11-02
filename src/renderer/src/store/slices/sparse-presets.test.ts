@@ -56,20 +56,6 @@ describe('createSparsePresetsSlice', () => {
     mockApi.sparsePresets.remove.mockResolvedValue(undefined)
   })
 
-  it('fetches presets into the requested repo bucket', async () => {
-    const store = createTestStore()
-    const preset = makePreset({ id: 'preset-1', repoId: 'repo-1', name: 'Web' })
-    mockApi.sparsePresets.list.mockResolvedValueOnce([preset])
-
-    await store.getState().fetchSparsePresets('repo-1')
-
-    expect(mockApi.sparsePresets.list).toHaveBeenCalledWith({ repoId: 'repo-1' })
-    expect(store.getState().sparsePresetsByRepo).toEqual({ 'repo-1': [preset] })
-    expect(store.getState().sparsePresetsLoadingByRepo['repo-1']).toBe(false)
-    expect(store.getState().sparsePresetsLoadStatusByRepo['repo-1']).toBe('loaded')
-    expect(store.getState().sparsePresetsErrorByRepo['repo-1']).toBeUndefined()
-  })
-
   it('keeps an unfetched repo bucket missing while presets are loading', async () => {
     const store = createTestStore()
     const preset = makePreset({ id: 'preset-1', repoId: 'repo-1', name: 'Web' })

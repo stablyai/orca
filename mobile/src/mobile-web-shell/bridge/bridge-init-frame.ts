@@ -23,6 +23,7 @@ import {
 } from './bridge-safe-area-insets'
 import type { BridgeFoldDivision } from './bridge-fold-division'
 import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
+import type { HostStatusReply } from '../../transport/host-status-reply-schema'
 
 // Grant the intersection of implemented capabilities and route declarations, plus protocol fault. Use the same resolved list for init and enforcement; new names need no version bump.
 export const BRIDGE_NATIVE_GRANTS: readonly string[] = [
@@ -57,6 +58,7 @@ export function createBridgeInitFrame(args: {
    *  Absent and empty are the same answer: nothing of the app's was left out. */
   storageOversize?: readonly string[]
   ownsHostArea?: boolean
+  hostStatus?: HostStatusReply | null
 }): Extract<BridgeHostMessage, { type: 'init' }> {
   return {
     v: BRIDGE_PROTOCOL_VERSION,
@@ -116,6 +118,7 @@ export function createBridgeInitFrame(args: {
     ...(args.storageOversize === undefined || args.storageOversize.length === 0
       ? {}
       : { storageOversize: [...args.storageOversize] }),
-    ...(args.ownsHostArea === true ? { ownsHostArea: true } : {})
+    ...(args.ownsHostArea === true ? { ownsHostArea: true } : {}),
+    ...(args.hostStatus ? { hostStatus: { ...args.hostStatus } } : {})
   }
 }

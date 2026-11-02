@@ -1,4 +1,4 @@
-import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import { HEX_COLOR_RE } from '../../shared/color-validation'
 import { parsePaddingValue, parseStrictInt } from './numeric-config-values'
@@ -23,6 +23,21 @@ const PALETTE_INDEX_MAP: Record<number, keyof TerminalColorOverrides> = {
 }
 
 type FieldAssignment = { key: keyof GlobalSettings; value: unknown }
+
+// Accepts `background-blur` (bool, radius, macos-glass-*) and its legacy `background-blur-radius` spelling.
+function mapGhosttyBackgroundBlur(v: string): FieldAssignment | null {
+  const radius = v === 'true' ? 1 : v === 'false' ? 0 : parseStrictInt(v)
+  if (v.startsWith('macos-glass-') || (radius !== null && radius > 0)) {
+    return { key: 'windowMaterial', value: 'blur' }
+  }
+  return radius === 0 ? { key: 'windowMaterial', value: 'translucent' } : null
+}
+
+// Repeated font-family is a fallback list whose first entry is primary; `""` resets the list.
+function activeGhosttyFontFamilies(rawValue: string | string[]): string[] {
+  const entries = Array.isArray(rawValue) ? rawValue : [rawValue]
+  return entries.slice(entries.findLastIndex((entry) => entry.trim().length === 0) + 1)
+}
 
 type FieldResult =
   | FieldAssignment
@@ -130,13 +145,9 @@ export function mapGhosttyToOrca(
       return { colorOverrides: overrides }
     },
 
-    'background-blur-radius': (v) => {
-      const num = parseStrictInt(v)
-      if (num === null || num < 0) {
-        return null
-      }
-      return { key: 'windowBackgroundBlur', value: num > 0 }
-    },
+    // Ghostty shows the desktop through background-opacity either way; blur only adds the filter.
+    'background-blur': (v) => mapGhosttyBackgroundBlur(v),
+    'background-blur-radius': (v) => mapGhosttyBackgroundBlur(v),
 
     'split-divider-color': (v) => {
       if (!HEX_COLOR_RE.test(v)) {
@@ -209,11 +220,9 @@ export function mapGhosttyToOrca(
       return { key: 'terminalCursorOpacity', value: num }
     },
 
-    'font-family': (v) => {
-      if (typeof v !== 'string' || v.trim().length === 0) {
-        return null
-      }
-      return { key: 'terminalFontFamily', value: v }
+    'font-family': (_v, rawValue) => {
+      const primary = activeGhosttyFontFamilies(rawValue)[0]
+      return primary ? { key: 'terminalFontFamily', value: primary } : null
     },
 
     'font-size': (v) => {
@@ -295,12 +304,15 @@ export function mapGhosttyToOrca(
 
     // Orca preserves only whether blur is enabled; report radius loss only for nonzero values.
     if (
-      key === 'background-blur-radius' &&
-      !Array.isArray(result) &&
-      'key' in result &&
-      result.value === true
+      (key === 'background-blur' || key === 'background-blur-radius') &&
+      (parseStrictInt(value) ?? 0) > 0
     ) {
-      unsupportedKeys.push('background-blur-radius (radius value not preserved)')
+      unsupportedKeys.push(`${key} (radius value not preserved)`)
+    }
+
+    // Orca stores one terminal font, so Ghostty's fallback fonts are dropped.
+    if (key === 'font-family' && activeGhosttyFontFamilies(rawValue).length > 1) {
+      unsupportedKeys.push(`${key} (fallback fonts not preserved)`)
     }
 
     if (Array.isArray(result)) {
@@ -322,5 +334,3 @@ export function mapGhosttyToOrca(
 
   return { diff, unsupportedKeys }
 }
-
-export type { GhosttyImportPreview }

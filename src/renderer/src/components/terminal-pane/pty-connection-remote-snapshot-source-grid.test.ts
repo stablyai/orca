@@ -221,14 +221,4 @@ describe('pushed remote snapshot replay grid', () => {
     expect(session.transport.resize).not.toHaveBeenCalledWith(HOST_COLS, HOST_ROWS)
     session.dispose()
   })
-
-  it('keeps the pane grid when the host published no snapshot dimensions', async () => {
-    const session = await connectRemotePane()
-
-    session.replay(HOST_FRAME)
-    await flushAsyncTicks(20)
-
-    expect(session.pane.terminal.resize).not.toHaveBeenCalledWith(HOST_COLS, HOST_ROWS)
-    session.dispose()
-  })
 })

@@ -218,28 +218,6 @@
         }
       }
     },
-    "3a9cf9068351": {
-      "name": "jiraConnection",
-      "ordinal": 50,
-      "value": {
-        "connected": false,
-        "credentialError": {
-          "$rpc": "null"
-        },
-        "selection": {
-          "$rpc": "null"
-        },
-        "sites": [],
-        "unavailableReason": {
-          "$rpc": "null"
-        }
-      }
-    },
-    "3b25063bc6c4": {
-      "name": "taskStateHydrated",
-      "ordinal": 49,
-      "value": false
-    },
     "3c66c971fe96": {
       "name": "showGitHubProjectViewPicker",
       "ordinal": 17,
@@ -297,6 +275,11 @@
       "name": "settings.get#1",
       "ordinal": 44,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "5e8e3f4c00f0": {
+      "name": "taskStateHydrated",
+      "ordinal": 50,
+      "value": false
     },
     "655a6de4ab25": {
       "name": "actionItem",
@@ -989,6 +972,23 @@
         "$rpc": "undefined"
       }
     },
+    "ec1e559a467d": {
+      "name": "jiraConnection",
+      "ordinal": 51,
+      "value": {
+        "connected": false,
+        "credentialError": {
+          "$rpc": "null"
+        },
+        "selection": {
+          "$rpc": "null"
+        },
+        "sites": [],
+        "unavailableReason": {
+          "$rpc": "null"
+        }
+      }
+    },
     "ecd76e86b480": {
       "name": "preflight.check#1",
       "ordinal": 41,
@@ -1038,6 +1038,14 @@
       "ordinal": 23,
       "value": {
         "$rpc": "null"
+      }
+    },
+    "fcd85cc8ccd3": {
+      "name": "tasksSupportState",
+      "ordinal": 49,
+      "value": {
+        "client": "logical-client",
+        "kind": "unknown"
       }
     },
     "fdb0bbb8aa59": {
@@ -1996,8 +2004,9 @@
             "effded4d3336",
             "2141fc3d6fbb",
             "a86b4f66d1b4",
-            "3b25063bc6c4",
-            "3a9cf9068351"
+            "fcd85cc8ccd3",
+            "5e8e3f4c00f0",
+            "ec1e559a467d"
           ]
         }
       },
@@ -2061,8 +2070,9 @@
             "effded4d3336",
             "2141fc3d6fbb",
             "cc5694af6266",
-            "3b25063bc6c4",
-            "3a9cf9068351"
+            "fcd85cc8ccd3",
+            "5e8e3f4c00f0",
+            "ec1e559a467d"
           ]
         }
       }

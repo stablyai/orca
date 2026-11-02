@@ -1,7 +1,7 @@
 import pg from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ASSIGNMENT_CONNECTION_HEADROOM_QUERY } from './assignment-connection-headroom-query.js'
-import { RelayAssignmentStore } from '../assignment-store.js'
+import { RelayAssignmentStore } from './assignment-store.js'
 import {
   openRelayDatabase,
   type RelayDatabase

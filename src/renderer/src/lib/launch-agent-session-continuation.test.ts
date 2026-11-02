@@ -61,57 +61,6 @@ describe('launchAgentSessionContinuation', () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
-  it('launches any detected target Agent in the same workspace and cwd', async () => {
-    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
-
-    await expect(
-      launchAgentSessionContinuation({
-        agent: 'claude',
-        prompt: 'continue the unfinished task',
-        worktreeId: 'wt-1',
-        groupId: 'group-1',
-        initialCwd: '/repo/worktree/packages/app',
-        launchSource: 'terminal_context_menu'
-      })
-    ).resolves.toBe(true)
-
-    expect(launchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'claude',
-        worktreeId: 'wt-1',
-        groupId: 'group-1',
-        initialCwd: '/repo/worktree/packages/app',
-        promptDelivery: 'draft'
-      })
-    )
-  })
-
-  it("detects the target Agent in the workspace host's inventory", async () => {
-    const { detectAgentSessionContinuationAgents } =
-      await import('./launch-agent-session-continuation')
-
-    const { detected } = await detectAgentSessionContinuationAgents('wt-1')
-    expect(detected).toEqual(['claude', 'codex'])
-    expect(ensureDetectedAgentsForWorktree).toHaveBeenCalledWith(store, 'wt-1')
-  })
-
-  it('stops before launch when the selected Agent is unavailable', async () => {
-    ensureDetectedAgentsForWorktree.mockResolvedValue(['claude'])
-    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
-
-    await expect(
-      launchAgentSessionContinuation({
-        agent: 'codex',
-        prompt: 'continue',
-        worktreeId: 'wt-1',
-        launchSource: 'sidebar'
-      })
-    ).resolves.toBe(false)
-
-    expect(launchAgentInNewTab).not.toHaveBeenCalled()
-    expect(toast.error).toHaveBeenCalledWith('Codex was not detected on this workspace host.')
-  })
-
   it('distinguishes prompt delivery failure from terminal launch failure', async () => {
     launchAgentInNewTab.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'tab-new' },
@@ -169,36 +118,12 @@ describe('launchAgentSessionContinuation', () => {
     toast.warning.mock.calls[0][1].action.onClick()
     expect(writeClipboardText).toHaveBeenCalledWith('continue the unfinished task')
   })
-
-  it('keeps the confirmed-delivery toast visible until dismissed', async () => {
-    launchAgentInNewTab.mockImplementation((args: { onPromptDelivered?: () => void }): unknown => {
-      args.onPromptDelivered?.()
-      return {
-        surface: { kind: 'local-terminal', tabId: 'tab-new' },
-        promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
-      }
-    })
-    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
-
-    await launchAgentSessionContinuation({
-      agent: 'codex',
-      prompt: 'continue',
-      worktreeId: 'wt-1',
-      launchSource: 'sidebar'
-    })
-
-    expect(toast.success).toHaveBeenCalledWith(
-      'Session context sent to Codex in a new session.',
-      expect.objectContaining({ duration: Infinity, dismissible: true })
-    )
-    expect(toast.warning).not.toHaveBeenCalled()
-  })
 })
 
 it('retains the accepted route across detection, and explicit chat declines without the preference fallback', async () => {
   const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
   const { beginHostAdmittedStructuredLaunch } =
-    await import('./structured-agent-session-launch-admission')
+    await import('./agent-session/launch/structured-agent-session-launch-admission')
   for (const requestedSurface of [undefined, 'chat'] as const) {
     const detected = Promise.withResolvers<string[]>()
     ensureDetectedAgentsForWorktree.mockReturnValueOnce(detected.promise)

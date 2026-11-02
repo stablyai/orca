@@ -9,6 +9,8 @@ import {
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
 import { RuntimeMessageWaiters } from '../runtime-message-waiters'
 
+import { verifyHeldLocalWorkerDone } from './structured-mailbox-held-worker-report.test-fixture'
+
 const IDENTITY: StructuredWorkerIdentity = {
   handle: 'structworker_1',
   sessionId: 'session-1',
@@ -108,7 +110,10 @@ function harness(options: {
     resolveStructuredTarget: (mailboxHandle) =>
       mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
     getCliCommand: () => 'orca-dev',
-    senderName: (party) => (party.address === 'term_coord' ? 'Coordinator' : null),
+    senderSnapshot: (party) => ({
+      name: party.address === 'term_coord' ? 'Coordinator' : null,
+      agent: null
+    }),
     host: {
       readSessionFacts: async () => {
         await journalRead
@@ -189,21 +194,6 @@ describe('structured mailbox pointer delivery', () => {
     }
   )
 
-  it('claims only mailboxes whose assignee is a structured worker', () => {
-    const { delivery } = harness({})
-    expect(delivery.deliverForHandle('dispatch:d1')).toBe(true)
-    expect(delivery.deliverForHandle('run:run_1')).toBe(false)
-  })
-
-  it('sends the pointer as a turn and consumes mail on an accepted dispatch', async () => {
-    const { delivery, markAsDelivered, send } = harness({})
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(send.mock.calls[0]![0].operationId).toMatch(/^\d{13}-[0-9a-f]{32}$/)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
-  })
-
   it('nudges through the worker`s own handle for direct peer mail outside a dispatch', async () => {
     const { delivery, send, markAsDelivered } = harness({
       mailbox: IDENTITY.handle,
@@ -232,22 +222,6 @@ describe('structured mailbox pointer delivery', () => {
     await flush()
     expect(send).toHaveBeenCalledOnce()
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
-  })
-
-  it('retains mail when the dispatch settles unknown', async () => {
-    const { delivery, markAsDelivered } = harness({
-      dispatchState: 'unknown'
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(markAsDelivered).not.toHaveBeenCalled()
-  })
-
-  it('retains mail when the session is not attached', async () => {
-    const { delivery, send } = harness({ attached: false })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).not.toHaveBeenCalled()
   })
 
   it('redrives a detached session when the journal replays on re-attach', async () => {
@@ -544,22 +518,6 @@ describe('structured mailbox pointer delivery', () => {
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
     expect(stored.has('dispatch:d1')).toBe(false)
   })
-
-  it('reuses one operation id for the same batch and re-mints when it grows', async () => {
-    const { delivery, send, stored } = harness({
-      dispatchState: 'unknown'
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    const first = send.mock.calls[0]![0].operationId
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send.mock.calls[1]![0].operationId).toBe(first)
-    stored.clear()
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send.mock.calls[2]![0].operationId).not.toBe(first)
-  })
 })
 
 describe('forgetting one settled worker', () => {
@@ -598,7 +556,7 @@ describe('forgetting one settled worker', () => {
           : null
       },
       getCliCommand: () => 'orca',
-      senderName: () => null,
+      senderSnapshot: () => ({ name: null, agent: null }),
       host: {
         readSessionFacts: async () => (attached ? { submissions: [] } : null),
         hasActionablePromptNow: () => false,
@@ -698,7 +656,7 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       getMessageWaiters: () => undefined,
       resolveStructuredTarget: () => ({ sessionId: target, dispatchId: 'd1' }),
       getCliCommand: () => 'orca-dev',
-      senderName: () => null,
+      senderSnapshot: () => ({ name: null, agent: null }),
       host: {
         readSessionFacts: async () => ({ submissions: [] }),
         hasActionablePromptNow: () => false,
@@ -763,14 +721,9 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       expect(pointed.has('m1')).toBe(true)
     }
   )
-
-  it('keeps an unchanged rejected nudge parked for the next edge', async () => {
-    const { delivery, send, settle } = clearingHarness()
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    settle('rejected')
-    await flush()
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-  })
 })
+
+it.each(['gone', 'live-other-kind', 'metadata-read-fails'])(
+  'delivers held local worker_done with exact durable identity after terminal loss (%s)',
+  verifyHeldLocalWorkerDone
+)

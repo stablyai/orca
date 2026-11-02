@@ -139,7 +139,7 @@ describe('workspace linked references in hover details', () => {
     expect(screen.getByLabelText('State: Merged')).toBeTruthy()
     expect(screen.queryByText('State: Merged')).toBeNull()
     expect(screen.getByText('Target: release')).toBeTruthy()
-    expect(screen.getByText('State: In Progress')).toBeTruthy()
+    expect(screen.getByLabelText('State: In Progress')).toBeTruthy()
     expect(screen.getAllByLabelText('Checks: Passing')).toHaveLength(1)
     expect(screen.queryByText('Used for checks')).toBeNull()
     const siblingRow = Array.from(

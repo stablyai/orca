@@ -2,10 +2,10 @@ import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.t
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
 import type { TuiAgent } from '../../../shared/tui-agent'

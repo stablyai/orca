@@ -5,7 +5,7 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2
+    paddingVertical: spacing.md
   },
   taskRowPressed: {
     backgroundColor: colors.bgRaised

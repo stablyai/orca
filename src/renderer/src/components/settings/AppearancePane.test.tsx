@@ -82,9 +82,12 @@ vi.mock('../ui/select', async () => {
       </button>
     ),
     SelectValue: () => null,
+    SelectSeparator: () => null,
     SelectContent: ({ children }: { children: React.ReactNode }) => (
       <div data-slot="select-content">{children}</div>
     ),
+    SelectGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    SelectLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
       const { onValueChange } = React.useContext(SelectContext)
       return (
@@ -103,18 +106,23 @@ vi.mock('../ui/select', async () => {
 
 import { AppearancePane } from './AppearancePane'
 import { TooltipProvider } from '../ui/tooltip'
+import type { UseTerminalConfigImportReturn } from './useTerminalConfigImport'
 
 const mountedRoots: Root[] = []
 
-function createGhosttyStub() {
+function createTerminalConfigImportStub(): UseTerminalConfigImportReturn {
   return {
-    loading: false,
+    format: 'ghostty',
+    open: false,
     preview: null,
-    error: null,
-    open: vi.fn(),
-    close: vi.fn(),
-    refresh: vi.fn(),
-    apply: vi.fn()
+    loading: false,
+    choosingFile: false,
+    applied: false,
+    applyError: null,
+    handleClick: vi.fn(),
+    handleChooseFile: vi.fn(),
+    handleApply: vi.fn(),
+    handleOpenChange: vi.fn()
   }
 }
 
@@ -160,7 +168,7 @@ async function renderAppearancePane(
             terminalFontSuggestions={[]}
             onRequestFontSuggestions={options.onRequestFontSuggestions}
             systemPrefersDark={false}
-            ghostty={createGhosttyStub() as never}
+            terminalConfigImport={createTerminalConfigImportStub()}
             warpThemes={createWarpThemesStub() as never}
           />
         </TooltipProvider>
@@ -189,7 +197,7 @@ async function rerenderAppearancePane(
             fontSuggestions={[]}
             terminalFontSuggestions={[]}
             systemPrefersDark={false}
-            ghostty={createGhosttyStub() as never}
+            terminalConfigImport={createTerminalConfigImportStub()}
             warpThemes={createWarpThemesStub() as never}
           />
         </TooltipProvider>
@@ -348,18 +356,18 @@ describe('AppearancePane', () => {
     const settings = getDefaultSettings('/tmp')
 
     const container = await renderAppearancePane(settings, updateSettings)
-    const matchTerminalButton = Array.from(
+    const tintedButton = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
-    ).find((button) => button.textContent === 'Match Terminal')
+    ).find((button) => button.textContent === 'Tinted')
 
-    expect(matchTerminalButton).toBeDefined()
+    expect(tintedButton).toBeDefined()
 
     await act(async () => {
-      matchTerminalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      tintedButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(updateSettings).toHaveBeenCalledWith({
-      leftSidebarAppearanceMode: 'match-terminal'
+      leftSidebarAppearanceMode: 'tinted'
     })
   })
 

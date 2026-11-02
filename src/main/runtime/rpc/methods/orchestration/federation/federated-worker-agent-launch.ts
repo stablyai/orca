@@ -1,7 +1,7 @@
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Execute terminalOnly on the receiving host with federation's agent-first worktree/background-terminal factories. The dispatch brief is delivered later. */
 
-import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { executeAgentLaunch } from '../../../../../agent-launch/agent-launch-executor'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'

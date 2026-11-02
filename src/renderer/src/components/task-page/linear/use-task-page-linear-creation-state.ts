@@ -1,4 +1,4 @@
-import type { TaskPageJiraListProjectionModel } from '../../use-task-page-jira-list-projection'
+import type { TaskPageJiraListProjectionModel } from '../jira/use-task-page-jira-list-projection'
 import { useState, useMemo, useEffect, useReducer, type SetStateAction } from 'react'
 import { useTeamMembers, useTeamLabels, useTeamStates } from '@/hooks/useIssueMetadata'
 import {

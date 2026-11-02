@@ -2,14 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
-import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
-import type { HistoryCatchUpPlan } from './structured-agent-session-history-catch-up'
 import {
+  type StructuredAgentSessionEventSink,
+  createDeferredStructuredAgentSessionEventSink
+} from './structured-agent-session-event-sink'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import {
+  type HistoryCatchUpPlan,
   createHistoryCatchUpBatch,
   runHistoryCatchUp
 } from './structured-agent-session-history-catch-up'

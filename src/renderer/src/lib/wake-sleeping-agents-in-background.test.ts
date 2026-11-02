@@ -9,7 +9,7 @@ import {
 } from '@/constants/terminal'
 import { listenForHibernatedAgentWake } from '@/components/terminal-pane/hibernated-agent-wake-listener'
 import type { ResumeSleepingAgentSessionsOptions } from './resume-sleeping-agent-session'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const resumeSpy = vi.fn<
   (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number

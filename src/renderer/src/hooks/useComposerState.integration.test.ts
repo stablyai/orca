@@ -14,8 +14,6 @@ import type { Repo } from '../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
 import { useComposerState } from './useComposerState'
-import * as publicComposerDecisions from './useComposerState'
-import * as composerDecisions from './composer-state/composer-decisions'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 let originalApiDescriptor: PropertyDescriptor | undefined
@@ -46,33 +44,6 @@ afterEach(() => {
 })
 
 describe('useComposerState integrated lifecycle', () => {
-  it('keeps the public composer decisions bound to the canonical decision module', () => {
-    expect(publicComposerDecisions.canResolveFolderSmartGitHubSubmit).toBe(
-      composerDecisions.canResolveFolderSmartGitHubSubmit
-    )
-    expect(publicComposerDecisions.getInitialAutoManagedWorkspaceName).toBe(
-      composerDecisions.getInitialAutoManagedWorkspaceName
-    )
-    expect(publicComposerDecisions.getInitialGitHubPrStartPointSelection).toBe(
-      composerDecisions.getInitialGitHubPrStartPointSelection
-    )
-    expect(publicComposerDecisions.getMatchingLinkedTaskSourceContext).toBe(
-      composerDecisions.getMatchingLinkedTaskSourceContext
-    )
-    expect(publicComposerDecisions.isExplicitWorkspaceNameInput).toBe(
-      composerDecisions.isExplicitWorkspaceNameInput
-    )
-    expect(publicComposerDecisions.resolveInitialWorkspaceRunSeed).toBe(
-      composerDecisions.resolveInitialWorkspaceRunSeed
-    )
-    expect(publicComposerDecisions.resolveSmartGitHubCreateNames).toBe(
-      composerDecisions.resolveSmartGitHubCreateNames
-    )
-    expect(publicComposerDecisions.retargetGitHubPrStartPointSelection).toBe(
-      composerDecisions.retargetGitHubPrStartPointSelection
-    )
-  })
-
   it('passes the selected runtime repository to the name field when IDs repeat across hosts', () => {
     const localRepo: Repo = {
       id: 'same-id',
@@ -218,31 +189,116 @@ describe('useComposerState integrated lifecycle', () => {
     }
   })
 
-  it('composes two live composers and exposes the parent-worktree control state', () => {
-    useAppStore.setState({
-      repos: [],
-      projects: [],
-      projectGroups: [],
-      projectHostSetups: [],
-      newWorkspaceDraft: null,
-      worktreesByRepo: {},
-      sparsePresetsByRepo: {}
-    })
-    const first = renderHook(() => useComposerState({ initialName: 'first', persistDraft: false }))
-    const second = renderHook(() =>
-      useComposerState({ initialName: 'second', persistDraft: false })
-    )
-
-    expect(first.result.current.cardProps.name).toBe('first')
-    expect(second.result.current.cardProps.name).toBe('second')
-    expect(first.result.current.cardProps.parentWorktreeId).toBeNull()
-    expect(first.result.current.cardProps.onParentWorktreeIdChange).toBeTypeOf('function')
-    act(() => first.result.current.cardProps.onParentWorktreeIdChange('repo-1::/parent'))
-    expect(first.result.current.cardProps.parentWorktreeId).toBe('repo-1::/parent')
-    expect(first.result.current.cardProps.onNativeFileDrop).toBeUndefined()
-    expect(second.result.current.cardProps.onNativeFileDrop).toBeUndefined()
-
-    second.unmount()
-    first.unmount()
-  })
+  it.each(['ask', 'submit-error', 'background-error'] as const)(
+    'preserves real composer setup probe, selection and Create behavior for %s',
+    async (outcome) => {
+      const original = useAppStore.getState()
+      const response = Promise.withResolvers<CreateWorktreeResult>()
+      const create = vi.fn<Window['api']['worktrees']['create']>().mockReturnValue(response.promise)
+      const check = vi
+        .fn<Window['api']['hooks']['check']>()
+        .mockImplementation(async ({ background }) => {
+          if (background) {
+            if (outcome === 'background-error') {
+              throw new Error('probe failed')
+            }
+            return {
+              hasHooks: false,
+              hooks: null,
+              mayNeedUpdate: false,
+              unavailable: 'wsl-distro-stopped'
+            }
+          }
+          if (outcome === 'submit-error') {
+            throw new Error('foreground failed')
+          }
+          return {
+            hasHooks: true,
+            hooks: { scripts: { setup: 'echo prepared' } },
+            mayNeedUpdate: false
+          }
+        })
+      const gh = {
+        repoSlug: vi.fn<Window['api']['gh']['repoSlug']>().mockResolvedValue(null),
+        listWorkItems: vi.fn<Window['api']['gh']['listWorkItems']>().mockResolvedValue({
+          items: [],
+          sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+        })
+      }
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: {
+          ...window.api,
+          gh,
+          hooks: { check },
+          worktrees: { ...window.api.worktrees, create }
+        }
+      })
+      useAppStore.setState(useAppStore.getInitialState(), true)
+      const repo: Repo = {
+        id: 'setup-repo',
+        path: '/setup-repo',
+        displayName: 'Setup repo',
+        badgeColor: '',
+        addedAt: 0,
+        hookSettings: { mode: 'auto', setupRunPolicy: 'ask', scripts: { setup: '', archive: '' } }
+      }
+      const projection = projectHostSetupProjectionFromRepos([repo])
+      useAppStore.setState({
+        repos: [repo],
+        projects: [...projection.projects],
+        projectHostSetups: [...projection.setups],
+        sparsePresetsByRepo: { [repo.id]: [] },
+        trustedOrcaHooks: { [repo.id]: { all: { approvedAt: 1 } } }
+      })
+      const composer = renderHook(() =>
+        useComposerState({
+          initialRepoId: repo.id,
+          initialName: 'setup-review',
+          persistDraft: false
+        })
+      )
+      try {
+        await waitFor(() =>
+          expect(check).toHaveBeenCalledWith({ repoId: repo.id, hostId: 'local', background: true })
+        )
+        expect(composer.result.current.createDisabled).toBe(false)
+        await waitFor(() =>
+          expect(composer.result.current.cardProps.shouldWaitForSetupCheck).toBe(
+            outcome !== 'background-error'
+          )
+        )
+        await act(async () => composer.result.current.submitQuick(null))
+        if (outcome === 'ask') {
+          expect(create).not.toHaveBeenCalled()
+          expect(composer.result.current.cardProps.advancedOpen).toBe(true)
+          expect(composer.result.current.createDisabled).toBe(true)
+          act(() => composer.result.current.cardProps.onSetupDecisionChange('skip'))
+          expect(composer.result.current.cardProps.setupDecision).toBe('skip')
+          expect(composer.result.current.createDisabled).toBe(false)
+          expect(create).not.toHaveBeenCalled()
+          await act(async () => composer.result.current.submitQuick(null))
+        }
+        await waitFor(() => expect(create).toHaveBeenCalledOnce())
+        expect(create).toHaveBeenCalledWith(
+          expect.objectContaining({ setupDecision: outcome === 'ask' ? 'skip' : 'inherit' })
+        )
+        expect(check).toHaveBeenCalledTimes(outcome === 'background-error' ? 1 : 2)
+        if (outcome !== 'background-error') {
+          expect(check).toHaveBeenLastCalledWith({ repoId: repo.id, hostId: 'local' })
+        }
+        await act(async () =>
+          response.resolve({
+            worktree: makeWorktree({ id: 'setup-result', repoId: repo.id, path: '/setup-result' })
+          })
+        )
+        await waitFor(() =>
+          expect(useAppStore.getState().worktreesByRepo[repo.id]?.[0].id).toBe('setup-result')
+        )
+      } finally {
+        composer.unmount()
+        useAppStore.setState(original, true)
+      }
+    }
+  )
 })

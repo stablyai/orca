@@ -15,7 +15,7 @@ import {
 import {
   CLAUDE_STRUCTURED_BASE_OPTIONS,
   claudeStructuredPermissionOptions
-} from './claude-structured-launch-resolution'
+} from './structured/launch/claude-structured-launch-resolution'
 
 // Opt-in spends real turns; ORCA_REAL_CLAUDE_SETTINGS supports auth outside the Claude home.
 const CLAUDE_BIN = process.env.ORCA_REAL_CLAUDE_BIN ?? ''

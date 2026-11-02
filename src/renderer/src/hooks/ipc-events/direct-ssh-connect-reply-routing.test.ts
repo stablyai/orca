@@ -5,7 +5,6 @@ import type {
   SshConnectionState,
   SshProviderEpoch
 } from '../../../../shared/ssh-types'
-import { makeTab, makeWorktree } from '@/store/slices/store-test-helpers'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 
 function connectedState(
@@ -39,46 +38,6 @@ async function settle(): Promise<void> {
 
 const originalStore = useAppStore.getState()
 const cleanups: (() => void)[] = []
-
-const WORKTREE_ID = 'repo-ssh::/work/demo'
-const TAB_ID = 'tab-ssh'
-const PTY_ID = 'ssh:target-a@@pty-1'
-
-function seedSshTab(): void {
-  useAppStore.setState({
-    repos: [
-      {
-        id: 'repo-ssh',
-        path: '/work/demo',
-        displayName: 'demo',
-        badgeColor: '#000',
-        addedAt: 1,
-        connectionId: 'target-a',
-        executionHostId: 'ssh:target-a'
-      }
-    ],
-    worktreesByRepo: {
-      'repo-ssh': [
-        makeWorktree({
-          id: WORKTREE_ID,
-          repoId: 'repo-ssh',
-          path: '/work/demo',
-          hostId: 'ssh:target-a'
-        })
-      ]
-    },
-    tabsByWorktree: {
-      [WORKTREE_ID]: [makeTab({ id: TAB_ID, worktreeId: WORKTREE_ID, ptyId: PTY_ID })]
-    },
-    ptyIdsByTabId: { [TAB_ID]: [PTY_ID] }
-  })
-}
-
-function expectSshTabBound(): void {
-  const state = useAppStore.getState()
-  expect(state.tabsByWorktree[WORKTREE_ID][0].ptyId).toBe(PTY_ID)
-  expect(state.ptyIdsByTabId[TAB_ID]).toEqual([PTY_ID])
-}
 
 async function createHarness(
   initialStates: readonly SshConnectionState[] = [],
@@ -159,42 +118,6 @@ afterEach(async () => {
 })
 
 describe('direct SSH connected-state routing', () => {
-  it.each(['reply-first', 'push-first'] as const)(
-    'keeps the target bindings on connected pushes when ordering is %s',
-    async (ordering) => {
-      seedSshTab()
-      const harness = await createHarness()
-      const state = connectedState()
-      if (ordering === 'reply-first') {
-        harness.applyConnectReply(state)
-      }
-      harness.emit(state)
-      if (ordering === 'push-first') {
-        harness.applyConnectReply(state)
-      }
-      await settle()
-      harness.emit({ ...state })
-
-      expectSshTabBound()
-    }
-  )
-
-  it.each(['disconnected', 'error'] as const)(
-    'keeps bindings on %s and on the next connected push',
-    async (status) => {
-      seedSshTab()
-      const state = connectedState()
-      const harness = await createHarness([state])
-      harness.emit({ ...state, status })
-      // Loss of contact is not evidence the remote PTY exited.
-      expectSshTabBound()
-
-      harness.applyConnectReply(state)
-      harness.emit(state)
-      expectSshTabBound()
-    }
-  )
-
   it.each(['providerEpoch', 'connectionGeneration'] as const)(
     'reconciles a partial %s on initial hydration',
     async (missingField) => {

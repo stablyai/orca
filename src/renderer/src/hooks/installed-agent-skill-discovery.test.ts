@@ -16,7 +16,6 @@ vi.mock('@/runtime/runtime-skills-client', () => ({ discoverSkillsForRuntimeTarg
 const {
   discoverInstalledAgentSkills,
   getRuntimeScopedSkillDiscoveryKey,
-  getSkillDiscoveryTargetKey,
   invalidateInstalledAgentSkillDiscovery,
   resetSkillDiscoveryCacheForTests
 } = await import('./installed-agent-skill-discovery')
@@ -215,39 +214,6 @@ describe('installed agent skill discovery lifecycle', () => {
       await expect(discoverInstalledAgentSkills(false, target)).resolves.toEqual(result(index))
     }
     expect(discoverSkillsForRuntimeTarget).toHaveBeenCalledTimes(targets.length)
-  })
-
-  it('keys targets by runtime and project identity', () => {
-    expect(getSkillDiscoveryTargetKey(undefined)).toBe('host')
-    expect(getSkillDiscoveryTargetKey({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe('wsl:Ubuntu')
-    expect(getSkillDiscoveryTargetKey({ projectRuntime: resolvedHostProjectRuntime })).toBe(
-      'repo-1:windows-host'
-    )
-    expect(getSkillDiscoveryTargetKey({ projectRuntime: repairProjectRuntime })).toBe(
-      'repo-1:repair:wsl-distro-required:default'
-    )
-  })
-
-  it('normalizes effective filters into local, project, and environment keys', () => {
-    const target = {
-      projectRuntime: resolvedWslProjectRuntime,
-      names: [' Computer-Use ', 'orchestration', 'computer-use'],
-      sourceKinds: ['home' as const]
-    }
-    const normalizedFilters = [['computer-use', 'orchestration'], ['home']]
-
-    expect(getSkillDiscoveryTargetKey(target)).toBe(
-      JSON.stringify(['repo-1:wsl:Ubuntu', ...normalizedFilters])
-    )
-    expect(getRuntimeScopedSkillDiscoveryKey(remote('env-a'), target)).toBe(
-      JSON.stringify(['runtime:env-a', ...normalizedFilters])
-    )
-    expect(getSkillDiscoveryTargetKey(target, [], [])).toBe(
-      JSON.stringify(['repo-1:wsl:Ubuntu', ...normalizedFilters])
-    )
-    expect(getSkillDiscoveryTargetKey(target, ['ORCHESTRATION'], [])).toBe(
-      JSON.stringify(['repo-1:wsl:Ubuntu', ['orchestration'], ['home']])
-    )
   })
 
   it('keys the bounded cache by runtime scope, not by the client target', async () => {

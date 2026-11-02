@@ -2,10 +2,13 @@
 import type { WslHostCopyParams } from './wsl-host-failure-copy'
 
 export const WSL_HOST_STATUS_CHANNEL = 'wslHosts:statusChanged'
+/** Main's capability changed mid-run, such as a live policy block stopping new work. */
+export const WSL_HOST_CAPABILITY_CHANNEL = 'wslHosts:capabilityChanged'
 
 export type WslHostDistro = {
   name: string
-  state: 'running' | 'stopped'
+  /** 'unverifiable': WSL's running list couldn't be read, so Orca can't say. */
+  state: 'running' | 'stopped' | 'unverifiable'
   /** WSL 1 runs no Linux kernel, so it cannot host orcad; null when the registry did not say. */
   version: 1 | 2 | null
   environmentId: string | null
@@ -57,7 +60,7 @@ export type WslHostDeferredUpdate = {
 export type WslHostCapability = {
   /** False when the packaged orcad template is missing, so no WSL host can deploy or connect. */
   serverFiles: boolean
-  /** False in serve-only: saved hosts work, but no host is added and no project moved. Absent from older mains. */
+  /** False in serve-only or after a live policy block: saved hosts work, but nothing is added or moved. Absent from older mains. */
   acceptsNewWork?: boolean
 }
 

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  agentJournalLinkageFields,
-  isRootAgentJournalItem
-} from '../../agent-session-journal-producer'
+import { agentJournalLinkageFields, isRootAgentJournalItem } from './agent-session-journal-producer'
 
 describe('isRootAgentJournalItem', () => {
   it('reads an id that failed to resolve as a subagent’s, not as root', () => {

@@ -309,7 +309,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
       envVars: {
         ORCA_ROOT_PATH: '/tmp/repo',
@@ -441,7 +441,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
       shell: { family: 'posix', executable: 'wsl.exe' },
       envVars: {

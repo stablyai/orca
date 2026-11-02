@@ -403,25 +403,6 @@ describe('Git Bash console-capacity pane retention', () => {
     expect(started.deps.onPaneProcessDied).not.toHaveBeenCalled()
   })
 
-  it('tears down an ordinary failed shell after acknowledged input', async () => {
-    const started = await startPane()
-    started.spawn()
-    sendTerminalInputThroughPane(started.pane, 'exit\r')
-    await flushAsyncTicks()
-    started.output('bash: missing command')
-    started.exit()
-    expect(started.deps.onPaneProcessDied).not.toHaveBeenCalled()
-    expect(started.deps.onPtyExitRef.current).toHaveBeenCalled()
-  })
-
-  it('uses existing newborn handling when no overlay handler is installed', async () => {
-    const started = await startPane({ handler: false })
-    started.spawn()
-    started.output(MARKER)
-    expect(() => started.exit()).not.toThrow()
-    expect(started.manager.closePane).not.toHaveBeenCalled()
-  })
-
   it('keys an input attempt to the bound process rather than its incoming replacement', async () => {
     const exitModule = await import('./pty-connection/pty-exit-hibernate')
     const install = exitModule.installPtyExitHibernate

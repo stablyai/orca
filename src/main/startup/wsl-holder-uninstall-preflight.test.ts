@@ -43,7 +43,7 @@ describe('releaseWslHoldersForUninstall', () => {
     stopServers.mockImplementation(async () => {})
   })
 
-  it('stops the running hosts’ servers after releasing the holders', async () => {
+  it('stops the running hosts’ servers before releasing the holders that keep their distros up', async () => {
     const order: string[] = []
     const holder = holderReleasing([])
     vi.mocked(holder.releaseAll).mockImplementation(async () => {
@@ -55,7 +55,7 @@ describe('releaseWslHoldersForUninstall', () => {
     })
 
     await expect(releaseWslHoldersForUninstall(holder, SERVERS)).resolves.toBe(0)
-    expect(order).toEqual(['release-holders', 'stop-servers'])
+    expect(order).toEqual(['stop-servers', 'release-holders'])
   })
 
   it('keeps the holder verdict as the exit code whatever the server stop does', async () => {

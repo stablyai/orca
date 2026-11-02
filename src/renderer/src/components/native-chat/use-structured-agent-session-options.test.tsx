@@ -22,14 +22,14 @@ import {
   tick,
   type RenderProps
 } from './use-structured-agent-session-options.test-fixture'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import { act, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   structuredAgentSessionSendSelection,
   structuredAgentSessionMessageSelection
-} from '../../../../shared/structured-agent-session-option-view'
+} from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
   forgetStructuredSessionSelection,
   structuredSessionSelectionController
@@ -755,7 +755,7 @@ describe('useStructuredAgentSessionOptions', () => {
 import type {
   PiRefreshFixtureModule,
   PiRefreshMount
-} from '../../../../shared/structured-agent-session-option-refresh.test-fixture-contract'
+} from '../../../../shared/agent-session/options/structured-agent-session-option-refresh.test-fixture-contract'
 const { piOptionRefreshContract } = await vi.importActual<PiRefreshFixtureModule>(
   '../../../../main/native-chat/agent-session-wire/structured-agent-session-option-refresh.test-fixture'
 )

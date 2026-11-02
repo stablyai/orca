@@ -2,7 +2,7 @@ import { AUTOMATION_ORPHAN_ISSUES } from '../../../src/shared/automation-list-sc
 import { activateMobileUiLocale } from '../i18n/mobile-i18n'
 import { MOBILE_RPC_METHOD_ROUTES } from '../../../src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-routing'
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
-import { SetupHookTrustDrawer } from '../components/SetupHookTrustDrawer'
+import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
@@ -73,7 +73,7 @@ export function registerAutomationPresentationTests({
     await press('Continue')
     await press('Create automation')
     expect(port.send.mock.calls.filter(([method]) => method === 'automation.create')).toEqual([])
-    const drawer = root().findByType(SetupHookTrustDrawer)
+    const drawer = root().findByType(OrcaHookTrustDrawer)
     expect(drawer.props).toMatchObject({
       visible: true,
       prompt: { repoId: 'repo-1', contentHash: 'setup-hash', scriptContent: 'npm ci' }
@@ -198,7 +198,7 @@ export function registerAutomationPresentationTests({
     await press('Continue')
     await press('Create automation')
     expect(send.mock.calls.filter(([method]) => method === 'automation.create')).toEqual([])
-    const drawer = root().findByType(SetupHookTrustDrawer)
+    const drawer = root().findByType(OrcaHookTrustDrawer)
     expect(drawer.props).toMatchObject({
       visible: true,
       allowAlwaysTrust: false,
@@ -561,6 +561,39 @@ export function registerAutomationPresentationTests({
     inventory.targets.mockResolvedValue(fresh)
     await mount(portFor())
     expect(metadata('Workspace')).toBe('Newly mounted workspace')
+  })
+
+  it('lists, shows and renames an automation whose agent this build does not know without rewriting its agent', async () => {
+    const port = portFor({ ...savedAutomation(), agentId: 'future-agent' })
+    await act(async () => {
+      setTree(create(createElement(AutomationManager, { client: port.client, hostId: 'desktop' })))
+    })
+    expect(
+      root()
+        .findByType(AutomationList)
+        .props.rows.map((row: MobileAutomationRow) => row.automation.agentId)
+    ).toEqual(['future-agent'])
+    await open()
+    expect(metadata('Agent')).toBe('future-agent')
+    await press('Edit')
+    expect(
+      root()
+        .findAllByType(AutomationChoice)
+        .find((node) => node.props.label === 'Agent')!.props.options
+    ).toContainEqual({ value: 'future-agent', label: 'future-agent (saved)' })
+    await act(async () => input('Name').props.onChangeText('Renamed'))
+    await press('Continue')
+    await press('Continue')
+    await press('Save changes')
+    expect(port.send).toHaveBeenCalledWith(
+      'automation.update',
+      {
+        id: 'automation-1',
+        expectedOwner: { selector: { kind: 'self' } },
+        updates: { name: 'Renamed' }
+      },
+      { failWhenDisconnected: true }
+    )
   })
 
   it('applies literal keyboard policy and the web font floor to actual editor inputs and saves their exact text', async () => {

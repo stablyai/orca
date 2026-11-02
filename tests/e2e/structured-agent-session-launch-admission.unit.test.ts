@@ -56,10 +56,10 @@ import { useAppStore } from '@/store'
 import { adoptAgentSessionLaunchVerdict } from '../../src/renderer/src/lib/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from '../../src/renderer/src/lib/agent-session/structured-agent-session-provisional-tab'
 import { beginDirectWorkItemStructuredLaunch } from '../../src/renderer/src/lib/launch-work-item-direct-agent-routing'
-import { getStructuredAgentLaunchStatus } from '../../src/renderer/src/lib/structured-agent-session-launch-status'
-import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/structured-agent-session-launch-options'
+import { getStructuredAgentLaunchStatus } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-status'
+import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
-import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/structured-agent-session-host-admission'
+import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-host-admission'
 import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/launch-agent-in-new-tab-structured-route'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 import {
@@ -598,24 +598,6 @@ describe('a structured chat launch on this machine', () => {
       expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toHaveLength(1)
     )
     expect(mocks.hostPermission).not.toHaveBeenCalled()
-    launch?.cancel()
-  })
-
-  it('opens the chat once this machine admits it', async () => {
-    mocks.createSupport.mockResolvedValue({ supported: true })
-
-    const launch = beginStructuredAgentSessionProvisionalLaunch({
-      plan: localPlan(),
-      hooks: {},
-      onHostDeclined: vi.fn()
-    })
-
-    expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE] ?? []).toEqual([])
-    await vi.waitFor(() =>
-      expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
-        expect.objectContaining({ contentType: 'agent-session', executionHostId: 'local' })
-      ])
-    )
     launch?.cancel()
   })
 

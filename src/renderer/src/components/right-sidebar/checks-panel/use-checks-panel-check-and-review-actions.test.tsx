@@ -140,6 +140,7 @@ function makeInput(overrides: Partial<Input> = {}): Input {
     suppressedGitHubPR: null,
     comment: ''
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture fills only the fields these hooks read; a hook reading another field fails its test.
   return {
     activeReview: {
       provider: 'gitlab',
@@ -161,6 +162,7 @@ function makeInput(overrides: Partial<Input> = {}): Input {
     fetchPRChecks: vi.fn(),
     fetchPRComments: vi.fn(),
     fetchPRForBranch: vi.fn(),
+    gitLabPipelineCheck: null,
     gitLabProjectRefRef: { current: null },
     isCurrentAsyncResult: vi.fn(() => true),
     isFixingChecksWithAI: false,
@@ -319,7 +321,7 @@ describe('useChecksPanelCheckAndReviewActions AI details diagnostics', () => {
         url: null,
         prRepo: null
       },
-      { repoId: 'repo-1' }
+      { repoId: 'repo-1', repoOwnerExecutionHostId: 'ssh:ssh-1' }
     )
     expect(mocks.loadGitLabJobLogDetails).not.toHaveBeenCalled()
     expect(mocks.startFixChecksAgent).toHaveBeenCalledOnce()
@@ -387,6 +389,28 @@ describe('useChecksPanelCheckAndReviewActions AI details diagnostics', () => {
     ])
     expect(mocks.startFixChecksAgent).toHaveBeenCalledOnce()
     expect(JSON.stringify(mocks.startFixChecksAgent.mock.calls)).not.toContain('SYNTHETIC_SECRET')
+  })
+
+  it('fixes a failed parent pipeline by name and link when its returned jobs pass', async () => {
+    const input = makeInput({
+      sourceControlAiActionsVisible: true,
+      checks: [{ name: 'test: unit', status: 'completed', conclusion: 'success', url: null }],
+      gitLabPipelineCheck: {
+        name: 'Pipeline #99',
+        status: 'completed',
+        conclusion: 'failure',
+        url: 'https://gitlab.example.com/group/repo/-/pipelines/99'
+      }
+    })
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+
+    await act(() => result.current.handleFixChecksWithAI())
+
+    expect(mocks.loadGitLabJobLogDetails).not.toHaveBeenCalled()
+    expect(input.fetchPRCheckDetails).not.toHaveBeenCalled()
+    const prompt = JSON.stringify(mocks.startFixChecksAgent.mock.calls)
+    expect(prompt).toContain('Pipeline #99')
+    expect(prompt).toContain('https://gitlab.example.com/group/repo/-/pipelines/99')
   })
 })
 

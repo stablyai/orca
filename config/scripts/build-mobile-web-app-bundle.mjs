@@ -102,8 +102,10 @@ export const MOBILE_WEB_APP_ROOT_RESET =
 
 // Use zero-specificity native parity: remove text-field focus rings only; keyboard buttons keep browser rings.
 // Disable body text selection/callout to prevent WebKit/Android long-press interference, including portaled modals; fields opt back in.
+// Stop the WebView rubber-banding the whole page (headers included) when an inner list hits its end; inner scrollers keep their bounce.
 export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
   '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
+  ':where(html){overscroll-behavior:none}' +
   ':where(body){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
   ':where(input,textarea,[contenteditable]){-webkit-user-select:text;user-select:text;' +
   '-webkit-touch-callout:default}</style>'

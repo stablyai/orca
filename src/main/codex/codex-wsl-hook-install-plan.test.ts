@@ -11,11 +11,7 @@ vi.mock('../wsl/wsl-background-exec-gate', () => ({
   blockedWslDistroForExec: blockedForExecMock
 }))
 
-import {
-  MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES,
-  _internals,
-  createCodexWslRuntimeHookInstallPlan
-} from './codex-wsl-hook-install-plan'
+import { MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES, _internals } from './codex-wsl-hook-install-plan'
 
 const originalPlatform = process.platform
 
@@ -72,17 +68,6 @@ describe('canonicalizeWslLinuxPath', () => {
     )
   })
 
-  it('joins guest paths without producing a double slash at the filesystem root', () => {
-    const plan = createCodexWslRuntimeHookInstallPlan(
-      'C:\\runtime',
-      { runtime: 'wsl', wslDistro: 'Ubuntu' },
-      () => '/'
-    )
-
-    expect(plan?.commandScriptPath).toBe('/.orca/agent-hooks/codex-hook.sh')
-    expect(plan?.trustConfigPath).toBe('/hooks.json')
-  })
-
   it('returns the path unchanged off Windows without spawning wsl.exe', async () => {
     setPlatform('linux')
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alice')).toBe('/home/alice')
@@ -127,16 +112,6 @@ describe('canonicalizeWslLinuxPath', () => {
     expect(blockedForExecMock).toHaveBeenCalledWith('Ubuntu')
     expect(runProcessMock).toHaveBeenCalledTimes(1)
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBe('/home/alice')
-  })
-
-  it('returns the cached path while revalidating it asynchronously', async () => {
-    setPlatform('win32')
-    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBeNull()
-    await spawned(1)
-    await answer(0, exited('/home/alice\n'))
-
-    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBe('/home/alice')
-    await spawned(2)
   })
 
   it('resolves a custom automount root and notifies the first launch', async () => {

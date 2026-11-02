@@ -4,10 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import {
-  LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
-  MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES
-} from '../../../../shared/terminal-quick-command-prompt-limit'
+import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal-quick-command-prompt-limit'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
 
 const mountedRoots: Root[] = []
@@ -40,16 +37,6 @@ async function renderDialog(
       />
     )
   })
-}
-
-function findAnimatedRowContaining(text: string): HTMLElement {
-  const row = Array.from(document.body.querySelectorAll<HTMLElement>('[aria-hidden]')).find(
-    (element) => element.textContent?.includes(text)
-  )
-  if (!row) {
-    throw new Error(`Could not find animated row containing ${text}`)
-  }
-  return row
 }
 
 describe('TerminalQuickCommandDialog animation structure', () => {
@@ -104,9 +91,9 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     }
   })
 
-  it('keeps agent-only fields mounted as collapsed animated rows in terminal mode', async () => {
+  it('shows the editor path token hint in the toolbar for terminal commands', async () => {
     await renderDialog({
-      id: 'qc-1',
+      id: 'qc-toolbar-tokens',
       label: 'Start dev server',
       action: 'terminal-command',
       command: 'npm run dev',
@@ -114,31 +101,12 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       scope: { type: 'global' }
     })
 
-    const agentRow = findAnimatedRowContaining('Agent')
-
-    expect(agentRow.getAttribute('aria-hidden')).toBe('true')
-    expect(agentRow.className).toContain('transition-[grid-template-rows]')
-    expect(agentRow.className).toContain('grid-rows-[0fr]')
-  })
-
-  it('shows append enter in the editor footer for terminal commands', async () => {
-    await renderDialog({
-      id: 'qc-2',
-      label: 'Start dev server',
-      action: 'terminal-command',
-      command: 'npm run dev',
-      appendEnter: true,
-      scope: { type: 'global' }
-    })
-
-    expect(document.body.textContent).toContain('Append Enter — run immediately')
-    expect(document.body.textContent).not.toContain('Supports /goal, skills, paths')
     expect(document.body.textContent).toContain('Supports ${file} and other editor path tokens')
   })
 
-  it('hides append enter and shows agent toolbar hint in agent mode', async () => {
+  it('does not show the editor path token hint in the toolbar for agent prompts', async () => {
     await renderDialog({
-      id: 'qc-3',
+      id: 'qc-agent-toolbar-tokens',
       label: 'Investigate',
       action: 'agent-prompt',
       agent: 'claude',
@@ -146,22 +114,7 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       scope: { type: 'global' }
     })
 
-    expect(document.body.textContent).toContain('Supports /goal, skills, paths')
-    expect(document.body.textContent).not.toContain('Append Enter — run immediately')
     expect(document.body.textContent).not.toContain('Supports ${file} and other editor path tokens')
-  })
-
-  it('shows scope summary on the collapsed advanced toggle', async () => {
-    await renderDialog({
-      id: 'qc-4',
-      label: 'Start dev server',
-      action: 'terminal-command',
-      command: 'npm run dev',
-      appendEnter: true,
-      scope: { type: 'global' }
-    })
-
-    expect(document.body.textContent).toMatch(/Advanced\s*·\s*Global/)
   })
 
   it('lists editor path tokens in Advanced for terminal commands', async () => {
@@ -198,24 +151,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     expect(document.body.textContent).not.toContain('${workspaceFolder}')
   })
 
-  it('opens the advanced section when defaultAdvancedOpen is true', async () => {
-    await renderDialog(
-      {
-        id: 'qc-5',
-        label: 'Start dev server',
-        action: 'terminal-command',
-        command: 'npm run dev',
-        appendEnter: true,
-        scope: { type: 'global' }
-      },
-      { defaultAdvancedOpen: true }
-    )
-
-    const advancedToggle = document.body.querySelector('[aria-expanded="true"]')
-    expect(advancedToggle?.textContent).toContain('Advanced')
-    expect(document.body.textContent).not.toMatch(/Advanced\s*·\s*Global/)
-  })
-
   it('refuses to save a prompt over an older host cap instead of truncating it', async () => {
     const onSave = vi.fn()
     await renderDialog(
@@ -247,22 +182,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       )
     })
     expect(onSave).not.toHaveBeenCalled()
-  })
-
-  it('refuses a prompt past the message limit without telling the user to update the host', async () => {
-    await renderDialog({
-      id: 'qc-9',
-      label: 'Review',
-      action: 'agent-prompt',
-      agent: 'claude',
-      prompt: 'x'.repeat(MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES),
-      scope: { type: 'global' }
-    })
-
-    const alert = document.body.querySelector('[role="alert"]')
-    expect(alert?.textContent).toBe('Too long to save.')
-    expect(document.body.textContent).not.toContain('Update Orca')
-    expect(document.body.textContent).toContain('257 KB / 256 KB')
   })
 
   it('keeps the over-cap alert text static while the count changes', async () => {
