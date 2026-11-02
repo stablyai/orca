@@ -182,6 +182,12 @@ export async function respondAfterAgentToolPluginHooks(
   body: unknown,
   headers: IncomingHttpHeaders
 ): Promise<void> {
+  // The usual case: no plugin listens, so answer at once without reading the call.
+  if (!pluginHookWanted('agent.tool.before') && !pluginHookWanted('agent.tool.after')) {
+    res.writeHead(204)
+    res.end()
+    return
+  }
   // Why: the body is read, so the slowloris cap must not cut off a plugin still deciding.
   res.socket?.setTimeout(0)
   const answer = await answerAgentToolPluginHooks(source, body, headers)

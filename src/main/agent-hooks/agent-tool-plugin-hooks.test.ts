@@ -1,9 +1,11 @@
+import type { ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHookName } from '../../shared/plugins/contributions/plugin-hook-contribution'
 import type { PluginHookChainOutcome } from '../../shared/plugins/workers/plugin-hook-chain'
 import { setPluginHookRunner } from '../plugins/hooks/plugin-hook-dispatch'
 import {
   answerAgentToolPluginHooks,
+  respondAfterAgentToolPluginHooks,
   readAgentToolCall,
   setAgentToolHookTerminalResolver
 } from './agent-tool-plugin-hooks'
@@ -120,5 +122,18 @@ describe('answerAgentToolPluginHooks', () => {
 
   it('adds nothing when no plugin lists a tool hook', async () => {
     await expect(answerAgentToolPluginHooks('claude', PRE, DECIDES)).resolves.toBeNull()
+  })
+
+  it('answers 204 synchronously, without running a chain, when no plugin lists a tool hook', () => {
+    const run = vi.fn()
+    setPluginHookRunner({ wants: () => false, run })
+    const res = { writeHead: vi.fn(), end: vi.fn(), socket: { setTimeout: vi.fn() } }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the responder calls only writeHead, end and socket.setTimeout.
+    void respondAfterAgentToolPluginHooks(res as unknown as ServerResponse, 'claude', PRE, DECIDES)
+    // Checked before any await: the reply is already written.
+    expect(res.writeHead).toHaveBeenCalledWith(204)
+    expect(res.end).toHaveBeenCalledOnce()
+    expect(res.socket.setTimeout).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
   })
 })
