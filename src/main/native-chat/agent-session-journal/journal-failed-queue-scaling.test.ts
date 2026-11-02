@@ -11,6 +11,12 @@ import {
 import { readQueuePublication } from '../agent-session-wire/structured-agent-session-queued-publication'
 import { StructuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
 import { journalInputOrder } from './journal-input-order'
+import { JournalInputCardIndex } from './journal-input-card-index'
+import {
+  buildJournalQueueClearRow,
+  buildJournalQueueResumeRow,
+  buildJournalStopEventRow
+} from './journal-stop-and-resume-rows'
 import { isolateJournalTransition } from './journal-reducer-transition'
 import { failedQueueTurnSequence } from './queued-message-pause'
 import type { JournalRow } from './journal-row-schema'
@@ -457,5 +463,145 @@ describe.each([100, 1_000])('failure source index cost with %s commands', (size)
     const { walks, derived } = f.counts()
     expect(walks).toBe(0)
     expect(derived).toBeLessThanOrEqual(perSource(size + 1))
+  })
+})
+
+describe.each([100, 1_000])('queue pause changes beside %s retained cards', (size) => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // Each pause-key change visits at most the `live` waiting cards and never a retained one.
+  it.each([1, 3])('re-flags only the %s waiting cards a pause can hold', (live) => {
+    const state = createJournalReducerState('session', 'epoch')
+    let seq = 0
+    const base = () => ({ v: 4, epoch: 'epoch', seq: ++seq, ts: seq, fence: 1 }) as const
+    const place = () => ({ state, seq: ++seq, fence: 1, ts: seq })
+    const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
+    const providerHandle = agentSessionJournalProviderHandle({
+      agent: 'codex',
+      providerHandle: codexProviderHandle('thread')
+    })
+    const queue = (messageId: string, position: number) =>
+      applyJournalRow(state, {
+        ...base(),
+        kind: 'queue',
+        messageId,
+        change: { op: 'queued', position, body, queuedAt: { epoch: 'epoch', sequence: seq } }
+      })
+    // Retained history no pause can hold: withdrawn cards and accepted hand-offs.
+    const history: string[] = []
+    for (let n = 0; n < size; n++) {
+      const messageId = `old-${n}`
+      history.push(messageId)
+      queue(messageId, n)
+      if (n % 2 === 0) {
+        applyJournalRow(state, { ...base(), kind: 'queue', messageId, change: { op: 'withdrawn' } })
+        continue
+      }
+      const clientMessageId = `sent-${n}`
+      applyJournalRow(state, {
+        ...base(),
+        kind: 'submission',
+        clientMessageId,
+        body,
+        providerHandle,
+        payloadFingerprint: clientMessageId,
+        handoverRecorded: true,
+        queuedMessageId: messageId
+      })
+      applyJournalRow(state, {
+        ...base(),
+        kind: 'dispatch',
+        clientMessageId,
+        state: 'accepted',
+        providerItemId: null,
+        reason: null
+      })
+    }
+    const waiting = Array.from({ length: live }, (_, n) => `waiting-${n}`)
+    waiting.forEach((messageId, n) => queue(messageId, size + n))
+    const read = (target = state) => {
+      const owner = journalInputOrder(target)
+      const head = owner.head(target, null)
+      expect(head?.messageId).toBe('waiting-0')
+      return owner.paused(target, head!, null)
+    }
+    expect(read()).toBe(false)
+    const cards = Object.values(journalInputOrder(state)).find(
+      (value) => value instanceof JournalInputCardIndex
+    )!
+    // Reads after adoption see only the pause change: count every walk of the cards or index.
+    const walks = [
+      state.queue.cards,
+      ...Object.values(cards).filter((v) => v instanceof Map)
+    ].flatMap((map) =>
+      (['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const).map((method) =>
+        vi.spyOn(map, method)
+      )
+    )
+    const walked = () => walks.reduce((sum, spy) => sum + spy.mock.calls.length, 0)
+    const visits = vi.spyOn(JournalInputCardIndex.prototype, 'indexCard')
+    let changes = 0
+    /** Commits one row; `inDraft` reads before adoption so the draft carries the re-flag. */
+    const commit = (row: JournalRow, paused: boolean, inDraft = false) => {
+      const pending = isolateJournalTransition(state, (draft) => {
+        applyJournalRow(draft, row)
+        if (inDraft) {
+          expect(read(draft)).toBe(paused)
+        }
+      })
+      pending.adopt()
+      const before = walked()
+      expect(read()).toBe(paused)
+      expect(walked()).toBe(before)
+      settle()
+    }
+    const settle = () => {
+      const ids = visits.mock.calls.map(([, card]) => card.messageId)
+      expect(ids.length).toBeLessThanOrEqual(live)
+      expect(ids.every((id) => waiting.includes(id))).toBe(true)
+      changes += ids.length > 0 ? 1 : 0
+      visits.mockClear()
+    }
+    const turn = (n: number, outcome?: 'failure'): JournalRow => ({
+      ...base(),
+      kind: 'item',
+      itemId: `turn-${n}`,
+      revision: outcome ? 2 : 1,
+      body: outcome
+        ? { kind: 'turn', turnId: `turn-${n}`, state: 'completed', outcome }
+        : { kind: 'turn', turnId: `turn-${n}`, state: 'running' }
+    })
+    for (let n = 0; n < 10; n++) {
+      commit(turn(n), false)
+      commit(turn(n, 'failure'), true, n % 2 === 0)
+    }
+    // A discarded Resume leaves the live hold, its flags and the pause key as they were.
+    isolateJournalTransition(state, (draft) => {
+      applyJournalRow(draft, buildJournalQueueResumeRow(place()))
+      expect(read(draft)).toBe(false)
+    })
+    settle()
+    expect(read()).toBe(true)
+    settle()
+    commit(buildJournalQueueResumeRow(place()), false)
+    // A clear naming every retained card is copied once, not again on later failure changes.
+    commit(
+      buildJournalQueueClearRow({
+        ...place(),
+        clear: { operationId: 'clear', messageIds: [...history, ...waiting] }
+      }),
+      true
+    )
+    const payload = vi.spyOn(state.queuePauseMarks.cleared!.messageIds, Symbol.iterator)
+    commit(turn(10), true)
+    commit(turn(10, 'failure'), true, true)
+    commit(buildJournalQueueResumeRow(place()), false)
+    expect(payload).not.toHaveBeenCalled()
+    commit(buildJournalStopEventRow({ ...place(), event: { reason: 'user-stop', at: seq } }), true)
+    // Ten failures, nine running turns, the discarded and kept Resumes, the clear, its lift
+    // and the Stop each re-flag the waiting cards; the failure beneath the clear re-flags none.
+    expect(changes).toBe(24)
   })
 })
