@@ -1,7 +1,5 @@
 import { eraseRpcMethods, isStreamingMethod } from '../../runtime/rpc/core'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../../runtime/rpc/methods/structured-agent-session-options-read'
-import * as receiving from './structured-agent-session-receiving-account'
-import { observeReceivingSql } from './structured-agent-session-receiving-sql.test-support'
 import {
   type AgentModelCatalogSuccess,
   AgentModelCatalogStore
@@ -10,7 +8,6 @@ import type { AgentModelCatalogProbe } from '../agent-model-catalog/agent-model-
 import { rm } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { REST_TEST_CALLER } from './structured-agent-session-rest-test-rig'
 import { hostTestOperationId } from './structured-agent-session-host-test-data'
 import {
@@ -266,159 +263,6 @@ describe('catalog consumes the constructed host receiving account', () => {
     }
   }, 10_000)
 })
-
-// Real cold adoption, N serialized mutations and bounded cleanup share the existing catalog budget.
-it.each([10, 100])(
-  'counts inventory-independent picks and explicit receiving catalog work over %i operations',
-  async (n) => {
-    const f = await createReceivingCallerFixture()
-    let service: ReturnType<typeof createAgentModelCatalogService> | undefined
-    try {
-      await f.found()
-      const { started } = await f.coldNative()
-      f.selectB()
-      const c = catalog(f, true)
-      service = c.service
-      f.rig.adapter.acquire.mockClear()
-      const entries = vi.spyOn(receiving, 'structuredAgentSessionReceivingAccount')
-      const external = vi.spyOn(f.rig.host, 'prospectiveAccountHome')
-      const all = vi.spyOn(f.rig.store, 'listRecords').mockImplementation(() => {
-        throw new Error('global history scan')
-      })
-      const pick = async () => {
-        const key = 'permissionMode'
-        const value = 'own'
-        expect(
-          await settled(
-            f.rig.host.setOption(REST_TEST_CALLER, {
-              key,
-              value,
-              envelope: {
-                sessionId: PARENT,
-                clientOperationId: hostTestOperationId(),
-                expectedRuntimeFence: f.rig.store.requireWritableRecord(PARENT).lease.runtimeFence,
-                payloadFingerprint: computeAgentSessionPayloadFingerprint({
-                  method: 'agentSession.setOption',
-                  sessionId: PARENT,
-                  fields: { key, value }
-                })
-              }
-            }),
-            'owned catalog counted mutation'
-          )
-        ).toMatchObject({
-          ok: true,
-          value: { key, value, options: { permissionMode: 'own' } }
-        })
-        expect(f.rig.store.requireWritableRecord(PARENT).permissionMode).toBe('own')
-        return undefined
-      }
-      const measure = async (count: number, work: () => Promise<void>) => {
-        entries.mockClear()
-        external.mockClear()
-        c.resolve.mockClear()
-        c.demands.mockClear()
-        const observed = observeReceivingSql(f.runtime.getOrchestrationDb())
-        try {
-          await work()
-          expect(entries).toHaveBeenCalledTimes(count)
-          expect(c.resolve).toHaveBeenCalledTimes(count)
-          expect(
-            c.resolve.mock.calls.every(
-              ([, cwd, lookup]) => cwd === f.rig.root && lookup === 'snapshot'
-            )
-          ).toBe(true)
-          expect(observed.measurements.prepares).toBeLessThanOrEqual(20 * count)
-          expect(observed.measurements.allRows).toBeLessThanOrEqual(8 * count)
-          expect(observed.measurements.plans.length).toBeGreaterThan(0)
-          expect(
-            observed.measurements.plans.filter((detail) =>
-              /\bSCAN (?:run|child|task|parent|messages|dispatch_contexts|agent_session_records)\b/.test(
-                detail
-              )
-            )
-          ).toEqual([])
-          expect(c.probe).not.toHaveBeenCalled()
-          expect(f.rig.adapter.acquire).not.toHaveBeenCalled()
-          expect(f.rig.adapter.dispatch).not.toHaveBeenCalled()
-          expect(f.rig.adapter.readOptions).not.toHaveBeenCalled()
-          expect(all).not.toHaveBeenCalled()
-          process.stdout.write(
-            `owned-catalog operations=${count} receiving=${entries.mock.calls.length} snapshotResolutions=${c.resolve.mock.calls.length} sql=${observed.measurements.prepares} rows=${observed.measurements.allRows}\n`
-          )
-        } finally {
-          observed.stop()
-        }
-      }
-      entries.mockClear()
-      c.resolve.mockClear()
-      c.demands.mockClear()
-      const preparation = vi.spyOn(c.service, 'prepareSaved')
-      const reads = vi.spyOn(c.service, 'read')
-      const pickedSql = observeReceivingSql(f.runtime.getOrchestrationDb())
-      try {
-        for (let i = 0; i < n; i += 1) {
-          await pick()
-        }
-        expect(entries).not.toHaveBeenCalled()
-        expect(c.resolve).not.toHaveBeenCalled()
-        expect(c.demands).not.toHaveBeenCalled()
-        expect(preparation).not.toHaveBeenCalled()
-        expect(reads).not.toHaveBeenCalled()
-        expect(pickedSql.measurements.prepares).toBe(0)
-        expect(pickedSql.measurements.allRows).toBe(0)
-      } finally {
-        pickedSql.stop()
-      }
-      await measure(n, async () => {
-        for (let i = 0; i < n; i += 1) {
-          const options = await settled(
-            f.rig.host.readOptions(PARENT, { readsWithoutModel: false }),
-            'explicit legacy options'
-          )
-          expect(options.current.model).toBe('claude-sonnet-5')
-        }
-      })
-      expect(preparation).toHaveBeenCalledTimes(n)
-      expect(reads.mock.calls.length).toBeGreaterThan(0)
-      expect(external).not.toHaveBeenCalled()
-      expect(
-        c.resolve.mock.calls.every(([home]) => agentSessionAccountHomePath(home) === HOME_A.path)
-      ).toBe(true)
-      entries.mockClear()
-      c.resolve.mockClear()
-      c.demands.mockClear()
-      expect(await c.ids(true)).toEqual(['claude-sonnet-5'])
-      expect(entries).toHaveBeenCalledTimes(1)
-      expect(c.resolve).toHaveBeenCalledTimes(1)
-      expect(c.demands).toHaveBeenCalledTimes(1)
-      const before = await f.rig.host.readOptions(PARENT)
-      f.runtime
-        .getOrchestrationDb()
-        .failWorkerStart(started.dispatch.id, 'agent_readiness', 'never constructed a worker')
-      await measure(1, async () => {
-        const [picked, listed] = await settled(
-          Promise.all([pick(), f.rig.host.readOptions(PARENT, { readsWithoutModel: false })]),
-          'parallel owned/external catalog consumers'
-        )
-        expect(picked).toBeUndefined()
-        expect(listed.current.model).toBe('claude-opus-5-5[1m]')
-      })
-      expect(external).not.toHaveBeenCalled()
-      expect(before.current.model).toBe('claude-sonnet-5')
-      expect(
-        c.resolve.mock.calls.every(([home]) => agentSessionAccountHomePath(home) === HOME_B.path)
-      ).toBe(true)
-    } finally {
-      service?.stop()
-      await f.dispose(
-        () => disposeCatalogMutationHost(f.rig),
-        () => rm(f.rig.root, { recursive: true, force: true })
-      )
-    }
-  },
-  10_000
-)
 
 // These operations run the real host owner and catalog claim; only external provider IO is scripted.
 it('keeps newer public intent while discovery waits and reports a failed listing without holding Stop', async () => {

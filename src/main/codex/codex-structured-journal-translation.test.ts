@@ -98,15 +98,13 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
   return { translator, tap, window }
 }
 
-function hardWatermarkDeferred() {
+function pausedDeferred() {
   return createDeferredStructuredAgentSessionEventSink({
     ...testEventSinkLogging(),
     watermarks: {
       pauseQueuedBytes: 1,
-      maxQueuedBytes: 1,
       lowQueuedBytes: 0,
       pauseQueuedOperations: 1,
-      maxQueuedOperations: 0,
       lowQueuedOperations: 0
     }
   })
@@ -571,7 +569,7 @@ describe('codex journal translation', () => {
     ])
   })
 
-  it('admits authoritative item completion across the deferred sink hard watermark', async () => {
+  it('admits authoritative item completion while the deferred sink pauses reading', async () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
@@ -579,10 +577,8 @@ describe('codex journal translation', () => {
       ...testEventSinkLogging(),
       watermarks: {
         pauseQueuedBytes: 1,
-        maxQueuedBytes: 1,
         lowQueuedBytes: 0,
         pauseQueuedOperations: 1,
-        maxQueuedOperations: 0,
         lowQueuedOperations: 0
       },
       readingControl
@@ -606,7 +602,7 @@ describe('codex journal translation', () => {
       })
     )
 
-    expect(deferred.state()).toMatchObject({ queuedOperations: 3, backpressured: true })
+    expect(deferred.state()).toMatchObject({ backpressured: true })
     expect(readingControl.pauseReading).toHaveBeenCalled()
 
     deferred.bind(deferredTarget(bodies, publishes))
@@ -636,11 +632,11 @@ describe('codex journal translation', () => {
     })
   })
 
-  it('admits command approval prompts and their publish across the hard watermark', async () => {
+  it('admits command approval prompts and their publish while the sink pauses reading', async () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const bound: [string, string, string][] = []
-    const deferred = hardWatermarkDeferred()
+    const deferred = pausedDeferred()
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       bindPromptItemId: (journalItemId, threadId, promptKey) =>
@@ -665,7 +661,7 @@ describe('codex journal translation', () => {
         'approval-hard-watermark'
       ]
     ])
-    expect(deferred.state()).toMatchObject({ queuedOperations: 2, backpressured: true })
+    expect(deferred.state()).toMatchObject({ backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -679,11 +675,11 @@ describe('codex journal translation', () => {
     expect(publishes).toHaveLength(1)
   })
 
-  it('admits user-input prompt questions and their publish across the hard watermark', async () => {
+  it('admits user-input prompt questions and their publish while the sink pauses reading', async () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const bound: [string, string, string][] = []
-    const deferred = hardWatermarkDeferred()
+    const deferred = pausedDeferred()
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       bindPromptItemId: (journalItemId, threadId, promptKey) =>
@@ -710,7 +706,7 @@ describe('codex journal translation', () => {
       'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq1',
       'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq2'
     ])
-    expect(deferred.state()).toMatchObject({ queuedOperations: 2, backpressured: true })
+    expect(deferred.state()).toMatchObject({ backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -743,26 +739,5 @@ describe('codex journal translation', () => {
     expect(tap.rows).toEqual([])
     expect(tap.bound).toEqual([])
     expect(tap.publishes()).toBe(0)
-  })
-
-  it('admits turn start publication across the hard watermark', async () => {
-    const bodies: AgentJournalItemBody[] = []
-    const publishes: string[] = []
-    const deferred = hardWatermarkDeferred()
-    const translator = createCodexJournalTranslator({
-      sink: deferred.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    expect(translator.handle(TURN_STARTED)).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 2, backpressured: true })
-
-    deferred.bind(deferredTarget(bodies, publishes))
-    await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
-
-    expect(bodies).toEqual([
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' })
-    ])
-    expect(publishes).toHaveLength(1)
   })
 })

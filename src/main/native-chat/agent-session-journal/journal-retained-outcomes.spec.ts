@@ -6,9 +6,10 @@ import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
 } from './journal-host-database-test-support'
+import type { JournalHostDatabase } from './journal-host-database'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import { openAgentSessionJournal } from './journal-store-factory'
-import { JournalOutcomeCompaction } from './journal-outcome-compaction-test-support'
+import { JournalOutcomeCompaction } from './journal-outcome-compaction'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   AGENT_JOURNAL_THREAD_SCOPE as thread,
@@ -30,6 +31,45 @@ import {
 import { openStructuredAgentSessionConversationJournal } from '../agent-session-wire/structured-agent-session-conversation-open'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+
+function retainExpectedRecords(database: JournalHostDatabase): () => void {
+  const records = () =>
+    database.db
+      .prepare(
+        'SELECT generation,seq,field,entry_key,format,ordinal,value_json,deleted FROM journal_outcomes ORDER BY generation,seq,field,entry_key'
+      )
+      .all()
+  const before = records()
+  const byKey = new Map<string, typeof before>()
+  const keep = new Set(
+    before.filter(
+      (row) => row.deleted !== 0 || row.field === 'tombstones' || row.field === 'removedTurnIds'
+    )
+  )
+  for (const row of before) {
+    const key = JSON.stringify([row.generation, row.field, row.entry_key])
+    const group = byKey.get(key) ?? []
+    group.push(row)
+    byKey.set(key, group)
+  }
+  for (const group of byKey.values()) {
+    keep.add(group[0])
+    keep.add(group.at(-1)!)
+  }
+  const expected = before.filter((row) => keep.has(row))
+  expect(expected.length).toBeLessThan(before.length)
+  const raw = () =>
+    database.db.prepare('SELECT * FROM journal_rows ORDER BY session_id,epoch,seq').all()
+  const sources = () =>
+    database.db.prepare('SELECT * FROM journal_outcome_epochs ORDER BY generation').all()
+  const rawBefore = raw()
+  const sourcesBefore = sources()
+  return () => {
+    expect(records()).toEqual(expected)
+    expect(raw()).toEqual(rawBefore)
+    expect(sources()).toEqual(sourcesBefore)
+  }
+}
 
 export function registerRetainedOutcomeContract() {
   it('retained-facts-next-action compacts real prefix0 outcomes and reopens actual image/action/echo consumers', async () => {
@@ -207,8 +247,10 @@ export function registerRetainedOutcomeContract() {
           .filter((row) => row.field === 'queue.cards')
           .every((row) => !String(row.value_json).includes('recovers'))
       ).toBe(true)
+      const expectRetention = retainExpectedRecords(database)
       const compactor = new JournalOutcomeCompaction()
       while (compactor.page(database)) {}
+      expectRetention()
       const retained = inventory()
       expect(retained.length).toBeLessThan(all.length)
       await journal.close()
@@ -292,8 +334,10 @@ export function registerRetainedOutcomeContract() {
       )
       expect(journal.receiptFor('U')).toEqual(receipt)
       expect(journal.queuedMessages.get('Q')).toEqual(returned)
+      const expectEchoRetention = retainExpectedRecords(database)
       const echoCompactor = new JournalOutcomeCompaction()
       while (echoCompactor.page(database)) {}
+      expectEchoRetention()
       const keptEcho = inventory()
       expect(keptEcho).not.toEqual(retained)
       await journal.close()
@@ -363,8 +407,10 @@ export function registerRetainedOutcomeContract() {
       await journal.queuedMessages.withdraw(['Q'])
       const selectedAfterRemoval = journal.presentationRemoved('orca:U')
       expect(selectedAfterRemoval).toBe(false)
+      const expectRemovalRetention = retainExpectedRecords(database)
       const removalCompactor = new JournalOutcomeCompaction()
       while (removalCompactor.page(database)) {}
+      expectRemovalRetention()
       await journal.close()
       journal = undefined
       await closeTestJournalHostDatabase(root)
@@ -535,8 +581,60 @@ export function registerRetainedEchoBoundaryContract() {
               })
               receipt = journal.receiptFor('U')
             }
+            const revisionControl = { ...provider, turnId: 'retained-revisions' }
+            for (let revision = 1; revision <= 3; revision++) {
+              await journal.appendItem(
+                revisionControl,
+                { kind: 'status', text: `revision ${revision}` },
+                { fence: 1, turnScope: thread }
+              )
+            }
+            const removedTurn = { ...provider, turnId: 'retained-removal' }
+            await journal.appendItem(
+              removedTurn,
+              { kind: 'turn', turnId: 'retained-removal', state: 'completed' },
+              { fence: 1, turnScope: thread }
+            )
+            await journal.appendTombstone(removedTurn, { fence: 1 })
+            const nativeSequence = database.db
+              .prepare("SELECT MIN(seq) AS seq FROM journal_outcomes WHERE field='inputEntries'")
+              .get()?.seq
+            expect(typeof nativeSequence).toBe('number')
+            const boundary = database.db
+              .prepare(
+                `SELECT MAX(seq) AS seq FROM journal_outcomes WHERE field='$' AND entry_key='"contextBoundary"'`
+              )
+              .get()?.seq
+            if (rewind) {
+              expect(typeof boundary).toBe('number')
+            }
+            const middle = database.db
+              .prepare(
+                "SELECT seq FROM journal_outcomes WHERE field='items' AND entry_key=? AND deleted=0 ORDER BY seq"
+              )
+              .all(JSON.stringify(agentJournalItemKey(revisionControl)))
+            expect(middle).toHaveLength(3)
+            expect(Number(middle[1].seq)).toBeGreaterThan(Number(nativeSequence))
+            if (rewind) {
+              expect(Number(middle[1].seq)).toBeGreaterThan(Number(boundary))
+            }
+            // Ordinary format-1 values retain their meaning beside newer native format-2 values.
+            database.db
+              .prepare(
+                "UPDATE journal_outcomes SET format=1 WHERE field='items' AND entry_key=? AND seq=?"
+              )
+              .run(JSON.stringify(agentJournalItemKey(revisionControl)), middle[0].seq)
+            const expectRetention = retainExpectedRecords(database)
             const compactor = new JournalOutcomeCompaction()
             while (compactor.page(database)) {}
+            expectRetention()
+            expect(
+              database.db
+                .prepare(
+                  "SELECT seq FROM journal_outcomes WHERE field='items' AND entry_key=? AND seq=?"
+                )
+                .all(JSON.stringify(agentJournalItemKey(revisionControl)), middle[1].seq)
+            ).toEqual([])
             if (reopened) {
               await journal.close()
               journal = undefined

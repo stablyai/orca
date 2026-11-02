@@ -4,9 +4,8 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { collectLineageDescendants } from './worktree-card-agent-lineage-disclosure'
 import { CompactAgentExpansion } from './worktree-card-compact-agents'
-import { buildSummaryAgentGroups, getAgentDotState } from './worktree-card-agent-summary'
+import { SUMMARY_STATE_ORDER, getAgentDotState } from './worktree-card-agent-summary'
 import type { AgentDotState } from '@/components/AgentStateDot'
 
 // A lone idle child costs the same row as its group, so only fold two or more.
@@ -28,14 +27,42 @@ export function partitionIdleChildAgents(childAgents: DashboardAgentRowData[]): 
 
 const QUIET_CHILD_STATES: ReadonlySet<AgentDotState> = new Set(['idle', 'done', 'unverifiable'])
 
-/** The most urgent non-quiet descendant state, so a collapsed parent still signals live sub-agent work. */
-export function collapsedChildAgentsSignalState(
-  childrenByParentPaneKey: ReadonlyMap<string, readonly DashboardAgentRowData[]>,
-  parentPaneKey: string
-): AgentDotState | undefined {
-  const descendants = collectLineageDescendants(childrenByParentPaneKey, parentPaneKey)
-  const top = buildSummaryAgentGroups(descendants)[0]?.state
-  return top && !QUIET_CHILD_STATES.has(top) ? top : undefined
+const SUMMARY_STATE_RANK = new Map(SUMMARY_STATE_ORDER.map((state, rank) => [state, rank]))
+
+/** Each parent's most urgent non-quiet descendant state, so a collapsed parent still signals live sub-agent work. */
+export function buildCollapsedChildAgentSignalStates(
+  childrenByParentPaneKey: ReadonlyMap<string, readonly DashboardAgentRowData[]>
+): ReadonlyMap<string, AgentDotState> {
+  // One bottom-up pass; per-parent subtree walks were quadratic on deep chains.
+  const bestRankByPaneKey = new Map<string, number>()
+  const visiting = new Set<string>()
+  const bestDescendantRank = (paneKey: string): number => {
+    const cached = bestRankByPaneKey.get(paneKey)
+    if (cached !== undefined) {
+      return cached
+    }
+    // Lineage metadata may cycle; a pane never counts its own subtree twice.
+    if (visiting.has(paneKey)) {
+      return Infinity
+    }
+    visiting.add(paneKey)
+    let best = Infinity
+    for (const child of childrenByParentPaneKey.get(paneKey) ?? []) {
+      const childRank = SUMMARY_STATE_RANK.get(getAgentDotState(child)) ?? Infinity
+      best = Math.min(best, childRank, bestDescendantRank(child.paneKey))
+    }
+    visiting.delete(paneKey)
+    bestRankByPaneKey.set(paneKey, best)
+    return best
+  }
+  const signalStates = new Map<string, AgentDotState>()
+  for (const parentPaneKey of childrenByParentPaneKey.keys()) {
+    const top = SUMMARY_STATE_ORDER[bestDescendantRank(parentPaneKey)]
+    if (top && !QUIET_CHILD_STATES.has(top)) {
+      signalStates.set(parentPaneKey, top)
+    }
+  }
+  return signalStates
 }
 
 type IdleChildAgentGroupRowProps = {

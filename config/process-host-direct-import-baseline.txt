@@ -14,10 +14,10 @@ src/main/ai-vault/session-scanner-service-client.ts
 src/main/ai-vault/session-scanner-service-spawn.ts
 src/main/app-icon.ts
 src/main/automations/precheck-runner.ts
-src/main/browser/agent-browser-bridge-execution.ts
-src/main/browser/agent-browser-bridge-raw-process.ts
-src/main/browser/agent-browser-bridge-state.ts
-src/main/browser/agent-browser-bridge-types.ts
+src/main/browser/agent-browser/agent-browser-bridge-execution.ts
+src/main/browser/agent-browser/agent-browser-bridge-raw-process.ts
+src/main/browser/agent-browser/agent-browser-bridge-state.ts
+src/main/browser/agent-browser/agent-browser-bridge-types.ts
 src/main/browser/browser-route-egress-electron-launch.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts

@@ -50,10 +50,8 @@ export type StructuredAgentSessionTransitionStep =
 
 export type StructuredAgentSessionTransition = {
   steps: readonly StructuredAgentSessionTransitionStep[]
-  /** Charge the lifecycle budget for ending/settling work. */
+  /** Ending or settling work. */
   lifecycle: boolean
-  /** Internal admission for bounded provider tails after finalization. */
-  finalTail?: true
   publish: boolean
   /** Run after writes and parent publication, in queue order. */
   onPublished?: () => void
@@ -83,8 +81,6 @@ function transitionAppend(
       bytes:
         transition.steps.reduce((total, step) => total + step.reservedBytes, 0) +
         (transition.publish ? 1 : 0),
-      lifecycle: transition.lifecycle,
-      finalTail: transition.finalTail,
       run: async (bound) => {
         const { journal, fence } = bound
         const wrote = await journal.appendSteps(
