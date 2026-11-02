@@ -103,7 +103,8 @@ export function useMobileStructuredOptionState(args: {
         ? {
             conversationSupport: {
               sessionId: support.sessionId,
-              commands: support.result.conversationCommands ?? []
+              commands: support.result.conversationCommands ?? [],
+              compactInstructions: support.result.compactInstructions === true
             },
             imageSupport: {
               sessionId: support.sessionId,
