@@ -203,9 +203,6 @@ function isRecoverablePaneBindingError(error: unknown): boolean {
   )
 }
 
-/** How long an exited pane waits for main's listing to say a switch stopped it. */
-const GONE_TERMINAL_STOPPED_FACT_WAIT_MS = 2_000
-
 function isRemoteTerminalGoneMessage(message: string): boolean {
   return (
     message.includes('terminal_exited') ||
@@ -2678,7 +2675,7 @@ export function createRemoteRuntimePtyTransport(
     // Why: the refused stream's trailing end must not start a recovery of its own meanwhile.
     subscriptionGeneration += 1
     closeMultiplexedStream()
-    const listed = listRemoteRuntimeSessionTabsAfterCurrentInFlight({
+    void listRemoteRuntimeSessionTabsAfterCurrentInFlight({
       environmentId: currentRuntimeEnvironmentId,
       worktreeId,
       load: async () => ({
@@ -2690,20 +2687,11 @@ export function createRemoteRuntimePtyTransport(
       .then(({ snapshot }) => findStoppedSwitchSource(snapshot, hostTabId, goneHandle))
       // An unreadable listing proves no stop; the exit stands as main answered it.
       .catch(() => undefined)
-    // A slow link must not hold every exited pane's state for the listing: past a short wait the
-    // exit shows as main answered it, as it did before the stopped fact existed.
-    let giveUp: ReturnType<typeof setTimeout> | undefined
-    void Promise.race([
-      listed,
-      new Promise<undefined>((resolve) => {
-        giveUp = setTimeout(resolve, GONE_TERMINAL_STOPPED_FACT_WAIT_MS)
+      .then((stopped) => {
+        if (!destroyed && goneLifecycle === lifecycleEpoch && handle === goneHandle) {
+          retireRemoteTerminalId(undefined, stopped)
+        }
       })
-    ]).then((stopped) => {
-      clearTimeout(giveUp)
-      if (!destroyed && goneLifecycle === lifecycleEpoch && handle === goneHandle) {
-        retireRemoteTerminalId(undefined, stopped)
-      }
-    })
   }
 
   function recoverAfterSubscribeFailure(
