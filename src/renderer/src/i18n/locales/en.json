@@ -656,7 +656,7 @@
         "inheritFont": "Same as IDE font",
         "fontPreviewLabel": "Chat font preview",
         "fontPreview": "The quick brown fox jumps over the lazy dog.",
-        "title": "Chat",
+        "title": "Chat UI",
         "textSize": "Text size",
         "textSizeDescription": "Messages, tool activity and the message box. {{increase}} / {{decrease}} in a chat change this too.",
         "codeTextSize": "Code text size",
@@ -8232,7 +8232,8 @@
           "273e7e81fe": "Configs",
           "1f744a72f4": "Config",
           "choose_file": "Choose Config File",
-          "not_found_choose_file": "No Ghostty config found on this computer. Choose a config file to import one from another location."
+          "not_found_choose_file": "No Ghostty config found on this computer. Choose a config file to import one from another location.",
+          "cleared": "Cleared"
         },
         "WarpThemeImportModal": {
           "title": "Import from Warp",
@@ -9330,7 +9331,8 @@
           "048aac8a64": "Terminal Typography",
           "4415beb958": "disabled",
           "4e7d41a9f0": "enabled",
-          "dimUnfocusedPanes": "Dim unfocused panes."
+          "dimUnfocusedPanes": "Dim unfocused panes.",
+          "kitty_import": "Import from Kitty"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
@@ -11345,7 +11347,9 @@
             "454df22a5e": "fish",
             "ddd5efe113": "shell",
             "3de504994c": "Shell and arguments used for new local interactive terminal panes",
-            "1733ccd3e9": "Terminal shell"
+            "1733ccd3e9": "Terminal shell",
+            "kitty_import": "Import from Kitty",
+            "kitty_import_description": "One-time import of supported settings from kitty.conf."
           },
           "windows": {
             "search": {
@@ -13577,6 +13581,11 @@
         },
         "FontAutocomplete": {
           "installedFontsUnavailable": "Couldn’t list installed fonts. Type any installed font name to use it."
+        },
+        "TerminalConfigImportModal": {
+          "kitty_title": "Import from Kitty",
+          "kitty_description": "Review the settings that will be imported from your kitty.conf and the files it includes.",
+          "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
         }
       },
       "right": {
@@ -23028,7 +23037,8 @@
       "images": "Images",
       "repoIconImages": "Repo icon images",
       "audio": "Audio",
-      "importGhosttyConfig": "Import Ghostty Config"
+      "importGhosttyConfig": "Import Ghostty Config",
+      "importKittyConfig": "Import Kitty Config"
     }
   },
   "taskProviders": {
