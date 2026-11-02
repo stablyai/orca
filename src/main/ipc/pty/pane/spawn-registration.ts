@@ -1,6 +1,7 @@
+import { classifyTerminalCreationFailure } from '../../../../shared/terminal-start-failure'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import {
@@ -114,6 +115,7 @@ export function registerPersistedPtySpawn(
   runtime: OrcaRuntimeService | undefined,
   store: Store | undefined,
   claim: PtyRegistrationClaim | undefined,
+  result: PtySpawnResult | undefined,
   ...args: Parameters<OrcaRuntimeService['registerPty']>
 ): Promise<never> | undefined {
   try {
@@ -122,6 +124,7 @@ export function registerPersistedPtySpawn(
     }
     runtime?.registerPty(...args)
   } catch (error) {
+    const failure = classifyTerminalCreationFailure(error, result)
     const [ptyId, worktreeId, connectionId, binding] = args
     // An exit during the binding write precedes runtime surface registration.
     if (
@@ -136,10 +139,10 @@ export function registerPersistedPtySpawn(
         worktreeId,
         connectionId
       ).then(() => {
-        throw error
+        throw failure
       })
     }
-    throw error
+    throw failure
   }
   return undefined
 }

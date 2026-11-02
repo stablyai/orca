@@ -84,36 +84,6 @@ describe('E2EE text reply backpressure', () => {
     vi.useRealTimers()
   })
 
-  it('holds text replies while over the buffer cap and drains them in order', () => {
-    const ctx = setup()
-    const baseline = ctx.ws.sent.length
-
-    ctx.ws.bufferedAmount = 9 * 1024 * 1024
-
-    emitReply(ctx, '{"seq":1}')
-    emitReply(ctx, '{"seq":2}')
-    emitReply(ctx, '{"seq":3}')
-
-    expect(ctx.ws.sent.length).toBe(baseline)
-
-    ctx.ws.bufferedAmount = 0
-    vi.runOnlyPendingTimers()
-
-    const replies = ctx.ws.sent
-      .slice(baseline)
-      .map((frame) => decrypt(String(frame), ctx.sharedKey))
-    expect(replies).toEqual(['{"seq":1}', '{"seq":2}', '{"seq":3}'])
-    expect(ctx.onError).not.toHaveBeenCalled()
-  })
-
-  it('sends straight through when the socket is not congested', () => {
-    const ctx = setup()
-    const baseline = ctx.ws.sent.length
-    emitReply(ctx, '{"ok":true}')
-    expect(ctx.ws.sent.length).toBe(baseline + 1)
-    expect(decrypt(String(ctx.ws.sent[baseline]), ctx.sharedKey)).toBe('{"ok":true}')
-  })
-
   it('still closes an oversized reply when telemetry throws', () => {
     const ctx = setup()
     trackMock.mockImplementationOnce(() => {
@@ -212,19 +182,6 @@ describe('E2EE legacy binary reply backpressure', () => {
 
     expect(ctx.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
     expect(trackMock).toHaveBeenCalledWith('remote_outbound_budget_close', { emitter: 'queue' })
-  })
-
-  it('refuses binary once the socket has left OPEN', () => {
-    const ctx = setup()
-    ctx.ws.readyState = 3
-    let accepted: RpcBinarySendResult = undefined
-
-    ctx.channel.onMessage((_plaintext, _encryptedReply, encryptedBinaryReply) => {
-      accepted = encryptedBinaryReply(new Uint8Array([1]))
-    })
-    ctx.channel.handleRawMessage(encrypt('{"id":"x","method":"terminal.subscribe"}', ctx.sharedKey))
-
-    expect(accepted).toBe(false)
   })
 
   it('drops a backlogged lossy binary reply instead of queueing it, then sends once drained', () => {

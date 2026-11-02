@@ -1,18 +1,22 @@
 import { MobileMarkdownPreviewImage } from './MobileMarkdownPreviewImage'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileFileAddressToolbar } from '../components/MobileFileAddressToolbar'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
 } from './MobileFilePreviewSourceText'
+import type { MarkdownPreviewMode } from './MobileMarkdownPreviewModeBar'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
+// Lifts the 13pt base to 14pt body text; headings scale with it.
+const DOCUMENT_TEXT_SCALE = 14 / 13
+
 type Props = {
+  mode: MarkdownPreviewMode
   relativePath: string
   content: string
   truncated: boolean
@@ -27,6 +31,7 @@ type Props = {
 }
 
 export function MobileFileMarkdownPreview({
+  mode,
   relativePath,
   content,
   truncated,
@@ -41,22 +46,12 @@ export function MobileFileMarkdownPreview({
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
-  const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
-  const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
-  // Switch modes before paint for a new file or line target; do not flash the previous manual mode.
-  if (relativePath !== previousRelativePath || initialLine !== previousInitialLine) {
-    setPreviousRelativePath(relativePath)
-    setPreviousInitialLine(initialLine)
-    setMode(initialLine ? 'source' : 'preview')
-  }
 
   return (
     <View style={styles.modeContainer}>
       <MobileFileAddressToolbar
         path={relativePath}
         viewMode={mode}
-        onViewModeChange={setMode}
         showLineNumbers={showLineNumbers}
         onToggleLineNumbers={onToggleLineNumbers}
         content={content}
@@ -72,6 +67,7 @@ export function MobileFileMarkdownPreview({
           {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
           <MobileMarkdown
             content={content}
+            textScale={DOCUMENT_TEXT_SCALE}
             onOpenFile={onOpenFile}
             renderImage={
               worktreeId

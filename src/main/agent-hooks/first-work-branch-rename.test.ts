@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
@@ -680,7 +680,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         throw noUpstreamError
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'you/Nautilus\n', stderr: '' }
+        return { stdout: 'refs/heads/you/Nautilus\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/you/Nautilus')) {
         throw new Error('not found')
@@ -705,7 +705,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         return { stdout: 'you/Nautilus\n', stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'you/Nautilus\n', stderr: '' }
+        return { stdout: 'refs/heads/you/Nautilus\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.includes('@{u}'))) {
         upstreamReadCount += 1

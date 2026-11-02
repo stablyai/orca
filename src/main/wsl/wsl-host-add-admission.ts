@@ -27,16 +27,14 @@ export function wslHostAddRefusal(
 export const WSL_HOST_REMOVING_MESSAGE = 'This WSL host is being removed.'
 
 export function wslHostNotConnectedMessage(distro: string): string {
-  return `The WSL host ${distro} isn’t connected. Open one of its projects or connect it in Settings → Remote Orca Servers.`
+  return `The WSL host ${distro} isn’t connected. If it’s stopped, click Start; otherwise open one of its projects or connect it in Settings → Remote Orca Servers.`
 }
 
-export function wslHostStoppedMessage(distro: string): string {
-  return `${distro} was stopped. Switch to one of its projects, or reconnect it in Settings → Remote Orca Servers, to start it again.`
-}
+export { wslHostStoppedMessage } from '../../shared/wsl-host-stopped-message'
 
 /** Shown on a paired phone once a stop is confirmed: only the desktop starts a distro. */
 export function wslHostStoppedForPhoneMessage(distro: string): string {
-  return `The WSL host ${distro} isn’t running. Open one of its projects on your computer to start it.`
+  return `The WSL host ${distro} is stopped. To start it, click Start or open a new terminal in one of its projects on your computer.`
 }
 
 /** Shown on a paired phone while WSL hosts are switched off, or this one is being removed. */
@@ -46,25 +44,32 @@ export function wslHostHiddenFromPhoneMessage(distro: string): string {
 
 /** Shown on a paired phone while the desktop can't confirm the host runs (starting, reconnecting). */
 export function wslHostUnavailableForPhoneMessage(distro: string): string {
-  return `The WSL host ${distro} isn’t available from your phone right now. Open one of its projects on your computer to connect it.`
+  return `The WSL host ${distro} isn’t available from your phone right now. On your computer, click Start if it’s stopped; otherwise open one of its projects to connect it.`
 }
 
 export function wslHostRemovalPendingMessage(distro: string): string {
   return `Orca didn’t finish removing the WSL host ${distro}. Remove it again in Settings → Remote Orca Servers, or connect it to keep it.`
 }
 
-/** Why no WSL host may run at all right now; null when they may. */
+/**
+ * Why a saved host can't run now. The WSL hosts setting governs new work only (Stage 1): with it
+ * off, saved hosts keep serving their projects, as in serve-only.
+ */
 export function wslHostRunRefusal(gate: {
-  isEnabled: () => boolean
   hasServerFiles: () => boolean
 }): WslHostAddRefusal | null {
-  if (!gate.isEnabled()) {
-    return wslHostAddRefusal('disabled', 'turnedOff')
-  }
   // Reject missing packaged templates before C4 deploy emits an opaque deep failure.
   return gate.hasServerFiles()
     ? null
     : wslHostAddRefusal('server-files-missing', 'serverFilesMissing')
+}
+
+/** Why a new host can't be added now: the setting is off, or no saved host could run either. */
+export function wslHostNewWorkRefusal(gate: {
+  isEnabled: () => boolean
+  hasServerFiles: () => boolean
+}): WslHostAddRefusal | null {
+  return gate.isEnabled() ? wslHostRunRefusal(gate) : wslHostAddRefusal('disabled', 'turnedOff')
 }
 
 export function sameWslDistro(left: string, right: string): boolean {
@@ -90,6 +95,10 @@ export function admitWslHostDistro(args: {
   }
   if (distro.state === 'stopped' && !args.startIfStopped) {
     return wslHostAddRefusal('distro-stopped', 'distroStopped', { distro: distro.name })
+  }
+  // Adding may start it, so a distro WSL couldn't vouch for needs the same explicit start.
+  if (distro.state === 'unverifiable' && !args.startIfStopped) {
+    return wslHostAddRefusal('failed', 'distroUnverifiable', { distro: distro.name })
   }
   return { distro }
 }

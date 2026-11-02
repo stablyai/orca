@@ -12,12 +12,12 @@ import {
   useMobileMarkdownViewMode
 } from './mobile-markdown-view-mode-state'
 import { markdownReaderStatusText } from './mobile-markdown-reader-status'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MarkdownDocState } from './mobile-session-route-types'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileLoadErrorState, MobileStateView } from '../components/MobileStateView'
 
 export function MarkdownReader({
   documentId,
@@ -30,6 +30,7 @@ export function MarkdownReader({
   onCopy,
   onCopyPath,
   onDiscard,
+  loadImageSource,
   keyboardLift
 }: {
   documentId: string
@@ -42,6 +43,7 @@ export function MarkdownReader({
   onCopy: () => void
   onCopyPath: () => void
   onDiscard: () => void
+  loadImageSource?: (path: string) => Promise<string>
   keyboardLift: number
 }) {
   useMobileColorScheme()
@@ -69,13 +71,11 @@ export function MarkdownReader({
 
   if (!doc || doc.status === 'loading') {
     return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
+      <MobileStateView loading title={t('session.markdownReader.loading', 'Loading document…')} />
     )
   }
   if (doc.status === 'error') {
-    return <MobileLoadErrorState message={doc.message} onRetry={onRefresh} />
+    return <MobileLoadErrorState error={doc.message} onRetry={onRefresh} />
   }
 
   const statusText = markdownReaderStatusText(doc)
@@ -91,6 +91,7 @@ export function MarkdownReader({
           editable={doc.editable && !doc.saving}
           onChange={onChange}
           onKeyboardInsetChange={setWebviewKeyboardInset}
+          loadImageSource={loadImageSource}
           initialScrollRatio={scrollRatioRef.current}
           onScrollRatioChange={handleScrollRatioChange}
         />
@@ -139,7 +140,11 @@ export function MarkdownReader({
         ) : null}
         <View style={styles.markdownFloatingActions}>
           <Pressable
-            style={[styles.markdownFloatingButton, styles.markdownCopyButton]}
+            style={({ pressed }) => [
+              styles.markdownFloatingButton,
+              styles.markdownCopyButton,
+              pressed && pressedStyle
+            ]}
             onPress={onCopy}
             accessibilityRole="button"
             accessibilityLabel={
@@ -155,7 +160,11 @@ export function MarkdownReader({
             </Text>
           </Pressable>
           <Pressable
-            style={[styles.markdownFloatingButton, styles.markdownCopyButton]}
+            style={({ pressed }) => [
+              styles.markdownFloatingButton,
+              styles.markdownCopyButton,
+              pressed && pressedStyle
+            ]}
             onPress={onCopyPath}
             accessibilityRole="button"
             accessibilityLabel={t('session.markdownReader.copyPathLabel', 'Copy Markdown path')}
@@ -178,7 +187,10 @@ export function MarkdownReader({
             </Text>
           </Pressable>
           {showRefresh ? (
-            <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
+            <Pressable
+              style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
+              onPress={onRefresh}
+            >
               <RefreshCw size={13} color={colors.textPrimary} />
               <Text style={styles.markdownFloatingButtonText}>
                 {t('common.refresh', 'Refresh')}
@@ -186,7 +198,10 @@ export function MarkdownReader({
             </Pressable>
           ) : null}
           {doc.isDirty ? (
-            <Pressable style={styles.markdownFloatingButton} onPress={onDiscard}>
+            <Pressable
+              style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
+              onPress={onDiscard}
+            >
               <Text style={styles.markdownFloatingButtonText}>
                 {t('session.markdownReader.discard', 'Discard')}
               </Text>
@@ -194,10 +209,11 @@ export function MarkdownReader({
           ) : null}
           {showSave ? (
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.markdownFloatingButton,
                 styles.markdownSaveButton,
-                (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled
+                (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled,
+                pressed && pressedStyle
               ]}
               disabled={!doc.editable || !doc.isDirty || doc.saving}
               onPress={onSave}

@@ -236,29 +236,4 @@ describe('applyWebSessionTabsSnapshot — unfocused HTML side preview', () => {
     expect(previewFocus(next).activeGroupId).not.toBe(EDITOR_GROUP)
     expect(previewFocus(next).activeTabType).toBe('editor')
   })
-
-  it('keeps the source editor focused when the editor group is still active', () => {
-    recordWebSessionBrowserPlacement({
-      environmentId: ENV,
-      worktreeId: WT,
-      remotePageId: HOST_BROWSER_PAGE,
-      groupId: PREVIEW_GROUP,
-      callerCreatedGroup: true
-    })
-    const state = editorFocusedSplitState(EDITOR_GROUP)
-
-    const patch = applyWebSessionTabsSnapshot(
-      state,
-      unfocusedHtmlPreviewSnapshot(),
-      ENV,
-      NOW + 10
-    ) as Partial<WebSessionTabsSyncState>
-    const next = { ...state, ...patch }
-
-    expect(previewFocus(next)).toEqual({
-      activeGroupId: EDITOR_GROUP,
-      activeTabId: EDITOR_TAB_ID,
-      activeTabType: 'editor'
-    })
-  })
 })

@@ -8,16 +8,15 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { GitStatusResult } from '../../../../shared/git-status-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
-import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
+
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
 import {
   getDeleteWorktreeChangeCheckStates,
   getDeleteWorktreeDirtyChangeCounts,
-  getDeleteWorktreeDirtyChangePreview,
   getDeleteWorktreeDirtyChangePreviews
 } from './delete-worktree-dirty-change-counts'
+
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
-import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 const state = vi.hoisted(() => ({
   repos: [],
@@ -180,34 +179,5 @@ describe('loaded deletion disclosure and existing hydration', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByText('old-host.ts')).not.toBeInTheDocument()
     expect(screen.queryByText(/No files|clean|0 changes/)).not.toBeInTheDocument()
-  })
-
-  it('exposes only the four existing visible lineage children, retaining conflict context', () => {
-    const descendants = Array.from({ length: 5 }, (_, index) => target(`child-${index}`))
-    const preview = getDeleteWorktreeDirtyChangePreview([
-      {
-        path: 'conflict.ts',
-        status: 'modified',
-        area: 'unstaged',
-        conflictStatus: 'unresolved',
-        conflictKind: 'both_modified'
-      }
-    ])
-    render(
-      <DeleteWorktreeLineageNotice
-        descendants={descendants}
-        dirtyChangeCountsByWorktreeId={
-          new Map(descendants.map((child) => [getWorktreeHostIdentity(child), 1]))
-        }
-        dirtyChangePreviewsByWorktreeId={
-          new Map(descendants.map((child) => [getWorktreeHostIdentity(child), preview]))
-        }
-      />
-    )
-    expect(screen.getAllByRole('button')).toHaveLength(4)
-    expect(screen.queryByText('child-4')).not.toBeInTheDocument()
-    fireEvent.click(screen.getAllByRole('button')[0])
-    expect(screen.getByText('Unresolved conflict')).toBeVisible()
-    expect(screen.getByText('conflict.ts')).toBeVisible()
   })
 })

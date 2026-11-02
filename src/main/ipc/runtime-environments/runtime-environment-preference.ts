@@ -3,7 +3,7 @@ import {
   getEnvironmentStorePath,
   listEnvironments
 } from '../../../shared/runtime-environment-store'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { watchFileAcrossReplacement } from '../rebinding-file-watch'
 
 type PreferenceStore = Pick<Store, 'getSettings' | 'updateSettings'>

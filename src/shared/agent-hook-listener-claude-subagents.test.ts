@@ -41,47 +41,6 @@ describe('shared agent-hook-listener', () => {
       expect(stop?.payload.turnCompletedAt).toBeUndefined()
     })
 
-    it('stamps turnCompletedAt on a gated lead Stop and repeats it on the all-clear', () => {
-      vi.useFakeTimers()
-      try {
-        vi.setSystemTime(1_700_000_005_000)
-        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
-        claudeEvent({
-          hook_event_name: 'SubagentStart',
-          agent_id: 'a1',
-          agent_type: 'general-purpose'
-        })
-        const stop = claudeEvent({
-          hook_event_name: 'Stop',
-          last_assistant_message: 'Which cells need hand-verification?',
-          background_tasks: [
-            {
-              id: 'a1',
-              type: 'subagent',
-              status: 'running',
-              description: 'Review loop',
-              agent_type: 'general-purpose'
-            }
-          ]
-        })
-        expect(stop?.payload.state).toBe('working')
-        expect(stop?.payload.turnCompletedAt).toBe(1_700_000_005_000)
-        expect(stop?.payload.lastAssistantMessage).toBe('Which cells need hand-verification?')
-
-        vi.setSystemTime(1_700_000_055_000)
-        const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-        expect(drained?.payload.state).toBe('done')
-        expect(drained?.payload.turnCompletedAt).toBe(1_700_000_005_000)
-
-        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'next turn' })
-        const nextStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
-        expect(nextStop?.payload.state).toBe('done')
-        expect(nextStop?.payload.turnCompletedAt).toBeUndefined()
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-
     it('does not stamp an interrupted Stop even while a child still gates the pane', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
       claudeEvent({
@@ -717,14 +676,12 @@ describe('shared agent-hook-listener', () => {
       // The lead is done; answering resumes the child and holds working only while it runs.
       expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({
         state: 'working',
-        turnCompletedAt: expect.any(Number),
         // The main agent's own fact rides beside the gated state: it finished, no verdict was given.
         mainAgent: { state: 'done', stateStartedAt: expect.any(Number) }
       })
       expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({
         state: 'done',
-        stateStartedAt: expect.any(Number),
-        turnCompletedAt: expect.any(Number)
+        stateStartedAt: expect.any(Number)
       })
 
       const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })

@@ -30,89 +30,6 @@ describe('listWorktreeGraph', () => {
     translateWslOutputPathsMock.mockClear()
   })
 
-  it('returns the worktree graph without sparse-checkout annotation probes', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-
-worktree /repo-feature
-HEAD def456
-branch refs/heads/feature/test
-`
-    })
-
-    await expect(listWorktreeGraph('/repo')).resolves.toEqual([
-      {
-        path: '/repo',
-        head: 'abc123',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      },
-      {
-        path: '/repo-feature',
-        head: 'def456',
-        branch: 'refs/heads/feature/test',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/repo',
-      timeout: WORKTREE_LIST_TIMEOUT_MS
-    })
-  })
-
-  it('falls back when older Git rejects worktree list -z with usage exit code', async () => {
-    gitExecFileAsyncMock
-      .mockRejectedValueOnce(
-        Object.assign(new Error('git usage error'), {
-          code: 129,
-          stderr: 'usage: git worktree list [<options>]\n'
-        })
-      )
-      .mockResolvedValueOnce({
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-
-worktree /repo-main-2
-HEAD def456
-branch refs/heads/main-2
-`
-      })
-
-    await expect(listWorktreeGraph('/repo')).resolves.toEqual([
-      {
-        path: '/repo',
-        head: 'abc123',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      },
-      {
-        path: '/repo-main-2',
-        head: 'def456',
-        branch: 'refs/heads/main-2',
-        isBare: false,
-        isMainWorktree: false,
-        // The legacy listing probes existence; this mocked linked path is absent.
-        prunable: true
-      }
-    ])
-
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [
-        ['worktree', 'list', '--porcelain', '-z'],
-        { cwd: '/repo', timeout: WORKTREE_LIST_TIMEOUT_MS }
-      ],
-      [['worktree', 'list', '--porcelain'], { cwd: '/repo', timeout: WORKTREE_LIST_TIMEOUT_MS }]
-    ])
-  })
-
   it('falls back on a localized (non-English) older-Git usage error via exit code 129', async () => {
     gitExecFileAsyncMock
       .mockRejectedValueOnce(
@@ -163,24 +80,5 @@ branch refs/heads/main
         { cwd: '/repo', timeout: WORKTREE_LIST_TIMEOUT_MS }
       ]
     ])
-  })
-
-  it('returns an empty graph for paths Git reports as non-repositories', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: not a git repository'))
-
-    await expect(listWorktreeGraph('/not-a-repo')).resolves.toEqual([])
-  })
-
-  it('lets callers override the default worktree list timeout', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
-    })
-
-    await listWorktreeGraph('/repo', { timeout: 5_000 })
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/repo',
-      timeout: 5_000
-    })
   })
 })

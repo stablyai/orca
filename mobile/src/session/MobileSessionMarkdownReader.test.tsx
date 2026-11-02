@@ -22,6 +22,7 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 }
 }))
 vi.mock('lucide-react-native', () => ({
+  CircleAlert: 'Icon',
   RefreshCw: 'RefreshCw',
   ListOrdered: 'ListOrdered',
   Copy: 'Copy',

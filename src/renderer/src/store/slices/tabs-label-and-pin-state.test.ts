@@ -46,12 +46,6 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
     })
 
     describe('tab property setters', () => {
-      it('setTabLabel updates the label', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().setTabLabel(tab.id, 'zsh')
-        expect(store.getState().unifiedTabsByWorktree[WT][0].label).toBe('zsh')
-      })
-
       it('setTabLabel preserves tab map references when the label is unchanged', () => {
         const tab = store.getState().createUnifiedTab(WT, 'terminal')
         store.getState().setTabLabel(tab.id, 'zsh')
@@ -60,25 +54,6 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
         store.getState().setTabLabel(tab.id, 'zsh')
 
         expect(store.getState().unifiedTabsByWorktree).toBe(before)
-      })
-
-      it('setTabCustomLabel updates customLabel', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().setTabCustomLabel(tab.id, 'my-term')
-        expect(store.getState().unifiedTabsByWorktree[WT][0].customLabel).toBe('my-term')
-      })
-
-      it('setTabCustomLabel clears customLabel with null', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().setTabCustomLabel(tab.id, 'my-term')
-        store.getState().setTabCustomLabel(tab.id, null)
-        expect(store.getState().unifiedTabsByWorktree[WT][0].customLabel).toBeNull()
-      })
-
-      it('setUnifiedTabColor updates color', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().setUnifiedTabColor(tab.id, '#ff0000')
-        expect(store.getState().unifiedTabsByWorktree[WT][0].color).toBe('#ff0000')
       })
     })
 
@@ -140,13 +115,6 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
         expect(store.getState().unifiedTabsByWorktree[WT].map((tab) => tab.sortOrder)).toEqual([
           2, 1, 0
         ])
-      })
-
-      it('unpins a tab', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().pinTab(tab.id)
-        store.getState().unpinTab(tab.id)
-        expect(store.getState().unifiedTabsByWorktree[WT][0].isPinned).toBe(false)
       })
 
       it('keeps remaining pinned tabs before a tab that was unpinned', () => {

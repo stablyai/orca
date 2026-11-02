@@ -132,6 +132,38 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', 'local')
   })
 
+  it('holds a single browsed folder the WSL host offer takes, and adds nothing', async () => {
+    const path = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+    pickFolders.mockResolvedValue([path])
+    const offerWslHost = vi.fn(() => true)
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+    const { handleBrowse } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      openModal,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel,
+      offerWslHost
+    })
+
+    await handleBrowse()
+
+    expect(offerWslHost).toHaveBeenCalledWith(path, 'local_folder_picker')
+    expect(scanNestedRepos).not.toHaveBeenCalled()
+    expect(addRepoPath).not.toHaveBeenCalled()
+    expect(setIsAdding).toHaveBeenLastCalledWith(false)
+  })
+
   it('skips nested-review folders in a multi-folder add and continues with git folders', async () => {
     pickFolders.mockResolvedValue(['/projects/monorepo', '/projects/later'])
     scanNestedRepos.mockImplementationOnce(async (_path, _connectionId, controls) => {

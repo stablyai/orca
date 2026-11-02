@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { onMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../../shared/agent-session-host-authority'
+import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../../shared/agent-session/agent-session-host-authority'
 import { deletePtyOwnership, setPtyOwnership } from './provider/ownership-state'
 import { registerPtyHandlers } from './register-handlers'
 import { setLocalPtyProvider } from './provider/registry'

@@ -33,6 +33,7 @@ export { getCommitDiff } from './source-control/commit-diff'
 export {
   bulkStageFiles,
   bulkUnstageFiles,
+  resolveConflict,
   stageFile,
   stageWorktreeChanges,
   unstageFile

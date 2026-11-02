@@ -3,13 +3,13 @@ import type { StructuredAgentSessionConversationLifetimeHost } from './structure
 import {
   AgentSessionRefusalError,
   agentSessionRefusalError
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import type {
   AgentSessionSwitchDeadline,
   AgentSessionSwitchResult,
   AgentSessionSwitchReceipt
-} from '../../../shared/agent-session-switch-execution'
+} from '../../../shared/agent-session/requests/agent-session-switch-execution'
 
 // Commands outlive the read handle they may close themselves.
 export type SwitchCommand = {

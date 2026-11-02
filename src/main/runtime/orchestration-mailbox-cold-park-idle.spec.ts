@@ -122,7 +122,7 @@ describe('orchestration mailbox cold-park idle continuation', () => {
     db.close()
   })
 
-  it('releases a delayed pointer watermark after an explicit check claims the batch', async () => {
+  it('submits a delayed pointer write after an explicit check claims the batch', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-delayed-pointer-check-')
     const harness = createRuntime(db)
@@ -153,8 +153,8 @@ describe('orchestration mailbox cold-park idle continuation', () => {
     expect(settleFirstPointerWrite).toBeDefined()
 
     settleFirstPointerWrite?.(stubWriteSettlement(true))
-    await vi.advanceTimersByTimeAsync(0)
-    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(1)
     await checkBoundMailbox(harness.runtime, { ack: checked.deliveryId! })
 
     const later = insertDirectRunMessage(db, run.id, 'Deliver after pointer settlement')
@@ -163,7 +163,7 @@ describe('orchestration mailbox cold-park idle continuation', () => {
     expect(pointerCount(harness.write)).toBe(2)
 
     await vi.advanceTimersByTimeAsync(500)
-    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(1)
+    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(2)
     expect(db.getMessageById(later.id)?.delivered_at).toEqual(expect.any(String))
     db.close()
   })

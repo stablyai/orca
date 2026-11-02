@@ -13,7 +13,7 @@ import {
 import { deleteRemovedTerminalScrollbackSnapshots } from './persistence/loading-store/terminal-session-cleanup'
 import { deleteRemovedTerminalScrollbackSnapshotsAsync } from './terminal-scrollback-snapshot-async-migration'
 import { extractSessionOwnersForTransfer } from './orca-profiles/profile-session-owner-transfer'
-import type { SleepingAgentSessionRecord } from '../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../shared/agent-session/lifecycle/agent-session-resume'
 
 const roots: string[] = []
 afterEach(() => {

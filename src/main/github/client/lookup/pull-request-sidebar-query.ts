@@ -29,7 +29,7 @@ const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $ch
     pullRequest(number: $number) {
       number title state url updatedAt isDraft mergeable reviewDecision mergeStateStatus
       autoMergeRequest { enabledAt }
-      baseRefName headRefName baseRefOid headRefOid
+      baseRefName headRefName baseRefOid headRefOid isCrossRepository
       headRepositoryOwner { login }
       headRepository { name }
       ${CHECKS_FIELDS}
@@ -88,6 +88,7 @@ const pullRequestSchema = z.object({
   headRefName: z.string(),
   baseRefOid: z.string().nullable(),
   headRefOid: z.string().nullable(),
+  isCrossRepository: z.boolean().optional(),
   headRepositoryOwner: z.object({ login: z.string() }).nullable(),
   headRepository: z.object({ name: z.string() }).nullable(),
   commits: commitsSchema,

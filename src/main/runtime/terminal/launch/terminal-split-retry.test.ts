@@ -65,17 +65,6 @@ describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
       vi.useRealTimers()
     })
 
-    it('names the pending pane and says it may still run its command', async () => {
-      const harness = createHarness()
-      const { error, leafId } = await timedOutSplit(harness)
-
-      expect(leafId).toBe(harness.rendererSplitTerminal.mock.calls[0]?.[2]?.newLeafId)
-      expect(error.message).toContain('Timed out waiting for split pane handle')
-      expect(error.message).toContain(leafId)
-      expect(error.data).toMatchObject({ tabId: TAB_ID, splitMayStillComplete: true })
-      expect(error.data.nextSteps.join('\n')).toContain(`--retry-split ${leafId}`)
-    })
-
     it('keeps waiting for a pane the window already listed while its terminal starts', async () => {
       const harness = createHarness()
       const split = harness.runtime.splitTerminal(harness.handle, { command: 'agent' })

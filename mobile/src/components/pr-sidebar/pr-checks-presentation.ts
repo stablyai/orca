@@ -146,16 +146,6 @@ export function prCheckKey(check: PRCheckDetail): string {
   return `name:${check.name}`
 }
 
-// Use sorted list for first-failure auto-expand so chosen row matches rendered actionable order.
-export function firstFailingCheckKey(checks: readonly PRCheckDetail[]): string | null {
-  for (const check of checks) {
-    if (checkOutcome(check) === 'failure') {
-      return prCheckKey(check)
-    }
-  }
-  return null
-}
-
 export type PRStateBadge = {
   label: string
   token: MobileStatusToken

@@ -7,7 +7,7 @@ import type {
   RuntimeAgentSessionRpcCaller,
   RuntimeEnsureAgentSessionRequest,
   RuntimeEnsureAgentSessionResult
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import {
   canonicalizeAgentSessionIdentity,
   type ProviderExecutionNamespace
@@ -16,10 +16,10 @@ import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { buildAgentResumeStartupPlan } from '../../../../shared/tui-agent-startup'
 import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { withAgentSessionAccountEnv } from '../../agent-session-account-env'
+import { withAgentSessionAccountEnv } from '../../agent-session/agent-session-account-env'
 import { resolveWslHostAgentResumeInputs } from '../../wsl-host-agent-terminal-launch'
 import {
-  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 
@@ -142,7 +142,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
         agentArgs:
           request.agentArgs !== undefined
             ? request.agentArgs
-            : resolveTuiAgentLaunchArgs(request.agent, settings),
+            : resolveTuiAgentLaunchRawArgs(request.agent, settings, undefined, shell),
         agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings),
         ompResumeFilePath: request.ompResumeFilePath,
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),

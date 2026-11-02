@@ -65,11 +65,7 @@ async function listTrackedPathSpecs(
   const trackedPaths: string[] = []
   const commands = bulkPathspecCommands(['ls-files', '-z', '--'], filePaths, worktreePath, options)
   for (const args of commands) {
-    const { stdout } = await gitExecFileAsync(args, {
-      ...gitOptionsForWorktree(worktreePath, options),
-      // Fence WSL rc banners: a corrupted first NUL record could misclassify a tracked path as untracked.
-      captureWslLoginShellOutput: true
-    })
+    const { stdout } = await gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
     // Iterate instead of spreading: tracked directories can exceed the JS argument limit.
     for (const trackedPath of stdout.split('\0')) {
       if (trackedPath) {

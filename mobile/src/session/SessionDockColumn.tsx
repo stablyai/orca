@@ -14,8 +14,6 @@ type Props = {
   name: string
   availableWidth: number
   onRequestClose: () => void
-  onFileOpenStart?: () => void
-  onOpenedFileDiff?: (relativePath: string) => void
   onOpenFile?: (relativePath: string) => void
 }
 
@@ -29,8 +27,6 @@ export function SessionDockColumn({
   name,
   availableWidth,
   onRequestClose,
-  onFileOpenStart,
-  onOpenedFileDiff,
   onOpenFile
 }: Props) {
   useMobileColorScheme()
@@ -46,8 +42,6 @@ export function SessionDockColumn({
         worktreeId={worktreeId}
         name={name}
         onRequestClose={onRequestClose}
-        onFileOpenStart={onFileOpenStart}
-        onOpenedFileDiff={onOpenedFileDiff}
         onOpenFile={onOpenFile}
       />
     </View>
@@ -61,8 +55,6 @@ const DockPanelContent = memo(function DockPanelContent({
   worktreeId,
   name,
   onRequestClose,
-  onFileOpenStart,
-  onOpenedFileDiff,
   onOpenFile
 }: DockPanelContentProps) {
   // Reuse the source-control hub so dock icon switches retain commit draft, visited tabs and scroll.
@@ -72,12 +64,9 @@ const DockPanelContent = memo(function DockPanelContent({
         hostId={hostId}
         worktreeId={worktreeId}
         name={name}
-        origin="session"
         embedded
         initialTab={activePanel === 'pr' ? 'pr' : 'changes'}
         onRequestClose={onRequestClose}
-        onFileOpenStart={onFileOpenStart}
-        onOpenedFileDiff={onOpenedFileDiff}
       />
     )
   }

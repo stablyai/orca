@@ -70,8 +70,9 @@ it('retains history after partial filesystem failure and releases it after a suc
   await symlink(outside, join(dataDir, key), process.platform === 'win32' ? 'junction' : 'dir')
   await expect(removeThroughPluginIpc(key)).rejects.toThrow('outside')
   await expect(stat(join(getUserPluginsDir(root), key))).rejects.toThrow()
-  expect((await readPluginLockfile(getUserPluginsDir(root))).plugins[key]).toBeDefined()
-  expect(store.getSettings().pluginConsents[key]).toBeDefined()
+  // Consent is revoked before deletion and the lock drops the entry whose install dir is gone.
+  expect((await readPluginLockfile(getUserPluginsDir(root))).plugins[key]).toBeUndefined()
+  expect(store.getSettings().pluginConsents[key]).toBeUndefined()
   expect(service.findValidPlugin(key)).not.toBeNull()
   expect(service.getLogs(key)).toHaveLength(200)
   await rm(join(dataDir, key))
