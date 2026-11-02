@@ -244,7 +244,9 @@ describe('Claude host-awaited open', () => {
       const error = await open
       const typed = startupAcquisitionRefusal(error)?.reason === 'savedConversationMissing'
       expect(errorRows(appendItem)).toHaveLength(typed ? 0 : 1)
-      expect(typed || (error as Error).message === 'initialize rejected').toBe(true)
+      expect(typed || (error instanceof Error && error.message === 'initialize rejected')).toBe(
+        true
+      )
     }
   )
 
