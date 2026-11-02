@@ -13,14 +13,11 @@ import { extractExecError } from '../exec-error'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 
-// A file Git cannot read (a Windows sharing lock, or a POSIX permission error) makes it abort the
-// whole unstaged pass with "cannot hash <path>"; exclude each such path so the other rows count.
+// Git aborts the whole diff on a file it cannot read (a Windows sharing lock, POSIX permissions).
 const UNREADABLE_PATH_PATTERN = /^fatal: cannot hash (.+)$/m
-// One path per failed run; bound the retries when many files are held open.
 const MAX_UNREADABLE_PATH_EXCLUSIONS = 8
 
-// Reuse a worktree's locked paths so a held lock costs one Git run per poll; re-probe them on the
-// line-stats cache TTL so a released file is counted again.
+// Keeps a held lock to one Git run per poll until the next re-probe.
 const UNREADABLE_PATH_MEMORY_MS = GIT_STATUS_LINE_STATS_CACHE_MAX_AGE_MS
 const MAX_REMEMBERED_UNREADABLE_WORKTREES = 64
 
@@ -28,12 +25,6 @@ type NumstatPass = { stats: Map<string, GitLineStats>; complete: boolean }
 
 const rememberedUnreadablePaths = new Map<string, { paths: string[]; storedAt: number }>()
 
-/** Test hook: forget locked paths remembered by earlier passes. */
-export function clearRememberedUnreadableNumstatPaths(): void {
-  rememberedUnreadablePaths.clear()
-}
-
-/** Reuse exclusions without extending their TTL, so released paths are eventually retried. */
 function recallUnreadablePaths(key: string, now: number): { paths: string[]; storedAt: number } {
   const remembered = rememberedUnreadablePaths.get(key)
   if (!remembered || now - remembered.storedAt >= UNREADABLE_PATH_MEMORY_MS) {
@@ -43,7 +34,6 @@ function recallUnreadablePaths(key: string, now: number): { paths: string[]; sto
   return { paths: [...remembered.paths], storedAt: remembered.storedAt }
 }
 
-/** Bound exclusion memory across worktrees while preserving the original re-probe deadline. */
 function rememberUnreadablePaths(key: string, paths: string[], storedAt: number): void {
   rememberedUnreadablePaths.delete(key)
   if (paths.length === 0) {
@@ -58,12 +48,6 @@ function rememberUnreadablePaths(key: string, paths: string[], storedAt: number)
   }
 }
 
-/** Extract the root-relative path from Git's cannot-hash failure, or null for other errors. */
-export function parseUnreadableNumstatPath(stderr: string): string | null {
-  return UNREADABLE_PATH_PATTERN.exec(stderr)?.[1]?.trimEnd() || null
-}
-
-/** Keep readable rows by excluding unreadable paths, marking partial passes incomplete. */
 async function runNumstat(
   worktreePath: string,
   cached: boolean,
@@ -102,13 +86,13 @@ async function runNumstat(
       if (options.signal?.aborted) {
         throw error
       }
-      const unreadablePath = parseUnreadableNumstatPath(extractExecError(error).stderr)
+      const unreadablePath =
+        UNREADABLE_PATH_PATTERN.exec(extractExecError(error).stderr)?.[1]?.trimEnd() || null
       if (unreadablePath === null || excluded.includes(unreadablePath)) {
         // null marks the pass incomplete and uncacheable; an empty map would imply success.
         return null
       }
       if (excluded.length >= MAX_UNREADABLE_PATH_EXCLUSIONS) {
-        // Avoid repeating the capped retry sequence on every poll until the original TTL expires.
         rememberUnreadablePaths(memoryKey, excluded, storedAt)
         return null
       }

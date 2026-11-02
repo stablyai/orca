@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearRememberedUnreadableNumstatPaths } from './source-control/status-line-stats'
+import { GIT_STATUS_LINE_STATS_CACHE_MAX_AGE_MS } from '../../shared/git-status-line-stats-cache'
 import { getStatus, invalidateGitReadCaches } from './status'
 
 // chmod 000 gives Git the same "cannot hash" failure as a Windows sharing lock.
@@ -20,7 +20,6 @@ function git(args: string[], cwd = repo): void {
 describe.skipIf(!canDenyRead)('line counts with an unreadable file', () => {
   beforeEach(async () => {
     invalidateGitReadCaches()
-    clearRememberedUnreadableNumstatPaths()
     root = await mkdtemp(join(tmpdir(), 'orca-status-unreadable-'))
     repo = join(root, 'repo')
     const emptyConfig = join(root, 'empty-git-config')
@@ -31,19 +30,23 @@ describe.skipIf(!canDenyRead)('line counts with an unreadable file', () => {
     git(['config', 'user.name', 'Test'])
     git(['config', 'user.email', 'test@example.invalid'])
     await writeFile(join(repo, 'locked.txt'), 'alpha\n')
+    await writeFile(join(repo, 'locked-too.txt'), 'gamma\n')
     await writeFile(join(repo, 'old.txt'), 'one\ntwo\nthree\n')
     await writeFile(join(repo, 'ok.txt'), 'beta\n')
     git(['add', '.'])
     git(['commit', '-qm', 'baseline'])
     await writeFile(join(repo, 'locked.txt'), 'alpha\nchanged\n')
+    await writeFile(join(repo, 'locked-too.txt'), 'gamma\nchanged\n')
     await writeFile(join(repo, 'ok.txt'), 'beta\nchanged\n')
     await chmod(join(repo, 'locked.txt'), 0o000)
+    await chmod(join(repo, 'locked-too.txt'), 0o000)
   })
 
   afterEach(async () => {
     await chmod(join(repo, 'locked.txt'), 0o644)
-    clearRememberedUnreadableNumstatPaths()
+    await chmod(join(repo, 'locked-too.txt'), 0o644)
     invalidateGitReadCaches()
+    vi.restoreAllMocks()
     vi.unstubAllEnvs()
     await rm(root, { recursive: true, force: true })
   })
@@ -52,15 +55,19 @@ describe.skipIf(!canDenyRead)('line counts with an unreadable file', () => {
     const { entries } = await getStatus(repo)
 
     expect(entries).toEqual([
+      { path: 'locked-too.txt', status: 'modified', area: 'unstaged' },
       { path: 'locked.txt', status: 'modified', area: 'unstaged' },
       { path: 'ok.txt', status: 'modified', area: 'unstaged', added: 1, removed: 0 }
     ])
 
     await chmod(join(repo, 'locked.txt'), 0o644)
-    clearRememberedUnreadableNumstatPaths()
+    await chmod(join(repo, 'locked-too.txt'), 0o644)
+    const pastExclusionExpiry = performance.now() + GIT_STATUS_LINE_STATS_CACHE_MAX_AGE_MS
+    vi.spyOn(performance, 'now').mockReturnValue(pastExclusionExpiry)
     invalidateGitReadCaches()
 
     expect((await getStatus(repo)).entries).toEqual([
+      { path: 'locked-too.txt', status: 'modified', area: 'unstaged', added: 1, removed: 0 },
       { path: 'locked.txt', status: 'modified', area: 'unstaged', added: 1, removed: 0 },
       { path: 'ok.txt', status: 'modified', area: 'unstaged', added: 1, removed: 0 }
     ])

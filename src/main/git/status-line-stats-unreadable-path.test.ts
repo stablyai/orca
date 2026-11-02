@@ -1,4 +1,3 @@
-// An unreadable file makes `git diff --numstat` abort on it; the other rows must still count.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitStatusEntry } from '../../shared/git-status-types'
 
@@ -11,22 +10,15 @@ vi.mock('./runner', () => ({
   gitStreamStdout: vi.fn()
 }))
 
-import {
-  attachLineStats,
-  clearRememberedUnreadableNumstatPaths,
-  parseUnreadableNumstatPath
-} from './source-control/status-line-stats'
+import { attachLineStats } from './source-control/status-line-stats'
 import { GIT_STATUS_LINE_STATS_CACHE_MAX_AGE_MS } from '../../shared/git-status-line-stats-cache'
 
-const WORKTREE = '/repo'
 const LOCKED = 'data/app state.json'
 
-/** Supply a modified row to trigger the unstaged numstat pass. */
 function unstaged(entryPath: string): GitStatusEntry {
   return { path: entryPath, area: 'unstaged', status: 'modified' }
 }
 
-/** Reproduce Git's sharing-violation stderr so retries exercise the real error parser. */
 function cannotHash(entryPath: string): Error {
   return Object.assign(new Error('Command failed: git diff'), {
     stdout: '',
@@ -34,62 +26,22 @@ function cannotHash(entryPath: string): Error {
   })
 }
 
-/** Inspect literal exclusions without coupling assertions to unrelated Git options. */
 function excludedPaths(argv: string[]): string[] {
   return argv.filter((arg) => arg.startsWith(':(top,exclude,literal)'))
 }
 
-describe('unstaged line stats with a file another process holds open', () => {
+describe('unreadable path exclusions across polls', () => {
+  let worktreeCount = 0
+  let WORKTREE: string
+
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    clearRememberedUnreadableNumstatPaths()
+    // Exclusions are remembered per worktree, so each test gets a fresh one.
+    WORKTREE = `/repo-${worktreeCount++}`
   })
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('reads the locked path from Git stderr', () => {
-    expect(
-      parseUnreadableNumstatPath(
-        `error: open("${LOCKED}"): Permission denied\nfatal: cannot hash ${LOCKED}\n`
-      )
-    ).toBe(LOCKED)
-    expect(parseUnreadableNumstatPath('fatal: not a git repository')).toBeNull()
-  })
-
-  it('excludes the locked path and counts the remaining rows without caching', async () => {
-    gitExecFileAsyncMock
-      .mockRejectedValueOnce(cannotHash(LOCKED))
-      .mockResolvedValueOnce({ stdout: '3\t1\tsrc/a.ts\0', stderr: '' })
-    const entries = [unstaged('src/a.ts'), unstaged(LOCKED)]
-
-    const complete = await attachLineStats(WORKTREE, entries)
-
-    expect(complete).toBe(false)
-    expect(entries[0]).toMatchObject({ added: 3, removed: 1 })
-    expect(entries[1].added).toBeUndefined()
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(excludedPaths(gitExecFileAsyncMock.mock.calls[0][0])).toEqual([])
-    expect(excludedPaths(gitExecFileAsyncMock.mock.calls[1][0])).toEqual([
-      `:(top,exclude,literal)${LOCKED}`
-    ])
-  })
-
-  it('accumulates one exclusion per locked file', async () => {
-    gitExecFileAsyncMock
-      .mockRejectedValueOnce(cannotHash('a.db'))
-      .mockRejectedValueOnce(cannotHash('b.log'))
-      .mockResolvedValueOnce({ stdout: '1\t0\tsrc/a.ts\0', stderr: '' })
-    const entries = [unstaged('src/a.ts'), unstaged('a.db'), unstaged('b.log')]
-
-    await attachLineStats(WORKTREE, entries)
-
-    expect(entries[0]).toMatchObject({ added: 1, removed: 0 })
-    expect(excludedPaths(gitExecFileAsyncMock.mock.calls[2][0])).toEqual([
-      ':(top,exclude,literal)a.db',
-      ':(top,exclude,literal)b.log'
-    ])
   })
 
   it('stops retrying when Git reports a path it already excluded', async () => {
