@@ -42,12 +42,13 @@ Use the lowest `execution` profile that covers the request; it decides what the 
 | A panel backed by its own Node code, storage or settings  | `trusted-worker`; `main`, a panel, `capabilities`, `settings`       | `--template worker-panel`                        |
 | Settings the user edits in Orca's Settings                | `contributes.settings` and `settings:own`                           | `references/manifest.md`                         |
 | Reacting to workspace or agent status changes             | `trusted-worker`; `main`, `contributes.events`, `*:read` capability | example `hello-orca`                             |
+| Rewriting or refusing terminal text or workspace creates  | `trusted-worker`; `main`, `contributes.hooks`                       | `--template hook`; `references/recipes.md`       |
 | A virtual machine environment recipe                      | `declarative`; `contributes.vmRecipes`                              | hand-written; fields in `references/manifest.md` |
 | A status bar item (a worker can update it)                | `declarative`; `contributes.statusBarItems`                         | `references/recipes.md`                          |
 
-Examples are in `examples/plugins/` of github.com/stablyai/orca. Sidebar cards,
-task sources, connections, MCP servers, skills and hooks are reserved and not buildable yet: say
-so instead of faking them. A panel cannot type into a terminal; only a worker
+Examples are in `examples/plugins/` of github.com/stablyai/orca. Sidebar cards, task sources,
+connections, MCP servers and skills are reserved and not buildable yet: say so instead of faking
+them. A panel cannot type into a terminal; only a worker
 with `terminal:send` can.
 
 ## No build step
@@ -120,7 +121,7 @@ need (`--references` lists them; `--full` if `--reference` is rejected).
 | -------------------------------------------------------------------- | -------------------------- |
 | Reading `dev watch` events; shots, `open`, `dev emit`; test examples | `references/workflow.md`   |
 | The full test kit: `mount`, `mountWorker`, `mockHost`, every act     | `references/testing.md`    |
-| A panel with its own worker, storage, settings; agent status; events | `references/recipes.md`    |
+| A worker panel, storage, settings; agent status; events; hooks       | `references/recipes.md`    |
 | Writing a components panel: components, props, atoms, `host`         | `references/components.md` |
 | Calling the host from a worker, frame or panel; capabilities         | `references/host-api.md`   |
 | Subscribing to worker, frame or panel events and their payloads      | `references/events.md`     |
