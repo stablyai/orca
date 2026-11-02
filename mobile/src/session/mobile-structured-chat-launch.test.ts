@@ -7,11 +7,13 @@ import pageAsyncStorage, {
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch-runtime-capability'
 import { AGENT_SESSION_AGENTS_METHOD } from '../../../src/shared/agent-session/agent-session-registered-agents'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
+import { HERMES_TRANSCRIPT_RUNTIME_CAPABILITY } from '../../../src/shared/native-chat/native-chat-hermes-capability'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
   loadMobileStructuredChatLaunchContext,
   readMobileStructuredChatLaunchContext,
+  mobileNewTabHostLaunchSurface,
   mobileStructuredChatLaunchSurface,
   withMobileStructuredChatLaunch,
   type MobileStructuredChatLaunchContext
@@ -80,19 +82,58 @@ describe('mobileStructuredChatLaunchSurface', () => {
     expect(mobileStructuredChatLaunchSurface('antigravity', null)).toBeUndefined()
   })
 
-  it('marks only those new-tab rows as opening in chat', () => {
-    expect(
-      withMobileStructuredChatLaunch(
-        [
-          { agent: 'antigravity', label: 'Antigravity' },
-          { agent: 'claude', label: 'Claude' }
-        ],
-        chatHost
+  it('marks a new tab that opens in chat and leaves a terminal unmarked', () => {
+    const rows = [
+      { agent: 'claude', label: 'Claude' },
+      { agent: 'codex', label: 'Codex' },
+      { agent: 'grok', label: 'Grok' },
+      { agent: 'antigravity', label: 'Antigravity' },
+      { agent: 'gemini', label: 'Gemini' },
+      { agent: 'hermes', label: 'Hermes' }
+    ]
+    const hinted = (context: MobileStructuredChatLaunchContext | null) =>
+      withMobileStructuredChatLaunch(rows, context).flatMap((row) =>
+        row.opensAsChat ? [row.agent] : []
       )
-    ).toEqual([
-      { agent: 'antigravity', label: 'Antigravity', opensAsChat: true },
-      { agent: 'claude', label: 'Claude' }
-    ])
+
+    expect(hinted(chatHost)).toEqual(['claude', 'codex', 'grok', 'antigravity'])
+    expect(mobileNewTabHostLaunchSurface('claude', chatHost)).toBeUndefined()
+    expect(mobileNewTabHostLaunchSurface('codex', chatHost)).toBeUndefined()
+    expect(mobileNewTabHostLaunchSurface('grok', chatHost)).toBeUndefined()
+    expect(mobileNewTabHostLaunchSurface('antigravity', chatHost)).toBe('chat')
+    expect(mobileNewTabHostLaunchSurface('gemini', chatHost)).toBeUndefined()
+    expect(mobileNewTabHostLaunchSurface('hermes', chatHost)).toBe('terminal')
+
+    const terminalDefault: MobileStructuredChatLaunchContext = {
+      ...chatHost,
+      defaultView: 'terminal'
+    }
+    expect(hinted(terminalDefault)).toEqual([])
+    expect(mobileNewTabHostLaunchSurface('antigravity', terminalDefault)).toBeUndefined()
+    expect(mobileNewTabHostLaunchSurface('claude', terminalDefault)).toBeUndefined()
+
+    const hermesChat: MobileStructuredChatLaunchContext = {
+      ...chatHost,
+      registeredAgents: ['hermes', 'antigravity', 'claude'],
+      hostCapabilities: [
+        AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
+        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+        HERMES_TRANSCRIPT_RUNTIME_CAPABILITY
+      ]
+    }
+    expect(hinted(hermesChat)).toEqual(['claude', 'codex', 'grok', 'antigravity', 'hermes'])
+    expect(mobileNewTabHostLaunchSurface('hermes', hermesChat)).toBe('terminal')
+
+    const unproven: MobileStructuredChatLaunchContext = {
+      ...chatHost,
+      registeredAgents: [],
+      canRequestSurface: false,
+      hostCapabilities: []
+    }
+    expect(hinted(unproven)).toEqual(['claude', 'codex', 'grok'])
+    expect(mobileNewTabHostLaunchSurface('antigravity', unproven)).toBeUndefined()
+    expect(mobileNewTabHostLaunchSurface('claude', null)).toBeUndefined()
+    expect(hinted(null)).toEqual([])
   })
 })
 
