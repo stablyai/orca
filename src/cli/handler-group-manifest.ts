@@ -1,3 +1,4 @@
+import { ACCOUNT_HANDLER_GROUP } from './account-handler-group'
 import type { CommandHandler } from './dispatch'
 import { BROWSER_HANDLER_GROUPS } from './browser/browser-handler-groups'
 import { JIRA_HANDLER_GROUP } from './jira-handler-group'
@@ -32,18 +33,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     keys: ['serve service install', 'serve service status', 'serve service uninstall'],
     load: async () => (await import('./handlers/serve-service.js')).SERVE_SERVICE_HANDLERS
   },
-  {
-    name: 'account',
-    keys: [
-      'account add',
-      'account list',
-      'account select',
-      'account rm',
-      'account auto-switch',
-      'account auth-proxy'
-    ],
-    load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
-  },
+  ACCOUNT_HANDLER_GROUP,
   {
     name: 'artifacts',
     keys: [

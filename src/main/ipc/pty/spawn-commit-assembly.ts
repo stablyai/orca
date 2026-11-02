@@ -1,3 +1,4 @@
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
 import { readTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtySpawnSizeSeed } from './spawn-options-assembly'
 import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
@@ -70,6 +71,8 @@ export type PtySpawnCommitState = {
   /** Before the provider started anything, so no output of this spawn's process predates it. */
   spawnRequestedAt?: number
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
+  isClaudeLaunch: boolean
+  claudeAuth: ClaudeRuntimeAuthPreparation | null
   launchCommand: string | undefined
   preSpawnHiddenMarkId: string | null
   replacedPaneOwner?: ReplacedPaneOwner | null

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerPty, unregisterPty } from '../../memory/pty-registry'
 import {
   _internals,
@@ -26,6 +26,9 @@ import {
 } from './claude-auth-proxy-slot-owners'
 
 const registered: string[] = []
+/** A fixed clock: the status prune compares allocation times against Date.now(). */
+const NOW = Date.parse('2026-10-30T12:00:00.000Z')
+const STALE_ALLOCATED_AT = NOW - CLAUDE_AUTH_PROXY_UNBOUND_SLOT_GRACE_MS - 1
 
 function trackPty(ptyId: string): void {
   registerPty({ ptyId, worktreeId: null, sessionId: null, paneKey: null, pid: null })
@@ -41,6 +44,7 @@ function requireProxy(): NonNullable<ReturnType<typeof getClaudeAuthProxy>> {
 }
 
 afterEach(async () => {
+  vi.useRealTimers()
   for (const ptyId of registered.splice(0)) {
     unregisterPty(ptyId)
   }
@@ -77,6 +81,7 @@ describe('claude auth proxy slot owners', () => {
 
 describe('claudeAuthProxyStatus slot prune', () => {
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW })
     await startClaudeAuthProxy()
   })
 
@@ -85,10 +90,7 @@ describe('claudeAuthProxyStatus slot prune', () => {
     const port = proxy.port()
     const leaked = proxy.allocateSlot('leaked')
     const stale = proxy.allocateSlot('stale')
-    noteClaudeAuthProxySlotAllocated(
-      stale,
-      Date.now() - CLAUDE_AUTH_PROXY_UNBOUND_SLOT_GRACE_MS - 1
-    )
+    noteClaudeAuthProxySlotAllocated(stale, STALE_ALLOCATED_AT)
     const fresh = proxy.allocateSlot('fresh')
     noteClaudeAuthProxySlotAllocated(fresh)
     const live = proxy.allocateSlot('live')
@@ -111,10 +113,7 @@ describe('claudeAuthProxyStatus slot prune', () => {
     bindClaudeAuthProxySlotToPty(live, 'pty-live')
     bindClaudeAuthProxySlotToPty(dead, 'pty-dead')
     noteClaudeAuthProxySlotAllocated(fresh)
-    noteClaudeAuthProxySlotAllocated(
-      stale,
-      Date.now() - CLAUDE_AUTH_PROXY_UNBOUND_SLOT_GRACE_MS - 1
-    )
+    noteClaudeAuthProxySlotAllocated(stale, STALE_ALLOCATED_AT)
 
     const slots = claudeAuthProxyStatus().slots.map((entry) => entry.slot)
     expect(slots).toContain(fresh)

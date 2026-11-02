@@ -519,6 +519,7 @@ describe('claude auth proxy', () => {
     })
     proxies.push(idleProxy)
     await idleProxy.start()
+    // ast-grep-ignore: test-no-wall-clock -- The proxy's real idle timer must elapse before the 502.
     const idleStarted = Date.now()
     const idleOutcome = await proxyRequest(
       `${idleProxy.slotBaseUrl(idleProxy.allocateSlot('account-a'))}v1/messages`,
@@ -529,6 +530,7 @@ describe('claude auth proxy', () => {
     )
     // The outgoing idle timer answers 502. The incoming socket timer can reset the client first.
     expect(idleOutcome === 502 || idleOutcome === 'reset').toBe(true)
+    // ast-grep-ignore: test-no-wall-clock -- Measures the real idle-timeout window the proxy enforces.
     const idleElapsed = Date.now() - idleStarted
     expect(idleElapsed).toBeGreaterThan(150)
     expect(idleElapsed).toBeLessThan(1500)
@@ -596,11 +598,13 @@ describe('claude auth proxy', () => {
       req.end('{}')
     })
     await firstChunk
+    // ast-grep-ignore: test-no-wall-clock -- stop() must drain a live stream within a real bound.
     const startedAt = Date.now()
     const stopping = proxy.stop()
     await expect(proxyRequest(url, { timeoutMs: 500 })).rejects.toThrow()
     release()
     await stopping
+    // ast-grep-ignore: test-no-wall-clock -- Measures the real stop() bound.
     expect(Date.now() - startedAt).toBeLessThan(1000)
     await expect(body).resolves.toBe('data: one\n\ndata: two\n\n')
   })
