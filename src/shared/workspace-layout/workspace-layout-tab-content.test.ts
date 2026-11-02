@@ -67,6 +67,25 @@ describe('setTabContent: a switch changes what a tab holds, never the tab', () =
     expect(back.model.workspaces[WS]!.groups[0]!.tabOrder).toEqual(order)
   })
 
+  it('takes the chat from another tab that showed it, which goes and is never reopenable', () => {
+    const { ctx, model, switched, right } = setup()
+    const opened = build(
+      ctx,
+      [{ type: 'openAgentSessionTab', workspace: WS, sessionId: 'session-1', agent: 'codex' }],
+      model
+    )
+    const duplicate = opened.results[0]!.tabId!
+    const chat = build(ctx, [toChat(switched, switched)], opened.model)
+    expect(chat.results[0]).toEqual({ tabId: switched, retargeted: true })
+    const workspace = chat.model.workspaces[WS]!
+    expect(
+      workspace.tabs.filter((tab) => tab.entityId === 'session-1').map((tab) => tab.id)
+    ).toEqual([switched])
+    expect(workspace.groups[0]!.tabOrder).not.toContain(duplicate)
+    expect(workspace.groups[0]!.tabOrder).toContain(right)
+    expect(Object.keys(workspace.closedTerminalTabs ?? {})).toEqual([switched])
+  })
+
   it('a retry after a lost answer finds its destination already there', () => {
     const { ctx, model, switched } = setup()
     const chat = build(ctx, [toChat(switched, switched)], model)

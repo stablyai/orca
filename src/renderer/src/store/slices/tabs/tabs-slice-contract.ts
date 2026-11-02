@@ -104,6 +104,8 @@ export type TabsSlice = {
       preserveWorktreeSelection?: boolean
       recordInteraction?: boolean
       terminalRetirementHandled?: boolean
+      /** The chat lives on in another tab (a switch moved it there): only this tab goes. */
+      chatRetirementHandled?: boolean
     }
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (

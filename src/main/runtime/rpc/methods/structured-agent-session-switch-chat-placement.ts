@@ -38,12 +38,11 @@ export async function placeSwitchChat(
   const content = { kind: 'agent-session' as const, sessionId, agent: chat.agent }
   const shown = ctx.runtime.mobileSessionTabsByWorktree.get(workspaceId)
   let recorded = false
-  // A chat already open in a tab (another one, or this switch's own after a lost answer) stays
-  // where it is and is selected there, as opening any open chat does.
+  // The switched tab becomes the conversation's chat tab, also when the chat was open in another
+  // tab: that one goes in the same write, and the chat's one record moves here (Brennan: "same
+  // session, so same tab").
   const switched =
-    source.terminalId &&
-    source.wholeTab &&
-    !logicalTabHolding(shown, { kind: 'agent-session', sessionId })
+    source.terminalId && source.wholeTab
       ? await ctx.runtime.switchTabContent(
           workspaceId,
           {

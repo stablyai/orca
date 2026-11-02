@@ -153,6 +153,44 @@ it.each([
   }
 )
 
+it('takes the chat from another tab that showed it: that tab goes, the chat stays open', async () => {
+  seed(SWITCHED)
+  const { closeStructuredAgentSession } = await import('@/runtime/structured-agent-session-close')
+  store.setState({
+    unifiedTabsByWorktree: {
+      [WORKTREE]: [
+        ...tabs(),
+        makeUnifiedTab({
+          id: 'open-chat',
+          entityId: 'session-open',
+          groupId: GROUP,
+          worktreeId: WORKTREE,
+          contentType: 'agent-session'
+        })
+      ]
+    },
+    groupsByWorktree: {
+      [WORKTREE]: [{ ...group()!, tabOrder: ['before', SWITCHED, 'after', 'open-chat'] }]
+    }
+  })
+  expect(
+    setWindowTabContent({
+      worktreeId: WORKTREE,
+      tabId: SWITCHED,
+      expectSource: { kind: 'terminal', terminalId: SWITCHED },
+      content: { kind: 'agent-session', sessionId: 'session-open', agent: 'codex' },
+      focus: false
+    })
+  ).toEqual({ retargeted: true, tabId: SWITCHED })
+  expect(
+    tabs()
+      .filter((tab) => tab.entityId === 'session-open')
+      .map((tab) => tab.id)
+  ).toEqual([SWITCHED])
+  expect(group()?.tabOrder).toEqual(['before', SWITCHED, 'after'])
+  expect(closeStructuredAgentSession).not.toHaveBeenCalled()
+})
+
 it('a chat tab takes the switch’s terminal under the terminal’s own id and keeps its own', () => {
   seed(SWITCHED)
   setWindowTabContent({

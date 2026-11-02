@@ -153,6 +153,12 @@ export function setTabContent(
         } satisfies LayoutContentTab)
       : terminalContent(next, kept, content)
   next = withPane(next, tab.id, replacement, content)
+  // The conversation has one chat tab: one it already had elsewhere goes, never to Reopen.
+  for (const duplicate of next.tabs.filter(
+    (entry) => entry.id !== tab.id && tabHoldsOnly(heldContentOf(entry), tabContentRef(content))
+  )) {
+    next = removeTabFromWorkspace(next, duplicate.id)
+  }
   const retargeted = withWorkspace(model, command.workspace, next)
   return applied(
     tab.kind === 'terminal'

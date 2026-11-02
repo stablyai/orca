@@ -108,6 +108,21 @@ export function setWindowTabContent(
   }
   // A list built before main records the chat must not read its absence as a close.
   recordUnlistedCreatedChat(worktreeId, content.sessionId, LOCAL_EXECUTION_HOST_ID)
+  // The conversation has one chat tab: one it already had here goes, its chat living on in this
+  // tab (never a close of the chat, nor a Reopen Closed Tab entry).
+  for (const duplicate of state.unifiedTabsByWorktree[worktreeId] ?? []) {
+    if (
+      duplicate.id !== tabId &&
+      duplicate.contentType === 'agent-session' &&
+      duplicate.entityId === content.sessionId
+    ) {
+      useAppStore.getState().closeUnifiedTab(duplicate.id, {
+        chatRetirementHandled: true,
+        preserveWorktreeSelection: true,
+        recordInteraction: false
+      })
+    }
+  }
   if (expectSource.kind === 'terminal') {
     // Its process already stopped; no tab holds it now, so this retires only its records (and
     // records it closed, so a late record of it can't bring it back), never Reopen Closed Tab.

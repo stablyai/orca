@@ -24,7 +24,6 @@ import { stopStructuredSwitchTerminalSource } from './structured-agent-session-s
 import { agentSessionLeasePossiblyWriting } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { mainAgentState } from '../../../../shared/main-agent-status'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
 import { placeSwitchChat } from './structured-agent-session-switch-chat-placement'
 import { createSwitchDestination } from './structured-agent-session-switch-destination'
@@ -288,10 +287,10 @@ async function switchToChat(
   )
   replacedBy = retargeted ? sessionId : undefined
   if (sameWorkspace) {
-    // Whole tab: its terminal left the tab in the layout owner's write. Split pane: the window
-    // retired it on exit, or shows it exited once this switch settles if the stop kept it; main's
-    // model closes it here.
-    await close.retire(retargeted || !ORCA_LAYOUT_OWNER_IS_MAIN)
+    // Its bookkeeping only, for every layout owner: a whole tab's terminal left the tab in the
+    // owner's write; a split pane (or a tab the user changed meanwhile) exited on the stop and
+    // shows it once this switch settles.
+    await close.retire(true)
   }
   // Publication is complete; a first new send may already own the ordinary start.
   const starting = await host.openSwitchToChat(sessionId, deadline)

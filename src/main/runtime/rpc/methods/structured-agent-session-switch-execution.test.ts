@@ -353,7 +353,7 @@ it('opens a split pane’s chat right after its tab when an earlier switch gave 
   expect(session().terminalLayoutsByTabId[TAB_ID]?.root).toEqual({ type: 'leaf', leafId: LEAF_B })
 })
 
-it('leaves a chat already open in this workspace where it is, without a second copy', async () => {
+it('makes the switched tab the chat already open in another tab, which goes, never to Reopen', async () => {
   await savedTranscript(rig)
   const { runtime, session } = setupMainOwnedWorkspace()
   await runtime.publishStructuredAgentSessionTab({
@@ -385,7 +385,6 @@ it('leaves a chat already open in this workspace where it is, without a second c
     },
     getForegroundProcess: async () => null
   })
-  const write = vi.spyOn(runtime, 'setSwitchedTabContent')
   expect(
     await executeStructuredSessionSwitch(
       {
@@ -403,8 +402,10 @@ it('leaves a chat already open in this workspace where it is, without a second c
       'chat'
     )
   ).toEqual({ status: 'completed', sessionId: id })
-  expect(write).not.toHaveBeenCalled()
-  expect(chatTabs().map((tab) => tab.id)).toEqual([openChat])
+  // One chat tab, the switched one, keeping its place; its record moved there too.
+  await vi.waitFor(() => expect(chatTabs().map((tab) => tab.id)).toEqual([TAB_ID]))
+  expect(openChat).not.toBe(TAB_ID)
+  expect(rig.store.getSessionTabId(id)).toBe(TAB_ID)
 })
 
 it('keeps the stopped source when the layout write that would take its tab fails', async () => {
