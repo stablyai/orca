@@ -289,6 +289,23 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(command.includes('--model')).toBe(recorded.agentArgs.includes('--model'))
   })
 
+  it('adds a live bypass before a recorded command’s -- terminator', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID, permissionMode: 'bypassPermissions' }
+    })
+    useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
+      agentArgs: '',
+      agentCommand: 'claude --',
+      agentEnv: {}
+    })
+
+    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toMatch(
+      /--dangerously-skip-permissions.* --$/
+    )
+  })
+
   it('still applies the configured default arguments to an unrecorded Codex launch', () => {
     seedAgentStatus({
       agentType: 'codex',

@@ -24,6 +24,7 @@ import {
   tuiAgentArgsBypassPermissions
 } from '../../../shared/tui-agent-launch-defaults'
 import { agentPermissionArgs } from '../../../shared/tui-agent-permission-choice'
+import { buildClaudeResumeLaunchCommand } from '../../../shared/agent-resume-launch-command'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { resolveAgentLaunchCommand } from '../../../shared/tui-agent-launch-command'
@@ -164,7 +165,16 @@ function keepLiveClaudeBypass(
     agentArgs: tuiAgentArgsBypassPermissions('claude', recipe.agentArgs, shell)
       ? recipe.agentArgs
       : [bypass, recipe.agentArgs].filter(Boolean).join(' '),
-    ...(recipe.agentCommand ? { agentCommand: `${recipe.agentCommand} ${bypass}` } : {})
+    // Reuse the resume splice so the flag lands before Claude's `--` terminator.
+    ...(recipe.agentCommand
+      ? {
+          agentCommand: buildClaudeResumeLaunchCommand(
+            recipe.agentCommand,
+            bypass.split(/\s+/),
+            shell
+          )
+        }
+      : {})
   }
 }
 
