@@ -444,7 +444,7 @@ it('recovers two distinct rich submissions across remount/new input without late
       })
     })
   let hook = mount()
-  const pending: Promise<void>[] = []
+  const pending: Promise<boolean>[] = []
   for (const path of ['/one/SKILL.md', '/two/SKILL.md', '/success/SKILL.md']) {
     act(() => updateNativeChatComposerDraft(scope, rich(path), 'immediate'))
     await act(async () => {
@@ -502,7 +502,7 @@ it('recovers two distinct rich submissions across remount/new input without late
     vi.mocked(transport.send).mockReturnValueOnce(reply.promise)
     hook = mount()
     act(() => updateNativeChatComposerDraft(scope, rich('/retired/SKILL.md'), 'immediate'))
-    let old: Promise<void> | undefined
+    let old: Promise<boolean> | undefined
     await act(async () => {
       old = hook.result.current('$review', [])
     })
@@ -624,7 +624,7 @@ it.each<[reverse: boolean, firstAccepted: boolean, delayed?: boolean]>([
       updateNativeChatComposerDraft(from, rich('/one/SKILL.md'), 'immediate')
       updateNativeChatComposerDraft(target, rich('/two/SKILL.md'), 'immediate')
     })
-    const operations: Promise<void>[] = []
+    const operations: Promise<boolean>[] = []
     await act(async () => {
       operations.push(
         old.result.current.submit('$review', readNativeChatComposerDraft(from).images)
