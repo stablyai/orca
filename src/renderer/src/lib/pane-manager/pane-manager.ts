@@ -17,7 +17,7 @@ import { setInlineImagesEnabled } from './pane-inline-images'
 import { fitAllPanesInternal } from './pane-tree-ops'
 import { collectPublicPanes, toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
-import { detachPanesWebglForRebuild, rebuildAttachedWebgl } from './pane-webgl-reattach'
+import { detachPanesWebglForRebuild } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
   clearPaneWebglTextureAtlases,
@@ -256,10 +256,6 @@ export class PaneManager {
 
   markPaneHasComplexScriptOutput(paneId: number): void {
     markPaneComplexScriptOutput(this.panes, paneId)
-  }
-
-  rebuildPaneWebgl(paneId: number): void {
-    this.withPane(paneId, rebuildAttachedWebgl)
   }
 
   resetWebglTextureAtlases(): void {

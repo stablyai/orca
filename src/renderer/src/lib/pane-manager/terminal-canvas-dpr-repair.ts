@@ -1,6 +1,6 @@
 import type { ManagedPane } from './pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
-import { forceFullViewportPresent } from './terminal-render-pause-release'
+import { forceFullViewportPresent, presentEmptiedCanvas } from './terminal-render-pause-release'
 import { isWebglCanvasBackingReleased } from './terminal-webgl-hidden-canvas-release'
 
 // Hidden-time DPR changes can evade WebGL’s device-pixel observer, leaving stale-scale canvas backing (e.g. 2160px for 1080 CSS pixels at DPR 1). Use xterm’s resize path to recompute device dimensions/backing at current DPR.
@@ -63,7 +63,10 @@ export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprR
     // Refresh cached DPR/dimensions before resize rebuilds backing and layer sizes.
     renderer.handleDevicePixelRatioChange?.()
     renderer.handleResize?.(pane.terminal.cols, pane.terminal.rows)
-    pane.terminal.refresh(0, pane.terminal.rows - 1)
+    // Resizing the backing wiped it, so DEC 2026 must not leave it blank.
+    if (!presentEmptiedCanvas(pane.terminal)) {
+      pane.terminal.refresh(0, pane.terminal.rows - 1)
+    }
   } catch {
     // Pane may be mid-teardown; the next reveal/fit retries the check.
     return 'deferred'

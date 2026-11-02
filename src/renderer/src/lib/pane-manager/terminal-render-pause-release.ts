@@ -65,8 +65,38 @@ export function forceRepaintThroughRenderPause(terminal: unknown): boolean {
   }
 }
 
+type RenderObservableTerminal = {
+  onRender?: (listener: () => void) => { dispose: () => void }
+}
+
+// Terminals whose WebGL canvas was emptied while paused; cleared by their next paint.
+const unpaintedCanvasTerminals = new WeakSet<object>()
+
+function hasUnpaintedCanvas(terminal: unknown): boolean {
+  return typeof terminal === 'object' && terminal !== null && unpaintedCanvasTerminals.has(terminal)
+}
+
+function rememberUnpaintedCanvas(terminal: unknown): void {
+  if (typeof terminal !== 'object' || terminal === null || unpaintedCanvasTerminals.has(terminal)) {
+    return
+  }
+  const observable: RenderObservableTerminal = terminal
+  if (typeof observable.onRender !== 'function') {
+    return
+  }
+  unpaintedCanvasTerminals.add(terminal)
+  const subscription = observable.onRender(() => {
+    unpaintedCanvasTerminals.delete(terminal)
+    subscription.dispose()
+  })
+}
+
 /** Preserve the coherent canvas through DEC 2026; RenderService waits for frame close with xterm’s bounded safety timeout. */
 export function requestFullViewportPresent(terminal: unknown): boolean {
+  if (hasUnpaintedCanvas(terminal)) {
+    // Nothing coherent to preserve: the canvas was emptied while paused and has not painted since.
+    return forceFullViewportPresent(terminal)
+  }
   const service = getRenderService(terminal)
   if (!service) {
     return false
@@ -113,7 +143,23 @@ export function isSynchronizedOutputHeld(terminal: unknown): boolean {
   )
 }
 
-/** Force a full present through pause/DEC 2026 only for held keystroke echo, replay hold-cap expiry, or revealing a released canvas (no coherent frame left to keep). Mid-frame painting exposes unfinished TUIs (#32198); reveal/recovery use requestFullViewportPresent. Normal unpaused paint falls back to refresh: direct first-splash renderRows precedes stable cell metrics and leaves a 1px gutter. */
+/** A new or resized WebGL canvas holds no frame to keep, so DEC 2026 must not leave it blank until the frame closes. A paused one paints on its reveal present instead. */
+export function presentEmptiedCanvas(terminal: unknown): boolean {
+  const service = getRenderService(terminal)
+  if (!service) {
+    return false
+  }
+  if (service._isPaused === true) {
+    rememberUnpaintedCanvas(terminal)
+    return false
+  }
+  if (!isSynchronizedOutputHeld(terminal)) {
+    return false
+  }
+  return forceFullViewportPresent(terminal)
+}
+
+/** Force a full present through pause/DEC 2026 only for held keystroke echo, replay hold-cap expiry, or a released, new or resized canvas (no coherent frame left to keep). Mid-frame painting exposes unfinished TUIs (#32198); reveal/recovery use requestFullViewportPresent. Normal unpaused paint falls back to refresh: direct first-splash renderRows precedes stable cell metrics and leaves a 1px gutter. */
 export function forceFullViewportPresent(terminal: unknown): boolean {
   const service = getRenderService(terminal)
   if (!service) {

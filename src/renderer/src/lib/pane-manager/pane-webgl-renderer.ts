@@ -14,6 +14,7 @@ import {
 } from './terminal-canvas-dpr-repair'
 import { recordPaneWebglContextLoss } from './pane-webgl-context-loss-policy'
 import { presentPaneViewport } from './pane-viewport-present'
+import { presentEmptiedCanvas } from './terminal-render-pause-release'
 import {
   releaseWebglCanvasBackingWhileHidden,
   stopReleasingWebglCanvasBacking
@@ -88,7 +89,9 @@ export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
 function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
   try {
     // New WebGL canvases are empty; repaint immediately so resume/reparent/settings do not look frozen until output.
-    pane.terminal.refresh(0, pane.terminal.rows - 1)
+    if (!presentEmptiedCanvas(pane.terminal)) {
+      pane.terminal.refresh(0, pane.terminal.rows - 1)
+    }
   } catch {}
 }
 

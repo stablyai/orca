@@ -227,6 +227,65 @@ describe('terminal WebGL addon lifecycle', () => {
     expect(pane.terminal.refresh).not.toHaveBeenCalled()
   })
 
+  it('paints a newly attached canvas inside a synchronized frame instead of leaving it blank', () => {
+    const renderRows = vi.fn()
+    const pane = createPane()
+    Object.assign(pane.terminal, {
+      _core: {
+        _renderService: {
+          _isPaused: false,
+          _needsFullRefresh: false,
+          refreshRows: vi.fn(),
+          _renderer: { value: { renderRows } }
+        },
+        coreService: { decPrivateModes: { synchronizedOutput: true } }
+      }
+    })
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(renderRows).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('paints a canvas attached while paused on its reveal present, inside a synchronized frame', () => {
+    const renderRows = vi.fn()
+    let render: (() => void) | null = null
+    const renderService = {
+      _isPaused: true,
+      _needsFullRefresh: false,
+      refreshRows: vi.fn(),
+      _renderer: { value: { renderRows } }
+    }
+    const pane = createPane()
+    Object.assign(pane.container, { getBoundingClientRect: () => ({ width: 800, height: 400 }) })
+    Object.assign(pane.terminal, {
+      onRender: vi.fn((listener: () => void) => {
+        render = listener
+        return { dispose: vi.fn() }
+      }),
+      _core: {
+        _renderService: renderService,
+        coreService: { decPrivateModes: { synchronizedOutput: true } }
+      }
+    })
+
+    attachWebgl(pane)
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(renderService._isPaused).toBe(true)
+
+    presentPaneViewport(pane)
+    expect(renderRows).toHaveBeenCalledWith(0, 23)
+
+    // Once painted, a later reveal preserves the synchronized frame again.
+    render!()
+    renderRows.mockClear()
+    renderService._isPaused = true
+    presentPaneViewport(pane)
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
+  })
+
   it('keeps the render pause latched when resetting a pane that has no layout box', () => {
     // Collapsed siblings must stay paused: releasing no-box panes paints nothing, permanently unpauses them, and loses full-refresh/deferred-resize latches before reveal.
     const { pane, renderService } = createPausedPane('none')
