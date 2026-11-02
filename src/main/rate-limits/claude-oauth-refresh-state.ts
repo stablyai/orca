@@ -269,7 +269,10 @@ export function noteClaudeOAuthRefreshPace(
   book.backoffLevel = paced.level
   book.failures = paced.level
   if (paced.outcome === 'limited') {
-    logClaudeOAuthRefresh(accountId, 'failed=http-429')
+    logClaudeOAuthRefresh(
+      accountId,
+      `failed=http-429 retry-after=${paced.retryAfter} error=${paced.error}`
+    )
     return { outcome: 'failed', reason: 'http-429' }
   }
   return { outcome: 'skipped', reason: 'backoff' }

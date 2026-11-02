@@ -33,6 +33,7 @@ import {
   refreshClaudeOAuthAccessToken,
   resetClaudeOAuthRefreshStateForTests
 } from './claude-oauth-refresh'
+import { CLAUDE_OAUTH_TOKEN_HEADERS } from './claude-oauth-node-fetch'
 import type { ClaudeOAuthCredentialDocument } from './claude-oauth-credential-document'
 import type { ClaudeOAuthRefreshDeps } from './claude-oauth-refresh-state'
 import {
@@ -152,7 +153,8 @@ it('posts Claude Code’s refresh body and writes every other field back first',
   expect(calls).toHaveLength(1)
   expect(calls[0]?.url).toBe(CLAUDE_OAUTH_TOKEN_URL)
   expect(calls[0]?.init.method).toBe('POST')
-  expect(calls[0]?.init.headers).toEqual({ 'Content-Type': 'application/json' })
+  expect(calls[0]?.init.redirect).toBe('manual')
+  expect(calls[0]?.init.headers).toEqual({ ...CLAUDE_OAUTH_TOKEN_HEADERS })
   const body = JSON.parse(String(calls[0]?.init.body))
   expect(body).toEqual({
     grant_type: 'refresh_token',
@@ -596,6 +598,47 @@ it('honors Retry-After seconds and an HTTP date, and caps the wait at 30 minutes
   })
   await refreshClaudeOAuthAccessToken({ accountId: 'huge', deps: huge.deps })
   expect(claudeOAuthRefreshStatus()[0]?.nextRetryAt).toBe(NOW + 30 * 60 * 1000)
+})
+
+it('logs the 429 retry-after and error code without the body', async () => {
+  const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+  const secret = 'do-not-log-secret'
+  const flat = harness({
+    fetch: async () =>
+      new Response(JSON.stringify({ error: 'rate_limit_error', access_token: secret }), {
+        status: 429,
+        headers: { 'retry-after': '10', 'content-type': 'application/json' }
+      })
+  })
+  expect(await refreshClaudeOAuthAccessToken({ accountId: 'acct', deps: flat.deps })).toEqual({
+    outcome: 'failed',
+    reason: 'http-429'
+  })
+  expect(info).toHaveBeenCalledWith(
+    '[claude-usage] refresh account=acct failed=http-429 retry-after=10 error=rate_limit_error'
+  )
+
+  resetClaudeOAuthRefreshStateForTests()
+  const nested = harness({
+    fetch: async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'rate_limit_error',
+            message: 'Rate limited. Please try again later.',
+            access_token: secret
+          }
+        }),
+        { status: 429, headers: { 'content-type': 'application/json' } }
+      )
+  })
+  await refreshClaudeOAuthAccessToken({ accountId: 'nested', deps: nested.deps })
+  expect(info).toHaveBeenCalledWith(
+    '[claude-usage] refresh account=nested failed=http-429 retry-after=- error=rate_limit_error'
+  )
+  const logged = JSON.stringify(info.mock.calls)
+  expect(logged).not.toContain(secret)
+  expect(logged).not.toContain('Please try again later')
 })
 
 it('raises the shared 429 backoff across polls and does not reset it on a burst', async () => {

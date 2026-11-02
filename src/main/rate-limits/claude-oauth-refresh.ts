@@ -1,7 +1,7 @@
 import { listClaudePaneAccounts } from '../claude-accounts/claude-pane-account-registry'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
 import { execSecurityCommand } from '../macos-keychain/generic-password'
-import { getMainHttpClient } from '../network/http-client'
+import { CLAUDE_OAUTH_TOKEN_HEADERS, claudeOAuthTokenFetch } from './claude-oauth-node-fetch'
 import {
   asClaudeOAuthRecord,
   claudeOAuthStringField,
@@ -43,7 +43,7 @@ export {
 export { readClaudeOAuthCredentialDocument } from './claude-oauth-credential-document'
 export { CLAUDE_OAUTH_DEFAULT_SCOPES } from './claude-oauth-refresh-scopes'
 
-/** Claude Code 2.1.316 `Xae` posts here. Header is JSON only; timeout is 30s. */
+/** Claude Code 2.1.314 `Pae` posts here via axios 1.15.2 node http. Timeout is 30s. */
 export const CLAUDE_OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token'
 /** Claude Code `CLIENT_ID`. Not the design client. */
 export const CLAUDE_CODE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e'
@@ -111,8 +111,9 @@ async function refreshOne(input: {
     post: () =>
       deps.fetch(CLAUDE_OAUTH_TOKEN_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...CLAUDE_OAUTH_TOKEN_HEADERS },
         body: JSON.stringify(tokenRequestBody(read.document.oauth)),
+        redirect: 'manual',
         signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS)
       })
   })
@@ -191,7 +192,7 @@ async function finishPendingWrite(
 function resolveDeps(partial: Partial<ClaudeOAuthRefreshDeps> | undefined): ClaudeOAuthRefreshDeps {
   return {
     now: partial?.now ?? Date.now,
-    fetch: partial?.fetch ?? ((url, init) => getMainHttpClient().fetch(url, init)),
+    fetch: partial?.fetch ?? claudeOAuthTokenFetch,
     readDocument: partial?.readDocument ?? readClaudeOAuthCredentialDocument,
     writeDocument: partial?.writeDocument ?? writeClaudeOAuthCredentialDocument,
     hasLiveSession:

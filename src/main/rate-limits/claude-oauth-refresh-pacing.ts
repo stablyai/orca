@@ -9,7 +9,7 @@ const LADDER_MS = [60_000, 5 * 60 * 1000, 30 * 60 * 1000] as const
 export type ClaudeOAuthRefreshPaceResult =
   | { outcome: 'posted'; response: Response }
   | { outcome: 'backoff'; until: number; level: number }
-  | { outcome: 'limited'; until: number; level: number }
+  | { outcome: 'limited'; until: number; level: number; retryAfter: string; error: string }
   | { outcome: 'network' }
 
 type PaceInput = {
@@ -103,11 +103,12 @@ async function runLocked(input: PaceInput): Promise<ClaudeOAuthRefreshPaceResult
     if (response.status !== 429) {
       return { outcome: 'posted', response }
     }
+    const limited = await readLimited(response, lastPostFinishedAt)
     apply429(
       lastPostFinishedAt,
       retryAfterMs(response.headers.get('retry-after'), lastPostFinishedAt)
     )
-    return { outcome: 'limited', until: gateUntil, level: strike }
+    return { outcome: 'limited', until: gateUntil, level: strike, ...limited }
   } catch {
     lastPostFinishedAt = input.now()
     return { outcome: 'network' }
@@ -138,6 +139,85 @@ function apply429(now: number, retryAfter: number | null): void {
   }
   const step = LADDER_MS[Math.max(0, strike - 1)] ?? LADDER_MS.at(-1)
   gateUntil = now + (retryAfter ?? step)
+}
+
+const SAFE_ERROR_CODE = /^[A-Za-z0-9._:-]{1,64}$/
+
+async function readLimited(
+  response: Response,
+  now: number
+): Promise<{ retryAfter: string; error: string }> {
+  const retryAfter = retryAfterLabel(response.headers.get('retry-after'), now)
+  try {
+    return { retryAfter, error: limitErrorCode(await response.json()) }
+  } catch {
+    return { retryAfter, error: '-' }
+  }
+}
+
+function retryAfterLabel(header: string | null, now: number): string {
+  const trimmed = header?.trim() ?? ''
+  if (!trimmed) {
+    return '-'
+  }
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+    return trimmed
+  }
+  const date = Date.parse(trimmed)
+  if (Number.isNaN(date)) {
+    return '-'
+  }
+  return String(Math.max(0, Math.round((date - now) / 1000)))
+}
+
+function limitErrorCode(value: unknown, depth = 0): string {
+  const direct = safeCode(value)
+  if (direct) {
+    return direct
+  }
+  const record = depth > 1 ? null : asPlainRecord(value)
+  if (!record) {
+    return '-'
+  }
+  const nested = own(record, 'error')
+  const nestedRecord = asPlainRecord(nested)
+  const type = nestedRecord ? safeCode(own(nestedRecord, 'type')) : null
+  if (type) {
+    return type
+  }
+  const code = safeCode(own(record, 'code'))
+  if (code) {
+    return code
+  }
+  const errorText = safeCode(nested)
+  if (errorText) {
+    return errorText
+  }
+  if (depth === 0 && nestedRecord) {
+    return limitErrorCode(nestedRecord, depth + 1)
+  }
+  return '-'
+}
+
+function safeCode(value: unknown): string | null {
+  return typeof value === 'string' && SAFE_ERROR_CODE.test(value) ? value : null
+}
+
+type PlainRecord = Record<string, unknown>
+
+function own(value: PlainRecord, key: string): unknown {
+  if (!Object.hasOwn(value, key)) {
+    return undefined
+  }
+  return Object.getOwnPropertyDescriptor(value, key)?.value
+}
+
+function asPlainRecord(value: unknown): PlainRecord | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check above excludes null and arrays, so this is a plain object.
+  return value as PlainRecord
 }
 
 function retryAfterMs(header: string | null, now: number): number | null {
