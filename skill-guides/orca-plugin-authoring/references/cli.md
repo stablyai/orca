@@ -4,7 +4,7 @@
 
 `ORCA` is the Orca executable you resolved. Every command takes `--json`; branch on `error.code`. Exit codes: 0 ok, 1 error, 2 the plugin is invalid (plugin_invalid), 3 approval is needed (approval_required or approval_stale). Run `ORCA <command> --help` for a command's notes.
 
-- `ORCA plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel|components|worker-panel> [--publisher <name>] [--id <id>] [--name <display name>] [--json]`: Scaffold a new Orca plugin from a template
+- `ORCA plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel|components|worker-panel|hook> [--publisher <name>] [--id <id>] [--name <display name>] [--json]`: Scaffold a new Orca plugin from a template
 - `ORCA plugin types <dir> [--json]`: Write the TypeScript typings for Orca plugins into a plugin folder
 - `ORCA plugin test [dir] [--json]`: Run a plugin's own tests on this machine, unsandboxed: only for code you trust
 - `ORCA plugin check [dir] [--json]`: Validate a plugin and render each components panel once on this machine, unsandboxed: only for code you trust
