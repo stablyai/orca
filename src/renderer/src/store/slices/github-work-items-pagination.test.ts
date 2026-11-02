@@ -295,7 +295,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         10
       )
 
-    expect(result).toEqual({ totalCount: 12, totalPages: 2 })
+    // An opaque answer without a matching accepted source envelope is not a certified estimate.
+    expect(result).toBeUndefined()
     expect(mockApi.gh.countWorkItems).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',

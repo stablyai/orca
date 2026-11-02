@@ -144,7 +144,7 @@ function Harness() {
 const ref = <T,>(current: T) => ({ current })
 const noop = () => {}
 /** A non-forced landing refresh with the Tasks page's own setters, refs and store actions. */
-async function landingRefresh() {
+async function landingRefresh(knownCount: number | null = null) {
   const state = mocks.store!.getState()
   const model: TaskPageGitHubLandingRefreshModel = {
     fetchWorkItemsAcrossRepos: state.fetchWorkItemsAcrossRepos,
@@ -168,7 +168,7 @@ async function landingRefresh() {
     githubResumeConsumedRef: ref(true),
     githubResumeContextRef: ref('landing'),
     pendingGithubScrollRestoreRef: ref<number | null>(null),
-    countedTotalPagesRef: ref<number | null>(null),
+    countedTotalPagesRef: ref<number | null>(knownCount),
     hardRefreshEpochRef: ref(0),
     currentPageRef: ref(0),
     pagesRef,
@@ -194,6 +194,7 @@ async function landingRefresh() {
       await Promise.resolve()
     }
   })
+  return model
 }
 const stored = () =>
   Object.values(mocks.store!.getState().workItemsCache).flatMap((entry) => entry.data ?? [])
@@ -214,6 +215,18 @@ describe('a tracked Tasks edit through the landing refresh', () => {
   afterEach(async () => {
     await act(async () => root.unmount())
     node.remove()
+  })
+
+  it('retains the selected collection count while same-source count revalidation is held', async () => {
+    await landingRefresh()
+    const held = Promise.withResolvers<number>()
+    mockApi.gh.countWorkItems.mockReturnValueOnce(held.promise)
+    const model = await landingRefresh(9)
+    expect(model.countedTotalPagesRef.current).toBe(9)
+    held.resolve(200)
+    await act(async () => {
+      await held.promise
+    })
   })
 
   it.each(['provisional', 'accepted'])(

@@ -20,6 +20,8 @@ export type TaskPageRepoCacheInput = {
   executionHostId?: string | null
   connectionId?: string | null
   sourceCacheScope?: string | null
+  binding?: string
+  candidateOwner?: string
 }
 
 export type TaskPageDialogWorkItemKey = {
@@ -63,10 +65,10 @@ function taskPageRepoCacheScope(repo: TaskPageRepoCacheInput): string {
 }
 
 function taskPageRepoSourceKey(repo: TaskPageRepoCacheInput): string {
-  return `${repo.id}::${taskPageRepoCacheScope(repo)}`
+  return `${repo.id}::${taskPageRepoCacheScope(repo)}${repo.candidateOwner ? `::${repo.candidateOwner}` : ''}`
 }
 
-export type TaskPageRepoCacheRow = { sourceKey: string; cacheKey: string }
+export type TaskPageRepoCacheRow = { sourceKey: string; cacheKey: string; binding?: string }
 
 export function getTaskPageRepoCacheRows(
   repos: readonly TaskPageRepoCacheInput[],
@@ -75,7 +77,8 @@ export function getTaskPageRepoCacheRows(
 ): TaskPageRepoCacheRow[] {
   return repos.map((repo) => ({
     sourceKey: taskPageRepoSourceKey(repo),
-    cacheKey: workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo))
+    binding: repo.binding,
+    cacheKey: workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo), repo.binding)
   }))
 }
 
@@ -102,18 +105,28 @@ type TaskPageWorkItemsCacheSelection = {
 export function createTaskPageWorkItemsCacheSelector(
   rows: readonly TaskPageRepoCacheRow[],
   queryFetchable: boolean,
-  getDisplayCacheKey: (sourceKey: string) => string | undefined
+  getDisplayCacheKey: (sourceKey: string) => string | undefined,
+  getCandidates?: (sourceKey: string) => CacheEntry<readonly GitHubWorkItem[]> | undefined
 ): (workItemsCache: WorkItemsCache) => TaskPageWorkItemsCacheSelection {
   let last: TaskPageWorkItemsCacheSelection = { current: [], display: [] }
   return (workItemsCache) => {
-    const current = rows.map((row) => workItemsCache[row.cacheKey])
-    const display = current.map((entry, index) => {
+    const current: TaskPageWorkItemsCacheSelection['current'] = []
+    const display: TaskPageWorkItemsCacheSelection['display'] = []
+    for (const row of rows) {
+      const entry = workItemsCache[row.cacheKey]
+      current.push(entry)
       if (entry || !queryFetchable) {
-        return entry
+        display.push(entry)
+        continue
       }
-      const displayKey = getDisplayCacheKey(rows[index].sourceKey)
-      return displayKey === undefined ? undefined : workItemsCache[displayKey]
-    })
+      const displayKey = getDisplayCacheKey(row.sourceKey)
+      const previous = displayKey === undefined ? undefined : workItemsCache[displayKey]
+      display.push(
+        previous && (!row.binding || previous.sourceBinding === row.binding)
+          ? previous
+          : getCandidates?.(row.sourceKey)
+      )
+    }
     const next = {
       current: shallow(current, last.current) ? last.current : current,
       display: shallow(display, last.display) ? last.display : display

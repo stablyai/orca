@@ -149,7 +149,14 @@ export function createAllHostRepoCatalogActions(
       const localFence = claimHostCatalogFence(get, 'repos', { kind: 'local' })
       try {
         if (
-          !applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }, get().repos), localFence)
+          !applyCatalog(
+            await fetchRepoCatalogForTarget(
+              { kind: 'local' },
+              get().repos,
+              get().githubSourceCollections
+            ),
+            localFence
+          )
         ) {
           failed = true
         }
@@ -176,7 +183,7 @@ export function createAllHostRepoCatalogActions(
         'repos',
         async (target, fence) => {
           const [catalogResult, visibilitySnapshot] = await Promise.all([
-            fetchRepoCatalogForTarget(target, get().repos).then(
+            fetchRepoCatalogForTarget(target, get().repos, get().githubSourceCollections).then(
               (catalog) => ({ ok: true as const, catalog }),
               (error: unknown) => ({ ok: false as const, error })
             ),

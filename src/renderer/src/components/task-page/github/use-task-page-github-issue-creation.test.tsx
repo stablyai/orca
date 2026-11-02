@@ -3,6 +3,9 @@ import { act, useRef } from 'react'
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
+import { createGitHubSlice } from '@/store/slices/github'
+import { createRepoUpdateActions } from '@/store/repos/repo-update'
+import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 import { createUIStore } from '@/store/slices/ui-slice-test-harness'
 import { useTaskPageGitHubDetail } from '@/components/task-page/github/use-task-page-github-detail'
 import { useTaskPageGitHubIssueCreation } from '@/components/task-page/github/use-task-page-github-issue-creation'
@@ -14,7 +17,7 @@ import type { AppState } from '@/store/types'
 import type { StoreApi } from 'zustand/vanilla'
 
 const holders = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
-const mocks = vi.hoisted(() => ({ createIssue: vi.fn(), workItem: vi.fn() }))
+const mocks = vi.hoisted(() => ({ createIssue: vi.fn(), workItem: vi.fn(), updateRepo: vi.fn() }))
 vi.mock('@/store/index', async () => {
   const { useStore } = await import('zustand')
   return {
@@ -48,11 +51,21 @@ function setup() {
   holders.store = store
   const repo: Repo = {
     id: 'repo-1',
+    executionHostId: 'local',
     path: '/repo',
     displayName: 'Repo',
     badgeColor: '',
     addedAt: 1
   }
+  store.setState({
+    ...createGitHubSlice(store.setState, store.getState, store),
+    ...createRepoUpdateActions(store.setState, store.getState),
+    repos: [repo],
+    projects: [],
+    projectHostSetups: [],
+    settings: createGlobalSettingsFixture(),
+    fetchReposForAllHosts: vi.fn().mockResolvedValue(undefined)
+  })
   const setter = vi.fn()
   const rendered = renderHook(() => {
     const detail = useTaskPageGitHubDetail({
@@ -101,7 +114,7 @@ function setup() {
       newIssueRuntimeTarget: null
     })
   })
-  return { ...rendered, store }
+  return { ...rendered, store, repo, setter }
 }
 
 beforeEach(() => {
@@ -110,7 +123,10 @@ beforeEach(() => {
   mocks.createIssue.mockResolvedValue({ ok: true, number: 1, url: item(1).url })
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { gh: { createIssue: mocks.createIssue, workItem: mocks.workItem } }
+    value: {
+      gh: { createIssue: mocks.createIssue, workItem: mocks.workItem },
+      repos: { update: mocks.updateRepo }
+    }
   })
 })
 afterEach(() => {
@@ -174,4 +190,37 @@ describe('created issue hydration ownership', () => {
     expect(store.getState().activeModal).toBe('new-workspace-composer')
     expect(store.getState().githubTaskDrawerWorkItem).toBeNull()
   })
+})
+
+describe('New Issue source-save dependency', () => {
+  it.each([true, false])(
+    'waits for the latest source save before creating (saved=%s)',
+    async (saved) => {
+      const { store, repo, result, setter } = setup()
+      const held = Promise.withResolvers<Repo>()
+      mocks.updateRepo.mockReturnValueOnce(held.promise)
+      let save!: Promise<void>, submit!: Promise<void>
+      await act(async () => {
+        save = store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+        submit = result.current.handleCreateNewIssue()
+        await Promise.resolve()
+      })
+      const callsWhileHeld = mocks.createIssue.mock.calls.length
+      await act(async () => {
+        if (saved) {
+          held.resolve({ ...repo, issueSourcePreference: 'origin' })
+        } else {
+          held.reject(new Error('save failed'))
+        }
+        await save
+        await submit
+      })
+      expect(callsWhileHeld).toBe(0)
+      expect(mocks.createIssue).toHaveBeenCalledTimes(saved ? 1 : 0)
+      if (!saved) {
+        expect(setter).not.toHaveBeenCalledWith('')
+        expect(setter).toHaveBeenLastCalledWith(false)
+      }
+    }
+  )
 })

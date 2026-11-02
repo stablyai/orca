@@ -89,7 +89,7 @@ export function createCmdJTaskSearchRequests(args: {
               { sourceContext: source, requireComplete: true }
             )
             // Open-only is applied to what Cmd-J shows, after pending edits (a reopen) are added.
-            return items
+            return (items ?? [])
               .filter((issue) => issue.type === 'issue')
               .map((issue) =>
                 makeCmdJTaskSearchResult({ provider, issue }, source, repo.id, hostLabel)

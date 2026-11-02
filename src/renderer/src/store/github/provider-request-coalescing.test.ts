@@ -141,7 +141,7 @@ describe('GitHub provider request upgrade coalescing', () => {
     strict.resolve(workItems('strict'))
     await Promise.all(strictFollowers)
     forced.resolve(workItems('forced'))
-    await expect(forcedFetch).resolves.toEqual(workItems('forced').items)
+    await expect(forcedFetch).resolves.toBeUndefined()
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
     expect(strictSettled).toHaveBeenCalledTimes(20)
     expect(strictSettled.mock.calls.every(([rows]) => rows[0].title === 'strict')).toBe(true)
@@ -247,7 +247,7 @@ describe('GitHub provider request upgrade coalescing', () => {
     strict.resolve(workItems('fresh'))
     await expect(strictFetch).resolves.toEqual(workItems('fresh').items)
     forced.resolve(workItems('gh-cached'))
-    await expect(forcedFetch).resolves.toEqual(workItems('gh-cached').items)
+    await expect(forcedFetch).resolves.toBeUndefined()
 
     expect(store.getState().getCachedWorkItems('repo-1', 24, '', '/repo')).toEqual(
       workItems('fresh').items

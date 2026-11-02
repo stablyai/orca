@@ -169,7 +169,7 @@ export function useSmartWorkspaceGithubSearch({
         sourceContext: target.githubSourceContext
       })
         .then((items) => {
-          if (!stale) {
+          if (!stale && items) {
             setGithubItems(items.slice(0, RESULT_LIMIT))
           }
         })
@@ -197,7 +197,7 @@ export function useSmartWorkspaceGithubSearch({
         query
       )
         .then((result) => {
-          if (!stale) {
+          if (!stale && result) {
             setGithubItems(result.items)
           }
         })

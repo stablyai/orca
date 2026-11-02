@@ -96,7 +96,11 @@ export function createRepoCatalogActions(
       set((s) => ({ reposFetchGeneration: s.reposFetchGeneration + 1 }))
       const fence = claimHostCatalogFence(get, 'repos', target)
       try {
-        const catalog = await fetchRepoCatalogForTarget(target, get().repos)
+        const catalog = await fetchRepoCatalogForTarget(
+          target,
+          get().repos,
+          get().githubSourceCollections
+        )
         // A newer same-host fetch or a replaced connection superseded us — drop this stale result.
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return

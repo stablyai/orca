@@ -1,3 +1,4 @@
+import { createGitHubSourceCollections } from '../github/source-collections'
 import { createGitHubTaskRecordCache } from '../github/task-record-cache'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
@@ -13,6 +14,7 @@ import { persistGitHubCacheChanges } from '../github/cache-persistence'
 import { createProjectActions } from '../github/project-actions'
 import { createProjectRowActions } from '../github/project-row-actions'
 import { createWorkItemFetchActions } from '../github/work-item-fetch-actions'
+import { createWorkItemCountActions } from '../github/work-item-count-actions'
 import { createWorkItemAggregateActions } from '../github/work-item-aggregate-actions'
 import { createWorkItemMutationActions } from '../github/work-item-mutation-actions'
 import { createPullRequestActions } from '../github/pull-request-actions'
@@ -34,6 +36,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
   store
 ) => ({
   githubTaskCache: createGitHubTaskRecordCache(store),
+  githubSourceCollections: createGitHubSourceCollections(store),
   prCache: {},
   issueCache: {},
   checksCache: {},
@@ -87,6 +90,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
   ...createProjectRowActions(set, get),
   ...createWorkItemFetchActions(set, get),
   ...createWorkItemAggregateActions(get),
+  ...createWorkItemCountActions(get),
   ...createPullRequestActions(set, get),
   ...createIssueActions(set, get),
   ...createCheckActions(set, get),

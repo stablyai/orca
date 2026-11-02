@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
 import {
   getTaskPageRepoCacheRows,
@@ -14,6 +14,8 @@ export function useTaskPageWorkItemsCacheSelection(
   githubPerRepoPageLimit: number,
   appliedWorkItemsCacheQuery: string
 ) {
+  const collections = useAppStore((s) => s.githubSourceCollections)
+  const revision = useSyncExternalStore(collections.subscribe, collections.snapshot)
   const workItemsCacheRows = useMemo(
     () =>
       getTaskPageRepoCacheRows(
@@ -25,14 +27,26 @@ export function useTaskPageWorkItemsCacheSelection(
   )
   // Why a ref, not state: each row's last committed current cache key; the entry is always read live.
   const sourceDisplayCacheKeysRef = useRef(new Map<string, string>())
+  const candidates = useMemo(
+    () =>
+      new Map(
+        workItemsCacheRows.map((row, index) => [
+          row.sourceKey,
+          collections.candidate(selectedRepos[index])
+        ])
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the external collection snapshot invalidates this derived projection.
+    [collections, selectedRepos, workItemsCacheRows, revision]
+  )
   const selectWorkItemsCacheEntries = useMemo(
     () =>
       createTaskPageWorkItemsCacheSelector(
         workItemsCacheRows,
         !isGitHubWorkItemsQueryTooLarge(appliedWorkItemsCacheQuery),
-        (sourceKey) => sourceDisplayCacheKeysRef.current.get(sourceKey)
+        (sourceKey) => sourceDisplayCacheKeysRef.current.get(sourceKey),
+        (sourceKey) => candidates.get(sourceKey)
       ),
-    [appliedWorkItemsCacheQuery, workItemsCacheRows]
+    [appliedWorkItemsCacheQuery, workItemsCacheRows, candidates]
   )
   const { current: selectedWorkItemsCacheEntries, display: sourceDisplayWorkItemsCacheEntries } =
     useAppStore((s) => selectWorkItemsCacheEntries(s.workItemsCache))

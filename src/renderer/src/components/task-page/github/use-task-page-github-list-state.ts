@@ -1,33 +1,38 @@
+import { useTaskPageGitHubCollectionState } from './use-task-page-github-collection-state'
 import type { TaskPageProviderStateModel } from '../use-task-page-provider-state'
-import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useSyncExternalStore } from 'react'
 import type { TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import {
   PER_REPO_FETCH_LIMIT,
   CROSS_REPO_DISPLAY_LIMIT,
-  getTaskPagePerRepoLimit,
-  sortWorkItemsByNumber
+  getTaskPagePerRepoLimit
 } from '../../../../../shared/work-items'
-import {
-  buildTaskPageGitHubResumeContextKey,
-  taskPageGitHubResumeCache
-} from '@/components/task-page/github/task-page-github-resume-cache'
+import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import { useAppStore } from '@/store/index'
 import type { GitHubListRestoreWrite } from './task-page-github-list-scroll-restore'
-import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const {
     pageData,
     getCachedWorkItems,
     workItemsInvalidationNonce,
     selectedRepos,
-    selectedReposKey,
+    selectedReposKey: repoSelectionKey,
     defaultTaskViewPreset,
     initialTaskQuery,
     taskSource,
     taskResumeApplied,
     githubMode
   } = model
+  const collections = useAppStore((s) => s.githubSourceCollections)
+  useSyncExternalStore(collections.subscribe, collections.snapshot)
+  const selectedReposKey =
+    taskSource === 'github'
+      ? JSON.stringify([
+          repoSelectionKey,
+          selectedRepos.map((repo) => [githubTaskBinding(repo), collections.context(repo)])
+        ])
+      : repoSelectionKey
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
   const taskSearchInputRef = useRef<HTMLInputElement>(null)
@@ -60,33 +65,18 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     CROSS_REPO_DISPLAY_LIMIT
   )
   const githubPageSize = githubPerRepoPageLimit * Math.max(1, selectedRepos.length)
-  const githubResumeContextKey = buildTaskPageGitHubResumeContextKey({
-    selectedReposKey,
-    query: appliedTaskSearch.trim(),
-    pageSize: githubPageSize
-  })
-  // Null slots permit direct numbered-page loading without reading intermediate pages.
-  const [pages, setPages] = useState<(GitHubWorkItem[] | null)[]>(() => {
-    const trimmed = initialTaskQuery.trim()
-    const merged: GitHubWorkItem[] = []
-    for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(
-        r.id,
-        githubPerRepoPageLimit,
-        trimmed,
-        r.path,
-        getTaskPageRepoSourceContext(r, 'github')
-      )
-      if (cached) {
-        merged.push(...cached)
-      }
-    }
-    if (merged.length === 0) {
-      return [[]]
-    }
-    const page0 = sortWorkItemsByNumber(merged).slice(0, githubPageSize)
-    return [page0]
-  })
+  const { githubResumeContextKey, pages, setPages, countedTotalPages, setCountedTotalPages } =
+    useTaskPageGitHubCollectionState({
+      collections,
+      selectedRepos,
+      selectedReposKey,
+      initialTaskQuery,
+      getCachedWorkItems,
+      taskSource,
+      appliedTaskSearch,
+      githubPageSize,
+      githubPerRepoPageLimit
+    })
   const [currentPage, setCurrentPage] = useState(0)
   const pagesRef = useRef(pages)
   const currentPageRef = useRef(currentPage)
@@ -103,11 +93,11 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const githubListRestoreWriteRef = useRef<GitHubListRestoreWrite | null>(null)
   const [paginationLoading, setPaginationLoading] = useState(false)
   const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
-  const [countedTotalPages, setCountedTotalPages] = useState<number | null>(null)
   // Keep proven 422 limits separate so late counts replace speculation without resurrecting unreachable pages.
   const [provenPageLimit, setProvenPageLimit] = useState<number | null>(null)
   // Mirror committed counts synchronously so empty-page handling cannot use a stale click-time closure.
   const countedTotalPagesRef = useRef<number | null>(null)
+  countedTotalPagesRef.current = countedTotalPages
   const hardRefreshEpochRef = useRef(0)
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
@@ -116,8 +106,23 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     if (!taskResumeApplied || taskSource !== 'github' || githubMode !== 'items' || !page) {
       return
     }
-    taskPageGitHubResumeCache.write(githubResumeContextKey, currentPage, page)
-  }, [currentPage, githubMode, githubResumeContextKey, pages, taskResumeApplied, taskSource])
+    taskPageGitHubResumeCache.write(
+      githubResumeContextKey,
+      currentPage,
+      page,
+      undefined,
+      selectedRepos.map((repo) => collections.context(repo))
+    )
+  }, [
+    collections,
+    selectedRepos,
+    currentPage,
+    githubMode,
+    githubResumeContextKey,
+    pages,
+    taskResumeApplied,
+    taskSource
+  ])
   const taskListPositionRef = useRef<{
     contextKey: string
     page: number
@@ -228,6 +233,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     countWorkItemsAcrossRepos: typeof countWorkItemsAcrossRepos
     taskListPositionRef: typeof taskListPositionRef
   }
+  nextModel.selectedReposKey = selectedReposKey
   nextModel.taskSearchInput = taskSearchInput
   nextModel.setTaskSearchInput = setTaskSearchInput
   nextModel.appliedTaskSearch = appliedTaskSearch

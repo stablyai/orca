@@ -124,6 +124,7 @@ export function createRepoUpdateActions(
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
       const ownerTarget = getProjectSetupRuntimeTarget(ownerHostId)
       const updateChainKey = getRepoHostIdentityForParts(projectId, ownerHostId)
+      const sourceOwner = get().githubSourceCollections?.capture(ownerRepo)
       const applyRepoUpdate = async () => {
         try {
           const sanitizedUpdates = sanitizeRepoUpdate(updates)
@@ -151,8 +152,15 @@ export function createRepoUpdateActions(
               if (!matchesOwner) {
                 return r
               }
+              if (sourceOwner && !s.githubSourceCollections?.owns(sourceOwner)) {
+                return r
+              }
               if (updatedRepo) {
-                return adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                return (
+                  s.githubSourceCollections?.adopt(
+                    adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                  ) ?? adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                )
               }
               let mergedRepo: Repo = r
               const {
@@ -200,7 +208,7 @@ export function createRepoUpdateActions(
               } else if (ghAccount !== undefined) {
                 mergedRepo = { ...mergedRepo, ghAccount }
               }
-              return mergedRepo
+              return s.githubSourceCollections?.adopt(mergedRepo) ?? mergedRepo
             })
             return {
               repos: nextRepos,

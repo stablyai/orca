@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { githubTaskBinding } from '@/lib/github-task-observation'
+import { findRepoForGitHubOwner } from '../github/repository-routing'
 import { workItemsCacheKey } from '../github/cache-identity'
 import {
   createTestStore,
@@ -76,7 +78,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
     expect(
       store.getState().workItemsCache[
-        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-1')
+        workItemsCacheKey(
+          'caller-repo-id',
+          24,
+          'is:open',
+          'runtime:env-1',
+          (() => {
+            const repo = findRepoForGitHubOwner(store.getState(), 'caller-repo-id', '/server/repo')
+            return repo && githubTaskBinding(repo)
+          })()
+        )
       ].data?.[0]
     ).toMatchObject({
       repoId: 'caller-repo-id',
@@ -126,7 +137,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
     expect(
       store.getState().workItemsCache[
-        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-1')
+        workItemsCacheKey(
+          'caller-repo-id',
+          24,
+          'is:open',
+          'runtime:env-1',
+          (() => {
+            const repo = findRepoForGitHubOwner(store.getState(), 'caller-repo-id', '/server/repo')
+            return repo && githubTaskBinding(repo)
+          })()
+        )
       ]?.data?.[0]
     ).toMatchObject({ repoId: 'caller-repo-id', number: 17 })
   })
@@ -237,12 +257,30 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
     expect(
       store.getState().workItemsCache[
-        workItemsCacheKey('caller-repo-id', 24, 'is:open', getTaskSourceCacheScope(sourceContext))
+        workItemsCacheKey(
+          'caller-repo-id',
+          24,
+          'is:open',
+          getTaskSourceCacheScope(sourceContext),
+          (() => {
+            const repo = findRepoForGitHubOwner(store.getState(), 'caller-repo-id', '/server/repo')
+            return repo && githubTaskBinding(repo)
+          })()
+        )
       ]?.data?.[0]
     ).toMatchObject({ repoId: 'caller-repo-id', number: 19 })
     expect(
       store.getState().workItemsCache[
-        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:focused-runtime')
+        workItemsCacheKey(
+          'caller-repo-id',
+          24,
+          'is:open',
+          'runtime:focused-runtime',
+          (() => {
+            const repo = findRepoForGitHubOwner(store.getState(), 'caller-repo-id', '/server/repo')
+            return repo && githubTaskBinding(repo)
+          })()
+        )
       ]
     ).toBeUndefined()
   })
@@ -325,12 +363,31 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       query: undefined
     })
     expect(
-      store.getState().workItemsCache[workItemsCacheKey('ssh-repo-id', 24, '', 'ssh:ssh-1')]
-        ?.data?.[0]
+      store.getState().workItemsCache[
+        workItemsCacheKey(
+          'ssh-repo-id',
+          24,
+          '',
+          'ssh:ssh-1',
+          (() => {
+            const repo = findRepoForGitHubOwner(store.getState(), 'ssh-repo-id', '')
+            return repo && githubTaskBinding(repo)
+          })()
+        )
+      ]?.data?.[0]
     ).toMatchObject({ repoId: 'ssh-repo-id', number: 27 })
     expect(
       store.getState().workItemsCache[
-        workItemsCacheKey('ssh-repo-id', 24, '', 'runtime:env-focused')
+        workItemsCacheKey(
+          'ssh-repo-id',
+          24,
+          '',
+          'runtime:env-focused',
+          (() => {
+            const repo = findRepoForGitHubOwner(store.getState(), 'ssh-repo-id', '')
+            return repo && githubTaskBinding(repo)
+          })()
+        )
       ]
     ).toBeUndefined()
   })
@@ -442,17 +499,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const result = await queued
     await Promise.all(blockers)
 
-    expect(result).toEqual([{ ...item, repoId: 'caller-repo-id' }])
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-start',
-      method: 'github.listWorkItems',
-      params: {
-        repo: 'repo-start',
-        limit: 24,
-        query: 'is:open'
-      },
-      timeoutMs: 30_000
-    })
+    expect(result).toBeUndefined()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(
       store.getState().workItemsCache[workItemsCacheKey('caller-repo-id', 24, 'is:open')]
     ).toBeUndefined()
@@ -558,10 +606,19 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'old-runtime' }
     })
-    await expect(oldFetch).resolves.toEqual([{ ...oldRuntimeItem, repoId: 'caller-repo-id' }])
+    await expect(oldFetch).resolves.toBeUndefined()
     expect(
       store.getState().workItemsCache[
-        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-new')
+        workItemsCacheKey(
+          'caller-repo-id',
+          24,
+          'is:open',
+          'runtime:env-new',
+          (() => {
+            const repo = findRepoForGitHubOwner(store.getState(), 'caller-repo-id', '/server/repo')
+            return repo && githubTaskBinding(repo)
+          })()
+        )
       ]?.data
     ).toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
   })

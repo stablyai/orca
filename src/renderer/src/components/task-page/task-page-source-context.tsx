@@ -1,3 +1,5 @@
+import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubCandidateOwner } from '@/store/github/source-collections'
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 export {
   getTaskPageRepoSourceContext,
@@ -128,11 +130,15 @@ export function getTaskPageRepoCacheInput(repo: Repo): {
   executionHostId?: string | null
   connectionId?: string | null
   sourceCacheScope?: string | null
+  binding?: string
+  candidateOwner?: string
 } {
   const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
   return {
     id: repo.id,
     path: repo.path,
+    binding: githubTaskBinding(repo),
+    candidateOwner: githubCandidateOwner(repo),
     executionHostId: repo.executionHostId,
     connectionId: repo.connectionId,
     sourceCacheScope:

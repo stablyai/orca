@@ -64,6 +64,12 @@ export function useTaskPageGitHubIssueCreation<Model extends TaskPageGitHubIssue
     }
     setNewIssueSubmitting(true)
     try {
+      const sourceReady = await useAppStore
+        .getState()
+        .githubSourceCollections.awaitSave(newIssueTargetRepo)
+      if (!sourceReady?.()) {
+        return
+      }
       const result = newIssueRuntimeTarget
         ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.createIssue>>>(
             newIssueRuntimeTarget,

@@ -18,6 +18,8 @@ export type WorkItemsCacheError = ClassifiedError & { source: GitHubOwnerRepo }
 
 export type CacheEntry<T> = {
   data: T | null
+  sourceBinding?: string
+  collection?: { owner: number; limit: number; query: string; cacheScope: string | undefined }
   fetchedAt: number
   fetchedHeadOid?: string | null
   headSha?: string
