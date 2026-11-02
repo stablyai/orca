@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { reportedChildWork } from './structured-agent-session-reported-child-work.test-support'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
@@ -558,7 +559,8 @@ describe('a queued /compact that fails', () => {
 
   async function handedOver() {
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
-    return rig.compact.mock.calls.at(-1)![0].command
+    const { command } = rig.compact.mock.calls.at(-1)![0]
+    return { ...command, itemId: agentJournalItemKey(command.identity) }
   }
 
   async function held(laterId: string) {

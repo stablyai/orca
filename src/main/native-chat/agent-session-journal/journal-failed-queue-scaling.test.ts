@@ -16,15 +16,21 @@ import { failedQueueTurnSequence } from './queued-message-pause'
 import type { JournalRow } from './journal-row-schema'
 import { JournalNewestTurn } from './journal-newest-turn'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 function usageLimit(turnItemId: string) {
   return {
-    kind: 'item',
+    kind: 'item' as const,
     itemId: `limit:${turnItemId}`,
     revision: 1,
-    body: { kind: 'status', text: 'Limit', tone: 'error', failure: { kind: 'usageLimitReached' } },
-    turnScope: { kind: 'turn', turnItemId }
-  } as const
+    body: {
+      kind: 'status' as const,
+      tone: 'error' as const,
+      ...agentSessionFailureWords(agentSessionFailureFact('usageLimitReached'), { surface: 'row' })
+    },
+    turnScope: { kind: 'turn' as const, turnItemId }
+  }
 }
 
 /** Live failure position next to what a restore over the same items would derive. */
@@ -301,9 +307,10 @@ function sourceIndexFold(size: number) {
           revision: 1,
           body: {
             kind: 'status',
-            text: 'Refused',
             tone: 'error',
-            failure: { kind: 'commandRefused' }
+            ...agentSessionFailureWords(agentSessionFailureFact('commandRefused'), {
+              surface: 'row'
+            })
           },
           turnScope: { kind: 'turn', turnItemId: itemId }
         }
