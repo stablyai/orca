@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => {
     toast: vi.fn(),
     reveal: vi.fn(),
     activate: vi.fn(),
-    navigate: vi.fn(() => true),
+    // This window lists wt-chat on the receiving host only.
+    navigate: vi.fn((_worktreeId: string, hostId?: string) => hostId === 'runtime:remote-2'),
     group: vi.fn(),
     type: vi.fn(),
     state: {
@@ -47,7 +48,9 @@ vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
   focusRuntimeTerminalHandle: mocks.remoteFocus
 }))
 vi.mock('./worktree-activation', () => ({ activateAndRevealWorktree: mocks.reveal }))
-// The store is mocked without worktree rows; navigation is the listed workspace already on screen.
+// The store is mocked without worktree rows, so the listing gate is a stand-in here; the real gate,
+// its owner catalog load and the switch wake run against the real store in
+// native-chat-agent-message-sender-host.test.tsx.
 vi.mock('./structured-chat-workspace-navigation', () => ({
   showStructuredChatWorkspace: mocks.navigate
 }))
@@ -151,6 +154,10 @@ it('a known root outranks a terminal and selects only the actual owner-qualified
     return { ok: true }
   })
   await open({ ...party, orcaSessionId: ROOT })
+  // The workspace is shown on the chat's own host, never the same-ID local copy's.
+  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith('wt-chat', 'runtime:remote-2', {
+    reported: false
+  })
   expect(mocks.activate).toHaveBeenCalledExactlyOnceWith('actual-issued', { worktreeId: 'wt-chat' })
   expect(mocks.focus).not.toHaveBeenCalled()
   expect(mocks.rpc.mock.calls.map((call) => call[1])).toEqual([

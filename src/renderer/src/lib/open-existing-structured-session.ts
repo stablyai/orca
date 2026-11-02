@@ -38,7 +38,10 @@ export type StructuredSessionRevealOutcome =
   | 'unreachable'
 
 export type StructuredSessionOpenAdapterDeps = {
-  activate: typeof activateStructuredAgentSessionById
+  /** May wait for the chat's workspace listing before showing it. */
+  activate: (
+    ...args: Parameters<typeof activateStructuredAgentSessionById>
+  ) => boolean | Promise<boolean>
   tabs: (
     target: { sessionId: string; worktreeId: string },
     owner: RuntimeClientTarget
@@ -87,6 +90,8 @@ type DesktopInteractionOptions = {
   deps?: StructuredSessionOpenAdapterDeps
   locate?: StructuredSessionOpenDeps['locate']
   initialize?: () => boolean
+  /** False once the user navigated during the open: it then ends without moving them. */
+  current?: () => boolean
   present: (result: StructuredSessionOpenResult) => void
   onError?: () => void
 }
@@ -131,7 +136,8 @@ export async function openDesktopStructuredSessionInteraction(
           source,
           owner,
           options.deps ?? desktopStructuredSessionOpenDeps,
-          options.locate
+          options.locate,
+          options.current
         )
       : {
           kind: 'failed' as const,
@@ -187,9 +193,11 @@ async function executeDesktopStructuredSession(
   source: StructuredSessionOpenSource,
   owner: RuntimeClientTarget,
   deps: StructuredSessionOpenAdapterDeps,
-  locate?: StructuredSessionOpenDeps['locate']
+  locate?: StructuredSessionOpenDeps['locate'],
+  current?: () => boolean
 ): Promise<StructuredSessionOpenResult> {
   return openStructuredAgentSession(source, {
+    current,
     locate:
       locate ??
       (async (address, messageIds) => {

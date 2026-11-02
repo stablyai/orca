@@ -25,7 +25,12 @@ const transport = vi.hoisted(() => ({
   focusRenderer: vi.fn(() => false),
   subscriptions: new Map<string, (event: AgentSessionStatusEvent) => void>(),
   unsupported: false,
-  olderLookup: false
+  olderLookup: false,
+  /** Holds server-1's repo catalog reply until released, as a cold or reconnecting window sees it. */
+  catalog: null as Promise<void> | null,
+  catalogFails: false,
+  /** Where the host says the chat is before a reveal places it. */
+  locatedAt: null as string | null
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   ...moduleFactories.structuredAgentSessionClient(),
@@ -38,7 +43,7 @@ vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChat
 vi.mock('./native-chat-image-runtime-context', () => ({
   useNativeChatImageRuntimeContext: () => ({
     settings: null,
-    worktreeId: 'shared-workspace',
+    worktreeId: 'repo-1::/repo',
     worktreePath: '/repo'
   })
 }))
@@ -58,18 +63,53 @@ vi.mock('@/components/terminal-pane/terminal-handle-links', async (original) => 
 }))
 
 import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPaneOverlayLayer'
+import * as sleepingResume from '@/lib/resume-sleeping-agent-session'
+import { structuredSessionOpenFeedback } from '@/lib/activate-ai-vault-structured-session'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { Repo } from '../../../../shared/repo-types'
+import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
 } from '@/runtime/structured-agent-session-status-feed'
 
-const WORKSPACE = 'shared-workspace'
+// The same checkout registered on this app and on server-1: one workspace ID on two hosts.
+const WORKSPACE = 'repo-1::/repo'
+const REPO: Repo = {
+  id: 'repo-1',
+  path: '/repo',
+  displayName: 'repo',
+  badgeColor: '#000',
+  addedAt: 1
+}
+const REMOTE_REPO: Repo = { ...REPO, executionHostId: 'runtime:server-1' }
+const row = (hostId: 'local' | 'runtime:server-1') =>
+  makeWorktree({ id: WORKSPACE, repoId: 'repo-1', path: '/repo', hostId, isMainWorktree: true })
 const ROOT = testOrcaSessionId('root-chat')
 const initial = useAppStore.getInitialState()
 const previousApi = Object.getOwnPropertyDescriptor(window, 'api')
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 let restoreViewport = () => {}
+let wakes: ReturnType<typeof vi.spyOn>
+/** server-1's own answers: its registered repo, its listing of that checkout, and its reveal. */
+const serverCatalog: Record<string, unknown> = {
+  'repo.list': { repos: [REPO] },
+  'worktree.detectedList': {
+    repoId: 'repo-1',
+    authoritative: true,
+    source: 'git',
+    worktrees: [
+      {
+        ...row('runtime:server-1'),
+        ownership: 'orca-managed',
+        selectedCheckout: true,
+        visible: true
+      }
+    ]
+  },
+  'agentSession.reveal': { ok: true, sessionId: ROOT, workspaceId: WORKSPACE, agent: 'claude' }
+}
 beforeAll(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
 })
@@ -112,7 +152,12 @@ function source(terminal = false): AgentMessageSource {
     }
   }
 }
-function seed(duplicate = false, terminal = false): void {
+/** `listed` names the hosts whose workspace listing this window already holds. */
+function seed(
+  duplicate = false,
+  terminal = false,
+  listed: readonly ('local' | 'runtime:server-1')[] = ['local', 'runtime:server-1']
+): void {
   const from = source(terminal)
   mocks.messages = [
     {
@@ -132,6 +177,9 @@ function seed(duplicate = false, terminal = false): void {
       ...initial,
       activeWorktreeId: WORKSPACE,
       activeWorkspaceExecutionHostId: 'local',
+      activeView: 'terminal',
+      repos: listed.includes('runtime:server-1') ? [REPO, REMOTE_REPO] : [REPO],
+      worktreesByRepo: { 'repo-1': listed.map(row) },
       focusGroup: vi.fn(),
       activateTab: vi.fn(),
       setActiveTabType: vi.fn(),
@@ -191,6 +239,10 @@ beforeEach(() => {
   transport.focusRenderer.mockClear()
   transport.unsupported = false
   transport.olderLookup = false
+  transport.catalog = null
+  transport.catalogFails = false
+  transport.locatedAt = null
+  wakes = vi.spyOn(sleepingResume, 'resumeSleepingAgentSessionsForWorktree').mockReturnValue(0)
   transport.subscribe.mockImplementation(
     async (target: RuntimeClientTarget, emit: (event: AgentSessionStatusEvent) => void) => {
       const host = target.kind === 'local' ? 'local' : target.environmentId
@@ -201,6 +253,12 @@ beforeEach(() => {
   transport.bridge.mockReset()
   transport.bridge.mockImplementation(
     async ({ method, params }: { method: string; params?: { address?: string } }) => {
+      if (method === 'repo.list') {
+        await transport.catalog
+        if (transport.catalogFails) {
+          return { id: 'reply', ok: false, error: { code: 'unavailable', message: 'offline' } }
+        }
+      }
       if (method === 'orchestration.partyLocation' && transport.olderLookup) {
         return {
           id: 'reply',
@@ -218,16 +276,23 @@ beforeEach(() => {
               minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
               capabilities: transport.unsupported
                 ? []
-                : [AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY]
+                : [
+                    AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+                    STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY
+                  ]
             }
           : method === 'orchestration.partyLocation'
             ? {
                 location:
                   params?.address === 'term-sender'
                     ? { kind: 'terminal', handle: 'term-current' }
-                    : { kind: 'chat', sessionId: ROOT, worktreeId: WORKSPACE }
+                    : {
+                        kind: 'chat',
+                        sessionId: ROOT,
+                        worktreeId: transport.locatedAt ?? WORKSPACE
+                      }
               }
-            : { ok: true }
+            : (serverCatalog[method] ?? { ok: true })
       return { id: 'reply', ok: true, result, _meta: { runtimeId: 'remote' } }
     }
   )
@@ -242,6 +307,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   resetStructuredAgentSessionStatusFeedsForTests()
   clearRuntimeCompatibilityCacheForTests()
   useAppStore.setState(initial, true)
@@ -286,7 +352,14 @@ it.each([false, true])(
       expect(useAppStore.getState().activateTab).toHaveBeenLastCalledWith('remote-sender', {
         worktreeId: WORKSPACE
       })
+      expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('runtime:server-1')
     }
+    // Both hosts listed and the local one on screen: the first click switches to server-1 and
+    // wakes it once; the second finds it on screen and wakes nothing.
+    expect(wakes.mock.calls.map(([worktreeId]) => worktreeId)).toEqual([WORKSPACE])
+    expect(transport.bridge).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'repo.list' })
+    )
     stopLocal()
   }
 )
@@ -308,7 +381,8 @@ it('keeps recorded CLI labels and focuses the exact remote pane from both surfac
 })
 
 it('keeps older-host direct-root names and both clicks on the stamped host when the workspace is local', async () => {
-  seed()
+  // This window lists only its own copy; the older host's listing loads on the click, with no reveal.
+  seed(false, false, ['local'])
   transport.unsupported = true
   transport.olderLookup = true
   useAppStore.setState({
@@ -322,12 +396,110 @@ it('keeps older-host direct-root names and both clicks on the stamped host when 
   })
   await mount()
   for (const link of screen.getAllByRole('button', { name: 'Legacy remote rename' })) {
+    vi.mocked(useAppStore.getState().activateTab).mockClear()
     await act(async () => fireEvent.click(link))
-    expect(useAppStore.getState().activateTab).toHaveBeenLastCalledWith('remote-sender', {
-      worktreeId: WORKSPACE
-    })
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().activateTab).toHaveBeenLastCalledWith('remote-sender', {
+        worktreeId: WORKSPACE
+      })
+    )
     expect(transport.bridge).toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'server-1', method: 'session.tabs.activate' })
     )
+    expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('runtime:server-1')
   }
+  expect(calls('agentSession.reveal')).toBe(0)
+  expect(calls('repo.list')).toBe(1)
+  expect(wakes).toHaveBeenCalledOnce()
+})
+
+const calls = (method: string): number =>
+  transport.bridge.mock.calls.filter(([request]) => request.method === method).length
+const remoteLink = () => screen.getAllByRole('button', { name: 'Remote rename' })[0]!
+
+it('finishes the click once server-1 lists the workspace this window had not loaded yet', async () => {
+  seed(false, false, ['local'])
+  let release = () => {}
+  transport.catalog = new Promise((resolve) => (release = resolve))
+  const unavailable = vi.spyOn(structuredSessionOpenFeedback, 'unavailable')
+  await mount()
+  await act(async () => fireEvent.click(remoteLink()))
+  await vi.waitFor(() => expect(calls('repo.list')).toBe(1))
+  // Waiting on the owner's catalog: nothing failed, switched, woke or activated yet.
+  expect(unavailable).not.toHaveBeenCalled()
+  expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('local')
+  expect(useAppStore.getState().activateTab).not.toHaveBeenCalled()
+  expect(wakes).not.toHaveBeenCalled()
+  await act(async () => release())
+  await vi.waitFor(() =>
+    expect(useAppStore.getState().activateTab).toHaveBeenLastCalledWith('remote-sender', {
+      worktreeId: WORKSPACE
+    })
+  )
+  const state = useAppStore.getState()
+  // Admitted through the store's own listing, then selected on its host.
+  expect(state.worktreesByRepo['repo-1']?.map((entry) => entry.hostId)).toContain(
+    'runtime:server-1'
+  )
+  expect(state.activeWorkspaceExecutionHostId).toBe('runtime:server-1')
+  expect(transport.bridge).toHaveBeenCalledWith(
+    expect.objectContaining({ selector: 'server-1', method: 'session.tabs.activate' })
+  )
+  expect(wakes).toHaveBeenCalledOnce()
+  expect(unavailable).not.toHaveBeenCalled()
+  expect(calls('agentSession.reveal')).toBe(0)
+})
+
+it('lists the destination a reveal returns before showing it', async () => {
+  seed(false, false, ['local'])
+  // The host still records the chat under its old project until the reveal places it.
+  transport.locatedAt = 'retired-project::/old'
+  await mount()
+  await act(async () => fireEvent.click(remoteLink()))
+  await vi.waitFor(() =>
+    expect(useAppStore.getState().activateTab).toHaveBeenLastCalledWith('remote-sender', {
+      worktreeId: WORKSPACE
+    })
+  )
+  expect(calls('agentSession.reveal')).toBe(1)
+  expect(calls('repo.list')).toBe(1)
+  expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('runtime:server-1')
+  expect(wakes).toHaveBeenCalledOnce()
+})
+
+it('wakes and selects nothing when server-1 cannot list the workspace', async () => {
+  seed(true, false, ['local'])
+  transport.catalogFails = true
+  const unavailable = vi.spyOn(structuredSessionOpenFeedback, 'unavailable')
+  await mount()
+  await act(async () => fireEvent.click(remoteLink()))
+  await vi.waitFor(() => expect(unavailable).toHaveBeenCalledOnce())
+  const state = useAppStore.getState()
+  expect(state.activeWorkspaceExecutionHostId).toBe('local')
+  // Neither the remote chat nor the same-ID local copy is shown.
+  expect(state.activateTab).not.toHaveBeenCalled()
+  expect(wakes).not.toHaveBeenCalled()
+  // One load per destination, however many times the opener retries showing it.
+  expect(calls('repo.list')).toBe(1)
+})
+
+it('leaves the user where they went while server-1 was still listing the workspace', async () => {
+  seed(false, false, ['local'])
+  let release = () => {}
+  transport.catalog = new Promise((resolve) => (release = resolve))
+  const unavailable = vi.spyOn(structuredSessionOpenFeedback, 'unavailable')
+  await mount()
+  await act(async () => fireEvent.click(remoteLink()))
+  await vi.waitFor(() => expect(calls('repo.list')).toBe(1))
+  act(() => useAppStore.setState({ activeWorktreeId: 'repo-1::/elsewhere' }))
+  await act(async () => release())
+  await vi.waitFor(() => expect(calls('worktree.detectedList')).toBe(1))
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)))
+  const state = useAppStore.getState()
+  expect(state.activeWorktreeId).toBe('repo-1::/elsewhere')
+  expect(state.activeWorkspaceExecutionHostId).toBe('local')
+  expect(state.activateTab).not.toHaveBeenCalled()
+  expect(wakes).not.toHaveBeenCalled()
+  expect(unavailable).not.toHaveBeenCalled()
+  expect(calls('agentSession.reveal')).toBe(0)
 })
