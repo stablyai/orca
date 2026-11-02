@@ -186,19 +186,18 @@ describe('mobile transcript roster row', () => {
   })
 
   it('opens a roster child from its row when the transcript can show it', () => {
-    const onOpen = vi.fn()
+    const onOpen = vi.fn<(agentId: string | null) => void>()
     act(() => {
       renderer = create(
-        createElement(MobileNativeChatOpenSubagentProvider, {
-          onOpen,
-          children: createElement(MobileNativeChatMessage, {
-            message: roster(
+        <MobileNativeChatOpenSubagentProvider onOpen={onOpen}>
+          <MobileNativeChatMessage
+            message={roster(
               [{ id: 'child-1', label: 'sample_greeting', state: 'completed' }],
               'Ran 1 subagent'
-            ),
-            subagentGroupsOpen: new Set(['group-1'])
-          })
-        })
+            )}
+            subagentGroupsOpen={new Set(['group-1'])}
+          />
+        </MobileNativeChatOpenSubagentProvider>
       )
     })
     const entry = renderer!.root.findAll((node) => byTestId(node, 'native-chat-open-subagent'))
