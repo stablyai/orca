@@ -263,23 +263,31 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     )
   })
 
-  it.each(['', '--model opus', '--dangerously-skip-permissions --model opus'])(
-    'adds a live bypass to recorded arguments %j once, keeping them',
-    (agentArgs) => {
-      seedAgentStatus({
-        agentType: 'claude',
-        state: 'done',
-        providerSession: { key: 'session_id', id: SESSION_ID, permissionMode: 'bypassPermissions' }
-      })
-      useAppStore
-        .getState()
-        .registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), { agentArgs, agentEnv: {} })
-
-      const command = buildPaneAccountRestartStartup('claude', pane)?.command ?? ''
-      expect(command.split('--dangerously-skip-permissions')).toHaveLength(2)
-      expect(command.includes('--model')).toBe(agentArgs.includes('--model'))
+  // A recorded command replaces the arguments on resume; `claude` with empty args is what a lossy restart recorded.
+  it.each([
+    { agentArgs: '' },
+    { agentArgs: '--model opus' },
+    { agentArgs: '--dangerously-skip-permissions --model opus' },
+    { agentArgs: '', agentCommand: 'claude' },
+    { agentArgs: '--model opus', agentCommand: "claude '--model' 'opus'" },
+    {
+      agentArgs: '--dangerously-skip-permissions',
+      agentCommand: "claude '--dangerously-skip-permissions'"
     }
-  )
+  ])('adds a live bypass to the recorded launch %j once, keeping it', (recorded) => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID, permissionMode: 'bypassPermissions' }
+    })
+    useAppStore
+      .getState()
+      .registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), { ...recorded, agentEnv: {} })
+
+    const command = buildPaneAccountRestartStartup('claude', pane)?.command ?? ''
+    expect(command.split('--dangerously-skip-permissions')).toHaveLength(2)
+    expect(command.includes('--model')).toBe(recorded.agentArgs.includes('--model'))
+  })
 
   it('still applies the configured default arguments to an unrecorded Codex launch', () => {
     seedAgentStatus({

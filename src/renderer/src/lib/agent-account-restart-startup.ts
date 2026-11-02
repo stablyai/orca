@@ -88,27 +88,32 @@ export function resolveAgentAccountRestartResumeStartup(
     (sleeping?.agent === agent ? sleeping.launchConfig : undefined)
   const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
   const startupShell = resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
+  const recipe = keepLiveClaudeBypass(
+    agent,
+    providerSession,
+    {
+      agentArgs:
+        launchConfig !== undefined
+          ? launchConfig.agentArgs
+          : unrecordedLaunchUsesDefaults
+            ? resolveTuiAgentLaunchRawArgs(agent, state.settings, undefined, startupShell)
+            : null,
+      ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {})
+    },
+    startupShell
+  )
   const startupPlan = buildAgentResumeStartupPlan({
     agent,
     providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs: keepLiveClaudeBypass(
-      agent,
-      providerSession,
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchRawArgs(agent, state.settings, undefined, startupShell)
-          : null,
-      startupShell
-    ),
+    agentArgs: recipe.agentArgs,
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
         : unrecordedLaunchUsesDefaults
           ? resolveTuiAgentLaunchEnv(agent, state.settings, resumeTarget.platform)
           : null,
-    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+    ...(recipe.agentCommand ? { agentCommand: recipe.agentCommand } : {}),
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
@@ -137,21 +142,30 @@ export function resolveAgentAccountRestartResumeStartup(
   }
 }
 
+type ResumeRecipe = { agentArgs: string | null; agentCommand?: string }
+
 /** Claude enters bypass only when its own launch allowed it, so keeping the mode grants nothing new; hand-started sessions record no flags. */
 function keepLiveClaudeBypass(
   agent: AccountRestartAgent,
   providerSession: AgentProviderSessionMetadata,
-  agentArgs: string | null,
+  recipe: ResumeRecipe,
   shell: AgentStartupShell
-): string | null {
+): ResumeRecipe {
   if (
     agent !== 'claude' ||
     providerSession.permissionMode !== 'bypassPermissions' ||
-    tuiAgentArgsBypassPermissions('claude', agentArgs, shell)
+    // Why: a recorded command replaces the arguments on resume, so it decides what runs.
+    tuiAgentArgsBypassPermissions('claude', recipe.agentCommand ?? recipe.agentArgs, shell)
   ) {
-    return agentArgs
+    return recipe
   }
-  return [agentPermissionArgs('claude', 'full-access'), agentArgs].filter(Boolean).join(' ')
+  const bypass = agentPermissionArgs('claude', 'full-access')
+  return {
+    agentArgs: tuiAgentArgsBypassPermissions('claude', recipe.agentArgs, shell)
+      ? recipe.agentArgs
+      : [bypass, recipe.agentArgs].filter(Boolean).join(' '),
+    ...(recipe.agentCommand ? { agentCommand: `${recipe.agentCommand} ${bypass}` } : {})
+  }
 }
 
 /** Account-switch startup: Codex can relaunch fresh; Claude requires its recorded conversation. */
