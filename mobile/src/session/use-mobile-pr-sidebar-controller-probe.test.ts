@@ -225,22 +225,56 @@ describe('useMobilePrSidebarController write reconciliation', () => {
     expect(sidebar?.actions.error).toBe('Connection lost after close')
   })
 
-  it('shows a merge the reread found even when its checks read failed', async () => {
-    await renderReady('topic-a')
-    rpc.fetchPRForBranch.mockResolvedValue({ ok: true, result: pr(7, { state: 'merged' }) })
-    rpc.fetchPRChecks.mockResolvedValue({ ok: false, error: 'Checks unavailable' })
-    rpc.fetchWorkItemDetails.mockReturnValue(new Promise(() => {}))
-
-    act(() => {
-      void sidebar!.actions.merge()
+  it('lands details that settle in the same batch as a cold first load', async () => {
+    await act(async () => {
+      renderer = create(createElement(SidebarHarness, { branch: 'topic-a' }))
     })
-    await settle()
+    await act(async () => {
+      await sidebar!.controller.refetchPRSidebar({ includeDetails: true })
+    })
 
     expect(sidebar?.controller.prSidebarState).toMatchObject({
       kind: 'ready',
-      data: { pr: { number: 7, state: 'merged' }, checks: [CHECK], checksError: null }
+      data: { pr: { number: 7 }, details: { body: 'Old' } }
     })
   })
+
+  // Phase two settles in the same batch as phase one (a fast read, or a closed client failing at once):
+  // the details publication must not restore the PR state the reread just replaced.
+  it.each([
+    { state: 'closed', details: 'fulfilled' },
+    { state: 'closed', details: 'failed' },
+    { state: 'merged', details: 'fulfilled' },
+    { state: 'merged', details: 'failed' }
+  ] as const)(
+    'shows the $state PR a reread found when its checks read failed and details $details at once',
+    async ({ state, details: detailsOutcome }) => {
+      await renderReady('topic-a')
+      rpc.fetchPRForBranch.mockResolvedValue({ ok: true, result: pr(7, { state }) })
+      rpc.fetchPRChecks.mockResolvedValue({ ok: false, error: 'Checks unavailable' })
+      rpc.fetchWorkItemDetails.mockResolvedValue(
+        detailsOutcome === 'fulfilled'
+          ? { ok: true, result: details('New') }
+          : { ok: false, error: 'Client closed' }
+      )
+
+      await act(async () => {
+        await (state === 'closed'
+          ? sidebar!.actions.updateState('closed')
+          : sidebar!.actions.merge())
+      })
+
+      expect(sidebar?.controller.prSidebarState).toMatchObject({
+        kind: 'ready',
+        data: { pr: { number: 7, state }, checks: [CHECK], checksError: null }
+      })
+      const shown = sidebar!.controller.prSidebarState
+      expect(shown.kind === 'ready' && sidebar!.actions.resolveState(shown.data.pr.state)).toBe(
+        state
+      )
+      expect(sidebar?.actions.error).toBe(state === 'closed' ? 'Connection lost after close' : null)
+    }
+  )
 
   it('rereads behind a held foreground read, and a pre-write details read cannot land after it', async () => {
     await renderReady('topic-a', true)

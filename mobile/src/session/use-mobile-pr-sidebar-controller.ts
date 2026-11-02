@@ -129,22 +129,25 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (detailsInFlightRef.current?.seq === detailsSeq) {
         detailsInFlightRef.current = null
       }
-      const current = stateRef.current
-      if (
-        detailsSeq !== detailsSeqRef.current ||
-        stateIdentityRef.current !== loadIdentity ||
-        current.kind !== 'ready' ||
-        prSidebarReviewKey(current.data.pr) !== review
-      ) {
-        return
-      }
-      // Replace nonfatal null with a placeholder so details cannot spin forever.
-      const details = resolvePrSidebarDetailsAfterPhase2({
-        fetched: fetchedDetails,
-        prior: current.data.details,
-        pr: current.data.pr
+      // Patch only details, checked against the latest queued state when React applies it: phase one's
+      // publication may not have rendered yet, and spreading the last render would undo its new PR state.
+      setState((current) => {
+        if (
+          detailsSeq !== detailsSeqRef.current ||
+          stateIdentityRef.current !== loadIdentity ||
+          current.kind !== 'ready' ||
+          prSidebarReviewKey(current.data.pr) !== review
+        ) {
+          return current
+        }
+        // Replace nonfatal null with a placeholder so details cannot spin forever.
+        const details = resolvePrSidebarDetailsAfterPhase2({
+          fetched: fetchedDetails,
+          prior: current.data.details,
+          pr: current.data.pr
+        })
+        return { kind: 'ready', data: { ...current.data, details } }
       })
-      setState({ kind: 'ready', data: { ...current.data, details } })
     },
     [worktreeId]
   )
