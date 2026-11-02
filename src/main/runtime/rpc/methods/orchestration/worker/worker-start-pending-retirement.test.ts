@@ -149,7 +149,7 @@ describe('pending worker execution and Dispatch retirement', () => {
     const teardown = vi.fn(() => {
       throw new Error('must not tear down accepted work')
     })
-    // SAFETY: the accepted-pending branch must return before accessing any runtime or structured-session operation.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the accepted-pending branch must return before accessing any runtime or structured-session operation.
     const runtime = { removeTerminal: teardown } as unknown as Parameters<
       typeof failWorkerStartWithReceipt
     >[0]['runtime']

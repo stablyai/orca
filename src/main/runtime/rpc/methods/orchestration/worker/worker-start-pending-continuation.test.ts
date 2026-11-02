@@ -83,7 +83,7 @@ it.each(['agent', 'shell'] as const)(
         name: 'child',
         timeoutMs: 20
       },
-      // SAFETY: the real placement, readiness, write guard and settlement exercise only these runtime ports.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real placement, readiness, write guard and settlement exercise only these runtime ports.
       runtime: runtime as unknown as OrcaRuntimeService,
       db,
       bindRun: () => db.getRun('run_legacy_local')!,

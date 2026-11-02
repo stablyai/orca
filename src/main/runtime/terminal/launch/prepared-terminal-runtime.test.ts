@@ -170,8 +170,8 @@ async function fixture(options: FixtureOptions = {}) {
   const wait = (
     identity: Parameters<OrcaRuntimeWithPreparedTerminals['waitForPreparedAgentTerminal']>[0]
   ) =>
-    // SAFETY: the waiter reads only the controller, operation store and PTY records injected above.
     OrcaRuntimeWithPreparedTerminals.prototype.waitForPreparedAgentTerminal.call(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the waiter reads only the controller, operation store and PTY records injected above.
       runtime as never,
       identity
     )

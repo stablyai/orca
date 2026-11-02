@@ -1,6 +1,6 @@
 import type { TerminalSpawnAdmissionMode } from './terminal-spawn-admission-mode'
-import type { SpawnAdmissionDecision } from '../../shared/host-spawn-admission'
 import type {
+  SpawnAdmissionDecision,
   SpawnAdmissionState,
   SpawnCharge,
   SpawnRequestFacts

@@ -136,7 +136,7 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
   it('seeds the tab reserved for a pending agent while only Setup exists, never Setup', () => {
     // Setup is interactive first; the agent tab appears only after Setup succeeds.
     setTabs([{ id: 'setup-tab' }, { id: 'logs' }])
-    const created = {
+    const result = {
       worktree: { id: 'wt-1' },
       startupTerminal: {
         spawned: false,
@@ -150,7 +150,9 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
           setupTerminalHandle: 'term_setup'
         }
       }
-    } as unknown as CreatedWorktreeResult
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: seeding reads only the worktree id and the pending startup receipt.
+    const created = result as unknown as CreatedWorktreeResult
 
     seedAgentTabStateAfterWorktreeCreate({
       request,
