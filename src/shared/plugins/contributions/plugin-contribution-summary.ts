@@ -89,7 +89,9 @@ export function pluginContributionSummary(
       c.newFiles,
       (newFile) => newFile.title,
       (newFile) => newFile.extension
-    )
+    ),
+    // Each item's text, or its id when it shows only an icon.
+    ...named('statusBarItems', c.statusBarItems, (item) => item.text || item.id)
   ].slice(0, PLUGIN_CONTRIBUTION_SUMMARY_LIMIT)
 }
 

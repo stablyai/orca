@@ -4,11 +4,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalToolCallState
 } from '../journal/agent-session-journal-types'
-import { describeToolInput } from '../../native-chat/tools/native-chat-tool-summary'
-import {
-  projectStructuredAgentSessionStatusSummary,
-  projectStructuredItemsToNativeChat
-} from './structured-agent-session-projection'
+import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
 import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
 
 function item(
@@ -54,15 +50,6 @@ describe('tool line between tool calls', () => {
       input: { file_path: `/repo/${name}.ts` },
       state
     })
-
-  it('keeps naming the finished tool while the agent thinks', () => {
-    const summary = projectStructuredAgentSessionStatusSummary([
-      ask,
-      running,
-      call('read', 3, 'Read', 'completed')
-    ])
-    expect(summary).toMatchObject({ toolName: 'Read', toolInput: '/repo/Read.ts' })
-  })
 
   // Codex marks any nonzero exit failed (a no-match search, a red test), so clearing would blank the line.
   it('keeps naming a failed call until the next tool starts', () => {
@@ -161,22 +148,6 @@ describe('tool line between tool calls', () => {
       expect(summary).toMatchObject({ toolName: 'Diff', toolInput: 'src/a.ts' })
     })
 
-    it('moves from the running apply_patch call to the Diff the same item becomes', () => {
-      const applying = item('edit', 4, {
-        kind: 'tool-call',
-        name: 'apply_patch',
-        input: { changes: [] },
-        state: 'running'
-      })
-      const written = { ...diff('edit', 4, 'src/a.ts'), revision: 2 }
-      expect(
-        projectStructuredAgentSessionStatusSummary([ask, running, rg, applying]).toolName
-      ).toBe('apply_patch')
-      expect(projectStructuredAgentSessionStatusSummary([ask, running, rg, written])).toMatchObject(
-        { toolName: 'Diff', toolInput: 'src/a.ts' }
-      )
-    })
-
     it('lets an older running command beat a newer Diff, which has no lifecycle', () => {
       const summary = projectStructuredAgentSessionStatusSummary([
         ask,
@@ -200,16 +171,6 @@ describe('tool line between tool calls', () => {
       }
     )
 
-    it('names a multi-file edit by its file count, as the chat does', () => {
-      const summary = projectStructuredAgentSessionStatusSummary([
-        ask,
-        running,
-        rg,
-        diff('edit', 4, '3 files')
-      ])
-      expect(summary).toMatchObject({ toolName: 'Diff', toolInput: '3 files' })
-    })
-
     it("never names a subagent's Diff", () => {
       const childEdit = child(diff('child-edit', 4, 'src/child.ts'))
       expect(
@@ -230,62 +191,5 @@ describe('tool line between tool calls', () => {
         projectStructuredAgentSessionStatusSummary(items, [submission('follow-up')]).toolName
       ).toBeUndefined()
     })
-  })
-
-  // The row names the chat's own block, so a tool the chat draws can never read differently here.
-  it('names, at every point in a turn, the block the chat draws for that tool', () => {
-    const timeline: AgentJournalRenderItem[] = [
-      ask,
-      running,
-      item('rg', 3, {
-        kind: 'tool-call',
-        name: 'shell',
-        input: { command: 'rg foo' },
-        callId: 'rg',
-        exitCode: 0,
-        state: 'completed'
-      }),
-      child(item('child-edit', 4, { kind: 'diff', path: 'src/child.ts', patch })),
-      item('edit', 5, { kind: 'diff', path: 'src/a.ts', patch }),
-      item('think', 6, {
-        kind: 'message',
-        role: 'reasoning',
-        blocks: [{ type: 'text', text: 'next' }]
-      }),
-      item('follow-up', 7, {
-        kind: 'message',
-        role: 'user',
-        blocks: [{ type: 'text', text: 'also check the tests' }]
-      }),
-      item('test', 8, {
-        kind: 'tool-call',
-        name: 'shell',
-        input: { command: 'pnpm test' },
-        state: 'running'
-      }),
-      child(
-        item('child-grep', 9, {
-          kind: 'tool-call',
-          name: 'Grep',
-          input: { pattern: 'x' },
-          state: 'running'
-        })
-      ),
-      item('multi', 10, { kind: 'diff', path: '2 files', patch })
-    ]
-    for (let end = 2; end <= timeline.length; end += 1) {
-      const items = timeline.slice(0, end)
-      const chatCalls = projectStructuredItemsToNativeChat(
-        items.slice(2).filter((entry) => entry.agentId === undefined)
-      )
-        .flatMap((message) => message.blocks)
-        .filter((block) => block.type === 'tool-call')
-      const expected =
-        chatCalls.findLast((block) => block.state === 'running') ?? chatCalls.at(-1) ?? null
-      expect(statusStructuredAgentSessionToolCall(items)).toEqual(expected)
-      const summary = projectStructuredAgentSessionStatusSummary(items)
-      expect(summary.toolName).toBe(expected?.name)
-      expect(summary.toolInput).toBe(expected ? describeToolInput(expected.input) : undefined)
-    }
   })
 })

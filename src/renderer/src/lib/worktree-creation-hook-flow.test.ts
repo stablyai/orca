@@ -82,7 +82,8 @@ describe('background script preparation', () => {
       'setup',
       'ssh:remote-1',
       undefined,
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     )
 
     trust.resolve('run')

@@ -1,3 +1,5 @@
+import { resolveWorkerLineageFacts, FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
+export { FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
@@ -36,37 +38,15 @@ export function resolveWorkerLineage(
   db: OrchestrationDb,
   dispatchId: string
 ): { latest: DispatchContextRow; resource: WorkerTerminalResourceRow | undefined } | undefined {
-  const addressed = db.getDispatchContextById(dispatchId)
-  if (!addressed) {
-    return undefined
-  }
-  let latest = addressed
-  const resourceOf = (id: string) =>
-    db.getWorkerTerminalResourceByOwner(id) ?? db.getWorkerTerminalResourceFormerlyOwnedBy(id)
-  const seen = new Set([latest.id])
-  // A follow-up that never got a worker continues the nearest one before it that did.
-  let resource = resourceOf(latest.id)
-  for (let back = addressed; !resource && back.follow_up_of_dispatch_id;) {
-    const prior = db.getDispatchContextById(back.follow_up_of_dispatch_id)
-    if (!prior || seen.has(prior.id)) {
-      break
-    }
-    seen.add(prior.id)
-    back = prior
-    resource = resourceOf(prior.id)
-  }
-  for (;;) {
-    const transferred = resource && resource.owner_dispatch_id !== latest.id ? resource : undefined
-    const next =
-      getFollowUpDispatch(db, latest.id) ??
-      (transferred ? db.getDispatchContextById(transferred.owner_dispatch_id) : undefined)
-    if (!next || seen.has(next.id)) {
-      return { latest, resource }
-    }
-    seen.add(next.id)
-    latest = next
-    resource = resourceOf(next.id) ?? resource
-  }
+  return resolveWorkerLineageFacts(
+    {
+      dispatch: (id) => db.getDispatchContextById(id),
+      ownedResource: (id) => db.getWorkerTerminalResourceByOwner(id),
+      formerResource: (id) => db.getWorkerTerminalResourceFormerlyOwnedBy(id),
+      followUp: (id) => getFollowUpDispatch(db, id)
+    },
+    dispatchId
+  )
 }
 
 export function readWorkerResumeSession(
@@ -136,7 +116,6 @@ export function carryWorkerResumeSession(
 }
 
 /** Mail a coordinator sends a working worker, and so what continues one once it has reported. */
-export const FOLLOW_UP_MESSAGE_TYPES = ['status', 'dispatch', 'handoff'] as const
 
 const UNREAD_FOLLOW_UP_MAIL_SQL = `SELECT 1 FROM messages
   WHERE to_handle = 'dispatch:' || dispatch_contexts.id AND read = 0

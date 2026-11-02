@@ -11,8 +11,10 @@ const {
   listSimulatorDevicesMock,
   listServeSimHelperProcessesForDeviceMock,
   shutdownSimulatorDeviceMock,
-  netFetchMock
+  netFetchMock,
+  assertInputNotShadowedMock
 } = vi.hoisted(() => ({
+  assertInputNotShadowedMock: vi.fn(async (_udid: string) => {}),
   execServeSimCommandMock: vi.fn(async () => ({})),
   hideNativeSimulatorAppMock: vi.fn(async () => {}),
   killServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
@@ -44,6 +46,10 @@ vi.mock('./serve-sim-helper-processes', () => ({
   listServeSimHelperProcessesForDevice: listServeSimHelperProcessesForDeviceMock
 }))
 
+vi.mock('./simulator-device-hub-input', () => ({
+  assertSimulatorInputNotShadowedByDeviceHub: assertInputNotShadowedMock
+}))
+
 vi.mock('./simulator-app-visibility', () => ({
   hideNativeSimulatorApp: hideNativeSimulatorAppMock
 }))
@@ -59,6 +65,7 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, platform: () => 'darwin' }
 })
 
+import { EmulatorError } from './emulator-errors'
 import { EmulatorBridge } from './emulator-bridge'
 import { RuntimeEmulatorCommands } from '../runtime/orca-runtime-emulator'
 
@@ -429,6 +436,38 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 
+  it('lists only the selected worktree sessions, across backends, and every session for all', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-ios', session('device-1'), { managed: true })
+    bridge.registerActiveEmulator(
+      'wt-android',
+      { ...session('emulator-5554'), backend: 'android', streamCodec: 'h264' },
+      { managed: true }
+    )
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async (selector: string) => selector.replace('id:', '')),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async (selector: string) => selector),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({ mobileEmulatorEnabled: true, mobileEmulatorDefaultDeviceUdid: null })
+    })
+
+    await expect(commands.emulatorList({ worktree: 'id:wt-android' })).resolves.toEqual({
+      sessions: [
+        expect.objectContaining({
+          worktreeId: 'wt-android',
+          backend: 'android',
+          deviceUdid: 'emulator-5554'
+        })
+      ]
+    })
+    await expect(commands.emulatorList({ worktree: 'id:wt-none' })).resolves.toEqual({
+      sessions: []
+    })
+    const all = (await commands.emulatorList({})).sessions.map((row) => row.worktreeId)
+    expect(all.sort()).toEqual(['wt-android', 'wt-ios'])
+  })
+
   it('heals a session registered without an axUrl by deriving it from the stream url', async () => {
     const tree = [{ type: 'Application', children: [] }]
     netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
@@ -496,7 +535,8 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     const send = vi.fn()
     const waitForEndpointReady = vi.fn(async () => true)
     const bridge = new EmulatorBridge({ waitForEndpointReady })
-    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const active: EmulatorSessionInfo = { ...session('device-1'), backend: 'ios' }
+    bridge.registerActiveEmulator('wt-1', active, { managed: true })
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -510,14 +550,72 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
 
     const res = await commands.emulatorAttach({ device: 'device-1', worktree: 'wt-1' })
 
-    expect(res).toEqual({ attached: true, info: session('device-1') })
+    expect(res).toEqual({ attached: true, info: active })
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith('ui:emulatorAutoAttach', {
       worktreeId: 'wt-1',
-      info: session('device-1')
+      info: active
     })
+  })
+
+  it('checks pane input against Device Hub only for an active iOS session', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-ios', session('device-1'), { managed: true })
+    bridge.registerActiveEmulator('wt-android', session('emulator-5554'), {
+      managed: true,
+      backend: 'android'
+    })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async (worktree: string) => worktree),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async (worktree: string) => worktree),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({ mobileEmulatorEnabled: true, mobileEmulatorDefaultDeviceUdid: null })
+    })
+    assertInputNotShadowedMock.mockRejectedValueOnce(
+      new EmulatorError('emulator_input_blocked', 'Device Hub has taken over input')
+    )
+
+    await expect(commands.emulatorCheckInput({ worktree: 'wt-ios' })).rejects.toMatchObject({
+      code: 'emulator_input_blocked'
+    })
+    await expect(commands.emulatorCheckInput({ worktree: 'wt-android' })).resolves.toEqual({
+      ok: true
+    })
+    expect(assertInputNotShadowedMock.mock.calls).toEqual([['device-1']])
+  })
+
+  it('keeps the live workspace device when reopened without a device', async () => {
+    listSimulatorDevicesMock.mockImplementation(async () => [
+      {
+        udid: 'iphone-1',
+        name: 'iPhone 16',
+        state: 'Shutdown',
+        runtime: 'iOS 18.0',
+        isAvailable: true
+      }
+    ])
+    const bridge = new EmulatorBridge({ waitForEndpointReady: vi.fn(async () => true) })
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: 'iphone-1'
+      })
+    })
+
+    await expect(commands.emulatorAttach({ worktree: 'wt-1' })).resolves.toEqual({
+      attached: true,
+      info: { ...session('device-1'), backend: 'ios' }
+    })
+    expect(execServeSimCommandMock).not.toHaveBeenCalled()
+    expect(bridge.getActiveForWorktree('wt-1')?.deviceUdid).toBe('device-1')
   })
 
   it('rejects attach when mobile emulator is disabled', async () => {

@@ -8,7 +8,10 @@ import {
   getFolderWorkspaceStatusRequestSnapshot
 } from './folder-path-status'
 import { createProjectGroup } from '../../../../shared/project-groups'
-import { makeRepo, makeFolderWorkspace } from '@/components/worktree-jump-palette-test-fixtures'
+import {
+  makeRepo,
+  makeFolderWorkspace
+} from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { createTestStore } from '../slices/store-test-helpers'
 
 const mocks = vi.hoisted(() => ({ getPathStatus: vi.fn(), callRuntimeRpc: vi.fn() }))

@@ -31,6 +31,8 @@ const COPY: Record<EmulatorFailureCode, (params: (name: string) => Param) => str
     translate('emulator.errors.serveSimNoEndpoints', EN.serveSimNoEndpoints),
   serveSimEndpointUnreachable: () =>
     translate('emulator.errors.serveSimEndpointUnreachable', EN.serveSimEndpointUnreachable),
+  deviceHubInputBlocked: () =>
+    translate('emulator.errors.deviceHubInputBlocked', EN.deviceHubInputBlocked),
   androidSdkMissing: () => translate('emulator.errors.androidSdkMissing', EN.androidSdkMissing),
   adbUnavailable: () => translate('emulator.errors.adbUnavailable', EN.adbUnavailable),
   noAndroidDevices: () => translate('emulator.errors.noAndroidDevices', EN.noAndroidDevices),
@@ -53,6 +55,16 @@ const COPY: Record<EmulatorFailureCode, (params: (name: string) => Param) => str
     return avdName === null
       ? null
       : translate('emulator.errors.avdBootTimeout', EN.avdBootTimeout, { avdName })
+  },
+  avdExitedBeforeBoot: (param) => {
+    const avdName = param('avdName')
+    const detail = param('detail')
+    return avdName === null || detail === null
+      ? null
+      : translate('emulator.errors.avdExitedBeforeBoot', EN.avdExitedBeforeBoot, {
+          avdName,
+          detail
+        })
   },
   scrcpyDownloadFailed: (param) => {
     const detail = param('detail')

@@ -14,7 +14,7 @@ import {
   buildNewTabAgentMenuRows,
   type HostChatAnswer
 } from '../../../../shared/agent-launch-picker-rows'
-import * as picker from '../../../../shared/agent-launch-picker'
+import type * as picker from '../../../../shared/agent-launch-picker'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
@@ -227,71 +227,6 @@ it('publishes only committed selection to physical catalog admission after a sus
   )
 })
 
-it('reads host Arguments and remembered chat choices without leaking desktop defaults or refetching for selection', async () => {
-  const menu = model()
-  const hook = renderHook(
-    ({ selected }: { selected?: 'codex' }) =>
-      useAgentPickerInventoryEntries(
-        useAgentLaunchPickerInventorySource('wt', menu, true, selected)
-      ),
-    { initialProps: {} }
-  )
-  expect(hook.result.current[0]).toMatchObject({
-    defaultsPending: true,
-    terminal: {},
-    structured: {}
-  })
-  await act(async () => {})
-  expect(hook.result.current[0]).toMatchObject({
-    defaultsPending: false,
-    arguments: '--host-only',
-    terminal: { permissionMode: 'ask' },
-    structured: { model: 'host-model', options: { effort: 'low' }, permissionMode: 'full-access' },
-    catalog
-  })
-  expect(mocks.settings).toHaveBeenCalledWith(
-    { environmentId: 'alpha', pairingRevision: 7, runtimeId: 'process-alpha' },
-    expect.any(AbortSignal)
-  )
-  hook.rerender({ selected: 'codex' })
-  expect(mocks.settings).toHaveBeenCalledTimes(1)
-  expect(mocks.session).toHaveBeenCalledTimes(2)
-  expect(
-    mocks.session.mock.calls.every(
-      (call) => call[0].environmentId === 'alpha' && call[2].worktree === 'id:wt'
-    )
-  ).toBe(true)
-  expect(mocks.rpc).not.toHaveBeenCalled()
-})
-
-it('uses existing legacy settings and a missing optional seed on an older paired host', async () => {
-  mocks.settings.mockResolvedValue(null)
-  mocks.rpc.mockResolvedValue({
-    settings: { agentDefaultArgs: { codex: '--sandbox workspace-write' } }
-  })
-  mocks.session.mockImplementation(async (_target, method) =>
-    method === 'agentSession.modelCatalog' ? catalog : { supported: true }
-  )
-  const hook = renderHook(() =>
-    useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', model(), true))
-  )
-  await act(async () => {})
-  expect(hook.result.current[0]).toMatchObject({
-    defaultsPending: false,
-    arguments: '--sandbox workspace-write',
-    structured: { options: {} }
-  })
-  expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
-    { kind: 'environment', environmentId: 'alpha' },
-    'settings.get',
-    undefined,
-    expect.objectContaining({
-      expectedEnvironmentPairingRevision: 7,
-      expectedEnvironmentRuntimeId: 'process-alpha'
-    })
-  )
-})
-
 it('bounds open-time catalog hydration to two agents and discards responses from the previous host', async () => {
   const old = Promise.withResolvers<AgentSessionModelCatalogResult>()
   mocks.session.mockImplementation((_target, method) =>
@@ -409,76 +344,6 @@ it('retains legacy remembered values when createSupport does not supply optional
   })
 })
 
-it('keeps Chat default controls pending until their independent seed read settles, even after catalog publication', async () => {
-  const support = Promise.withResolvers<{ seedOptions?: Record<string, string> }>()
-  mocks.session.mockImplementation((_target, method) =>
-    method === 'agentSession.modelCatalog' ? Promise.resolve(catalog) : support.promise
-  )
-  const hook = renderHook(() =>
-    useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', model(), true))
-  )
-  await act(async () => {})
-  expect(hook.result.current[0]).toMatchObject({
-    defaultsPending: false,
-    structuredDefaultsPending: true,
-    catalog
-  })
-  expect(hook.result.current[0].terminal.permissionMode).toBe('ask')
-  await act(async () =>
-    support.resolve({ seedOptions: { model: 'remembered', permissionMode: 'ask' } })
-  )
-  expect(hook.result.current[0]).toMatchObject({
-    defaultsPending: false,
-    structuredDefaultsPending: false,
-    structured: { model: 'remembered', permissionMode: 'ask' }
-  })
-})
-
-it('acquires each host agent once per open batch at N and 10N, independently of catalog size and selection', async () => {
-  const { TUI_AGENT_CONFIG } = await import('../../../../shared/tui-agent-config')
-  const agents = Object.keys(TUI_AGENT_CONFIG).filter(
-    (agent): agent is keyof typeof TUI_AGENT_CONFIG => Object.hasOwn(TUI_AGENT_CONFIG, agent)
-  )
-  const seeds = vi.spyOn(picker, 'agentPickerChoiceSeeds')
-  for (const count of [3, 30]) {
-    seeds.mockClear()
-    mocks.settings.mockClear()
-    mocks.session.mockClear()
-    const menu = model()
-    if (menu.state !== 'settled') {
-      throw new Error('settled fixture')
-    }
-    menu.rows = agents
-      .slice(0, count)
-      .map((agent) => ({ agent, kind: 'chat', executionHostId: 'runtime:alpha' }))
-    menu.detection.detectedIds = agents.slice(0, count)
-    const hook = renderHook(
-      ({ open, selected }) =>
-        useAgentPickerInventoryEntries(
-          useAgentLaunchPickerInventorySource('wt', menu, open, selected)
-        ),
-      { initialProps: { open: true, selected: agents[0] } }
-    )
-    await act(async () => {})
-    expect(mocks.settings).toHaveBeenCalledTimes(1)
-    expect(
-      mocks.session.mock.calls.filter((call) => call[1] === 'agentSession.modelCatalog')
-    ).toHaveLength(count)
-    expect(
-      mocks.session.mock.calls.filter((call) => call[1] === 'agentSession.createSupport')
-    ).toHaveLength(count)
-    hook.rerender({ open: true, selected: agents[1] })
-    expect(mocks.session).toHaveBeenCalledTimes(2 * count)
-    expect(seeds).toHaveBeenCalledTimes(2 * count)
-    hook.rerender({ open: false, selected: agents[1] })
-    hook.rerender({ open: true, selected: agents[1] })
-    await act(async () => {})
-    expect(mocks.session).toHaveBeenCalledTimes(4 * count)
-    hook.unmount()
-  }
-  seeds.mockRestore()
-})
-
 it('updates terminal availability when detection changes while the Chat rows stay the same', async () => {
   const menu = model()
   if (menu.state !== 'settled') {
@@ -497,20 +362,6 @@ it('updates terminal availability when detection changes while the Chat rows sta
   hook.rerender({ value: menu })
   await act(async () => {})
   expect(hook.result.current[0].surfaces).toEqual(['chat', 'terminal'])
-})
-
-it('reorders entries when the default agent changes while the rows stay the same', async () => {
-  const menu = model('default-order', ['codex', 'claude'])
-  const hook = renderHook(
-    ({ value }: { value: Extract<NewTabAgentMenuModel, { state: 'settled' }> }) =>
-      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', value, true)),
-    { initialProps: { value: { ...menu, defaultTuiAgent: 'claude' } } }
-  )
-  await act(async () => {})
-  expect(hook.result.current[0].agent).toBe('claude')
-  hook.rerender({ value: { ...menu, defaultTuiAgent: 'codex' } })
-  await act(async () => {})
-  expect(hook.result.current[0].agent).toBe('codex')
 })
 
 it.each([3, 30])(

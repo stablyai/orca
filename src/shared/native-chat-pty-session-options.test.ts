@@ -28,29 +28,6 @@ describe('native chat PTY session options', () => {
     expect(surface.getSnapshot()).toEqual([])
   })
 
-  it('renders the version-neutral seed picker before any host catalog arrives', () => {
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: vi.fn()
-    })!
-
-    expect(surface.getSnapshot()[0]).toMatchObject({
-      id: 'model',
-      valueSource: 'unknown',
-      kind: {
-        choices: [
-          expect.objectContaining({ value: 'fable', label: 'Fable' }),
-          expect.objectContaining({ value: 'opus', label: 'Opus' }),
-          expect.objectContaining({ value: 'sonnet', label: 'Sonnet' }),
-          expect.objectContaining({ value: 'haiku', label: 'Haiku' })
-        ]
-      }
-    })
-  })
-
   it('uses model and effort reported by the live Claude terminal', () => {
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',

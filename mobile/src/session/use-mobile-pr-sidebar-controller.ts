@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { GitHubPRFileViewedState } from '../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { backgroundReadFailed, useForegroundFirstLoad } from './pr-sidebar-load-result'
 import {
   fetchGithubRepoSlug,
   fetchHostedReviewForBranch,
@@ -35,6 +36,8 @@ type PrSidebarControllerInput = {
 // Load body/comments only when the PR segment opens; the hub chip needs just PR/checks.
 export type PrSidebarLoadOptions = {
   includeDetails?: boolean
+  /** A poll the user did not ask for: a failed read leaves the shown PR in place. */
+  background?: boolean
 }
 
 // Keep HEAD out of identity: commits soft-refresh checks without clearing ready UI.
@@ -128,13 +131,13 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [identity])
 
-  const load = useCallback(
+  const loadOnce = useCallback(
     async (options?: PrSidebarLoadOptions) => {
       const includeDetails = options?.includeDetails ?? true
       const deps = buildDeps()
       const loadIdentity = identity
       if (!deps || !branch || !loadIdentity) {
-        return
+        return 'stale'
       }
       const seq = loadSeqRef.current + 1
       loadSeqRef.current = seq
@@ -155,7 +158,10 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         !shouldApplyResult(seq, loadSeqRef.current) ||
         stateIdentityRef.current !== loadIdentity
       ) {
-        return
+        return 'stale'
+      }
+      if (options?.background && backgroundReadFailed(stateRef.current, next)) {
+        return 'failed'
       }
       stateIdentityRef.current = loadIdentity
 
@@ -171,12 +177,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (next.kind === 'ready' && priorDetails != null) {
         setState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
         if (!includeDetails) {
-          return
+          return 'applied'
         }
       } else {
         setState(next)
         if (next.kind !== 'ready' || !includeDetails) {
-          return
+          return next.kind === 'ready' || next.kind === 'none' ? 'applied' : 'failed'
         }
       }
 
@@ -195,7 +201,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         stateRef.current.kind !== 'ready' ||
         stateRef.current.data.pr.number !== next.data.pr.number
       ) {
-        return
+        return 'applied'
       }
       // Replace nonfatal null with a placeholder so details cannot spin forever.
       const details = resolvePrSidebarDetailsAfterPhase2({
@@ -204,9 +210,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         pr: stateRef.current.data.pr
       })
       setState({ kind: 'ready', data: { ...stateRef.current.data, details } })
+      return 'applied'
     },
     [buildDeps, branch, headSha, identity, worktreeId]
   )
+
+  const load = useForegroundFirstLoad(loadOnce)
 
   const ensurePrSidebarDetails = useCallback(async () => {
     const current = stateRef.current

@@ -48,7 +48,7 @@ vi.mock('../navigation/route-handoff', () => ({
 }))
 
 // The dialogs are read off `ConfirmModal`'s props; the drawer under them needs a native runtime.
-vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: () => null }))
 
 vi.mock('../platform/random-v4-uuid', () => ({ randomV4Uuid: dependencies.uuid }))
 

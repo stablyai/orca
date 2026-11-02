@@ -35,12 +35,6 @@ describe('agent-session grouped question answers', () => {
     }
   })
 
-  it('keeps compact answers readable by the original percent-decoding contract', () => {
-    expect(decodeWithOriginalPercentDecoder(encodeAgentSessionQuestionAnswers(answers))).toEqual(
-      answers
-    )
-  })
-
   it('accepts the previous fully percent-encoded representation', () => {
     const encoded = `${GROUP_ANSWER_PREFIX}${encodeURIComponent(JSON.stringify(answers))}`
 

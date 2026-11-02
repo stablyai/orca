@@ -5,6 +5,7 @@ import type { Tab } from '../tab-types'
 import type { LayoutEditorView } from './layout-editor-view'
 import { loadWorkspace } from './workspace-layout-load-workspace'
 import { nameBasedLoadContext } from './workspace-layout-minted-ids'
+import { createRecordedLeafReader } from './workspace-layout-recorded-key-order'
 
 vi.mock('../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -36,26 +37,30 @@ function load(entries: Tab[], hostId: ExecutionHostId) {
       }
     ])
   )
+  const session = { ...getDefaultWorkspaceSession(), unifiedTabs: { [key]: entries } }
   return () =>
-    loadWorkspace({
-      session: { ...getDefaultWorkspaceSession(), unifiedTabs: { [key]: entries } },
-      hostId,
-      key,
-      terminalHomes: new Map(),
-      context: { ...nameBasedLoadContext(), editorViewsOf: () => views },
-      view: {
-        activeRepoId: null,
-        activeWorktreeId: key,
-        activeTabId: null,
-        groups: {},
-        lastFocusedAt: {},
-        panes: {},
-        editorDrafts: {}
+    loadWorkspace(
+      {
+        session,
+        hostId,
+        key,
+        terminalHomes: new Map(),
+        context: { ...nameBasedLoadContext(), editorViewsOf: () => views },
+        view: {
+          activeRepoId: null,
+          activeWorktreeId: key,
+          activeTabId: null,
+          groups: {},
+          lastFocusedAt: {},
+          panes: {},
+          editorDrafts: {}
+        },
+        facts: { tabLabels: {}, terminalRows: {}, scrollback: {}, browserTabs: {} },
+        layouts: new Map(),
+        canonicalTabIdBySubsumedTabId: new Map()
       },
-      facts: { tabLabels: {}, terminalRows: {}, scrollback: {}, browserTabs: {} },
-      layouts: new Map(),
-      canonicalTabIdBySubsumedTabId: new Map()
-    })
+      createRecordedLeafReader(session)
+    )
 }
 
 it.each(['local', 'ssh:builder'] as const)(

@@ -6,6 +6,7 @@ import {
 } from '../../../src/shared/execution-host'
 import { parsePaneKey } from '../../../src/shared/stable-pane-id'
 import { hostScopeCensusIsComplete } from '../../../src/shared/runtime-listing-host-scope'
+import { salvagingArray } from '../../../src/shared/zod-salvage'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import type { RpcClient } from '../transport/rpc-client'
@@ -20,7 +21,9 @@ const terminalList = bindDeferredRpcOperation(
     read: rpcResultVariant(
       'original-pane-inventory',
       z.object({
-        terminals: z.array(
+        // Another pane's newer value must not hide the target; a dropped row leaves fewer rows
+        // than totalCount, so it can never prove the target absent.
+        terminals: salvagingArray(
           z.object({
             worktreeId: z.string(),
             tabId: z.string(),
