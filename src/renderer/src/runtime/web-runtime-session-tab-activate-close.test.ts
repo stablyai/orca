@@ -159,7 +159,7 @@ describe('web runtime session tab actions', () => {
         owner,
         WORKTREE_ID,
         'host-browser-unified',
-        Date.now() + 60_000
+        Number.MAX_SAFE_INTEGER
       )
     ).toBe(true)
     const due = takeDueWebSessionCloseReplays(
