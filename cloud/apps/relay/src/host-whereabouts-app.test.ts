@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { HostWhereaboutsRow } from './assignment-store.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import type { HostWhereaboutsRow } from './assignment/assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import { ShadowSeatDirectory } from './shadow-seat-directory.js'

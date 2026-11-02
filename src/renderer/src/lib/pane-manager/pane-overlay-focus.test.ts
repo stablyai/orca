@@ -31,23 +31,43 @@ function fixture() {
   const panes = new Map([[pane.id, pane]])
   const publishPaneCreated = vi.fn()
   const onActivePaneChange = vi.fn()
+  function unexpectedHostOperation(): never {
+    throw new Error('Unexpected host operation in overlay focus fixture')
+  }
+  const options = { onActivePaneChange, linkOpenHint: unexpectedHostOperation }
   const manager = Object.create(PaneManager.prototype) as PaneManager
   Object.assign(manager, {
     panes,
     activePaneId: null,
     styleOptions: {},
-    options: { onActivePaneChange }
+    options
   })
-  const host = {
-    options: {},
+  const host: PaneManagerHost = {
+    options,
     root,
     panes,
+    get identities() {
+      return unexpectedHostOperation()
+    },
+    get dragState() {
+      return unexpectedHostOperation()
+    },
+    isDestroyed: unexpectedHostOperation,
+    isRenderingSuspended: unexpectedHostOperation,
+    allocatePaneId: unexpectedHostOperation,
+    createDivider: unexpectedHostOperation,
+    getDragCallbacks: unexpectedHostOperation,
+    setActivePane: (paneId, opts) => manager.setActivePane(paneId, opts),
+    requestPaneReparentFrame: unexpectedHostOperation,
     createPaneInternal: () => pane,
-    setActivePaneId: vi.fn(),
-    getActivePaneId: () => pane.id,
+    setActivePaneId: vi.fn((activePaneId: number | null) => {
+      Object.assign(manager, { activePaneId })
+    }),
+    getActivePaneId: () => manager.getActivePane()?.id ?? null,
     getStyleOptions: () => ({}),
     publishPaneCreated
-  } as unknown as PaneManagerHost
+  }
+  Object.assign(manager, { host })
   return { root, container, textarea, pane, host, manager, publishPaneCreated, onActivePaneChange }
 }
 

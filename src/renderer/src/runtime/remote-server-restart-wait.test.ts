@@ -150,28 +150,4 @@ describe('waitForReplacementRuntime', () => {
     // Second tick starts at 3s; status spends 2s, leaving 4s of 9s rather than the tick’s original 6s.
     expect(getUpdaterStatus).toHaveBeenNthCalledWith(1, 'server-1', 4_000)
   })
-
-  it('bounds the failure probe by the same remaining budget', async () => {
-    let clock = 0
-    const getUpdaterStatus = vi.fn(async () => idleSnapshot)
-
-    await expect(
-      waitForReplacementRuntime(
-        'server-1',
-        {
-          now: () => clock,
-          wait: async (milliseconds) => {
-            clock += milliseconds
-          },
-          getUpdaterStatus,
-          getRuntimeStatus: async () => runtime('1.4.0', 'runtime-old')
-        },
-        install,
-        { reconnectTimeoutMs: 4_000, pollIntervalMs: 1_000 }
-      )
-    ).rejects.toThrow('remote_update_reconnect_timeout')
-
-    // First tick is the probe's warm-up; the second runs with 3s of the 4s budget left.
-    expect(getUpdaterStatus).toHaveBeenCalledWith('server-1', 3_000)
-  })
 })

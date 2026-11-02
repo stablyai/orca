@@ -1,5 +1,5 @@
 import { subscribeWebWorkspaceSleep } from './web-workspace-sleep-notices'
-import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session/agent-session-attachments'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { savePastedTextAsWebAgentSessionAttachment } from './web-pasted-text-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'
@@ -16,6 +16,7 @@ import {
   readClipboardImagePngBase64,
   readClipboardImageThumbnail,
   saveClipboardImageAsTempFileInRuntime,
+  writeWebClipboardImage,
   writeWebClipboardText
 } from './web-clipboard-api'
 import {
@@ -186,7 +187,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    writeClipboardImage: () => Promise.resolve(),
+    writeClipboardImage: writeWebClipboardImage,
     writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
     performNativePaste: () => {
       document.execCommand?.('paste')

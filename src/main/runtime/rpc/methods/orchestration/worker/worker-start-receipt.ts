@@ -1,4 +1,5 @@
 import { PreparedTerminalPendingError } from '../../../../terminal/launch/prepared-terminal-pending'
+import { formatTerminalStartFailure } from '../../../../../../shared/terminal-start-failure'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerDispatchRow } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -102,7 +103,9 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
-  const reason = args.error instanceof Error ? args.error.message : String(args.error)
+  const reason =
+    formatTerminalStartFailure(args.error) ??
+    (args.error instanceof Error ? args.error.message : String(args.error))
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
-  FILE_INPUT_TARGET_FUNCTION,
+  FILE_UPLOAD_TARGET_FUNCTION,
   FILL_ELEMENT_FUNCTION,
   SELECT_ALL_ELEMENT_FUNCTION,
   SELECT_OPTION_TARGET_FUNCTION
@@ -131,17 +131,43 @@ describe('element target checks', () => {
     expect(callOn(element, SELECT_OPTION_TARGET_FUNCTION)).toMatch(reason)
   })
 
-  it('accepts select on an enabled <select> and upload on a file input', () => {
-    const body = mount('<select></select><input type="file">')
+  it('accepts select on an enabled <select>', () => {
+    const select = mount('<select></select>').querySelector('select')!
 
-    expect(callOn(body.querySelector('select')!, SELECT_OPTION_TARGET_FUNCTION)).toBeNull()
-    expect(callOn(body.querySelector('input')!, FILE_INPUT_TARGET_FUNCTION)).toBeNull()
+    expect(callOn(select, SELECT_OPTION_TARGET_FUNCTION)).toBeNull()
   })
 
-  it('refuses upload on an element that is not a file input', () => {
-    const button = mount('<button>Attach</button>').querySelector('button')!
+  it('takes a file input for upload as is and clicks any other element to open its picker', () => {
+    const body = mount('<input type="file"><button>Attach</button>')
+    const input = body.querySelector('input')!
+    const button = body.querySelector('button')!
+    const clicks: string[] = []
+    input.addEventListener('click', () => clicks.push('input'))
+    button.addEventListener('click', () => clicks.push('button'))
 
-    expect(callOn(button, FILE_INPUT_TARGET_FUNCTION)).toBe('it is not a file input')
+    expect(callOn(input, FILE_UPLOAD_TARGET_FUNCTION)).toBe(true)
+    expect(callOn(button, FILE_UPLOAD_TARGET_FUNCTION)).toBe(false)
+    expect(clicks).toEqual(['button'])
+  })
+
+  it('clicks an SVG picker control, which has no click() of its own', () => {
+    const svg = mount('<svg role="button"></svg>').querySelector('svg')!
+    let clicked = false
+    document.body.addEventListener('click', () => (clicked = true))
+
+    expect(callOn(svg, FILE_UPLOAD_TARGET_FUNCTION)).toBe(false)
+    expect(clicked).toBe(true)
+  })
+
+  it('refuses upload on a disabled control without clicking it', () => {
+    const body = mount('<input type="file" disabled><button disabled>Attach</button>')
+    const button = body.querySelector('button')!
+    let clicked = false
+    button.addEventListener('click', () => (clicked = true))
+
+    expect(callOn(body.querySelector('input')!, FILE_UPLOAD_TARGET_FUNCTION)).toBe('it is disabled')
+    expect(callOn(button, FILE_UPLOAD_TARGET_FUNCTION)).toBe('it is disabled')
+    expect(clicked).toBe(false)
   })
 
   it('selects all of an input value and reports that it holds focus', () => {

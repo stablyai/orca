@@ -6,7 +6,7 @@ import {
 } from './prepared-terminal-prompt-delivery'
 import { provesPreparedLaunchOwnerGone } from './prepared-terminal-owner-demise'
 export { preparedPromptUncertainText } from './prepared-terminal-prompt-delivery'
-import type { AgentSessionOperationRow } from '../../../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   isPreparedAgentLaunchDescriptor,
   isPreparedAgentLaunchStatus,
@@ -18,7 +18,7 @@ import {
   type PreparedLaunchPublication
 } from '../../../../shared/prepared-agent-launch'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'

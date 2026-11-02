@@ -4,14 +4,14 @@ import type {
   createCodexAccountStateDb,
   healPendingCodexAccountThreads
 } from './codex-account-session-index-heal'
-import type { CodexAppServerInvocation } from './codex-app-server-session'
+import type { CodexAppServerInvocation } from './app-server/codex-app-server-session'
 
 const { runWslProcessMock, runCodexAppServerSessionMock, stopping } = vi.hoisted(() => ({
   runWslProcessMock: vi.fn<(spec: WslSpec) => Promise<WslResult>>(),
   runCodexAppServerSessionMock: vi.fn(async () => {}),
   stopping: { value: false }
 }))
-vi.mock('./codex-app-server-session', () => ({
+vi.mock('./app-server/codex-app-server-session', () => ({
   runCodexAppServerSession: runCodexAppServerSessionMock
 }))
 

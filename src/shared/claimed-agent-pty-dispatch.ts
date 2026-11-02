@@ -3,7 +3,7 @@ import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
   AgentSessionOwnerBinding
-} from './agent-session-host-authority'
+} from './agent-session/agent-session-host-authority'
 import type { PreparedAgentPtyOwner } from './claimed-agent-pty-owner'
 import {
   agentSessionClaimKey,
@@ -36,6 +36,7 @@ export type PreparedOwnerDispatch = {
   }>
   isLive?: (owner: LiveAgentSessionOwner) => boolean | Promise<boolean>
   creation?: Promise<PtyCreationDisposition>
+  exitedDuringStart?: () => Error
 }
 
 type PreparedOwnerRegistry = {
@@ -106,11 +107,11 @@ export async function dispatchPreparedAgentPtyOwner(
     // Index before awaited proof so an exit beating spawn completion can remove the matching generation.
     if (args.isLive && !(await args.isLive(cloneOwner(owner)))) {
       registry.release(owner.ptyId, owner.generation)
-      throw new Error('agent_session_exited_during_start')
+      throw args.exitedDuringStart?.() ?? new Error('agent_session_exited_during_start')
     }
     const current = registry.live.get(key)
     if (current?.ptyId !== owner.ptyId || current.generation !== owner.generation) {
-      throw new Error('agent_session_exited_during_start')
+      throw args.exitedDuringStart?.() ?? new Error('agent_session_exited_during_start')
     }
     const result: AgentSessionClaimedSpawnResult = {
       disposition: spawned.disposition ?? 'created',

@@ -46,6 +46,8 @@ export type MobileHostedReviewCreateIntentOutcome =
 type PrepareInput = {
   branch: string
   title: string
+  /** The base the user picked; eligibility judges the branch against it. */
+  base?: string
   status: MobileGitStatusResult | null
   commitMessage?: string
   // The live composer text, so a message typed during generation is not overwritten.
@@ -60,13 +62,13 @@ function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
 async function resolvePrefillFromStatus(
   client: RpcOperationSender,
   worktreeId: string,
-  branch: string,
-  title: string,
+  input: Pick<PrepareInput, 'branch' | 'title' | 'base'>,
   status: MobileGitStatusResult | null
 ): Promise<MobilePrPrefill> {
   return resolveMobilePrPrefill(client, worktreeId, {
-    branch,
-    title,
+    branch: input.branch,
+    title: input.title,
+    ...(input.base ? { base: input.base } : {}),
     ...getMobilePrEligibilityReadiness(status)
   })
 }
@@ -258,13 +260,7 @@ export async function prepareMobileHostedReviewCreateIntent(
   }
   currentStatus = committed.status
 
-  let prefill = await resolvePrefillFromStatus(
-    client,
-    worktreeId,
-    input.branch,
-    input.title,
-    currentStatus
-  )
+  let prefill = await resolvePrefillFromStatus(client, worktreeId, input, currentStatus)
   for (let attempts = 0; attempts < 2; attempts++) {
     const remote = await applyMobileHostedReviewRemotePrerequisite(client, worktreeId, prefill, {
       ...input,
@@ -297,13 +293,7 @@ export async function prepareMobileHostedReviewCreateIntent(
         status: currentStatus
       }
     }
-    prefill = await resolvePrefillFromStatus(
-      client,
-      worktreeId,
-      input.branch,
-      input.title,
-      currentStatus
-    )
+    prefill = await resolvePrefillFromStatus(client, worktreeId, input, currentStatus)
   }
 
   return { ok: true, prefill, status: currentStatus, committed: committed.committed }

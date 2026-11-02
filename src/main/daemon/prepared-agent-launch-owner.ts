@@ -18,11 +18,11 @@ import {
   claimAgentSessionOperation,
   evaluateAgentSessionOperation,
   pruneAgentSessionOperationRows
-} from '../../shared/agent-session-operation-ledger'
+} from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type {
   PreparedAgentLaunchIdentity,
   PreparedAgentLaunchRequest,

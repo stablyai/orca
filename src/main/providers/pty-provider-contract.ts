@@ -19,7 +19,7 @@ import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
@@ -150,7 +150,7 @@ export type IPtyProvider = {
   killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
-  attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence' | 'lastTitle'> | void>
+  attach(id: string): Promise<PtySpawnResult | void>
   hasPty?: (id: string) => boolean
   /** Read-only input availability, including retained unattached PTYs; null means unobserved. */
   getPtyAvailability?: (id: string) => boolean | null
@@ -207,6 +207,7 @@ export type IPtyProvider = {
   setColorQueryReplyColors?: (colors: TerminalOscColorQueryReplyColors) => void
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
+  supportsForegroundObservation?(id: string): boolean
   getForegroundProcess(id: string): Promise<string | null>
   /** Strong process evidence captured after the caller's command boundary. */
   confirmForegroundProcess?: (id: string) => Promise<string | null>
@@ -221,6 +222,8 @@ export type IPtyProvider = {
     worktreeId?: string
     /** Scope route validation to these PTYs; absence still requires a complete inventory. */
     ptyIds?: readonly string[]
+    /** Foreground proof only: read `ptyIds` from their established owner. Never exit proof or a census. */
+    targetOwnerOnly?: boolean
     /** Diagnostic display only: include generations whose routing owner is unverifiable. */
     includeUnrouted?: boolean
   }): Promise<PtyProcessInfo[]>

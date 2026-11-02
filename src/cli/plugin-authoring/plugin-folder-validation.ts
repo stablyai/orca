@@ -25,8 +25,6 @@ import {
   type PluginManifest
 } from '../../shared/plugins/manifest/plugin-manifest'
 
-export const PLUGIN_INVALID_CODE = 'plugin_invalid'
-
 export type PluginFolderSummary = {
   pluginKey: string
   name: string

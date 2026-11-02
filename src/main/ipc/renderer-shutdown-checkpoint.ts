@@ -4,11 +4,11 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { isFrozenOrcadSourceSessionPartition } from '../ssh/orcad-retained-source'
 import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 import { windowViewSaveForMain, type ReconnectFactsFor } from '../persistence/window-save-view'

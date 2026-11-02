@@ -129,9 +129,8 @@ export class TerminalHost {
     )
   }
 
-  preparedAgentLaunch(payload: PreparedAgentLaunchRequest['payload']): Promise<unknown> {
-    return this.preparedLaunches.handle(payload)
-  }
+  preparedAgentLaunch = (payload: PreparedAgentLaunchRequest['payload']): Promise<unknown> =>
+    this.preparedLaunches.handle(payload)
 
   hasPendingAgentLaunches = (): boolean => this.preparedLaunches.pending > 0
 
@@ -258,7 +257,9 @@ export class TerminalHost {
   }
 
   async confirmForegroundProcess(sessionId: string): Promise<string | null> {
-    return confirmTerminalHostForegroundProcess(this.sessions.get(sessionId))
+    return confirmTerminalHostForegroundProcess(this.sessions.get(sessionId), () =>
+      this.sessions.get(sessionId)
+    )
   }
 
   async confirmShellForeground(sessionId: string): Promise<boolean> {

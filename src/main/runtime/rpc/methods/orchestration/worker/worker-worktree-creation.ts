@@ -1,7 +1,8 @@
 import type { PendingPreparedAgentLaunch } from '../../../../../../shared/prepared-agent-launch'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
-import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { suggestCreatureNameForPaths } from '../../../../../../shared/worktree-name-suggestion'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -99,12 +100,17 @@ export async function createWorkerWorktree(args: {
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
   terminalHandle: string | undefined
+  terminalCreation?: RuntimeTerminalCreate
   setupReceipt: WorkerSetupReceipt
 }> {
   const { runtime, db, dispatchId, requestedWorktree, target, params, effects } = args
   const setupDecision = params.setup ?? 'run'
+  let terminalCreation: RuntimeTerminalCreate | undefined
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
+    onStartupTerminalCreated: (terminal) => {
+      terminalCreation = terminal
+    },
     repoSelector: target.repoSelector,
     ...(await resolveWorkerWorktreeName(runtime, target.repoSelector, params.name)),
     baseBranch: params.baseBranch,
@@ -160,7 +166,9 @@ export async function createWorkerWorktree(args: {
   }
   if (pending) {
     args.onPreparedLaunch?.(pending, setupReceipt)
-    terminalHandle = (await runtime.waitForPreparedAgentTerminal(pending)).handle
+    // A prepared agent terminal is created by its publication, not by the startup callback above.
+    terminalCreation = await runtime.waitForPreparedAgentTerminal(pending)
+    terminalHandle = terminalCreation.handle
   }
   if (args.withAgentTerminal && !terminalHandle) {
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
@@ -202,6 +210,7 @@ export async function createWorkerWorktree(args: {
   return {
     worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
     terminalHandle,
+    terminalCreation,
     setupReceipt
   }
 }

@@ -1,15 +1,15 @@
 import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding
-} from './agent-session-host-authority'
+} from './agent-session/agent-session-host-authority'
 import { isPtyIncarnationId } from './pty-incarnation'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from './agent-session-host-authority'
+} from './agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from './pty-incarnation'
 import type { WorktreeStartupLaunch } from './worktree/launch-types'
-import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import type { SleepingAgentLaunchConfig } from './agent-session/lifecycle/agent-session-resume'
 import { tuiAgentDisplayName } from './tui-agent-display-names'
 export type PreparedAgentLaunchIdentity = {
   operationId: string

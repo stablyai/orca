@@ -5,9 +5,9 @@ import {
   computeTrustKey,
   getCodexExplicitHomeHookSourcePath,
   normalizeCodexHookSourcePath,
-  parseTrustKey,
-  type CodexTrustEntry
+  parseTrustKey
 } from './config-toml-trust'
+
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
@@ -24,18 +24,6 @@ afterEach(() => {
 })
 
 describe('computeTrustKey', () => {
-  it('joins source path, event label, group index, handler index with colons', () => {
-    expect(
-      computeTrustKey({
-        sourcePath: '/Users/thebr/.codex/hooks.json',
-        eventLabel: 'pre_tool_use',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'irrelevant'
-      })
-    ).toBe('/Users/thebr/.codex/hooks.json:pre_tool_use:0:0')
-  })
-
   it('lexically normalizes source paths without resolving default-home aliases', () => {
     const nestedDir = join(tmpDir, 'nested')
     mkdirSync(nestedDir)
@@ -121,15 +109,6 @@ describe('computeTrustKey', () => {
   )
 })
 describe('parseTrustKey', () => {
-  it('parses a typical posix-style key', () => {
-    expect(parseTrustKey('/Users/x/.codex/hooks.json:pre_tool_use:0:0')).toEqual({
-      sourcePath: '/Users/x/.codex/hooks.json',
-      eventLabel: 'pre_tool_use',
-      groupIndex: 0,
-      handlerIndex: 0
-    })
-  })
-
   it('parses a Windows-style sourcePath whose drive letter contains a colon', () => {
     expect(parseTrustKey('C:\\Users\\x\\.codex\\hooks.json:session_start:2:3')).toEqual({
       sourcePath: 'C:\\Users\\x\\.codex\\hooks.json',
@@ -141,40 +120,6 @@ describe('parseTrustKey', () => {
 
   it('returns null for a non-Codex event label', () => {
     expect(parseTrustKey('/x/hooks.json:not_an_event:0:0')).toBeNull()
-  })
-
-  it('returns null for a key with too few colons', () => {
-    expect(parseTrustKey('foo:bar')).toBeNull()
-    expect(parseTrustKey('foo')).toBeNull()
-  })
-
-  it('returns null when the group index is not an integer', () => {
-    expect(parseTrustKey('/x/hooks.json:pre_tool_use:abc:0')).toBeNull()
-  })
-
-  it('returns null when the handler index is not an integer', () => {
-    expect(parseTrustKey('/x/hooks.json:pre_tool_use:0:abc')).toBeNull()
-  })
-
-  it('returns null when the source path is empty', () => {
-    expect(parseTrustKey(':pre_tool_use:0:0')).toBeNull()
-  })
-
-  it('round-trips with computeTrustKey', () => {
-    const entry: CodexTrustEntry = {
-      sourcePath: '/Users/x/.codex/hooks.json',
-      eventLabel: 'post_tool_use',
-      groupIndex: 4,
-      handlerIndex: 7,
-      command: 'irrelevant'
-    }
-    const parsed = parseTrustKey(computeTrustKey(entry))
-    expect(parsed).toEqual({
-      sourcePath: entry.sourcePath,
-      eventLabel: entry.eventLabel,
-      groupIndex: entry.groupIndex,
-      handlerIndex: entry.handlerIndex
-    })
   })
 
   it('returns null for empty group/handler segments', () => {

@@ -97,11 +97,25 @@ function addPendingRemoval(record: WorktreeRemovalRecord): RemovalSettlement {
 /** Pending removals are host-local; never join a same-ID checkout on another host. */
 export function waitForPendingWorktreeRemoval(
   worktreeId: string,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  deleteBranch?: boolean
 ): Promise<RemoveWorktreeResult> | undefined {
-  return (hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID
-    ? settlementsByWorktreeId.get(worktreeId)?.result
-    : undefined
+  if ((hostId ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID) {
+    return undefined
+  }
+  assertAcceptedBranchChoice(pendingWorktreeRemovals.get(worktreeId), deleteBranch)
+  return settlementsByWorktreeId.get(worktreeId)?.result
+}
+
+function assertAcceptedBranchChoice(
+  record: WorktreeRemovalRecord | undefined,
+  deleteBranch: boolean | undefined
+): void {
+  if (record && deleteBranch !== undefined && record.deleteBranch !== deleteBranch) {
+    throw new Error(
+      `Orca already accepted removal of ${record.worktreePath} with a different branch choice. That cleanup may already have run; check the branch before retrying.`
+    )
+  }
 }
 
 /** Await the delete while preserving the acceptance result fields. */
@@ -150,15 +164,17 @@ export function retryFailedWorktreeRemoval(
   worktreeId: string,
   hostId: ExecutionHostId | undefined,
   jobFor: (record: WorktreeRemovalRecord) => BackgroundWorktreeRemovalJob,
-  force?: boolean
+  force?: boolean,
+  deleteBranch?: boolean
 ): Promise<RemoveWorktreeResult> | undefined {
   const failed =
     (hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID
       ? failedWorktreeRemovals.get(worktreeId)
       : undefined
   if (!failed) {
-    return waitForPendingWorktreeRemoval(worktreeId, hostId)
+    return waitForPendingWorktreeRemoval(worktreeId, hostId, deleteBranch)
   }
+  assertAcceptedBranchChoice(failed, deleteBranch)
   const { failure: _failure, ...original } = failed
   const record = { ...original, force: force ?? original.force }
   const settlement = addPendingRemoval(record)

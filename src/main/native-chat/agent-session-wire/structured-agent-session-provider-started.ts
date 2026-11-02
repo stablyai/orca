@@ -21,7 +21,7 @@ import {
 } from './structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { settleUnheldStructuredAgentSessionTurns } from './structured-agent-session-unheld-turns'
 import {
   applyStructuredRewindRecovery,
@@ -228,9 +228,13 @@ async function recordStartedHandle(
     return store.getRecord(event.sessionId)?.lease.provenHandleLinkId != null
   }
   try {
-    await store.transitionHandoff(event.sessionId, (record) =>
+    const committed = await store.transitionHandoff(event.sessionId, (record) =>
       recordAgentSessionProviderHandle({ record, fence: event.fence, link, now: context.now() })
     )
+    // Inherit only a committed new context; a resumed CLI keeps its own later title.
+    if (event.newConversation ?? (link.origin === 'created' || link.origin === 'forked')) {
+      context.deps.nameProviderConversation?.(committed)
+    }
     return true
   } catch (error) {
     logger.warn('recording the handle a started provider answered with failed', {

@@ -28,6 +28,11 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { activateRetainedAgentRow } from './activate-retained-agent-row'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
 import { opensClaudeParentConversation } from '@/lib/claude-agent-row-view'
+import { lineageAncestorPaneKeys } from './worktree-card-agent-lineage-disclosure'
+import {
+  ChildAgentsWithIdleGroup,
+  buildCollapsedChildAgentSignalStates
+} from './worktree-card-idle-child-agents'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -154,16 +159,20 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   )
 
   const now = useNow(30_000)
-  const { rootRows: rootAgents, childrenByParentPaneKey } = useMemo(
-    () => buildAgentRowLineageTree(agents),
-    [agents]
-  )
+  const lineageTree = useMemo(() => buildAgentRowLineageTree(agents), [agents])
+  const { rootRows: rootAgents, childrenByParentPaneKey } = lineageTree
   const hasLineage = childrenByParentPaneKey.size > 0
+  const collapsedChildAgentSignalStates = useMemo(
+    () => buildCollapsedChildAgentSignalStates(childrenByParentPaneKey),
+    [childrenByParentPaneKey]
+  )
   // Persist disclosure outside component state so virtualizer/sibling-triggered remounts cannot reset it.
   const {
-    collapsedLineageParents,
+    expandedLineageParents,
+    expandedIdleChildGroups,
     compactRootListExpanded,
     toggleLineageParent: toggleLineageParentState,
+    toggleIdleChildGroup: toggleIdleChildGroupState,
     toggleCompactRootList
   } = useWorktreeAgentExpansionState(worktreeId)
 
@@ -189,6 +198,51 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [toggleLineageParentState]
   )
+  const toggleIdleChildGroup = useCallback(
+    (parentPaneKey: string) => {
+      dispatchSuppressScrollAdjustment()
+      toggleIdleChildGroupState(parentPaneKey)
+    },
+    [toggleIdleChildGroupState]
+  )
+
+  const sendTargetFor = (paneKey: string) =>
+    isAgentSendTargetModeActive
+      ? (sendTargetsByPaneKey.get(paneKey) ?? {
+          status: 'disabled' as const,
+          disabledReason: translate(
+            'auto.components.sidebar.WorktreeCardAgents.agentUnavailable',
+            'Agent is not available'
+          )
+        })
+      : undefined
+  // Picker rows are the send targets, so every lineage level stays open while picking.
+  const isLineageExpanded = (paneKey: string): boolean =>
+    isAgentSendTargetModeActive || expandedLineageParents.has(paneKey)
+  const focusedAncestorPaneKeys = useMemo(
+    () => lineageAncestorPaneKeys(childrenByParentPaneKey, focusedAgentPaneKey),
+    [childrenByParentPaneKey, focusedAgentPaneKey]
+  )
+  // A collapsed parent stands in for its hidden focused descendant.
+  const isFocusedOrHidesFocus = (paneKey: string, expanded: boolean): boolean =>
+    paneKey === focusedAgentPaneKey || (!expanded && focusedAncestorPaneKeys.has(paneKey))
+
+  const renderChildAgents = (
+    parent: DashboardAgentRowData,
+    childAgents: DashboardAgentRowData[],
+    renderChild: (childAgent: DashboardAgentRowData, idleGroupExpanded: boolean) => React.ReactNode
+  ): React.ReactNode => (
+    <ChildAgentsWithIdleGroup
+      childAgents={childAgents}
+      // Picking shows every child flat; folding would hide send targets.
+      flat={isAgentSendTargetModeActive}
+      idleExpanded={expandedIdleChildGroups.has(parent.paneKey)}
+      onToggleIdle={() => toggleIdleChildGroup(parent.paneKey)}
+      layout={agentActivityDisplayMode === 'compact' ? 'compact' : 'full'}
+      ariaLevel={(parent.lineage?.depth ?? 0) + 2}
+      renderChild={renderChild}
+    />
+  )
 
   const stopBubble = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -204,16 +258,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
-    const expanded = !collapsedLineageParents.has(agent.paneKey)
-    const sendTarget = isAgentSendTargetModeActive
-      ? (sendTargetsByPaneKey.get(agent.paneKey) ?? {
-          status: 'disabled' as const,
-          disabledReason: translate(
-            'auto.components.sidebar.WorktreeCardAgents.agentUnavailable',
-            'Agent is not available'
-          )
-        })
-      : undefined
+    const expanded = isLineageExpanded(agent.paneKey)
+    // Picker mode forces children open; a toggle there would silently flip stored state.
+    const canToggle = hasChildAgents && !isAgentSendTargetModeActive
+    const sendTarget = sendTargetFor(agent.paneKey)
     const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
     descendantAncestorPaneKeys.add(agent.paneKey)
     return (
@@ -234,10 +282,13 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           hideExpand
           childAgentCount={hasChildAgents ? childAgents.length : undefined}
           childAgentsExpanded={expanded}
-          onToggleChildAgents={
-            hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
+          collapsedChildAgentsState={
+            hasChildAgents && !expanded
+              ? collapsedChildAgentSignalStates.get(agent.paneKey)
+              : undefined
           }
-          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          onToggleChildAgents={canToggle ? () => toggleLineageParent(agent.paneKey) : undefined}
+          isFocusedPane={isFocusedOrHidesFocus(agent.paneKey, expanded)}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
@@ -246,7 +297,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         />
         {hasChildAgents && expanded ? (
           <div className="worktree-agent-lineage-children">
-            {childAgents.map((childAgent) =>
+            {renderChildAgents(agent, childAgents, (childAgent) =>
               renderAgentBranch(childAgent, descendantAncestorPaneKeys)
             )}
           </div>
@@ -265,16 +316,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
-    const expanded = !collapsedLineageParents.has(agent.paneKey)
-    const sendTarget = isAgentSendTargetModeActive
-      ? (sendTargetsByPaneKey.get(agent.paneKey) ?? {
-          status: 'disabled' as const,
-          disabledReason: translate(
-            'auto.components.sidebar.WorktreeCardAgents.agentUnavailable',
-            'Agent is not available'
-          )
-        })
-      : undefined
+    const expanded = isLineageExpanded(agent.paneKey)
+    // Picker mode forces children open; a toggle there would silently flip stored state.
+    const canToggle = hasChildAgents && !isAgentSendTargetModeActive
+    const sendTarget = sendTargetFor(agent.paneKey)
     const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
     descendantAncestorPaneKeys.add(agent.paneKey)
     return (
@@ -300,20 +345,23 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
           childAgentCount={hasChildAgents ? childAgents.length : undefined}
           childAgentsExpanded={expanded}
-          onToggleChildAgents={
-            hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
+          collapsedChildAgentsState={
+            hasChildAgents && !expanded
+              ? collapsedChildAgentSignalStates.get(agent.paneKey)
+              : undefined
           }
-          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          onToggleChildAgents={canToggle ? () => toggleLineageParent(agent.paneKey) : undefined}
+          isFocusedPane={isFocusedOrHidesFocus(agent.paneKey, expanded)}
           cacheTimerActive={cacheTimerActive}
         />
         {hasChildAgents ? (
           <CompactAgentExpansion expanded={expanded}>
             <div className="worktree-agent-lineage-children flex flex-col gap-0.5">
-              {childAgents.map((childAgent) =>
+              {renderChildAgents(agent, childAgents, (childAgent, idleGroupExpanded) =>
                 renderCompactAgentBranch(
                   childAgent,
                   descendantAncestorPaneKeys,
-                  cacheTimerActive && expanded
+                  cacheTimerActive && expanded && idleGroupExpanded
                 )
               )}
             </div>

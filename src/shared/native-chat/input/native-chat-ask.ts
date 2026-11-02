@@ -4,11 +4,12 @@ import type {
   AskQuestion,
   InteractiveQuestionParser
 } from './native-chat-ask-types'
-import { isInterruptedStatusMessage, type NativeChatMessage } from '../../native-chat-types'
+import { isInterruptedStatusMessage, type NativeChatMessage } from '../native-chat-types'
 import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput
 } from '../../codex-async-question-input'
+import { askAnswerQuote } from '../../native-chat-ask-answer'
 
 const QUESTION_TOOL_PARSERS = new Map<string, InteractiveQuestionParser>()
 
@@ -141,7 +142,7 @@ export function extractPendingMessageReplyAsk(
   return aggregateAsyncQuestions(scanPendingAsks(messages).contributors)
 }
 
-/** Delivered human input only; agent notices and pending sends answer no async question. */
+/** Delivered human input only; agent notices and pending sends answer no question. */
 export function isDeliveredNativeChatUserMessage(message: NativeChatMessage): boolean {
   return (
     message.role === 'user' &&
@@ -193,10 +194,17 @@ export function asyncQuestionOccurrenceId(
 }
 
 /** Filter addressed calls before grouping; one call's complete definition stays together. */
+function quotedByQueuedAnswer(question: AskQuestion, queuedTexts: readonly string[]): boolean {
+  const quote = askAnswerQuote(question)
+  return queuedTexts.some((text) => text.startsWith(quote) || text.includes(`\n\n${quote}`))
+}
+
+/** Queued texts hide questions an answer waiting in the queue already quotes; deleting that card brings them back. */
 export function aggregateAsyncQuestions(
   contributors: readonly AsyncQuestionContributor[],
   sourceScope?: string,
-  hiddenIds?: ReadonlySet<string>
+  hiddenIds?: ReadonlySet<string>,
+  queuedTexts: readonly string[] = []
 ): AskPrompt | null {
   const questions: AskQuestion[] = []
   const occurrenceIds: string[] = []
@@ -204,6 +212,9 @@ export function aggregateAsyncQuestions(
     const id =
       sourceScope === undefined ? undefined : asyncQuestionOccurrenceId(sourceScope, contributor)
     if (id !== undefined && hiddenIds?.has(id)) {
+      continue
+    }
+    if (contributor.questions.some((question) => quotedByQueuedAnswer(question, queuedTexts))) {
       continue
     }
     if (id !== undefined) {
@@ -257,15 +268,9 @@ export function createPendingAskScanner(): {
   }
   const append = (message: NativeChatMessage): readonly AsyncQuestionContributor[] => {
     const accepted: AsyncQuestionContributor[] = []
-    // New user turns/interrupts abandon unresolved calls. Decoding drops tool_use_id, so orphan results cannot match by id;
-    // reset the FIFO or one orphan strands later answered asks forever (#11761). Claude tool results decode as role tool.
-    const interrupted = isInterruptedStatusMessage(message)
-    if (message.role === 'user' || interrupted) {
-      if (interrupted || isDeliveredNativeChatUserMessage(message)) {
-        interrupt()
-      } else {
-        resetBlocking()
-      }
+    // Delivered human turns/interrupts abandon the uncorrelated FIFO, or orphan calls strand later asks (#11761).
+    if (isDeliveredNativeChatUserMessage(message) || isInterruptedStatusMessage(message)) {
+      interrupt()
     }
     for (const block of message.blocks) {
       if (block.type === 'tool-call') {

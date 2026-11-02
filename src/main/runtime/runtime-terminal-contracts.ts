@@ -1,4 +1,5 @@
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
@@ -8,11 +9,11 @@ import type {
   AgentLaunchPreferences,
   AgentSessionExecutionClaim,
   RuntimeCreateAgentSessionResult
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrchestrationCompatibilityHostStamp } from '../../shared/orchestration-compatibility-evidence'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import type {
@@ -97,6 +98,9 @@ export type TerminalCreateOptions = {
   startFailure?: Error
   /** Main-owned sleep wake publishes resume outcomes instead of relying on window restore. */
   resumesSleepingRecord?: true
+  /** May start an existing pane again rather than new work in the workspace: a saved pane's
+   *  restore, a lost pane's recovery, or a paired window mounting its panes. */
+  reopensPane?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
   sessionId?: string
@@ -193,7 +197,17 @@ export type HookLiveAgentRow = Pick<
   | 'programStatus'
 >
 
-export type TerminalHandleRecord = {
+export type TerminalHandlePty = {
+  record: TerminalHandleRecord
+  pty: RuntimePtyWorktreeRecord
+}
+
+export type TerminalHandleLeaf = {
+  record: TerminalHandleRecord
+  leaf: RuntimeLeafRecord
+}
+
+export type TerminalHandleRecord = Readonly<{
   handle: string
   runtimeId: string
   rendererGraphEpoch: number
@@ -204,7 +218,7 @@ export type TerminalHandleRecord = {
   ptyGeneration: number
   /** Issue-time stamp of the pane main bound a terminal handle for; read only by recoverTerminalPane. */
   issuedForPaneKey?: string
-}
+}>
 
 export type OrchestrationCompatibilityTerminalAuthority = {
   runtimeId: string
@@ -248,6 +262,8 @@ export type OrchestrationCompatibilitySshTerminal = Readonly<{
 
 export type TerminalWaiter = {
   handle: string
+  /** The terminal the handle named when the wait began; the wait follows it, not the handle. */
+  ptyId: string
   condition: RuntimeTerminalWaitCondition
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void

@@ -28,6 +28,11 @@ type WslCliRegistrationRegistryTiming = {
   // Unchanged launcher/build pairs need no repair; app updates must trigger a new probe.
   currentTarget?: string | null
   appVersion?: string | null
+  /**
+   * Unregistered distros that may still be inspected: ones Orca deployed a host into. Any other
+   * distro is the user's own and never gets a guest command (EDR noise, untouched environments).
+   */
+  inspectableDistros?: readonly string[]
 }
 
 export type WslCliRegistrationObservation = {
@@ -193,6 +198,7 @@ export async function getWslCliRegistrationCandidates(
   const now = timing.now ?? Date.now()
   const negativeInspectionTtlMs =
     timing.negativeInspectionTtlMs ?? DEFAULT_NEGATIVE_INSPECTION_TTL_MS
+  const inspectable = new Set((timing.inspectableDistros ?? []).map(normalizeWslDistroKey))
   return uniqueDistros(availableDistros).filter((distro) => {
     const key = normalizeWslDistroKey(distro)
     if (registered.has(key)) {
@@ -203,6 +209,9 @@ export async function getWslCliRegistrationCandidates(
         reconciliation.target === timing.currentTarget &&
         reconciliation.appVersion === (timing.appVersion ?? '')
       )
+    }
+    if (!inspectable.has(key)) {
+      return false
     }
     const inspectedAt = state.inspectionTimes[key]
     return (

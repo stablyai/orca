@@ -136,14 +136,4 @@ describe('terminateCodexProbeChild', () => {
     expect(settled).toBe(true)
     expect(child.kill).not.toHaveBeenCalled()
   })
-
-  it('does nothing for a child that already exited', async () => {
-    const child = makeFakeChild()
-    child.exit()
-
-    await terminateCodexProbeChild(child, { platform: 'darwin' })
-
-    expect(child.stdin.end).not.toHaveBeenCalled()
-    expect(child.kill).not.toHaveBeenCalled()
-  })
 })

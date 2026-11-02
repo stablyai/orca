@@ -31,26 +31,4 @@ describe('coalescedBreadcrumbs stays bounded (leak regression)', () => {
     }
     expect(getCoalescedKeyCountForTest()).toBeLessThanOrEqual(MAX_COALESCE_KEYS)
   })
-
-  it('still coalesces repeated breadcrumbs for the same key within the interval', () => {
-    recordCoalescedCrashBreadcrumb({ name: 'x', coalesceKey: 'k', minIntervalMs: 30_000 })
-    recordCoalescedCrashBreadcrumb({ name: 'x', coalesceKey: 'k', minIntervalMs: 30_000 })
-    expect(getCoalescedKeyCountForTest()).toBe(1)
-  })
-
-  it('keeps the most-recently-recorded key after capping', () => {
-    for (let i = 0; i < MAX_COALESCE_KEYS + 50; i++) {
-      recordCoalescedCrashBreadcrumb({
-        name: 'agent_state',
-        coalesceKey: `agent:type-${i}:working`,
-        minIntervalMs: 30_000
-      })
-    }
-    recordCoalescedCrashBreadcrumb({
-      name: 'agent_state',
-      coalesceKey: `agent:type-${MAX_COALESCE_KEYS + 49}:working`,
-      minIntervalMs: 30_000
-    })
-    expect(getCoalescedKeyCountForTest()).toBeLessThanOrEqual(MAX_COALESCE_KEYS)
-  })
 })

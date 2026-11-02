@@ -338,6 +338,80 @@ describe('project header host context', () => {
     expect(contexts.size).toBe(0)
   })
 
+  it("names a same-id twin's own host, not the registration repoMap keeps", () => {
+    const homeTwin: Repo = { ...local, id: 'twin', executionHostId: 'runtime:home' }
+    const localTwin: Repo = { ...homeTwin, executionHostId: undefined }
+    const homeCopy: GroupHeaderRow = {
+      ...header(homeTwin),
+      key: 'repo:twin',
+      hostId: 'runtime:home',
+      anchorRepo: localTwin
+    }
+    const contexts = getProjectHeaderHostContexts({
+      rows: [homeCopy, header(local)],
+      hosts,
+      repoMap: new Map([localTwin, local].map((value) => [value.id, value]))
+    })
+
+    expect(contexts.get(homeCopy.key)?.hostId).toBe('runtime:home')
+  })
+
+  it("leaves a same-id twin's header unlabelled while its rows span both hosts", () => {
+    const homeTwin: Repo = { ...local, id: 'twin', executionHostId: 'runtime:home' }
+    const localTwin: Repo = { ...homeTwin, executionHostId: undefined }
+    const merged: GroupHeaderRow = {
+      ...header(localTwin),
+      key: 'repo:twin',
+      hostRepos: new Map([
+        ['local', localTwin],
+        ['runtime:home', homeTwin]
+      ])
+    }
+    const contexts = getProjectHeaderHostContexts({
+      rows: [merged, header(paired)],
+      hosts,
+      repoMap: new Map([localTwin, paired].map((value) => [value.id, value]))
+    })
+
+    expect(contexts.has(merged.key)).toBe(false)
+    expect(contexts.get(`repo:${paired.id}`)?.hostId).toBe('runtime:home')
+  })
+
+  it('labels a header whose row hosts are aliases of one machine', () => {
+    const sshHome: Repo = { ...local, id: 'app-home', connectionId: 'home' }
+    const runtimeHome: Repo = {
+      ...sshHome,
+      connectionId: undefined,
+      executionHostId: 'runtime:home'
+    }
+    const aliased: GroupHeaderRow = {
+      ...header(runtimeHome),
+      key: 'repo:app-home',
+      hostRepos: new Map([
+        ['ssh:home', sshHome],
+        ['runtime:home', runtimeHome]
+      ])
+    }
+    const contexts = getProjectHeaderHostContexts({
+      rows: [aliased, header(local)],
+      hosts: [
+        ...hosts,
+        {
+          id: 'ssh:home',
+          label: 'Old name',
+          detail: '',
+          kind: 'ssh',
+          health: 'disconnected',
+          mergedIntoHostId: 'runtime:home'
+        }
+      ],
+      repoMap: new Map([runtimeHome, local].map((value) => [value.id, value]))
+    })
+
+    expect(contexts.get(aliased.key)?.hostId).toBe('runtime:home')
+    expect(contexts.get(`repo:${local.id}`)?.hostId).toBe('local')
+  })
+
   it('keeps non-project lanes unchanged', () => {
     expect(
       getProjectHeaderHostContexts({

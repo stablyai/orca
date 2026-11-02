@@ -1,5 +1,5 @@
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import { isStructuredTab } from './structured-agent-session-tab'
+import { isStructuredTab } from './agent-session/view/structured-agent-session-tab'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from './workspace-scope'
 
 type SessionTabs = Pick<WorkspaceSessionState, 'browserTabsByWorktree' | 'unifiedTabs'>

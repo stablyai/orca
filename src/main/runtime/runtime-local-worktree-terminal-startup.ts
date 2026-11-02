@@ -1,8 +1,11 @@
 import type { PendingPreparedAgentLaunch } from '../../shared/prepared-agent-launch'
-import type { PreparedTerminalPrompts } from '../daemon/prepared-agent-launch-protocol'
+import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
-import { startPreparedLocalWorktreeTerminals } from './runtime-prepared-worktree-terminal-startup'
+import {
+  startPreparedLocalWorktreeTerminals,
+  type PreparedStartupPorts
+} from './runtime-prepared-worktree-terminal-startup'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
@@ -22,23 +25,19 @@ import type {
 } from './runtime-worktree-agent-startup'
 import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
 
-type Ports = {
+type Ports = PreparedStartupPorts & {
   canSpawn: boolean
-  startPrepared?: (
-    options: TerminalCreateOptions,
-    prompts: PreparedTerminalPrompts
-  ) => Promise<{
-    pending: PendingPreparedAgentLaunch
-    setupTerminal?: RuntimeTerminalCreate
-    warning?: string
-  } | null>
   provisionInBackground?: () => boolean
   createTerminal: (
     selector: string,
     options: TerminalCreateOptions
   ) => Promise<RuntimeTerminalCreate>
   pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
-  sendFollowup: (handle: string, followup: WorktreeStartupFollowup) => void
+  sendFollowup: (
+    handle: string,
+    followup: WorktreeStartupFollowup,
+    terminal: RuntimeTerminalCreate
+  ) => void
   provision: (
     options: WorktreeTerminalProvisioningArgs
   ) => Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }>
@@ -144,11 +143,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...(shouldActivate ? {} : { surfaceOwner: false as const })
       })
+      request.onStartupTerminalCreated?.(terminal)
       if (args.draftPaste) {
         ports.pasteDraft(terminal.handle, args.draftPaste)
       }
       if (args.startupFollowup) {
-        ports.sendFollowup(terminal.handle, args.startupFollowup)
+        ports.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
       didSpawnStartup = true
       startupTerminalHandle = terminal.handle
@@ -261,7 +261,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 }
 
 function provisionArgs(
-  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],
+  args: StartupArgs,
   primaryTerminalHandle: string | null,
   hasStartupTerminal: boolean,
   wrappedSetupCommand?: string
@@ -283,9 +283,7 @@ function provisionArgs(
   }
 }
 
-function callerProvidesInitialSurface(
-  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]
-): boolean {
+function callerProvidesInitialSurface(args: StartupArgs): boolean {
   // Background agent creates already leave their initial surface to the caller.
   return (
     args.promisedAgentChat === true ||
@@ -295,6 +293,7 @@ function callerProvidesInitialSurface(
   )
 }
 
+type StartupArgs = Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]
 function setupPlatform(
   setup: CreateWorktreeResult['setup'],
   fallback: 'windows' | 'posix'
@@ -308,7 +307,9 @@ function appendFailure(
   kind: 'startup' | 'initial',
   error: unknown
 ): string {
-  const message = readableWslDistroHoldText(error instanceof Error ? error.message : String(error))
+  const message = readableWslDistroHoldText(
+    formatTerminalStartFailure(error) ?? (error instanceof Error ? error.message : String(error))
+  )
   const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
   const combined = warning
     ? `${warning} Also ${failure}`

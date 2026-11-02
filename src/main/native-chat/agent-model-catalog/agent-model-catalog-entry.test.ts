@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { agentModelCatalogEntry, type AgentModelCatalogListing } from './agent-model-catalog-entry'
+import {
+  agentModelCatalogEntry,
+  entryWithConfiguredDefault,
+  agentModelCatalogListingKey,
+  type AgentModelCatalogListing
+} from './agent-model-catalog-entry'
 
 const menu = (...levels: string[]) => levels.map((value) => ({ value, label: value }))
 
@@ -82,4 +87,94 @@ describe('a model whose newer chat listing does not know its efforts', () => {
       effortsKnown: false
     })
   })
+})
+
+it('selects the newest declaration observation before resolving its value, including unknown', () => {
+  const source = (
+    origin: AgentModelCatalogListing['origin'],
+    at: number,
+    declaredDefaultEffort?: string | null
+  ) => ({
+    ...listing(origin, at, menu('low', 'high')),
+    models: [
+      {
+        ...listing(origin, at, menu('low', 'high')).models[0]!,
+        defaultEffort: 'high',
+        ...(declaredDefaultEffort !== undefined ? { declaredDefaultEffort } : {})
+      }
+    ]
+  })
+  for (const newerSource of ['discovery', 'live']) {
+    const merged = (newer?: string | null) =>
+      agentModelCatalogEntry(
+        'grok',
+        'fp',
+        source(
+          'probe',
+          newerSource === 'discovery' ? 3 : 1,
+          newerSource === 'discovery' ? newer : 'high'
+        ),
+        source(
+          'live-session',
+          newerSource === 'live' ? 3 : 1,
+          newerSource === 'live' ? newer : 'high'
+        ),
+        { modelId: 'openai/gpt-6', effort: 'high', at: 0 }
+      )!.models[0]
+    expect(merged('low')?.declaredDefaultEffort).toBe('low')
+    expect(merged(null)).toMatchObject({ declaredDefaultEffort: null, defaultEffort: 'high' })
+    expect(merged()?.declaredDefaultEffort).toBe('high')
+    expect(merged('low')?.declaredDefaultEffort).toBe('low')
+  }
+})
+
+it('keeps late configured validation from reattaching old declaration proof to a newer listing', () => {
+  const old = listing('live-session', 1, menu('low', 'high'))
+  const current = {
+    ...listing('live-session', 2, menu('low', 'high')),
+    models: [{ ...old.models[0]!, declaredDefaultEffort: null }]
+  }
+  const entry = agentModelCatalogEntry('grok', 'fp', null, current, null)!
+  const late = entryWithConfiguredDefault(
+    entry,
+    { modelId: 'openai/gpt-6', effort: 'low' },
+    3,
+    old
+  )!
+  expect(late.models[0]).toMatchObject({ defaultEffort: 'low', declaredDefaultEffort: null })
+  expect(
+    entryWithConfiguredDefault(late, { modelId: 'openai/gpt-6', effort: 'high' }, 4, current)
+      ?.models[0]?.declaredDefaultEffort
+  ).toBe('high')
+})
+
+it('bounds transient declaration serialization and configured observation work at N and 10N', () => {
+  const counts = [100, 1000].map((size) => {
+    let observations = 0
+    const models = Array.from({ length: size }, (_, index) => ({
+      id: `model-${index}`,
+      label: 'Model',
+      isDefault: false,
+      efforts: menu('low', 'high'),
+      get declaredDefaultEffort() {
+        observations++
+        return 'low'
+      }
+    }))
+    const source = { models, origin: 'live-session' as const, at: 1 }
+    const entry = agentModelCatalogEntry('grok', 'fp', null, source, {
+      modelId: `model-${size - 1}`,
+      effort: 'low',
+      at: 1
+    })!
+    observations = 0
+    agentModelCatalogListingKey(entry)
+    expect(observations).toBe(size)
+    expect(
+      entryWithConfiguredDefault(entry, { modelId: `model-${size - 1}`, effort: 'low' }, 2)
+    ).toBeNull()
+    expect(observations).toBe(size + 1)
+    return observations
+  })
+  expect(counts[1]).toBeLessThanOrEqual(10 * counts[0])
 })

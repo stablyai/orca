@@ -19,12 +19,36 @@ import type { PluginManifest } from '../manifest/plugin-manifest'
 export const PLUGIN_APPROVAL_REQUIRED_CODE = 'approval_required'
 export const PLUGIN_APPROVAL_STALE_CODE = 'approval_stale'
 export const PLUGIN_NOT_FOUND_CODE = 'plugin_not_found'
+export const PLUGIN_INVALID_CODE = 'plugin_invalid'
+export const PLUGIN_SYSTEM_DISABLED_CODE = 'plugin_system_disabled'
+/** `orca plugin dev request`: the worker's own error code rides in `data.requestCode`. */
+export const PLUGIN_REQUEST_FAILED_CODE = 'plugin_request_failed'
 /** Codes the runtime passes through to CLI callers with their `data`. */
 export const PLUGIN_CLI_ERROR_CODES = [
   PLUGIN_APPROVAL_REQUIRED_CODE,
   PLUGIN_APPROVAL_STALE_CODE,
-  PLUGIN_NOT_FOUND_CODE
+  PLUGIN_NOT_FOUND_CODE,
+  PLUGIN_INVALID_CODE,
+  PLUGIN_SYSTEM_DISABLED_CODE,
+  PLUGIN_REQUEST_FAILED_CODE
 ] as const
+
+/** A plugin CLI refusal whose `data` carries `nextSteps` for the caller. */
+export class PluginCliError extends Error {
+  readonly code: string
+  readonly data: { nextSteps: string[] } & Record<string, unknown>
+
+  constructor(
+    code: string,
+    message: string,
+    data: { nextSteps: string[] } & Record<string, unknown>
+  ) {
+    super(message)
+    this.name = 'PluginCliError'
+    this.code = code
+    this.data = data
+  }
+}
 
 /** What the caller was doing; install and update reuse the same flag in later commands. */
 export type PluginApprovalAction = 'enable' | 'dev-load' | 'install' | 'update'
@@ -34,6 +58,8 @@ export type PluginApprovalGrants = {
   executionDescription: string
   capabilities: { kind: string; description: string }[]
   contributions: PluginContributionSummaryItem[]
+  /** Commands that run in place of Orca's own actions; absent when there are none. */
+  replacements?: { command: string; action: string }[]
 }
 
 export type PluginApprovalRequest = {
@@ -84,8 +110,17 @@ export function pluginApprovalGrants(manifest: PluginManifest): PluginApprovalGr
       kind: capability.kind,
       description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
     })),
-    contributions: pluginContributionSummary(manifest)
+    contributions: pluginContributionSummary(manifest),
+    ...withReplacements(manifest)
   }
+}
+
+// Why only when present: grants feed the approval fingerprint, which must not move for others.
+function withReplacements(manifest: PluginManifest): Pick<PluginApprovalGrants, 'replacements'> {
+  const replacements = manifest.contributes.commands.flatMap((command) =>
+    command.replaces ? [{ command: command.title, action: command.replaces }] : []
+  )
+  return replacements.length > 0 ? { replacements } : {}
 }
 
 function uniqueCapabilities(capabilities: readonly PluginCapability[]): PluginCapability[] {
@@ -148,13 +183,17 @@ export function buildPluginApprovalRequest(
 /** One message for humans; agents read `data` instead. */
 export function formatPluginApprovalMessage(request: PluginApprovalRequest, stale = false): string {
   const lead = stale
-    ? `${request.pluginKey} changed since that approval was shown, so the fingerprint no longer matches. Review what it would get now.`
+    ? `That fingerprint does not match what ${request.pluginKey} would get now: the plugin changed since it was shown, or the fingerprint is for something else. Review the current grants.`
     : `${request.pluginKey} ${request.version} needs approval before it can run.`
   const lines = [
     lead,
-    `Approving ${request.name} (${request.pluginKey} ${request.version}${request.isDev ? ', development folder' : ''}) lets it:`,
+    `Approving ${request.name} (${request.pluginKey} ${request.version}${request.isDev ? ', development folder' : ''}) grants:`,
     `- ${request.grants.executionDescription}`,
-    ...request.grants.capabilities.map((capability) => `- ${capability.description}`)
+    ...request.grants.capabilities.map((capability) => `- ${capability.description}`),
+    ...(request.grants.replacements ?? []).map(
+      (replacement) =>
+        `- Runs "${replacement.command}" instead of Orca's own ${replacement.action} (switch it back on the plugin's page)`
+    )
   ]
   if (request.grants.contributions.length > 0) {
     lines.push(

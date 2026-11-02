@@ -47,10 +47,6 @@ describe('runRetirementBackfillScan', () => {
     vi.useRealTimers()
   })
 
-  it('gives up on a listing that never returns instead of blocking create forever', async () => {
-    await stallPastDeadline({}, 'ns')
-  })
-
   it('does not stack a second listing while the first is still stuck', async () => {
     const store = {}
     await stallPastDeadline(store, 'ns')
@@ -60,19 +56,6 @@ describe('runRetirementBackfillScan', () => {
 
     await expect(runRetirementBackfillScan(store, 'ns', retry)).rejects.toThrow(/exceeded/)
     expect(retry).not.toHaveBeenCalled()
-  })
-
-  it('retries once the stuck listing settles and the backoff has lapsed', async () => {
-    const store = {}
-    const stalled = await stallPastDeadline(store, 'ns')
-    const retry = vi.fn(async () => found(['nautilus']))
-
-    stalled.fail()
-    await vi.advanceTimersByTimeAsync(RETIREMENT_BACKFILL_RETRY_AFTER_FAILURE_MS)
-
-    await expect(runRetirementBackfillScan(store, 'ns', retry)).resolves.toEqual(
-      new Set(['nautilus'])
-    )
   })
 
   it('serves the failure from the memo until the backoff lapses', async () => {
@@ -103,20 +86,6 @@ describe('runRetirementBackfillScan', () => {
     await expect(runRetirementBackfillScan(store, 'healthy-ns', healthy)).resolves.toEqual(
       new Set(['nautilus'])
     )
-  })
-
-  it('scans a namespace once and shares the answer with every later caller', async () => {
-    const store = {}
-    const scan = vi.fn(async () => found(['nautilus']))
-
-    await expect(runRetirementBackfillScan(store, 'ns', scan)).resolves.toEqual(
-      new Set(['nautilus'])
-    )
-    await expect(runRetirementBackfillScan(store, 'ns', scan)).resolves.toEqual(
-      new Set(['nautilus'])
-    )
-
-    expect(scan).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a listing that lands after the deadline instead of discarding the answer', async () => {

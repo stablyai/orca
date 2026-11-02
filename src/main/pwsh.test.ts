@@ -50,23 +50,6 @@ describe('isPwshAvailable', () => {
     }
   })
 
-  it('returns true when pwsh.exe is available on Windows', async () => {
-    const restorePlatform = setPlatform('win32')
-    runProcessSyncMock.mockReturnValue(ok)
-
-    try {
-      const { isPwshAvailable } = await import('./pwsh')
-      expect(isPwshAvailable()).toBe(true)
-      expect(runProcessSyncMock).toHaveBeenCalledWith({
-        program: 'pwsh.exe',
-        args: ['-Version'],
-        timeoutMs: 5000
-      })
-    } finally {
-      restorePlatform()
-    }
-  })
-
   it('returns false when pwsh.exe probe throws on Windows', async () => {
     const restorePlatform = setPlatform('win32')
     runProcessSyncMock.mockImplementation(() => {

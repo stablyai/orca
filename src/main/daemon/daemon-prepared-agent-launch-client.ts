@@ -1,5 +1,5 @@
 import type { PtySpawnOptions } from '../providers/pty-provider-contract'
-import { resolveUnixShellPath } from '../providers/local-pty-utils'
+import { resolveUnixShellPath } from '../providers/local-pty/local-pty-executable-spawn'
 import { resolvePtyShellPath, shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import { PREPARED_AGENT_LAUNCH_PROTOCOL_VERSION } from './daemon-protocol-version'

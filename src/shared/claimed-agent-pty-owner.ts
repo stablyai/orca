@@ -11,7 +11,7 @@ import type {
   AgentSessionExecutionClaim,
   AgentSessionOwnerBinding,
   AgentSessionSurfaceBinding
-} from './agent-session-host-authority'
+} from './agent-session/agent-session-host-authority'
 import {
   agentSessionClaimKey,
   buildClaimedAgentPtyOwnerIndex,
@@ -70,6 +70,7 @@ export class ClaimedAgentPtyOwnerRegistry {
     /** Called when this request waits on another request's start instead of starting its own. */
     onJoin?: (creation?: Promise<PtyCreationDisposition>) => void
     creation?: Promise<PtyCreationDisposition>
+    exitedDuringStart?: () => Error
   }): Promise<AgentSessionClaimedSpawnResult> {
     const preparation = this.prepare(args)
     const prepared = preparation instanceof Promise ? await preparation : preparation

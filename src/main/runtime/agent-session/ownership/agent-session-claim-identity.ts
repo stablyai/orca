@@ -12,7 +12,7 @@ import { dirname, isAbsolute, join, normalize } from 'node:path'
 import {
   AGENT_SESSION_CLAIM_DIGEST_VERSION,
   type AgentSessionExecutionClaim
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getAgentResumeArgv } from '../../../../shared/agent-resume-argv'
 import {
@@ -20,7 +20,7 @@ import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const COORDINATION_KEY_BYTES = 32
 const COORDINATION_KEY_FILE = 'agent-session-authority.key'

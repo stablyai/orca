@@ -5,6 +5,22 @@ import type {
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { PreparedLaunchNotAcceptedError } from './terminal/launch/prepared-terminal-pending'
 import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
+import type { PendingPreparedAgentLaunch } from '../../shared/prepared-agent-launch'
+import type { PreparedTerminalPrompts } from '../daemon/prepared-agent-launch-protocol'
+import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
+import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+
+export type PreparedStartupPorts = {
+  /** Starts the agent behind Setup in its host; null when that host cannot. */
+  startPrepared?: (
+    options: TerminalCreateOptions,
+    prompts: PreparedTerminalPrompts
+  ) => Promise<{
+    pending: PendingPreparedAgentLaunch
+    setupTerminal?: RuntimeTerminalCreate
+    warning?: string
+  } | null>
+}
 
 export async function startPreparedLocalWorktreeTerminals(
   args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],

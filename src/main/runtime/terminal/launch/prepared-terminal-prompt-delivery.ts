@@ -6,7 +6,7 @@ import type {
   PreparedAgentLaunchIdentity
 } from '../../../../shared/prepared-agent-launch'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
-import type { AgentSessionOperationRow } from '../../../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 
 /** The operation namespace main records prepared worktree launches under. */
 export const PREPARED_LAUNCH_ROW_CALLER = 'worktree-startup'

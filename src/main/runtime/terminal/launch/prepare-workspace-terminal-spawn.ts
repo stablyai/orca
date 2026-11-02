@@ -102,6 +102,7 @@ export async function prepareWorkspaceTerminalSpawn({
     telemetry: launchOpts.telemetry,
     connectionId: workspace.connectionId,
     worktreeId: workspace.id,
+    resolvedWorkspace: workspace,
     preAllocatedHandle,
     tabId,
     leafId,

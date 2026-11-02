@@ -58,7 +58,7 @@ export function NativeChatInteractiveCard({
   if (card.kind === 'question') {
     if (requiresTerminal) {
       return (
-        <div className="shrink-0 bg-chat-canvas">
+        <div className="shrink-0 bg-chat-pane">
           <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
             <div className="rounded-lg border border-input bg-card p-3 shadow-xs">
               <p className="text-sm text-foreground">

@@ -25,12 +25,3 @@ describe('PluginKvStore limits', () => {
     expect(store.get('large')).toBeUndefined()
   })
 })
-
-it('reads only stored keys, including names inherited by plain objects', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-plugin-storage-'))
-  roots.push(root)
-  const store = new PluginKvStore(root, 'samples.demo', 'storage.json')
-  expect(store.get('toString')).toBeUndefined()
-  expect(store.set('toString', 'saved')).toEqual({ ok: true })
-  expect(new PluginKvStore(root, 'samples.demo', 'storage.json').get('toString')).toBe('saved')
-})

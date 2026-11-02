@@ -50,7 +50,7 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
     ) {
       return null
     }
-    const workspace = await this.resolveTerminalCreateLaunchScope(selector, created, startupOptions)
+    const workspace = await this.resolveTerminalCreateLaunchScope(selector, startupOptions, created)
     if (workspace.connectionId) {
       return null
     }
@@ -222,7 +222,10 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
     if (prompts.draft && !(await this.pasteStartupDraftWhenReady(terminal.handle, prompts.draft))) {
       return false
     }
-    return !prompts.followup || this.deliverStartupFollowup(terminal.handle, prompts.followup)
+    return (
+      !prompts.followup ||
+      this.deliverStartupFollowup(terminal.handle, prompts.followup, { terminalCreation: terminal })
+    )
   }
 
   private async prepareTerminalForSetup(
@@ -234,7 +237,7 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
     if (!controller?.prepareSpawn) {
       throw new Error('prepared_agent_launch_unsupported')
     }
-    const workspace = await this.resolveTerminalCreateLaunchScope(selector, created, options)
+    const workspace = await this.resolveTerminalCreateLaunchScope(selector, options, created)
     const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, options)
     const { tabId, leafId } = dependencies.allocateTerminalPaneIdentity(launchOpts)
     const preAllocatedHandle =

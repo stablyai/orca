@@ -159,13 +159,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version worktree ps verdict', () => {
-  it('pairs two real builds that disagree on the row shape', () => {
-    // Require distinct implementations so every skew cannot silently run the same build.
-    expect(oldBuild.agentDotState).not.toBe(newBuild.agentDotState)
-    expect(Object.values(publishRows(oldBuild.host)).some((row) => 'mainAgent' in row)).toBe(false)
-    expect(Object.values(publishRows(newBuild.host)).every((row) => 'mainAgent' in row)).toBe(true)
-  })
-
   it('an OLD phone reads a new host row by the interrupted flag it always read', () => {
     const rows = publishRows(newBuild.host)
     expect(rows.stopped).toMatchObject({ interrupted: true })

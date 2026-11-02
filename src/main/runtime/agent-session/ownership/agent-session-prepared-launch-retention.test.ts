@@ -5,18 +5,18 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   agentSessionOperationKey,
   pendingAgentSessionOperationRow
-} from '../../../../shared/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
-} from '../../agent-session-record-store-test-harness'
+} from '../records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../../shared/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { commitAgentSessionReservation } from './agent-session-reservation-admission'
-import type { AgentSessionStoreState } from '../../agent-session-store-state'
+import type { AgentSessionStoreState } from '../records/agent-session-store-state'
 
 const NOW = 1_800_000_000_000
 const operationId = `${NOW}-${'a'.repeat(32)}`

@@ -5,7 +5,7 @@ import { PreparedAgentLaunchOwner } from '../../../daemon/prepared-agent-launch-
 import type { InternalCreateOrAttachOptions } from '../../../daemon/terminal-host-agent-session-claim'
 import type { RawPtySpawnObserver } from '../../../daemon/pty-subprocess'
 import type { PreparedAgentLaunchDescriptor } from '../../../../shared/prepared-agent-launch'
-import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { startPreparedWorktreeTerminals } from './prepared-worktree-terminal-start'
 import { OrcaRuntimeWithPreparedTerminals } from './prepared-terminal-runtime'
 

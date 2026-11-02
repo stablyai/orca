@@ -2,7 +2,7 @@ import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owne
 import {
   agentSessionOperationKey,
   type AgentSessionOperationRow
-} from '../../shared/agent-session-operation-ledger'
+} from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type {
   ClaimedAgentPtyOwnerRegistry,
   PreparedAgentPtyOwner

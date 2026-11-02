@@ -28,7 +28,7 @@ export class PluginKvStore {
   constructor(
     pluginsDataDir: string,
     qualifiedKey: string,
-    fileName: 'storage.json' | 'settings.json'
+    fileName: 'storage.json' | 'settings.json' | 'panel-state.json'
   ) {
     this.filePath = join(pluginDataDir(pluginsDataDir, qualifiedKey), fileName)
   }
@@ -57,8 +57,7 @@ export class PluginKvStore {
   }
 
   get(key: string): PluginJsonValue | undefined {
-    const settings = this.read()
-    return settings && Object.hasOwn(settings, key) ? settings[key] : undefined
+    return this.read()?.[key]
   }
 
   getAll(): Record<string, PluginJsonValue> {

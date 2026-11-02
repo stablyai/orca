@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import {
   isPreparedAgentLaunchStatus,
   preparedLaunchStatusFailureText,
@@ -16,7 +16,7 @@ import type {
   PreparedAgentSpawn,
   PreparedTerminalPrompts
 } from '../../../daemon/prepared-agent-launch-protocol'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
 import { buildObservedSetupCommand } from '../../orchestration/setup-completion-signal'
