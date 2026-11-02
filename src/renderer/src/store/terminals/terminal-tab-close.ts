@@ -42,6 +42,7 @@ export function createTerminalTabCloseActions(
         opts?.precomputedRetirementPlan?.tabId === tabId
           ? opts.precomputedRetirementPlan
           : buildTerminalTabRetirementPlan(get(), tabId)
+      get().closeDetachedTerminalWindow(tabId)
       let closingWorktreeId: string | null = null
       // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
       retireParkedTerminalTab(tabId)

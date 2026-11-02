@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from 'react'
+import { Fragment, memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -16,6 +16,7 @@ import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-reaction'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { DetachedTerminalPlaceholder } from './DetachedTerminalPlaceholder'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -27,6 +28,7 @@ const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_ACTIVITY_PORTALS: ActivityTerminalPortalTarget[] = []
+const EMPTY_DETACHED_TERMINALS: Record<string, { ptyId: string }> = {}
 
 const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId,
@@ -58,12 +60,13 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   /** Grant global keyboard chords to one workspace even when another overlay workspace remains visible. */
   ownsNativeChatToggleShortcut?: boolean
 }): React.JSX.Element | null {
-  const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
+  const { terminalTabs, unifiedTabs, groups, activeGroupId, detachedTerminalByTabId } = useAppStore(
     useShallow((state) => ({
       terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
       groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
-      activeGroupId: state.activeGroupIdByWorktree[worktreeId]
+      activeGroupId: state.activeGroupIdByWorktree[worktreeId],
+      detachedTerminalByTabId: state.detachedTerminalByTabId ?? EMPTY_DETACHED_TERMINALS
     }))
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
@@ -139,6 +142,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
       {terminalTabs.map((terminalTab) => {
         const assignment = assignments.get(terminalTab.id)
         const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
+        const isDetached = terminalTab.id in detachedTerminalByTabId
         if (!shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)) {
           // Only startup holds remain visible here; other visible deferred tabs are admitted in this render.
           return isVisible ? (
@@ -158,28 +162,54 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
           tabId: terminalTab.id
         })
         if (parkedTerminalTabIds.has(terminalTab.id)) {
-          return null
+          return isVisible && isDetached ? (
+            <RetainedPaneHost
+              key={terminalTab.id}
+              groupId={assignment?.groupId}
+              isVisible
+              dimmed={groups.length > 1 && !isActive && !themeBackgroundActive}
+              onFocusOwningGroup={focusOwningGroup}
+            >
+              <DetachedTerminalPlaceholder tabId={terminalTab.id} />
+            </RetainedPaneHost>
+          ) : null
         }
         return (
-          <TerminalOverlaySlot
-            key={terminalTab.id}
-            terminalTabId={terminalTab.id}
-            terminalGeneration={terminalTab.generation}
-            worktreeId={worktreeId}
-            worktreePath={worktreePath}
-            startupCwd={terminalTab.startupCwd}
-            groupId={assignment?.groupId}
-            isWorktreeActive={isWorktreeActive}
-            isVisible={isVisible}
-            isActive={isActive}
-            hiddenPrewarm={assignment?.isActiveInGroup === true ? hiddenTerminalPrewarm : null}
-            // Why not over a theme image: a chat there is translucent, so a dim would bleed the image in.
-            dimmed={groups.length > 1 && isVisible && !isActive && !themeBackgroundActive}
-            activityTerminalPortal={activityTerminalPortal}
-            onFocusOwningGroup={focusOwningGroup}
-            consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-            captureEmptiedReaction={captureEmptiedReaction}
-          />
+          <Fragment key={terminalTab.id}>
+            <TerminalOverlaySlot
+              terminalTabId={terminalTab.id}
+              terminalGeneration={terminalTab.generation}
+              worktreeId={worktreeId}
+              worktreePath={worktreePath}
+              startupCwd={terminalTab.startupCwd}
+              groupId={assignment?.groupId}
+              isWorktreeActive={isWorktreeActive}
+              isVisible={isVisible && !isDetached}
+              isActive={isActive && !isDetached}
+              // Why: a detached tab's companion window owns the PTY grid, so the hidden pane must not measure.
+              hiddenPrewarm={
+                !isDetached && assignment?.isActiveInGroup === true ? hiddenTerminalPrewarm : null
+              }
+              // Why not over a theme image: a chat there is translucent, so a dim would bleed the image in.
+              dimmed={
+                groups.length > 1 && isVisible && !isDetached && !isActive && !themeBackgroundActive
+              }
+              activityTerminalPortal={isDetached ? null : activityTerminalPortal}
+              onFocusOwningGroup={focusOwningGroup}
+              consumeSuppressedPtyExit={consumeSuppressedPtyExit}
+              captureEmptiedReaction={captureEmptiedReaction}
+            />
+            {isVisible && isDetached ? (
+              <RetainedPaneHost
+                groupId={assignment?.groupId}
+                isVisible
+                dimmed={groups.length > 1 && !isActive && !themeBackgroundActive}
+                onFocusOwningGroup={focusOwningGroup}
+              >
+                <DetachedTerminalPlaceholder tabId={terminalTab.id} />
+              </RetainedPaneHost>
+            ) : null}
+          </Fragment>
         )
       })}
     </>

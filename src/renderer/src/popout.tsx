@@ -6,6 +6,10 @@ import './assets/main.css'
 import { StrictMode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
+import {
+  DetachedTerminalWindow,
+  readDetachedTerminalWindowParams
+} from './components/detached-terminal/DetachedTerminalWindow'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   installRendererCrashDiagnostics,
@@ -27,6 +31,7 @@ import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
+const detachedTerminalParams = readDetachedTerminalWindowParams(window.location.search)
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 // Each popout has a separate React root/DOM/JS context; run full renderer bootstrap despite sharing preload/window.api.
@@ -106,6 +111,9 @@ function PopoutSettingsSync(): null {
 
 function PopoutRoot(): React.JSX.Element {
   useTranslation()
+  if (detachedTerminalParams) {
+    return <DetachedTerminalWindow {...detachedTerminalParams} />
+  }
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="dashboard-popout.root"

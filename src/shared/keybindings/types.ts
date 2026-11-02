@@ -61,6 +61,7 @@ export type KeybindingActionId =
   | 'worktree.history.back'
   | 'worktree.history.forward'
   | 'tab.newTerminal'
+  | 'tab.moveToNewWindow'
   | 'tab.newAgent'
   | AgentTabActionId
   | 'tab.newBrowser'

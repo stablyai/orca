@@ -51,7 +51,7 @@ import {
   publishClipboardOperation,
   publishClipboardText
 } from './clipboard-text-publisher'
-import { isDashboardPopoutRenderer } from './dashboard-popout-window'
+import { isTerminalPreviewWindow } from './terminal-preview-window'
 import { restoreNativeChatPastes } from './native-chat-paste-files'
 import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
 import { agentSessionPastedImageName } from '../../shared/agent-session/agent-session-attachments'
@@ -315,8 +315,8 @@ function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
 }
 
 function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
-  // Dashboard popouts need text clipboard authority only; never extend it to images, files or remote operations.
-  if (!isTrustedClipboardRenderer(event.sender) && !isDashboardPopoutRenderer(event.sender)) {
+  // Terminal preview windows need text clipboard authority only; never extend it to images, files or remote operations.
+  if (!isTrustedClipboardRenderer(event.sender) && !isTerminalPreviewWindow(event.sender)) {
     throw new Error('Unauthorized clipboard IPC sender')
   }
 }

@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
+import { Pencil, PictureInPicture2, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -15,6 +15,8 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import type { DetachedWindow } from './DetachedTerminalTabIndicator'
 
 const TAB_COLORS = [
   {
@@ -107,6 +109,7 @@ type SortableTabContextMenuProps = {
   onToggleViewMode?: () => void
   canSplitTerminal?: boolean
   nativeChat?: NativeChatTabSession
+  detachedWindow?: DetachedWindow
 }
 
 export function SortableTabContextMenu({
@@ -130,7 +133,8 @@ export function SortableTabContextMenu({
   isChatView = false,
   onToggleViewMode,
   canSplitTerminal = true,
-  nativeChat
+  nativeChat,
+  detachedWindow
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -183,6 +187,21 @@ export function SortableTabContextMenu({
         leadingSeparator={!showTerminalViewSwitch}
         onComplete={onSessionSwitchComplete}
       />
+      {detachedWindow ? (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={detachedWindow.onMove} disabled={detachedWindow.disabled}>
+            <PictureInPicture2 className="size-3.5 shrink-0" />
+            {detachedWindow.isDetached
+              ? translate('components.tab.bar.SortableTabContextMenu.showWindow', 'Show Window')
+              : translate(
+                  'components.tab.bar.SortableTabContextMenu.moveToNewWindow',
+                  'Move to New Window'
+                )}
+            {detachedWindow.localOnly ? <LocalOnlyMenuHint /> : null}
+          </ContextMenuItem>
+        </>
+      ) : null}
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={onTogglePin}>
         {isPinned ? (

@@ -5,6 +5,8 @@ import type {
 } from '../../shared/terminal-preview'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
+import { isDetachedTerminalRendererForPty } from '../window/detached-terminal-window'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX } from '../../shared/terminal-scrollback-policy'
 import { isTrustedUIRenderer } from './ui'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import {
@@ -19,8 +21,13 @@ function isValidPtyId(value: unknown): value is string {
 }
 
 // Both popout and main-renderer overlay host previews; trusted UI already has ordinary PTY access.
-function isTerminalPreviewRenderer(sender: WebContents): boolean {
-  return isDashboardPopoutRenderer(sender) || isTrustedUIRenderer(sender)
+// A detached terminal window may preview only its own PTY.
+function isTerminalPreviewAllowed(sender: WebContents, ptyId: string): boolean {
+  return (
+    isDashboardPopoutRenderer(sender) ||
+    isTrustedUIRenderer(sender) ||
+    isDetachedTerminalRendererForPty(sender, ptyId)
+  )
 }
 /** Pop-out terminal transport with an atomic snapshot/live boundary. */
 export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): void {
@@ -91,7 +98,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       event,
       args: { ptyId?: unknown; opts?: { scrollbackRows?: unknown } }
     ): Promise<TerminalPreviewConnectResult> => {
-      if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
+      if (!isValidPtyId(args?.ptyId) || !isTerminalPreviewAllowed(event.sender, args.ptyId)) {
         return { snapshot: null, replay: [] }
       }
       const ptyId = args.ptyId
@@ -123,9 +130,13 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       perPty.set(ptyId, subscription)
 
       const requestedRows = args.opts?.scrollbackRows
+      // A companion window is the tab's whole view, so it may replay the pane's full scrollback.
+      const maxScrollbackRows = isDetachedTerminalRendererForPty(event.sender, ptyId)
+        ? DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX
+        : 1000
       const scrollbackRows =
         typeof requestedRows === 'number' && Number.isFinite(requestedRows)
-          ? Math.max(0, Math.min(1000, Math.floor(requestedRows)))
+          ? Math.max(0, Math.min(maxScrollbackRows, Math.floor(requestedRows)))
           : undefined
       let snapshot: TerminalPreviewSnapshot | null
       let resyncRequired = false
@@ -165,8 +176,8 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     'terminalPreview:input',
     (event, args: { ptyId?: unknown; data?: unknown }): Promise<boolean> => {
       if (
-        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
+        !isTerminalPreviewAllowed(event.sender, args.ptyId) ||
         typeof args.data !== 'string'
       ) {
         return Promise.resolve(false)
@@ -179,8 +190,8 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     'terminalPreview:ack',
     (event, args: { ptyId?: unknown; bytes?: unknown }): void => {
       if (
-        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
+        !isTerminalPreviewAllowed(event.sender, args.ptyId) ||
         typeof args.bytes !== 'number' ||
         !Number.isFinite(args.bytes) ||
         args.bytes <= 0 ||
@@ -200,8 +211,8 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       args: { ptyId?: unknown; cols?: unknown; rows?: unknown }
     ): Promise<{ cols: number; rows: number } | null> => {
       if (
-        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
+        !isTerminalPreviewAllowed(event.sender, args.ptyId) ||
         typeof args.cols !== 'number' ||
         typeof args.rows !== 'number' ||
         !Number.isFinite(args.cols) ||
@@ -246,7 +257,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
   )
 
   ipcMain.handle('terminalPreview:unsubscribe', (event, args: { ptyId?: unknown }): void => {
-    if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
+    if (!isValidPtyId(args?.ptyId) || !isTerminalPreviewAllowed(event.sender, args.ptyId)) {
       return
     }
     subscriptionsByContents.get(event.sender.id)?.get(args.ptyId)?.dispose()

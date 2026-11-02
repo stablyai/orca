@@ -1,5 +1,6 @@
 import {
   DASHBOARD_MAX_LABEL_LENGTH,
+  type DashboardCardTerminalInput,
   type DashboardRevealAgentArgs,
   type DashboardSnapshot
 } from '../../shared/dashboard-snapshot'
@@ -276,7 +277,9 @@ function isDashboardCard(value: unknown): boolean {
   )
 }
 
-function isDashboardTerminalInput(value: unknown): boolean {
+export function isDashboardTerminalInput(
+  value: unknown
+): value is DashboardCardTerminalInput | undefined {
   if (value === undefined) {
     return true
   }

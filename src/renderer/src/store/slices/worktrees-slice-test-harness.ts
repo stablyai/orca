@@ -111,6 +111,10 @@ export const mockApi = {
     cancelProvision: stubMock().mockResolvedValue({ cancelled: true }),
     cleanup: stubMock().mockResolvedValue({}),
     listRuntimes: stubMock().mockResolvedValue([])
+  },
+  detachedTerminal: {
+    close: stubMock().mockResolvedValue(undefined),
+    open: stubMock().mockResolvedValue(undefined)
   }
 }
 
@@ -159,6 +163,8 @@ export function createTestStore() {
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
         shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
+        closeDetachedTerminalWindow: vi.fn().mockResolvedValue(undefined),
+        detachedTerminalByTabId: {},
         deleteManagedBrowserSessionProfile: vi.fn().mockResolvedValue(undefined),
         ptyIdsByTabId: {},
         tabsByWorktree: {},
