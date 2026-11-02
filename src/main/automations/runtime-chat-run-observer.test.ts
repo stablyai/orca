@@ -322,6 +322,7 @@ describe('real host queue publication and operation bounds', () => {
     'observes Q→S at %i prior turns without token-triggered history scans',
     async (history) => {
       const totals: number[][] = []
+      const outputIterations: number[] = []
       for (const mode of ['baseline', 'internal', 'display'] as const) {
         const rig = await createQueuedMessageTestRig({ restartable: true })
         mocks.actualHost = rig.host
@@ -373,8 +374,17 @@ describe('real host queue publication and operation bounds', () => {
             )
           ).toMatchObject({ ok: true, value: { queued: { messageId: q, state: 'waiting' } } })
           const metrics = measureAutomationChatRun(journal, rig.host)
-          const { measure, full, observerReads, registration, releases, keys, timers, cleared } =
-            metrics
+          const {
+            measure,
+            full,
+            status,
+            observerReads,
+            registration,
+            releases,
+            keys,
+            timers,
+            cleared
+          } = metrics
           const tokenBurst = async () => {
             for (let n = 0; n < 25; n++) {
               sink.appendItem(
@@ -426,7 +436,8 @@ describe('real host queue publication and operation bounds', () => {
             await eventually(() => expect(registration).toHaveBeenCalledOnce())
           }
           await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-          await eventually(() => expect(full.mock.calls.length).toBeGreaterThan(0))
+          expect(status.mock.calls.length).toBeGreaterThan(0)
+          expect(full).toHaveBeenCalledTimes(mode === 'baseline' ? 0 : 1)
           const beforeTokens = measure()
           const readsBeforeTokens = observerReads.mock.calls.length
           const keysBeforeTokens = keys.map((spy) => spy.mock.calls.length)
@@ -551,6 +562,7 @@ describe('real host queue publication and operation bounds', () => {
           expect(sessions['observers'].size).toBe(0)
           expect(sessions['attachments'].size).toBe(1)
           totals.push(measure())
+          outputIterations.push(metrics.details().outputIterations)
           process.stdout.write(
             `${JSON.stringify({ history, mode, sourceAttachments: sessions['attachments'].size, logicalObservers: sessions['observers'].size, baselineWork, observerWork, keyedAdded, totals: measure(), ...metrics.details(), reconciliations: observerReads.mock.calls.length, registrations: registration.mock.calls.length, releases: releases.filter((r) => r.mock.calls.length === 1).length })}\n`
           )
@@ -562,12 +574,24 @@ describe('real host queue publication and operation bounds', () => {
         }
       }
       const added = totals[1].map((value, i) => value - totals[0][i])
-      expect(added.slice(0, 15).filter((_, i) => i !== 5 && i !== 12)).toEqual(
-        added
-          .slice(0, 15)
-          .filter((_, i) => i !== 5 && i !== 12)
-          .map(() => 0)
-      )
+      expect(added.slice(0, 15)).toEqual([
+        0,
+        8 * history + 13,
+        4,
+        12 * history + 20,
+        0,
+        6,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        6,
+        0,
+        0
+      ])
+      expect(added[1]).toBe(outputIterations[1] - outputIterations[0])
       expect(added[5]).toBe(6)
       expect(added[12]).toBe(6)
       expect(totals[0].slice(17, 21)).toEqual([1, 2 * history + 5, 0, 0])

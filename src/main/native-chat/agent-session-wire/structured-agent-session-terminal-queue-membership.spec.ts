@@ -151,10 +151,9 @@ it.each([10, 100])(
     const observeNode = (node: Tree | undefined): Tree | undefined =>
       node &&
       new Proxy(node, {
-        get(target, key, receiver) {
+        get(target, key: keyof typeof target) {
           count().paths++
-          const value = Reflect.get(target, key, receiver)
-          return key === 'left' || key === 'right' ? observeNode(value) : value
+          return key === 'left' || key === 'right' ? observeNode(target[key]) : target[key]
         }
       })
     const atPath = <T>(index: JournalInputPlaceIndex, run: () => T): T => {
@@ -211,8 +210,8 @@ it.each([10, 100])(
       .spyOn(JournalInputOrder.prototype, 'stoppedHistoryInputs')
       .mockImplementation(function (this: JournalInputOrder, ...args) {
         return new Proxy(stoppedInputs.apply(this, args), {
-          get(target, key, receiver) {
-            const value = Reflect.get(target, key, receiver)
+          get(target, key: keyof typeof target) {
+            const value = target[key]
             if (typeof key === 'string' && /^\d+$/.test(key)) {
               visit(value)
             }
@@ -225,11 +224,12 @@ it.each([10, 100])(
       .mockImplementation(function (this: JournalInputOrder, ...args) {
         const result = status.apply(this, args)
         return new Proxy(result, {
-          get(target, key, receiver) {
-            const value = Reflect.get(target, key, receiver)
+          get(target, key: keyof typeof target) {
+            const value = target[key]
             if (typeof key === 'string' && /^\d+$/.test(key)) {
               count().statusRecords++
-              if (value && archived(value.clientMessageId)) {
+              const input = target[Number(key)]
+              if (input && archived(input.clientMessageId)) {
                 count().endpoints++
               }
             }
@@ -241,11 +241,11 @@ it.each([10, 100])(
     const rendered = vi.spyOn(reducer, 'renderJournalItems').mockImplementation(
       (...args) =>
         new Proxy(renderItems(...args), {
-          get(target, key, receiver) {
+          get(target, key: keyof typeof target) {
             if (typeof key === 'string' && /^\d+$/.test(key)) {
               count().statusItems++
             }
-            return Reflect.get(target, key, receiver)
+            return target[key]
           }
         })
     )
@@ -264,8 +264,8 @@ it.each([10, 100])(
       this: JournalQueuedMessages
     ) {
       return new Proxy(list.call(this), {
-        get(target, key, receiver) {
-          const value: unknown = Reflect.get(target, key, receiver)
+        get(target, key: keyof typeof target) {
+          const value: unknown = target[key]
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             visit(value)
           }

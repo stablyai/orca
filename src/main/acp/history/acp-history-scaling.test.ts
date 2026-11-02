@@ -674,7 +674,7 @@ it('counts observed-exit provenance passes while preserving imported history at 
       kind: 'turn',
       turnItemId: archival.findLast((row) => readAgentJournalTurn(row.body))!.itemId
     })
-    const snapshot = rig.journal.snapshot
+    const statusRead = rig.journal.statusRead
     const batch = rig.journal.appendPlannedLifecycleBatch
     let batchCalls = 0
     let settlement: Awaited<ReturnType<typeof settleObservedExitForTest>> | undefined
@@ -684,8 +684,8 @@ it('counts observed-exit provenance passes while preserving imported history at 
       count.submissions = submissionCount
       rig.journal.observeCommits(() => count.commits++)
       const spies = [
-        vi.spyOn(rig.journal, 'snapshot').mockImplementation(() => {
-          const result = snapshot.call(rig.journal)
+        vi.spyOn(rig.journal, 'statusRead').mockImplementation(() => {
+          const result = statusRead.call(rig.journal)
           const phase =
             operationStack()
               .split('\n')

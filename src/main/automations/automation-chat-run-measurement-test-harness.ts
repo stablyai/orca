@@ -6,6 +6,7 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 export type AutomationChatRunMeasurement = {
   measure: () => number[]
   full: MockInstance<AgentSessionJournal['snapshot']>
+  status: MockInstance<AgentSessionJournal['statusRead']>
   observerReads: MockInstance<StructuredAgentSessionHost['journalSnapshot']>
   registration: MockInstance<StructuredAgentSessionHost['observeConversationPublications']>
   releases: Mock<() => void>[]
@@ -24,6 +25,7 @@ export type AutomationChatRunMeasurement = {
     deltaRows: number
     copied: number
     iteratorYields: number
+    outputIterations: number
     projections: number
     projectedRows: number
     scannedRows: number
@@ -98,16 +100,21 @@ export function measureAutomationChatRun(
   let projections = 0,
     projectedRows = 0,
     scannedRows = 0
+  let renderingOutput = false,
+    outputIterations = 0
   const materialized = new WeakSet<object>()
   const realPublicRead = journal.publicRead.bind(journal)
   const publicReads = vi.spyOn(journal, 'publicRead').mockImplementation(() => {
     const view = realPublicRead()
     return {
+      snapshotForItems(ids) {
+        return output(() => wrapSnapshot(view.snapshotForItems(ids)))
+      },
       get normalizationKey() {
         return view.normalizationKey
       },
       get snapshot() {
-        const result = view.snapshot
+        const result = output(() => view.snapshot)
         if (!materialized.has(view)) {
           materialized.add(view)
           projections++
@@ -117,6 +124,15 @@ export function measureAutomationChatRun(
       }
     }
   })
+  function output<T>(read: () => T): T {
+    const previous = renderingOutput
+    renderingOutput = true
+    try {
+      return read()
+    } finally {
+      renderingOutput = previous
+    }
+  }
   const visitItems = journal.visitItems.bind(journal)
   const visits = vi.spyOn(journal, 'visitItems').mockImplementation((visit) =>
     visitItems((...args) => {
@@ -135,6 +151,7 @@ export function measureAutomationChatRun(
   })
   const timers = vi.spyOn(globalThis, 'setTimeout'),
     cleared = vi.spyOn(globalThis, 'clearTimeout')
+  const status = vi.spyOn(journal, 'statusRead')
   const realSnapshot = journal.snapshot.bind(journal)
   const full = vi.spyOn(journal, 'snapshot').mockImplementation((...args) => {
     const value = realSnapshot(...args)
@@ -157,6 +174,9 @@ export function measureAutomationChatRun(
   vi.spyOn(folded.items, 'values').mockImplementation(function* () {
     for (const item of values()) {
       iteratorYields++
+      if (renderingOutput) {
+        outputIterations++
+      }
       yield item
     }
     return undefined
@@ -215,6 +235,7 @@ export function measureAutomationChatRun(
   return {
     measure,
     full,
+    status,
     observerReads,
     registration,
     releases,
@@ -228,6 +249,7 @@ export function measureAutomationChatRun(
       deltaRows,
       copied,
       iteratorYields,
+      outputIterations,
       projections,
       projectedRows,
       scannedRows
