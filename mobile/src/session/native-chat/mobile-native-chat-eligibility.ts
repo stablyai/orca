@@ -37,7 +37,8 @@ export type MobileNativeChatTab = {
 
 export function resolveMobileNativeChat(
   tab: MobileNativeChatTab | null,
-  nativeChatTranscriptIsLocalReadable = false
+  nativeChatTranscriptIsLocalReadable = false,
+  hermesOverlaySupported = false
 ): MobileNativeChatResolution | null {
   if (!tab) {
     return null
@@ -66,6 +67,9 @@ export function resolveMobileNativeChat(
   })
   // Frames can omit live status, so the remembered agent fills in only after desktop's evidence.
   const agent = evidenceAgent ?? remembered?.agent ?? null
+  if (agent === 'hermes' && !hermesOverlaySupported) {
+    return null
+  }
   if (!agent || !isNativeChatAgentAvailable(agent, nativeChatTranscriptIsLocalReadable)) {
     return null
   }
@@ -97,7 +101,7 @@ export function withRememberedNativeChatIdentity<
     const prior = priorTab?.type === 'terminal' ? priorTab.nativeChatIdentity : undefined
     const carried =
       prior && (tab.terminal == null || tab.terminal === prior.terminal) ? prior : undefined
-    const resolved = resolveMobileNativeChat({ ...tab, nativeChatIdentity: carried }, true)
+    const resolved = resolveMobileNativeChat({ ...tab, nativeChatIdentity: carried }, true, true)
     const terminal = tab.terminal ?? carried?.terminal
     const nativeChatIdentity =
       resolved && terminal
@@ -113,7 +117,7 @@ export function withRememberedNativeChatIdentity<
 }
 
 export function isMobileNativeChatAgentConfirmed(tab: MobileNativeChatTab | null): boolean {
-  return resolveMobileNativeChat(tab, true)?.agentConfirmed !== false
+  return resolveMobileNativeChat(tab, true, true)?.agentConfirmed !== false
 }
 
 export function canShowMobileNativeChat(
@@ -129,7 +133,9 @@ export function resolveMobileNativeChatSessionId(tab: MobileNativeChatTab | null
   }
   if (tab?.type === 'terminal') {
     return (
-      tab.agentStatus?.providerSession?.id ?? resolveMobileNativeChat(tab, true)?.sessionId ?? null
+      tab.agentStatus?.providerSession?.id ??
+      resolveMobileNativeChat(tab, true, true)?.sessionId ??
+      null
     )
   }
   return null

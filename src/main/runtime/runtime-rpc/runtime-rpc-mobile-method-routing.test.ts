@@ -24,4 +24,8 @@ describe('mobile RPC method routing census', () => {
     expect(MOBILE_RPC_METHOD_ROUTES.get('preflight.detectAgents')).toBe('execution-host')
     expect(MOBILE_RPC_METHOD_ROUTES.get('preflight.refreshAgents')).toBe('execution-host')
   })
+
+  it('routes registered agent discovery to the workspace host for mobile chat launches', () => {
+    expect(MOBILE_RPC_METHOD_ROUTES.get('agentSession.agents')).toBe('execution-host')
+  })
 })

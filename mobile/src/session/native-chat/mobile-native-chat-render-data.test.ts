@@ -23,6 +23,12 @@ function user(id: string, text: string): NativeChatMessage {
 const fold = (messages: NativeChatMessage[]) => foldMobileNativeChatMessages(messages, 'claude')
 
 describe('mobileNativeChatEmptyState', () => {
+  it.each(['waiting-session', 'awaiting-transcript'] as const)(
+    'shows Hermes connecting while %s',
+    (status) => {
+      expect(mobileNativeChatEmptyState(status, 'hermes')?.title).toBe('Connecting to Hermes…')
+    }
+  )
   it('invites a first message into a loaded, empty chat, matching desktop copy', () => {
     expect(mobileNativeChatEmptyState('ready', 'codex')).toEqual({
       title: 'Start a chat with Codex',

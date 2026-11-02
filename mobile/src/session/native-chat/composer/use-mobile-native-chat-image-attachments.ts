@@ -164,7 +164,7 @@ export function useMobileNativeChatImageAttachments({
         return false
       }
       // Use one action budget across paste, settle and text so per-leg clocks cannot double the composer lock.
-      const deadline = openMobileNativeChatSendBudget()
+      const deadline = openMobileNativeChatSendBudget(agent)
       const sentAt = Date.now()
       try {
         const scope = scopeKey

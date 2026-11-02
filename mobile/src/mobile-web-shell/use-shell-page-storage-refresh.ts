@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
-import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
+import { NATIVE_PAGE_STORAGE_REFRESH_KEYS } from './page-storage-keys'
 
 export function useShellPageStorageRefresh(refresh: () => Promise<unknown>, publish: () => void) {
   useFocusEffect(
@@ -18,7 +18,7 @@ export function useShellPageStorageRefresh(refresh: () => Promise<unknown>, publ
           (error: unknown) => console.warn('[web-shell] could not refresh page settings', error)
         )
       }
-      const stopWatching = TERMINAL_SHORTCUT_STORAGE_KEYS.map((key) =>
+      const stopWatching = NATIVE_PAGE_STORAGE_REFRESH_KEYS.map((key) =>
         subscribeMirroredKey(key, (_value, source) => {
           if (focused && source === 'persisted') {
             publish()

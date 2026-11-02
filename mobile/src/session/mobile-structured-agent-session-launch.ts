@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
@@ -7,7 +7,8 @@ import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
-  type StructuredAgentSessionCreateParams
+  type StructuredAgentSessionCreateParams,
+  type StructuredAgentSessionResumeSource
 } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
@@ -38,36 +39,43 @@ export type MobileStructuredAgentLaunchResult =
   | { kind: 'unknown'; message: string }
 
 function createParamsFor(
-  agent: AgentSessionHandleProvider,
-  worktree: string
+  agent: StructuredAgentId,
+  worktree: string,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
     sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
     worktree,
     agent,
+    ...(resumeFrom ? { resumeFrom } : {}),
     randomUuid: randomV4Uuid
   })
 }
 
+function agentLabel(agent: string): string {
+  const names: Record<string, string> = TUI_AGENT_DISPLAY_NAMES
+  return names[agent] ?? agent
+}
+
 function unknownCreateResult(
-  agent: AgentSessionHandleProvider,
+  agent: StructuredAgentId,
   error: unknown
 ): MobileStructuredAgentLaunchResult {
   const message = error instanceof Error ? error.message.trim() : ''
   return { kind: 'unknown', message: message || unconfirmedMessage(agent) }
 }
 
-function unconfirmedMessage(agent: AgentSessionHandleProvider): string {
-  return `The ${TUI_AGENT_DISPLAY_NAMES[agent]} chat result could not be confirmed.`
+function unconfirmedMessage(agent: StructuredAgentId): string {
+  return `The ${agentLabel(agent)} chat result could not be confirmed.`
 }
 
-function failedMessage(agent: AgentSessionHandleProvider): string {
-  return `Could not open ${TUI_AGENT_DISPLAY_NAMES[agent]} chat.`
+function failedMessage(agent: StructuredAgentId): string {
+  return `Could not open ${agentLabel(agent)} chat.`
 }
 
 // Only definitive refusal permits failure/fallback; uncertain creates may already own a session and must not create a sibling.
 function classifyCreateRefusal(
-  agent: AgentSessionHandleProvider,
+  agent: StructuredAgentId,
   code: string,
   message: string
 ): MobileStructuredAgentLaunchResult {
@@ -80,7 +88,8 @@ function classifyCreateRefusal(
 export async function createMobileStructuredAgentSession(
   client: RpcClient,
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId,
+  options?: { resumeFrom?: StructuredAgentSessionResumeSource }
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
@@ -121,7 +130,7 @@ export async function createMobileStructuredAgentSession(
     return { kind: 'unsupported', reason: support?.reason }
   }
 
-  const params = createParamsFor(agent, worktree)
+  const params = createParamsFor(agent, worktree, options?.resumeFrom)
   rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
   try {

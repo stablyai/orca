@@ -37,8 +37,8 @@ export const MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS = 15_000
 export const MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS = 2_000
 
 // One action gets one budget; multi-write sequences must not multiply the send timeout.
-export function openMobileNativeChatSendBudget(): number {
-  return Date.now() + MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS
+export function openMobileNativeChatSendBudget(agent?: string | null): number {
+  return Date.now() + (agent === 'hermes' ? 75_000 : MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS)
 }
 
 export async function sendMobileNativeChatMessageWithOutcome(

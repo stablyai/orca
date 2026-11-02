@@ -5,6 +5,7 @@ import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 import { ANTIGRAVITY_ACP_DIALECT } from './acp-dialects/antigravity-dialect'
+import { HERMES_ACP_DIALECT } from './acp-dialects/hermes-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
@@ -37,6 +38,8 @@ import { OPENCODE_TRANSCRIPT_IMPORT } from '../opencode/opencode-transcript-impo
 import { assertOpenCodeCopyUsesLocalStore } from '../../shared/opencode-launch-command'
 import { OMP_SESSION_HISTORY } from '../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../omp/omp-transcript-import'
+import { hermesAcpAccountBinding } from '../hermes/hermes-acp-account'
+import { HERMES_SESSION_HISTORY } from '../hermes/hermes-session-history'
 import {
   ANTIGRAVITY_ACP_COMMAND,
   ANTIGRAVITY_ACP_RUNTIME
@@ -294,12 +297,36 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
+// `hermes acp --yolo` is rejected; the parent CLI consumes `--yolo` before `acp`.
+const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
+  agent: 'hermes',
+  command: 'hermes',
+  args: ({ fullAccess }) => (fullAccess ? ['--yolo', 'acp'] : ['acp']),
+  env: { HERMES_YOLO_MODE: '0' },
+  dialect: HERMES_ACP_DIALECT,
+  loginCommand: agentSessionSignInFor('hermes')?.loginCommand ?? [],
+  // `hermes-setup` is interactive and authenticates only after credentials exist.
+  authMethod: ({ advertised }) => advertised.find((id) => id !== 'hermes-setup'),
+  account: hermesAcpAccountBinding(),
+  installDirectories: () => [],
+  // Replay frames carry no turn id, so catch-up would fail the attach. Journals reopen themselves.
+  compaction: true,
+  modelDiscovery: {
+    kind: 'unavailable',
+    reason: 'Hermes lists its models only in a chat session'
+  },
+  // Sessions live in SQLite, not transcript files.
+  transcriptImport: null,
+  sessionHistory: HERMES_SESSION_HISTORY
+}
+
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   GROK_LAUNCH_SPEC,
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
-  ANTIGRAVITY_LAUNCH_SPEC
+  ANTIGRAVITY_LAUNCH_SPEC,
+  HERMES_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

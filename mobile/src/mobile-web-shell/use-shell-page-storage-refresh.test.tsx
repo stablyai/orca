@@ -10,7 +10,7 @@ import {
   retainMirroredStorage,
   writeMirroredStorage
 } from '../storage/mirrored-storage-keys'
-import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
+import { NATIVE_PAGE_STORAGE_REFRESH_KEYS } from './page-storage-keys'
 
 const store = vi.hoisted(() => ({
   values: new Map<string, string>(),
@@ -84,7 +84,7 @@ it('refreshes before publishing on native return and foreground, and drops a blu
   expect(app.remove).toHaveBeenCalledTimes(2)
 })
 
-it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
+it.each(NATIVE_PAGE_STORAGE_REFRESH_KEYS)(
   'publishes the final queued native save for %s, only while focused',
   async (key) => {
     focus.active = false

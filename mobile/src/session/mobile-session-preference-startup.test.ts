@@ -481,6 +481,13 @@ it('refreshes a mounted terminal from native shortcut settings without router fo
     { id: 'two', label: 'Two', bytes: '2', enter: false }
   ])
   expect(await pageAsyncStorage.getItem(draftKey)).toBe('unsent page draft')
+  storage['orca:defaultSessionView'] = 'chat'
+  await act(async () => {
+    pair.host.publishStorage()
+    await pair.flush()
+  })
+  expect(await pageAsyncStorage.getItem('orca:defaultSessionView')).toBe('chat')
+  expect(await pageAsyncStorage.getItem(draftKey)).toBe('unsent page draft')
   expect(pair.storageWrites).toHaveLength(writes)
   expect(mounts).toBe(1)
   expect(pair.client.getShellSession()?.sessionId).toBe('session-a')

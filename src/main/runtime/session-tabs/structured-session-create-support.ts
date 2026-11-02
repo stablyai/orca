@@ -27,6 +27,7 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { hermesAcpLoadSessionId } from '../../../shared/hermes-session-id'
 
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
   protected abstract restoreStructuredAgentSessionTabsOnce(
@@ -155,9 +156,10 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     // Adopting a conversation reads the agent's own transcript, so only an agent registered with an
-    // importer adopts.
+    // importer adopts. Hermes reloads an ACP uuid; a TUI timestamp is not that id.
     const transcriptImport = structuredAgentRuntimeMetadata(input.agent)?.transcriptImport
-    if (!support.supported || (input.resumeFrom && !transcriptImport)) {
+    const hermesLoadId = hermesAcpLoadSessionId(input.agent, input.resumeFrom)
+    if (!support.supported || (input.resumeFrom && !transcriptImport && !hermesLoadId)) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {
         reason: 'hostUnsupported'
       })
@@ -182,7 +184,19 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       ...(options ? { options } : {})
     })
     if (committedReplay) {
-      return committedReplay
+      if (!hermesLoadId) {
+        return committedReplay
+      }
+      return {
+        envelope: committedReplay.envelope,
+        location: committedReplay.location,
+        provider: committedReplay.provider,
+        agent: committedReplay.agent,
+        accountHome: committedReplay.accountHome,
+        ...(committedReplay.options ? { options: committedReplay.options } : {}),
+        acpLoadSessionId: hermesLoadId,
+        runtimeKind: committedReplay.runtimeKind
+      }
     }
     const resumeFrom = input.resumeFrom
     if (resumeFrom) {
@@ -247,7 +261,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
               workspaceCwd
             })
           }
-        : {}),
+        : hermesLoadId
+          ? { acpLoadSessionId: hermesLoadId }
+          : {}),
       runtimeKind: 'native'
     }
   }

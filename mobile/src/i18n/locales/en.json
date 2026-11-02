@@ -2220,11 +2220,15 @@
       "emptySubtitle": "Ask {{agent}} to inspect code, explain output, or make a change.",
       "errorTitle": "Could not load conversation",
       "errorSubtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
-      "defaultAgentLabel": "the agent"
+      "defaultAgentLabel": "the agent",
+      "hermesStartingTitle": "Connecting to Hermes…",
+      "hermesStartingSubtitle": "The conversation will appear when Hermes is ready."
     },
     "nativeChatToggleAction": {
       "switchToTerminalView": "Switch to terminal view",
-      "switchToChatView": "Switch to chat view"
+      "switchToChatView": "Switch to chat view",
+      "terminalCannotSwitchToChat": "Can't switch this {{agent}} terminal to Chat",
+      "startNewChatSession": "Start a new session with Chat UI on"
     },
     "prSidebarState": {
       "loadFailed": "Unable to load pull request"
@@ -2406,6 +2410,7 @@
       "presetsUnavailable": "Agent Presets Unavailable",
       "checkHostHint": "Check the host connection",
       "newSessionHint": "New agent session",
+      "opensAsChat": "Opens in Chat",
       "copyNotesHint": "Copy notes instead"
     },
     "useStartup": {

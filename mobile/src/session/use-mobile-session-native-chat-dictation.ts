@@ -40,7 +40,6 @@ export function useMobileSessionNativeChatDictation(
     worktreeId,
     client,
     connState,
-    agentSessionHostSupport,
     setInput,
     liveInputTerminalHandles,
     activeHandle,
@@ -51,7 +50,6 @@ export function useMobileSessionNativeChatDictation(
     setDictationMode,
     dictationEnabled,
     setDictationEnabled,
-    deviceTokenRef,
     dictationRouteContextRef,
     commandFieldAnchorRef,
     activeHandleRef,
@@ -80,17 +78,9 @@ export function useMobileSessionNativeChatDictation(
     connected: connState === 'connected'
   })
   const nativeChatController = useMobileNativeChatController({
-    client,
-    hostId,
-    worktreeId,
-    activeSessionTab,
-    activeSessionTabId,
-    activeHandleRef,
-    deviceTokenRef,
+    ...scope,
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
-    connState,
-    agentSessionHostSupport,
     onSendError: nativeChatSendError.show,
     onQueuedEditNotice: showToast,
     onSendResolved: nativeChatSendError.clear
@@ -112,7 +102,6 @@ export function useMobileSessionNativeChatDictation(
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
   })
 
-  // Share dictation error handling for start rejection and live errors so disabled host setup always opens the setup sheet.
   const reportDictationFailure = useCallback(
     (err: unknown) => {
       const message = err instanceof Error ? err.message : String(err)

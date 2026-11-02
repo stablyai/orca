@@ -68,6 +68,18 @@ export function mobileNativeChatEmptyState(
   const agentLabel = agent
     ? formatAgentTypeLabel(agent)
     : translate('session.nativeChatRenderData.defaultAgentLabel', 'the agent')
+  if (
+    agent === 'hermes' &&
+    (status === 'waiting-session' || (status === 'awaiting-transcript' && !sessionLive))
+  ) {
+    return {
+      title: translate('session.nativeChatRenderData.hermesStartingTitle', 'Connecting to Hermes…'),
+      subtitle: translate(
+        'session.nativeChatRenderData.hermesStartingSubtitle',
+        'The conversation will appear when Hermes is ready.'
+      )
+    }
+  }
   switch (status) {
     // Missing history may mean new or unreadable; promise neither in the waiting copy.
     case 'waiting-session':

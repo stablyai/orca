@@ -81,6 +81,48 @@ describe('getMobileTerminalActionSheetActions', () => {
     expect(onCloseSessionTab).toHaveBeenCalledWith(second)
   })
 
+  it('switches a Hermes terminal to its overlay on a capable host', () => {
+    const onToggleChat = vi.fn()
+    const actions = buildActions({
+      tabs: [{ type: 'terminal', id: 'tab-h', terminal: 'terminal-1', launchAgent: 'hermes' }],
+      hermesOverlaySupported: true,
+      onToggleChat
+    })
+    const action = actions.find((candidate) => candidate.id === 'toggleChatView')
+    expect(action?.label).toBe('Switch to chat view')
+    action?.onPress()
+    expect(onToggleChat).toHaveBeenCalledWith('tab-h')
+  })
+
+  it('keeps Hermes in the terminal on an older host', () => {
+    const actions = buildActions({
+      tabs: [{ type: 'terminal', id: 'tab-h', terminal: 'terminal-1', launchAgent: 'hermes' }]
+    })
+    expect(actions.find((candidate) => candidate.id === 'toggleChatView')).toBeUndefined()
+  })
+
+  it('still offers chat view on a Claude terminal', () => {
+    const actions = buildActions({
+      tabs: [{ type: 'terminal', id: 'tab-c', terminal: 'terminal-1', launchAgent: 'claude' }],
+      structuredAgents: ['hermes', 'claude']
+    })
+    expect(actions.find((action) => action.id === 'toggleChatView')?.label).toBe(
+      'Switch to chat view'
+    )
+    expect(actions.find((action) => action.id === 'structuredChatUnavailable')).toBeUndefined()
+  })
+
+  it('still explains that another structured terminal cannot become a chat', () => {
+    const actions = buildActions({
+      tabs: [{ type: 'terminal', id: 'tab-g', terminal: 'terminal-1', launchAgent: 'gemini' }],
+      structuredAgents: ['gemini']
+    })
+    expect(actions.find((action) => action.id === 'structuredChatUnavailable')).toMatchObject({
+      disabled: true,
+      label: "Can't switch this Gemini terminal to Chat"
+    })
+  })
+
   it('falls back to the handle close when no session tab owns the handle', () => {
     const onClose = vi.fn()
     const onCloseSessionTab = vi.fn()

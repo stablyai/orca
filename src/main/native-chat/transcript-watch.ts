@@ -1,6 +1,7 @@
 import { UNFLUSHED_SETTLE_MS } from './transcript-watch-contract'
 import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
+import { canReadHermesTranscriptHere, hermesTranscriptDeps } from './transcript-hermes'
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
@@ -228,6 +229,11 @@ export async function subscribeNativeChatTranscript(
   setupSignal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription> {
   setupSignal?.throwIfAborted()
+  if (args.agent === 'hermes') {
+    return canReadHermesTranscriptHere(args)
+      ? subscribeOpenCodeNativeChatTranscript(args, setupSignal, hermesTranscriptDeps)
+      : { unsubscribe: () => {}, watching: false }
+  }
   if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
     return subscribeOpenCodeNativeChatTranscript(
       args,

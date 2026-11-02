@@ -842,6 +842,14 @@ describe('a new local worktree whose startup terminal did not come up', () => {
 })
 
 describe('explicit chat settlement uses resolved facts and launch effects', () => {
+  it('keeps explicit Hermes ACP chat available alongside its terminal overlay', async () => {
+    const result = await harness({ settings: {} }).run({
+      agent: 'hermes',
+      surface: 'chat',
+      target: { kind: 'existing', worktree: 'wt-7' }
+    })
+    expect(result.outcome.kind).toBe('structured')
+  })
   it.each(['create-worktree', 'create-folder-workspace'] as const)(
     'settles root and custom cwd after %s without losing launch inputs',
     async (kind) => {

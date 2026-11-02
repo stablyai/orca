@@ -1,7 +1,9 @@
 import {
-  TERMINAL_SHORTCUT_STORAGE_KEYS,
+  NATIVE_PAGE_STORAGE_REFRESH_KEYS,
   isHostWorkspaceStorageKey,
+  isNativePagePreferenceKey,
   isPageStorageKeyForRoute,
+  pageRefreshKeepsStoredValue,
   PAGE_STORAGE_MAX_VALUE_CHARS
 } from '../page-storage-keys'
 
@@ -39,6 +41,8 @@ let hostId = ''
 let routePathname = ''
 // Host-area pages read workspace-scoped keys on demand and may write them across this host’s workspaces.
 let readWorkspaceKey: ((key: string) => Promise<string | null>) | null = null
+// Session pages do not own the host area, so Chat UI is not a workspace key. Ask the shell when init omitted it.
+let readNativePreference: ((key: string) => Promise<string | null>) | null = null
 
 export function publishPageStorage(
   entries: Readonly<Record<string, string>>,
@@ -46,7 +50,8 @@ export function publishPageStorage(
   forHostId: string,
   forRoutePathname: string,
   forOversizeKeys: readonly string[] = [],
-  forWorkspaceKeyReader: ((key: string) => Promise<string | null>) | null = null
+  forWorkspaceKeyReader: ((key: string) => Promise<string | null>) | null = null,
+  forNativePreferenceReader: ((key: string) => Promise<string | null>) | null = null
 ): void {
   values.clear()
   oversizeKeys = new Set(forOversizeKeys)
@@ -57,18 +62,21 @@ export function publishPageStorage(
   hostId = forHostId
   routePathname = forRoutePathname
   readWorkspaceKey = forWorkspaceKeyReader
+  readNativePreference = forNativePreferenceReader
 }
 
-/** Apply native shortcut settings without replacing page-owned drafts or pending journals. */
+/** Apply native settings the page does not own, without replacing page-owned drafts or pending journals. */
 export function refreshPageTerminalShortcuts(
   entries: Readonly<Record<string, string>>,
   oversize: readonly string[]
 ): void {
   const nextOversize = new Set(oversizeKeys)
-  for (const key of TERMINAL_SHORTCUT_STORAGE_KEYS) {
+  for (const key of NATIVE_PAGE_STORAGE_REFRESH_KEYS) {
     const value = entries[key]
     if (value === undefined) {
-      values.delete(key)
+      if (!pageRefreshKeepsStoredValue(key)) {
+        values.delete(key)
+      }
     } else {
       values.set(key, value)
     }
@@ -81,10 +89,33 @@ export function refreshPageTerminalShortcuts(
   oversizeKeys = nextOversize
 }
 
+function rememberPreference(key: string, value: string | null): string | null {
+  const held = values.get(key)
+  if (held !== undefined) {
+    return held
+  }
+  if (typeof value === 'string') {
+    values.set(key, value)
+  }
+  return value
+}
+
 function getItem(key: string): Promise<string | null> {
-  return readWorkspaceKey !== null && isHostWorkspaceStorageKey(key, hostId)
-    ? readWorkspaceKey(key)
-    : Promise.resolve(values.get(key) ?? null)
+  if (readWorkspaceKey !== null && isHostWorkspaceStorageKey(key, hostId)) {
+    return readWorkspaceKey(key)
+  }
+  const held = values.get(key)
+  if (held !== undefined) {
+    return Promise.resolve(held)
+  }
+  // A shell that throws, or never granted the read, leaves the setting at its default.
+  if (readNativePreference !== null && isNativePagePreferenceKey(key)) {
+    return readNativePreference(key).then(
+      (value) => rememberPreference(key, value),
+      () => null
+    )
+  }
+  return Promise.resolve(null)
 }
 
 // Never keep refused writes locally; an app-invisible cache value would make a pin appear persisted only to this document.

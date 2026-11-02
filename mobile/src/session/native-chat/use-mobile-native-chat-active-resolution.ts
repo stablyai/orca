@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import { HERMES_TRANSCRIPT_RUNTIME_CAPABILITY } from '../../../../src/shared/native-chat/native-chat-hermes-capability'
 import { encodeNativeChatTranscriptIdentity } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import {
@@ -13,6 +14,7 @@ export function useMobileNativeChatActiveResolution(args: {
   activeSessionTabId: string | null
   activeHandleRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  hostCapabilities?: readonly string[] | null
 }): {
   sessionViewReady: boolean
   isTabChatView: (tabId: string) => boolean
@@ -50,7 +52,11 @@ export function useMobileNativeChatActiveResolution(args: {
     (activeSessionTabId ? isTabChatView(activeSessionTabId) : false)
   const activeChatResolution =
     activeSessionTab && activeSessionTabId && tabWantsChat
-      ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)
+      ? resolveMobileNativeChat(
+          activeSessionTab,
+          nativeChatTranscriptIsLocalReadable,
+          args.hostCapabilities?.includes(HERMES_TRANSCRIPT_RUNTIME_CAPABILITY) === true
+        )
       : null
   const showNativeChat = activeChatResolution != null
   const showNativeChatRef = useRef(showNativeChat)

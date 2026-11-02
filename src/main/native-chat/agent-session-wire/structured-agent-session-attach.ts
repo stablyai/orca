@@ -62,6 +62,11 @@ export type AgentSessionAttachParams = {
     transcriptPath?: string
     source?: AdoptedTranscriptSource
   }
+  /**
+   * Host-only Hermes ACP `session/load` id. Seeds an adopted handle without a transcript.
+   * Absent from the fingerprint when unset so other creates keep their identity.
+   */
+  acpLoadSessionId?: string
 }
 
 export type AgentSessionAttachAuthority = {
@@ -85,6 +90,7 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     providerHandle: params.providerHandle,
     // Adoption changes identity; transcript location is transient and excluded.
     adoptedProviderHandle: params.adopt?.providerHandle,
+    ...(params.acpLoadSessionId ? { acpLoadSessionId: params.acpLoadSessionId } : {}),
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -179,9 +185,29 @@ function adoptedProviderHandleLink(
 ): AgentSessionProviderHandleLink {
   return {
     // Pi native IDs are paths; link IDs must be bounded slugs.
-    linkId: `${handle.agent}-${ADOPTED_HANDLE_FENCE}-${handle.nativeId}`
-      .replace(/[^A-Za-z0-9_-]/g, '_')
-      .slice(0, 128),
+    linkId: providerHandleLinkId(handle),
+    handle,
+    origin: 'adopted',
+    mintedAtFence: ADOPTED_HANDLE_FENCE,
+    observedAt
+  }
+}
+
+function providerHandleLinkId(handle: AgentSessionProviderHandle): string {
+  return `${handle.agent}-${ADOPTED_HANDLE_FENCE}-${handle.nativeId}`
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .slice(0, 128)
+}
+
+/** Open the chain as adopted so a missing Hermes load warns instead of silently starting over. */
+function acpLoadProviderHandleLink(
+  agent: StructuredAgentId,
+  nativeId: string,
+  observedAt: number
+): AgentSessionProviderHandleLink {
+  const handle: AgentSessionProviderHandle = { transport: 'acp', agent, nativeId }
+  return {
+    linkId: providerHandleLinkId(handle),
     handle,
     origin: 'adopted',
     mintedAtFence: ADOPTED_HANDLE_FENCE,
@@ -216,7 +242,15 @@ export function reserveRequestFor(input: {
           // New records begin at fence 1, matching the owner probe’s required head fence.
           adoptedHandleLink: adoptedProviderHandleLink(params.adopt.providerHandle, input.now)
         }
-      : {}),
+      : params.acpLoadSessionId
+        ? {
+            adoptedHandleLink: acpLoadProviderHandleLink(
+              params.agent,
+              params.acpLoadSessionId,
+              input.now
+            )
+          }
+        : {}),
     expectedFence: params.envelope.expectedRuntimeFence,
     spawnToken: authority.spawnToken,
     claimKeyId: authority.claimKeyId,

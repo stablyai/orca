@@ -55,6 +55,8 @@ import {
   resetHostStructuredAgentsForTests
 } from './host-structured-agents'
 import { installHostStructuredAgentsSync } from './host-structured-agents-sync'
+import { chatProviderAgents } from '@/lib/chat-provider-agents'
+import { buildNewTabAgentMenuRows } from '../../../shared/agent-launch-picker-rows'
 
 const REGISTERED: RuntimeCapability[] = [
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -127,11 +129,11 @@ describe('host structured agents', () => {
       }
       uninstall = installHostStructuredAgentsSync()
       await new Promise((resolve) => setImmediate(resolve))
+      await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'grok']))
       if (surface === 'chat') {
-        await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'grok']))
-        expect(agentIds('runtime:env-1')).toEqual(['claude', 'grok'])
+        await vi.waitFor(() => expect(agentIds('runtime:env-1')).toEqual(['claude', 'grok']))
       } else {
-        expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+        expect(agentIds('runtime:env-1')).toBeUndefined()
       }
     }
   )
@@ -184,20 +186,44 @@ describe('host structured agents', () => {
     await vi.waitFor(() => expect(agentIds('runtime:env-1')).toEqual(['claude']))
   })
 
-  // Asking installs a host's structured store; a profile with structured chat off never pays it.
-  it('asks no host until structured chat is turned on', async () => {
+  // Older paired hosts install storage to answer. This computer's list does not, so Chat | CLI can be offered first.
+  it('asks no paired host until structured chat is turned on', async () => {
     mocks.state = { ...mocks.state, settings: { nativeChatProviders: { claude: false } } }
     uninstall = installHostStructuredAgentsSync()
     setStatuses(new Map([['env-1', pairedStatus('rt-1', REGISTERED)]]))
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'grok']))
+    expect(agentIds('runtime:env-1')).toBeUndefined()
 
     const previous = mocks.state
     mocks.state = { ...previous, settings: ON }
     mocks.listeners.forEach((listener) => listener(mocks.state, previous))
-    await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'grok']))
     await vi.waitFor(() => expect(agentIds('runtime:env-1')).toEqual(['claude', 'grok']))
+  })
+
+  it('offers Chat on a registered agent before any chat preference exists', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({
+      agents: [
+        { agent: 'claude', capabilities: {} },
+        { agent: 'hermes', capabilities: { contextUsage: true, steering: 'queue' } }
+      ]
+    })
+    mocks.state = {
+      ...mocks.state,
+      settings: { agentDefaultSurface: 'terminal', nativeChatProviders: {} }
+    }
+    uninstall = installHostStructuredAgentsSync()
+    await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'hermes']))
+    const chatAgents = chatProviderAgents('local', undefined)
+    expect(chatAgents).toEqual(['claude', 'codex', 'hermes'])
+    expect(
+      buildNewTabAgentMenuRows({
+        settings: mocks.state.settings,
+        detectedOnHost: ['hermes'],
+        chatAgents,
+        hostChatAnswer: () => 'yes',
+        chatProgram: () => 'available'
+      })
+    ).toContainEqual({ kind: 'cli', agent: 'hermes', chat: true })
   })
 
   it("reads the local host's agents once its capabilities land, when startup asked too early", async () => {

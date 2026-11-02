@@ -51,6 +51,7 @@ async function newTabLabels(executionHost?: string): Promise<string[]> {
     isFolderWorkspaceRoute: false,
     isFloatingWorkspaceRoute: false,
     sessionTabs: [],
+    terminals: [],
     nativeChatController: { isTabChatView: () => false },
     createTabAgentActions: [],
     sendDiffNotesAgentActions: [],

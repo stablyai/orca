@@ -1,4 +1,7 @@
-import { TERMINAL_SHORTCUT_STORAGE_KEYS } from '../page-storage-keys'
+import {
+  NATIVE_PAGE_STORAGE_REFRESH_KEYS,
+  pageRefreshKeepsStoredValue
+} from '../page-storage-keys'
 import { readShellSession, type BridgeShellSession } from './bridge-client-session'
 import { bridgeRouteMoved } from './bridge-route-update'
 import {
@@ -117,15 +120,17 @@ export function createBridgeClientShellSession(args: {
       const storageOversize = refreshShortcuts
         ? [
             ...update.storageOversize.filter(
-              (key) => !TERMINAL_SHORTCUT_STORAGE_KEYS.some((item) => item === key)
+              (key) => !NATIVE_PAGE_STORAGE_REFRESH_KEYS.some((item) => item === key)
             ),
-            ...TERMINAL_SHORTCUT_STORAGE_KEYS.filter((key) => sentOversize.includes(key))
+            ...NATIVE_PAGE_STORAGE_REFRESH_KEYS.filter((key) => sentOversize.includes(key))
           ]
         : update?.storageOversize
       if (refreshShortcuts && storage) {
-        for (const key of TERMINAL_SHORTCUT_STORAGE_KEYS) {
+        for (const key of NATIVE_PAGE_STORAGE_REFRESH_KEYS) {
           if (sentStorage[key] === undefined) {
-            delete storage[key]
+            if (!pageRefreshKeepsStoredValue(key)) {
+              delete storage[key]
+            }
           } else {
             storage[key] = sentStorage[key]
           }

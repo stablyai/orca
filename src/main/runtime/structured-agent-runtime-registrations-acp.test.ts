@@ -5,12 +5,23 @@ import {
   type StructuredAgentAccountHomeServices
 } from './structured-agent-runtime-registrations'
 import { decideAgentLaunchMode } from '../agent-launch/agent-launch-mode'
+import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 
 describe('ACP agents in the runtime registrations', () => {
   it('registers Grok beside Claude and Codex with its declared capabilities', () => {
     expect(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(({ definition }) => definition.agent)
-    ).toEqual(['pi', 'codex', 'claude', 'grok', 'opencode', 'opencode2', 'omp', 'antigravity'])
+    ).toEqual([
+      'pi',
+      'codex',
+      'claude',
+      'grok',
+      'opencode',
+      'opencode2',
+      'omp',
+      'antigravity',
+      'hermes'
+    ])
     expect(structuredAgentRuntimeRegistration('codex')?.definition.capabilities.contextUsage).toBe(
       true
     )
@@ -58,7 +69,7 @@ describe('ACP agents in the runtime registrations', () => {
     expect(registration?.launchCheck).toBeDefined()
   })
 
-  it.each(['omp', 'opencode2'])(
+  it.each(['omp', 'opencode2', 'hermes'])(
     'opens %s as a structured chat only when it is set to chat',
     (agent) => {
       const placement = { agent, workspaceKind: 'git-worktree' } as const
@@ -132,6 +143,38 @@ describe('ACP agents in the runtime registrations', () => {
     await expect(resolve({ GROK_HOME: 'relative/grok' })).resolves.toMatchObject({
       path: expect.stringMatching(/\.grok$/)
     })
+  })
+
+  it('registers Hermes on the ACP lane, pinning HERMES_HOME and approving full access itself', () => {
+    const registration = structuredAgentRuntimeRegistration('hermes')
+    expect(registration?.definition).toMatchObject({
+      agent: 'hermes',
+      handleTransport: 'acp',
+      accountHomeVariable: 'HERMES_HOME',
+      capabilities: {
+        rewind: false,
+        compact: true,
+        imagePrompts: true,
+        steering: 'queue',
+        approvalEnforcement: 'orca'
+      }
+    })
+    expect(registration?.launchCheck).toBeUndefined()
+    const spec = acpLaunchSpecFor('hermes')
+    expect(spec?.env.HERMES_YOLO_MODE).toBe('0')
+    expect(spec?.args({ fullAccess: false, pluginDir: '/plugin' })).toEqual(['acp'])
+    expect(spec?.args({ fullAccess: true, pluginDir: '/plugin' })).toEqual(['--yolo', 'acp'])
+    expect(spec?.historyCatchUp).toBeUndefined()
+    expect(spec?.permissionModeConfig).toBeUndefined()
+    expect(spec?.transcriptImport).toBeNull()
+    expect(spec?.modelDiscovery).toEqual({
+      kind: 'unavailable',
+      reason: 'Hermes lists its models only in a chat session'
+    })
+    expect(spec?.authMethod?.({ advertised: ['hermes-setup', 'openrouter'], env: {} })).toBe(
+      'openrouter'
+    )
+    expect(spec?.authMethod?.({ advertised: ['hermes-setup'], env: {} })).toBeUndefined()
   })
 
   it('runs Grok only where this runtime supervises the child itself', () => {

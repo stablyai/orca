@@ -90,7 +90,7 @@ export async function prepareLegacyTranscriptImport(input: {
   // OMP retained Pi's format, so its decoder also reads Pi sessions.
   const transcriptAgent =
     input.agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(input.agent)
-  if (!transcriptAgent) {
+  if (!transcriptAgent || transcriptAgent === 'hermes') {
     return { ok: false, error: `Unsupported agent for journal import: ${input.agent}` }
   }
   if (transcriptAgent === 'opencode') {
