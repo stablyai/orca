@@ -8,6 +8,7 @@ import { withSelectedTabs } from '../headless-tab-group-selection'
 import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,
@@ -34,7 +35,8 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     if (this.getAvailableAuthoritativeWindow()) {
-      if (!this.notifier?.movePaneToNewTab) {
+      // Why: a main-owned layout names the new tab itself, not under the id the client drew.
+      if (!this.notifier?.movePaneToNewTab || ORCA_LAYOUT_OWNER_IS_MAIN) {
         return { status: 'not_held' }
       }
       if (!isValidHostTerminalTabId(args.targetTabId)) {

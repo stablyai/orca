@@ -17,6 +17,13 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session/works
 import type { Tab } from '../../shared/tab-types'
 import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
 
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
+
 const SIBLING_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 const OTHER_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 async function setup(
@@ -346,17 +353,29 @@ describe('moveMobileSessionLeafToNewTab on a host with a window', () => {
     expect(commit).not.toHaveBeenCalled()
   })
 
-  it.each(['renderer_unavailable', 'terminal_pane_move_timeout'])(
-    'refuses the move when the window cannot answer (%s), so the client puts the pane back',
-    async (reason) => {
-      const { commit, move } = await setupWithWindow(() => Promise.reject(new Error(reason)))
-      await expect(move('host-new-tab')).resolves.toEqual({
-        status: 'refused',
-        reason: 'pane_unavailable'
-      })
+  it('leaves the pane to the client when main owns the layout and would name the new tab itself', async () => {
+    layoutOwner.isMain = true
+    try {
+      const movePaneToNewTab = vi.fn(async () => ({ status: 'moved' as const, ptyId: null }))
+      const { commit, move } = await setupWithWindow(movePaneToNewTab)
+      await expect(move('host-new-tab')).resolves.toEqual({ status: 'not_held' })
+      expect(movePaneToNewTab).not.toHaveBeenCalled()
       expect(commit).not.toHaveBeenCalled()
+    } finally {
+      layoutOwner.isMain = false
     }
-  )
+  })
+
+  it('refuses the move when the window cannot answer, so the client puts the pane back', async () => {
+    const { commit, move } = await setupWithWindow(() =>
+      Promise.reject(new Error('terminal_pane_move_timeout'))
+    )
+    await expect(move('host-new-tab')).resolves.toEqual({
+      status: 'refused',
+      reason: 'pane_unavailable'
+    })
+    expect(commit).not.toHaveBeenCalled()
+  })
 })
 
 /** A session whose worktree also has an editor open beside its two terminal tabs. */
