@@ -199,7 +199,9 @@ export function useSourceControlAgentActionDialog({
       )
       return draft && entry ? applySourceControlPickerDraft(picked, entry, draft) : picked
     })
-    if (draft || selectedAgent !== agent) {
+    // A surface button always carries a draft. Only an argument edit in that draft,
+    // or a different agent, replaces the dialog's pending arguments.
+    if (draft?.recipeEdits?.changed || selectedAgent !== agent) {
       setArgumentsEdited(false)
     }
     resetDeliveryPlan()

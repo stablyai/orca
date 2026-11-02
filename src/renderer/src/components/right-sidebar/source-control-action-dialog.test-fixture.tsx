@@ -154,6 +154,12 @@ export async function pickDialogAgent(label: string, terminal: boolean) {
   const trigger = screen.getByRole('button', { name: 'Select agent' })
   await waitFor(() => expect(trigger.hasAttribute('disabled')).toBe(false))
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+  if (!terminal) {
+    // Chat is chosen inside the setup popover. A row click keeps the saved surface.
+    fireEvent.click(await screen.findByRole('button', { name: `Configure ${label}` }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Launch chat' }))
+    return
+  }
   const row = (await screen.findAllByRole('menuitem')).find((item) =>
     item.textContent?.startsWith(label)
   )
@@ -161,10 +167,6 @@ export async function pickDialogAgent(label: string, terminal: boolean) {
     throw new Error(`Missing agent row ${label}`)
   }
   fireEvent.click(row)
-  const toggle = screen.queryByRole('radio', { name: terminal ? 'Terminal' : 'Chat' })
-  if (toggle) {
-    fireEvent.click(toggle)
-  }
 }
 
 export function renderDialog(

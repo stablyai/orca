@@ -23,6 +23,7 @@ vi.mock('@/lib/structured-agent-launch-settlement', () => ({
 
 import { planAgentSessionLaunch } from './agent-session-launch-plan'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the route builder is mocked, so this store is only forwarded and never read.
 const store = { settings: {} } as unknown as AgentLaunchRouteStore
 const ROUTE_INPUT = { agent: 'codex', executionHostId: 'local' }
 const STRUCTURED = { kind: 'structured', sessionId: 'session-1' }
@@ -95,22 +96,4 @@ describe('planAgentSessionLaunch', () => {
       expect(request).not.toHaveProperty('chatSessionOptions')
     }
   )
-})
-
-describe('structuredAgentSessionLaunchFeasible', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.buildAgentLaunchRouteInput.mockReturnValue(ROUTE_INPUT)
-    mocks.structuredAgentLaunchSupported.mockReturnValue(true)
-  })
-})
-
-describe('adoptAgentSessionLaunchVerdict', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.beginStructuredAgentLaunchSettlement.mockReturnValue({
-      sessionId: 'session-1',
-      settlement: Promise.resolve(STRUCTURED)
-    })
-  })
 })
