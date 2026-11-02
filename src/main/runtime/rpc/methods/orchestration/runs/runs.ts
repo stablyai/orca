@@ -1,6 +1,7 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { readRunRemovedWork } from '../../../../orchestration/db/reset/removed-orchestration-work-read'
+import { boundRunWorkerNext } from '../../../../orchestration/db/runs/worker-run-binding'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -138,8 +139,13 @@ export const ORCHESTRATION_RUN_METHODS = [
         callerSession: orchestrationCaller,
         requireStablePane: true
       })
-      const run = runtime.getOrchestrationDb().getCurrentRunForCoordinator(caller)
-      return { run: run ? exposeRun(run) : null }
+      const db = runtime.getOrchestrationDb()
+      const run = db.getCurrentRunForCoordinator(caller)
+      if (!run) {
+        return { run: null }
+      }
+      const next = boundRunWorkerNext(db, caller, run.id)
+      return { run: exposeRun(run), ...(next ? { next } : {}) }
     }
   }),
   defineMethod({
