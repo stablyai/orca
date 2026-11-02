@@ -33,17 +33,18 @@ export function PRCommentOptionsMenu({
   onHideResolvedChange: (hide: boolean) => void
 }): React.JSX.Element {
   const activeFilterCount = hideResolved ? 1 : 0
+  const title = translate(
+    'auto.components.right.sidebar.checks.panel.content.f5cf324efa',
+    'Comment display options'
+  )
   const label =
     activeFilterCount > 0
       ? translate(
           'auto.components.right.sidebar.checks.panel.commentOptions.triggerActive',
-          'Comment options ({{value0}})',
+          'Comment display options ({{value0}})',
           { value0: formatActiveFilterLabel(activeFilterCount) }
         )
-      : translate(
-          'auto.components.right.sidebar.checks.panel.commentOptions.title',
-          'Comment options'
-        )
+      : title
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -66,12 +67,7 @@ export function PRCommentOptionsMenu({
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" side="bottom" sideOffset={6} className="w-60">
-        <div className="px-2 pt-1.5 text-sm font-semibold text-foreground">
-          {translate(
-            'auto.components.right.sidebar.checks.panel.commentOptions.title',
-            'Comment options'
-          )}
-        </div>
+        <div className="px-2 pt-1.5 text-sm font-semibold text-foreground">{title}</div>
         {/* Menu-native items: Radix menus block Tab and arrow-key only between items. */}
         <DropdownMenuLabel>
           {translate('auto.components.right.sidebar.checks.panel.content.5e6e5a13fa', 'View')}

@@ -678,7 +678,7 @@ describe('PRCommentsList hide resolved threads', () => {
     expect(container.textContent).toContain('Top-level note.')
     expect(container.textContent).not.toContain('Resolved · 1')
     expect(container.textContent).toContain('1 resolved thread hidden')
-    expect(hasButton('Comment options (1 filter)')).toBe(true)
+    expect(hasButton('Comment display options (1 filter)')).toBe(true)
 
     clickButton('Show')
 
