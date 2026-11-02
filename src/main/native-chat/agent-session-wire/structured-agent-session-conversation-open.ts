@@ -28,7 +28,10 @@ export type OpenedStructuredAgentSessionConversation = {
 }
 
 export type StructuredAgentSessionConversationOpenDeps = {
-  store: Pick<AgentSessionRecordStore, 'getConversation' | 'replacedRuntime'>
+  store: Pick<
+    AgentSessionRecordStore,
+    'getConversation' | 'replacedRuntime' | 'usageLimitContinueCancelReceipt'
+  >
   journalDatabase: JournalHostDatabase
   logger: StructuredAgentSessionHostDeps['logger']
 }
@@ -90,7 +93,11 @@ export async function openStructuredAgentSessionConversationJournal(
     expectedRuntimeFence: fence
   })
   const identity = journalIdentityFor(record, params)
-  const journal = await openAgentSessionJournal({ identity, database: deps.journalDatabase })
+  const journal = await openAgentSessionJournal({
+    identity,
+    database: deps.journalDatabase,
+    withdrawStoppedCut: (cut) => deps.store.usageLimitContinueCancelReceipt(sessionId, cut)
+  })
   try {
     // A handed-over row found here stays doubt: it reads as sent, and nothing narrows it later.
     await journal.markPendingSubmissionsUnknown(fence)

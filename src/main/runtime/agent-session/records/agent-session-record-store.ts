@@ -282,6 +282,25 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   operationOutcomeReceipt = (args: Parameters<typeof agentSessionOperationOutcomeReceipt>[1]) =>
     agentSessionOperationOutcomeReceipt(this.transactions, args)
 
+  /** The journal commit revealing a stopped cut co-writes its withdrawal; a saved one needs none. */
+  usageLimitContinueCancelReceipt = (
+    id: string,
+    cut: usageLimitContinue.UsageLimitContinueIdentity
+  ): JournalOperationReceipt | undefined => {
+    const saved = this.getRecord(id)?.usageLimitContinueCancel
+    return saved?.turnItemId === cut.turnItemId && saved.resetsAt === cut.resetsAt
+      ? undefined
+      : this.transactions.receipt((draft) => {
+          const record = draft.records.get(id)
+          if (record) {
+            draft.records.set(
+              id,
+              usageLimitContinue.cancelAgentSessionUsageLimitContinue(record, cut)
+            )
+          }
+        })
+  }
+
   /** Automatic queue admission uses the same record transition as a client's send receipt. */
   submissionReceipt = (sessionId: string) =>
     this.transactions.receipt(() => {}, { submissionSessionId: sessionId })
