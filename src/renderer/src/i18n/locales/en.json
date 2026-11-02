@@ -8818,8 +8818,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
-          "2b2f38652b": "Custom command",
-          "0ffb081b3a": "Use default agent",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Customize",
           "403876bb48": "Use global",
