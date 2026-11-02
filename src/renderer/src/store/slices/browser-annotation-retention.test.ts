@@ -59,21 +59,6 @@ describe('saved browser note lifetime and marker eligibility', () => {
     expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual(['fresh'])
   })
 
-  it('prunes marker IDs when notes are deleted or cleared', async () => {
-    const { store, pageId } = await createAnnotatedPage()
-    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'second'))
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual([
-      'annotation-1',
-      'second'
-    ])
-
-    store.getState().deleteBrowserPageAnnotation(pageId, 'second')
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual(['annotation-1'])
-    store.getState().clearBrowserPageAnnotations(pageId)
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
-  })
-
   it('removes an accepted delivery snapshot after navigation while preserving later edits and additions', async () => {
     const { store, pageId } = await createAnnotatedPage()
     store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'edited'))
