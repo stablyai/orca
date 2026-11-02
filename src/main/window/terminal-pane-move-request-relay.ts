@@ -18,7 +18,6 @@ type RelayedPaneMove = {
   timedOut: boolean
   /** The window is committing, so the deadline can no longer turn the move into a refusal. */
   claim: () => void
-  answer: (result: TerminalLeafMoveResult) => void
 }
 
 /** Client moves a window is still carrying out, by the new tab's id. */
@@ -65,8 +64,7 @@ export function requestTerminalPaneMoveFromRenderer(
     const relayed: RelayedPaneMove = {
       webContents,
       timedOut: false,
-      claim: () => clearTimeout(timeout),
-      answer: (result) => settle(null, result)
+      claim: () => clearTimeout(timeout)
     }
     const onRendererUnavailable = (): void => {
       settle(new Error('renderer_unavailable'))
@@ -105,8 +103,7 @@ export function requestTerminalPaneMoveFromRenderer(
 
 /**
  * Commits a window's pane move. A move a client asked for commits nothing once the client was told
- * it timed out, and a committed one answers the client at once, so the client never hears a refusal
- * for a pane the host moved.
+ * it timed out; once committing, the client waits for the window's final reply, not the deadline.
  */
 export async function commitRelayedPaneMove(
   sender: WebContents,
@@ -121,9 +118,5 @@ export async function commitRelayedPaneMove(
     return { status: 'refused', reason: 'pane_unavailable' }
   }
   relayed.claim()
-  const result = await commit()
-  if (result.status === 'moved') {
-    relayed.answer(result)
-  }
-  return result
+  return commit()
 }

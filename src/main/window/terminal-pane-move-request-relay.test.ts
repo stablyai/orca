@@ -70,23 +70,31 @@ describe('requestTerminalPaneMoveFromRenderer', () => {
     expect(ipcEmitter.listenerCount('ui:terminalPaneMoveToNewTabReply')).toBe(0)
   })
 
-  it('answers moved once the window commits, even when its reply comes after the deadline', async () => {
-    const { relay, pending, sender } = await requestMove()
-    let finishCommit: (result: TerminalLeafMoveResult) => void = () => {}
-    const committing = relay.commitRelayedPaneMove(
-      sender,
-      move.targetTabId,
-      () =>
-        new Promise((resolve) => {
-          finishCommit = resolve
-        })
-    )
-    await vi.advanceTimersByTimeAsync(10_000)
-    finishCommit({ status: 'moved', ptyId: 'pty-1' })
+  it.each<TerminalLeafMoveResult>([
+    { status: 'moved', ptyId: 'pty-1' },
+    { status: 'refused', reason: 'pane_unavailable' }
+  ])(
+    'answers with the window’s final reply once it commits, past the deadline (%o)',
+    async (windowReply) => {
+      const { relay, pending, sender, reply } = await requestMove()
+      let finishCommit: (result: TerminalLeafMoveResult) => void = () => {}
+      const committing = relay.commitRelayedPaneMove(
+        sender,
+        move.targetTabId,
+        () =>
+          new Promise((resolve) => {
+            finishCommit = resolve
+          })
+      )
+      await vi.advanceTimersByTimeAsync(10_000)
+      finishCommit({ status: 'moved', ptyId: 'pty-1' })
+      await expect(committing).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
+      await vi.advanceTimersByTimeAsync(10_000)
 
-    await expect(committing).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
-    await expect(pending).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
-  })
+      reply(windowReply)
+      await expect(pending).resolves.toEqual(windowReply)
+    }
+  )
 
   it('leaves a commit no client asked for alone', async () => {
     const { relay, sender } = await requestMove()
