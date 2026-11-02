@@ -45,7 +45,7 @@ Use `--no-parent` and omit `--base-branch` for independent top-level handoffs un
 
 When the user asks for a new agent without naming one, pass `--agent default`. Orca resolves the target project's saved default on the execution host, even when the caller or parent belongs to another project. Select the target explicitly with `--project` or `--repo` when needed; do not infer it from the caller or reuse the caller's agent. If the user names an agent, pass that explicit ID instead; this changes only the launch, not the project setting. A host that cannot resolve `default`, an unavailable configured agent, or a `Blank Terminal` default is a pre-launch error for an agent handoff; report it and let the user choose an explicit agent or update the setting.
 
-For example, from project A, an unspecified-agent handoff to project B uses `ORCA worktree create --project B --name <task-name> --agent default --prompt "<task brief>" --json`. If the user explicitly requests Claude for B, replace `default` with `claude`.
+For example, from project A, an unspecified-agent handoff to project B uses `ORCA worktree create --project B --name <task-name> --no-parent --agent default --prompt "<task brief>" --json`. If the user explicitly requests Claude for B, replace `default` with `claude`.
 
 For a requested Codex model or effort, such as `gpt-6-astra high`, explicitly select Codex and add `--model` and `--effort` to the same command:
 
@@ -75,7 +75,7 @@ ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> --su
 
 To see which agents can start here, run `ORCA agent installed --json`: each `agents[].id` is a valid `--agent` value, and `default: true` marks the host's global default. When the user names no agent, pass `--agent default` so the target project is resolved on its execution host. Pass `--worktree <selector>` to check where that workspace runs agents, such as its SSH host or WSL distro. It lists installed agent CLIs, not running agents; for those, use `agent list` below.
 
-If a launch reply is lost, use the returned `operationId` to re-issue the exact same command from the same directory against the same execution host with `--retry-launch <operationId>`. Keep that ID on every retry: the host replays the accepted launch instead of starting another agent or submitting the brief twice. Do not retry as a fresh launch. If replay says the outcome is unknown or expired, or an older host gives no replay ID, inspect the workspace and agent without sending input before deciding whether another launch is needed. A host that cannot safely carry prompts or honor background/focus requests is refused before launch; update Orca on that execution host.
+If a launch reply is lost, run the returned `recoveryCommand` from the same directory against the same execution host. It includes `--retry-launch <operationId>` and the resolved agent for a `--agent default` launch. Keep that command and operation ID on every retry: the host replays the accepted launch instead of starting another agent or submitting the brief twice. Do not retry as a fresh launch or combine `--agent default` with `--retry-launch`. If replay says the outcome is unknown or expired, or an older host gives no replay ID, inspect the workspace and agent without sending input before deciding whether another launch is needed. A host that cannot safely carry prompts or honor background/focus requests is refused before launch; update Orca on that execution host.
 
 ## Agents by ID
 
