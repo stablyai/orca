@@ -1,9 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const invokeCommand = vi.hoisted(() => vi.fn())
-const state: { plugins: unknown[]; off: string[] } = vi.hoisted(() => ({ plugins: [], off: [] }))
+const state: { plugins: unknown[]; off: string[]; workspace: string | null } = vi.hoisted(() => ({
+  plugins: [],
+  off: [],
+  workspace: 'wt-1'
+}))
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ settings: { pluginReplacementsOff: state.off } }) }
+  useAppStore: {
+    getState: () => ({
+      settings: { pluginReplacementsOff: state.off },
+      activeWorktreeId: state.workspace
+    })
+  }
 }))
 vi.mock('@/store/plugin-panels', () => ({
   usePluginPanelsStore: { getState: () => ({ plugins: state.plugins }) },
@@ -43,6 +52,7 @@ beforeEach(() => {
     { pluginKey: 'acme.tasks', name: 'Tasks plus', status: 'idle', commands: [command()] }
   ]
   state.off = []
+  state.workspace = 'wt-1'
 })
 
 afterEach(() => {
@@ -57,7 +67,12 @@ describe('a built-in action a plugin replaces', () => {
     invokeCommand.mockResolvedValueOnce('done')
     runBuiltInOrReplacement('view.tasks', builtIn)
     await vi.advanceTimersByTimeAsync(PLUGIN_REPLACEMENT_TIMEOUT_MS)
-    expect(invokeCommand).toHaveBeenCalledWith({ pluginKey: 'acme.tasks', commandId: 'tasks' })
+    // Main refuses to start it past the deadline, so a slow worker never runs after the fallback.
+    expect(invokeCommand).toHaveBeenCalledWith({
+      pluginKey: 'acme.tasks',
+      commandId: 'tasks',
+      timeoutMs: PLUGIN_REPLACEMENT_TIMEOUT_MS
+    })
     expect(builtIn).not.toHaveBeenCalled()
 
     invokeCommand.mockRejectedValueOnce(new Error('worker crashed'))
@@ -95,7 +110,18 @@ describe('a built-in action a plugin replaces', () => {
     ]
     runBuiltInOrReplacement('view.tasks', builtIn)
     runBuiltInOrReplacement('sidebar.left.toggle', builtIn)
-    expect(builtIn).toHaveBeenCalledTimes(3)
+    // A workspace command is not available without a workspace.
+    state.plugins = [
+      {
+        pluginKey: 'acme.tasks',
+        name: 'T',
+        status: 'idle',
+        commands: [command({ context: 'workspace' })]
+      }
+    ]
+    state.workspace = null
+    runBuiltInOrReplacement('view.tasks', builtIn)
+    expect(builtIn).toHaveBeenCalledTimes(4)
     expect(invokeCommand).not.toHaveBeenCalled()
   })
 })

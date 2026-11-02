@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
 import { PLUGIN_SCHEMA_NEWEST_SINCE } from '../installation/plugin-host-version'
+import { formatPluginApprovalMessage, pluginApprovalGrants } from '../approval/plugin-cli-approval'
+import { fingerprintPluginConsent } from '../approval/plugin-consent-fingerprint'
 
 function manifest(commands: unknown[], engines = '>=1.4.248') {
   return {
@@ -52,5 +54,53 @@ describe('commands[].replaces', () => {
   it('needs a worker, since the replacement runs worker code', () => {
     const { main: _main, ...noWorker } = manifest([{ id: 'a', title: 'A', replaces: 'view.tasks' }])
     expect(issues({ ...noWorker, execution: 'declarative' })).not.toBe('')
+  })
+})
+
+describe('approving a replacing plugin from the CLI', () => {
+  it('names the replacement among the grants', () => {
+    const parsed = parsePluginManifest(
+      manifest([{ id: 'tasks', title: 'Task board', replaces: 'view.tasks' }])
+    )
+    if (!parsed.ok) {
+      throw new Error(parsed.error)
+    }
+    const grants = pluginApprovalGrants(parsed.manifest)
+    expect(grants.replacements).toEqual([{ command: 'Task board', action: 'view.tasks' }])
+    const message = formatPluginApprovalMessage({
+      pluginKey: 'local.tasks-plus',
+      name: 'Tasks plus',
+      version: '1.0.0',
+      action: 'dev-load',
+      approvalFingerprint: 'ap1-x',
+      contentIdentity: 'c',
+      isDev: true,
+      grants,
+      why: 'it runs code',
+      approveFlag: '--approve ap1-x',
+      nextSteps: []
+    })
+    expect(message).toContain(`- Runs "Task board" instead of Orca's own view.tasks`)
+  })
+
+  it('leaves the grants of other plugins as they were', () => {
+    const parsed = parsePluginManifest(manifest([{ id: 'tasks', title: 'Tasks' }]))
+    expect(parsed.ok && 'replacements' in pluginApprovalGrants(parsed.manifest)).toBe(false)
+  })
+})
+
+describe('consent for a replacement', () => {
+  it('changes when a command starts replacing an action, and only then', () => {
+    const fingerprint = (commands: unknown[]) => {
+      const parsed = parsePluginManifest(manifest(commands))
+      if (!parsed.ok) {
+        throw new Error(parsed.error)
+      }
+      return fingerprintPluginConsent(parsed.manifest, 'tree')
+    }
+    const plain = fingerprint([{ id: 'tasks', title: 'Tasks' }])
+    const replacing = fingerprint([{ id: 'tasks', title: 'Tasks', replaces: 'view.tasks' }])
+    expect(replacing).not.toBe(plain)
+    expect(fingerprint([{ id: 'other', title: 'Other' }])).toBe(plain)
   })
 })

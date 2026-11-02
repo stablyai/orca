@@ -5,6 +5,7 @@ import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
 import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
+import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import {
   findPluginCommandForKeybinding,
   globalShortcutTargetYields
@@ -138,9 +139,11 @@ export function useGlobalKeybindings(args: {
         if (selectedFolderRelativePath !== null && activeWorktreeId) {
           input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
-          actions.showRightSidebarSearch({
-            includePattern: folderRelativePathToIncludeGlob(selectedFolderRelativePath)
-          })
+          runBuiltInOrReplacement('sidebar.search.toggle', () =>
+            actions.showRightSidebarSearch({
+              includePattern: folderRelativePathToIncludeGlob(selectedFolderRelativePath)
+            })
+          )
           return
         }
 
@@ -148,7 +151,9 @@ export function useGlobalKeybindings(args: {
         if (selectedText) {
           input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
-          actions.showRightSidebarSearch({ query: selectedText })
+          runBuiltInOrReplacement('sidebar.search.toggle', () =>
+            actions.showRightSidebarSearch({ query: selectedText })
+          )
           return
         }
       }
@@ -176,7 +181,7 @@ export function useGlobalKeybindings(args: {
         floatingTerminalEnabled
       ) {
         input.preventDefault()
-        openFloatingWorkspaceMaximized()
+        runBuiltInOrReplacement('floatingWorkspace.maximize', openFloatingWorkspaceMaximized)
         return
       }
 

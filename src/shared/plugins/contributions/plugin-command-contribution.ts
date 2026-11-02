@@ -62,7 +62,7 @@ export const pluginCommandContributionSchema = z
     }),
     replaces: pluginCommandIdSchema.optional().meta({
       ...pluginFieldDoc(
-        "Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. The command can still run Orca's own with `commands.run`. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does.",
+        'Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does.',
         PLUGIN_COMMAND_REPLACES_SINCE,
         ['view.tasks']
       ),
