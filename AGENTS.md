@@ -5,7 +5,7 @@
 - **Lint/format**: Basic: `pnpm exec oxlint <files>`; full lint gate: `pnpm lint`; formatting: `pnpm exec oxfmt --check <files>` (fix: `--write`). Applicable gates include `pnpm check:code-quality:changed <base>` and `pnpm check:flaky-test-pattern-ratchet`.
 
 > [!IMPORTANT]
-> Run `pnpm check:changed --maxWorkers=2` after your last edit/rebase, right before every push. Never `--no-verify`.
+> Run `pnpm check:changed` after your last edit/rebase, right before every push. Never `--no-verify`.
 
 If selection fans out excessively, use scoped checks and report limits. Use the PR base (default `origin/main`; `ORCA_CODE_QUALITY_BASE=<ref>` for stacks). `--base=HEAD` and dirty-only checks provide incremental evidence only.
 
