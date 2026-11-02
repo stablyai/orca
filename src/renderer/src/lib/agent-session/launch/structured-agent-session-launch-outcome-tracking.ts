@@ -15,7 +15,15 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
-import { StructuredHostLaunchNotStartedError } from './structured-agent-session-host-launch'
+import {
+  StructuredHostLaunchNotStartedError,
+  StructuredHostLaunchTerminalError
+} from './structured-agent-session-host-launch'
+import { hostLaunchAwaitsItsTab } from './structured-agent-session-host-launch-retention'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
+import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   deleteStructuredLaunchStateIfCurrent,
   notifyStructuredLaunchListeners,
@@ -38,14 +46,37 @@ export function maybeCleanupLaunchState(state: StructuredLaunchState): void {
   cleanupLaunchState(state)
 }
 
-function cleanupUnmaterializedLaunch(state: StructuredLaunchState): boolean {
-  if (state.intent.surfaceAddress && !findStructuredLaunchTab(state.intent)) {
+/** The chat's tab shows here now: a host launch kept only for want of it retires as any other. */
+export function reconsiderShownHostLaunch(state: StructuredLaunchState): void {
+  if (state.intent.hostLaunch && !hostLaunchAwaitsItsTab(state)) {
+    maybeCleanupLaunchState(state)
+    notifyStructuredLaunchListeners()
+  }
+}
+
+/** The host started its terminal and took the text, and nothing else waits in the chat: that
+ *  terminal is the launch's surface, so a chat never shown has nothing left to recover. */
+function hostLaunchSettledInTerminal(state: StructuredLaunchState, error: unknown): boolean {
+  return (
+    error instanceof StructuredHostLaunchTerminalError &&
+    !state.intent.hostLaunch?.firstMessage &&
+    !nativeChatComposerHasUserContent(structuredAgentSessionDraftScopeKey(state.intent.sessionId))
+  )
+}
+
+function cleanupUnmaterializedLaunch(state: StructuredLaunchState, error?: unknown): boolean {
+  const adoptedElsewhere = hostLaunchSettledInTerminal(state, error)
+  if (
+    state.intent.surfaceAddress &&
+    !findStructuredLaunchTab(state.intent) &&
+    (adoptedElsewhere || !hostLaunchAwaitsItsTab(state))
+  ) {
     removeStructuredLaunchSlot(
       useAppStore.getState(),
       state.intent.worktreeId,
       state.intent.sessionId
     )
-    if (deleteStructuredLaunchStateIfCurrent(state)) {
+    if (deleteStructuredLaunchStateIfCurrent(state, adoptedElsewhere || undefined)) {
       forgetStructuredSessionSelection(state.intent.sessionId, state.intent.target)
       return true
     }
@@ -53,7 +84,7 @@ function cleanupUnmaterializedLaunch(state: StructuredLaunchState): boolean {
   return false
 }
 
-function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
+function settleStructuredLaunchRefusal(state: StructuredLaunchState, error: unknown): void {
   if (state.callers.outcome !== 'pending' && state.callers.outcome !== 'unknown') {
     return
   }
@@ -62,7 +93,7 @@ function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
     state.intent.sessionId
   )
   settleStructuredLaunchCallers(state.callers, 'failed')
-  if (cleanupUnmaterializedLaunch(state)) {
+  if (cleanupUnmaterializedLaunch(state, error)) {
     retireStructuredAgentSessionReadOwner(state.intent.sessionId, state.intent.target)
   }
   notifyStructuredLaunchListeners()
@@ -82,6 +113,11 @@ export function trackLaunchSettlement(
       }
       state.visibilityUnknown = false
       materializeStructuredLaunchSurface(state.intent)
+      if (state.intent.hostLaunch) {
+        afterPendingTab(structuredAgentSessionTabId(state.intent.sessionId), () =>
+          reconsiderShownHostLaunch(state)
+        )
+      }
       if (!state.hostListed) {
         const { worktreeId, sessionId, executionHostId } = state.intent
         recordUnlistedCreatedChat(worktreeId, sessionId, executionHostId)
@@ -119,7 +155,7 @@ export function trackLaunchSettlement(
         delete state.failure
       }
       if (error instanceof StructuredAgentSessionCreateRefusalError) {
-        settleStructuredLaunchRefusal(state)
+        settleStructuredLaunchRefusal(state, error)
       } else if (!state.visibilityUnknown) {
         settleStructuredLaunchCallers(state.callers, 'failed')
         cleanupUnmaterializedLaunch(state)

@@ -9,7 +9,6 @@ import {
 } from '@/lib/launch-structured-agent-session'
 import {
   discardStructuredAgentSessionChatSends,
-  discardStructuredLaunchPrompts,
   stageStructuredLaunchPrompt
 } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import {
@@ -27,7 +26,6 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import * as launchDraft from './structured-agent-session-launch-draft'
 import {
-  deleteStructuredLaunchStateIfCurrent,
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners,
@@ -56,6 +54,8 @@ import {
   structuredLaunchSelectionController
 } from './structured-agent-session-launch-options'
 import { releaseStructuredLaunchSource } from './structured-agent-session-launch-source-handoff'
+import { joinHeldHostLaunch } from './structured-agent-session-host-launch-join'
+import { adoptRereadHostLaunchTerminal } from './structured-agent-session-host-launch-terminal'
 
 type StructuredLaunchStateResult = {
   state: StructuredLaunchState
@@ -192,6 +192,10 @@ function structuredAgentLaunchState(
   agent: TuiAgent,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
+  const held = joinHeldHostLaunch(worktreeId, agent, options, restartStructuredLaunchState)
+  if (held) {
+    return held
+  }
   const identity = structuredLaunchIdentity(worktreeId, agent, options)
   const existing = getJoinableStructuredLaunchState(identity, options.requestId)
   const joined = existing && joinStructuredLaunchState(existing, options)
@@ -269,21 +273,6 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
   return true
 }
 
-/** Ends this window's hold on a launch without telling its host, which keeps running it; a later
- *  start of the same request adopts it. Its text stays with the caller that handed it over. */
-export function detachStructuredAgentLaunch(sessionId: string): void {
-  const state = getStructuredLaunchStateBySessionId(sessionId)
-  if (!state) {
-    return
-  }
-  state.cancelled = true
-  state.callers.outcome = 'cancelled'
-  discardStructuredLaunchPrompts(sessionId)
-  abandonStructuredAgentSessionLaunchIntent(state.intent)
-  deleteStructuredLaunchStateIfCurrent(state)
-  notifyStructuredLaunchListeners()
-}
-
 export function startStructuredAgentLaunch(
   worktreeId: string,
   agent: TuiAgent,
@@ -312,7 +301,12 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
   ) {
     return false
   }
+  // Only reads the host's record of its launch; whatever that started shows in the chat's place.
+  const rereadsHostLaunch = state.visibilityUnknown && state.intent.hostLaunch !== undefined
   restartStructuredLaunchState(state)
+  if (rereadsHostLaunch) {
+    adoptRereadHostLaunchTerminal(state)
+  }
   return true
 }
 

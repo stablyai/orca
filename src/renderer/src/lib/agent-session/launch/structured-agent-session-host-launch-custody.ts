@@ -21,20 +21,26 @@ export function hostLaunchMessageAcknowledged(result: AgentLaunchResult): boolea
 
 /** Settles the held message once: let go when the host acknowledged it, else back to the chat's
  *  composer beside whatever was typed there, and never sent again from here. Text staged in this
- *  window settles with its send; a launch restored after a reload has only its saved copy. */
+ *  window settles with its send; a launch restored after a reload has only its saved copy, which
+ *  is kept until the composer durably holds it. */
 export function releaseHostLaunchMessage(
   intent: StructuredAgentSessionLaunchIntent,
   acknowledged: boolean
 ): void {
   const saved = intent.hostLaunch?.firstMessage
+  let settled = true
   if (acknowledged) {
     settleHostCarriedStructuredLaunchPrompts(intent.sessionId)
   } else if (hasStagedStructuredLaunchPrompt(intent.sessionId)) {
-    takeBackLegacyStructuredLaunchPrompts(intent.sessionId)
+    settled = takeBackLegacyStructuredLaunchPrompts(intent.sessionId)
   } else if (saved) {
-    handBackStructuredAgentSessionMessage(intent.sessionId, saved.clientMessageId, saved.body)
+    settled = handBackStructuredAgentSessionMessage(
+      intent.sessionId,
+      saved.clientMessageId,
+      saved.body
+    )
   }
-  if (saved && intent.hostLaunch) {
+  if (saved && settled && intent.hostLaunch) {
     const { firstMessage: _settled, ...rest } = intent.hostLaunch
     intent.hostLaunch = rest
     // Saved again without it: a later reload has nothing left to give back.

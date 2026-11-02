@@ -34,7 +34,8 @@ import {
 } from './launch/structured-agent-session-action-launch'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../empty-workspace-default-surface-claims'
 import { adoptHostLaunchedTerminal } from './launch/structured-agent-session-host-launch-terminal'
-import { detachStructuredAgentLaunch } from './launch/structured-agent-session-launch'
+import { getStructuredLaunchStateBySessionId } from './launch/structured-agent-session-launch-registry'
+import { reconsiderShownHostLaunch } from './launch/structured-agent-session-launch-outcome-tracking'
 import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
 import {
   captureStructuredLaunchSurfaceAddress,
@@ -133,11 +134,19 @@ export function beginStructuredAgentSessionProvisionalLaunch(
     }
     if (args.plan.hostLaunch) {
       // The host asks itself whether it runs the chat, after Setup: the chat shows now, and gives
-      // way to the terminal the host starts instead.
+      // way to the terminal the host starts instead. Its saved row names where the chat goes, so a
+      // reload can draw it again if this window cannot show it.
       const launch = open(
         beginLocalProvisionalLaunch({
           ...args,
-          target: { ...args.target, worktreeId, executionHostId: owner.executionHostId },
+          target: {
+            ...args.target,
+            worktreeId,
+            executionHostId: owner.executionHostId,
+            surfaceAddress:
+              args.target?.surfaceAddress ??
+              captureStructuredLaunchSurfaceAddress(worktreeId, args.targetGroupId)
+          },
           beforeOpen: undefined
         })
       )
@@ -251,15 +260,18 @@ function beginLocalProvisionalLaunch(
       if (!shown || !useAppStore.getState().getTab(shown)) {
         retirePosition(tab.id)
       }
+      // A host launch outlives a refused tab: its saved row keeps the launch and its input for a
+      // Retry or a reload to show, and a close would end what the host may still run.
+      const held = args.plan.hostLaunch && getStructuredLaunchStateBySessionId(handle.sessionId)
       if (shown === null) {
-        // A host launch outlives a refused tab: a close would end the launch its Retry adopts.
-        if (args.plan.hostLaunch) {
-          detachStructuredAgentLaunch(handle.sessionId)
-        } else {
+        if (!args.plan.hostLaunch) {
           handle.cancel()
         }
         args.onTabOpenSettled?.(null, 'layout-refused')
       } else {
+        if (held) {
+          reconsiderShownHostLaunch(held)
+        }
         args.onTabOpenSettled?.(shown)
       }
     })

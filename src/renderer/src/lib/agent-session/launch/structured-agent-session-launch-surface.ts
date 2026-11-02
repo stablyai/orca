@@ -6,7 +6,10 @@ import {
 import { findIndexedRepoOwner } from '../../repo-owner-index'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
 import type { Tab } from '../../../../../shared/tab-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -263,23 +266,45 @@ export function restoreStructuredLaunchSurfaces(): void {
     ]
   }
   for (const record of readStructuredAgentLaunchRecords()) {
+    // A host launch's chat comes back failed or unknown, on its own host; others only as before.
+    const hostLaunch = record.hostLaunchOperationId !== undefined
     if (
-      record.executionHostId !== 'local' ||
-      record.lifecycle !== 'visibility-unknown' ||
-      !record.surfaceAddress
+      !record.surfaceAddress ||
+      (!hostLaunch &&
+        (record.executionHostId !== 'local' || record.lifecycle !== 'visibility-unknown'))
     ) {
       continue
     }
     const workspace = findIndexedWorktreeOwner(catalog, record.surfaceAddress.worktreeId)
-    if (!workspace || workspace.runtimeOwnerEnvironmentId?.trim()) {
+    const environmentId = workspace?.runtimeOwnerEnvironmentId?.trim()
+    if (!workspace || (environmentId && !hostLaunch)) {
       continue
     }
     const repo = findIndexedRepoOwner(state.repos, workspace.repoId)
-    const host = workspace.hostId ?? (repo ? getCatalogOwnerHostId(repo) : undefined)
-    if (host !== getStructuredAgentSessionLaunchOwner(record.sessionId)) {
+    const host = environmentId
+      ? toRuntimeExecutionHostId(environmentId)
+      : (workspace.hostId ?? (repo ? getCatalogOwnerHostId(repo) : undefined))
+    if (
+      host !== getStructuredAgentSessionLaunchOwner(record.sessionId) ||
+      !structuredAgentSessionTargetForHost(record.executionHostId)
+    ) {
       continue
     }
     reserveStructuredLaunchSlot(record)
-    materializeStructuredLaunchSurface(record, false)
+    if (record.executionHostId === 'local') {
+      materializeStructuredLaunchSurface(record, false)
+    } else {
+      // A paired host's own slot bookkeeping is not this window's; its chat is drawn as at launch.
+      openStructuredAgentSessionProvisionalTab({
+        worktreeId: record.surfaceAddress.worktreeId,
+        executionHostId: record.executionHostId,
+        sessionId: record.sessionId,
+        agent: record.agent,
+        ...(record.surfaceAddress.targetGroupId
+          ? { targetGroupId: record.surfaceAddress.targetGroupId }
+          : {}),
+        activate: false
+      })
+    }
   }
 }

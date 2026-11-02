@@ -9,9 +9,14 @@ import {
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { useAppStore } from '@/store/index'
 import type { OpenedAgentSessionTab } from '../../structured-agent-session-tab-open-through-layout-owner'
-import type { ProvisionalLaunchArgs } from '../structured-agent-session-provisional-tab'
-import { declinedChat, replaceDeclinedChat } from './structured-agent-session-action-launch'
+import {
+  declinedChat,
+  replaceDeclinedChat,
+  type DeclinedChatCaller
+} from './structured-agent-session-action-launch'
 import { StructuredHostLaunchTerminalError } from './structured-agent-session-host-launch'
+import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+import { findStructuredLaunchTab } from './structured-agent-session-launch-surface'
 
 // The host's reveal reaches this window a moment after its answer; past this the chat stays and
 // says the terminal opened where it could not be shown.
@@ -56,7 +61,7 @@ function awaitDrawnTerminalTab(worktreeId: string, hostTabId: string): Promise<s
 
 /** Driven by the host's own result, never by a refusal: the terminal already exists. */
 export async function adoptHostLaunchedTerminal(
-  args: ProvisionalLaunchArgs,
+  args: DeclinedChatCaller,
   worktreeId: string,
   tab: OpenedAgentSessionTab,
   settlement: StructuredAgentLaunchSettlement
@@ -74,5 +79,37 @@ export async function adoptHostLaunchedTerminal(
   const { outcome } = settlement.error.result
   const pane = outcome.kind === 'terminal' && outcome.paneKey ? parsePaneKey(outcome.paneKey) : null
   const terminalTabId = pane ? await awaitDrawnTerminalTab(worktreeId, pane.tabId) : undefined
-  return replaceDeclinedChat(args, worktreeId, tab, chat, terminalTabId, settlement)
+  // A held message the host gave no receipt for, and the composer could not take back, is still
+  // only in the launch: the chat keeps it beside the terminal.
+  const owed = chat.launchState?.intent.hostLaunch?.firstMessage !== undefined
+  return replaceDeclinedChat(
+    args,
+    worktreeId,
+    tab,
+    owed ? { ...chat, typed: true } : chat,
+    terminalTabId,
+    settlement
+  )
+}
+
+/** A launch read again after an unknown answer or a reload has no caller left waiting on it: its
+ *  shown chat gives way to the terminal the host reports, as it does at launch. */
+export function adoptRereadHostLaunchTerminal(state: StructuredLaunchState): void {
+  const { promise, intent } = state
+  void promise.catch((error: unknown) => {
+    const tab = findStructuredLaunchTab(intent)
+    if (
+      !(error instanceof StructuredHostLaunchTerminalError) ||
+      state.promise !== promise ||
+      !tab
+    ) {
+      return
+    }
+    void adoptHostLaunchedTerminal(
+      { plan: { agent: intent.agent }, hooks: {} },
+      intent.worktreeId,
+      tab,
+      { kind: 'failed', error }
+    )
+  })
 }

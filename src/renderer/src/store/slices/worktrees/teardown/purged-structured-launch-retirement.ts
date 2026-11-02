@@ -96,11 +96,12 @@ export function cancelStructuredLaunchesForWorktrees(
     }
   }
   // A resume that publishes on commit has no tab or in-memory launch yet; its saved record names
-  // the workspace it will open in.
+  // the workspace it will open in. So does a host launch whose chat never showed, on any host:
+  // its host's listing dropping the workspace is the only thing that ends it short of a Dismiss.
   for (const record of readStructuredAgentLaunchRecords()) {
     const worktreeId = record.surfaceAddress?.worktreeId
     if (
-      record.executionHostId === 'local' &&
+      (record.executionHostId === 'local' || record.hostLaunchOperationId !== undefined) &&
       worktreeId &&
       worktreeIdSet.has(worktreeId) &&
       (!ownedByHost || ownedByHost(worktreeId, record.executionHostId)) &&

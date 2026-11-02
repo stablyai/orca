@@ -96,10 +96,17 @@ export async function openTerminalForDeclinedChat(
 
 export type DeclinedChat = NonNullable<ReturnType<typeof declinedChat>>
 
+/** What placing a declined chat's terminal reads of its launch: whose agent, and whether the
+ *  caller gave it up. A launch read again from its saved row has no other caller. */
+export type DeclinedChatCaller = {
+  plan: Pick<ProvisionalLaunchArgs['plan'], 'agent'>
+  hooks: Pick<ProvisionalLaunchArgs['hooks'], 'signal'>
+}
+
 /** The chat a declined launch reserved, while it still shows and is still this launch's; read
  *  before its terminal opens. */
 export function declinedChat(
-  args: ProvisionalLaunchArgs,
+  args: DeclinedChatCaller,
   worktreeId: string,
   tab: OpenedAgentSessionTab
 ) {
@@ -124,7 +131,7 @@ export function declinedChat(
 /** The terminal that answers a declined chat takes the chat's place; text left in the chat keeps
  *  the chat open beside it. */
 export async function replaceDeclinedChat(
-  args: ProvisionalLaunchArgs,
+  args: DeclinedChatCaller,
   worktreeId: string,
   tab: OpenedAgentSessionTab,
   { source, launchState, attempt, scopeKey, typed }: DeclinedChat,

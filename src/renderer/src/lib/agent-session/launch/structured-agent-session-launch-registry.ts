@@ -28,6 +28,7 @@ import {
   retireStructuredAgentLaunchCancellation
 } from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
+import { hostLaunchAwaitsItsTab } from './structured-agent-session-host-launch-retention'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -101,8 +102,15 @@ export function setStructuredLaunchState(state: StructuredLaunchState): void {
   persistStructuredLaunchState(state)
 }
 
-export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchState): boolean {
-  if (structuredLaunchesBySessionId.get(state.intent.sessionId) !== state) {
+/** `adoptedElsewhere`: the host's own surface took the launch and nothing is left for its chat. */
+export function deleteStructuredLaunchStateIfCurrent(
+  state: StructuredLaunchState,
+  adoptedElsewhere?: true
+): boolean {
+  if (
+    structuredLaunchesBySessionId.get(state.intent.sessionId) !== state ||
+    (hostLaunchAwaitsItsTab(state) && !adoptedElsewhere)
+  ) {
     return false
   }
   structuredLaunchesBySessionId.delete(state.intent.sessionId)
@@ -112,12 +120,18 @@ export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchStat
 
 function persistStructuredLaunchState(state: StructuredLaunchState): void {
   const lifecycle = launchStateLifecycle(state)
-  if (lifecycle === 'published' || lifecycle === 'cancelled') {
+  // A host launch's chat this window never showed is not the user's yet: a reload redraws it from
+  // this row and reads the host again.
+  const unshown = lifecycle === 'published' && hostLaunchAwaitsItsTab(state)
+  if (lifecycle === 'cancelled' || (lifecycle === 'published' && !unshown)) {
     deleteStructuredAgentLaunchRecord(state.intent.sessionId)
     return
   }
   writeStructuredAgentLaunchRecord({
-    ...structuredAgentLaunchRecordFor(state.intent, lifecycle),
+    ...structuredAgentLaunchRecordFor(
+      state.intent,
+      lifecycle === 'published' ? 'visibility-unknown' : lifecycle
+    ),
     ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
   })
 }

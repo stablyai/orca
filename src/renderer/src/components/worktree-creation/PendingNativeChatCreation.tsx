@@ -1,5 +1,8 @@
 import React from 'react'
-import { closeDismissedHostLaunch } from '@/lib/worktree-creation-host-launch'
+import {
+  closeDismissedHostLaunch,
+  pendingChatDraftScopeKey
+} from '@/lib/worktree-creation-host-launch'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -197,7 +200,7 @@ export default function PendingNativeChatCreation({
           ref={composerRef}
           terminalTabId={tabId}
           paneKey={`${tabId}:composer`}
-          draftScopeKey={pendingCreationChatDraftScopeKey(creationId)}
+          draftScopeKey={pendingChatDraftScopeKey(entry)}
           unavailableHint={
             entry.chatInputHandedOff
               ? translate(

@@ -127,16 +127,18 @@ export function discardStructuredAgentSessionChatSends(sessionId: string): void 
 }
 
 // Prepublication Stop returns unsent text to the composer while allowing chat startup to continue.
-export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
-  for (const prompt of staged.get(sessionId) ?? []) {
-    if (prompt.delivery || prompt.createOwned) {
-      continue
-    }
-    unstage(prompt)
-    prompt.discarded = true
-    handBackStagedPrompt(prompt)
-    prompt.discard()
-  }
+/** True once every taken-back text is durably in the composer or kept by its sender. */
+export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): boolean {
+  return [...(staged.get(sessionId) ?? [])]
+    .filter((prompt) => !prompt.delivery && !prompt.createOwned)
+    .map((prompt) => {
+      unstage(prompt)
+      prompt.discarded = true
+      const kept = handBackStagedPrompt(prompt) || prompt.callerKeepsText === true
+      prompt.discard()
+      return kept
+    })
+    .every(Boolean)
 }
 
 /** The host carried the launch's text itself, as its chat's first message or to its terminal:
@@ -196,12 +198,11 @@ function handBackStagedPrompt(prompt: StagedStructuredLaunchPrompt): boolean {
     return false
   }
   try {
-    handBackStructuredAgentSessionMessage(
+    return handBackStructuredAgentSessionMessage(
       prompt.sessionId,
       `launch-${prompt.sessionId}`,
       structuredAgentSessionSendBody(prompt.text, [])
     )
-    return true
   } catch (error) {
     console.error(
       '[native-chat-send] a launch message could not be put back in the composer',

@@ -18,6 +18,8 @@ import { structuredLaunchOwner } from '@/lib/agent-session/structured-agent-sess
 import { notifyExplicitChatFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import type { StructuredHostLaunch } from '@/lib/agent-session/launch/structured-agent-session-host-launch'
+import { getStructuredLaunchStateBySessionId } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { cancelStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import {
   deleteNativeChatComposerDraft,
   readNativeChatComposerDraft,
@@ -140,9 +142,10 @@ export function worktreeHostLaunch(args: {
   }
 }
 
-/** The layout refused the chat's tab, or opening it threw: the creation keeps its held message,
- *  takes back the draft the launch moved, and shows why, with a Retry that hands off into this same
- *  workspace again. Out of view, the existing short notice says so without moving the user. */
+/** The layout refused the chat's tab, or opening it threw: the creation shows why, with a Retry
+ *  that hands off into this same workspace again. A launch still held keeps its draft in its own
+ *  saved chat, which a reload shows; one the throw ended gives its draft back to the creation. Out
+ *  of view, the existing short notice says so without moving the user. */
 export function keepPendingChatAfterRefusedHandoff(
   creationId: string,
   worktreeId: string,
@@ -151,7 +154,7 @@ export function keepPendingChatAfterRefusedHandoff(
 ): void {
   const launchScope = structuredAgentSessionDraftScopeKey(sessionId)
   const { text, document, pastedTextFiles, images } = readNativeChatComposerDraft(launchScope)
-  if (text !== '' || images.length > 0) {
+  if (!heldHostLaunch(sessionId) && (text !== '' || images.length > 0)) {
     const draft = { text, images, ...(document ? { document } : {}) }
     updateNativeChatComposerDraft(
       pendingCreationChatDraftScopeKey(creationId),
@@ -175,14 +178,32 @@ export function keepPendingChatAfterRefusedHandoff(
   }
 }
 
+/** The launch this window still holds for a creation's chat, until the user closes it. */
+function heldHostLaunch(sessionId: string): boolean {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  return state !== undefined && !state.cancelled
+}
+
+/** Where the creation's composer writes: the chat its launch holds, once handed off. */
+export function pendingChatDraftScopeKey(entry: PendingWorktreeCreation): string {
+  return entry.hostLaunch && heldHostLaunch(entry.hostLaunch.sessionId)
+    ? structuredAgentSessionDraftScopeKey(entry.hostLaunch.sessionId)
+    : pendingCreationChatDraftScopeKey(entry.creationId)
+}
+
 /** Dismissing a creation whose chat its host still owns closes that chat, so nothing starts later
- *  in a workspace the user walked away from; the host fences its launch on the close. */
+ *  in a workspace the user walked away from; the host fences its launch on the close. The launch
+ *  this window held ends with it, as a closed chat's does, unsent draft included. */
 export function closeDismissedHostLaunch(entry: PendingWorktreeCreation | undefined): void {
   const route = entry?.request.agentLaunchRoute
   const owner =
     entry?.hostLaunch && entry.worktreeId && route
       ? structuredLaunchOwner({ route }, entry.worktreeId)
       : null
+  if (entry?.hostLaunch && entry.worktreeId && heldHostLaunch(entry.hostLaunch.sessionId)) {
+    cancelStructuredAgentLaunch(entry.worktreeId, entry.hostLaunch.sessionId)
+    deleteNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(entry.hostLaunch.sessionId))
+  }
   if (owner && entry?.hostLaunch) {
     closeStructuredAgentSession(owner.target, entry.hostLaunch.sessionId).catch((error) => {
       console.warn('[worktree-create] closing a dismissed chat launch failed', error)
