@@ -10,22 +10,22 @@ export function canonicalOrcaSessionId(
   orcaSessionId: OrcaSessionId,
   store: Pick<
     AgentSessionRecordReader,
-    'listRecords' | 'revision'
+    'listRecords' | 'lineageRevision'
   > | null = readAgentSessionRecordStore()
 ): OrcaSessionId {
   return createCanonicalOrcaSessionResolver(store)(orcaSessionId)
 }
 
-/** Clear edges per store revision: mail checks ask per message, and must not rescan every record each time. */
+/** Clear edges per lineage revision: mail checks ask per message, and must not rescan every record each time. */
 const clearEdgesByRevision = new WeakMap<object, ReadonlyMap<string, string>>()
 
 export function createCanonicalOrcaSessionResolver(
-  store: Pick<AgentSessionRecordReader, 'listRecords' | 'revision'> | null
+  store: Pick<AgentSessionRecordReader, 'listRecords' | 'lineageRevision'> | null
 ): (id: OrcaSessionId) => OrcaSessionId {
   if (!store) {
     return (id) => id
   }
-  const revision = store.revision?.()
+  const revision = store.lineageRevision?.()
   let clearedFrom = revision ? clearEdgesByRevision.get(revision) : undefined
   if (!clearedFrom) {
     const edges = new Map<string, string>()

@@ -10,6 +10,7 @@ import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixtur
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import type { AgentMessageSource } from '../../shared/agent-session/agent-session-message-source'
 import { agentSessionRefusalNotice } from '../../shared/agent-session/failures/agent-session-refusal-notice'
+import { nextStructuredQueuedMessage } from '../native-chat/agent-session-wire/structured-agent-session-queued-messages'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
 import {
@@ -23,6 +24,7 @@ import {
   finishWorker,
   host,
   isWholeMail,
+  observationClock,
   openChat,
   queuedCardTexts,
   runtime,
@@ -230,11 +232,69 @@ describe('a queued mail card runs only while its chat still owes it', () => {
       coordinatorHandle: 'term_taker',
       coordinatorPaneKey: 'tab_taker:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
     })
+    // What the runtime's own delivery sees once the chat gives the report back.
+    const selectable: number[] = []
+    const deliver = runtime.deliverPendingMessagesForHandle.bind(runtime)
+    vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation((handle, types) => {
+      if (handle === `run:${runId}`) {
+        selectable.push(db.getUndeliveredUnreadMessages(handle).length)
+      }
+      return deliver(handle, types)
+    })
     runtime.withdrawStaleChatMail()
     await vi.waitFor(async () => expect(await queuedCardTexts()).toEqual([]), WAIT)
     await vi.waitFor(() => expect(db.getStructuredMailSends(`run:${runId}`)).toEqual([]), WAIT)
-    // Unread and undelivered again: the terminal's own lane selects it; nothing marked it read.
+    // Unread and undelivered again, and the terminal's lane is woken to point at it.
     expect(db.getUnreadMessages(`run:${runId}`)).toMatchObject([{ read: 0, delivered_at: null }])
+    await vi.waitFor(() => expect(selectable).toContain(1), WAIT)
+  })
+
+  it('publishes nothing as next while only undecidable mail waits, and hands it over once readable', async () => {
+    const chat = await busyChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+    const unreadable = vi.spyOn(db, 'areUnreadMessages').mockImplementation(() => {
+      throw new Error('database unavailable')
+    })
+    await settleTurn(COORDINATOR, 0)
+    const journal = journalOf(COORDINATOR)
+    const work = host.currentWork(COORDINATOR)!
+    // Idle with nothing to hand over: not working, so /clear and the person's sends go through.
+    await vi.waitFor(() => expect(work.working()).toBe(false), WAIT)
+    const record = host.deps.store.getRecord(COORDINATOR)
+    expect(nextStructuredQueuedMessage({ journal, record, work })).toBeNull()
+    // The person's Send of that card says what happened, never that Orca restarted.
+    const card = journal.queuedMessages.list().find((row) => row.state === 'waiting')
+    const fields = { messageId: card!.messageId }
+    const sent = await host.queuedMessageSend(
+      { callerKey: 'test-surface' },
+      {
+        envelope: {
+          sessionId: COORDINATOR,
+          clientOperationId: operationId(),
+          expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.queuedMessageSend',
+            sessionId: COORDINATOR,
+            fields
+          })
+        },
+        ...fields
+      }
+    )
+    if (sent.ok) {
+      throw new Error('an undecidable Send went through')
+    }
+    const notice = agentSessionRefusalNotice(sent.refusal, 'send', { agentName: 'Codex' })
+    expect(notice).toContain("Orca couldn't read this chat's saved state.")
+    expect(notice).not.toContain('restart')
+    expect(chat.turns).toHaveLength(1)
+    // Readable again: the lane's next look wakes the queue, with no action from the person.
+    unreadable.mockRestore()
+    runtime.withdrawStaleChatMail()
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
+    expect(isWholeMail(turnText(chat.turns[1]!))).toBe(true)
   })
 
   it('sends a report refused for queue room once the queue frees room, and never spins meanwhile', async () => {
@@ -318,6 +378,9 @@ describe('a queued mail card runs only while its chat still owes it', () => {
           { fence, turnScope: { kind: 'thread' } }
         )
       }
+      // Each report admitted on its own, as workers report: identity is read from every saved
+      // conversation once, not once per admission.
+      const lineage = vi.spyOn(host.deps.store, 'listConversations')
       for (let report = 0; report < count; report += 1) {
         db.insertMessage({
           runId,
@@ -325,9 +388,10 @@ describe('a queued mail card runs only while its chat still owes it', () => {
           to: `run:${runId}`,
           subject: `report ${report}`
         })
+        runtime.deliverPendingMessagesForHandle(`run:${runId}`)
+        await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(report + 1), WAIT)
       }
-      runtime.deliverPendingMessagesForHandle(`run:${runId}`)
-      await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(count), WAIT)
+      expect(lineage.mock.calls.length).toBeLessThanOrEqual(1)
 
       const facts = vi.spyOn(host, 'sendAnswer')
       const snapshots = vi.spyOn(host, 'journalSnapshot')
@@ -356,6 +420,16 @@ describe('a queued mail card runs only while its chat still owes it', () => {
       expect(sends).not.toHaveBeenCalled()
       expect(db.getStructuredMailSends(`run:${runId}`)).toHaveLength(count)
       expect(codex.connections.flatMap((connection) => connection.turns)).toHaveLength(1)
+
+      // Publications that change nothing the mail waits on, as streamed tokens do, start no pass
+      // (once the redrive the admissions themselves scheduled has run).
+      await observationClock.observe(2_500)
+      facts.mockClear()
+      for (let token = 0; token < 5; token += 1) {
+        host.wakeQueuedMessages(COORDINATOR)
+        await observationClock.observe(400)
+      }
+      expect(facts).not.toHaveBeenCalled()
     },
     30_000
   )

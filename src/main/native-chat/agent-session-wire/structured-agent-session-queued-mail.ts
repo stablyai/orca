@@ -18,10 +18,13 @@ export function queuedMessageOwed(
   return from && orchestrationMailNotice(from) && decide ? () => decide(sessionId, from) : undefined
 }
 
-/** Mail the queue cannot decide on now: kept in place, and passed over for the person's cards behind it. */
+/** Mail the queue cannot decide on now: kept in place, and passed over for the person's cards behind it.
+ *  A read only, so choosing the next card never settles anything. */
 export function queuedMailUnavailable(
   deps: OwedDeps,
   sessionId: string
 ): (card: QueuedMessageRow) => boolean {
-  return (card) => queuedMessageOwed(deps, sessionId, card.body)?.() === 'unavailable'
+  return ({ body: { from } }) =>
+    Boolean(from && orchestrationMailNotice(from)) &&
+    deps.queuedAgentMessageOwed?.(sessionId, from!, true) === 'unavailable'
 }

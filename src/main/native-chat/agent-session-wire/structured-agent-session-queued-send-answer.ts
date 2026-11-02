@@ -96,7 +96,7 @@ function submissionAnswer(
           at !== undefined && (journal.inputOrder.links.acceptedHandover() > at || cleared > at)
       }
     }
-    default:
+    case 'unknown':
       return { kind: 'unknown' }
   }
 }

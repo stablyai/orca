@@ -19,7 +19,7 @@ import {
   QueuedMessageNotConsumableError,
   QueuedMessageNotOwedError
 } from '../agent-session-journal/queued-message-consume-error'
-import { queuedMailUnavailable, queuedMessageOwed } from './structured-agent-session-queued-mail'
+import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type {
   StructuredAgentSessionHostDeps,
@@ -68,20 +68,12 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
 
 /** Publish the drain’s live pick; backlog itself never gates a lone draft. */
 export function nextStructuredQueuedMessage(
-  input: StructuredQueueGateInput & {
-    journal: AgentSessionJournal
-    unavailable?: (card: QueuedMessageRow) => boolean
-  }
+  input: StructuredQueueGateInput & { journal: AgentSessionJournal }
 ): QueuedMessageRow | null {
   if (structuredInputExecutionWorking(input.journal, input.work)) {
     return null
   }
-  const selected = selectStructuredAgentSessionInput(
-    input.journal,
-    undefined,
-    false,
-    input.unavailable
-  )
+  const selected = selectStructuredAgentSessionInput(input.journal)
   const next = selected.kind === 'card' ? selected.card : null
   // Check cheap working state before the prompt scan on every streamed frame.
   if (next === null) {
@@ -275,15 +267,13 @@ export class StructuredAgentSessionQueuedMessageDrain {
     const fence = this.deps.conversationFence(sessionId)
     const record = this.deps.getRecord(sessionId)
     const work = this.deps.currentWork(sessionId)
-    const deps = { queuedAgentMessageOwed: this.deps.owed }
-    const unavailable = queuedMailUnavailable(deps, sessionId)
-    const next = work ? nextStructuredQueuedMessage({ journal, record, work, unavailable }) : null
+    const next = work ? nextStructuredQueuedMessage({ journal, record, work }) : null
     if (this.disposed || !next) {
       return
     }
     // Fresh submission IDs link drafts through queuedMessageId, never equality.
     const submissionId = createStructuredAgentSessionOperationId(randomUUID)
-    const owed = queuedMessageOwed(deps, sessionId, next.body)
+    const owed = queuedMessageOwed({ queuedAgentMessageOwed: this.deps.owed }, sessionId, next.body)
     try {
       await journal.appendSubmission(
         {
@@ -300,7 +290,6 @@ export class StructuredAgentSessionQueuedMessageDrain {
           messageId: next.messageId,
           expect: 'waiting',
           yieldsToPause: true,
-          unavailable,
           ...(owed && { owed })
         },
         this.deps.submissionReceipt?.(sessionId)
@@ -308,7 +297,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {
         if (next.messageId !== journal.queuedMessages.nextInputCard()?.messageId) {
-          // It was chosen beside held mail, which may be decidable now: choose again.
+          // The queue's choice moved (older mail became decidable): choose again.
           this.schedule(sessionId)
         }
         return

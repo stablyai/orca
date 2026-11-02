@@ -48,7 +48,7 @@ export class JournalInputOrder {
   private readonly overrides = new Map<string, AgentJournalSubmission>()
   private pending: readonly AgentJournalSubmission[] | undefined
   readonly lineage: JournalInputLineageOwner
-  private readonly cards: JournalInputCardIndex
+  readonly cards: JournalInputCardIndex
   private receiptCount = 0
   private queueRevision = 0
   private revision = 0

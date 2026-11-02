@@ -147,10 +147,11 @@ export function sendQueuedStructuredAgentMessage(
           if (error.owed === 'unavailable') {
             return {
               ok: false,
+              // Not only after a restart: any unreadable fact it depends on, so no step is promised.
               refusal: refuse(
                 'execution_owner_reconciling',
-                { reason: 'hostReconciling' },
-                "Orca can't confirm this message still applies right now."
+                { reason: 'recordUnreadable' },
+                "Orca can't read what decides whether this message still applies."
               )
             }
           }

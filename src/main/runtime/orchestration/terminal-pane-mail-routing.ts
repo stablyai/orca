@@ -17,7 +17,10 @@ import {
 import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import type { OrchestrationDb } from './db'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import {
+  orchestrationMailNotice,
+  type AgentMessageSource
+} from '../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
 import {
   structuredMailboxCustody,
@@ -221,16 +224,26 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale()
   }
 
-  /** Asked as a chat's queue hands over an agent's card; opening the database lets a restart's first
-   *  handover decide. */
-  structuredChatMailOwed(sessionId: string, from: AgentMessageSource): QueuedMessageOwed {
+  /** Asked as a chat's queue hands over an agent's card, or, with `peek`, as it chooses its next card;
+   *  opening the database lets a restart's first handover decide. */
+  structuredChatMailOwed(
+    sessionId: string,
+    from: AgentMessageSource,
+    peek = false
+  ): QueuedMessageOwed {
+    if (!orchestrationMailNotice(from)) {
+      return 'owed'
+    }
     let db: OrchestrationDb | null
     try {
       db = this.getExistingOrchestrationDb()
     } catch {
       return 'unavailable'
     }
-    return this.orchestrationStructuredMailboxPointerDelivery.owedAtHandover(sessionId, from, db)
+    const delivery = this.orchestrationStructuredMailboxPointerDelivery
+    return peek
+      ? delivery.owedNow(sessionId, from, db)
+      : delivery.owedAtHandover(sessionId, from, db)
   }
 
   /** Resolve every structured-owned mailbox here; declining Run or direct mail would leave both delivery lanes refusing it. */

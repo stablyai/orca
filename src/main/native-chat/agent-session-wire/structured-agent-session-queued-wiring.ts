@@ -18,6 +18,7 @@ import {
   updateQueuedStructuredAgentMessage
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
+import { queuedMailUnavailable } from './structured-agent-session-queued-mail'
 
 /** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
@@ -39,10 +40,26 @@ export function wireStructuredAgentSessionQueuedMessages(
     owed: (sessionId, from) => context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
   })
+  /** Publish the queue again and look for work: what it can hand over may have changed with no write. */
+  const refresh = (sessionId: string) => {
+    const journal = sessions.get(sessionId)?.journal
+    if (journal) {
+      void context()
+        .serialize(sessionId, async () => republish(context(), sessionId, journal))
+        .catch(() => {})
+    }
+    drain.schedule(sessionId)
+  }
   return {
     drain,
+    refresh,
     onOpened: (sessionId: string) => {
       const journal = sessions.get(sessionId)?.journal
+      if (journal) {
+        // Installed before anything reads the next card, so every reader applies the one mail rule.
+        journal.queuedMessages.mailUnavailable = (card) =>
+          queuedMailUnavailable(context().deps, sessionId)(card)
+      }
       journal?.queuedMessages.editLeases.onDeadline(() => {
         void context()
           .serialize(sessionId, async () => {

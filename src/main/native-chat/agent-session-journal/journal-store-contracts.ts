@@ -24,7 +24,6 @@ import type { JournalRowWriter } from './journal-row-writer'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody } from './journal-write-queue'
 import type { QueuedMessageOwed } from './queued-message-consume-error'
-import type { QueuedMessageRow } from './queued-message-table'
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
@@ -140,8 +139,6 @@ export type JournalSubmissionConsume = {
   yieldsToPause?: true
   /** Re-asked in the handover transaction: an agent's message can stop being owed while it waits. */
   owed?: () => QueuedMessageOwed
-  /** The drain's own pass-over rule, re-applied here so the card it chose is still the one to hand over. */
-  unavailable?: (card: QueuedMessageRow) => boolean
 }
 
 export type JournalItemAppendInput = {

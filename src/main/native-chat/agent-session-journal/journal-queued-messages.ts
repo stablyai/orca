@@ -1,5 +1,5 @@
 import { journalInputOrder } from './journal-input-order'
-import { selectBesideHeldMail } from './journal-queue-held-mail'
+import { nextEligibleQueuedCard } from './journal-queue-mail-eligibility'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import {
   journalAttachmentClaimReceipt,
@@ -91,20 +91,19 @@ export class JournalQueuedMessages {
     return this.deps.state().queue.cards.get(messageId) ?? this.legacy.get(messageId) ?? null
   }
 
-  /** Selection reads identity summaries; current values are resolved after edits. `unavailable`: mail
-   *  the head cannot be decided on now, passed over for the person's cards behind it. */
-  nextInputCard(
-    automatic = true,
-    unavailable?: (card: QueuedMessageRow) => boolean
-  ): QueuedMessageRow | null {
-    const state = this.inputState()
-    const identity = journalInputOrder(state).head(state, this.deps.reopenFloor())
-    const ready = (next: QueuedMessageRow) =>
-      next.state !== 'returned' &&
-      !journalInputOrder(state).paused(state, next, this.deps.reopenFloor()) &&
-      !(automatic && this.editLeases.isHeld(next.messageId))
-    const head = identity ? this.get(identity.messageId) : null
-    return selectBesideHeldMail(() => this.list(), head, ready, unavailable)
+  /** Mail the orchestration owner cannot confirm now; the host installs it once, so every reader of
+   *  the next card (drain, consume, publication, scheduling) applies one rule. */
+  mailUnavailable: ((card: QueuedMessageRow) => boolean) | undefined
+
+  /** Selection reads identity summaries; current values are resolved after edits. */
+  nextInputCard(automatic = true): QueuedMessageRow | null {
+    return nextEligibleQueuedCard({
+      state: this.inputState(),
+      floor: this.deps.reopenFloor(),
+      get: (messageId) => this.get(messageId),
+      editHeld: (messageId) => automatic && this.editLeases.isHeld(messageId),
+      unavailable: this.mailUnavailable
+    })
   }
 
   // Card insertion, attachment claims and send receipt must commit together.
@@ -233,7 +232,7 @@ export class JournalQueuedMessages {
       card.fingerprint === input.fingerprint &&
       input.consumedAs !== input.messageId
     if (consumable && input.yieldsToPause) {
-      const next = this.nextInputCard(true, input.unavailable)
+      const next = this.nextInputCard()
       if (next?.messageId === input.messageId) {
         return
       }

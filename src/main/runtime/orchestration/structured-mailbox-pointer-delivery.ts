@@ -14,14 +14,15 @@ import { structuredMailMessage } from './structured-mail-source'
 import type { SenderSnapshotResolver } from './agent-message-sender'
 import type { StructuredMailSendRow } from './db/messages/structured-mail-send-store'
 import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import {
+  orchestrationMailNotice,
+  type AgentMessageSource
+} from '../../../shared/agent-session/agent-session-message-source'
 import { StructuredMailboxParking } from './structured-mailbox-parking'
-import { structuredMailboxCustody } from './structured-session-mail-target'
 import {
   hasStructuredMailSends,
   settleStructuredMailSends,
-  structuredMailboxEnded,
-  structuredMailOwed,
+  StructuredMailAuthority,
   type StructuredMailResend
 } from './structured-mail-custody'
 
@@ -36,6 +37,8 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   /** Resolve dispatch or direct-worker mail to its session; null delegates to the PTY lane. */
   resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
+  /** The runtime's own delivery for a mailbox, whichever lane owns it: a terminal's included. */
+  redeliver?: (mailboxHandle: string) => void
   /** Whether nothing can own the mailbox again; read from the database unless a test supplies it. */
   mailboxEnded?: (mailboxHandle: string) => boolean
   /** Why no chat resolves a mailbox; read from the database unless a test supplies it. */
@@ -60,7 +63,11 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     onActivity: (sessionId) => this.onJournalActivity(sessionId)
   })
 
-  constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {}
+  private readonly authority: StructuredMailAuthority
+
+  constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {
+    this.authority = new StructuredMailAuthority({ ...deps, resolve: deps.resolveStructuredTarget })
+  }
 
   deliverForHandle(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): boolean {
     const target = this.deps.resolveStructuredTarget(mailboxHandle)
@@ -76,12 +83,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
 
   /** Retry mail parked on this session's settlement or reattach journal edge. */
   onJournalActivity(sessionId: string): void {
+    // The watch stays through its own redrive: only a move, or the last obligation ending, ends it.
     for (const [mailboxHandle, parked] of this.parking.parkedFor(sessionId)) {
-      // A mailbox that moved is parked again under its new owner by the pass, if it still needs to be.
-      // An unresolved one stays parked here: its sends still settle (a Dispatch that ended releases them).
-      if (this.deps.resolveStructuredTarget(mailboxHandle)) {
-        this.parking.unpark(mailboxHandle)
-      }
       void this.deliver(mailboxHandle, parked.reservedTypes).catch(() => undefined)
     }
   }
@@ -108,24 +111,13 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     }
   }
 
-  /** The one authority every handover asks: whether this session may still be handed this mail now. */
-  owedTo(
+  /** Read only: the queue asks this choosing and publishing its next card, so it settles nothing. */
+  owedNow(
     sessionId: string,
-    mailboxHandle: string,
-    messageIds: readonly string[]
+    from: AgentMessageSource,
+    db: OrchestrationDb | null
   ): QueuedMessageOwed {
-    const db = this.deps.getDb()
-    return db
-      ? structuredMailOwed({
-          db,
-          sessionId,
-          mailboxHandle,
-          messageIds,
-          resolve: this.deps.resolveStructuredTarget,
-          unresolved: (handle) => this.unresolved(handle),
-          ended: (handle) => this.ended(handle)
-        })
-      : 'unavailable'
+    return this.authority.owedNow(sessionId, from, db)
   }
 
   /** The queue asks this as it hands an agent's card over. A stale mail card is dropped without a
@@ -136,25 +128,17 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     from: AgentMessageSource,
     db: OrchestrationDb | null
   ): QueuedMessageOwed {
-    const mail = from.orchestration
-    if (mail?.message !== 'mail-notice') {
-      return 'owed'
-    }
-    if (!db) {
-      // No orchestration database: nothing can owe this mail any more.
-      return 'stale'
-    }
-    const messageIds = mail.messages.map((message) => message.messageId)
-    const owed = this.owedTo(sessionId, mail.mailbox, messageIds)
-    if (owed === 'stale') {
-      for (const id of messageIds) {
-        const row = db.getStructuredMailSend(mail.mailbox, id)
+    const owed = this.owedNow(sessionId, from, db)
+    const mail = orchestrationMailNotice(from)
+    if (owed === 'stale' && mail && db) {
+      for (const { messageId } of mail.messages) {
+        const row = db.getStructuredMailSend(mail.mailbox, messageId)
         if (row?.session_id === sessionId) {
           db.releaseStructuredMailSend(row)
         }
       }
-      // After the queue's write lane unwinds.
-      queueMicrotask(() => this.deliverForHandle(mail.mailbox))
+      // After the queue's write lane unwinds, through whichever lane owns the mailbox now.
+      queueMicrotask(() => this.redeliver(mail.mailbox))
     }
     return owed
   }
@@ -188,18 +172,22 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       if (!db) {
         return
       }
-      const { outstanding, resend } = await settleStructuredMailSends({
+      const { outstanding, resend, released } = await settleStructuredMailSends({
         db,
         mailboxHandle,
         host: this.deps.host,
         cliCommand: this.deps.getCliCommand(),
-        owed: (sessionId, messageIds) => this.owedTo(sessionId, mailboxHandle, messageIds)
+        owed: (sessionId, messageIds) => this.authority.owedTo(sessionId, mailboxHandle, messageIds)
       })
       let target = this.deps.resolveStructuredTarget(mailboxHandle)
-      if (!target || this.ended(mailboxHandle)) {
+      if (!target || this.authority.ended(mailboxHandle)) {
         if (!hasStructuredMailSends(db, mailboxHandle)) {
           // Nothing of it is left in any chat: no edge is owed to it.
           this.parking.unpark(mailboxHandle)
+        }
+        if (released) {
+          // Mail a chat gave back goes to whoever owns the mailbox now, a terminal included.
+          queueMicrotask(() => this.redeliver(mailboxHandle))
         }
         return
       }
@@ -226,6 +214,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         if (outstanding.size > 0 || resend.length > 0) {
           // Cards still in the chat: their handover or deletion is read on this session's next edge.
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
+        } else {
+          this.parking.unpark(mailboxHandle)
         }
         return
       }
@@ -246,7 +236,6 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
           return
         }
-        this.parking.unpark(mailboxHandle)
       }
       // The arrival snapshot protects its first handoff; successors derive live waiter ownership.
       currentReservedTypes = undefined
@@ -296,7 +285,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       expectedRuntimeFence: fence,
       body,
       stillOwed: () => {
-        owed = this.owedTo(sessionId, mailboxHandle, [message.id])
+        owed = this.authority.owedTo(sessionId, mailboxHandle, [message.id])
         return (
           owed === 'owed' &&
           !shouldReleaseOrchestrationPointer(
@@ -329,19 +318,11 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     }
   }
 
-  /** Read from the database: a resolver that found no chat where the database names one cannot decide. */
-  private unresolved(mailboxHandle: string): 'elsewhere' | 'unverifiable' {
-    if (this.deps.unresolvedCustody) {
-      return this.deps.unresolvedCustody(mailboxHandle)
+  private redeliver(mailboxHandle: string): void {
+    if (this.deps.redeliver) {
+      this.deps.redeliver(mailboxHandle)
+    } else {
+      this.deliverForHandle(mailboxHandle)
     }
-    const custody = structuredMailboxCustody(mailboxHandle, this.deps.getDb())
-    return custody === 'elsewhere' ? 'elsewhere' : 'unverifiable'
-  }
-
-  private ended(mailboxHandle: string): boolean {
-    return (
-      this.deps.mailboxEnded?.(mailboxHandle) ??
-      structuredMailboxEnded(mailboxHandle, this.deps.getDb())
-    )
   }
 }
