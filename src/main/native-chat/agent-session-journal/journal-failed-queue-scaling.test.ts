@@ -562,7 +562,7 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
         const entries =
           value instanceof Map || value instanceof Set
             ? [...value.values()]
-            : Reflect.ownKeys(value).map((key) => Reflect.get(value, key))
+            : Object.values(Object.getOwnPropertyDescriptors(value)).map((field) => field.value)
         if (value instanceof Map && !watched.has(value)) {
           watched.add(value)
           owned.push(
@@ -578,7 +578,12 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
     const visits = vi.spyOn(JournalInputCardIndex.prototype, 'indexCard')
     const sets = vi.spyOn(JournalInputPlaceIndex.prototype, 'set')
     // Outside the clear's rebuild, every ensure keeps the indexes and walks nothing.
-    const kept = ['index', 'currentCoordinates', 'domains', 'indexed']
+    const kept = (index: JournalInputCardIndex) => ({
+      index: index['index'],
+      currentCoordinates: index['currentCoordinates'],
+      domains: index['domains'],
+      indexed: index['indexed']
+    })
     const ensure = JournalInputCardIndex.prototype.ensure
     let rebuilding = false
     let ensures = 0
@@ -588,12 +593,14 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
       floor
     ) {
       const walked = sum(canonical) + sum(owned)
-      const before = kept.map((key) => Reflect.get(this, key))
+      const before = kept(this)
       ensure.call(this, target, floor)
       if (!rebuilding) {
         ensures++
         expect(sum(canonical) + sum(owned)).toBe(walked)
-        expect(kept.filter((key, n) => Reflect.get(this, key) !== before[n])).toEqual([])
+        const after = kept(this)
+        const keys = Object.keys(before) as (keyof typeof before)[]
+        expect(keys.filter((key) => after[key] !== before[key])).toEqual([])
       }
     })
     /** Commits one row; `inDraft` reads before adoption too. No step may visit or place a card. */
