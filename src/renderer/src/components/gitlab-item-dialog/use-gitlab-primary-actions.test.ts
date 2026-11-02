@@ -36,6 +36,7 @@ describe('useGitLabPrimaryActions', () => {
     const events: string[] = []
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handleMerge reads only these dialog-state fields; the rest of the dialog state is unused here.
     const state = {
+      claimDetailsOwner: () => () => true,
       commentDraft: '',
       mountedRef: { current: true },
       setActionInFlight: (value: string | null) => events.push(`inFlight:${value}`),

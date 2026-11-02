@@ -18,6 +18,7 @@ export function useGitLabPrimaryActions(
   handleRefresh: () => void
 ) {
   const {
+    claimDetailsOwner,
     commentDraft,
     mountedRef,
     setActionInFlight,
@@ -29,6 +30,7 @@ export function useGitLabPrimaryActions(
       return
     }
     setActionInFlight('close')
+    const ownsResult = claimDetailsOwner()
     try {
       const res = await gitLabApiFor(repoSelector).closeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
@@ -50,19 +52,21 @@ export function useGitLabPrimaryActions(
         showGitLabMutationError(error)
       }
     } finally {
-      if (mountedRef.current) {
+      // Only while this MR is still shown: a switched-to item keeps its own read and busy state.
+      if (ownsResult()) {
         setActionInFlight(null)
         // Why: a failed response doesn't prove the host kept the old state; reread on every attempted write.
         handleRefresh()
       }
     }
-  }, [handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
+  }, [claimDetailsOwner, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
 
   const handleReopen = useCallback(async (): Promise<void> => {
     if (!item || !repoSelector || item.type !== 'mr') {
       return
     }
     setActionInFlight('reopen')
+    const ownsResult = claimDetailsOwner()
     try {
       const res = await gitLabApiFor(repoSelector).reopenMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
@@ -84,18 +88,19 @@ export function useGitLabPrimaryActions(
         showGitLabMutationError(error)
       }
     } finally {
-      if (mountedRef.current) {
+      if (ownsResult()) {
         setActionInFlight(null)
         handleRefresh()
       }
     }
-  }, [handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
+  }, [claimDetailsOwner, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
 
   const handleMerge = useCallback(async (): Promise<void> => {
     if (!item || !repoSelector || item.type !== 'mr') {
       return
     }
     setActionInFlight('merge')
+    const ownsResult = claimDetailsOwner()
     try {
       const res = await gitLabApiFor(repoSelector).mergeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
@@ -117,12 +122,12 @@ export function useGitLabPrimaryActions(
         showGitLabMutationError(error)
       }
     } finally {
-      if (mountedRef.current) {
+      if (ownsResult()) {
         setActionInFlight(null)
         handleRefresh()
       }
     }
-  }, [handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
+  }, [claimDetailsOwner, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
 
   const handleSubmitComment = useCallback(async (): Promise<void> => {
     const bodyState = getCommentBodySubmitState(commentDraft)
@@ -139,6 +144,7 @@ export function useGitLabPrimaryActions(
       return
     }
     setCommentSubmitting(true)
+    const ownsResult = claimDetailsOwner()
     try {
       const res =
         item.type === 'mr'
@@ -158,7 +164,9 @@ export function useGitLabPrimaryActions(
             current.itemId === itemId ? { itemId, value: '' } : current
           )
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
-          handleRefresh()
+          if (ownsResult()) {
+            handleRefresh()
+          }
         }
       } else {
         if (mountedRef.current) {
@@ -170,11 +178,12 @@ export function useGitLabPrimaryActions(
         showGitLabMutationError(error)
       }
     } finally {
-      if (mountedRef.current) {
+      if (ownsResult()) {
         setCommentSubmitting(false)
       }
     }
   }, [
+    claimDetailsOwner,
     commentDraft,
     handleRefresh,
     item,

@@ -110,7 +110,8 @@ export function useGitLabReviewActions(
           showGitLabMutationError(error)
         }
       } finally {
-        if (mountedRef.current) {
+        // Only while this item is still shown: a switched-to item keeps its own read and busy state.
+        if (ownsResult()) {
           setReviewerUpdating(false)
           // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
           handleRefresh()
