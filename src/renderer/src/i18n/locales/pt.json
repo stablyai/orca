@@ -20891,7 +20891,7 @@
         "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
         "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder.",
         "exitUnconfirmedFromTerminal": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
-        "exitUnconfirmed": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões."
+        "exitUnconfirmed": "{{agent}} está executando esta conversa em outro terminal. Encerre-o lá ou feche esse terminal e tente novamente."
       },
       "loadingEarlierMessages": "Carregando mensagens anteriores…",
       "prompt": {
