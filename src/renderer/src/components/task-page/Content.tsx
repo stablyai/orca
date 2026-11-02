@@ -7,6 +7,7 @@ import { TaskPageGitHubList } from './github/listing/List'
 import { TaskPageGitLabTodoList } from './gitlab/TodoList'
 import { TaskPageGitLabItemList } from './gitlab/ItemList'
 import { TaskPageJiraContent } from './jira/Content'
+import { TaskPageAzureDevOpsContent } from './azure-devops/Content'
 export function TaskPageContent({
   model
 }: {
@@ -74,6 +75,8 @@ export function TaskPageContent({
     <TaskPageGitLabTodoList model={model} />
   ) : taskSource === 'gitlab' ? (
     <TaskPageGitLabItemList model={model} />
+  ) : taskSource === 'azure-devops' ? (
+    <TaskPageAzureDevOpsContent model={model} />
   ) : (
     <TaskPageJiraContent model={model} />
   )

@@ -24,8 +24,8 @@ import { assertRuntimeEnvironmentCapability } from '../../../../runtime/rpc/comp
 import { runtimeTargetSupportsCapability } from '../../../../runtime/rpc/compatibility/runtime-target-capability'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
+import { linkedWorkItemRuntimeCapabilityGates } from '../../../linked-work-item-runtime-capability'
 import {
-  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
@@ -219,16 +219,11 @@ export function createCreateWorktree(
         note: options?.note,
         warnParentDropped: warnParentDroppedOnce
       })
-      if (
-        target.kind === 'environment' &&
-        (options?.linkedWorkItem?.provider === 'jira' ||
-          options?.linkedTaskSourceContext?.provider === 'jira')
-      ) {
-        await assertRuntimeEnvironmentCapability(
-          target.environmentId,
-          WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          'Update the remote runtime to link Jira'
-        )
+      for (const gate of linkedWorkItemRuntimeCapabilityGates(target, [
+        options?.linkedWorkItem?.provider,
+        options?.linkedTaskSourceContext?.provider
+      ])) {
+        await assertRuntimeEnvironmentCapability(gate.environmentId, gate.capability, gate.message)
       }
       if (
         options?.provisionedRoot &&

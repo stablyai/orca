@@ -6,6 +6,7 @@ import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-qu
 import { useState, useRef, useEffect, useMemo } from 'react'
 import {
   type TaskProvider,
+  isRepoBackedTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../../shared/work-items/task-providers'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
@@ -51,7 +52,7 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
   )
   const taskSourceRepoContexts = useMemo(
     () =>
-      taskSource === 'github' || taskSource === 'gitlab'
+      isRepoBackedTaskProvider(taskSource)
         ? selectedRepos
             .map((repo) => getTaskPageRepoSourceContext(repo, taskSource))
             .filter((context): context is TaskSourceContext => context !== null)

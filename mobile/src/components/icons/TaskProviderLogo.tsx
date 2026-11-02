@@ -1,6 +1,6 @@
 import Svg, { Path } from 'react-native-svg'
 
-export type TaskProviderLogoKind = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProviderLogoKind = 'github' | 'gitlab' | 'linear' | 'jira' | 'azure-devops'
 
 type Props = {
   provider: TaskProviderLogoKind
@@ -58,6 +58,15 @@ export function TaskProviderLogo({ provider, size = 16, color }: Props) {
         <Path d="M244.658 0H121.707a55.502 55.502 0 0 0 55.502 55.502h22.649V77.37c.02 30.625 24.841 55.447 55.466 55.467V10.666C255.324 4.777 250.55 0 244.658 0z" />
         <Path d="M183.822 61.262H60.872c.019 30.625 24.84 55.447 55.466 55.467h22.649v21.938c.039 30.625 24.877 55.43 55.502 55.43V71.93c0-5.891-4.776-10.667-10.667-10.667z" />
         <Path d="M122.951 122.489H0c0 30.653 24.85 55.502 55.502 55.502h22.72v21.867c.02 30.597 24.798 55.408 55.396 55.466V133.156c0-5.891-4.776-10.667-10.667-10.667z" />
+      </Svg>
+    )
+  }
+
+  if (provider === 'azure-devops') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+        {/* Why: same mark as the desktop AzureDevOpsIcon, so both surfaces name the provider alike. */}
+        <Path d="M22 5.5v12.7l-5.2 4.3-8.1-3v3l-4.6-6 13.4 1V6.4L22 5.5zM17.6 6.5 10.1 2v3.1L3.2 7.1 1 10v6.7l3 1.3V10.2l13.6-3.7z" />
       </Svg>
     )
   }

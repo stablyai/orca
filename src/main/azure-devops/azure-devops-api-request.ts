@@ -1,6 +1,10 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import {
+  getAzCliAzureDevOpsAccessToken,
+  isEntraEligibleAzureDevOpsBaseUrl
+} from './az-cli-access-token'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Newest first: older on-prem Servers reject newer versions with VssVersionOutOfRangeException.
@@ -72,6 +76,8 @@ export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
   onResponse?: (response: Response) => void
+  method?: 'GET' | 'POST'
+  body?: unknown
 }
 
 function envValue(name: string): string | null {
@@ -99,7 +105,7 @@ export function azureDevOpsTokenConfigured(config: AzureDevOpsAuthConfig): boole
   return Boolean(config.pat || config.accessToken)
 }
 
-function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
+function envAuthHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
   if (config.accessToken) {
     return { Authorization: `Bearer ${config.accessToken}` }
   }
@@ -108,6 +114,26 @@ function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
     return { Authorization: `Basic ${encoded}` }
   }
   return {}
+}
+
+/**
+ * Env tokens win; otherwise hosted Azure DevOps falls back to the az CLI's
+ * Entra login. On-prem Azure DevOps Server never tries az — it only accepts
+ * PAT/Windows auth.
+ */
+export async function resolveAzureDevOpsAuthHeaders(
+  baseUrl: string
+): Promise<Record<string, string>> {
+  const config = getAzureDevOpsAuthConfig()
+  const fromEnv = envAuthHeaders(config)
+  if (Object.keys(fromEnv).length > 0) {
+    return fromEnv
+  }
+  if (!isEntraEligibleAzureDevOpsBaseUrl(baseUrl)) {
+    return {}
+  }
+  const token = await getAzCliAzureDevOpsAccessToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
@@ -143,7 +169,8 @@ function apiUrl(
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
   const params = {
     ...searchParams,
-    'api-version': azureDevOpsApiVersionForOrigin(url.origin)
+    // Why: a pinned version names an endpoint that exists only there; negotiation is for the rest.
+    'api-version': searchParams?.['api-version'] ?? azureDevOpsApiVersionForOrigin(url.origin)
   }
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, String(value))
@@ -158,13 +185,15 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   // Creation preflight must distinguish lookup failure from an absent PR.
   throwOnFailure = false
 ): Promise<T | null> {
-  const config = getAzureDevOpsAuthConfig()
-  const doFetch = (url: URL): Promise<Response> =>
+  const doFetch = async (url: URL): Promise<Response> =>
     fetch(url, {
+      method: options.method ?? 'GET',
       headers: {
         Accept: 'application/json',
-        ...authHeaders(config)
+        ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(await resolveAzureDevOpsAuthHeaders(baseUrl))
       },
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
   try {
@@ -179,6 +208,7 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       await cancelUnreadResponseBody(response)
       if (
         attempt >= AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS ||
+        options.searchParams?.['api-version'] !== undefined ||
         !recordAzureDevOpsApiVersionRejection(url, response.status, body)
       ) {
         if (throwOnFailure) {

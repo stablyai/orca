@@ -91,6 +91,9 @@ export class RuntimeClientSettingsController {
       defaultLinearTeamSelection: Array.isArray(settings.defaultLinearTeamSelection)
         ? settings.defaultLinearTeamSelection.filter((id): id is string => typeof id === 'string')
         : null,
+      azureDevOpsTeamSelection: settings.azureDevOpsTeamSelection ?? null,
+      azureDevOpsViewSelection: settings.azureDevOpsViewSelection ?? null,
+      azureDevOpsBacklogColumnWidths: settings.azureDevOpsBacklogColumnWidths ?? null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       worktreeCardDetailsRow: settings.worktreeCardDetailsRow !== false,
