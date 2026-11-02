@@ -40,12 +40,12 @@ export function pluginRuntimeDelegate(
 /** Binds the plugin host to main's runtime: its delegate, and the hooks Orca's own code runs. */
 export function bindPluginRuntime(
   service: PluginService,
-  runtime: RuntimeDelegateSource,
+  runtime: RuntimeDelegateSource & { getTerminalHandleForPaneKey(paneKey: string): string | null },
   hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] }
 ): PluginRuntimeDelegate {
   const delegate = pluginRuntimeDelegate(runtime, () => hookServer.getStatusSnapshot())
   service.setRuntimeDelegate(delegate)
-  installPluginHookRunner(service)
+  installPluginHookRunner(service, runtime)
   return delegate
 }
 
