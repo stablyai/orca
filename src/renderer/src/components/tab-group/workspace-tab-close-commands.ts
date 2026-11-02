@@ -3,6 +3,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { requestEditorFileClose } from '../editor/editor-autosave'
+import { runAfterEditorFramesFlush } from '../editor/editor-pending-flush'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -111,11 +112,18 @@ export function createWorkspaceTabCloseCommands({
     } else if (item.contentType === 'simulator') {
       closeUnifiedTab(item.id)
     } else {
-      const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id, whenEmptied)
-      if (!canCloseTab) {
-        return
-      }
-      closeUnifiedTab(item.id)
+      // Why: a custom editor frame may still hold edits the dirty check must see.
+      runAfterEditorFramesFlush(useAppStore.getState(), [item.entityId], (deferred) => {
+        const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
+        if (deferred && !tabs.some((tab) => tab.id === item.id)) {
+          return
+        }
+        if (closeEditorIfUnreferenced(item.entityId, item.id, whenEmptied)) {
+          closeUnifiedTab(item.id)
+          whenEmptied?.()
+        }
+      })
+      return
     }
     whenEmptied?.()
   }

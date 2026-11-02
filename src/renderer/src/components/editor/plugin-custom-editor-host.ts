@@ -291,6 +291,11 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       if (!ready) {
         return Promise.resolve(!lostEdit)
       }
+      // A read-only document takes no edits, and a frame without a window cannot answer.
+      if (options.getDocument().readOnly || !options.getFrameWindow()) {
+        applyHeldEdit()
+        return Promise.resolve(!lostEdit)
+      }
       const requestId = nextFlushId++
       return new Promise<boolean>((resolve) => {
         const settle = (answered: boolean): void => {
