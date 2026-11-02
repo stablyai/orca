@@ -10,6 +10,8 @@ import type { AgentSessionJournal } from './journal-store'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { journalInputOrder } from './journal-input-order'
 import { nextStructuredQueuedMessage } from '../agent-session-wire/structured-agent-session-queued-messages'
+import { structuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import type { QueuedMessageRow } from './queued-message-table'
 
 const personal = (text: string): AgentJournalMessageItem => ({
@@ -123,19 +125,19 @@ describe("the queue's one rule for the next card", () => {
     const authority = vi.fn((_card: QueuedMessageRow) => true)
     journal.queuedMessages.mailUnavailable = authority
     await journal.queuedMessages.insert({ messageId: 'A', body: mail('run:r', 'm1') })
-    const work = (prompt: boolean) =>
-      ({
-        activeTurnId: () => null,
-        owesSend: () => false,
-        hasActionablePrompt: () => prompt
-      }) as never
-    const record = {} as never
+    // Idle: no turn running and nothing owed, so only the gates below can stop a send.
+    const work = structuredAgentSessionCurrentWork(journal, { record: null })
+    const prompt = vi.spyOn(work, 'hasActionablePrompt')
+    const record = agentSessionRecordFixture({ sessionId: 'queue-mail' })
     for (let publication = 0; publication < 10; publication += 1) {
-      expect(nextStructuredQueuedMessage({ journal, record: null, work: work(false) })).toBeNull()
-      expect(nextStructuredQueuedMessage({ journal, record, work: work(true) })).toBeNull()
+      prompt.mockReturnValue(false)
+      expect(nextStructuredQueuedMessage({ journal, record: null, work })).toBeNull()
+      prompt.mockReturnValue(true)
+      expect(nextStructuredQueuedMessage({ journal, record, work })).toBeNull()
     }
     expect(authority).not.toHaveBeenCalled()
-    expect(nextStructuredQueuedMessage({ journal, record, work: work(false) })).toBeNull()
+    prompt.mockReturnValue(false)
+    expect(nextStructuredQueuedMessage({ journal, record, work })).toBeNull()
     expect(authority).toHaveBeenCalledTimes(1)
   })
 
@@ -150,12 +152,14 @@ describe("the queue's one rule for the next card", () => {
       }
       expect(next(journal)).toBe('C')
       // Reads of the queue's live order: a walk reads up to its stop, a filtered copy reads all.
-      const cards = journalInputOrder(journal.queuedMessages.inputState()).cards as unknown as {
-        ordered: QueuedMessageRow[]
+      const cards = journalInputOrder(journal.queuedMessages.inputState()).cards
+      const live = cards['ordered']
+      if (!live) {
+        throw new Error('the queue has not ordered its cards')
       }
       let reads = 0
       const counted: QueuedMessageRow[] = []
-      cards.ordered.forEach((card, index) => {
+      live.forEach((card, index) => {
         Object.defineProperty(counted, index, {
           enumerable: true,
           get: () => {
@@ -164,7 +168,7 @@ describe("the queue's one rule for the next card", () => {
           }
         })
       })
-      cards.ordered = counted
+      cards['ordered'] = counted
       for (let selection = 0; selection < 10; selection += 1) {
         expect(next(journal)).toBe('C')
       }

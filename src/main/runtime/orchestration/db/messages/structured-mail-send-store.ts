@@ -1,5 +1,6 @@
 import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
+import type { SqliteRow } from '../../../../sqlite/sqlite-statement'
 
 /** One orchestration message handed to a chat session: the agent-session operation id its send used. */
 export type StructuredMailSendRow = {
@@ -10,13 +11,30 @@ export type StructuredMailSendRow = {
   minted_at_ms: number
 }
 
+const SEND_COLUMNS = 'mailbox_handle, message_id, session_id, operation_id, minted_at_ms'
+
+/** A saved send, read column by column: a row whose values don't fit is not one this build wrote. */
+function readStructuredMailSendRow(row: SqliteRow): StructuredMailSendRow | undefined {
+  const { mailbox_handle, message_id, session_id, operation_id, minted_at_ms } = row
+  return typeof mailbox_handle === 'string' &&
+    typeof message_id === 'string' &&
+    typeof session_id === 'string' &&
+    typeof operation_id === 'string' &&
+    typeof minted_at_ms === 'number'
+    ? { mailbox_handle, message_id, session_id, operation_id, minted_at_ms }
+    : undefined
+}
+
 export function getStructuredMailSends(
   this: OrchestrationDb,
   mailboxHandle: string
 ): StructuredMailSendRow[] {
   return this.db
-    .prepare('SELECT * FROM structured_mail_sends WHERE mailbox_handle = ? ORDER BY minted_at_ms')
-    .all(mailboxHandle) as StructuredMailSendRow[]
+    .prepare(
+      `SELECT ${SEND_COLUMNS} FROM structured_mail_sends WHERE mailbox_handle = ? ORDER BY minted_at_ms`
+    )
+    .all(mailboxHandle)
+    .flatMap((row) => readStructuredMailSendRow(row) ?? [])
 }
 
 export function getStructuredMailSend(
@@ -24,17 +42,19 @@ export function getStructuredMailSend(
   mailboxHandle: string,
   messageId: string
 ): StructuredMailSendRow | undefined {
-  return this.db
-    .prepare('SELECT * FROM structured_mail_sends WHERE mailbox_handle = ? AND message_id = ?')
-    .get(mailboxHandle, messageId) as StructuredMailSendRow | undefined
+  const row = this.db
+    .prepare(
+      `SELECT ${SEND_COLUMNS} FROM structured_mail_sends WHERE mailbox_handle = ? AND message_id = ?`
+    )
+    .get(mailboxHandle, messageId)
+  return row && readStructuredMailSendRow(row)
 }
 
 export function getStructuredMailSendMailboxes(this: OrchestrationDb): string[] {
-  return (
-    this.db.prepare('SELECT DISTINCT mailbox_handle FROM structured_mail_sends').all() as {
-      mailbox_handle: string
-    }[]
-  ).map((row) => row.mailbox_handle)
+  return this.db
+    .prepare('SELECT DISTINCT mailbox_handle FROM structured_mail_sends')
+    .all()
+    .flatMap(({ mailbox_handle }) => (typeof mailbox_handle === 'string' ? [mailbox_handle] : []))
 }
 
 /** Reserve a send before the host call: its record and the message's delivered stamp land together,

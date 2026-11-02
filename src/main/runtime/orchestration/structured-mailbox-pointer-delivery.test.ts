@@ -108,6 +108,8 @@ function harness(options: { busy?: boolean } = {}) {
       return true
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every OrchestrationDb method the delivery and its custody reads call; the class's other members are never reached.
+  const orchestrationDb = db as unknown as OrchestrationDb
   const host: StructuredMailboxPointerHost = {
     currentFence: () => 4,
     watchJournal: (sessionId, onActivity) => {
@@ -140,7 +142,7 @@ function harness(options: { busy?: boolean } = {}) {
     })
   }
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
-    getDb: () => db as never,
+    getDb: () => orchestrationDb,
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: (handle) =>
       handle === mailbox && !ended ? { sessionId: owner, dispatchId: 'd1' } : null,
@@ -169,7 +171,7 @@ function harness(options: { busy?: boolean } = {}) {
             messages: [{ messageId: id, runId: 'run_1', from: 'term_coord' }]
           }
         },
-        db as never
+        orchestrationDb
       ),
     mail,
     records,
