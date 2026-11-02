@@ -164,14 +164,12 @@ test.describe('PR comments sidebar cards view', () => {
     await visibleQueueButton.click()
     await expect(visibleQueueButton).toBeHidden()
     await expect(
-      orcaPage.getByRole('button', { name: 'Send 1 queued comments to AI' })
+      orcaPage.getByRole('button', { name: 'Send 1 queued comment to AI' })
     ).toBeVisible()
     await expect(orcaPage.getByText('Queued', { exact: true })).toBeVisible()
 
     await orcaPage.getByRole('button', { name: 'Clear queued comments' }).click()
-    await expect(
-      orcaPage.getByRole('button', { name: 'Send 1 queued comments to AI' })
-    ).toBeHidden()
+    await expect(orcaPage.getByRole('button', { name: 'Send 1 queued comment to AI' })).toBeHidden()
     await openThreadCard.hover()
     await expect(visibleQueueButton).toBeVisible()
 
@@ -183,7 +181,7 @@ test.describe('PR comments sidebar cards view', () => {
     await expect(queueMenuItem).toBeHidden()
 
     await expect(
-      orcaPage.getByRole('button', { name: 'Send 1 queued comments to AI' })
+      orcaPage.getByRole('button', { name: 'Send 1 queued comment to AI' })
     ).toBeVisible()
     await expect(orcaPage.getByText('Queued', { exact: true })).toBeVisible()
 

@@ -148,25 +148,28 @@ export async function installFinalActivationGate(page: Page, targetPath: string)
 export async function injectSameIdLocalActivationCollision(
   page: Page,
   targetPath: string,
-  localPath: string
+  localPath: string,
+  waitForActivationGate = true
 ): Promise<ActivationCollision> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          () =>
-            (
-              window as typeof window & {
-                __pr11346ActivationGate?: { waiting: boolean }
-              }
-            ).__pr11346ActivationGate?.waiting ?? false
-        ),
-      { timeout: 60_000 }
-    )
-    .toBe(true)
+  if (waitForActivationGate) {
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (
+                window as typeof window & {
+                  __pr11346ActivationGate?: { waiting: boolean }
+                }
+              ).__pr11346ActivationGate?.waiting ?? false
+          ),
+        { timeout: 60_000 }
+      )
+      .toBe(true)
+  }
 
   return page.evaluate(
-    ({ localCollisionPath, runtimePath }) => {
+    ({ localCollisionPath, runtimePath, waitForActivationGate }) => {
       const store = window.__store
       const gateWindow = window as typeof window & {
         __pr11346ActivationGate?: {
@@ -175,7 +178,7 @@ export async function injectSameIdLocalActivationCollision(
         }
       }
       const gate = gateWindow.__pr11346ActivationGate
-      if (!store || !gate) {
+      if (!store || (waitForActivationGate && !gate)) {
         throw new Error('Activation gate unavailable')
       }
       const state = store.getState()
@@ -217,16 +220,16 @@ export async function injectSameIdLocalActivationCollision(
           ...state.worktreesByRepo,
           [localRepoId]: [localWorktree]
         },
-        fetchWorktrees: gate.originalFetchWorktrees
+        fetchWorktrees: gate?.originalFetchWorktrees ?? state.fetchWorktrees
       })
-      gate.release()
+      gate?.release()
       delete gateWindow.__pr11346ActivationGate
       return {
         localWorktreeId: localWorktree.id,
         runtimeWorktreeId: runtimeWorktree.id
       }
     },
-    { localCollisionPath: localPath, runtimePath: targetPath }
+    { localCollisionPath: localPath, runtimePath: targetPath, waitForActivationGate }
   )
 }
 

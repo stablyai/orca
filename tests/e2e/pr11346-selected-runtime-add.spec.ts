@@ -131,6 +131,7 @@ async function runSelectedRuntimeAddJourney(
       fixture.localCloneCollisionPath
     )
     await expect(gitDialog).toBeHidden({ timeout: 30_000 })
+    await expectRuntimeActivation(client.page, gitCollision)
     measurements.gitAddMs = Date.now() - startedAt
 
     startedAt = Date.now()
@@ -144,6 +145,7 @@ async function runSelectedRuntimeAddJourney(
       fixture.localCreateCollisionPath
     )
     await expect(folderDialog).toBeHidden({ timeout: 30_000 })
+    await expectRuntimeActivation(client.page, folderCollision)
     measurements.folderAddMs = Date.now() - startedAt
 
     startedAt = Date.now()
@@ -592,9 +594,7 @@ async function runSelectedRuntimeAddJourney(
         clonedRepoPath,
         createdRepoPath,
         environmentId,
-        folderCollisionId,
         folderPath,
-        gitCollisionId,
         gitPath,
         nestedParentPath,
         nestedRepoPaths
@@ -610,20 +610,8 @@ async function runSelectedRuntimeAddJourney(
           createdOwner:
             state?.repos.find((repo) => repo.path === createdRepoPath)?.executionHostId ?? null,
           folderKind: state?.repos.find((repo) => repo.path === folderPath)?.kind ?? null,
-          folderSameIdHosts:
-            Object.values(state?.worktreesByRepo ?? {})
-              .flat()
-              .filter((worktree) => worktree.id === folderCollisionId)
-              .map((worktree) => worktree.hostId ?? 'local')
-              .sort() ?? [],
           folderOwner:
             state?.repos.find((repo) => repo.path === folderPath)?.executionHostId ?? null,
-          gitSameIdHosts:
-            Object.values(state?.worktreesByRepo ?? {})
-              .flat()
-              .filter((worktree) => worktree.id === gitCollisionId)
-              .map((worktree) => worktree.hostId ?? 'local')
-              .sort() ?? [],
           gitOwner: state?.repos.find((repo) => repo.path === gitPath)?.executionHostId ?? null,
           nestedGroupOwner: nestedGroup?.executionHostId ?? null,
           nestedRepoOwners: nestedRepos.map((repo) => repo.executionHostId ?? null).sort(),
@@ -639,9 +627,7 @@ async function runSelectedRuntimeAddJourney(
         clonedRepoPath: fixture.clonedRepoPath,
         createdRepoPath: fixture.createdRepoPath,
         environmentId: client.environmentId,
-        folderCollisionId: folderCollision.runtimeWorktreeId,
         folderPath: fixture.folderPath,
-        gitCollisionId: gitCollision.runtimeWorktreeId,
         gitPath: fixture.gitPath,
         nestedParentPath: fixture.nestedParentPath,
         nestedRepoPaths: fixture.nestedRepoPaths
@@ -654,14 +640,19 @@ async function runSelectedRuntimeAddJourney(
       expectedOwner: `runtime:${client.environmentId}`,
       folderKind: 'folder',
       folderOwner: `runtime:${client.environmentId}`,
-      folderSameIdHosts: ['local', `runtime:${client.environmentId}`],
       gitOwner: `runtime:${client.environmentId}`,
-      gitSameIdHosts: ['local', `runtime:${client.environmentId}`],
       nestedGroupOwner: `runtime:${client.environmentId}`,
       nestedRepoOwners: [`runtime:${client.environmentId}`, `runtime:${client.environmentId}`],
       nestedReposInGroup: true
     })
 
+    // Local inventory refresh replaces transient collision rows; seed the next action again.
+    await injectSameIdLocalActivationCollision(
+      client.page,
+      fixture.gitPath,
+      fixture.localCloneCollisionPath,
+      false
+    )
     const terminalActivation = await client.page.evaluate(
       async ({ environmentId, worktreeId }) => {
         const bridge = (
@@ -677,17 +668,18 @@ async function runSelectedRuntimeAddJourney(
         if (!bridge || !store) {
           throw new Error('Runtime terminal activation bridge unavailable')
         }
+        const sameIdHosts = Object.values(store.getState().worktreesByRepo)
+          .flat()
+          .filter((worktree) => worktree.id === worktreeId)
+          .map((worktree) => worktree.hostId ?? 'local')
+          .sort()
         const outcome = await bridge.createTerminal({ environmentId, worktreeId })
         const state = store.getState()
         return {
           activeHostId: state.activeWorkspaceExecutionHostId,
           activeWorktreeId: state.activeWorktreeId,
           outcome,
-          sameIdHosts: Object.values(state.worktreesByRepo)
-            .flat()
-            .filter((worktree) => worktree.id === worktreeId)
-            .map((worktree) => worktree.hostId ?? 'local')
-            .sort()
+          sameIdHosts
         }
       },
       {
