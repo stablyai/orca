@@ -754,7 +754,7 @@ describe('re-adding a tombstoned row', () => {
   })
 })
 
-it('retires unknown execution debt with the submission tombstone', () => {
+it('retains unknown proof identity when a context tombstone removes its visible item', () => {
   const state = fold([
     {
       kind: 'submission',
@@ -781,6 +781,13 @@ it('retires unknown execution debt with the submission tombstone', () => {
       ...base(3)
     }
   ])
-  expect(state.submissions.has('retired')).toBe(false)
-  expect(journalInputOrder(state).unsettledSubmissions()).toEqual([])
+  expect(state.items.has(agentJournalSubmissionKey('retired'))).toBe(false)
+  expect(state.submissions.get('retired')).toMatchObject({
+    dispatchState: 'unknown',
+    payloadFingerprint: 'retired'
+  })
+  expect(journalInputOrder(state).unsettledSubmissions()).toEqual([
+    state.submissions.get('retired')
+  ])
+  expect(journalInputOrder(state).place('retired')).toBeUndefined()
 })

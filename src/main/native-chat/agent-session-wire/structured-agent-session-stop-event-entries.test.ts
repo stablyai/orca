@@ -1,6 +1,11 @@
 import { afterEach, expect, it } from 'vitest'
 import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
 import {
+  openTestJournalHostDatabase,
+  readTestJournalOutcomes
+} from '../agent-session-journal/journal-host-database-test-support'
+import { outcomeFormat1StoredScalars } from '../agent-session-journal/journal-outcome-format-1'
+import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,
   hostTestOperationId
@@ -24,13 +29,18 @@ function journal() {
   return value
 }
 function stopEvents(): JournalStopEvent[] {
-  const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
-  if (!since.ok) {
-    throw new Error('expected current journal rows')
+  const events = new Map<number, JournalStopEvent>()
+  for (const row of readTestJournalOutcomes(openTestJournalHostDatabase(rig.root).db, SESSION)) {
+    if (row.field === '$' && row.key === JSON.stringify('queuePauseMarks') && !row.deleted) {
+      const { latestStop } = outcomeFormat1StoredScalars.shape.queuePauseMarks.parse(
+        JSON.parse(row.json)
+      )
+      if (latestStop) {
+        events.set(latestStop.sequence, latestStop.event)
+      }
+    }
   }
-  return since.rows.flatMap((row) =>
-    row.kind === 'tombstone' && row.stopEvent ? [row.stopEvent] : []
-  )
+  return [...events.values()]
 }
 async function queuedDraft(text: string) {
   const queued = await rig.send(text, 'queue-if-active').result

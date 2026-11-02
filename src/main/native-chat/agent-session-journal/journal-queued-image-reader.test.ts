@@ -28,7 +28,7 @@ import {
 } from './journal-host-database-test-support'
 import type { AgentSessionJournal } from './journal-store'
 
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 const identity = {
   sessionId: 'recovery-images',
   workspaceId: 'ws',

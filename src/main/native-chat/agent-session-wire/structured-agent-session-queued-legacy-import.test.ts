@@ -125,7 +125,8 @@ function queueRows(sessionId = SESSION): string[] {
 }
 
 async function nothingSentTo(...cards: string[]): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 100))
+  await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
+  await rig.host.flushStreamedEvents(SESSION)
   for (const card of cards) {
     expect(await rig.handoff(card)).toBeUndefined()
   }
@@ -260,6 +261,8 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   expect(resent).not.toBe('att-edited')
   await fixture.rig.settleAccepted(resent, 'resent')
 
+  // Finish the automatic handoff too, so this reopen isolates import idempotence.
+  await rig.settleAccepted(await rig.handoffId('edited'), 'received-edited-card')
   // A third open finds nothing to move, and an old Delete still answers from its receipt.
   const rows = queueRows()
   await fixture.rig.restartHostProcess()

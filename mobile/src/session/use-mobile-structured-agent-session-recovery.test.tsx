@@ -119,7 +119,9 @@ describe('current recovery publication and normal Resume', () => {
   const appendText = vi.fn((_text: string) => true)
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
   const subscribe = vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
-    listener = onData
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+    }
     return vi.fn()
   })
   const client: RpcClient = {
@@ -211,7 +213,11 @@ describe('current recovery publication and normal Resume', () => {
       stored.delete(key)
     })
     sendRequest.mockImplementation(async (method) =>
-      method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
+      method === 'settings.get'
+        ? ok({ settings: { nativeChatQueueFollowUps: true } })
+        : method === 'agentSession.options'
+          ? ok({ models: [], current: {} })
+          : ok({})
     )
   })
 

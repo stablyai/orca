@@ -1,3 +1,4 @@
+import { journalInputSourceBody } from '../../../native-chat/agent-session-journal/journal-input-source'
 import {
   createQueuedImageWireRecord,
   streamState,
@@ -65,7 +66,7 @@ const { buildMobileNativeChatTransientData } = await vi.importActual<{
     pending: []
     imagePreviewsByMessageId: Record<string, string[]>
   }) => { data: NativeChatMessage[] }
-}>('../../../../../mobile/src/session/mobile-native-chat-render-data')
+}>('../../../../../mobile/src/session/native-chat/mobile-native-chat-render-data')
 const { isRenderableImageUri } = await vi.importActual<{
   isRenderableImageUri: (uri: string | undefined) => boolean
 }>('../../../../../mobile/src/session/native-chat/visual/mobile-native-chat-image-preview')
@@ -664,7 +665,10 @@ it.each([
 ])(
   'keeps ordinary uncertain original through cold/late proof, independent of a saved physical edit ($image/$edit)',
   async ({ image, edit }) => {
-    rig = await createQueuedMessageTestRig({ restartable: true })
+    rig = await createQueuedMessageTestRig({
+      restartable: true,
+      ...(edit ? { legacyInputs: true } : {})
+    })
     setStructuredAgentSessionHost(rig.host)
     const full = await imageBody('Original first paragraph.\n\nKeep the complete final paragraph.')
     const body = {
@@ -741,7 +745,11 @@ it.each([
       expect(journal().queuedMessages.get(`recovery:${id}`)).toEqual(edited)
     }
     const input = structuredClone(journal().queuedMessages.displayState().inputs.sources.get(id))
-    expect(input).toMatchObject({ body, options: original.options, fence: original.fence })
+    expect(journalInputSourceBody(input)).toEqual(body)
+    expect(input?.kind === 'submission' ? input.options : input?.submission.options).toEqual(
+      original.options
+    )
+    expect(input?.fence).toBe(original.fence)
     const beforeProof = journal().queuedMessages.get(`recovery:${id}`)
     expect(journal().submission(id)).toEqual(original)
     expect(journal().receiptFor(id)).toEqual(receipt)

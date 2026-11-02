@@ -1,7 +1,8 @@
+import { isolateJournalTransition } from './journal-reducer-transition'
 import { journalInputOrder } from './journal-input-order'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDispatchRowApplies, queuedHandOffInDoubt } from './journal-dispatch-settlement'
-import { legacyQueuedChange, unanswered } from './journal-queue-legacy-change'
+import { legacyQueuedChange } from './journal-queue-legacy-change'
 export { legacyQueuedChange } from './journal-queue-legacy-change'
 import { journalQueueRowBuilder, type JournalQueuedChange } from './journal-queue-events'
 import { queuedCardFromChange } from './journal-queue-fold'
@@ -26,7 +27,6 @@ type LegacyDeps = Pick<
 export class LegacyQueuedCards {
   private revision = 0
   private stored: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
-  private readonly changes = new Map<string, JournalQueuedChange>()
   private readonly witnesses = new Map<string, { messageId: string; change: JournalQueuedChange }>()
   private viewed: {
     owner: JournalReducerState
@@ -57,21 +57,23 @@ export class LegacyQueuedCards {
     }
     const state = this.deps.state()
     if (this.viewed?.key !== key || this.viewed.owner !== state) {
-      const cards = this.rows().flatMap((row) => {
+      const cards: QueuedMessageRow[] = []
+      const handedOff: { card: QueuedMessageRow; submission: AgentJournalSubmission }[] = []
+      const byId = new Map<string, QueuedMessageRow>()
+      for (const row of this.rows()) {
         const change = this.change(row)
-        return change ? [queuedCardFromChange(state, row.messageId, change)] : []
-      })
-      const handedOff = cards.flatMap((card) => {
+        if (!change) {
+          continue
+        }
+        const card = queuedCardFromChange(state, row.messageId, change)
+        cards.push(card)
+        byId.set(card.messageId, card)
         const submission = selectedHandOff(state, card)
-        return submission ? [{ card, submission }] : []
-      })
-      this.viewed = {
-        owner: state,
-        key,
-        cards,
-        handedOff,
-        byId: new Map(cards.map((card) => [card.messageId, card]))
+        if (submission) {
+          handedOff.push({ card, submission })
+        }
       }
+      this.viewed = { owner: state, key, cards, handedOff, byId }
     }
     return this.viewed.cards
   }
@@ -98,20 +100,14 @@ export class LegacyQueuedCards {
       }
       return state
     }
-    const display = {
-      ...state,
-      normalizedHandOffs: new Set(state.normalizedHandOffs),
-      items: new Map(state.items),
-      submissions: new Map(state.submissions),
-      inputs: { ...state.inputs, presentations: new Map(state.inputs.presentations) }
-    }
-    for (const { card, submission: entry } of handedOff) {
-      const send = { ...entry }
-      display.submissions.set(send.clientMessageId, send)
-      display.inputs.presentations.set(send.clientMessageId, card)
-      foldQueuedHandOffInDoubt(send)
-      placeQueuedHandOffInDoubt(display, send)
-    }
+    const { state: display } = isolateJournalTransition(state, (draft) => {
+      for (const { card, submission: entry } of handedOff) {
+        const send = draft.submissions.get(entry.clientMessageId)!
+        draft.inputs.presentations.set(send.clientMessageId, card)
+        foldQueuedHandOffInDoubt(send)
+        placeQueuedHandOffInDoubt(draft, send)
+      }
+    })
     if (this.viewed) {
       this.viewed.display = display
     }
@@ -156,12 +152,6 @@ export class LegacyQueuedCards {
     const state = this.deps.state()
     if (state.queue.cards.has(row.messageId)) {
       return null
-    }
-    const cached = this.changes.get(row.messageId)
-    if (cached) {
-      return unanswered(queuedCardFromChange(state, row.messageId, cached), state.submissions)
-        ? cached
-        : null
     }
     return legacyQueuedChange(state, row)
   }
@@ -213,7 +203,6 @@ export class LegacyQueuedCards {
             ? null
             : legacyQueuedChange(this.deps.state(), row)
           if (change) {
-            this.changes.set(row.messageId, change)
             const state = this.deps.state()
             for (const send of journalInputOrder(state).linkedTo(row.messageId)) {
               if (journalDispatchRowApplies(send)) {

@@ -31,6 +31,9 @@ export function readJournalOutcomes(
   baseline?: JournalReducerState
 ): JournalReducerState {
   const newest = db.prepare(JOURNAL_NEWEST_OUTCOME_SQL)
+  const recoveries = [...(baseline?.queue.cards.values() ?? [])].flatMap((card) =>
+    card.recovers ? [{ id: card.messageId, recovers: card.recovers }] : []
+  )
   const prefix = detachJournalNativePrefix(baseline)
   const fold = new JournalOutcomeFold()
   let after = { field: '', key: '' }
@@ -38,6 +41,13 @@ export function readJournalOutcomes(
     const row = newest.get(source.generation, after.field, after.key, source.through)
     if (!row) {
       const state = fold.finish(sessionId, epoch, source.through, baseline)
+      // Tail values omit derived recovery links; only the same raw-prefix incarnation inherits one.
+      for (const { id, recovers } of recoveries) {
+        const card = state.queue.cards.get(id)
+        if (card && !fold.replaced('queue.cards', id)) {
+          card.recovers = recovers
+        }
+      }
       restoreJournalNativeState(db, state, source.format, fold, prefix)
       return state
     }

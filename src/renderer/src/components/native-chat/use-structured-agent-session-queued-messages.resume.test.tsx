@@ -211,8 +211,8 @@ describe('published recovery membership through the Resume controller', () => {
         </TooltipProvider>
       )
       expect(screen.getAllByRole('listitem')).toHaveLength(2)
-      expect(screen.queryAllByRole('button', { name: 'Send' })).toHaveLength(0)
-      expect(screen.getAllByRole('button', { name: 'Steer' })).toHaveLength(2)
+      expect(screen.getAllByRole('button', { name: 'Send' })).toHaveLength(2)
+      expect(screen.queryAllByRole('button', { name: 'Steer' })).toHaveLength(0)
       expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(2)
       await act(() => fireEvent.click(screen.getByRole('button', { name: 'Resume' })))
       expect(mocks.call).toHaveBeenCalledExactlyOnceWith(

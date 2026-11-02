@@ -236,7 +236,7 @@ it('publishes the complete original and exact compact retry tuple through instal
 })
 
 it('keeps a saved physical hold independent while its own rejected retry blocks the ordered suffix', async () => {
-  rig = await createQueuedMessageTestRig({ restartable: true })
+  rig = await createQueuedMessageTestRig({ restartable: true, legacyInputs: true })
   setStructuredAgentSessionHost(rig.host)
   const body: AgentJournalMessageItem = {
     kind: 'message',

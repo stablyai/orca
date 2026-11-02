@@ -82,11 +82,12 @@ export function restoreRetainedJournalInputs(
     const decision = latest
       ? latestSubmission.get(source.generation, JSON.stringify(latest), source.through)
       : undefined
+    const decisionSequence = typeof decision?.seq === 'number' ? decision.seq : Infinity
     const terminalBeforeSelection =
       send &&
       (send.dispatchState === 'accepted' || send.dispatchState === 'rejected') &&
       (send.dispatchState === 'accepted'
-        ? (state.receipts.get(latest!)?.cursor.sequence ?? decision?.seq ?? Infinity) < value.seq
+        ? (state.receipts.get(latest!)?.cursor.sequence ?? decisionSequence) < value.seq
         : typeof decision?.seq === 'number' && decision.seq < value.seq)
     const selected =
       card.consumedAs ??

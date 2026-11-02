@@ -145,10 +145,10 @@ it.each([100, 1000])(
         ...emptyLegacyCounts(),
         displays: 2,
         handoffApplications: 2 * n,
-        itemCopies: 2,
-        itemEntries: 2 * n + 3,
-        submissionCopies: 2,
-        submissionEntries: 2 * (n + 1)
+        itemCopies: 0,
+        itemEntries: 0,
+        submissionCopies: 0,
+        submissionEntries: 0
       },
       failure: emptyLegacyCounts()
     })
@@ -174,10 +174,10 @@ it.each([100, 1000])(
         ...emptyLegacyCounts(),
         displays: 1,
         handoffApplications: n,
-        itemCopies: 1,
-        itemEntries: n + 3,
-        submissionCopies: 1,
-        submissionEntries: n + 1
+        itemCopies: 0,
+        itemEntries: 0,
+        submissionCopies: 0,
+        submissionEntries: 0
       },
       failure: emptyLegacyCounts()
     })
@@ -201,10 +201,10 @@ it.each([100, 1000])(
       ...emptyLegacyCounts(),
       displays: 1,
       handoffApplications: n,
-      itemCopies: 1,
-      itemEntries: n + 4,
-      submissionCopies: 1,
-      submissionEntries: n + 1
+      itemCopies: 0,
+      itemEntries: 0,
+      submissionCopies: 0,
+      submissionEntries: 0
     }
     expect(failure).toEqual({
       upstream: emptyLegacyCounts(),

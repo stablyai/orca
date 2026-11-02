@@ -334,6 +334,7 @@ describe('internal publication lifetime, independently of presentation', () => {
       expect(second.readSince(replacedCursor)).toEqual({
         ok: true,
         rows: [],
+        through: replacedCursor.sequence,
         cursor: replacedCursor
       })
       const plain: Map<string, StructuredAgentSessionHostSession> = sessions

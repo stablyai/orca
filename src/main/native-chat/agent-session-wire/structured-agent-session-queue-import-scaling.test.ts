@@ -89,11 +89,16 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
     const sets = vi.spyOn(Set.prototype, Symbol.iterator).mockImplementation(function (
       this: Set<unknown>
     ) {
-      return this.has('u-0') ? counted(setIterator.call(this), true) : setIterator.call(this)
+      return this === journal['state'].normalizedHandOffs
+        ? counted(setIterator.call(this), true)
+        : setIterator.call(this)
     })
     const gets = vi.spyOn(Map.prototype, 'get')
+    const draftGets = vi.spyOn(JournalDraftMap.prototype, 'get')
     const sourceGets = () =>
-      gets.mock.contexts.filter((m) => m === display.items || m === display.submissions)
+      [...gets.mock.contexts, ...draftGets.mock.contexts].filter(
+        (m) => m === display.items || m === display.submissions
+      )
     const sorts = vi.spyOn(Array.prototype, 'sort')
     const json = vi.spyOn(JSON, 'stringify')
     const work = () => [
@@ -106,6 +111,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
     const reset = () => {
       keyVisits = 0
       gets.mockClear()
+      draftGets.mockClear()
       sorts.mockClear()
       json.mockClear()
     }
@@ -143,9 +149,8 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(journal.queuedMessages.displayState() === display).toBe(false)
       expect(journal.snapshot()).not.toBe(snapshot)
       feed.publish(SESSION, journal)
-      // Import normalizes the one affected submission and refreshes its derived entered index.
-      // Each touched map key is listed for encoding and adoption; no other history key is visited.
-      expect(work()).toEqual([corrections + (adopt ? 0 : 2 * 2), 1, 1])
+      // Count canonical normalization reads, not the draft’s changed-key metadata.
+      expect(work()).toEqual([corrections, 1, 1])
       reset()
       await journal.appendItem(
         { provider: 'codex', threadId: 'progress', turnId: 't', ordinal: 0 },
@@ -163,7 +168,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(work()).toEqual([corrections, 1, 1])
       expect(journal.publicRead().normalizationKey).toBe(key)
     } finally {
-      for (const spy of [sets, gets, sorts, json, entriesRead, valuesRead]) {
+      for (const spy of [sets, gets, draftGets, sorts, json, entriesRead, valuesRead]) {
         spy.mockRestore()
       }
       if (!adopt) {
@@ -254,6 +259,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     return (
       typeof first === 'object' &&
       first !== null &&
+      !('kind' in first) &&
       'messageId' in first &&
       typeof first.messageId === 'string' &&
       first.messageId.startsWith('D')

@@ -1,3 +1,7 @@
+import * as legacyChange from '../agent-session-journal/journal-queue-legacy-change'
+import { readTestJournalOutcomes } from '../agent-session-journal/journal-host-database-test-support'
+import { outcomeFormat1EntryParsers } from '../agent-session-journal/journal-outcome-format-1'
+import { JournalDraftMap } from '../agent-session-journal/journal-transition-collections'
 import { appendTestJournalQueueRow } from '../agent-session-journal/journal-host-database-test-support'
 import { expect, it, vi } from 'vitest'
 import {
@@ -138,11 +142,16 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
     const sets = vi.spyOn(Set.prototype, Symbol.iterator).mockImplementation(function (
       this: Set<unknown>
     ) {
-      return this.has('u-0') ? counted(setIterator.call(this), true) : setIterator.call(this)
+      return this === journal['state'].normalizedHandOffs
+        ? counted(setIterator.call(this), true)
+        : setIterator.call(this)
     })
     const gets = vi.spyOn(Map.prototype, 'get')
+    const draftGets = vi.spyOn(JournalDraftMap.prototype, 'get')
     const sourceGets = () =>
-      gets.mock.contexts.filter((m) => m === display.items || m === display.submissions)
+      [...gets.mock.contexts, ...draftGets.mock.contexts].filter(
+        (m) => m === display.items || m === display.submissions
+      )
     const sorts = vi.spyOn(Array.prototype, 'sort')
     const json = vi.spyOn(JSON, 'stringify')
     const work = () => [
@@ -155,6 +164,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
     const reset = () => {
       keyVisits = 0
       gets.mockClear()
+      draftGets.mockClear()
       sorts.mockClear()
       json.mockClear()
     }
@@ -210,7 +220,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(work()).toEqual([corrections, 1, 1])
       expect(journal.publicRead().normalizationKey).toBe(key)
     } finally {
-      for (const spy of [sets, gets, sorts, json, entriesRead, valuesRead]) {
+      for (const spy of [sets, gets, draftGets, sorts, json, entriesRead, valuesRead]) {
         spy.mockRestore()
       }
       if (!adopt) {
@@ -244,6 +254,14 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     })
   )
   let visits = 0
+  let classified = 0
+  const classify = legacyChange.legacyQueuedChange
+  const classifications = vi
+    .spyOn(legacyChange, 'legacyQueuedChange')
+    .mockImplementation((...args) => {
+      classified++
+      return classify(...args)
+    })
   const flatMap = Array.prototype.flatMap
   const scans = vi.spyOn(Array.prototype, 'flatMap')
   scans.mockImplementation(function (this: { messageId?: string }[], callback, thisArg) {
@@ -261,19 +279,26 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     expect(visits).toBe(0)
     expect(journal.publicRead().normalizationKey).toBe('')
     expect(journal.queuedMessages.list().filter((c) => c.state === 'waiting')).toHaveLength(size)
-    expect(visits).toBe(size)
+    expect(visits).toBe(0)
+    expect(classified).toBe(0)
     for (const events of received) {
       const items = events.flatMap((e) => (e.type === 'batch' ? e.batch.items : []))
       expect(items.map((i) => i.body)).toContainEqual(message('progress'))
       expect(events.filter((e) => e.type === 'snapshot')).toHaveLength(0)
     }
     visits = 0
+    classified = 0
     for (let p = 0; p < 5; p++) {
       feed.publish(SESSION, journal)
     }
     expect(visits).toBe(0)
+    expect(classified).toBe(0)
     const answered = { turn: { ...turn, ordinal: -1 }, via: 'steer' as const }
     await handOff(journal, 'u', 'waiting-0', 'words', 'cancelled', 0, undefined, answered, true)
+    expect(classified).toBeLessThanOrEqual(2 * size)
+    classified = 0
+    const raw = structuredClone(journal.submission('u'))
+    const saved = readTestJournalOutcomes(db(), SESSION)
     feed.publish(SESSION, journal)
     const view = journal.publicRead()
     expect(view.normalizationKey).not.toBe('')
@@ -287,29 +312,34 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     expect(journal.submissionBody('u')).toEqual(message('words'))
     expect(journal.submission('u')).toMatchObject({ dispatchState: 'unknown' })
     expect(journal.submission('u')?.submittedSequence).toBeLessThan(journal.cursor().sequence)
-    expect(
-      db()
-        .prepare(`SELECT COUNT(*) AS count FROM journal_rows WHERE session_id = ?
-        AND json_extract(row_json, '$.kind') = 'dispatch'
-        AND json_extract(row_json, '$.clientMessageId') = 'u'
-        AND json_extract(row_json, '$.state') = 'rejected'`)
-        .get(SESSION)
-    ).toMatchObject({ count: 1 })
-    // Family eligibility and presentation do not rewrite the original durable observation.
+    const storedSends = saved
+      .filter(
+        (row) => row.field === 'submissions' && row.key === JSON.stringify('u') && !row.deleted
+      )
+      .map((row) => outcomeFormat1EntryParsers.submissions.parse(JSON.parse(row.json))[1])
+    expect(storedSends.at(-1)).toEqual(raw)
+    expect(raw).toMatchObject({ dispatchState: 'unknown', recovered: true })
+    expect(journal.submission('u')).toEqual(raw)
+    expect(readTestJournalOutcomes(db(), SESSION)).toEqual(saved)
+    // Derived family eligibility and presentation do not rewrite committed format-2 observations.
     expect(journal.receiptFor('u')).toBeNull()
     expect(journal.queuedMessages.get('waiting-0')).toMatchObject({
       state: 'dispatched',
       consumedAs: 'u'
     })
     expect(visits).toBeLessThanOrEqual(2 * size)
+    expect(classified).toBeLessThanOrEqual(size)
     visits = 0
+    classified = 0
     for (let p = 0; p < 5; p++) {
       feed.publish(SESSION, journal)
     }
     expect(visits).toBe(0)
+    expect(classified).toBe(0)
     expect(received.map((es) => es.filter((e) => e.type === 'snapshot').length)).toEqual([1, 1, 0])
   } finally {
     scans.mockRestore()
+    classifications.mockRestore()
     db().exec('DROP TRIGGER b2_raw_fail_import')
     await journal.close()
   }

@@ -7,10 +7,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  agentSessionJournalProviderHandle,
-  codexProviderHandle
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { nextSendableQueuedCard } from './queued-message-pause'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -557,45 +554,24 @@ it('does not end observation from warnings, retry errors or another attempt’s 
 it.each([100, 1000])(
   'does no accepted-history or spent-card visits per streamed row at N=%i',
   async (count) => {
-    const { applyJournalRow } = await import('./journal-reducer')
-    const state = journal.queuedMessages.displayState()
-    const base = () => ({
-      v: 1,
-      epoch: state.epoch,
-      seq: state.lastSequence + 1,
-      fence: 7,
-      ts: clock++
-    })
     for (let i = 0; i < count; i++) {
-      applyJournalRow(state, {
-        kind: 'submission',
+      const message = body('old')
+      await journal.appendSubmission({
         clientMessageId: `old-${i}`,
-        payloadFingerprint: 'old',
-        providerHandle: agentSessionJournalProviderHandle(identity),
-        body: body('old'),
-        ...base()
+        payloadFingerprint: agentSessionSendBodyFingerprint(identity.sessionId, message),
+        body: message,
+        fence: 7
       })
-      applyJournalRow(state, {
-        kind: 'dispatch',
+      await journal.resolveDispatch({
         clientMessageId: `old-${i}`,
         state: 'accepted',
-        providerItemId: null,
-        reason: null,
-        ...base()
+        providerIdentity: null,
+        fence: 7
       })
-      applyJournalRow(state, {
-        kind: 'queue',
-        messageId: `spent-${i}`,
-        change: { op: 'queued', body: body('spent'), position: i, queuedAt: null },
-        ...base()
-      })
-      applyJournalRow(state, {
-        kind: 'queue',
-        messageId: `spent-${i}`,
-        change: { op: 'withdrawn' },
-        ...base()
-      })
+      await journal.queuedMessages.insert({ messageId: `spent-${i}`, body: body('spent') })
+      await journal.queuedMessages.withdraw([`spent-${i}`])
     }
+    const state = journal.queuedMessages.displayState()
     const gate = () => ({ work: work(), record: records.agentSessionRecordFixture(lease) })
     readQueuePublication(journal, gate)
     let visits = 0
@@ -634,18 +610,13 @@ it.each([100, 1000])(
     const { structuredAgentSessionCommandTurnIdentity } =
       await import('../../../shared/agent-session/view/structured-agent-session-command-turn-identity')
     const command = { ...body('/compact'), command: { name: 'compact' as const } }
-    applyJournalRow(state, {
-      kind: 'queue',
-      messageId: 'command',
-      change: {
-        op: 'queued',
-        body: command,
-        position: 0,
-        queuedAt: null,
-        attempt: 'command-send',
-        returned: { reason: 'refused' }
-      },
-      ...base()
+    appendTestJournalQueueRow(openTestJournalHostDatabase(root).db, journal, 'command', {
+      op: 'queued',
+      body: command,
+      position: 0,
+      queuedAt: null,
+      attempt: 'command-send',
+      returned: { reason: 'refused' }
     })
     expect(state.queue.cards.get('command')?.state).toBe('returned')
     await journal.appendItem(

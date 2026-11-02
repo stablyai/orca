@@ -70,7 +70,7 @@ const sourceQueueChange = z.discriminatedUnion('op', [
   ...otherQueueChanges
 ])
 
-const storedRow = z.discriminatedUnion('kind', [
+const commonRows = [
   z.object({
     ...envelope,
     kind: z.literal('epoch'),
@@ -134,12 +134,15 @@ const storedRow = z.discriminatedUnion('kind', [
     mutations: z.array(
       z.discriminatedUnion('kind', [z.object(itemMutation), z.object(tombstoneMutation)])
     )
-  }),
+  })
+] as const
+const storedRow = z.discriminatedUnion('kind', [
+  ...commonRows,
   z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: queueChange })
 ])
 const strictRow = strictStorage(storedRow)
 const sourceRowDeclaration = z.discriminatedUnion('kind', [
-  ...storedRow.options.filter((schema) => schema.shape.kind.value !== 'queue'),
+  ...commonRows,
   z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: sourceQueueChange })
 ])
 const sourceRow = strictStorage(sourceRowDeclaration)

@@ -230,7 +230,7 @@ function headOfQueuePositions(
   }
   for (const { submission, body } of batch) {
     const id = body ? submission.clientMessageId : explicitHeads.get(submission.clientMessageId)
-    if (!id || keptIds.has(id)) {
+    if (!id || (body && keptIds.has(id))) {
       continue
     }
     if (!body && previousBoundary > 0) {
