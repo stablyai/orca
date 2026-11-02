@@ -123,7 +123,6 @@ describe('native chat subagent brief', () => {
     expect(framed.map((message) => text(message))).toEqual(['sample_greeting', 'Hello from Orca'])
     expect(
       nativeChatSpawnedSubagentId('spawn_agent', {
-        type: 'tool-result',
         output: '{"task_name":"/root/sample_greeting"}'
       })
     ).toBe('/root/sample_greeting')
