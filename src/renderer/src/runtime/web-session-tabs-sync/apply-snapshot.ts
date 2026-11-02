@@ -1,7 +1,9 @@
 import { agentSenderPublicationPatch } from '../agent-sender-associations'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { reconcileTerminalHostAliases } from '../terminal-host-alias-snapshot'
+import {
+  getTerminalHostAliasesFor,
+  reconcileTerminalHostAliases
+} from '../terminal-host-alias-snapshot'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -54,17 +56,7 @@ export function applyWebSessionTabsSnapshotWithContext(
       )
     : {}
   const worktreeId = rawSnapshot.worktree
-  if (
-    state.tabsByWorktree[worktreeId]?.some((tab) => {
-      const alias = tab.hostTerminalAlias
-      const host = parseExecutionHostId(alias?.executionHostId)
-      return (
-        host?.kind === 'runtime' &&
-        host.environmentId === environmentId &&
-        alias?.worktreeId === worktreeId
-      )
-    })
-  ) {
+  if (getTerminalHostAliasesFor(state, environmentId, worktreeId).length) {
     return reconcileTerminalHostAliases(state, state, rawSnapshot, environmentId)
   }
   // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — every mirror write (single, batch, operations) passes here.

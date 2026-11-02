@@ -4,13 +4,12 @@ import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { buildMirroredTerminalTabs } from './web-session-tabs-sync/terminal-build'
 import { indexMirroredTerminalSurfaces } from './web-session-tabs-sync/mirrored-terminal-handle-index'
 
-export function reconcileTerminalHostAliases(
+export function getTerminalHostAliasesFor(
   state: WebSessionTabsSyncState,
-  patch: WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
-  snapshot: RuntimeMobileSessionTabsResult,
-  environmentId: string
-): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
-  const aliases = Object.values(state.tabsByWorktree)
+  environmentId: string,
+  worktreeId: string
+) {
+  return Object.values(state.tabsByWorktree)
     .flat()
     .filter((tab) => {
       const alias = tab.hostTerminalAlias
@@ -18,9 +17,18 @@ export function reconcileTerminalHostAliases(
       return (
         host?.kind === 'runtime' &&
         host.environmentId === environmentId &&
-        alias?.worktreeId === snapshot.worktree
+        alias?.worktreeId === worktreeId
       )
     })
+}
+
+export function reconcileTerminalHostAliases(
+  state: WebSessionTabsSyncState,
+  patch: WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
+  snapshot: RuntimeMobileSessionTabsResult,
+  environmentId: string
+): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  const aliases = getTerminalHostAliasesFor(state, environmentId, snapshot.worktree)
   if (!aliases.length) {
     return patch
   }
