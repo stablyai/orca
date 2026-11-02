@@ -2,7 +2,10 @@ import { useCallback } from 'react'
 import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
-import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
+import {
+  NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY,
+  TERMINAL_SHORTCUT_STORAGE_KEYS
+} from './page-storage-keys'
 
 export function useShellPageStorageRefresh(refresh: () => Promise<unknown>, publish: () => void) {
   useFocusEffect(
@@ -18,13 +21,21 @@ export function useShellPageStorageRefresh(refresh: () => Promise<unknown>, publ
           (error: unknown) => console.warn('[web-shell] could not refresh page settings', error)
         )
       }
-      const stopWatching = TERMINAL_SHORTCUT_STORAGE_KEYS.map((key) =>
-        subscribeMirroredKey(key, (_value, source) => {
-          if (focused && source === 'persisted') {
+      const stopWatching = [
+        ...TERMINAL_SHORTCUT_STORAGE_KEYS.map((key) =>
+          subscribeMirroredKey(key, (_value, source) => {
+            if (focused && source === 'persisted') {
+              publish()
+            }
+          })
+        ),
+        // A pinch writes from the page. Other open chats have to see it without a reload.
+        subscribeMirroredKey(NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY, () => {
+          if (focused) {
             publish()
           }
         })
-      )
+      ]
       refreshAndPublish()
       const sub = AppState.addEventListener('change', (state) => {
         if (state === 'active') {

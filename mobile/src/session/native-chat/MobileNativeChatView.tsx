@@ -216,7 +216,7 @@ export function MobileNativeChatView({
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
-  const { fontScale, pinchGesture, pinchTarget } = useMobileNativeChatPinchGesture()
+  const { fontScale, scaleReady, pinchGesture, pinchTarget } = useMobileNativeChatPinchGesture()
 
   // Memoize list derivation to keep downstream autoscroll/renderItem dependencies stable.
   const { data } = useMemo(
@@ -326,6 +326,11 @@ export function MobileNativeChatView({
     inputRef
   )
   const emptyStateView = emptyState ? <MobileNativeChatEmptyStateView copy={emptyState} /> : null
+
+  // The stored size is already in fontScale when the page cache was published. Otherwise wait.
+  if (!scaleReady) {
+    return <View style={[styles.root, { paddingBottom: bottomPad }]} />
+  }
 
   if (readFailedFinally && emptyStateView) {
     return <View style={[styles.root, { paddingBottom: bottomPad }]}>{emptyStateView}</View>
