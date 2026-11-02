@@ -2321,10 +2321,7 @@
         },
         {
           "file": "src/renderer/src/lib/workspace-session-host-contention.test.ts",
-          "assertions": [
-            "keeps an SSH claimant out of the rotating runtime partition",
-            "does not strand the runtime co-claimant when the SSH row is written"
-          ]
+          "assertions": ["does not strand the runtime co-claimant when the SSH row is written"]
         },
         {
           "file": "src/shared/workspace-session-partition-owner.test.ts",
@@ -5781,7 +5778,7 @@
       "providers": ["remote-runtime", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "A headed macOS desktop host and separate paired Electron client exercise a real mirrored terminal link, owner-asserted host browser creation, exact host/client page identity, rendered DOM, explicit browser-tab activation, client external-browser suppression, exact host/client close convergence, and continued original-PTY liveness. Unit contracts cover OSC, WebLinksAddon, click fallback, explicit System Browser routing, failed creation, incapable runtimes, and unchanged direct SSH behavior.",
+      "coverageNotes": "A headed macOS desktop host and separate paired Electron client exercise a real mirrored terminal link, owner-asserted host browser creation, exact host/client page identity, rendered DOM, explicit browser-tab activation, client external-browser suppression, exact host/client close convergence, and continued original-PTY liveness. Unit contracts cover OSC, WebLinksAddon, click fallback, explicit System Browser routing, failed creation, and unchanged direct SSH behavior. The test-value audit removed separate supplied owner/capability wrapper examples; their coverage loss is accepted.",
       "motivatingLinks": [
         "https://stablygroup.slack.com/archives/C0AK2T3JEF4/p1786567689897109",
         "https://github.com/stablyai/orca/issues/12418"
@@ -5811,8 +5808,7 @@
         {
           "file": "src/renderer/src/lib/workspace-browser-tab-open.test.ts",
           "assertions": [
-            "an asserted runtime cannot fall back to a client browser",
-            "mismatched and incapable runtime owners fail closed"
+            "false or rejected runtime creation does not fall back to a client browser"
           ]
         },
         {
