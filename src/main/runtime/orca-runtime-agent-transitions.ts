@@ -91,13 +91,16 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     },
     getHandle: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
     waitForEmptyComposer: (handle, signal) => this.waitForEmptyClaudeComposer(handle, signal),
-    sendCommand: async (handle, text, signal) => {
+    sendCommand: async (handle, text, signal, stillWanted) => {
       // The pane may have returned to its shell since the hook row was written.
       const guard = createLaunchedAgentWriteGuard(this, 'claude')
       try {
         await this.sendTerminalAgentPrompt(handle, text, {
           inputKind: 'driving',
-          beforeWrite: guard.beforeWrite,
+          beforeWrite: async (ptyId) => {
+            await guard.beforeWrite(ptyId)
+            stillWanted()
+          },
           acceptQueued: true,
           observationTimeoutMs: 0,
           signal

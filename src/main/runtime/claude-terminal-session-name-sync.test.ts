@@ -119,7 +119,12 @@ describe('ClaudeTerminalSessionNameSync', () => {
     }
     await settle()
     expect(sendCommand).toHaveBeenCalledTimes(1)
-    expect(sendCommand).toHaveBeenCalledWith('handle-1', '/rename second', expect.anything())
+    expect(sendCommand).toHaveBeenCalledWith(
+      'handle-1',
+      '/rename second',
+      expect.anything(),
+      expect.any(Function)
+    )
   })
   it('lets a /rename typed in Claude win over a tab rename still waiting for the composer', async () => {
     const sendCommand = vi.fn(async () => {})
@@ -194,6 +199,23 @@ describe('ClaudeTerminalSessionNameSync', () => {
     waits.shift()?.()
     await settle()
     expect(sendCommand).not.toHaveBeenCalled()
+  })
+
+  it('drops a rename that goes stale at the write boundary', async () => {
+    let enabled = true
+    const written: string[] = []
+    const { sync } = harness({
+      isEnabled: () => enabled,
+      sendCommand: async (_handle, text, _signal, stillWanted) => {
+        // The write guard waits; sync is turned off meanwhile.
+        enabled = false
+        stillWanted()
+        written.push(text)
+      }
+    })
+    sync.tabRenamed('tab-1', 'late')
+    await settle()
+    expect(written).toEqual([])
   })
 
   it('rechecks a title shown before its transcript path was known', async () => {

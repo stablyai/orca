@@ -20,7 +20,13 @@ export type ClaudeTerminalSessionNameSyncDeps = {
   getHandle: (paneKey: string) => string | null
   /** Resolves true once the composer is at rest and empty; false when the wait gave up. */
   waitForEmptyComposer: (handle: string, signal: AbortSignal) => Promise<boolean>
-  sendCommand: (handle: string, text: string, signal: AbortSignal) => Promise<void>
+  /** `stillWanted` runs at the write boundary; it throws to drop the command unwritten. */
+  sendCommand: (
+    handle: string,
+    text: string,
+    signal: AbortSignal,
+    stillWanted: () => void
+  ) => Promise<void>
   renameTab: (handle: string, name: string) => Promise<void>
   readCustomTitle: (transcriptPath: string) => Promise<string | null>
 }
@@ -28,7 +34,11 @@ export type ClaudeTerminalSessionNameSyncDeps = {
 type PendingRename = { name: string; abort: AbortController }
 
 // The pane went back to its shell or away; its hook row outlived the agent.
-const EXPECTED_REFUSALS = new Set(['agent_not_in_foreground', 'terminal_handle_stale'])
+const EXPECTED_REFUSALS = new Set([
+  'agent_not_in_foreground',
+  'terminal_handle_stale',
+  'claude_session_name_sync_stale'
+])
 
 /** Mirrors a terminal tab's name and the Claude Code session name (`/rename`) both ways, on the execution host. */
 export class ClaudeTerminalSessionNameSync {
@@ -135,7 +145,17 @@ export class ClaudeTerminalSessionNameSync {
       if (this.pendingRenames.get(paneKey) === rename) {
         this.pendingRenames.delete(paneKey)
       }
-      await this.deps.sendCommand(handle, claudeRenameCommand(rename.name), rename.abort.signal)
+      await this.deps.sendCommand(
+        handle,
+        claudeRenameCommand(rename.name),
+        rename.abort.signal,
+        () => {
+          // The write guard can wait; the setting or the tab's panes may change meanwhile.
+          if (!this.canCommit(paneKey)) {
+            throw new Error('claude_session_name_sync_stale')
+          }
+        }
+      )
     } catch (error) {
       if (rename.abort.signal.aborted) {
         return
