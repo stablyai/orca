@@ -128,6 +128,12 @@ export function useHostScreenController({
     state
   })
 
+  // A new project changes the repo catalog as well as the rows, so force both past their throttles.
+  const refreshAfterProjectAdded = useCallback(() => {
+    void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+    void catalog.fetchWorktrees({ allowDuringModal: true, queueIfInFlight: true })
+  }, [catalog, fetchRepoMetadata])
+
   const hostPlatform = useResolvedHostPlatform(state, hostId)
   const displayWorktrees = useHostDisplayWorktrees(connState, state, hostPlatform)
   const feed = sidebarFeed?.feed ?? null
@@ -180,6 +186,7 @@ export function useHostScreenController({
     now,
     onHideSidebar,
     reconnectAttempts,
+    refreshAfterProjectAdded,
     relayRecovery,
     routeNotice,
     router,

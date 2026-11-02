@@ -683,7 +683,8 @@
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)",
       "searchWorkspaces": "Search workspaces",
-      "newWorkspace": "New workspace"
+      "newWorkspace": "New workspace",
+      "create": "Create"
     },
     "identity": {
       "hostNotFound": "Host not found"
@@ -830,6 +831,7 @@
       "done": "Done"
     },
     "hostWorkspaceListStates": {
+      "addProject": "Add a project",
       "checkHost": "Check that your computer is awake and Orca is running",
       "loadFailed": "Could not load workspaces from this host",
       "noMatches": "No matching workspaces",
@@ -4498,6 +4500,55 @@
           }
         }
       }
+    }
+  },
+  "addProject": {
+    "sheet": {
+      "projectAdded": "Project added",
+      "done": "Done",
+      "createWorkspace": "Create workspace",
+      "title": "Create",
+      "newWorkspace": "New workspace",
+      "newWorkspaceHint": "In a project already on this host",
+      "newProject": "New project",
+      "newProjectHint": "Create an empty repository on the host",
+      "cloneRepository": "Clone repository",
+      "cloneHint": "From a Git URL",
+      "gitMissingHint": "Git was not found on the host",
+      "addExistingFolder": "Add existing folder",
+      "addExistingHint": "A project or folder already on the host",
+      "useThisLocation": "Use this location",
+      "useThisFolder": "Use this folder"
+    },
+    "forms": {
+      "newProject": "New project",
+      "gitRepoMessage": "An empty Git repository on the host.",
+      "plainFolderMessage": "Git was not found on the host, so this creates a plain folder.",
+      "create": "Create",
+      "creating": "Creating…",
+      "name": "Name",
+      "cloneRepository": "Clone repository",
+      "cloneMessage": "Clone a Git repository onto the host.",
+      "clone": "Clone",
+      "cloning": "Cloning…",
+      "gitUrl": "Git URL",
+      "cloneHint": "Cloned into a folder named after the repository.",
+      "addExistingFolder": "Add existing folder",
+      "existingMessage": "A folder already on the host.",
+      "hostPath": "Host path",
+      "addAsFolder": "Add as folder",
+      "addGitProject": "Add Git project",
+      "locationOnHost": "Location on host",
+      "browseHostFolders": "Browse host folders",
+      "back": "Back"
+    },
+    "folderBrowser": {
+      "back": "Back",
+      "parentFolder": "Parent folder",
+      "noFolders": "No folders here"
+    },
+    "flow": {
+      "homeUnknown": "Couldn't read the host's home folder. Enter a full path instead of ~."
     }
   }
 }

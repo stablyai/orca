@@ -7,6 +7,7 @@ import { useWorkspaceServer } from '../transport/workspace-server'
 import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
+import { AddProjectSheet } from '../add-project/AddProjectSheet'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
@@ -30,6 +31,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     existingWorktreePaths,
     hostCapabilities,
     hostId,
+    refreshAfterProjectAdded,
     state
   } = controller
   const actionTarget = state.actionTarget
@@ -212,8 +214,17 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         onCancel={() => state.setConfirmRemoveHost(false)}
       />
 
+      <AddProjectSheet
+        visible={state.showAddProject}
+        client={client}
+        onClose={actions.closeAddProject}
+        onNewWorkspace={actions.openNewWorktreeForRepo}
+        onProjectAdded={refreshAfterProjectAdded}
+      />
+
       <NewWorktreeModalController
         visible={state.showNewWorktree}
+        initialRepoId={state.newWorktreeInitialRepoId}
         client={client}
         hostCapabilities={hostCapabilities}
         hostId={hostId}
