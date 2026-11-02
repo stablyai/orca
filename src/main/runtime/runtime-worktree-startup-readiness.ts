@@ -1,6 +1,8 @@
 import { waitForGeneratedAgentInput } from '../../shared/generated-agent-input-readiness'
-import { admitsGeneratedInput } from '../../shared/generated-agent-input-admission'
-import type { RuledScreen } from '../../shared/screen-input-veto'
+import {
+  admitsGeneratedInput,
+  type GeneratedInputScreen
+} from '../../shared/generated-agent-input-admission'
 import type { TerminalReadinessCreation } from './launched-agent-composer-readiness'
 import { isShellProcess } from '../../shared/agent-detection'
 import {
@@ -26,8 +28,8 @@ export type WorktreeStartupReadinessHost = {
   hasChildProcesses?: (ptyId: string) => Promise<boolean>
   subscribeToData: (ptyId: string, listener: (data: string) => void) => () => void
   readRecentOutput: (ptyId: string) => string | undefined
-  /** The host's current caught-up screen, null while it cannot be read. */
-  readInputScreen?: (ptyId: string) => Promise<RuledScreen | null>
+  /** The host's current screen: null while its model catches up, 'unknown' when it has none. */
+  readInputScreen?: (ptyId: string) => Promise<GeneratedInputScreen>
   /** The host model's current bracketed-paste mode, for an observer that missed its byte. */
   bracketedPaste?: (ptyId: string) => boolean
   generation?: (ptyId: string) => number

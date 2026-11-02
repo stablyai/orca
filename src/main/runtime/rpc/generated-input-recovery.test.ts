@@ -2,7 +2,7 @@ import './unused-default-rpc-methods.test-fixture'
 import { expect, it } from 'vitest'
 import { GeneratedAgentInputNotices } from '../generated-agent-input-notices'
 import { GENERATED_INPUT_METHODS } from './methods/generated-input'
-import type { RpcContext } from './core'
+import { eraseRpcMethods, type RpcContext, type RpcMethod } from './core'
 import { createGeneratedInputNoticeFeed } from '../../../shared/generated-input-notice-feed'
 import type { GeneratedAgentInputNotice } from '../../../shared/generated-agent-input-notice'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
@@ -17,14 +17,22 @@ function harness() {
   }
   // SAFETY: these handlers only consume the notice owner and subscription registry above.
   const context = { runtime, connectionId: 'viewer' } as unknown as RpcContext
-  const method = (name: string) => {
-    const found = GENERATED_INPUT_METHODS.find((entry) => entry.name === name)
+  const methods = eraseRpcMethods(GENERATED_INPUT_METHODS)
+  const find = (name: string) => {
+    const found = methods.find((entry) => entry.name === name)
     if (!found) {
       throw new Error(`missing ${name}`)
     }
     return found
   }
-  const subscribe = method('terminal.generatedInputNotices.subscribe')
+  const method = (name: string): RpcMethod => {
+    const found = find(name)
+    if ('stream' in found) {
+      throw new Error(`${name} is streaming`)
+    }
+    return found
+  }
+  const subscribe = find('terminal.generatedInputNotices.subscribe')
   const page = method('terminal.generatedInputNotices.page')
   const dismiss = method('terminal.dismissGeneratedInputNotice')
   const wire: string[] = []

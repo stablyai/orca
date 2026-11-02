@@ -58,6 +58,8 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
             observationTimeoutMs: 0
           }
     )
+    // A refusal can settle while the clock runs; it is read below, not left unhandled.
+    void submission.catch(() => undefined)
     await vi.advanceTimersByTimeAsync(40_000)
     await expect(submission).resolves.toMatchObject({ accepted: true })
     return {

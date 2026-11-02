@@ -122,8 +122,8 @@ it('keeps the same toasts when a subscription is replaced, reconciling only afte
   await settle()
   expect(state.dismissed).toEqual([])
 
-  const [first] = state.host.page().frames
-  state.host.dismiss(first.id)
+  const [first] = state.host!.page().frames
+  state.host!.dismiss(first.id)
   state.holdPages = false
   state.pageReads.splice(0).forEach((release) => release())
   await settle()

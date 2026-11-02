@@ -1,12 +1,13 @@
 import './unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { GENERATED_INPUT_METHODS } from './methods/generated-input'
-import type { RpcContext } from './core'
+import { eraseRpcMethods, type RpcContext, type RpcMethod } from './core'
 import { TerminalSendGeneratedInputParams } from '../../../shared/rpc-contract/generated-input-params'
 import { MOBILE_RPC_METHOD_ROUTES } from '../runtime-rpc/runtime-rpc-mobile-method-routing'
 
-const send = GENERATED_INPUT_METHODS.find(
-  (method) => method.name === 'terminal.sendGeneratedInput'
+const send = eraseRpcMethods(GENERATED_INPUT_METHODS).find(
+  (method): method is RpcMethod =>
+    method.name === 'terminal.sendGeneratedInput' && !('stream' in method)
 )!
 
 it('takes a send whose agent is not identified yet, and routes phones to the owning host', () => {

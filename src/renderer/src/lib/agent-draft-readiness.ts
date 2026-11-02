@@ -22,8 +22,10 @@ import {
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
-import { getRemoteRuntimePtyOwner } from '@/runtime/runtime-terminal-stream'
+import {
+  getRemoteRuntimePtyOwner,
+  subscribeToRuntimeTerminalData
+} from '@/runtime/runtime-terminal-stream'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 // Legacy adapter: only for a paired host older than the generated-input transaction. It applies
