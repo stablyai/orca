@@ -19,8 +19,8 @@ export function buildAgentTuiClearInput(lineCount: number): string {
 /** Injected line count is a lower bound because users type too. Bias upward: 41 Ctrl+U cleanly cleared a one-line buffer on both agents; undershoot leaves residue for the next send. */
 export const AGENT_TUI_CLEAR_LINE_SLACK = 8
 
-/** Bounds the burst so a pathological draft cannot emit an unbounded write. */
-export const AGENT_TUI_CLEAR_MAX_LINES = 40
+/** Claude Code 2.1 reads a 64-byte input chunk as a paste and drops its keys; 15 lines keeps a burst at 58 bytes. */
+export const AGENT_TUI_CLEAR_MAX_LINES = 15
 
 /** Widest burst we ever send — the remedy when a clear is not observed to land. */
 export const AGENT_TUI_CLEAR_INPUT_MAX = buildAgentTuiClearInput(AGENT_TUI_CLEAR_MAX_LINES)

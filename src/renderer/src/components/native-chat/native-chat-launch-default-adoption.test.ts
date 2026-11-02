@@ -3,7 +3,7 @@ import {
   clearNativeChatSessionOptionCacheForTests,
   seedNativeChatAppliedSessionOptions
 } from './native-chat-session-option-cache'
-import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
+import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat/input/native-chat-pty-session-options'
 import {
   resolveNativeChatSessionOptionDefaults,
   updateNativeChatSessionOptionDefaults

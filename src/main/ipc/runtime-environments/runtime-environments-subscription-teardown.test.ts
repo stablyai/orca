@@ -91,6 +91,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     updateSettings: ReturnType<typeof vi.fn>
     removeWorkspaceSessionHost: ReturnType<typeof vi.fn>
     setRemoteLayoutSnapshot: ReturnType<typeof vi.fn>
+    setHostRepoCatalogSnapshot: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -100,6 +101,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
       removeWorkspaceSessionHost: vi.fn(),
       setRemoteLayoutSnapshot: vi.fn(),
+      setHostRepoCatalogSnapshot: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
