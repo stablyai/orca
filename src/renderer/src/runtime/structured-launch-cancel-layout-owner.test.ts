@@ -1,3 +1,4 @@
+import { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 // @vitest-environment happy-dom
 
 // Local layout-owner main records cancellation; paired hosts retain tombstones in either build.
@@ -45,7 +46,6 @@ import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
-  markStructuredAgentSessionLaunchCancelled,
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState,
   type StructuredLaunchState

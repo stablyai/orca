@@ -13,7 +13,10 @@ import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
-import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import {
+  getLinkedWorkItemWorkspaceName,
+  getLinkedWorkItemSuggestedName
+} from '../../../../shared/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
   type TaskSourceContext,
@@ -25,7 +28,7 @@ import {
   type TaskSourceContextSummary,
   type TaskSourceHostAvailability
 } from '../task-source-context-summary'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
 import { cn } from '@/lib/utils'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 export function isGitLabMRFilter(

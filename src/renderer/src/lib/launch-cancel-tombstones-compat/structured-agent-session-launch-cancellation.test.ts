@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { markStructuredAgentSessionLaunchCancelled } from '../agent-session/launch/structured-agent-session-launch-cancel'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -7,7 +8,6 @@ import { suppressCancelledStructuredSessionTabs } from '@/runtime/structured-age
 import type { StructuredLaunchState } from '../agent-session/launch/structured-agent-session-launch-registry'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
-  markStructuredAgentSessionLaunchCancelled,
   retireAbsentStructuredAgentSessionLaunchCancellationTombstones,
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState
