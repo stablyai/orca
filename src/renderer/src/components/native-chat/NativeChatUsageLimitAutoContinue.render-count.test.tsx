@@ -21,7 +21,9 @@ import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { useNativeChatUsageLimitAutoContinue } from './use-native-chat-usage-limit-auto-continue'
 
 const mocks = vi.hoisted(() => ({
-  subscribeStatus: vi.fn(async () => ({ unsubscribe: () => {} })),
+  subscribeStatus: vi.fn<typeof OriginalClient.subscribeStructuredAgentSessionStatus>(async () => ({
+    unsubscribe: () => {}
+  })),
   call: vi.fn()
 }))
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
@@ -140,9 +142,10 @@ function Pane() {
 async function renderPane() {
   render(<Pane />)
   await act(async () => {})
-  const emit = mocks.subscribeStatus.mock.calls[0]?.[1] as unknown as (
-    event: AgentSessionStatusEvent
-  ) => void
+  const emit = mocks.subscribeStatus.mock.calls[0]?.[1]
+  if (!emit) {
+    throw new Error('the status feed did not subscribe')
+  }
   // Each update in its own turn, counted after the first snapshot settles.
   return async (event: AgentSessionStatusEvent | 'minute'): Promise<void> => {
     renders.pane = 0
