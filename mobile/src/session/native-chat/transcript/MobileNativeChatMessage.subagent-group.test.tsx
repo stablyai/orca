@@ -189,17 +189,16 @@ describe('mobile transcript roster row', () => {
     const onOpen = vi.fn()
     act(() => {
       renderer = create(
-        createElement(
-          MobileNativeChatOpenSubagentProvider,
-          { onOpen },
-          createElement(MobileNativeChatMessage, {
+        createElement(MobileNativeChatOpenSubagentProvider, {
+          onOpen,
+          children: createElement(MobileNativeChatMessage, {
             message: roster(
               [{ id: 'child-1', label: 'sample_greeting', state: 'completed' }],
               'Ran 1 subagent'
             ),
             subagentGroupsOpen: new Set(['group-1'])
           })
-        )
+        })
       )
     })
     const entry = renderer!.root.findAll((node) => byTestId(node, 'native-chat-open-subagent'))
