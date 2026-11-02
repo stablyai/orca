@@ -20,6 +20,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { hostTestOperationId } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { deriveContextTransferState } from '../agent-session-journal/context-transfer-state'
 
 let fixture: Awaited<ReturnType<typeof contextTransferFixture>>
 beforeEach(async () => {
@@ -151,6 +152,49 @@ describe('native saved-context recovery delivery', () => {
     expect(journal.itemBody(agentJournalSubmissionKey(id))).toEqual(
       hostTestMessage('Please use the saved number')
     )
+  })
+  it('keeps ingesting provider output when an accepted carrier receipt cannot be saved', async () => {
+    const { journal, native } = await fixture.recoverSavedChat(async () => ({
+      kind: 'unsupported'
+    }))
+    fixture.dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const id = await fixture.accept('Use the number now')
+    await eventually(() => expect(fixture.dispatch).toHaveBeenCalledTimes(2))
+    const encoded = fixture.dispatch.mock.calls.at(-1)![0].body
+    const sink = fixture.acquire.mock.calls.at(-1)![0].events
+    const identity = { provider: 'codex' as const, threadId: native(), turnId: 'echo', ordinal: 0 }
+    const db = openTestJournalHostDatabase(fixture.root).db
+    db.exec(`CREATE TEMP TRIGGER refuse_inline_receipt BEFORE INSERT ON agent_session_context_transfers
+      WHEN json_extract(NEW.record_json, '$.outcome.kind') = 'inline-accepted'
+      BEGIN SELECT RAISE(ABORT, 'receipt write failed'); END`)
+    try {
+      sink.appendItem(identity, encoded, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+      await fixture.host.flushStreamedEvents(SESSION)
+    } finally {
+      db.exec('DROP TRIGGER refuse_inline_receipt')
+    }
+    sink.appendItem(
+      { ...identity, ordinal: 1 },
+      { ...hostTestMessage('Provider reply 42'), role: 'assistant' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await fixture.host.flushStreamedEvents(SESSION)
+    expect((await fixture.submission(id))?.dispatchState).toBe('accepted')
+    expect(JSON.stringify(await fixture.host.journalSnapshot(SESSION))).toContain(
+      'Provider reply 42'
+    )
+    const records = journal.contextTransfers.read()
+    expect(records.find((row) => row.kind === 'delivery' && row.mode === 'inline')).toMatchObject({
+      carrierInputId: id,
+      writeStartedAt: expect.any(Number),
+      outcome: null
+    })
+    expect(
+      deriveContextTransferState(
+        records,
+        fixture.store.requireWritableRecord(SESSION).providerHandleChain
+      ).kind
+    ).toBe('uncertain')
   })
   it('parks Q behind known live work, then the real completion commit wakes idle replacement without replaying unknown P', async () => {
     const { native } = await fixture.recoverSavedChat(async () => ({ kind: 'unsupported' }))

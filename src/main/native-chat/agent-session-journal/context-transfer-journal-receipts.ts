@@ -1,6 +1,10 @@
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { deriveContextTransferState } from './context-transfer-state'
-import type { ContextTransferRecord } from './context-transfer-record'
+import type {
+  ContextTransferDelivery,
+  ContextTransferRecord,
+  ContextTransferTarget
+} from './context-transfer-record'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { matchesContextTransferTarget } from './context-transfer-echo'
 import type Database from '../../sqlite/sync-database'
@@ -13,6 +17,8 @@ import {
   contextTransferOwner
 } from './context-transfer-repository'
 import { isAgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
+
+const RECEIPT_SAVEPOINT = 'context_transfer_receipt'
 
 /** The reducer's acceptance, including late provider items, commits with its matching context receipt. */
 export function writeContextTransferJournalReceipts(
@@ -57,11 +63,41 @@ export function writeContextTransferJournalReceipts(
       records.push(record)
     }
   }
+  // A lost outcome leaves the started write uncertain, so it can neither replay nor end the provider's events.
+  const settle = (delivery: ContextTransferDelivery) => {
+    db.exec(`SAVEPOINT ${RECEIPT_SAVEPOINT}`)
+    try {
+      write(delivery)
+      db.exec(`RELEASE ${RECEIPT_SAVEPOINT}`)
+    } catch (error) {
+      db.exec(`ROLLBACK TO ${RECEIPT_SAVEPOINT}`)
+      db.exec(`RELEASE ${RECEIPT_SAVEPOINT}`)
+      console.warn('[agent-session-journal] saving a context delivery outcome failed:', {
+        sessionId: next.sessionId,
+        deliveryId: delivery.id,
+        error
+      })
+    }
+  }
   const owner = contextTransferOwner(db, next.sessionId)
   const state = deriveContextTransferState(records, owner?.providerHandleChain ?? [])
   const target = state.kind !== 'none' && state.kind !== 'unpublished' ? state.target : undefined
   if (!target) {
     return
+  }
+  const targets = new Map<string, ContextTransferTarget>()
+  const carriers = new Map<string, ContextTransferDelivery[]>()
+  for (const record of records) {
+    if (record.kind === 'target') {
+      targets.set(record.id, record)
+    } else if (
+      record.kind === 'delivery' &&
+      record.mode === 'inline' &&
+      record.carrierInputId &&
+      (record.outcome === null || record.outcome.kind === 'unknown')
+    ) {
+      carriers.set(record.carrierInputId, [...(carriers.get(record.carrierInputId) ?? []), record])
+    }
   }
   for (const row of rows) {
     if (
@@ -72,72 +108,67 @@ export function writeContextTransferJournalReceipts(
       if (!target.firstInputId) {
         write({ ...target, firstInputId: row.clientMessageId })
       }
-      for (const delivery of records) {
-        if (
-          delivery.kind === 'delivery' &&
-          delivery.targetId === target.id &&
-          delivery.mode === 'inline' &&
-          delivery.carrierInputId === row.clientMessageId &&
-          !delivery.writeStartedAt &&
-          !delivery.outcome
-        ) {
-          write({ ...delivery, writeStartedAt: row.ts })
+      const deliveries = carriers.get(row.clientMessageId) ?? []
+      deliveries.forEach((delivery, index) => {
+        if (delivery.targetId === target.id && !delivery.writeStartedAt && !delivery.outcome) {
+          deliveries[index] = { ...delivery, writeStartedAt: row.ts }
+          write(deliveries[index])
         }
-      }
+      })
     }
   }
-  for (const delivery of records) {
+  for (const [carrierInputId, deliveries] of carriers) {
+    const receipt = next.receipts.get(carrierInputId)
+    const submission = next.submissions.get(carrierInputId)
+    const accepted = receipt !== undefined && previous.receipts.get(carrierInputId) !== receipt
     if (
-      delivery.kind !== 'delivery' ||
-      delivery.mode !== 'inline' ||
-      !delivery.carrierInputId ||
-      !delivery.writeStartedAt ||
-      (delivery.outcome !== null && delivery.outcome.kind !== 'unknown')
+      !accepted &&
+      submission?.dispatchState !== 'unknown' &&
+      submission?.dispatchState !== 'rejected'
     ) {
       continue
     }
-    const receipt = next.receipts.get(delivery.carrierInputId)
-    const recipient = records.find((row) => row.kind === 'target' && row.id === delivery.targetId)
-    const identity = receipt && parseAgentJournalItemKey(receipt.providerItemId)
-    const directCarrier =
-      identity?.provider === 'orca' &&
-      identity.clientMessageId === delivery.carrierInputId &&
-      recipient?.id === target.id &&
-      rows.some(
-        (row) =>
-          row.kind === 'dispatch' &&
-          row.state === 'accepted' &&
-          row.clientMessageId === delivery.carrierInputId &&
-          row.fence === owner?.lease.runtimeFence
-      )
-    if (
-      receipt &&
-      identity &&
-      recipient?.kind === 'target' &&
-      recipient.targetLink &&
-      (directCarrier ||
-        matchesContextTransferTarget({
-          owner: () => owner,
-          sessionId: next.sessionId,
-          identity,
-          handle: recipient.targetLink.handle,
-          fence: next.submissions.get(delivery.carrierInputId)?.fence
-        })) &&
-      previous.receipts.get(delivery.carrierInputId) !== receipt
-    ) {
-      write({
-        ...delivery,
-        outcome: {
-          kind: 'inline-accepted',
-          at: receipt.acceptedAt,
-          clientMessageId: receipt.clientMessageId,
-          providerItemIdentity: receipt.providerItemId
-        }
-      })
-    } else {
-      const submission = next.submissions.get(delivery.carrierInputId)
-      if (submission?.dispatchState === 'unknown' && !delivery.outcome) {
-        write({
+    for (const delivery of deliveries) {
+      if (!delivery.writeStartedAt) {
+        continue
+      }
+      const recipient = targets.get(delivery.targetId)
+      const identity = accepted ? parseAgentJournalItemKey(receipt.providerItemId) : null
+      const directCarrier =
+        identity?.provider === 'orca' &&
+        identity.clientMessageId === carrierInputId &&
+        recipient?.id === target.id &&
+        rows.some(
+          (row) =>
+            row.kind === 'dispatch' &&
+            row.state === 'accepted' &&
+            row.clientMessageId === carrierInputId &&
+            row.fence === owner?.lease.runtimeFence
+        )
+      if (
+        accepted &&
+        identity &&
+        recipient?.targetLink &&
+        (directCarrier ||
+          matchesContextTransferTarget({
+            owner: () => owner,
+            sessionId: next.sessionId,
+            identity,
+            handle: recipient.targetLink.handle,
+            fence: submission?.fence
+          }))
+      ) {
+        settle({
+          ...delivery,
+          outcome: {
+            kind: 'inline-accepted',
+            at: receipt.acceptedAt,
+            clientMessageId: receipt.clientMessageId,
+            providerItemIdentity: receipt.providerItemId
+          }
+        })
+      } else if (submission?.dispatchState === 'unknown' && !delivery.outcome) {
+        settle({
           ...delivery,
           outcome: { kind: 'unknown', at, reason: 'The carrier has no proved provider receipt' }
         })
@@ -145,7 +176,7 @@ export function writeContextTransferJournalReceipts(
         submission?.dispatchState === 'rejected' &&
         readWholeAgentSessionFailureFact(submission.rejection)?.neverReachedAgent === true
       ) {
-        write({
+        settle({
           ...delivery,
           outcome: { kind: 'refused-before-write', at, failureKind: 'carrier-refused' }
         })
