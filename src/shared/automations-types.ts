@@ -31,7 +31,7 @@ export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean
 }
 
 export type AutomationSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
-export type AutomationRunUsageProvider = 'claude' | 'codex'
+export type AutomationRunUsageProvider = 'claude' | 'codex' | 'zeroclaw'
 export type AutomationRunUsageStatus = 'known' | 'unavailable'
 export type AutomationRunUsageAttribution = 'provider_session_time_window'
 export type AutomationRunUsageUnavailableReason =

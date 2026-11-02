@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { basename, join, type posix } from 'node:path'
+import { basename, dirname, join, type posix } from 'node:path'
 import type { SkillDiscoverySource, SkillProvider, SkillSourceKind } from '../../shared/skills'
 import type { AgentType } from '../../shared/agent-status-types'
 import type { Repo } from '../../shared/repo-types'
@@ -103,6 +103,9 @@ export function buildSkillDiscoverySources(
   const cwd = args.cwd ?? process.cwd()
   const providerRootOverrides =
     args.providerRootOverrides ?? (args.pathApi ? {} : resolveEnvironmentSkillProviderRoots())
+  const zeroclawBase = providerRootOverrides.zeroclaw
+    ? dirname(providerRootOverrides.zeroclaw)
+    : pathApi.join(home, '.zeroclaw')
   // Read HERMES_HOME only on this process's host; a custom path adapter describes another host with POSIX Hermes defaults.
   const hermesSkillsRoot = args.pathApi
     ? pathApi.join(home, '.hermes', 'skills')
@@ -185,6 +188,38 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'muse'
+    ),
+    source(
+      'home-openclaw',
+      'OpenClaw home',
+      pathApi.join(home, '.openclaw', 'skills'),
+      'home',
+      ['agent-skills'],
+      'openclaw'
+    ),
+    source(
+      'home-zeroclaw-data',
+      'ZeroClaw data skills',
+      pathApi.join(zeroclawBase, 'data', 'skills'),
+      'home',
+      ['agent-skills'],
+      'zeroclaw'
+    ),
+    source(
+      'home-zeroclaw-shared',
+      'ZeroClaw shared skills',
+      pathApi.join(zeroclawBase, 'shared', 'skills'),
+      'home',
+      ['agent-skills'],
+      'zeroclaw'
+    ),
+    source(
+      'home-zeroclaw-workspace',
+      'ZeroClaw workspace skills',
+      pathApi.join(zeroclawBase, 'workspace', 'skills'),
+      'home',
+      ['agent-skills'],
+      'zeroclaw'
     )
   ]
 

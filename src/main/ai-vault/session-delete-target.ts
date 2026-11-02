@@ -117,6 +117,17 @@ function sessionDeleteRemovals(args: {
     ]
   }
 
+  if (agent === 'zeroclaw') {
+    const sessionId = basename(resolvedPath, extname(resolvedPath))
+    if (!sessionId || sessionId === '.' || sessionId === '..') {
+      return null
+    }
+    return [
+      { path: subagentTranscriptsDirFor(resolvedPath), kind: 'directory', roots },
+      { path: resolvedPath, kind: 'file', roots }
+    ]
+  }
+
   return [{ path: resolvedPath, kind: 'file', roots }]
 }
 

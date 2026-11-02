@@ -442,6 +442,9 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('openclaw')).toBe(
       "cd '/tmp/openclaw' && openclaw --resume 'openclaw-session'"
     )
+    expect(commandByAgent.get('zeroclaw')).toBe(
+      "cd '/tmp/zeroclaw' && zeroclaw --session 'zeroclaw-session'"
+    )
     expect(commandByAgent.get('pi')).toBe("cd '/tmp/pi' && pi --session 'pi-session'")
     expect(commandByAgent.get('omp')).toBe(`cd '/tmp/omp' && omp --resume '${ompSessionFile}'`)
     expect(commandByAgent.get('prime-agent')).toBe(

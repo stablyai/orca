@@ -42,6 +42,7 @@ export const AGENT_KIND_VALUES = [
   'rovo',
   'hermes',
   'openclaw',
+  'zeroclaw',
   'copilot',
   'grok',
   'devin',
