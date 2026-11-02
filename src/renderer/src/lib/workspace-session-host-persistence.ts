@@ -210,7 +210,7 @@ function splitWorkspaceSessionForWrite(
     mode === 'patch'
       ? (state.hydratedRuntimeSessionHostIds ?? []).filter(
           (hostId) =>
-            catalogRuntimeHostIds.has(hostId) && !state.contestedHostWorkspaceSessions?.[hostId]
+            !state.contestedHostWorkspaceSessions?.[hostId]
         )
       : []
   // Use live tab catalogs for layouts-only patches; payload-only routing loses remote park scrollback in local pruning (#21295).

@@ -102,4 +102,11 @@ export function deleteOwnerKeyedSessionFields(
   if (next.activeWorktreeId === ownerKey) {
     next.activeWorktreeId = null
   }
+  if (next.sleepingAgentSessionsByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
+      if (record && record.worktreeId === ownerKey) {
+        delete next.sleepingAgentSessionsByPaneKey[paneKey]
+      }
+    }
+  }
 }
