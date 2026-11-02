@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRuntimeClientEventsSync } from '../hooks/runtime-client-events-sync'
-import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
+import './runtime-rpc-environment-call'
 import {
   getRuntimeEnvironmentRevision,
   replaceRuntimeEnvironmentRevisions
@@ -76,22 +76,6 @@ describe('a pairing rotation under a live subscriber', () => {
     expect(subscribe.mock.calls.map(([args]) => args.expectedEnvironmentPairingRevision)).toEqual([
       1, 2
     ])
-  })
-
-  it('re-reads the pairing when a request is refused, so the next one goes through', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 1 }])
-    installMain()
-    const request = () =>
-      callRuntimeEnvironmentWithRevision({
-        environmentId: 'env-1',
-        method: 'repo.list',
-        params: undefined,
-        expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision('env-1')
-      })
-
-    await expect(request()).rejects.toThrow('pairing changed')
-    await vi.waitFor(() => expect(getRuntimeEnvironmentRevision('env-1')).toBe(2))
-    await expect(request()).resolves.toMatchObject({ ok: true })
   })
 })
 

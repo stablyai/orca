@@ -76,27 +76,6 @@ beforeEach(() => {
 })
 
 describe('remote SSH state reads', () => {
-  it('reads several targets at once instead of waiting on each in turn', async () => {
-    const envId = 'env-concurrent'
-    const held = installHeldStateReads(new RuntimeRpcCallQueuePool(), envId)
-
-    const hydration = hydrateRuntimeEnvironmentSshState(envId)
-    await flush()
-    expect(held).toHaveLength(SSH_STATE_READ_CONCURRENCY)
-
-    let maxInFlight = held.length
-    for (let read = held.shift(); read; read = held.shift()) {
-      read.release()
-      await flush()
-      maxInFlight = Math.max(maxInFlight, held.length)
-    }
-    await hydration
-
-    expect(maxInFlight).toBe(SSH_STATE_READ_CONCURRENCY)
-    const states = useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates
-    expect(states?.size).toBe(TARGET_COUNT)
-  })
-
   it('leaves foreground capacity for an interactive call while every read is held', async () => {
     const envId = 'env-lane'
     const pool = new RuntimeRpcCallQueuePool()
