@@ -26,6 +26,7 @@ import { isKnownReadyPromptBody } from '../../terminal-wait-detection'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../../shared/agent-prompt-injection'
 import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'
 import { GeneratedAgentInputNotices } from '../../generated-agent-input-notices'
+import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
 
 /** Resolves with `fallback` once the operation's deadline passes, so no read outlives it. */
 export function boundedByDeadline<T>(read: Promise<T>, deadline: number, fallback: T): Promise<T> {
@@ -270,12 +271,7 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
       'submit' | 'generatedAgent' | 'inputDeadline' | 'observedReady' | 'generatedIntent'
     >,
     signal: AbortSignal | undefined
-  ): Promise<{
-    agent: TuiAgent | null
-    deadline: number
-    submit: boolean
-    intent: GeneratedInputIntent
-  }> {
+  ): Promise<Omit<GeneratedInputWait, 'signal' | 'observedReady'>> {
     const agent = this.generatedInputAgent(ptyId, options.generatedAgent)
     const deadline = options.inputDeadline ?? Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
     const submit = options.submit !== false
@@ -283,6 +279,8 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     const intent = options.generatedIntent ?? 'running'
     const wait = { agent, deadline, submit, intent, signal, observedReady: options.observedReady }
     if (!(await this.waitForGeneratedTerminalInput(ptyId, wait))) {
+      // A cancelled caller learns it was cancelled, as before, not that the agent refused.
+      assertAgentPromptRequestActive(signal)
       throw this.generatedInputRefusal(ptyId)
     }
     return { agent, deadline, submit, intent }

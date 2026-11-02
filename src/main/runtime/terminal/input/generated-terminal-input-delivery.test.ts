@@ -106,12 +106,8 @@ describe('one host transaction for generated input', () => {
       const controller = (
         runtime as unknown as { ptyController: { getForegroundProcess: () => Promise<string> } }
       ).ptyController
-      controller.getForegroundProcess = () =>
-        new Promise((resolve) => {
-          if (variant !== 'never answers') {
-            setTimeout(() => resolve('claude'), 120)
-          }
-        })
+      const answers: ((process: string) => void)[] = []
+      controller.getForegroundProcess = () => new Promise((resolve) => answers.push(resolve))
       const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
         text: 'late',
         submit: true,
@@ -119,6 +115,10 @@ describe('one host transaction for generated input', () => {
         timeoutMs: 60
       })
       expect(outcome).toBe('not-sent')
+      // The read answers only once the operation has already settled.
+      if (variant !== 'never answers') {
+        answers.forEach((answer) => answer('claude'))
+      }
       await new Promise((resolve) => setImmediate(resolve))
       expect(writes).toEqual([])
     }
