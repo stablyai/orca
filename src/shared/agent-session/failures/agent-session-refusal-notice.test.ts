@@ -27,6 +27,21 @@ describe('agentSessionRefusalCauseParts', () => {
       )
     }
   )
+
+  // A failed start the host refused for a running terminal says so; only a named chat is another chat.
+  it('names the terminal that holds the conversation unless the refusal names a chat', () => {
+    const held = agentSessionRefusalFailure({
+      code: 'agent_session_conflict',
+      details: { reason: 'conversationHeldElsewhere' }
+    })
+    expect(
+      agentSessionWriteNoticeEnglish(agentSessionRefusalCauseParts(held, { agentName: 'Claude' }))
+    ).toBe(
+      'Claude is already running this conversation in another terminal. Quit Claude there or close that terminal to continue here.'
+    )
+    const namingChat = { ...held, owner: { sessionId: 'chat-1', workspaceId: 'wt-1' } }
+    expect(agentSessionRefusalCauseParts(namingChat)).toEqual([])
+  })
 })
 
 describe('saved Arguments refusals', () => {

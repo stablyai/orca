@@ -196,7 +196,12 @@ describe('structured launch after a host-failed create', () => {
         sessionError: null,
         composerError: null
       })
-    ).toMatchObject([{ text: 'Chat could not be started.', action: { label: 'Retry' } }])
+    ).toMatchObject([
+      {
+        text: "Chat could not be started. Orca couldn't open this chat's history right now.",
+        action: { label: 'Retry' }
+      }
+    ])
     expect(createdOperations).toEqual([failedOperation])
     expect(retryStructuredAgentSessionLaunch(WORKTREE, sessionId)).toBe(true)
     await settle(sessionId)
