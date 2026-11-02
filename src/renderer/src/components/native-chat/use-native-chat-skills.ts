@@ -4,7 +4,7 @@ import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
-import { isNativeChatSkillForAgent } from '../../../../shared/native-chat-skill-visibility'
+import { isNativeChatSkillForAgent } from '../../../../shared/native-chat/input/native-chat-skill-visibility'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { emitNativeChatSkillDiscovery } from '@/lib/native-chat-telemetry'
 import {

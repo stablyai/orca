@@ -8,7 +8,7 @@ import {
   nativeChatPromptDismissals,
   forgetNativeChatPromptDismissalsForTab
 } from './native-chat-prompt-dismissals'
-import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
+import type { InteractivePromptCard } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 
 const PANE = 'tab-1:leaf-1'
 const question: InteractivePromptCard = {
