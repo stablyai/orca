@@ -125,6 +125,7 @@ it.each([
       disposed: false,
       createProcessExitState: () => ({ detector: { observe: vi.fn() } }),
       clearRegisteredStartupLaunchConfig: vi.fn(),
+      reconcileExitStartupAfterFreshStart: vi.fn(),
       registerEffectiveLaunchConfig: register,
       showSessionRestoredBanner: note,
       reportRemoteRendererSerializerReady: callbacksReady,
