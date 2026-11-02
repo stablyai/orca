@@ -7,8 +7,9 @@ const mocks = vi.hoisted(() => ({
   record: vi.fn(),
   readiness: vi.fn(),
   pins: vi.fn(),
-  live: vi.fn(async () => false),
-  remove: vi.fn()
+  inUse: vi.fn(async () => false),
+  remove: vi.fn(),
+  fenceHeld: false
 }))
 
 vi.mock('../managed-server/activation/orcad-activation-record-store', () => ({
@@ -19,7 +20,21 @@ vi.mock('../managed-server/lifecycle/orcad-managed-version-gc', async (importOri
   probeOrcadSlotReadiness: mocks.readiness
 }))
 vi.mock('../ssh/orcad-gc-transaction-pins', () => ({ readOrcadGcTransactionPins: mocks.pins }))
-vi.mock('../managed-server/install/orcad-remote-gc', () => ({ isOrcadInstallDirLive: mocks.live }))
+vi.mock('./wsl-orcad-slot-process-probe', () => ({ isWslOrcadSlotInUse: mocks.inUse }))
+// One activation fence per host: a second taker is told it is held, as the real lock does after its wait.
+vi.mock('../managed-server/activation/orcad-activation-lock', () => ({
+  withOrcadActivationLock: async <T>(_slot: unknown, run: () => Promise<T>, held: () => T) => {
+    if (mocks.fenceHeld) {
+      return held()
+    }
+    mocks.fenceHeld = true
+    try {
+      return await run()
+    } finally {
+      mocks.fenceHeld = false
+    }
+  }
+}))
 vi.mock('../managed-server/install/remote-install-gc', () => ({
   removeRemoteInstallVersionDir: mocks.remove
 }))
@@ -47,6 +62,7 @@ vi.mock('../ssh/remote-exec/remote-exec-command', () => ({
 }))
 
 import { removeFailedFreshWslOrcadInstall } from './wsl-orcad-failed-install-removal'
+import { withOrcadActivationLock } from '../managed-server/activation/orcad-activation-lock'
 import { installOrcadBundle } from '../managed-server/install/orcad-remote-install'
 import { uploadRemoteInstallDirectory } from '../managed-server/install/remote-install-transfers'
 import {
@@ -99,6 +115,7 @@ describe('removeFailedFreshWslOrcadInstall', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.installed.clear()
+    mocks.fenceHeld = false
     mocks.record.mockResolvedValue(
       withActivatedVersion(emptyOrcadActivationRecord(), OLD, null, new Date(0))
     )
@@ -120,6 +137,53 @@ describe('removeFailedFreshWslOrcadInstall', () => {
     expect(mocks.installed.has(NEW_DIR)).toBe(false)
     expect(await install()).toBe('uploaded')
     expect(uploadRemoteInstallDirectory).toHaveBeenCalledTimes(2)
+  })
+
+  it('checks and deletes under the activation fence, so a concurrent activator waits and re-uploads', async () => {
+    await install()
+    let resume = (): void => {}
+    mocks.record.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        resume = resolve
+      })
+      return emptyOrcadActivationRecord()
+    })
+    const removal = removeFailedFreshWslOrcadInstall(slot, failedFresh)
+    await vi.waitFor(() => expect(mocks.record).toHaveBeenCalled())
+
+    // Another connect reaching activation between the check and the delete finds the fence held.
+    const activator = await withOrcadActivationLock(
+      slot,
+      async () => 'launched',
+      () => 'held'
+    )
+    expect(activator).toBe('held')
+    resume()
+    await removal
+
+    expect(mocks.pins).toHaveBeenCalledWith(slot, { callerHoldsFence: true })
+    expect(mocks.installed.has(NEW_DIR)).toBe(false)
+    expect(await install()).toBe('uploaded')
+  })
+
+  it('keeps the copy when another activator already holds the fence', async () => {
+    await install()
+    mocks.fenceHeld = true
+
+    await removeFailedFreshWslOrcadInstall(slot, failedFresh)
+
+    expect(mocks.record).not.toHaveBeenCalled()
+    expect(mocks.remove).not.toHaveBeenCalled()
+    expect(await install()).toBe('reused')
+  })
+
+  it('asks the slot process probe, which also sees a daemon the candidate left there', async () => {
+    await removeFailedFreshWslOrcadInstall(slot, failedFresh)
+    const [, , , , { isDirLive }] = mocks.remove.mock.calls[0]
+    mocks.inUse.mockResolvedValueOnce(true)
+
+    await expect(isDirLive(NEW_DIR)).resolves.toBe(true)
+    expect(mocks.inUse).toHaveBeenCalledWith(slot, NEW_DIR)
   })
 
   it('also removes a failed first install, where nothing is active', async () => {
