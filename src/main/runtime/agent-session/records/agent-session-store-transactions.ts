@@ -90,6 +90,9 @@ export class AgentSessionStoreTransactions {
   private readonly admittedSends = new Map<string, number>()
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   private published: AgentSessionStoreState
+  /** Replaced only when a record joins or leaves, or a /clear links one conversation to the next:
+   *  lookups derived from every record's lineage stay valid across admission and lease writes. */
+  private lineage: object = {}
   /** Receipts co-written in one transaction build on each other's drafts, so adoption keeps both. */
   private staged: { transaction: number; draft: AgentSessionStoreState } | null = null
   /** Loaded takeover evidence; immutable for this runtime. */
@@ -120,6 +123,10 @@ export class AgentSessionStoreTransactions {
 
   get state(): AgentSessionStoreState {
     return this.published
+  }
+
+  lineageRevision(): object {
+    return this.lineage
   }
 
   get readOnly(): boolean {
@@ -241,6 +248,15 @@ export class AgentSessionStoreTransactions {
         if (writes) {
           freezeRows(draft, writes)
           this.published = draft
+          const lineageChanged =
+            writes.records.remove.length > 0 ||
+            writes.records.upsert.some(([id]) => {
+              const before = published.records.get(id)
+              return before?.conversationCommand !== draft.records.get(id)?.conversationCommand
+            })
+          if (lineageChanged) {
+            this.lineage = {}
+          }
           const topologyChanged =
             writes.sessionTabs !== null ||
             writes.records.remove.length > 0 ||
