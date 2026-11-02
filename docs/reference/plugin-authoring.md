@@ -163,7 +163,9 @@ and `done`. Every event's payload is in the [host API reference](plugin-host-api
 A worker command can take over one of Orca's own actions with `"replaces": "<action>"` in
 `contributes.commands` (the same actions a declarative `action` may name; `engines.orca`
 `>=1.4.248`). When that action fires from its shortcut, the palette or a menu, Orca runs the
-command instead; if the worker fails or has not answered within 2 seconds, Orca runs its own. The
+command instead; if the worker fails or has not answered within 2 seconds, Orca runs its own. To
+wrap Orca's own, the command calls `orca.host.call('commands.run', { action })`, which always
+runs the built-in, never a replacement. The
 person sees each replacement before approving the plugin and can switch it back on the plugin's
 page. When two plugins replace the same action, the one installed first does, and the other's log
 says so.

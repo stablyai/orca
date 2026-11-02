@@ -76,7 +76,9 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
 export function createAppCommandHandlers(
   state: AppShortcutState,
   input?: ShortcutDispatchInput,
-  keybindingContext: KeybindingContext = 'app'
+  keybindingContext: KeybindingContext = 'app',
+  /** A plugin's `commands.run`: Orca's own action, never a plugin replacement (no loops). */
+  builtInOnly = false
 ): Map<KeybindingActionId, () => boolean> {
   const {
     activeView,
@@ -106,7 +108,11 @@ export function createAppCommandHandlers(
       })
     }
     // A plugin command may replace the action; it falls back to `run`.
-    runBuiltInOrReplacement(actionId, run)
+    if (builtInOnly) {
+      run()
+    } else {
+      runBuiltInOrReplacement(actionId, run)
+    }
     return true
   }
   const revealRightSidebarTab = (

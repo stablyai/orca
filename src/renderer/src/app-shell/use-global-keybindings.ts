@@ -76,8 +76,15 @@ export function useGlobalKeybindings(args: {
       ...shortcutStateRef.current,
       activeWorktreeId: useAppStore.getState().activeWorktreeId
     })
-    const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
-      (createAppCommandHandlers(readShortcutState()).get(actionId) ?? (() => false))()
+    const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId, source) =>
+      (
+        createAppCommandHandlers(
+          readShortcutState(),
+          undefined,
+          'app',
+          source === 'plugin-host'
+        ).get(actionId) ?? (() => false)
+      )()
     )
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
