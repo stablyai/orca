@@ -4775,6 +4775,7 @@
       "noGitLabTasks": "No GitLab tasks",
       "noLinearTasks": "No Linear tasks",
       "noJiraTasks": "No Jira tasks",
+      "noAzureDevOpsTasks": "No Azure DevOps tasks",
       "assignedSubtitle": "Unresolved issues assigned to you",
       "reportedSubtitle": "Unresolved issues you reported",
       "allSubtitle": "Unresolved issues across the selected sites",
@@ -5145,7 +5146,8 @@
       "refreshJira": "Refresh Jira issues",
       "title": "Tasks",
       "newGitHubIssue": "New GitHub issue",
-      "newLinearIssue": "New Linear issue"
+      "newLinearIssue": "New Linear issue",
+      "refreshAzureDevOps": "Refresh Azure DevOps work items"
     },
     "searchControl": {
       "projectPlaceholder": "Search project view...",

@@ -1,0 +1,43 @@
+import type {
+  AzureDevOpsAssignedWorkItemsPage,
+  AzureDevOpsBacklogLevel,
+  AzureDevOpsBacklogPage,
+  AzureDevOpsBoardPage,
+  AzureDevOpsTeam,
+  AzureDevOpsTeamConfiguration,
+  AzureDevOpsWorkItemDetail
+} from '../../shared/azure-devops/boards-types'
+import type {
+  AzureDevOpsBoardsRepoArgs,
+  AzureDevOpsTeamRoute
+} from '../../shared/azure-devops/boards-repo-resolution'
+
+export type AzureDevOpsBoardsApi = {
+  isAuthenticated: (args: AzureDevOpsBoardsRepoArgs) => Promise<boolean>
+  listTeams: (args: AzureDevOpsBoardsRepoArgs) => Promise<AzureDevOpsTeam[]>
+  getConfiguration: (
+    args: AzureDevOpsBoardsRepoArgs & AzureDevOpsTeamRoute
+  ) => Promise<AzureDevOpsTeamConfiguration>
+  loadBacklog: (
+    args: AzureDevOpsBoardsRepoArgs &
+      AzureDevOpsTeamRoute & {
+        level: AzureDevOpsBacklogLevel
+        /** Extra reference names to hydrate (the user's own column options). Optional for older hosts. */
+        columnFields?: string[]
+      }
+  ) => Promise<AzureDevOpsBacklogPage>
+  loadBoard: (
+    args: AzureDevOpsBoardsRepoArgs & AzureDevOpsTeamRoute & { level: AzureDevOpsBacklogLevel }
+  ) => Promise<AzureDevOpsBoardPage | null>
+  /** Project-wide, assigned to @Me; no team route, so no team area scoping. */
+  loadAssignedWorkItems: (
+    args: AzureDevOpsBoardsRepoArgs
+  ) => Promise<AzureDevOpsAssignedWorkItemsPage>
+  getWorkItem: (
+    args: AzureDevOpsBoardsRepoArgs & {
+      id: number
+      /** Ids the renderer already holds, so their children are not fetched again. */
+      cachedIds?: number[]
+    }
+  ) => Promise<AzureDevOpsWorkItemDetail | null>
+}

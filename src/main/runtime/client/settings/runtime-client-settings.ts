@@ -5,6 +5,7 @@ import { isArtifactSharingEnabled } from '../../../../shared/artifacts/artifact-
 import { isAgentSkillSharingEnabled } from '../../../../shared/skills/sharing/agent-skill-sharing-gate'
 import { applyPRBotAuthorOverride } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { TASK_PROVIDERS } from '../../../../shared/work-items/task-providers'
+import { pickAzureDevOpsBoardsSettings } from '../../../../shared/azure-devops/boards-settings-types'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
@@ -100,6 +101,7 @@ export class RuntimeClientSettingsController {
       defaultLinearTeamSelection: Array.isArray(settings.defaultLinearTeamSelection)
         ? settings.defaultLinearTeamSelection.filter((id): id is string => typeof id === 'string')
         : null,
+      ...pickAzureDevOpsBoardsSettings(settings),
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       worktreeCardDetailsRow: settings.worktreeCardDetailsRow !== false,

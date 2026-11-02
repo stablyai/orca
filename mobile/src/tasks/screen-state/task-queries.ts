@@ -229,5 +229,8 @@ export function taskListParams(input: TaskListInput, repoKey: string): HostQuery
             query
           }
         : null
+    // Why: the desktop reads Azure DevOps Boards over its own IPC; mobile has no host query for it yet.
+    case 'azure-devops':
+      return null
   }
 }

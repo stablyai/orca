@@ -29,5 +29,8 @@ export function shouldHideTaskPageListChrome({
       return hasJiraDetail
     case 'linear':
       return hasLinearIssueDetail || hasLinearProjectContext || hasLinearViewContext
+    // Why: Azure DevOps has no list-detail view yet, so there is nothing to hide chrome for.
+    case 'azure-devops':
+      return false
   }
 }
