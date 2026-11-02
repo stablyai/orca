@@ -8,7 +8,7 @@ import type { runAgentModelCatalogListing } from './agent-model-catalog-probe-ru
 import claudeCapture from '../../claude/__fixtures__/catalog-signin.json'
 import { AGENT_MODEL_CATALOG_FAILURE_TTL_MS } from './agent-model-catalog-failures'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 it('re-probes a signed-out Claude scope once per held-reason TTL for N and 10N chats', async () => {
   const home = { variable: 'CLAUDE_CONFIG_DIR', path: '/account' }

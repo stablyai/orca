@@ -89,7 +89,9 @@ export default function activate(orca: OrcaWorkerApi) {
 Other hooks: `workspace.create.before`/`.after`, `agent.launch.before` (change the command line or
 add `env`; the agent's own environment is never shown) and `agent.prompt.before` (rewrite a prompt
 Orca submits to an agent), and `agent.tool.before`/`.after` (a tool call an agent makes; Claude
-Code waits, so `{ deny }` refuses the call and `next` can change its `input`).
+Code waits, so `{ deny }` refuses the call and `next` can change its `input`), and
+`editor.save.before` (format on save: return `next({ ...event, text: formatted })`, or `{ deny }` to
+stop the save; autosaves are not hooked).
 
 Return `{ deny }` to stop, nothing (or `next(event)`) to pass. Past 2 s or on a throw Orca carries
 on as if the hook passed and logs it (`ORCA plugin logs`); a guard that must fail closed lists the
