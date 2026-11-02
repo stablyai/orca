@@ -176,6 +176,10 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
         : pty.lastAgentStatus === 'permission'
           ? 'blocked'
           : 'done'
+    // Why: an unchanged idle title keeps an old lastOscTitleEpochMs; restamping the hook's done with it would sort behind the client's newer working row.
+    if (titleState === 'done' && status.state === 'done' && titleEvidenceAt <= status.updatedAt) {
+      return status
+    }
     return buildTitleOnlyStatus(
       titleState,
       titleEvidenceAt,
