@@ -1,4 +1,3 @@
-import type { connectPanePty } from './pty-connection'
 import { foregroundSemantics, createInitialStoreState } from './pty-connection-test-store-fixtures'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
