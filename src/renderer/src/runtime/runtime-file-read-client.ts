@@ -91,7 +91,9 @@ async function readRuntimeFileContentAsStored({
   }
   if (floatingWorkspaceEnvironmentId(worktreeId)) {
     const document = await readFloatingMarkdownTab({ target, worktreeId, filePath })
-    if (document) return { content: document.document.content, isBinary: false }
+    if (document) {
+      return { content: document.document.content, isBinary: false }
+    }
   }
   // Why: decided synchronously so ordinary reads pin their pairing without an extra await.
   if (isHostFileOutsideWorkspaces({ filePath, relativePath, grantId: terminalArtifactGrantId })) {

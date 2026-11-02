@@ -135,7 +135,9 @@ export function editorSaveGrant(
   context: RuntimeFileOperationArgs,
   getState: () => Pick<AppState, 'setTerminalArtifactGrant'>
 ): EditorSaveGrant | Promise<EditorSaveGrant> | undefined {
-  if (floatingWorkspaceEnvironmentId(file.worktreeId)) return undefined
+  if (floatingWorkspaceEnvironmentId(file.worktreeId)) {
+    return undefined
+  }
   const onRenewed = (renewed: string): void => getState().setTerminalArtifactGrant(file.id, renewed)
   const expectedEnvironmentPairingRevision =
     context.target.kind === 'environment'

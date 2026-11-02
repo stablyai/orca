@@ -24,8 +24,12 @@ export async function writeFloatingMarkdownFile(
   }
   if (precondition) {
     const comparison = compareDiskWritePrecondition(precondition, opened.document.content, content)
-    if (comparison === 'identical') return { ok: true, unchanged: true }
-    if (comparison) return { ok: false, diskConflict: comparison }
+    if (comparison === 'identical') {
+      return { ok: true, unchanged: true }
+    }
+    if (comparison) {
+      return { ok: false, diskConflict: comparison }
+    }
   }
   await opened.save(content)
   return { ok: true }

@@ -122,7 +122,7 @@ export function useFloatingTerminalPanelShortcuts({
         ? { kind: 'index', index: panelShortcut.index }
         : { kind: 'chrome', action: panelShortcut.action }
     },
-    [activeTab]
+    [activeTab, worktreeId]
   )
 
   const applyFloatingPanelShortcut = useCallback(
