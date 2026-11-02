@@ -1,4 +1,4 @@
-import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
+import { GeneratedInputObservation } from './generated-input-observation'
 import type { DraftPasteReadySignal } from './tui-agent-config'
 
 export const GENERATED_AGENT_INPUT_TIMEOUT_MS = 60_000
@@ -29,7 +29,10 @@ export function signalAllowsCompatibilityEvidence(signal: DraftPasteReadySignal)
  *  so only blocking evidence refuses, as a direct send would have been written. */
 export type GeneratedInputIntent = 'startup' | 'running'
 
-/** Compatibility quiet is live evidence, never a deadline's permission to write. */
+/** Observation-only readiness for callers that do not write (the launch-composer watch, held keys'
+ *  pane timing): the same observation the generated-input operation keeps, read by their own
+ *  `composerReady`/`accept` facts. Compatibility quiet is live evidence, never a deadline's
+ *  permission. */
 export function waitForGeneratedAgentInput(
   host: GeneratedAgentInputHost,
   signal: DraftPasteReadySignal,
@@ -44,22 +47,15 @@ export function waitForGeneratedAgentInput(
   const deadline = Date.now() + (options.timeoutMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS)
   const permitsQuiet = !options.requireComposerMarker && signalAllowsCompatibilityEvidence(signal)
   return new Promise((resolve) => {
-    let scanner = createDraftPasteReadyScanner(signal)
-    let lastOutput = Date.now()
-    let handoffCarry = ''
-    let sequence = 0
-    let ready = false
-    // Quiet counts only once the agent has enabled paste input, seen live or in the current mode.
-    let quietArmed = false
-    let refusedAtSequence = -1
-    let graceAt: number | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
     let hardTimer: ReturnType<typeof setTimeout> | undefined
-    let unsubscribe: (() => void) | undefined
     let settled = false
     let checking = false
-    let replaying = true
-    const pending: string[] = []
+    let refusedAtSequence = -1
+    const observation = new GeneratedInputObservation(signal, () => {
+      clearTimeout(timer)
+      void check()
+    })
     const finish = (value: boolean): void => {
       if (settled) {
         return
@@ -67,33 +63,11 @@ export function waitForGeneratedAgentInput(
       settled = true
       clearTimeout(timer)
       clearTimeout(hardTimer)
-      unsubscribe?.()
+      observation.close()
       options.signal?.removeEventListener('abort', abort)
       resolve(value)
     }
     const abort = (): void => finish(false)
-    const scan = (data: string): void => {
-      const combined = handoffCarry + data
-      handoffCarry = combined.slice(-7)
-      // oxlint-disable-next-line no-control-regex -- PTY mode resets revoke stale readiness.
-      const handoffs = [...combined.matchAll(/\x1b\[\?(?:2004|2031|1049)l/g)]
-      const last = handoffs.at(-1)
-      if (last) {
-        scanner = createDraftPasteReadyScanner(signal)
-        ready = false
-        quietArmed = false
-        graceAt = null
-        data = combined.slice(last.index + last[0].length)
-      }
-      const result = scanner.observe(data)
-      ready ||= result.ready
-      quietArmed ||= result.armQuietTimer
-      if (result.readyAfterMs === null) {
-        graceAt = null
-      } else if (result.readyAfterMs !== undefined) {
-        graceAt ??= Date.now() + result.readyAfterMs
-      }
-    }
     const check = async (): Promise<void> => {
       if (settled || checking) {
         return
@@ -102,27 +76,25 @@ export function waitForGeneratedAgentInput(
         return finish(false)
       }
       checking = true
-      const observedSequence = sequence
+      const observedSequence = observation.sequence
       try {
-        const signalled = ready || (graceAt !== null && Date.now() >= graceAt)
+        const signalled = observation.signalled()
+        const quietMs = Date.now() - observation.lastOutput
         // Current-screen evidence is re-read each time; it is not a one-shot signal.
-        const current = !signalled && (await host.composerReady?.(Date.now() - lastOutput)) === true
+        const current = !signalled && (await host.composerReady?.(quietMs)) === true
         const marker = signalled || current
         const quiet =
           permitsQuiet &&
-          (quietArmed || host.bracketedPaste?.() === true) &&
-          Date.now() - lastOutput >= GENERATED_AGENT_INPUT_QUIET_MS
-        // Output during the read voids only quiet; a positive composer survives a busy footer, and
-        // the writer rechecks the current screen before every byte.
+          (observation.quietArmed || host.bracketedPaste?.() === true) &&
+          quietMs >= GENERATED_AGENT_INPUT_QUIET_MS
         const quietOnly = quiet && !marker && !running
-        // A startup signal refused once is asked again only when the agent paints something new,
-        // as a direct observer would; a running agent has no signal and is asked on each check.
-        const askAgain = running || current || refusedAtSequence !== sequence
+        // A startup signal refused once is asked again only when the agent paints something new.
+        const askAgain = running || current || refusedAtSequence !== observation.sequence
         if ((marker || quiet || running) && askAgain) {
           if (await host.accept(quietOnly)) {
             if (
               !settled &&
-              (!quietOnly || observedSequence === sequence) &&
+              (!quietOnly || observedSequence === observation.sequence) &&
               Date.now() < deadline
             ) {
               finish(true)
@@ -132,12 +104,13 @@ export function waitForGeneratedAgentInput(
           }
         }
       } catch {
-        // A failed observation is no evidence; retry within this operation's budget.
+        // A failed observation is no evidence; retry within this budget.
       } finally {
         checking = false
-        if (!settled && observedSequence !== sequence) {
+        if (!settled && observedSequence !== observation.sequence) {
           void check()
         } else if (!settled) {
+          const graceAt = observation.graceAt
           const graceDelay = graceAt !== null && graceAt > Date.now() ? graceAt - Date.now() : 150
           timer = setTimeout(() => void check(), Math.min(150, graceDelay))
         }
@@ -148,44 +121,9 @@ export function waitForGeneratedAgentInput(
     }
     options.signal?.addEventListener('abort', abort, { once: true })
     hardTimer = setTimeout(() => finish(false), Math.max(0, deadline - Date.now()))
-    let subscription: ReturnType<GeneratedAgentInputHost['subscribe']>
-    // A running agent needs no readiness marker: only blocking evidence is read, on each check.
-    const subscribe: GeneratedAgentInputHost['subscribe'] = running
-      ? () => () => {}
-      : host.subscribe
-    try {
-      subscription = subscribe((data) => {
-        lastOutput = Date.now()
-        sequence += 1
-        if (replaying) {
-          pending.push(data)
-        } else {
-          scan(data)
-          clearTimeout(timer)
-          void check()
-        }
-      })
-    } catch {
-      return finish(false)
-    }
-    void Promise.resolve(subscription)
-      .then((dispose) => {
-        if (settled) {
-          return dispose()
-        }
-        unsubscribe = dispose
-        lastOutput = Date.now()
-        const replay = host.replay?.()
-        if (replay) {
-          scan(replay)
-        }
-        for (const data of pending) {
-          scan(data)
-        }
-        pending.length = 0
-        replaying = false
-        void check()
-      })
+    void observation
+      .start({ observe: host.subscribe, replay: host.replay })
+      .then(() => void check())
       .catch(() => finish(false))
   })
 }
