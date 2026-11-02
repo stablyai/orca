@@ -81,7 +81,12 @@ export function reloadWslMoveWindowWithWritesHeld(onReloaded: () => void = () =>
     return
   }
   reloadOwed = false
-  landOnReload()
+  // Best-effort: a failed landing must not strand the hold or skip the reload.
+  try {
+    landOnReload()
+  } catch (error) {
+    console.warn('[wsl-move] Could not pick the view the reload opens on:', error)
+  }
   const window = getWindow()
   if (!window || window.isDestroyed()) {
     held = false

@@ -134,4 +134,20 @@ describe('WSL move window write hold', () => {
     reloadWslMoveWindowWithWritesHeld()
     expect(land).not.toHaveBeenCalled()
   })
+
+  it('still reloads and releases the hold when picking the landing view throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    setWslMoveReloadLanding(() => {
+      throw new Error('store write failed')
+    })
+    const { window, page } = fakeWindow()
+    holdWslMoveWindowWrites()
+    reloadWslMoveWindowWithWritesHeld()
+    await nextTurn()
+    expect(window.reload).toHaveBeenCalledOnce()
+    page.loaded()
+    expect(isWslMoveWindowWriteHeld()).toBe(false)
+    expect(warn).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
 })
