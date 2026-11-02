@@ -50,8 +50,8 @@ export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = Mob
 function sectionTitles(): Record<SourceControlDisplaySectionId, string> {
   return {
     conflicts: translate('sourceControl.gitStatus.conflicts', 'Conflicts'),
-    unstaged: translate('sourceControl.gitStatus.changes', 'Changes'),
-    staged: translate('sourceControl.gitStatus.stagedChanges', 'Staged Changes')
+    unstaged: translate('sourceControl.gitStatus.uncommitted', 'Uncommitted'),
+    staged: translate('sourceControl.gitStatus.staged', 'Staged')
   }
 }
 

@@ -38,7 +38,7 @@ on:
       - '!src/main/daemon/mock-descendant-sweep.ts'
       - '!src/main/daemon/daemon-host-relocation.test-fixture.ts'
       - '!src/main/daemon/daemon-endpoint-reachability-test-harness.ts'
-      - 'src/main/providers/local-pty-provider.ts'
+      - 'src/main/providers/local-pty/local-pty-provider.ts'
       - 'src/main/providers/windows-shell-args.ts'
       - 'src/main/providers/windows-shell-preflight-runtime.windows.test.ts'
       - 'native/computer-use-macos/**'

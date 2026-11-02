@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { getShellLaunchConfig } from './providers/local-pty-shell-ready'
+import { getShellLaunchConfig } from './providers/local-pty/local-pty-shell-ready'
 import { selectShellStartupFeatures } from './shell-startup-features'
 import { ZSH_WRAPPER_DIR_MARKER_FILE } from './shell-templates'
 import { hasZsh, makeZshHome, runZshPty, ZSH_PATH } from './zsh-startup-hook-pty-harness'

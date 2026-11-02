@@ -12,7 +12,7 @@ import { registerPtyHandlers } from './register-handlers'
 import { join } from 'node:path'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/posix-shell-startup-command'
 // Wrapper roots are content-addressed.
-import { getShellReadyWrapperRoot } from '../../providers/local-pty-shell-ready-wrapper-root'
+import { getShellReadyWrapperRoot } from '../../providers/local-pty/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -192,7 +192,7 @@ describe('registerPtyHandlers', () => {
       await spawnAndGetCall({ cwd: '/tmp', command: 'echo hello' })
 
       const { getBashShellReadyRcfileContent } =
-        await import('../../providers/local-pty-shell-ready-bash-rcfile')
+        await import('../../providers/local-pty/local-pty-shell-ready-bash-rcfile')
       const bashRcContent = getBashShellReadyRcfileContent()
       expect(bashRcContent).toContain('source "$HOME/.bash_profile"')
       expect(bashRcContent).not.toContain('source "$HOME/.bashrc"')

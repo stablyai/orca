@@ -11,11 +11,7 @@ import {
   structuredAgentSessionOptionModels,
   type StructuredAgentSessionLiveOptions
 } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
-import {
-  claudeFastModeSupport,
-  wireClaudeModels,
-  type WireClaudeModel
-} from './claude-structured-catalog-listing'
+import { wireClaudeModels, type WireClaudeModel } from './claude-structured-catalog-listing'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 
 /** Effort comes from settings; system/init omits it. */
@@ -59,33 +55,16 @@ const FAST_MODE_STATES: readonly AgentSessionFastModeState[] = ['off', 'cooldown
 
 export function readClaudeFastModeFacts(value: unknown): {
   state?: AgentSessionFastModeState
-  disabledReason?: string
-  disabledReasonReported: boolean
 } {
-  const row = record(value)
-  const state = text(row?.fast_mode_state)
+  const state = text(record(value)?.fast_mode_state)
   const matched = FAST_MODE_STATES.find((entry) => entry === state)
-  const reportedDisabledReason = text(row?.fast_mode_disabled_reason)
-  return {
-    ...(matched ? { state: matched } : {}),
-    ...(reportedDisabledReason ? { disabledReason: reportedDisabledReason } : {}),
-    disabledReasonReported: Object.hasOwn(row ?? {}, 'fast_mode_disabled_reason')
-  }
+  return matched ? { state: matched } : {}
 }
 
 export function observeClaudeFastModeFacts(session: ClaudeSession, value: unknown): void {
   const facts = readClaudeFastModeFacts(value)
   if (facts.state) {
     session.fastModeState = facts.state
-    session.fastModeReportedMutation = session.optionMutationSequence
-  }
-  if (facts.disabledReason) {
-    session.fastModeDisabledReason = facts.disabledReason
-    session.fastModeDisabledMutation = session.optionMutationSequence
-  } else if (facts.state || facts.disabledReasonReported) {
-    // A state frame without a reason clears the block; the child omits the key instead of sending null.
-    delete session.fastModeDisabledReason
-    delete session.fastModeDisabledMutation
   }
 }
 
@@ -167,9 +146,6 @@ function observeClaudeSettingsReadback(
     }
     if (fastMode !== null) {
       session.reportedOptions.fastMode = fastMode
-      if (!fastMode) {
-        delete session.fastModeReportedMutation
-      }
       if (decodedFastMode(session) !== undefined) {
         session.options.set('fastMode', String(fastMode))
       }
@@ -208,9 +184,6 @@ export function claudeStructuredSessionOptionsFrom(
     desiredFastMode ??
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
-  const support = changesLive
-    ? claudeFastModeSupport([], session.fastModeDisabledReason)
-    : CLAUDE_CLI_UPDATE_REQUIRED
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
@@ -221,7 +194,7 @@ export function claudeStructuredSessionOptionsFrom(
   ]
   return {
     models: wireClaudeModels(models),
-    ...(support ? { fastModeSupport: support } : {}),
+    ...(changesLive ? {} : { fastModeSupport: CLAUDE_CLI_UPDATE_REQUIRED }),
     ...(changesLive ? {} : { effortFixed: true as const }),
     current: {
       model,

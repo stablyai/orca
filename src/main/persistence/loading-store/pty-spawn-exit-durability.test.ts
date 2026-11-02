@@ -2,7 +2,7 @@ import { formatTerminalStartFailure } from '../../../shared/terminal-start-failu
 import { requireAcceptedSpawn } from '../../ipc/pty/spawn-outcome'
 import { SessionNotFoundError } from '../../daemon/daemon-errors'
 import { completePaneAdoption } from '../../ipc/pty/pane/complete-pane-adoption'
-import { LocalPtyProvider } from '../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
 import { adoptStablePane } from '../../ipc/pty/pane/adopt-stable'
 import * as providerRegistry from '../../ipc/pty/provider/registry'
 import { bindProviderListeners } from '../../ipc/pty/provider/bind-listeners'

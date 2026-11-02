@@ -970,6 +970,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.availability': EmulatorAvailabilityParams,
   'emulator.ax': AxParams,
   'emulator.button': ButtonParams,
+  'emulator.checkInput': ListParams,
   'emulator.exec': ExecParams,
   'emulator.gesture': GestureParams,
   'emulator.kill': KillParams,

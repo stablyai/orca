@@ -10,8 +10,10 @@ vi.mock('../wsl', async (importOriginal) => {
   return { ...actual, wslUncDirectoryExistsAsync: wslUncDirectoryExistsAsyncMock }
 })
 
-import { validateWorkingDirectoryAsync } from './local-pty-utils'
-import { _resetWorkingDirectoryValidationStateForTest } from './working-directory-validation'
+import {
+  validateWorkingDirectoryAsync,
+  _resetWorkingDirectoryValidationStateForTest
+} from './working-directory-validation'
 
 let tempDir: string
 

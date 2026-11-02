@@ -1819,6 +1819,10 @@ html.native-shell .app-layout {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
+.agent-working-spinner[data-animation-offscreen] {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .agent-working-spinner {
     animation: none;

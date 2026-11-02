@@ -20,7 +20,7 @@ import {
 } from './external-chromium-tab-projection'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
 import { runExternalChromiumPageInput } from './external-chromium-page-input'
-import { agentBrowserSnapshotArgs } from '../browser/agent-browser-snapshot-arguments'
+import { agentBrowserSnapshotArgs } from '../browser/agent-browser/agent-browser-snapshot-arguments'
 import { Snapshot } from '../../shared/rpc-contract/browser-observation-params'
 const AgentBrowserSnapshot = z.object({
   refs: z

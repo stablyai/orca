@@ -163,7 +163,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitConflictOperationByWorktree: {},
     remoteStatusesByWorktree: {},
     isRemoteOperationActive: false,
-    inFlightRemoteOpKind: null,
+    remoteOperations: [],
     settings: null,
     hostedReviewCache: {},
     prCache: {},

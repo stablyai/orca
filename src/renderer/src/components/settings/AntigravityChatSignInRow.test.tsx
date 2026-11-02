@@ -308,6 +308,19 @@ it('preserves moved setup owner, actions and failure states through collapse and
       removable: true,
       snapshot: {
         kind: 'known',
+        state: { ...state, source: 'managed', installedVersion: '0.9', canRemove: true }
+      }
+    }
+    view.rerender(element())
+    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    expect(installManagedRuntime).toHaveBeenCalledTimes(2)
+    expect(installManagedRuntime).toHaveBeenLastCalledWith(subject)
+    install.current = {
+      kind: 'active',
+      subject,
+      removable: true,
+      snapshot: {
+        kind: 'known',
         state: {
           ...state,
           source: 'managed',
