@@ -239,7 +239,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
           defaultThinkingLevel: 'low'
         }
       ],
-      defaultModelId: 'gpt-5.4'
+      // Plans hide models they do not offer; Auto runs on any plan.
+      defaultModelId: 'auto'
     },
     antigravity: {
       id: 'antigravity',
