@@ -4,7 +4,7 @@ import { resolveAgentLaunchHost } from '@/lib/agent-launch-route-input'
 import {
   executionHostTerminalPending,
   resolveRepoExecutionHostTarget,
-  resolveWorktreeExecutionHostTarget,
+  resolveWorktreeResourceTarget,
   type ExecutionHostTarget
 } from '@/lib/execution-host-facts'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
@@ -53,13 +53,16 @@ type TerminalTargetWorkspace = Pick<
   'worktreeId' | 'repoId' | 'executionHostId'
 >
 
-/** The terminal host a menu's launch would use, from ownership slices alone; null when none owns it. */
+/**
+ * The terminal host a menu's launch would use, from the resource's owner alone; null when none owns
+ * it. Settings are out of its reach: a focused default only places a row-less setup terminal.
+ */
 function resolveAgentMenuTerminalTarget(
-  state: AppState,
+  state: Omit<AppState, 'settings'>,
   { worktreeId, repoId, executionHostId }: TerminalTargetWorkspace
 ): ExecutionHostTarget | null {
   if (worktreeId) {
-    return resolveWorktreeExecutionHostTarget(state, worktreeId)
+    return resolveWorktreeResourceTarget(state, worktreeId)
   }
   // A workspace not created yet launches on its repo's owning host: the first row with that id
   // on that host, or the id's only row. Rows on several hosts with none named settle as no owner.
@@ -84,8 +87,9 @@ export function readAgentMenuTerminalPending(
   return target ? executionHostTerminalPending(state, target) : false
 }
 
-// Every input the owner resolvers read; the build fails if WorktreeRuntimeOwnerState gains one
-// this does not compare. Connection and contact facts are not here: they are read live.
+// Every resource-owner input the target resolver reads; the build fails if WorktreeRuntimeOwnerState
+// gains one this does not compare. Settings are not one (see resolveAgentMenuTerminalTarget), and
+// connection and contact facts are read live.
 const OWNERSHIP_INPUTS = Object.values({
   repos: (state) => state.repos,
   worktreesByRepo: (state) => selectWorktreesByRepo(state),
@@ -98,10 +102,11 @@ const OWNERSHIP_INPUTS = Object.values({
   activeWorkspaceExecutionHostId: (state) => state.activeWorkspaceExecutionHostId,
   runtimeEnvironments: (state) => state.runtimeEnvironments,
   runtimeEnvironmentCatalogHydrated: (state) => state.runtimeEnvironmentCatalogHydrated,
-  removedRuntimeEnvironmentIds: (state) => state.removedRuntimeEnvironmentIds,
-  // The settings slice by reference: it changes only on a settings write.
-  settings: (state) => state.settings
-} satisfies Record<keyof WorktreeRuntimeOwnerState, (state: AppState) => unknown>)
+  removedRuntimeEnvironmentIds: (state) => state.removedRuntimeEnvironmentIds
+} satisfies Record<
+  Exclude<keyof WorktreeRuntimeOwnerState, 'settings'>,
+  (state: AppState) => unknown
+>)
 
 /**
  * One mounted menu's readiness. The target host is resolved again only when an ownership slice

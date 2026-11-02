@@ -33,7 +33,12 @@ import {
 } from './use-new-tab-agent-menu-rows'
 import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
 import { createAgentMenuTerminalPendingSelector } from './agent-menu-launch-facts'
-import { connectedRuntimeStatus } from '@/runtime/paired-runtime-environment-test-fixture'
+import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
+import { useMemo } from 'react'
+import {
+  connectedRuntimeStatus,
+  publicRuntimeEnvironment
+} from '@/runtime/paired-runtime-environment-test-fixture'
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 const initial = useAppStore.getState()
@@ -654,3 +659,139 @@ it('waits on a paired server only while contact is checking without a reported O
   useAppStore.setState(contact('verified', answered && { ...answered, hostPlatform: 'linux' }))
   expect(pending(useAppStore.getState())).toBe(false)
 })
+
+/** Copies whose owner-field reads (`id`, `executionHostId`) are counted. */
+function countOwnerReads<T extends { id: string; executionHostId?: Repo['executionHostId'] }>(
+  rows: T[],
+  onRead: () => void
+): T[] {
+  return countIdReads(rows, onRead).map((row) => {
+    const { executionHostId } = row
+    return Object.defineProperty(row, 'executionHostId', {
+      enumerable: true,
+      get: () => {
+        onRead()
+        return executionHostId
+      }
+    })
+  })
+}
+
+it.each([1, 10])(
+  "keeps a detected twin's readiness on its owner across settings, focus and catalog writes (x%i)",
+  async (scale) => {
+    let visits = 0
+    const countVisit = () => {
+      visits += 1
+    }
+    const project: Repo = { ...TEST_REPO, id: 'repo-1', path: '/srv/worktree' }
+    const filler: Repo = { ...TEST_REPO, connectionId: 'third', executionHostId: 'ssh:third' }
+    // The same project listed here and by a paired server; its rows below carry no owner stamp.
+    const repos = countOwnerReads(
+      [
+        { ...project, executionHostId: 'local' },
+        { ...project, executionHostId: 'runtime:hub-a' },
+        ...Array.from({ length: 20 * scale }, (_, index) => ({ ...filler, id: `f${index}` }))
+      ],
+      countVisit
+    )
+    const ids = Array.from({ length: 2 * scale }, (_, index) => `repo-1::/srv/worktree/${index}`)
+    const detected = (stampFirst: boolean) => ({
+      'repo-1': makeDetectedResult(
+        'repo-1',
+        ids.map((id, index) =>
+          makeWorktree({
+            id,
+            repoId: 'repo-1',
+            path: id.split('::')[1],
+            ...(stampFirst && index === 0 ? { runtimeOwnerEnvironmentId: 'hub-a' } : {})
+          })
+        )
+      )
+    })
+    const hubA = (verification: 'checking' | 'verified') => ({
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'hub-a',
+          runtimeEnvironmentStatusFromSnapshot({
+            environmentId: 'hub-a',
+            pairingRevision: 1,
+            sequence: 1,
+            checkedAt: 1,
+            status:
+              verification === 'verified'
+                ? { ...connectedRuntimeStatus('hub-runtime', 1).status!, hostPlatform: 'linux' }
+                : null,
+            verification,
+            transport: verification === 'verified' ? 'ready' : 'connecting'
+          })
+        ]
+      ])
+    })
+    useAppStore.setState({
+      ...initial,
+      settings: getDefaultSettings('/home/me'),
+      repos,
+      detectedWorktreesByRepo: detected(false),
+      runtimeEnvironments: [publicRuntimeEnvironment({ id: 'hub-a' })],
+      runtimeEnvironmentCatalogHydrated: true,
+      ...hubA('checking')
+    })
+    const visitsFor = async (update: () => void) => {
+      visits = 0
+      await act(async () => update())
+      return visits
+    }
+    const settingsWrite = () =>
+      useAppStore.setState((state) => ({
+        settings: { ...state.settings!, terminalFontSize: state.settings!.terminalFontSize + 1 }
+      }))
+    const focusWrite = (environmentId: string | null) => () =>
+      useAppStore.setState((state) => ({
+        settings: { ...state.settings!, activeRuntimeEnvironmentId: environmentId }
+      }))
+    const republish = (id: string) => () =>
+      useAppStore.setState((state) => ({
+        repos: state.repos.map((row, index) =>
+          index === state.repos.length - 1
+            ? countOwnerReads([{ ...filler, id }], countVisit)[0]
+            : row
+        )
+      }))
+    // Store subscribers outside readiness, measured with nothing mounted.
+    const storeOnly = {
+      settings: await visitsFor(settingsWrite),
+      focus: await visitsFor(focusWrite('hub-a')),
+      republish: await visitsFor(republish('late0'))
+    }
+    // The readiness subscription alone, for distinct targets and a repeated one.
+    const targets = [...ids, ...ids.map(() => ids[0])]
+    const renders = targets.map(() => 0)
+    const hooks = targets.map((worktreeId, index) =>
+      renderHook(() => {
+        renders[index] += 1
+        const selector = useMemo(() => createAgentMenuTerminalPendingSelector({ worktreeId }), [])
+        return useAppStore(selector)
+      })
+    )
+    await act(async () => {})
+    const pending = () => hooks.map((hook) => hook.result.current)
+    expect(pending()).toEqual(targets.map(() => false))
+    const settled = [...renders]
+    // Neither an unrelated setting nor the focused server is an owner of an existing workspace.
+    expect(await visitsFor(settingsWrite)).toBe(storeOnly.settings)
+    expect(await visitsFor(focusWrite(null))).toBe(storeOnly.focus)
+    expect(renders).toEqual(settled)
+    expect(pending()).toEqual(targets.map(() => false))
+    // Another host's row changing re-resolves each target over its own id's rows only.
+    const readinessVisits = (await visitsFor(republish('late1'))) - storeOnly.republish
+    expect(readinessVisits).toBeLessThanOrEqual(3 * repos.length + 4 * targets.length)
+    expect(pending()).toEqual(targets.map(() => false))
+    // Stamping one row with a server still checking, with no OS, waits only that row's pickers.
+    await act(async () => useAppStore.setState({ detectedWorktreesByRepo: detected(true) }))
+    expect(pending()).toEqual(targets.map((id) => id === ids[0]))
+    await act(async () => useAppStore.setState(hubA('verified')))
+    expect(pending()).toEqual(targets.map(() => false))
+    hooks.forEach((hook) => hook.unmount())
+  }
+)

@@ -16,6 +16,7 @@ import { CLIENT_PLATFORM } from './new-workspace'
 import type { ResolvedAgentBackgroundTarget } from './agent-background-session-contract'
 import {
   getExecutionHostIdForWorktree,
+  getResourceExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from './worktree-runtime-owner'
 
@@ -228,19 +229,31 @@ export function resolveWorktreeExecutionHostPlatform(
     )
   }
   return resolveHostPlatform(state, {
-    ...resolveWorktreeExecutionHostTarget(state, worktreeId),
+    // Why the routing default: an owner-less row launches where routing sends it, and a row-less
+    // setup terminal on the focused default, so read that host.
+    ...targetOnHost(state, worktreeId, getExecutionHostIdForWorktree(state, worktreeId)),
     workspacePath,
     projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktreeId)
   })
 }
 
-/** Only ownership slices (`WorktreeRuntimeOwnerState`) decide this; connection facts never do. */
-export function resolveWorktreeExecutionHostTarget(
-  state: WorktreeHostFactsState,
+/**
+ * An existing workspace's terminal host, from its resource owner alone (ownership slices, never
+ * settings or connection facts), for observers that must not re-derive on a focus change.
+ */
+export function resolveWorktreeResourceTarget(
+  state: Omit<WorktreeHostFactsState, 'settings'>,
   worktreeId: string
 ): ExecutionHostTarget {
-  // Why the routing default: an owner-less row launches where routing sends it, so read that host.
-  const host = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
+  return targetOnHost(state, worktreeId, getResourceExecutionHostIdForWorktree(state, worktreeId))
+}
+
+function targetOnHost(
+  state: Omit<WorktreeHostFactsState, 'settings'>,
+  worktreeId: string,
+  hostId: string
+): ExecutionHostTarget {
+  const host = parseExecutionHostId(hostId)
   return {
     host,
     nestedSshTargetId:

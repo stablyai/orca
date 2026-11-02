@@ -17,6 +17,10 @@ const repoOwnerIndexCache = new WeakMap<
   readonly RepoOwnerRecord[],
   ReadonlyMap<string, IndexedRepoOwnerResolution>
 >()
+const repoRowsByIdCache = new WeakMap<
+  readonly RepoOwnerRecord[],
+  ReadonlyMap<string, readonly RepoOwnerRecord[]>
+>()
 const qualifiedRepoOwnerIndexCache = new WeakMap<
   readonly RepoOwnerRecord[],
   ReadonlyMap<string, IndexedRepoOwnerResolution>
@@ -78,6 +82,7 @@ export function resolveIndexedRepoOwner(
     index = next
     repoOwnerIndexCache.set(repos, index)
     qualifiedRepoOwnerIndexCache.set(repos, qualified)
+    repoRowsByIdCache.set(repos, rowsById)
     repoExecutionHostLookupCache.set(
       repos,
       createRepoExecutionHostLookup((id) => rowsById.get(id) ?? EMPTY_ROWS)
@@ -108,6 +113,18 @@ export function resolveQualifiedIndexedRepoOwnerForHost(
   resolveIndexedRepoOwner(repos, repoId)
   const key = `${repoId}\0${hostId}${connectionId === undefined ? '' : `\0${connectionId ?? ''}`}`
   return qualifiedRepoOwnerIndexCache.get(repos)?.get(key) ?? { kind: 'missing' }
+}
+
+/** Every physical row with this id, in catalog order, from the same per-snapshot index. */
+export function getIndexedRepoRowsById(
+  repos: readonly RepoOwnerRecord[] | undefined,
+  repoId: string
+): readonly RepoOwnerRecord[] {
+  if (!repos) {
+    return EMPTY_ROWS
+  }
+  resolveIndexedRepoOwner(repos, repoId)
+  return repoRowsByIdCache.get(repos)?.get(repoId) ?? EMPTY_ROWS
 }
 
 export function findIndexedRepoOwner(

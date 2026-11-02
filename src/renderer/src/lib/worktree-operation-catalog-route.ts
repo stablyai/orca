@@ -5,6 +5,7 @@ import {
   parseExecutionHostId
 } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { getIndexedRepoRowsById } from './repo-owner-index'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
@@ -111,10 +112,8 @@ function isUnstampedRowOfSharedLocalProject(
   }
   let hasLocalRepoRow = false
   let hasRuntimeRepoRow = false
-  for (const repo of state.repos ?? []) {
-    if (repo.id !== owner.repoId) {
-      continue
-    }
+  // This id's rows, in catalog order, from the same snapshot index; never the whole catalog.
+  for (const repo of getIndexedRepoRowsById(state.repos, owner.repoId)) {
     const hostId = getRepoExecutionHostId(repo)
     if (hostId === LOCAL_EXECUTION_HOST_ID) {
       hasLocalRepoRow = true

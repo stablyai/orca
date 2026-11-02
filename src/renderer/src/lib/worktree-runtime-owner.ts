@@ -115,6 +115,18 @@ export function getExecutionHostIdForWorktree(
 }
 
 /**
+ * The host an existing workspace runs on: its owner, else where this client runs an unstamped row.
+ * Unlike {@link getExecutionHostIdForWorktree}, never the focused default a row-less setup terminal
+ * is created on, so it reads no settings.
+ */
+export function getResourceExecutionHostIdForWorktree(
+  state: Omit<WorktreeRuntimeOwnerState, 'settings'>,
+  worktreeId: string
+): ExecutionHostId {
+  return getKnownExecutionHostIdForWorktree(state, worktreeId) ?? getUnstampedExecutionHostId(state)
+}
+
+/**
  * {@link resolveOwner}, except an id no row places and no caller names a host resolves to this app
  * instead of `missing` — or, for a folder, to its saved session's server or a web client's only one.
  */
