@@ -6,7 +6,10 @@ import type {
   RuntimeTerminalSetPaneTitle
 } from '../../../shared/runtime-terminal-contracts'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
+import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
+import { translateSetTabProps } from '../../../shared/workspace-layout/old-client/old-client-method-translation'
+import { resolveSessionTabRow } from '../../../shared/workspace-layout/old-client/old-client-session-tab-rows'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
@@ -54,6 +57,38 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
       : null
   }
 
+  /** Main's layout of a workspace, from its routed partition; undefined when main holds none. */
+  protected mainLayoutWorkspace(worktreeId: string): WorkspaceLayout | undefined {
+    const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+    return hostId
+      ? this.workspaceLayoutReads.readPartition(hostId)?.layout.workspaces[worktreeId]
+      : undefined
+  }
+
+  /** The tab main's layout lists a row under (a chat row's id is not its tab's), if it holds it. */
+  protected mainLayoutTabOfRow(worktreeId: string, rowId: string | undefined): string | undefined {
+    const workspace = rowId ? this.mainLayoutWorkspace(worktreeId) : undefined
+    return workspace && rowId ? resolveSessionTabRow(workspace, rowId)?.tab.id : undefined
+  }
+
+  /** A client's command acts only while each row it named still names, in main's layout when the
+   *  store runs the write, the tab it named when translated: a queued switch or an earlier command
+   *  of the same reorder can change what a tab holds before the write runs. */
+  protected rowAdmission(
+    worktreeId: string,
+    translated: WorkspaceLayout,
+    rowIds: readonly string[]
+  ): LayoutCommandRunOptions {
+    const named = rowIds.flatMap((rowId) => {
+      const tabId = resolveSessionTabRow(translated, rowId)?.tab.id
+      return tabId ? [[rowId, tabId] as const] : []
+    })
+    return {
+      admit: () =>
+        named.every(([rowId, tabId]) => this.mainLayoutTabOfRow(worktreeId, rowId) === tabId)
+    }
+  }
+
   /** The tab's panes when main's layout holds it as a terminal tab of an owned workspace. */
   private mainOwnedTabPanes(worktreeId: string, tabId: string) {
     const surfaces = startedMainTerminalSurfaces(this)
@@ -61,8 +96,11 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
     return panes.length > 0 ? panes : null
   }
 
-  private async applyMainRename(command: WindowLayoutCommand): Promise<void> {
-    const reply = await this.applyLayoutCommand(command)
+  private async applyMainRename(
+    command: WindowLayoutCommand,
+    run?: LayoutCommandRunOptions
+  ): Promise<void> {
+    const reply = await this.applyLayoutCommand(command, run)
     if (!reply.ok) {
       // A pane a concurrent close took is a stale handle, as today's rename of it is.
       throw new Error(
@@ -126,10 +164,13 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
     return { handle, tabId: pane.tabId, leafId: pane.leafId, title: normalizedTitle }
   }
 
-  /** A phone's tab props for a terminal tab main owns; false for any other tab. */
+  /** A phone's tab props for a terminal tab main owns; false for any other tab. The row names
+   *  the layout tab (which a switch keeps while its terminal changes); the terminal id names only
+   *  the terminal's panes. */
   protected async setMainTabProps(
     worktreeId: string,
-    tabId: string,
+    rowId: string,
+    terminalTabId: string,
     props: {
       color?: string | null
       isPinned?: boolean
@@ -137,13 +178,27 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
       customTitle?: string | null
     }
   ): Promise<boolean> {
-    const panes = this.mainOwnedTabPanes(worktreeId, tabId)
-    if (!panes) {
+    const panes = this.mainOwnedTabPanes(worktreeId, terminalTabId)
+    const workspace = panes ? this.mainLayoutWorkspace(worktreeId) : undefined
+    if (!panes || !workspace) {
       return false
     }
-    const { customTitle, ...tabProps } = props
+    const translated = translateSetTabProps(worktreeId, workspace, { tabId: rowId })
+    const tabId =
+      translated.ok && translated.commands[0]?.type === 'setTabProps'
+        ? translated.commands[0].tabId
+        : null
+    if (!tabId) {
+      throw new Error('terminal_handle_stale')
+    }
+    const admission = this.rowAdmission(worktreeId, workspace, [rowId])
+    const { customTitle, color, isPinned, viewMode } = props
+    const tabProps = { color, isPinned, viewMode }
     if (Object.values(tabProps).some((value) => value !== undefined)) {
-      await this.applyMainRename({ type: 'setTabProps', workspace: worktreeId, tabId, ...tabProps })
+      await this.applyMainRename(
+        { type: 'setTabProps', workspace: worktreeId, tabId, ...tabProps },
+        admission
+      )
     }
     if (customTitle !== undefined) {
       // Why by tab: a sleeping or starting pane has no handle for terminal.rename to name (#29975).
@@ -154,13 +209,10 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
           this.stampManualTitle(pty, title)
         }
       }
-      await this.applyMainRename({
-        type: 'renameTab',
-        workspace: worktreeId,
-        tabId,
-        kind: 'custom',
-        title
-      })
+      await this.applyMainRename(
+        { type: 'renameTab', workspace: worktreeId, tabId, kind: 'custom', title },
+        admission
+      )
     }
     return true
   }

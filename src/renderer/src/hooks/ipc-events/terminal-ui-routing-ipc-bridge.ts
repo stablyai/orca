@@ -112,9 +112,17 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
 
   unsubs.push(
     window.api.ui.onRenameTerminal(({ tabId, title, recordInteraction }) => {
-      useAppStore
-        .getState()
-        .setTabCustomTitle(tabId, title, recordInteraction === false ? { recordInteraction } : {})
+      const store = useAppStore.getState()
+      // Main names a terminal here: a retired terminal's id never names the chat a switch left
+      // in the tab that once had that id.
+      if (!Object.values(store.tabsByWorktree).some((tabs) => tabs.some((t) => t.id === tabId))) {
+        return
+      }
+      store.setTabCustomTitle(
+        tabId,
+        title,
+        recordInteraction === false ? { recordInteraction } : {}
+      )
     })
   )
 

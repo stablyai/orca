@@ -5,6 +5,9 @@ import {
   WORKTREE_ID,
   setupMainOwnedWorkspace
 } from '../main-owned-workspace-runtime-fixture'
+import { fixture as delayedStoreFixture } from '../../persistence/loading-store/profile-state-delayed-authority-fixture'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -172,5 +175,127 @@ describe("a client's tab move in a workspace main owns", () => {
       })
     ).rejects.toThrow('invalid_tab_order')
     expect(groups()).toEqual(before)
+  })
+
+  it('a row a queued switch retired splits nothing when the store runs the split', async () => {
+    const { store, authority } = await delayedStoreFixture()
+    const workspace = 'repo-local::/fixture/local'
+    const source = 'tab-local'
+    const runtime = new OrcaRuntimeService(store)
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    await runtime.applyLayoutCommand({
+      type: 'openEditorTab',
+      workspace,
+      tabId: 'editor',
+      fileId: '/fixture/local/e.ts',
+      contentType: 'editor',
+      file: { filePath: '/fixture/local/e.ts', relativePath: 'e.ts', language: 'typescript' }
+    })
+    const layout = () =>
+      runtime.workspaceLayoutReads.readPartition('local')!.layout.workspaces[workspace]!
+    const originalGroup = layout().groups[0]!.id
+    // A slow profile write holds the store's queue: the switch queues, then the phone's split of
+    // the terminal row the switch retires queues behind it, resolved against the old layout.
+    const gate = authority.pause()
+    const earlierWrite = runtime.applyLayoutCommand({
+      type: 'setTabProps',
+      workspace,
+      tabId: source,
+      color: 'blue'
+    })
+    await gate.started.promise
+    const switching = runtime.applyLayoutCommand({
+      type: 'setTabContent',
+      workspace,
+      tabId: source,
+      expectSource: { kind: 'terminal', terminalId: source },
+      content: { kind: 'agent-session', sessionId: 'S', agent: 'codex' }
+    })
+    const moving = runtime.moveMobileSessionTab(`id:${workspace}`, {
+      kind: 'split',
+      tabId: source,
+      targetGroupId: originalGroup,
+      splitDirection: 'right'
+    })
+    gate.finish.resolve()
+    await earlierWrite
+    expect(await switching).toMatchObject({ ok: true })
+    await expect(moving).rejects.toThrow('tab_not_found')
+    expect(layout().tabs.find((entry) => entry.id === source)?.kind).toBe('agent-session')
+    expect(layout().groups.find((group) => group.tabOrder.includes(source))?.id).toBe(originalGroup)
+  })
+
+  it("stops a reorder's later commands once a switch changes a tab it names", async () => {
+    const { runtime, groups, group } = await setup()
+    await runtime.applyLayoutCommand({
+      type: 'moveTab',
+      workspace: WORKTREE_ID,
+      tabId: TAB_ID,
+      toGroupId: group,
+      index: 3
+    })
+    expect(groups()[0]!.tabOrder).toEqual(['a', 'b', TAB_ID])
+    const real = runtime.applyLayoutCommand.bind(runtime)
+    // The switch lands between the reorder's first and second move.
+    const applied = vi
+      .spyOn(runtime, 'applyLayoutCommand')
+      .mockImplementation(async (command, options) => {
+        const reply = await real(command, options)
+        if (command.type === 'moveTab' && command.tabId === 'b') {
+          await real({
+            type: 'setTabContent',
+            workspace: WORKTREE_ID,
+            tabId: TAB_ID,
+            expectSource: { kind: 'terminal', terminalId: TAB_ID },
+            content: { kind: 'agent-session', sessionId: 'new-chat', agent: 'codex' }
+          })
+        }
+        return reply
+      })
+    await expect(
+      runtime.moveMobileSessionTab(WT, {
+        kind: 'reorder',
+        tabId: 'b',
+        targetGroupId: group,
+        tabOrder: ['b', TAB_ID, 'a']
+      })
+    ).rejects.toThrow('tab_not_found')
+    applied.mockRestore()
+    expect(groups()[0]!.tabOrder).toEqual(['b', 'a', TAB_ID])
+  })
+
+  it('pins the tab a switch kept by the row its current terminal publishes', async () => {
+    const { runtime } = setupMainOwnedWorkspace()
+    const tabs = () =>
+      runtime.workspaceLayoutReads.readPartition('local')!.layout.workspaces[WORKTREE_ID]!.tabs
+    expect(
+      await runtime.applyLayoutCommand({
+        type: 'setTabContent',
+        workspace: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectSource: { kind: 'terminal', terminalId: TAB_ID },
+        content: { kind: 'agent-session', sessionId: 'S', agent: 'codex' }
+      })
+    ).toMatchObject({ ok: true })
+    const leafId = '33333333-3333-4333-8333-333333333333'
+    expect(
+      await runtime.applyLayoutCommand({
+        type: 'setTabContent',
+        workspace: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectSource: { kind: 'agent-session', sessionId: 'S' },
+        content: {
+          kind: 'terminal',
+          terminalId: 'E-new',
+          leafId,
+          adopt: { ptyId: 'pty-new', recordedPaneKey: `E-new:${leafId}` }
+        }
+      })
+    ).toMatchObject({ ok: true })
+
+    await expect(
+      runtime.setMobileSessionTabProps(WT, { tabId: 'E-new', color: 'blue' })
+    ).resolves.toEqual({ updated: true })
+    expect(tabs().find((tab) => tab.id === TAB_ID)?.color).toBe('blue')
   })
 })

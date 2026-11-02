@@ -7,11 +7,13 @@ const mocks = vi.hoisted(() => {
   const state: {
     tabsByWorktree: Record<string, { id: string }[]>
     unifiedTabsByWorktree: Record<string, { id: string; entityId: string; contentType: string }[]>
+    setTabCustomTitle: (...args: unknown[]) => void
   } = {
     tabsByWorktree: {
       'repo::/folder': [{ id: 'tab-parked' }]
     },
-    unifiedTabsByWorktree: {}
+    unifiedTabsByWorktree: {},
+    setTabCustomTitle: vi.fn()
   }
   return {
     hasRegisteredRuntimeTerminalTab: vi.fn<(tabId: string, worktreeId?: string) => boolean>(),
@@ -37,7 +39,10 @@ import {
   hasTerminalPaneSplitMountLease,
   registerTerminalPaneSplitRequestHandler
 } from '@/components/terminal-pane/terminal-pane-split-request-routing'
-import { routeRuntimeTerminalSplitRequest } from './terminal-ui-routing-ipc-bridge'
+import {
+  registerTerminalUiRoutingIpcBridge,
+  routeRuntimeTerminalSplitRequest
+} from './terminal-ui-routing-ipc-bridge'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -286,5 +291,41 @@ describe('runtime terminal split IPC routing', () => {
 
     expect(mocks.requestBackgroundTerminalWorktreeMount).not.toHaveBeenCalled()
     expect(hasTerminalPaneSplitMountLease('tab-parked')).toBe(false)
+  })
+})
+
+describe('runtime terminal rename IPC routing', () => {
+  it("names a terminal, never the chat a switch left in the tab that had a retired terminal's id", () => {
+    let rename: ((request: { tabId: string; title: string | null }) => void) | undefined
+    vi.stubGlobal('window', {
+      api: {
+        ui: new Proxy(
+          {},
+          {
+            get: (_target, key) => (listener: never) => {
+              if (key === 'onRenameTerminal') {
+                rename = listener
+              }
+              return () => {}
+            }
+          }
+        )
+      }
+    })
+    registerTerminalUiRoutingIpcBridge([])
+    // Tab E0 first held terminal E0; a switch retired it and left chat S in that tab.
+    mocks.state.tabsByWorktree = { 'repo::/folder': [{ id: 'E1' }] }
+    mocks.state.unifiedTabsByWorktree = {
+      'repo::/folder': [
+        { id: 'E0', entityId: 'session-S', contentType: 'agent-session' },
+        { id: 'E1', entityId: 'E1', contentType: 'terminal' }
+      ]
+    }
+
+    rename?.({ tabId: 'E0', title: 'renamed' })
+    expect(mocks.state.setTabCustomTitle).not.toHaveBeenCalled()
+    rename?.({ tabId: 'E1', title: 'renamed' })
+    expect(mocks.state.setTabCustomTitle).toHaveBeenCalledWith('E1', 'renamed', {})
+    vi.unstubAllGlobals()
   })
 })

@@ -47,7 +47,10 @@ export async function startKeepingFailedPane<T>(
 export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCreateTerminal {
   protected abstract markPaneLiveTitlesDirty(): void
   protected abstract inResumeRecordOrder<T>(write: () => Promise<T>): Promise<T>
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    options?: LayoutCommandRunOptions
+  ): Promise<LayoutApplyReply>
 
   protected async applyOwnedWindowLayoutCommand(
     command: WindowLayoutCommand,

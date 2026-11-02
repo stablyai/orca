@@ -33,20 +33,6 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
     )
   }
 
-  /** Main's layout of a workspace, from its routed partition; undefined when main holds none. */
-  protected mainLayoutWorkspace(worktreeId: string): WorkspaceLayout | undefined {
-    const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
-    return hostId
-      ? this.workspaceLayoutReads.readPartition(hostId)?.layout.workspaces[worktreeId]
-      : undefined
-  }
-
-  /** The tab main's layout lists a row under (a chat row's id is not its tab's), if it holds it. */
-  protected mainLayoutTabOfRow(worktreeId: string, rowId: string | undefined): string | undefined {
-    const workspace = rowId ? this.mainLayoutWorkspace(worktreeId) : undefined
-    return workspace && rowId ? resolveSessionTabRow(workspace, rowId)?.tab.id : undefined
-  }
-
   /** Validate moves against rows the client saw; retain refusal codes. Null leaves unowned workspaces on the legacy path. */
   protected async moveTabInMainLayout(
     worktreeId: string,
@@ -72,6 +58,8 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
     if (!translation.ok) {
       throw new Error(translation.code)
     }
+    const rows = move.kind === 'reorder' ? [move.tabId, ...move.tabOrder] : [move.tabId]
+    const admission = this.rowAdmission(worktreeId, workspace, rows)
     for (const command of translation.commands) {
       if (command.type !== 'moveTab' && command.type !== 'splitGroup') {
         throw new Error('invalid_params')
@@ -79,12 +67,17 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
       if (command.type === 'splitGroup' && isSplitNoOp(workspace, command)) {
         continue
       }
-      const reply = await this.applyLayoutCommand(command)
+      const reply = await this.applyLayoutCommand(command, admission)
       if (!reply.ok) {
         throw new Error(reply.code === 'group_not_found' ? 'target_group_not_found' : reply.code)
       }
       if (command.type === 'splitGroup' && reply.result.groupId) {
-        this.selectSplitTab(worktreeId, workspace, command.tabId, reply.result.groupId)
+        this.selectSplitTab(
+          worktreeId,
+          this.mainLayoutWorkspace(worktreeId) ?? workspace,
+          command.tabId,
+          reply.result.groupId
+        )
       }
     }
     return { moved: true }
