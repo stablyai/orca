@@ -455,7 +455,7 @@ describe('ClaudeHookService.installRemote', () => {
       'PermissionRequest'
     ]) {
       expect(parsed.hooks[event]).toBeTruthy()
-      const cmd = parsed.hooks[event][0].hooks[0].command as string
+      const cmd = parsed.hooks[event][0].hooks[0].command
       expect(cmd).toContain('"${HOME-}/.orca/agent-hooks/claude-hook.sh"')
       expect(cmd).not.toContain('/home/dev/.orca/agent-hooks/claude-hook.sh')
     }

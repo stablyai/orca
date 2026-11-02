@@ -9,6 +9,7 @@ import {
 } from '../../shared/orca-profiles'
 import { getDefaultPersistedState } from '../../shared/constants'
 import type { PersistedState } from '../../shared/persisted-state-types'
+import type { SystemClaudeHookTarget } from '../../main/claude/claude-hook-target'
 import {
   getOrcaProfileDataFile,
   getOrcaProfileStateDatabaseFile
@@ -154,8 +155,12 @@ describe('agent hooks CLI handler', () => {
     vi.stubEnv('ORCA_CLI_WSL_CONTEXT', '')
     vi.stubEnv('CLAUDE_CONFIG_DIR', '/home/guest/custom')
     vi.stubEnv('ORCA_CLAUDE_INJECTED_CONFIG_DIR', '')
-    const target = { kind: 'system-default', configDir: join(homedir(), '.claude') }
-    const { resolveSystemClaudeHookTarget } = await import('../../main/claude/claude-hook-target')
+    const target: SystemClaudeHookTarget = {
+      kind: 'system-default',
+      configDir: join(homedir(), '.claude')
+    }
+    const { resolveSystemClaudeHookTarget } =
+      await import('../../main/claude/claude-hook-target.js')
     expect(await resolveSystemClaudeHookTarget({ target })).toEqual(target)
     writeDataFile(userDataPath, getDefaultPersistedState(userDataPath))
     getDefaultUserDataPathMock.mockReturnValue(userDataPath)
