@@ -613,7 +613,7 @@
         "inheritFont": "Wie IDE-Schrift",
         "fontPreviewLabel": "Vorschau der Chat-Schrift",
         "fontPreview": "Der schnelle braune Fuchs springt über den faulen Hund.",
-        "title": "Chat",
+        "title": "Chat-Oberfläche",
         "textSize": "Textgröße",
         "textSizeDescription": "Nachrichten, Werkzeugaktivitäten und das Nachrichtenfeld. {{increase}} / {{decrease}} in einem Chat ändern diese Einstellung ebenfalls.",
         "codeTextSize": "Code-Textgröße",
@@ -8082,7 +8082,6 @@
           "9d3e56ca36": "Änderungen anwenden",
           "f96688b6bc": "Abbrechen",
           "b7ddae600c": "Abschließen",
-          "e4bda7ce6f": "Auf diesem System wurde keine Ghostty-Konfiguration gefunden.",
           "b58d4c9051": "Nicht unterstützte Schlüssel",
           "674b5ccd6b": "Keine neuen Einstellungen zum Importieren – die aktuellen Einstellungen stimmen bereits überein.",
           "a4c5dec640": "Zu aktualisierende Einstellungen",
@@ -20549,6 +20548,9 @@
         "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Läuft in WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -23104,6 +23106,8 @@
     "arguments": "Argumente",
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
-    "launchTerminal": "Terminal starten"
+    "launchTerminal": "Terminal starten",
+    "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
+    "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien"
   }
 }

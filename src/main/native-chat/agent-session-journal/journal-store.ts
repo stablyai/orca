@@ -104,7 +104,7 @@ export class AgentSessionJournal {
     this.state = createJournalReducerState(options.identity.sessionId, '')
     this.queue = new JournalWriteQueue(options.identity.sessionId)
     this.projection = new JournalWriteProjection({
-      database: this.database,
+      ...options,
       state: () => this.state,
       adopt: (state) => {
         this.state = state

@@ -182,7 +182,7 @@ declare module 'orca/testing' {
     /** The drawn tree as plain data, for snapshots; handlers show as `[handler]`. */
     tree(): TreeSnapshot | string | null
     /** One line per thing a person notices first: headings, callouts, empty states, table and
-     *  tree sizes, the selected tab, loading placeholders, danger or warning text. */
+     *  tree sizes, the selected tab, loading placeholders, danger or warning text and boxes. */
     summary(): string[]
     /** Each act grants one gesture (a press) and resolves once the panel has settled. */
     press(target: Target): Promise<void>

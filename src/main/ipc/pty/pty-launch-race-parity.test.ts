@@ -18,7 +18,7 @@ import { getHiddenRendererPtyIds, isHiddenRendererPty } from './delivery/pty-hid
 import { ptySizes } from './delivery/visibility-state'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import * as paneSpawnReservations from './pane/spawn-reservation'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../runtime/worktree-terminals-sleeping-error'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../shared/workspace-sleep'
 import { RestoredPaneStarter } from '../../runtime/terminal/recovery/restored-pane-start'
 import {
   LAUNCH_RACE_LANES,

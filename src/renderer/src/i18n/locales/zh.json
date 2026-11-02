@@ -173,7 +173,7 @@
         "inheritFont": "与 IDE 字体相同",
         "fontPreviewLabel": "聊天字体预览",
         "fontPreview": "这段文字用于预览聊天字体。",
-        "title": "聊天",
+        "title": "聊天界面",
         "textSize": "文字大小",
         "textSizeDescription": "消息、工具活动和消息输入框。在聊天中按 {{increase}} / {{decrease}} 也会更改此设置。",
         "codeTextSize": "代码文字大小",
@@ -7436,7 +7436,6 @@
           "9d3e56ca36": "应用更改",
           "f96688b6bc": "取消",
           "b7ddae600c": "完成",
-          "e4bda7ce6f": "在此系统上未找到 Ghostty 配置。",
           "b58d4c9051": "不支持的按键",
           "674b5ccd6b": "无需导入新设置 — 您当前设置已经匹配。",
           "a4c5dec640": "要更新的设置",
@@ -19272,6 +19271,13 @@
         "switchAccount": "切换账号",
         "addAccount": "添加账号…",
         "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "无法取消自动继续。请重试。",
+        "openSetting": "额度重置后自动继续",
+        "cancelled": "Orca 不会自动继续此聊天。",
+        "scheduled": "Orca 将在 {{time}} 继续此聊天。",
+        "cancel": "不要继续"
       }
     },
     "tab": {
@@ -19700,7 +19706,12 @@
         "queueSearchSteer": "立即发送",
         "shellEnvSearchVariables": "环境变量",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "usageLimitContinueTitle": "使用额度重置后自动继续聊天",
+        "usageLimitContinueCopy": "额度重置后，Orca 会发送“Continue where you left off.”。适用于所有已知重置时间的聊天。",
+        "usageLimitContinueSearchLimit": "使用额度",
+        "usageLimitContinueSearchReset": "重置",
+        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天"
       }
     },
     "agentChildRow": {
@@ -19844,6 +19855,9 @@
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
         "keepOpen": "保持打开"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "在 WSL 上运行：{{distro}}（Linux）"
     }
   },
   "dashboardPopout": {
@@ -22304,7 +22318,9 @@
     "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 个模型"
+    "legacyModelCount": "{{total}} 个模型",
+    "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
+    "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"
   },
   "wslMove": {
     "entry": {

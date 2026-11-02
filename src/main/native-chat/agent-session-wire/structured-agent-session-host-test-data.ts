@@ -46,6 +46,15 @@ export function hostTestMessage(text: string): ReturnType<typeof structuredAgent
   return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
 }
 
+/** Waits for the test chat's starting provider child, if any, to finish starting. */
+export async function awaitHostTestStartup(host: StructuredAgentSessionHost): Promise<void> {
+  const { sessions, runtimeState } = host.collaboratorsForTests()
+  const child = sessions.get(HOST_TEST_SESSION)?.child
+  if (child) {
+    await runtimeState.startupAttempts.readiness(HOST_TEST_SESSION, child)?.wait()
+  }
+}
+
 export function hostTestAttachParams(
   expectedRuntimeFence: number | null,
   overrides: Partial<AgentSessionAttachParams> = {}

@@ -11,6 +11,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session/record
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
+  awaitHostTestStartup,
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
   hostTestAttachParams,
@@ -94,11 +95,7 @@ export async function expectRawStopNoteRewindRecovery({
       hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
     )
   ).toMatchObject({ ok: true })
-  const collaborators = host.collaboratorsForTests()
-  const child = collaborators.sessions.get(HOST_TEST_SESSION)?.child
-  if (child) {
-    await collaborators.runtimeState.startupAttempts.readiness(HOST_TEST_SESSION, child)?.wait()
-  }
+  await awaitHostTestStartup(host)
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   expect(journal.itemBody(noteId)).toEqual(unconfirmed)
   expect(journal.snapshot().items.find((item) => item.itemId === noteId)?.body).toEqual({
