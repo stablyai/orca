@@ -1,3 +1,11 @@
+import {
+  captureWebSessionIntentOwner,
+  matchesWebSessionIntentOwner
+} from '@/runtime/web-runtime-session-environment'
+import { recordTerminalTabCloseThroughLayoutOwner } from '@/store/terminals/terminal-tab-close-layout-owner'
+import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { omitRecordKeys } from '@/store/slices/worktrees/teardown/record-key-omission'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -48,10 +56,13 @@ export async function createTerminalTabOnHost({
   const sourceRepo = state.repos.find((repo) => repo.id === source.repoId)
   const projectId = getWorktreeProjectId(source, sourceRepo, projection.setups)
   const target = { kind: 'environment' as const, environmentId: host.environmentId }
+  const owner = captureWebSessionIntentOwner(host.environmentId)
+  const rpcOptions = { expectedEnvironmentPairingRevision: owner.pairingRevision }
   const { setups } = await callRuntimeRpc<{ setups: ProjectHostSetup[] }>(
     target,
     'projectHostSetup.list',
-    {}
+    {},
+    rpcOptions
   )
   const candidates = setups.filter(
     (setup) =>
@@ -67,10 +78,20 @@ export async function createTerminalTabOnHost({
     throw new Error('setup-not-ready')
   }
   const [catalog, { folderWorkspaces }] = await Promise.all([
-    callRuntimeRpc<RuntimeWorktreePsResult>(target, 'worktree.ps', {
-      limit: Number.MAX_SAFE_INTEGER
-    }),
-    callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(target, 'folderWorkspace.list', {})
+    callRuntimeRpc<RuntimeWorktreePsResult>(
+      target,
+      'worktree.ps',
+      {
+        limit: Number.MAX_SAFE_INTEGER
+      },
+      rpcOptions
+    ),
+    callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
+      target,
+      'folderWorkspace.list',
+      {},
+      rpcOptions
+    )
   ])
   const active = catalog.worktrees.find(
     (row) =>
@@ -95,7 +116,8 @@ export async function createTerminalTabOnHost({
   const { worktree } = await callRuntimeRpc<{ worktree: Pick<Worktree, 'id'> }>(
     target,
     'worktree.show',
-    { worktree: selector }
+    { worktree: selector },
+    rpcOptions
   )
   const hostWorktreeId = worktree.id
   const created = await callRuntimeRpc<RuntimeMobileSessionCreateTerminalResult>(
@@ -108,26 +130,35 @@ export async function createTerminalTabOnHost({
       navigation: 'caller',
       clientMutationId: createBrowserUuid()
     },
-    { timeoutMs: 15_000 }
+    { ...rpcOptions, timeoutMs: 15_000 }
   )
   const tab = created.tab
+  let createdAliasId: string | undefined
   try {
     if (!isValidHostTerminalTabId(tab.parentTabId) || !isTerminalLeafId(tab.leafId)) {
       throw new Error('invalid_host_reply')
     }
-    await callRuntimeRpc(target, 'session.tabs.activate', {
-      worktree: toRuntimeWorktreeSelector(hostWorktreeId),
-      tabId: tab.parentTabId,
-      leafId: tab.leafId,
-      navigation: 'host'
-    })
+    await callRuntimeRpc(
+      target,
+      'session.tabs.activate',
+      {
+        worktree: toRuntimeWorktreeSelector(hostWorktreeId),
+        tabId: tab.parentTabId,
+        leafId: tab.leafId,
+        navigation: 'host'
+      },
+      rpcOptions
+    )
+    if (!matchesWebSessionIntentOwner(owner)) {
+      throw new Error('runtime_environment_pairing_changed')
+    }
     const latest = useAppStore.getState()
     if (!isLocalHostTerminalSource(latest, worktreeId)) {
       throw new Error('source_worktree_not_local')
     }
     const localTabId = toWebTerminalSurfaceTabId(tab.parentTabId)
     if (!latest.tabsByWorktree[worktreeId]?.some((row) => row.id === localTabId)) {
-      latest.createTab(worktreeId, groupId, undefined, {
+      createdAliasId = latest.createTab(worktreeId, groupId, undefined, {
         id: localTabId,
         initialLeafId: tab.leafId,
         mirroredHostTab: true,
@@ -137,15 +168,20 @@ export async function createTerminalTabOnHost({
           tabId: tab.parentTabId,
           leafId: tab.leafId
         }
-      })
+      }).id
     }
     latest.setActiveTab(localTabId)
     latest.setActiveTabType('terminal', worktreeId)
     focusTerminalTabSurface(localTabId)
     await refreshWebRuntimeSessionTabsSnapshot(host.environmentId, hostWorktreeId, {
       afterCurrentInFlight: true,
-      acceptCurrentSnapshot: true
+      acceptCurrentSnapshot: true,
+      expectedEnvironmentPairingRevision: owner.pairingRevision,
+      errorMode: 'throw'
     })
+    if (!matchesWebSessionIntentOwner(owner)) {
+      throw new Error('runtime_environment_pairing_changed')
+    }
     return {
       executionHostId: host.id,
       hostWorktreeId,
@@ -155,11 +191,59 @@ export async function createTerminalTabOnHost({
       title: tab.title
     }
   } catch (error) {
+    if (createdAliasId) {
+      const latest = useAppStore.getState()
+      const id = createdAliasId
+      const row = latest.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === id)
+      if (
+        row?.hostTerminalAlias?.executionHostId === host.id &&
+        row.hostTerminalAlias.worktreeId === hostWorktreeId &&
+        row.hostTerminalAlias.tabId === tab.parentTabId
+      ) {
+        if (
+          !ORCA_LAYOUT_OWNER_IS_MAIN ||
+          !recordTerminalTabCloseThroughLayoutOwner(latest, worktreeId, id, 'cleanup')
+        ) {
+          commitTerminalSurfaceClose(worktreeId, { kind: 'tab', tabId: id }, 'cleanup')
+        }
+        const tabsByWorktree = {
+          ...latest.tabsByWorktree,
+          [worktreeId]: latest.tabsByWorktree[worktreeId].filter((candidate) => candidate.id !== id)
+        }
+        const stillMirrored = Object.values(tabsByWorktree).some((rows) =>
+          rows.some((candidate) => candidate.id === id)
+        )
+        useAppStore.setState({
+          tabsByWorktree,
+          unifiedTabsByWorktree: {
+            ...latest.unifiedTabsByWorktree,
+            [worktreeId]: (latest.unifiedTabsByWorktree[worktreeId] ?? []).filter(
+              (entry) => entry.entityId !== id
+            )
+          },
+          ...(!stillMirrored
+            ? {
+                terminalLayoutsByTabId: omitRecordKeys(latest.terminalLayoutsByTabId, [id]),
+                ptyIdsByTabId: omitRecordKeys(latest.ptyIdsByTabId, [id])
+              }
+            : {})
+        })
+        useAppStore.getState().reconcileWorktreeTabModel(worktreeId)
+      }
+    }
+    if (!matchesWebSessionIntentOwner(owner)) {
+      throw error
+    }
     try {
-      await callRuntimeRpc(target, 'session.tabs.close', {
-        worktree: toRuntimeWorktreeSelector(hostWorktreeId),
-        tabId: tab.parentTabId
-      })
+      await callRuntimeRpc(
+        target,
+        'session.tabs.close',
+        {
+          worktree: toRuntimeWorktreeSelector(hostWorktreeId),
+          tabId: tab.parentTabId
+        },
+        rpcOptions
+      )
     } catch {
       // Preserve the creation failure if host cleanup also fails.
     }
