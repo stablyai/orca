@@ -110,6 +110,60 @@ function snapshot(owner: string): ProviderAccountsSnapshot {
   }
 }
 
+it.each(['before', 'after'] as const)(
+  'refreshes a returned owner when its old roster resolves %s its retired selection',
+  async (order) => {
+    const pending = deferred<CodexRateLimitAccountsState>()
+    const returnedRoster = deferred<ProviderAccountsSnapshot>()
+    const selected = { ...accounts('remote-a'), activeAccountId: 'remote-a-other' }
+    mocks.load
+      .mockResolvedValueOnce(snapshot('remote-a'))
+      .mockResolvedValueOnce(snapshot('remote-b'))
+      .mockReturnValueOnce(returnedRoster.promise)
+      .mockResolvedValueOnce({ ...snapshot('remote-a'), codex: selected })
+    mocks.select.mockReturnValueOnce(pending.promise)
+    configureOwner('remote-a')
+    render(<CodexSwitcherMenu codex={usage} compact iconOnly />)
+    await act(async () => {})
+    await expand('remote-a')
+    fireEvent.click(row('remote-a'))
+    await act(async () =>
+      useAppStore.setState((state) => ({
+        settings: { ...state.settings!, activeRuntimeEnvironmentId: 'remote-b' }
+      }))
+    )
+    await act(async () =>
+      useAppStore.setState((state) => ({
+        settings: { ...state.settings!, activeRuntimeEnvironmentId: 'remote-a' }
+      }))
+    )
+    if (order === 'before') {
+      await act(async () => returnedRoster.resolve(snapshot('remote-a')))
+      await expand('remote-a')
+      expect(row('remote-a').getAttribute('aria-disabled')).toBe('false')
+    }
+    await act(async () => pending.resolve(selected))
+    if (order === 'after') {
+      await act(async () => returnedRoster.resolve(snapshot('remote-a')))
+      await expand('remote-a')
+    }
+    expect(row('remote-a').getAttribute('aria-disabled')).toBe('true')
+    const previousAccountRow = screen
+      .getByText('remote-a@example.com')
+      .closest('[role="menuitem"]')!
+    expect(previousAccountRow.getAttribute('aria-disabled')).toBe('false')
+    mocks.select.mockResolvedValueOnce(accounts('remote-a'))
+    fireEvent.click(previousAccountRow)
+    await act(async () => {})
+    expect(mocks.select).toHaveBeenLastCalledWith(
+      { kind: 'environment', environmentId: 'remote-a' },
+      { accountId: 'remote-a', runtime: 'host', wslDistro: null }
+    )
+    expect(previousAccountRow.getAttribute('aria-disabled')).toBe('true')
+    expect(row('remote-a').getAttribute('aria-disabled')).toBe('false')
+  }
+)
+
 const usage: ProviderRateLimits = {
   provider: 'codex',
   session: null,

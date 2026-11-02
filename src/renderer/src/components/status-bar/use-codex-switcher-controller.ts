@@ -32,7 +32,7 @@ import {
   resolveCodexStatusAccountState
 } from './status-bar-codex-accounts'
 import { signInCodexAccount } from './codex-sign-in-action'
-import { useProviderAccountList } from './use-provider-account-list'
+import { refreshProviderAccountLists, useProviderAccountList } from './use-provider-account-list'
 
 export function useCodexSwitcherController(codex: ProviderRateLimits, owner: AccountOwner) {
   const [open, setOpen] = useState(false)
@@ -103,6 +103,8 @@ export function useCodexSwitcherController(codex: ProviderRateLimits, owner: Acc
       recordFeatureInteraction('codex-account-switching')
       if (mountedRef.current) {
         setAccounts(next)
+      } else {
+        refreshProviderAccountLists(runtimeTarget, 'codex')
       }
       // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
       if (!hasActiveRuntimeEnvironment) {

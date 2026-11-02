@@ -10,6 +10,17 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 
 const noSubscription = () => () => {}
 const noSnapshot = () => null
+const accountListRefreshListeners = new Map<string, Set<() => void>>()
+
+export function refreshProviderAccountLists(
+  target: RuntimeClientTarget,
+  provider: 'claude' | 'codex'
+): void {
+  invalidateProviderAccountsSnapshot(target)
+  accountListRefreshListeners
+    .get(`${getProviderAccountsOwnerKey(target)}:${provider}`)
+    ?.forEach((refresh) => refresh())
+}
 
 /** The switchers share snapshot loading; a failed provider half never replaces its roster. */
 export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
@@ -96,5 +107,21 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
       )
     }
   }, [loadAccounts, observing, provider, syncKey])
+  useEffect(() => {
+    const refresh = () => {
+      void loadAccounts().catch((error: unknown) =>
+        console.error(`Failed to load ${provider} accounts:`, error)
+      )
+    }
+    const listeners = accountListRefreshListeners.get(ownerKey) ?? new Set()
+    listeners.add(refresh)
+    accountListRefreshListeners.set(ownerKey, listeners)
+    return () => {
+      listeners.delete(refresh)
+      if (listeners.size === 0) {
+        accountListRefreshListeners.delete(ownerKey)
+      }
+    }
+  }, [loadAccounts, ownerKey, provider])
   return { accounts, setAccounts, accountsLoaded, loadAccounts, mountedRef }
 }
