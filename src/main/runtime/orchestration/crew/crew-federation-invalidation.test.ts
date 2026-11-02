@@ -165,7 +165,7 @@ it.each([1, 10])(
     try {
       const heartbeat = f.relay(1, 'heartbeat', '', {
         kind: 'heartbeat',
-        at: new Date().toISOString()
+        at: '2026-11-02T12:00:00.000Z'
       })
       for (const duplicate of [false, true]) {
         const measured = await f.measure(() => f.db.importFederatedRelayItem(heartbeat))
