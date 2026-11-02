@@ -11,13 +11,23 @@ export function createRelayPaneRootResolver(
   request: (paneKey: string) => Promise<unknown>
 ): HookPaneProcessIo['resolveRoot'] {
   let methodAbsent = false
+  // Hooks of one pane arriving together share one request instead of one each.
+  const inFlight = new Map<string, Promise<unknown>>()
+  const ask = (paneKey: string): Promise<unknown> => {
+    let pending = inFlight.get(paneKey)
+    if (!pending) {
+      pending = request(paneKey).finally(() => inFlight.delete(paneKey))
+      inFlight.set(paneKey, pending)
+    }
+    return pending
+  }
   return async (paneKey) => {
     if (methodAbsent) {
       return 'legacy'
     }
     let reply: unknown
     try {
-      reply = await request(paneKey)
+      reply = await ask(paneKey)
     } catch (error) {
       methodAbsent =
         typeof error === 'object' &&
