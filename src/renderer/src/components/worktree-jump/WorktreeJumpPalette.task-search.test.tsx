@@ -124,7 +124,8 @@ it('finds an unlinked Jira task from keywords and opens detail with the returned
     'text ~ "login redirect*"',
     expect.any(Number),
     'all',
-    expect.any(AbortSignal)
+    expect.any(AbortSignal),
+    undefined
   )
   await act(async () => {
     fireEvent.click(screen.getByText('Fix login redirect'))

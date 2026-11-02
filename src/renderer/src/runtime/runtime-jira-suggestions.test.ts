@@ -39,7 +39,14 @@ it('carries numeric suggestions to both local IPC and the selected remote owner'
   )
 
   await expect(
-    jiraSearchIssuesForTarget({ kind: 'local' }, 'text ~ "400*"', 12, 'site-a', undefined, suggestions)
+    jiraSearchIssuesForTarget(
+      { kind: 'local' },
+      'text ~ "400*"',
+      12,
+      'site-a',
+      undefined,
+      suggestions
+    )
   ).resolves.toEqual([{ key: 'LOCAL-400' }])
   expect(searchLocal).toHaveBeenCalledExactlyOnceWith({
     jql: 'text ~ "400*"',
