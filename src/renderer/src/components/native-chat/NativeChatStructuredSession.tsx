@@ -71,6 +71,7 @@ import {
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
+  const { tabId: terminalTabId, agent, isVisible } = props
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
@@ -223,9 +224,6 @@ export function NativeChatStructuredSession(
     transport
   })
 
-  // Said once: on the pane when the failure took it, else in the composer's notices.
-  const sessionError =
-    viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
   const availability = useNativeChatAvailabilityNotice({
     unavailable: controller.unavailable,
@@ -246,7 +244,8 @@ export function NativeChatStructuredSession(
   const notices = structuredSessionNotices({
     launch: install.slot.kind === 'install' ? { ...launch, lifecycle: null } : launch,
     agentLabel,
-    sessionError,
+    // Said once: on the pane when the failure took it, else in the composer's notices.
+    sessionError: viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
     composerError: composerError ?? continuation.continueError,
     claudeSignIn,
     availability,
@@ -339,7 +338,7 @@ export function NativeChatStructuredSession(
             statedFailures={startFailures}
             steerHeld={stopControls.stopping || hostHeld}
             focusComposer={focusComposer}
-            editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
+            editAttachTo={{ terminalTabId, agent, isVisible, transport }}
           />
           <NativeChatStructuredSessionStatus
             sessionId={props.sessionId}
@@ -389,6 +388,7 @@ export function NativeChatStructuredSession(
           {composerShown ? (
             <NativeChatComposer
               ref={composerRef}
+              isVisible={props.isVisible}
               terminalTabId={props.tabId}
               paneKey={paneKey}
               draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}

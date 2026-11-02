@@ -13,6 +13,7 @@ import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { nativeChatComposerSendState } from './native-chat-composer-send-state'
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
+import { nativeChatComposerTargetKey } from './native-chat-composer-target'
 import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
@@ -40,6 +41,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       targetPtyId,
       agent,
       canSend = true,
+      isVisible = true,
       unavailableHint,
       isWorking = false,
       isStopping = false,
@@ -181,21 +183,17 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const localHandle = useRef<C.NativeChatComposerHandle>(null)
     const root = useRef<HTMLDivElement>(null)
-    const handlePasteEvent = useNativeChatComposerHandle(localHandle, {
+    const { handlePasteEvent, addressPreviews } = useNativeChatComposerHandle(localHandle, {
       attachmentScopeKey: draftScopeKey,
       textareaRef,
+      draft,
       isComposing: imeEnterGesture.isComposing,
       caret,
       setDraft,
       setCaret,
+      addressPreviewsEnabled: isVisible && !inputOwnedByCard,
       setActiveSuggestion,
-      targetKey: JSON.stringify([
-        paneKey,
-        targetPtyId,
-        structuredTransport?.sessionId,
-        structuredTransport?.worktreeId,
-        structuredTransport?.runtimeEnvironmentId
-      ]),
+      targetKey: nativeChatComposerTargetKey(paneKey, targetPtyId, structuredTransport),
       agent,
       disabled,
       resolveAttachmentOwner,
@@ -378,6 +376,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           activeSuggestion={activeSuggestion}
           notices={notices}
           imageAttachments={imageAttachments}
+          addressPreviews={addressPreviews}
           numberImages={Boolean(structuredTransport)}
           attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
           sendButtonDisabled={sendState.sendButtonDisabled}
