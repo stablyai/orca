@@ -38,6 +38,8 @@ const hookDeniedSchema = z.looseObject({
   cancellationContext: z.looseObject({ reason: z.string().optional() }).nullish()
 })
 const promptErrorDataSchema = z.looseObject({ message: z.string() })
+// Grok's code for an HTTP 429; /compact keeps it when it wraps the error.
+const RATE_LIMITED_ERROR_CODE = -32003
 const FAILED_STOP_REASONS = ['error', 'rate_limit']
 const SESSION_NOTIFICATIONS = ['x.ai/session_notification', 'x.ai/session/update']
 
@@ -256,5 +258,7 @@ export const GROK_ACP_DIALECT: AcpDialect = {
   builtinCommands: grokBuiltinCommands,
   hookBlock,
   promptErrorDetail: (error) => promptErrorDataSchema.safeParse(error.data).data?.message,
+  promptFailure: (error) =>
+    error.code === RATE_LIMITED_ERROR_CODE ? { stopReason: 'rate_limit' } : undefined,
   failedTurnText: () => 'Grok ended this turn with an error.'
 }

@@ -225,6 +225,29 @@ describe('a failed ACP turn says why', () => {
     }
   )
 
+  it("reads Grok's rate-limit RPC code as a usage failure on an ordinary turn", async () => {
+    const f = await openAcpFixtureRig()
+    const lane = f.lane()
+    const prompt = lane.openPrompt('c1', 1000)
+    f.apply(lane.notification('_x.ai/queue/changed', queued(prompt.promptId), 1001))
+    f.apply(
+      lane.promptFailed(
+        'c1',
+        new AcpAgentError(-32003, 'Internal error', { message: REASON }),
+        1002
+      )
+    )
+    expect(statusRows(await f.rig.rows()).map(({ body }) => body)).toEqual([
+      {
+        kind: 'status',
+        tone: 'warning',
+        text: 'The agent hit its usage limit.',
+        failure: { kind: 'usageLimitReached', detail: { text: REASON, audience: 'person' } }
+      }
+    ])
+    expect((await f.rig.turns())[0]).toMatchObject({ state: 'completed', outcome: 'failure' })
+  })
+
   it('writes no failure row for a turn the provider ended on purpose', async () => {
     const f = await openAcpFixtureRig()
     const lane = f.lane()

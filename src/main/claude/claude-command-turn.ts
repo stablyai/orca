@@ -17,6 +17,7 @@ import type { ClaudeCurrentTurn, ClaudeTurnEnd } from './claude-turn-lifecycle-i
 import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
 import type { ClaudeUsageLimits } from './claude-usage-limits'
+import type { ClaudeAssistantFailures } from './claude-assistant-failures'
 
 export type ClaudeCommandTurn = {
   identity: AgentJournalItemIdentity
@@ -25,8 +26,10 @@ export type ClaudeCommandTurn = {
   compacted: boolean
   interruptRequested: boolean
   failed: { detail?: ProviderDiagnostic } | null
-  /** Account rejections received before the command began cannot explain its failure. */
-  rejectionsBefore: number
+  /** Limits that rejected this command while it ran; older account rejections cannot explain it. */
+  rejections: Set<string>
+  /** The hidden reply's sign-in notice, written only if the command's failure selects it. */
+  notice: AgentJournalItemBody | null
 }
 
 export type ClaudeCommandStart = StructuredAgentSessionCommandRun & {
@@ -34,10 +37,7 @@ export type ClaudeCommandStart = StructuredAgentSessionCommandRun & {
   sentUuid: string
 }
 
-export function claudeCommandCurrentTurn(
-  start: ClaudeCommandStart,
-  usageLimits: Pick<ClaudeUsageLimits, 'receivedRejections'>
-): ClaudeCurrentTurn {
+export function claudeCommandCurrentTurn(start: ClaudeCommandStart): ClaudeCurrentTurn {
   const { running } = start
   return {
     sessionId: start.providerSessionId,
@@ -52,7 +52,8 @@ export function claudeCommandCurrentTurn(
       compacted: false,
       interruptRequested: false,
       failed: null,
-      rejectionsBefore: usageLimits.receivedRejections
+      rejections: new Set(),
+      notice: null
     }
   }
 }
@@ -84,8 +85,15 @@ export function observeClaudeCommandFrame(
 
 /** Hidden command replies still carry this attempt's provider failure cause. */
 export function absorbClaudeCommandFrame(
-  turn: ClaudeOpenTurn,
-  usageLimits: Pick<ClaudeUsageLimits, 'assistant'>,
+  {
+    turn,
+    usageLimits,
+    assistantFailures
+  }: {
+    turn: ClaudeOpenTurn
+    usageLimits: Pick<ClaudeUsageLimits, 'assistant'>
+    assistantFailures: Pick<ClaudeAssistantFailures, 'notice'>
+  },
   message: Record<string, unknown>
 ): boolean {
   const { command } = turn
@@ -94,6 +102,7 @@ export function absorbClaudeCommandFrame(
   }
   if (command && claudeCommandAnswers(command, message)) {
     usageLimits.assistant(message, turn)
+    command.notice ??= assistantFailures.notice(message)
   }
   return true
 }

@@ -147,7 +147,6 @@ export function createClaudeJournalTranslator(
     return delta !== null || thinking
   }
 
-  const usageLimits = new ClaudeUsageLimits()
   const messageContext: ClaudeMessageJournalContext = {
     sink: deps.sink,
     tools,
@@ -161,7 +160,7 @@ export function createClaudeJournalTranslator(
     corrections,
     turn,
     assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
-    usageLimits,
+    usageLimits: new ClaudeUsageLimits(),
     threadGoal: new ClaudeThreadGoal(() => deps.sink.journalLinkage?.()?.threadGoalSource())
   }
 
@@ -205,7 +204,7 @@ export function createClaudeJournalTranslator(
           }
         }
       }
-      if (event.type === 'message' && absorbClaudeCommandFrame(turn, usageLimits, event.message)) {
+      if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
         return
       }
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
@@ -231,7 +230,7 @@ export function createClaudeJournalTranslator(
         journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
       } else if (event.type === 'message') {
         backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
-        messageContext.usageLimits.observe(event.message)
+        messageContext.usageLimits.observe(event.message, turn.command?.rejections)
         const kind = claudeProviderFrameKind(event.message)
         if (
           !journalClaudeMessage(
@@ -272,7 +271,7 @@ export function createClaudeJournalTranslator(
     get commandTurnId() {
       return turn.command ? turn.id : null
     },
-    beginCommand: (start) => turn.beginCommand(claudeCommandCurrentTurn(start, usageLimits)),
+    beginCommand: (start) => turn.beginCommand(claudeCommandCurrentTurn(start)),
     forgetCommand: (turnId) => turn.forgetCommand(turnId),
     commandInterruptRequested: (turnId) => turn.commandInterruptRequested(turnId),
     get openTurnInLiveProviderCycle() {

@@ -71,16 +71,18 @@ export function journalClaudeResult(
     commandResult?.end.outcome === 'failure' &&
     !leftToStop &&
     (command.failed !== null || failure !== null)
-      ? { ...command.failed, receivedAfter: command.rejectionsBefore }
+      ? { ...command.failed, rejections: command.rejections }
       : undefined
   const usageLimit = settlesTurn
     ? usageLimits.result(message, !command && failure !== null, usageEvidence, compactionFailure)
     : null
-  if (command && commandResult?.row && !usageLimit) {
+  // As on an ordinary send, a sign-in notice from the hidden reply outranks quota.
+  const terminalFailure = (compactionFailure && command?.notice) || usageLimit
+  if (command && commandResult?.row && !terminalFailure) {
     sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })
   }
-  if (usageLimit && endedTurnIdentity) {
-    writeClaudeTerminalFailure(sink, endedTurnIdentity, usageLimit)
+  if (terminalFailure && endedTurnIdentity) {
+    writeClaudeTerminalFailure(sink, endedTurnIdentity, terminalFailure)
   }
   if (settlesTurn) {
     turn.suppressReopenOnFailure(message.is_error === true)
@@ -107,7 +109,7 @@ export function journalClaudeResult(
     sink.publish()
   }
   const kind = claudeProviderFrameKind(message)
-  if (usageLimit && endedTurnIdentity) {
+  if (terminalFailure && endedTurnIdentity) {
     return
   }
   const alreadyShown = assistantFailures.resultAlreadyShown(message)

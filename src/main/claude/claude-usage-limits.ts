@@ -49,20 +49,14 @@ export type ClaudeUsageLimitEvidence = {
 
 // Account observations outlive turns because unchanged rejection notifications are throttled.
 export class ClaudeUsageLimits {
-  // Each rejection keeps when it was received, so an attempt can tell its own from older ones.
-  private readonly rejected = new Map<string, { resetsAt: number | null; received: number }>()
-  private received = 0
+  private readonly rejected = new Map<string, number | null>()
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  /** A watermark: later rejections were received after this point. */
-  get receivedRejections(): number {
-    return this.received
-  }
-
-  observe(message: Record<string, unknown>): void {
+  /** An open command's own set records which limits rejected it while it ran. */
+  observe(message: Record<string, unknown>, attempt?: Set<string>): void {
     if (message.type === 'rate_limit_event') {
-      this.record(claudeRecord(message.rate_limit_info))
+      this.record(claudeRecord(message.rate_limit_info), attempt)
     }
   }
 
@@ -96,7 +90,7 @@ export class ClaudeUsageLimits {
     message: Record<string, unknown>,
     failed: boolean,
     evidence: ClaudeUsageLimitEvidence | null,
-    compactionFailure?: { detail?: ProviderDiagnostic; receivedAfter: number }
+    compactionFailure?: { detail?: ProviderDiagnostic; rejections: ReadonlySet<string> }
   ): ClaudeUsageLimitRow | null {
     if ((!failed && !compactionFailure) || evidence?.cause === 'other') {
       return null
@@ -110,7 +104,7 @@ export class ClaudeUsageLimits {
         (reason === null || LIMIT_TERMINAL_REASONS.includes(reason))) ||
       // Only a rejection received during this command can explain its failure; older ones are context.
       (compactionFailure !== undefined &&
-        this.rejectedAfter(compactionFailure.receivedAfter) &&
+        this.rejecting(compactionFailure.rejections) &&
         (status == null || status === 429) &&
         (reason === null || LIMIT_TERMINAL_REASONS.includes(reason) || reason === 'blocking_limit'))
     if (!limited) {
@@ -122,7 +116,7 @@ export class ClaudeUsageLimits {
     )
   }
 
-  private record(info: Record<string, unknown> | null): void {
+  private record(info: Record<string, unknown> | null, attempt?: Set<string>): void {
     if (!info) {
       return
     }
@@ -136,20 +130,23 @@ export class ClaudeUsageLimits {
       const seconds = info.resetsAt
       const resetsAt =
         typeof seconds === 'number' ? usageLimitResetsAt(seconds * 1000, this.now()) : undefined
-      this.rejected.set(type, { resetsAt: resetsAt ?? null, received: ++this.received })
+      this.rejected.set(type, resetsAt ?? null)
+      attempt?.add(type)
     } else if (info.status === 'allowed' || info.status === 'allowed_warning' || overage) {
       this.rejected.delete(type)
+      attempt?.delete(type)
     }
   }
 
-  private rejectedAfter(received: number): boolean {
+  /** A limit this attempt saw rejecting must still be rejecting; an older one cannot stand in. */
+  private rejecting(attempt: ReadonlySet<string>): boolean {
     this.expire()
-    return [...this.rejected.values()].some((entry) => entry.received > received)
+    return [...attempt].some((type) => this.rejected.has(type))
   }
 
   private expire(): void {
     const now = this.now()
-    for (const [type, { resetsAt }] of this.rejected) {
+    for (const [type, resetsAt] of this.rejected) {
       if (resetsAt !== null && resetsAt <= now) {
         this.rejected.delete(type)
       }
@@ -164,9 +161,7 @@ export class ClaudeUsageLimits {
     }
     const windows = new Set([...this.rejected.keys()].map((type) => CLAUDE_LIMIT_WINDOWS[type]))
     const window = windows.size === 1 ? [...windows][0] : undefined
-    const resets = [...this.rejected.values()]
-      .map((entry) => entry.resetsAt)
-      .filter((reset): reset is number => reset !== null)
+    const resets = [...this.rejected.values()].filter((reset): reset is number => reset !== null)
     const resetsAt = resets.length === this.rejected.size ? Math.max(...resets) : undefined
     return { ...(window ? { window } : {}), ...(resetsAt ? { resetsAt } : {}) }
   }

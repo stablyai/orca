@@ -5,7 +5,6 @@ import {
 } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { BoundedMap } from '../../shared/bounded-map'
-import type { AcpCompaction } from './acp-compaction-turn'
 import type { AgentSessionUsageLimit } from '../../shared/agent-session/failures/agent-session-usage-limit'
 import type {
   ProviderTimelineEvent,
@@ -16,26 +15,35 @@ import { AcpAgentError, AcpAuthRequiredError, AcpSignInPromptError } from './acp
 
 const FAILED_STOP_REASONS = ['error', 'rate_limit']
 
-function acpStopReasonFailed(stopReason: string): boolean {
+export function acpStopReasonFailed(stopReason: string): boolean {
   return FAILED_STOP_REASONS.includes(stopReason)
 }
+
+export type AcpTurnFailureReport = Pick<
+  AcpTurnEnding,
+  'stopReason' | 'failureDetail' | 'notSignedIn' | 'usageLimit' | 'providerFailure'
+>
 
 export type AcpTurnFailureEvidence = {
   text: string
   notSignedIn: boolean
   usageLimited: boolean
+  providerFailure: boolean
   usageLimit?: AgentSessionUsageLimit
 }
 
-/** Keep the first diagnostic and established quota cause when a later RPC error is generic. */
+/** Keep the first diagnostic and established causes when a later RPC error is generic. */
 export function mergeAcpTurnFailureEvidence(
   previous: AcpTurnFailureEvidence | undefined,
-  stopReason: string,
-  text: string | undefined,
-  notSignedIn = false,
-  usageLimit?: AgentSessionUsageLimit
+  {
+    stopReason,
+    failureDetail: text,
+    notSignedIn,
+    usageLimit,
+    providerFailure
+  }: AcpTurnFailureReport
 ): AcpTurnFailureEvidence {
-  const authenticationRequired = notSignedIn || previous?.notSignedIn === true
+  const authenticationRequired = notSignedIn === true || previous?.notSignedIn === true
   return {
     text:
       previous?.text ||
@@ -43,11 +51,15 @@ export function mergeAcpTurnFailureEvidence(
     notSignedIn: authenticationRequired,
     usageLimited:
       !authenticationRequired && (stopReason === 'rate_limit' || previous?.usageLimited === true),
+    providerFailure: providerFailure === true || previous?.providerFailure === true,
     usageLimit: usageLimit ?? previous?.usageLimit
   }
 }
 
-type FailurePlacement = { join: ProviderTimelineJoin; previous?: AcpTurnFailureEvidence }
+/** Agents report their own refusals as errors too; only these causes make a failure the provider's. */
+export function acpProviderFailed(evidence: AcpTurnFailureEvidence): boolean {
+  return evidence.notSignedIn || evidence.usageLimited || evidence.providerFailure
+}
 
 /** Prefer provider error details over generic messages such as Internal error. */
 export function acpPromptErrorDetail(dialect: AcpDialect, error: AcpAgentError): string {
@@ -107,54 +119,31 @@ export class AcpTurnFailures {
     return turn &&
       extension?.disposition === 'map' &&
       (extension.failureDetail || extension.failure)
-      ? this.row(
-          turn,
-          extension.failureDetail ?? extension.failure?.failureDetail,
-          extension.failure?.stopReason
-        )
-      : []
-  }
-
-  ended(turn: string, ending: AcpTurnEnding, compaction?: AcpCompaction): ProviderTimelineEvent[] {
-    const { stopReason, failureDetail, notSignedIn, usageLimit } = ending
-    if (!acpStopReasonFailed(stopReason)) {
-      return []
-    }
-    if (!compaction) {
-      return this.row(turn, failureDetail, stopReason, notSignedIn, usageLimit)
-    }
-    // Agents report /compact's own failures as errors too; only a typed cause makes it the provider's.
-    compaction.failure = mergeAcpTurnFailureEvidence(
-      compaction.failure,
-      stopReason,
-      failureDetail,
-      notSignedIn,
-      usageLimit
-    )
-    return compaction.failure.notSignedIn || compaction.failure.usageLimited
-      ? this.row(turn, failureDetail, stopReason, notSignedIn, usageLimit, {
-          join: { thread: this.sessionId },
-          previous: compaction.failure
+      ? this.row(turn, {
+          ...extension.failure,
+          stopReason: extension.failure?.stopReason ?? 'error',
+          failureDetail: extension.failureDetail ?? extension.failure?.failureDetail
         })
       : []
   }
 
-  row(
+  ended(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
+    return acpStopReasonFailed(ending.stopReason) ? this.row(turn, ending) : []
+  }
+
+  row(turn: string, report: AcpTurnFailureReport): ProviderTimelineEvent[] {
+    const evidence = mergeAcpTurnFailureEvidence(this.rows.peek(turn), report)
+    return this.write(turn, evidence, { thread: this.sessionId, turn }, report.stopReason)
+  }
+
+  /** Render already merged evidence; a host command passes its thread-only join. */
+  write(
     turn: string,
-    text: string | undefined,
-    stopReason = 'error',
-    notSignedIn = false,
-    usageLimit?: AgentSessionUsageLimit,
-    placement?: FailurePlacement
+    evidence: AcpTurnFailureEvidence,
+    join: ProviderTimelineJoin,
+    stopReason = 'error'
   ): ProviderTimelineEvent[] {
     const written = this.rows.peek(turn)
-    const evidence = mergeAcpTurnFailureEvidence(
-      written ?? placement?.previous,
-      stopReason,
-      text,
-      notSignedIn,
-      usageLimit
-    )
     const { notSignedIn: authenticationRequired, usageLimited, usageLimit: limit } = evidence
     const diagnostic = providerDiagnostic(evidence.text, 'person')
     if (
@@ -192,7 +181,7 @@ export class AcpTurnFailures {
                   `${this.agentName ?? 'The agent'} ended this turn with an error.`
               })
         },
-        join: placement?.join ?? { thread: this.sessionId, turn }
+        join
       }
     ]
   }

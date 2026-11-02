@@ -25,6 +25,10 @@ const COMMAND_KEY = agentJournalItemKey(COMMAND_IDENTITY)
 const QUOTA_RESET_S = Math.floor(Date.now() / 1000) + 3600
 const CREDITS = 'This model requires usage credits'
 const IN_COMMAND: AgentJournalTurnScope = { kind: 'turn', turnItemId: COMMAND_KEY }
+const TERMINAL_FAILURE_KEY = agentJournalItemKey({
+  provider: 'orca',
+  clientMessageId: `terminal-failure:claude:${COMMAND_KEY}`
+})
 const RUNNING = {
   kind: 'turn' as const,
   turnId: 'compact:cmd-1',
@@ -185,10 +189,7 @@ describe('a captured /compact as the open Claude turn', () => {
       expect(h.commandTurn()).toMatchObject({ state: 'completed', outcome: 'failure' })
       expect(h.drawn()).toEqual([
         expect.objectContaining({
-          key: agentJournalItemKey({
-            provider: 'orca',
-            clientMessageId: `terminal-failure:claude:${COMMAND_KEY}`
-          }),
+          key: TERMINAL_FAILURE_KEY,
           turnScope: IN_COMMAND,
           body: expect.objectContaining({
             kind: 'status',
@@ -209,7 +210,6 @@ describe('a captured /compact as the open Claude turn', () => {
       const h = harness()
       h.begin('compact-input')
       h.frame(rejected('five_hour'))
-      const shown = cause === 'signed out' ? 'Not logged in · Please run /login' : CREDITS
       if (cause === 'signed out') {
         for (const frame of await recordedSignedOut()) {
           h.frame(frame)
@@ -243,11 +243,26 @@ describe('a captured /compact as the open Claude turn', () => {
       }
       expect(h.commandTurn()).toMatchObject({ state: 'completed', outcome: 'failure' })
       const statuses = h.drawn().filter((row) => row.body.kind === 'status')
+      // Signed out reads as an ordinary send does; the credit refusal keeps Claude's own words.
       expect(statuses).toEqual([
-        expect.objectContaining({
-          turnScope: IN_COMMAND,
-          body: expect.objectContaining({ text: expect.stringContaining(shown) })
-        })
+        expect.objectContaining(
+          cause === 'signed out'
+            ? {
+                key: TERMINAL_FAILURE_KEY,
+                turnScope: IN_COMMAND,
+                body: expect.objectContaining({
+                  tone: 'error',
+                  failure: expect.objectContaining({
+                    kind: 'notSignedIn',
+                    detail: { text: 'Not logged in · Please run /login', audience: 'person' }
+                  })
+                })
+              }
+            : {
+                turnScope: IN_COMMAND,
+                body: expect.objectContaining({ text: expect.stringContaining(CREDITS) })
+              }
+        )
       ])
       expect(
         statuses.some(
@@ -257,41 +272,54 @@ describe('a captured /compact as the open Claude turn', () => {
     }
   )
 
-  it.each(['received before the command', 'cleared during it'])(
-    "keeps Claude's own refusal command-owned when the only rejection was %s",
-    (when) => {
-      const h = harness()
-      if (when === 'received before the command') {
-        h.frame(rejected('five_hour'))
-        h.begin('compact-input')
-      } else {
-        // A blanket "rejected during this command" flag would borrow the older weekly limit.
-        h.frame(rejected('seven_day'))
-        h.begin('compact-input')
-        h.frame(rejected('five_hour'))
-        h.frame(rejected('five_hour', 'allowed'))
-      }
-      h.frame({
-        type: 'system',
-        subtype: 'status',
-        compact_result: 'failed',
-        compact_error: 'Not enough messages to compact.'
-      })
+  it.each([
+    'received before the command',
+    'received during an earlier command',
+    'cleared during it'
+  ])("keeps Claude's own refusal command-owned when the only rejection was %s", (when) => {
+    const h = harness()
+    if (when === 'received before the command') {
+      h.frame(rejected('five_hour'))
+      h.begin('compact-input')
+    } else if (when === 'received during an earlier command') {
+      // The account keeps the limit, but the next attempt starts with none of its own.
+      h.begin('earlier-input')
+      h.frame(rejected('five_hour'))
+      h.frame({ type: 'system', subtype: 'compact_boundary' })
       h.frame({
         type: 'result',
         subtype: 'success',
         is_error: false,
-        user_message_uuid: 'compact-input'
+        user_message_uuid: 'earlier-input'
       })
-      expect(h.commandTurn()).toMatchObject({ state: 'completed', outcome: 'failure' })
-      expect(h.drawn().map((row) => row.body)).toEqual([
-        expect.objectContaining({
-          text: 'Compaction failed: Not enough messages to compact.',
-          failure: expect.objectContaining({ kind: 'compactionFailed' })
-        })
-      ])
+      h.begin('compact-input')
+    } else {
+      // A blanket "rejected during this command" flag would borrow the older weekly limit.
+      h.frame(rejected('seven_day'))
+      h.begin('compact-input')
+      h.frame(rejected('five_hour'))
+      h.frame(rejected('five_hour', 'allowed'))
     }
-  )
+    h.frame({
+      type: 'system',
+      subtype: 'status',
+      compact_result: 'failed',
+      compact_error: 'Not enough messages to compact.'
+    })
+    h.frame({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      user_message_uuid: 'compact-input'
+    })
+    expect(h.commandTurn()).toMatchObject({ state: 'completed', outcome: 'failure' })
+    expect(h.drawn().map((row) => row.body)).toEqual([
+      expect.objectContaining({
+        text: 'Compaction failed: Not enough messages to compact.',
+        failure: expect.objectContaining({ kind: 'compactionFailed' })
+      })
+    ])
+  })
 
   it.each(['success', 'stop', 'unconfirmed', 'allowed', 'expired', 'other-error'])(
     'does not turn %s into quota failure from an account observation',

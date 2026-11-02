@@ -1,4 +1,4 @@
-// Consume /compact output; ordinary provider failures replace the command's own result row.
+// Consume /compact output; select its one result: an ordinary provider failure or the command's own row.
 
 import { providerDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
@@ -6,7 +6,13 @@ import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../shared/agen
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/structured-conversation-command-outcome'
 import type { AcpDialect, AcpTurnEnding } from './acp-dialects/acp-dialect'
-import { mergeAcpTurnFailureEvidence, type AcpTurnFailureEvidence } from './acp-turn-failures'
+import {
+  acpProviderFailed,
+  acpStopReasonFailed,
+  mergeAcpTurnFailureEvidence,
+  type AcpTurnFailureEvidence,
+  type AcpTurnFailures
+} from './acp-turn-failures'
 import type { ContentBlock, SessionUpdate } from './generated/acp-protocol.generated'
 
 export const ACP_COMPACT_PROMPT: readonly ContentBlock[] = [{ type: 'text', text: '/compact' }]
@@ -42,14 +48,12 @@ export function absorbAcpCompactionFrame(
   }
   const failure = extension?.failure ?? extension?.end
   const detail = extension?.failureDetail ?? failure?.failureDetail
-  if (detail || (failure && ['error', 'rate_limit'].includes(failure.stopReason))) {
-    compaction.failure = mergeAcpTurnFailureEvidence(
-      compaction.failure,
-      failure?.stopReason ?? 'error',
-      detail,
-      false,
-      failure?.usageLimit
-    )
+  if (detail || (failure && acpStopReasonFailed(failure.stopReason))) {
+    compaction.failure = mergeAcpTurnFailureEvidence(compaction.failure, {
+      stopReason: failure?.stopReason ?? 'error',
+      failureDetail: detail,
+      usageLimit: failure?.usageLimit
+    })
   }
   const end = extension?.end
   if (end) {
@@ -62,18 +66,16 @@ export function absorbAcpCompactionFrame(
   return update !== undefined && readAcpCompactionUpdate(compaction, update)
 }
 
-export function acpCompactionEnd(input: {
-  compaction: AcpCompaction
-  turn: string
-  thread: string
-  stopReason: string
-  at: number
-  durationMs?: number
-  failureDetail?: string
-  failureShown?: boolean
-  dialect: AcpDialect
-  agentName?: string
-}): ProviderTimelineEvent[] {
+export function acpCompactionEnd(
+  input: AcpTurnEnding & {
+    compaction: AcpCompaction
+    turn: string
+    thread: string
+    dialect: AcpDialect
+    agentName?: string
+    failures: Pick<AcpTurnFailures, 'write'>
+  }
+): ProviderTimelineEvent[] {
   const { compaction, turn, stopReason } = input
   // The host's command turn has no provider key.
   const join = { thread: input.thread }
@@ -103,6 +105,13 @@ export function acpCompactionEnd(input: {
       end('success')
     ]
   }
+  // Established provider evidence selects the ordinary failure row instead of the command's own.
+  if (acpStopReasonFailed(stopReason)) {
+    compaction.failure = mergeAcpTurnFailureEvidence(compaction.failure, input)
+    if (acpProviderFailed(compaction.failure)) {
+      return [...input.failures.write(turn, compaction.failure, join, stopReason), end('failure')]
+    }
+  }
   // Settlement already merged its detail behind the first diagnostic the agent reported.
   const words = reply?.detail ?? (compaction.failure?.text || input.failureDetail)
   const detail = words === undefined ? undefined : providerDiagnostic(words, 'person')
@@ -116,9 +125,6 @@ export function acpCompactionEnd(input: {
     return [end('cancellation')]
   }
   const failure = verdict.failure
-  if (failure && input.failureShown) {
-    return [end('failure')]
-  }
   const body =
     verdict.outcome === 'success' || !failure
       ? { kind: 'status' as const, text: 'Context compacted', presentation: 'compaction' as const }
