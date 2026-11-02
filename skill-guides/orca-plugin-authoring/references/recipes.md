@@ -85,10 +85,15 @@ export default function activate(orca: OrcaWorkerApi) {
 }
 ```
 
+Other hooks: `workspace.create.before`/`.after`, `agent.launch.before` (change the command line or
+add `env`; the agent's own environment is never shown) and `agent.prompt.before` (rewrite a prompt
+Orca submits to an agent).
+
 Return `{ deny }` to stop, nothing (or `next(event)`) to pass. Past 2 s or on a throw Orca carries
 on as if the hook passed and logs it (`ORCA plugin logs`); a guard that must fail closed lists the
 hook as `{ "event": "terminal.send", "onError": "deny" }`. Decide before any other awaited call:
 `await orca.host.call('notifications.show', …)` ahead of `return { deny }` can throw or time out and
 let the action through, so count blocks after deciding (`void orca.host.call(...)`). Unit-test with
 `(await mountWorker(worker)).hooks.fire('terminal.send', event)`, which returns
-`{ kind: 'continue', event }` or `{ kind: 'deny', reason }`.
+`{ kind: 'continue', event }` or `{ kind: 'deny', reason }`; against the loaded dev plugin,
+`ORCA plugin dev hook . terminal.send --data '<json>'` prints the same decision.
