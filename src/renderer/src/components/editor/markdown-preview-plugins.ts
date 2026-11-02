@@ -15,14 +15,16 @@ import {
   remarkGitHubCallouts
 } from '@/lib/remark-github-callouts'
 import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
+import { EXTERNAL_EDITOR_URI_SCHEME_NAMES } from '../../../../shared/external-editor-uri-schemes'
 
 const markdownPreviewSanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'kbd', 'sub', 'sup', 'ins'],
   protocols: {
     ...defaultSchema.protocols,
-    // Why: keep file:// through sanitize so the click handler can open the target.
-    href: [...(defaultSchema.protocols?.href ?? []), 'file'],
+    // Why: keep file:// and editor deep links (vscode://) through sanitize
+    // so the click handler can open the target.
+    href: [...(defaultSchema.protocols?.href ?? []), 'file', ...EXTERNAL_EDITOR_URI_SCHEME_NAMES],
     src: [...(defaultSchema.protocols?.src ?? []), 'file']
   },
   attributes: {
