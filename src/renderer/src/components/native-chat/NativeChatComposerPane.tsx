@@ -299,6 +299,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       disabled,
       structuredTransport,
       editSession,
+      goalActive: goalMode.active,
       isWorking,
       canStop: hasPty && onStop !== undefined,
       setDraft,

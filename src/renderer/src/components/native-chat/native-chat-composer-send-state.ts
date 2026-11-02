@@ -32,6 +32,8 @@ export function nativeChatComposerSendState(input: {
   disabled: boolean
   structuredTransport: NativeChatStructuredComposerTransport | undefined
   editSession: { canSave: boolean } | undefined
+  /** The draft becomes a goal, not a message. */
+  goalActive: boolean
   isWorking: boolean
   canStop: boolean
   setDraft: (draft: string) => void
@@ -57,6 +59,7 @@ export function nativeChatComposerSendState(input: {
   const suggestion =
     input.messageDelivery &&
     !input.editSession &&
+    !input.goalActive &&
     !sendHeld &&
     input.draft === '' &&
     input.imageAttachments.length === 0
