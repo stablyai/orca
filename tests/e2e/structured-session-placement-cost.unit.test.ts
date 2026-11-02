@@ -7,9 +7,6 @@ import {
   reveal
 } from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
-import { stopStructuredAgentSessionRuntime } from '../../src/main/runtime/agent-session/structured-agent-session-runtime'
-import { closeTestStores } from '../../src/main/persistence/persistence-test-harness'
-import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { acquireWatcherRemovalGate } from '../../src/main/ipc/watcher-removal-gate'
 import { registerSessionHandlers } from '../../src/main/ipc/session'
 import * as worktreeIdentity from '../../src/shared/worktree/id'
@@ -44,13 +41,6 @@ vi.mock('electron', async (original) => ({
 
 const chatIds = (prefix: string, n: number) =>
   Array.from({ length: n }, (_, i) => `${prefix}-${i.toString().padStart(5, '0')}`)
-async function closeRig() {
-  await chatTabCommandsSettled()
-  await stopStructuredAgentSessionRuntime()
-  await closeTestStores()
-  await closeTestJournalHostDatabases()
-  vi.restoreAllMocks()
-}
 const linear = (tally: Record<string, number[]>) => {
   for (const [key, [small, large]] of Object.entries(tally)) {
     expect([key, large]).toEqual([key, expect.any(Number)])
@@ -58,9 +48,12 @@ const linear = (tally: Record<string, number[]>) => {
   }
 }
 
-it('a window graph over N and 10N chats costs linear work to accept, resend, go stale after a move, be omitted and stay unchanged', async () => {
-  const tally: Record<string, number[]> = {}
-  for (const n of [20, 200]) {
+// Each population gets its own profile and journal, so the N and 10N runs are separate cases.
+const graphTally: Record<string, number[]> = {}
+it.each([20, 200])(
+  'a window graph over %i chats costs linear work to accept, resend, go stale after a move, be omitted and stay unchanged',
+  async (n) => {
+    const tally = graphTally
     const others = chatIds('other', n)
     const listed = [B, C, ...others]
     const rig = await retired([C, ...others], listed)
@@ -113,16 +106,19 @@ it('a window graph over N and 10N chats costs linear work to accept, resend, go 
     phase('outbound', () => {
       expect(ids(resultAt(rig, rig.old))).toEqual([C, ...others].sort())
     })
-    await closeRig()
-  }
-  console.log('S3_GRAPH_COUNTS', JSON.stringify(tally))
-  linear(tally)
-  for (const [key, counts] of Object.entries(tally)) {
-    if (key.endsWith('.published')) {
-      expect(Math.max(...counts), key).toBeLessThanOrEqual(2)
+    for (const [key, counts] of Object.entries(tally)) {
+      if (key.endsWith('.published')) {
+        expect(Math.max(...counts), key).toBeLessThanOrEqual(2)
+      }
+    }
+    if (n === 200) {
+      console.log('S3_GRAPH_COUNTS', JSON.stringify(tally))
+      // The 20-chat case runs first in this file and leaves its counts beside these.
+      expect(Object.values(tally).every((counts) => counts.length === 2)).toBe(true)
+      linear(tally)
     }
   }
-})
+)
 
 it('saved get, set and patch through the real handlers filter N and 10N workspaces in linear work, and a view-only patch looks no chat up', async () => {
   const tally: Record<string, number[]> = {}
