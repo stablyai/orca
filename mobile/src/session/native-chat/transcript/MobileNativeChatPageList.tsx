@@ -286,12 +286,14 @@ export function MobileNativeChatPageList({
     ref,
     () => ({
       scrollToEnd: () => {
+        align.cancelAlign()
         const s = scroller()
         if (s) {
           write(s, 0)
         }
       },
       scrollToOffset: ({ offset }) => {
+        align.cancelAlign()
         const s = scroller()
         if (s) {
           write(s, offset - (s.scrollHeight - s.clientHeight))
@@ -300,7 +302,7 @@ export function MobileNativeChatPageList({
       hasPreviousMessage: align.hasPreviousMessage,
       revealPreviousMessage: align.revealPreviousMessage
     }),
-    [align.hasPreviousMessage, align.revealPreviousMessage, scroller, write]
+    [align.cancelAlign, align.hasPreviousMessage, align.revealPreviousMessage, scroller, write]
   )
 
   const drawnHead = useRef<string | undefined>(undefined)
@@ -358,6 +360,7 @@ export function MobileNativeChatPageList({
     }
     // A release that hands over to a fling comes right after a scroll, which still counts.
     const down = () => {
+      align.cancelAlign()
       touching.current = true
       hold()
     }
@@ -374,7 +377,7 @@ export function MobileNativeChatPageList({
       downs.forEach((type) => s.removeEventListener(type, down, options))
       ups.forEach((type) => s.removeEventListener(type, up, options))
     }
-  }, [scroller, hold])
+  }, [align.cancelAlign, scroller, hold])
 
   const scrolled = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
