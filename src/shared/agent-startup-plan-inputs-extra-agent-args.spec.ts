@@ -30,6 +30,22 @@ describe('resolveAgentStartupPlanInputs with extra agent args', () => {
     expect(plan?.launchCommand).toContain('--dangerously-skip-permissions')
   })
 
+  it('uses Pi extras instead of host model and thinking defaults', () => {
+    const inputs = resolveAgentStartupPlanInputs({
+      agent: 'pi',
+      settings: { agentDefaultArgs: { pi: '--model old/model --thinking low' } },
+      platform: 'linux',
+      isRemote: false,
+      shell: undefined,
+      extraAgentArgs: '--model=new/model --thinking=max'
+    })
+    const command = buildAgentStartupPlan({ ...inputs, prompt: 'go' })?.launchCommand
+    expect(command).toContain("'--model' 'new/model'")
+    expect(command).toContain("'--thinking' 'max'")
+    expect(command).not.toContain('old/model')
+    expect(command).not.toContain("'low'")
+  })
+
   it('matches explicitly composed launch defaults and extras', () => {
     const headless = resolveAgentStartupPlanInputs({
       agent: 'claude',

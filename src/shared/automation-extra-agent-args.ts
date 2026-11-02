@@ -1,4 +1,7 @@
-import { agentArgTerminatorIndex } from './agent-session/options/agent-session-option-agent-args'
+import {
+  agentArgTerminatorIndex,
+  removeAgentArgOption
+} from './agent-session/options/agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import { findOptionOccurrence } from './command-option-occurrence'
 import {
@@ -42,7 +45,8 @@ const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOp
   // Cursor composes effort into the model id, so only the model is a flag.
   cursor: [MODEL_OR_M_OPTION],
   grok: [MODEL_OR_M_OPTION, { kind: 'effort', aliases: ['--effort', '--reasoning-effort'] }],
-  omp: [MODEL_OPTION]
+  omp: [MODEL_OPTION],
+  pi: [MODEL_OPTION, { kind: 'effort', aliases: ['--thinking'] }]
 }
 
 export function supportsExtraAgentArgs(agent: TuiAgent): boolean {
@@ -222,7 +226,18 @@ export function parseExtraAgentArgs(args: {
     kinds.add(kind)
     index += match.consumed - 1
   }
-  return { ok: true, tokens, kinds }
+  // Pi treats --option=value as an extension flag, not a built-in option.
+  return {
+    ok: true,
+    tokens:
+      args.agent === 'pi'
+        ? tokens.flatMap((token) => {
+            const match = /^(--model|--thinking)=(.+)$/.exec(token)
+            return match ? [match[1], match[2]] : [token]
+          })
+        : tokens,
+    kinds
+  }
 }
 
 function removeDefaultsFor(
@@ -230,6 +245,16 @@ function removeDefaultsFor(
   kinds: ReadonlySet<ExtraAgentArgKind>,
   tokens: readonly string[]
 ): string[] {
+  if (agent === 'pi') {
+    let result = [...tokens]
+    if (kinds.has('model')) {
+      result = removeAgentArgOption(agent, result, ['--model'])
+    }
+    if (kinds.has('effort')) {
+      result = removeAgentArgOption(agent, result, ['--thinking'])
+    }
+    return result
+  }
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   let result = [...tokens]
   if (!catalog) {

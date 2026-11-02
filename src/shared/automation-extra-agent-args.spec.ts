@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { mergeExtraAgentArgs, parseExtraAgentArgs } from './automation-extra-agent-args'
+import {
+  getExtraAgentArgsPlaceholder,
+  mergeExtraAgentArgs,
+  parseExtraAgentArgs,
+  supportsExtraAgentArgs
+} from './automation-extra-agent-args'
+import { assertAutomationExtraAgentArgs } from './automation-extra-agent-args-record'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
@@ -27,6 +33,21 @@ function rejection(agent: TuiAgent, extraAgentArgs: string) {
 }
 
 describe('mergeExtraAgentArgs', () => {
+  it('enables Pi extras for fresh sessions', () => {
+    const automation = {
+      agentId: 'pi' as const,
+      extraAgentArgs: '--model provider/model --thinking high',
+      reuseSession: false,
+      surface: 'terminal' as const
+    }
+    expect(supportsExtraAgentArgs('pi')).toBe(true)
+    expect(getExtraAgentArgsPlaceholder('pi')).toBe('--model model-id --thinking high')
+    expect(() => assertAutomationExtraAgentArgs(automation)).not.toThrow()
+    expect(() => assertAutomationExtraAgentArgs({ ...automation, reuseSession: true })).toThrow(
+      'fresh session'
+    )
+  })
+
   it('matches the documented example', () => {
     expect(
       merged(
@@ -109,7 +130,25 @@ describe('mergeExtraAgentArgs', () => {
       '--model=grok-4.7',
       ['--reasoning-effort', 'low', '--model=grok-4.7']
     ],
-    ['omp', '--model a/b', '--model c/d', ['--model', 'c/d']]
+    ['omp', '--model a/b', '--model c/d', ['--model', 'c/d']],
+    [
+      'pi',
+      '--model old/model --thinking low',
+      '--model=new/model --thinking=max',
+      ['--model', 'new/model', '--thinking', 'max']
+    ],
+    [
+      'pi',
+      '--model old/model --thinking low',
+      '--thinking high',
+      ['--model', 'old/model', '--thinking', 'high']
+    ],
+    [
+      'pi',
+      '--system-prompt --model --model old',
+      '--model new',
+      ['--system-prompt', '--model', '--model', 'new']
+    ]
   ] as const)('%s: %s + %s', (agent, defaults, extras, expected) => {
     expect(merged(agent, defaults, extras)).toEqual(expected)
   })
@@ -179,6 +218,9 @@ describe('parseExtraAgentArgs rejections', () => {
     ['grok', '--effort low --reasoning-effort high', 'effort more than once'],
     ['grok', '--permission-mode bypassPermissions', '"--permission-mode"'],
     ['omp', '--effort high', '"--effort"'],
+    ['pi', '--thinking low --thinking high', 'effort more than once'],
+    ['pi', '--extension path', '"--extension"'],
+    ['pi', '--model x --resume', '"--resume"'],
     ['codebuddy', '--add-dir x', '"--add-dir"']
   ] as const)('%s rejects %j', (agent, extras, message) => {
     expect(rejection(agent, extras)).toContain(message)
@@ -246,6 +288,30 @@ describe.each(['posix', 'powershell', 'cmd'] as const)('round trip on %s', (shel
         shell
       )
     ).toEqual(['--dangerously-skip-permissions', '--add-dir', 'x y', '--add-dir', token])
+  })
+
+  it('builds a Pi startup command with separate model and thinking arguments', () => {
+    const args = mergeExtraAgentArgs({
+      agent: 'pi',
+      defaultArgs: '',
+      extraAgentArgs: '--model=provider/model --thinking=max',
+      shell
+    })
+    if (!args.ok) {
+      throw new Error(args.error)
+    }
+    const plan = buildAgentStartupPlan({
+      agent: 'pi',
+      prompt: 'do the thing',
+      cmdOverrides: {},
+      platform: shell === 'posix' ? 'linux' : 'win32',
+      shell,
+      agentArgs: args.agentArgs
+    })
+    expect(tokenizeStartupCommand(plan?.launchCommand ?? '', shell)).toMatchObject({
+      ok: true,
+      tokens: ['pi', '--model', 'provider/model', '--thinking', 'max', 'do the thing']
+    })
   })
 
   it('builds the startup command with extras before the prompt', () => {
