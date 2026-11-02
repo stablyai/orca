@@ -938,6 +938,9 @@
               }
             }
           }
+        },
+        "linear": {
+          "37d36984d0": "La conexión de Linear fue reemplazada por una solicitud más reciente."
         }
       },
       "pluginNewFile": {
@@ -1387,7 +1390,8 @@
       },
       "file": {
         "preview": {
-          "webClientUnavailable": "Las vistas previas de documentos no están disponibles en el cliente web."
+          "webClientUnavailable": "Las vistas previas de documentos no están disponibles en el cliente web.",
+          "pairedOutsideWorktree": "Los archivos fuera del espacio de trabajo aún no se pueden previsualizar en un servidor emparejado."
         }
       },
       "clipboardWriteFailure": {
@@ -1490,6 +1494,27 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+clic para abrir en el navegador del sistema",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "plane": {
+        "usage": {
+          "examples": {
+            "readTicket": "Leer la incidencia vinculada",
+            "readTicketSummary": "Obtén el contexto completo de la incidencia de Plane vinculada antes de empezar a trabajar.",
+            "readTicketPrompt": "Usa {{value0}} para leer la incidencia de Plane vinculada a este worktree, luego resume el objetivo y los criterios de aceptación antes de comenzar.",
+            "postUpdate": "Publicar una actualización de progreso",
+            "postUpdateSummary": "Comenta el progreso o un resumen de finalización en la incidencia de Plane vinculada.",
+            "postUpdatePrompt": "Usa {{value0}} para publicar una actualización de finalización en la incidencia de Plane vinculada con lo que ha cambiado y cómo se verificó.",
+            "moveState": "Avanzar la incidencia",
+            "moveStateSummary": "Avanza el estado del flujo de trabajo de Plane a medida que progresa el trabajo.",
+            "moveStatePrompt": "Usa {{value0}} para mover la incidencia de Plane vinculada a En curso o En revisión ahora que el cambio está en marcha.",
+            "triagePriority": "Clasificar y establecer prioridad",
+            "triagePrioritySummary": "Actualiza la prioridad o el estado en la incidencia de Plane a medida que se aclara el alcance.",
+            "triagePriorityPrompt": "Usa {{value0}} para clasificar la incidencia de Plane vinculada: actualiza su prioridad a urgente/alta/media/baja y ajusta el estado.",
+            "createFollowup": "Crear una incidencia de seguimiento",
+            "createFollowupSummary": "Crea una nueva incidencia de Plane para el trabajo pospuesto o los errores relacionados encontrados durante el desarrollo.",
+            "createFollowupPrompt": "Usa {{value0}} para crear una nueva incidencia de Plane para el trabajo de seguimiento pospuesto."
+          }
+        }
       }
     },
     "hooks": {
@@ -1617,7 +1642,9 @@
         "automationsDescription": "Programa el trabajo del agente y elige si Automatizaciones aparece en la barra lateral.",
         "shareSkillsTitle": "Compartir skills",
         "shareSkillsDescription": "Comparte tus skills con un enlace no listado. Cualquiera que lo tenga puede instalarlos.",
-        "floatingWorkspaceWebDescription": "Pestañas globales de terminal y markdown."
+        "floatingWorkspaceWebDescription": "Pestañas globales de terminal y markdown.",
+        "planeTitle": "Plane",
+        "planeDescription": "Cómo funciona Plane en Orca, lista de comprobación de configuración, habilidad de agente y prompts de ejemplo."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -4184,7 +4211,8 @@
             "rateLimitResetsAvailable_many": "{{count}} reinicios de rate limit disponibles",
             "staleCodexSessions_one": "{{count}} sesión de Codex sigue en la cuenta anterior.",
             "staleCodexSessions_other": "{{count}} sesiones de Codex siguen en la cuenta anterior.",
-            "staleCodexSessions_many": "{{count}} sesiones de Codex siguen en la cuenta anterior."
+            "staleCodexSessions_many": "{{count}} sesiones de Codex siguen en la cuenta anterior.",
+            "9332ba8684": "Cambiar a"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -5888,7 +5916,8 @@
           "fee535205b": "Tareas",
           "d599269755": "Ocultar de la barra lateral",
           "artifacts": "Artefactos",
-          "skills": "Habilidades"
+          "skills": "Habilidades",
+          "openPlaneTasks": "Abrir tareas de Plane"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Limpiar",
@@ -6100,7 +6129,13 @@
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "Creado por Orca CLI",
           "linkedJira": "Jira {{value0}} vinculado",
-          "openInOrcaBrowser": "Abrir en el navegador Orca"
+          "openInOrcaBrowser": "Abrir en el navegador Orca",
+          "e42941631a": "Ver en Linear",
+          "5e982e6128": "Linear {{value0}}",
+          "b22f058067": "Ver en GitHub",
+          "e97d8f2876": "Issue #{{value0}}",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "Ver en Jira"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "Estado: Abierto",
@@ -6244,7 +6279,9 @@
           "pathLaunchFailedDetail": "Comprueba el comando del editor configurado en esta máquina.",
           "wsl": "WSL",
           "remoteEditorHint": "Sólo VS Code, Cursor y Zed pueden abrir carpetas en un host SSH.",
-          "remoteRuntimeEditorHint": "Las aplicaciones de este equipo solo pueden abrir los archivos del servidor cuando Orca se conecta a él por SSH."
+          "remoteRuntimeEditorHint": "Las aplicaciones de este equipo solo pueden abrir los archivos del servidor cuando Orca se conecta a él por SSH.",
+          "remoteLaunchFailed": "No se pudo abrir la ruta en el editor.",
+          "remoteLaunchFailedDetail": "Comprueba el comando del editor configurado en esta máquina."
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "No leído:",
@@ -6857,7 +6894,8 @@
           "refresh": "Actualizar",
           "wsl1Reason": "WSL 1 no puede ejecutar un host de Orca; conviértela con {{command}}",
           "noWsl2Title": "No se encontraron distribuciones de WSL 2",
-          "noWsl2Install": "Instala una desde una terminal de Windows con {{command}} y luego elige Actualizar."
+          "noWsl2Install": "Instala una desde una terminal de Windows con {{command}} y luego elige Actualizar.",
+          "none": "No se encontraron distros WSL. Instala una con: wsl --install"
         },
         "wslHostRowStatus": {
           "connecting": "Iniciando",
@@ -7302,7 +7340,9 @@
             "tintDescription": "Mantén la barra lateral izquierda predeterminada o aplícale un tinte. Para seguir el terminal, elige Coincidir con el terminal como tema claro u oscuro.",
             "fcc653abee": "Apariencia de la barra lateral izquierda",
             "df205a675e": "Intensidad del tinte",
-            "ba1d9a0607": "Tinte de la barra lateral"
+            "ba1d9a0607": "Tinte de la barra lateral",
+            "rowDescription": "Haz que la barra lateral izquierda coincida con tu terminal, mantén el valor predeterminado o usa un tinte.",
+            "matchTerminal": "Coincidir con el terminal"
           },
           "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
           "interfaceTitle": "Interfaz",
@@ -7636,7 +7676,11 @@
             "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell",
             "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca.",
             "resumeTitle": "Reanudar los chats de trabajo automáticamente después de reiniciar",
-            "resumeToggleLabel": "Alternar reanudación automática después de un reinicio"
+            "resumeToggleLabel": "Alternar reanudación automática después de un reinicio",
+            "title": "Chat UI",
+            "toggleLabel": "Alternar Chat UI",
+            "description": "Abra nuevos agentes admitidos en la interfaz de usuario de Chat.",
+            "copy": "Los nuevos agentes admitidos se abren en un chat estructurado. Otros agentes abren en la terminal; los chats existentes permanecen disponibles."
           },
           "agentDashboard": {
             "title": "Panel de agentes",
@@ -7783,7 +7827,8 @@
           "d2f33670a9": "Importar desde Ghostty",
           "273e7e81fe": "Configuraciones",
           "1f744a72f4": "configuración",
-          "9759d2dfa2": "Aplicar cambios"
+          "9759d2dfa2": "Aplicar cambios",
+          "e4bda7ce6f": "No se encontró ninguna configuración de Ghostty en este sistema."
         },
         "BranchPrefixFeedback": {
           "6c40c0908f": "El prefijo no puede contener espacios ni caracteres especiales como ~ ^ : ? * [ \\",
@@ -8067,7 +8112,20 @@
           "workerAutoReleaseDescription": "Cierra el terminal o chat de un trabajador 2 minutos después de que termine, salvo que elijas Mantener abierto. Si vuelve a trabajar, los 2 minutos empiezan de nuevo cuando termina.",
           "workerAutoReleaseKeywordClose": "cerrar",
           "workerAutoReleaseKeywordRelease": "liberar",
-          "8a94078d05": "Orquestación de agentes"
+          "8a94078d05": "Orquestación de agentes",
+          "chatErrorEscalationTitle": "Avisar al coordinador de los errores del chat",
+          "chatErrorEscalationDescription": "Cuando un agente asignado encuentra un error que termina su turno, envía el error exacto al coordinador que lo asignó. La tarea sigue asignada al agente. Solo funciona con agentes que se ejecutan en la interfaz de chat.",
+          "chatErrorEscalationNeedsChat": "Activa la interfaz de chat en la configuración experimental para usarlo.",
+          "chatErrorEscalationKeywordError": "error",
+          "chatErrorEscalationKeywordChat": "chat",
+          "heartbeatTitle": "Latidos de los trabajadores",
+          "heartbeatDescription": "Los trabajadores asignados se reportan cada pocos minutos para que el coordinador distinga un agente que trabaja de uno colgado. Si lo desactivas, el coordinador recibe menos mensajes, pero pierde esa señal de actividad. Se aplica a los trabajadores asignados después del cambio.",
+          "heartbeatKeywordHeartbeat": "latido",
+          "heartbeatKeywordStalled": "atascado",
+          "heartbeatKeywordInterval": "intervalo",
+          "heartbeatIntervalTitle": "Intervalo de latidos",
+          "heartbeatIntervalDescription": "Un intervalo más corto le da al coordinador reportes más frecuentes, pero le envía más mensajes. Un intervalo más largo envía menos mensajes, pero deja más tiempo entre reportes. Se aplica a los trabajadores asignados después del cambio.",
+          "heartbeatIntervalSuffix": "minutos"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Permite a los agentes transferir contexto y coordinar el trabajo a través de Orca.",
@@ -8555,7 +8613,9 @@
           "742ca66ea6": "Privacidad y telemetría",
           "c2bb9fc528": "Espacio de trabajo flotante",
           "f1fddf7764": "Entrada y edición",
-          "d60b7f0e58": "Comandos rápidos"
+          "d60b7f0e58": "Comandos rápidos",
+          "planeTitle": "Plane",
+          "planeDescription": "Cómo funciona Plane en Orca, lista de comprobación de configuración, habilidad de agente y prompts de ejemplo."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -8790,7 +8850,9 @@
           "integrationsLink": "Integraciones",
           "skillHint": ". Después de conectar Linear, los ejemplos de uso están en Ajustes → Linear.",
           "incompleteBannerBodyWithLinear": "Oculta los proveedores que no uses o expande una tarjeta y completa sus pasos. Para Linear: acceso a la API, la habilidad del agente y Mostrar en Tareas.",
-          "30255b39dc": "Proveedores de tareas"
+          "30255b39dc": "Proveedores de tareas",
+          "plane": "Plane",
+          "planeDescription": "Conecta Plane Cloud o Plane autoalojado y muéstralo en Tareas."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Grosor de la línea divisoria del panel.",
@@ -9030,7 +9092,11 @@
           "e80b782206": "Opacidad del fondo",
           "9881daf4f5": "ANSI brillante",
           "f5bda64f57": "Negro brillante",
-          "2d8a13cabd": "Relleno horizontal"
+          "2d8a13cabd": "Relleno horizontal",
+          "53ce336e15": "Reinicie Orca para aplicar el cambio de desenfoque de ventana.",
+          "97950bb087": "Aplica desenfoque de fondo a la ventana de la terminal. Requiere reiniciar.",
+          "2b82242f43": "Desenfoque de ventana",
+          "03c855d15f": "Restablecer todas las anulaciones de color"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Restablecer"
@@ -9379,7 +9445,9 @@
               "background": "fondo",
               "tint": "tinte",
               "tintDescription": "Mantén la barra lateral izquierda predeterminada o aplícale un tinte. Para seguir el terminal, elige Coincidir con el terminal como tema claro u oscuro.",
-              "0a5d3677f0": "Apariencia de la barra lateral izquierda"
+              "0a5d3677f0": "Apariencia de la barra lateral izquierda",
+              "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte.",
+              "terminal": "Terminal"
             },
             "workspaceCardLayout": {
               "description": "Las tarjetas de espacios de trabajo pueden usar diseños compactos o detallados.",
@@ -9760,6 +9828,19 @@
               "inWindow": "en la ventana",
               "worktrees": "árboles de trabajo",
               "eaf17a7214": "Panel de agentes"
+            },
+            "nativeChat": {
+              "title": "Chat UI",
+              "grok": "grok",
+              "native": "nativo",
+              "chat": "chat",
+              "claude": "claude",
+              "codex": "codex",
+              "openclaude": "claudia abierta",
+              "omp": "omp",
+              "terminal": "Terminal",
+              "agent": "agente",
+              "description": "Abra nuevos agentes admitidos en la interfaz de usuario de Chat."
             }
           }
         },
@@ -10058,7 +10139,10 @@
             "86a08aa60c": "Integración de Gitea",
             "cd74b2f587": "Integración de GitLab",
             "d905b3ecee": "Integración Linear",
-            "b3efe7ab71": "Integración de Azure DevOps"
+            "b3efe7ab71": "Integración de Azure DevOps",
+            "plane_title": "Integración con Plane",
+            "plane_description": "Conecta Plane Cloud o autoalojado para explorar y vincular incidencias.",
+            "plane_keyword": "lineal"
           }
         },
         "jira": {
@@ -10549,7 +10633,8 @@
             "apiKey": "clave de API",
             "skill": "habilidad",
             "connect": "conectar",
-            "12d2fdff3c": "Proveedores de tareas"
+            "12d2fdff3c": "Proveedores de tareas",
+            "plane": "lineal"
           }
         },
         "terminal": {
@@ -10799,7 +10884,9 @@
             "3fdccf0277": "Relleno vertical",
             "651c993c32": "Familia de fuentes",
             "64f6b4fdf6": "El foco sigue al mouse",
-            "18a9f63aff": "Color del divisor claro"
+            "18a9f63aff": "Color del divisor claro",
+            "bc2054657a": "Aplica desenfoque de fondo a la ventana del terminal. Requiere reiniciar.",
+            "72d0482137": "Desenfoque de ventana"
           },
           "windows": {
             "search": {
@@ -11055,7 +11142,9 @@
                 "connectedSiteSingular": "{{count}} sitio conectado",
                 "connectedSitePlural": "{{count}} sitios conectados",
                 "connectedWorkspaceSingular": "{{count}} espacio de trabajo conectado",
-                "connectedWorkspacePlural": "{{count}} espacios de trabajo conectados"
+                "connectedWorkspacePlural": "{{count}} espacios de trabajo conectados",
+                "checkingPlane": "Comprobando el acceso a Plane antes de mostrar las acciones de configuración.",
+                "addPlaneAccess": "Conecta Plane Cloud o una instancia autoalojada mediante un token de API."
               }
             }
           }
@@ -11631,7 +11720,8 @@
           "resolvedTag": "Instala {{value0}} en el commit {{value1}}.",
           "resolvedBranch": "Instala la rama {{value0}} tal como está ahora, en el commit {{value1}}.",
           "resolvedCommit": "Instala el commit {{value0}}.",
-          "resolvedDefaultBranch": "No se encontró ninguna etiqueta de versión, así que se instala el commit más reciente, {{value0}}."
+          "resolvedDefaultBranch": "No se encontró ninguna etiqueta de versión, así que se instala el commit más reciente, {{value0}}.",
+          "gitRefRequired": "Añade un #tag o #commit, como #v0.1.0."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "Solo en un espacio de trabajo"
@@ -11746,7 +11836,8 @@
           "useForDark": "Usar en oscuro:",
           "assignedLight": "{{value0}} establecido como tema claro",
           "assignedDark": "{{value0}} establecido como tema oscuro",
-          "saveFailed": "No se pudo guardar el tema. Inténtalo de nuevo."
+          "saveFailed": "No se pudo guardar el tema. Inténtalo de nuevo.",
+          "useName": "Usar ahora: {{value0}}"
         },
         "PluginContributionActionCommand": {
           "run": "Ejecutar",
@@ -12893,7 +12984,8 @@
           "hashCopied": "Hash de contenido copiado",
           "hashCopyFailed": "No se pudo copiar el hash.",
           "readme": "Leer el README en {{value0}}",
-          "installs": "Instalaciones"
+          "installs": "Instalaciones",
+          "homepage": "Página web"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Ningún plugin coincide con estos filtros",
@@ -13081,6 +13173,72 @@
           "shownPluginCount_other": "{{count}} complementos coincidentes mostrados, incluido este",
           "samePublisher": "Más elementos incluidos como {{value0}}",
           "shownPluginCount_many": "{{count}} complementos coincidentes mostrados, incluido este"
+        },
+        "PlaneAgentSkillPane": {
+          "title": "Plane",
+          "description": "Cómo funciona Plane en Orca: explora incidencias, inicia espacios de trabajo vinculados y permite que los agentes actualicen incidencias con /orca-plane.",
+          "skillTitle": "Habilidad de Plane",
+          "howToUse": "Prompts de ejemplo",
+          "howToUseDescription": "Haz clic en una tarjeta para copiar un prompt. Úsalos en un espacio de trabajo vinculado a Plane después de instalar la habilidad.",
+          "manageConnectionHint": "Revisa los espacios de trabajo de Plane conectados y las claves de API en",
+          "manageConnectionLink": "Integraciones"
+        },
+        "PlaneAgentSkillGuide": {
+          "setupConnectTitle": "1. Conectar Plane",
+          "setupConnectBody": "Una clave de API personal para que Orca pueda listar incidencias y abrir espacios de trabajo vinculados.",
+          "manageKeys": "Administrar claves",
+          "addAccess": "Añadir acceso",
+          "setupSkillTitle": "2. Instalar la habilidad del agente",
+          "setupSkillBody": "Proporciona /orca-plane a los agentes para leer, actualizar, clasificar y adjuntar solicitudes de cambio.",
+          "setupVisibleTitle": "3. Mostrar Plane en Tareas",
+          "setupVisibleBody": "Mantiene Plane en el selector de fuentes de Tareas y en los accesos directos de la barra lateral.",
+          "openTaskSources": "Fuentes de tareas",
+          "setupTitle": "Lista de configuración",
+          "setupBody": "Los tres pasos son necesarios para el flujo completo entre Tareas y agentes. La configuración inicial también está en Fuentes de tareas.",
+          "setupReady": "Todo listo",
+          "setupProgress": "{{done}} de {{total}} listos",
+          "notesTitle": "Conviene saberlo",
+          "notesIntro": "Recordatorios rápidos después de conectar Plane e instalar la habilidad.",
+          "noteLinkedTitle": "Comienza desde una incidencia de Plane",
+          "noteLinkedBody": "Las acciones de incidencias funcionan mejor en un espacio de trabajo creado desde Tareas, para mantener la incidencia vinculada como contexto.",
+          "noteSlashTitle": "Menciona /orca-plane",
+          "noteSlashBody": "En el chat, usa /orca-plane (o pide la acción en lenguaje natural) para que el agente cargue la habilidad durante ese turno.",
+          "noteInstanceTitle": "Cloud y autoalojado",
+          "noteInstanceBody": "Compatible tanto con Plane Cloud (app.plane.so) como con instancias de Plane autoalojadas personalizadas.",
+          "noteVisibilityTitle": "Ocultar no desconecta",
+          "noteVisibilityBody": "Ocultar Plane en Fuentes de tareas solo lo quita del selector. No elimina la clave ni la habilidad.",
+          "setupChecking": "De cheques…"
+        },
+        "TaskSourcePlaneSetup": {
+          "connectTitle": "Conectar Plane",
+          "connectDescription": "Añade una clave de API personal para que Orca pueda explorar incidencias y abrir espacios de trabajo con su contexto.",
+          "manageAccess": "Administrar claves",
+          "addAccess": "Añadir acceso a Plane",
+          "connectedHint": "Los espacios de trabajo y las claves se guardan para el entorno de ejecución activo. Puedes añadir más accesos en cualquier momento.",
+          "recheck": "Volver a comprobar la conexión",
+          "skillTitle": "Instalar la habilidad de agente de Plane",
+          "skillDescription": "Proporciona /orca-plane a los agentes para leer incidencias, publicar actualizaciones, cambiar estados y adjuntar solicitudes de cambio.",
+          "skillBlocked": "Conecta Plane primero y luego instala la habilidad para los agentes.",
+          "skillPanelTitle": "Habilidad de Plane",
+          "showDescription": "Incluye Plane en el selector de fuentes de Tareas y en los accesos directos de la barra lateral."
+        },
+        "plane": {
+          "agent": {
+            "skill": {
+              "search": {
+                "title": "Plane",
+                "description": "Estado de la habilidad de Plane, ejemplos de uso y enlaces a la configuración de Fuentes de tareas.",
+                "plane": "lineal",
+                "tickets": "entradas",
+                "issues": "asuntos",
+                "skill": "habilidad",
+                "orcaPlane": "orca-plane"
+              }
+            }
+          },
+          "cloud": "Plane Cloud",
+          "connectionFailed": "Error de conexión",
+          "cardFooter": "Explora incidencias y abre worktrees con el contexto del ticket directamente desde Plane Cloud o tu instancia autoalojada."
         }
       },
       "right": {
@@ -15078,7 +15236,24 @@
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Escritorios",
             "af761a0c0d": "Ajustes",
-            "5d94e8ddcc": "Orca"
+            "5d94e8ddcc": "Orca",
+            "a7d9e2c44d": "7d",
+            "a3d5476811": "5h",
+            "8a350a4784": "Uso de la cuenta",
+            "e27fdaee51": "Nuevo espacio de trabajo",
+            "4405f3c440": "Emparejar escritorio",
+            "0b00c98506": "Acciones rápidas",
+            "0bad5b07c8": "GitHub y Linear",
+            "d047197480": "GitHub · Linear",
+            "d33d7a9c29": "orca  ·  feat/mobile-page",
+            "25d6e8a491": "feat/mobile-page",
+            "c791677f2f": "Reanudar",
+            "091355da3d": "M1 Mini · inicio",
+            "0bc1881bc4": "Conectado · 40 worktrees · 5 activos",
+            "156db8a68a": "PRs creados",
+            "4a40af029b": "Tiempo de agentes",
+            "00a6903322": "Agentes iniciados",
+            "c0e2e9dcd9": "Bienvenido de nuevo"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "Enviar",
@@ -15950,7 +16125,9 @@
           "d9d2944855": "No se pudo cargar la vista previa del archivo",
           "fitToView": "Ajustar a la vista",
           "actualSize": "Tamaño real",
-          "expand": "Ampliar imagen"
+          "expand": "Ampliar imagen",
+          "6c89c73d9f": "Restablecer zoom",
+          "77bfc9b35a": "Abrir imagen en ventana emergente"
         },
         "IpynbViewer": {
           "859bf9fc21": "Ejecutar celda",
@@ -16636,6 +16813,11 @@
           "tooLarge": "{{value0}} es demasiado grande para abrirse en {{value1}} ({{value2}}; el límite es {{value3}}).",
           "unsupported": "{{value0}} no puede leer este archivo desde donde está almacenado. Actualiza el servidor de Orca que lo aloja o cambia a Código fuente.",
           "readFailed": "No se pudo leer {{value0}} para {{value1}}. {{value2}}"
+        },
+        "ImageViewerPopup": {
+          "0ef78475e7": "Presione Esc para cerrar",
+          "535f4e2b56": "Cerrar",
+          "9e27b2ecaf": "Vista previa de imagen a tamaño completo"
         }
       },
       "diff": {
@@ -18111,6 +18293,20 @@
                 }
               }
             }
+          },
+          "plane": {
+            "connectTitle": "Conectar el espacio de trabajo de Plane",
+            "connectDescription": "Explora, rastrea e inicia trabajo a partir de incidencias de Plane directamente en worktrees aislados.",
+            "connectButton": "Conectar Plane",
+            "selectWorkspace": "Seleccionar espacio de trabajo",
+            "allProjects": "Todos los proyectos",
+            "refreshIssues": "Actualizar incidencias",
+            "openInPlane": "Abrir en Plane",
+            "noIssuesFound": "No se encontraron incidencias",
+            "createIssueHint": "Crea una incidencia en Plane para verla aquí.",
+            "backlog": "Backlog",
+            "openInWorktree": "Abrir en worktree",
+            "viewInPlane": "Ver en Plane"
           }
         }
       },
@@ -18804,6 +19000,23 @@
         "setting-global-off": "La confianza de carpetas está desactivada en los ajustes de Agentes, así que los agentes siempre preguntan.",
         "keyword-trust": "confianza",
         "keyword-hooks": "hooks"
+      },
+      "plane": {
+        "connect": {
+          "dialog": {
+            "title": "Conectar Plane",
+            "description": "Conecta tu espacio de trabajo de Plane para explorar incidencias y abrir worktrees con el contexto del ticket.",
+            "deploymentType": "Tipo de despliegue",
+            "planeCloud": "Plane Cloud",
+            "selfHosted": "Autoalojado",
+            "instanceUrl": "URL de la instancia",
+            "instanceUrlPlaceholder": "https://plane.yourcompany.com",
+            "personalApiToken": "Token de API personal",
+            "createApiToken": "Crear token de API",
+            "apiTokenPlaceholder": "plane_api_...",
+            "connecting": "Conectando..."
+          }
+        }
       }
     },
     "i18n": {
@@ -19416,7 +19629,8 @@
       "resumeInNewChat": {
         "hostUpdateRequired": "Actualiza Orca en este host para continuar en la interfaz de chat.",
         "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
-        "exitUnconfirmed": "{{agent}} está ejecutando esta conversación en otra terminal. Ciérralo allí o cierra esa terminal y vuelve a intentarlo."
+        "exitUnconfirmed": "{{agent}} ya está ejecutando esta conversación en otra terminal. Ciérrala allí o cierra esa terminal, luego inténtalo de nuevo.",
+        "exitUnconfirmedFromTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones."
       },
       "state": {
         "loading": {
@@ -19570,7 +19784,8 @@
         "moveChanged": "La cola cambió antes de este movimiento. Intenta arrastrar el mensaje de nuevo.",
         "reorderHint": "Arrastra para reordenar o usa las teclas de flecha arriba y abajo.",
         "reorderMessage": "Reordenar mensaje",
-        "imageCount": "{{count}} imágenes"
+        "imageCount": "{{count}} imágenes",
+        "turnOffQueueing": "Desactivar la cola"
       },
       "thought": "Pensó",
       "thoughtForDuration": "Pensó durante {{duration}}",
@@ -20430,7 +20645,10 @@
         "turnDiffsTitle": "Diferencias de turnos",
         "turnDiffsCopy": "Muestra debajo de la respuesta los archivos modificados en cada turno, con el número de líneas.",
         "turnDiffsSearchChangedFiles": "archivos modificados",
-        "turnDiffsSearchEdits": "ediciones"
+        "turnDiffsSearchEdits": "ediciones",
+        "queueFollowUpsTitle": "Poner mensajes en cola",
+        "queueFollowUpsCopy": "Los mensajes que envías mientras el agente trabaja esperan como tarjetas que puedes enviar ahora, editar o eliminar. Los mensajes con imágenes se envían de inmediato.",
+        "queueFollowUpsToggleLabel": "Alternar la cola de mensajes"
       },
       "TerminalInteraction": {
         "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas.",
@@ -21334,6 +21552,18 @@
       "switchedNoteTitle": "Los agentes nuevos se abrirán en Chat UI",
       "switchedNoteBody": "¿Prefieres el terminal? Vuelve cuando quieras: busca <term>Chat UI</term> en Ajustes.",
       "openSettings": "Abrir ajustes"
+    },
+    "nativeChatUpgrade": {
+      "eyebrow": "Nuevo",
+      "title": "El chat nativo mejora",
+      "intro": "Los chats nuevos de agentes compatibles usan la vista de chat mejorada. Para alternar entre chat y CLI, abre {{panel}} (barra lateral derecha):",
+      "resumeInNativeChat": "{{action}} abre una conversación de CLI compatible en el chat nativo.",
+      "resumeInCli": "{{action}} copia un chat de Claude/Codex a una CLI nueva sin tocar el original.",
+      "gotIt": "Entendido",
+      "leaveOff": "Dejarlo desactivado",
+      "enableNow": "Activar ahora",
+      "enableError": "No se pudo activar el modo chat.",
+      "manageInSettings": "Gestiona Chat UI en <link>Ajustes → Experimental</link>."
     }
   },
   "fileExplorer": {
@@ -21610,7 +21840,8 @@
       "quitDuringMoveConfirm": "Salir de todos modos"
     },
     "startupWorktreeRefresh": {
-      "loading": "Buscando espacios de trabajo…"
+      "loading": "Buscando espacios de trabajo…",
+      "description": "Pueden aparecer más espacios de trabajo mientras se cargan los proyectos locales y remotos."
     },
     "createProject": {
       "errors": {
@@ -21868,7 +22099,9 @@
   "common": {
     "retry": "Reintentar",
     "cancel": "Cancelar",
-    "delete": "Borrar"
+    "delete": "Borrar",
+    "connect": "Conectar",
+    "disconnect": "Desconectar"
   },
   "terminal": {
     "codexTerminalServerIsolationNotice": {
@@ -22386,7 +22619,11 @@
       "endHint": "Finaliza este terminal y sus procesos secundarios.",
       "claimed": "Un agente ahora posee este terminal. Actualiza antes de volver a intentarlo.",
       "attached": "Un cliente ahora está conectado a este terminal. Actualiza antes de volver a intentarlo.",
-      "unverifiableEnd": "No verificable: el host no pudo confirmar el resultado. Puede que el terminal siga ejecutándose."
+      "unverifiableEnd": "No verificable: el host no pudo confirmar el resultado. Puede que el terminal siga ejecutándose.",
+      "endTitle": "¿Finalizar {{terminal}}?",
+      "endDescription": "Esto finaliza el terminal y sus procesos secundarios. El trabajo sin guardar puede perderse.",
+      "cancel": "Cancelar",
+      "end": "Finalizar terminal"
     },
     "resources": "Recursos",
     "ptys": "PTY",
@@ -23365,7 +23602,12 @@
         "views_one": "Se muestra {{count}} vista, la primera de la lista. Busca o abre Linear para ver la lista completa.",
         "views_other": "Se muestran las primeras {{count}} vistas. Busca o abre Linear para ver la lista completa.",
         "views_many": "Se muestran las primeras {{count}} vistas. Busca o abre Linear para ver la lista completa."
-      }
+      },
+      "projectsLoadFailed": "No se pudieron cargar los proyectos.",
+      "projectLoadFailed": "No se pudo cargar el proyecto.",
+      "projectIssuesLoadFailed": "No se pudieron cargar los issues del proyecto.",
+      "viewsLoadFailed": "No se pudieron cargar las vistas.",
+      "viewContentsLoadFailed": "No se pudo cargar el contenido de la vista."
     },
     "jira": {
       "connectionFailed": "La conexión falló",
