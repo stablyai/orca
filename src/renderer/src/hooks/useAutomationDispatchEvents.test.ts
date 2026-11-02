@@ -681,6 +681,26 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
+  // A reused session's terminal that closed before any write may start a fresh session; one that
+  // may have taken the text never does, or the run would send its prompt twice.
+  it.each([
+    ['target-gone', true],
+    ['unconfirmed', false]
+  ] as const)('a reused session answering %s starts a fresh one: %s', async (outcome, fresh) => {
+    mockFindReusableAutomationSession.mockReturnValue({
+      tabId: 'agent-tab',
+      paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+      ptyId: 'agent-pty'
+    })
+    mockObserveExistingAutomationSession.mockResolvedValue(() => {})
+    mockSubmitPromptToAgentPty.mockResolvedValue(outcome)
+
+    await registerAndDispatch(makeAutomation({ reuseSession: true }))
+
+    expect(mockSubmitPromptToAgentPty).toHaveBeenCalledOnce()
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledTimes(fresh ? 1 : 0)
+  })
+
   it('consumes duplicate done and zero-exit completion through one finalizer', async () => {
     let launchArgs: {
       onAgentStatus?: (payload: { state: string }) => void

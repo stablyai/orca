@@ -4501,5 +4501,10 @@
         }
       }
     }
+  },
+  "agentPrompt": {
+    "notSent": "Your prompt wasn't sent to {{agent}}. Answer any dialog in its terminal, then paste your prompt.",
+    "deliveryUnconfirmed": "{{agent}} may have received part of your prompt. Check its terminal before sending again.",
+    "copy": "Copy prompt"
   }
 }

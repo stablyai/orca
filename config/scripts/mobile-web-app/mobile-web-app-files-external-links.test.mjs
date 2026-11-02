@@ -46,7 +46,7 @@ describeClosure(
   240_000
 )
 
-// Preview copies Markdown via device seam; explorer grants clipboard because in-document preview inherits opening grants.
+// Preview copies Markdown via device seam; every host route also reaches it through the shared layout's notice Copy.
 describeClosure(
   'the clipboard the files pages reach',
   () => {
@@ -57,10 +57,8 @@ describeClosure(
 
     it('reaches the device writer through the Markdown source Copy control', async () => {
       const preview = await mobileWebAppRouteClosure(PREVIEW)
-      const explorer = await mobileWebAppRouteClosure(EXPLORER)
       expect(preview.local).toContain('src/components/MobileSourceCopyButton.tsx')
       expect(preview.local).toContain('src/platform/clipboard.web.ts')
-      expect(explorer.local).not.toContain('src/platform/clipboard.web.ts')
     })
   },
   240_000

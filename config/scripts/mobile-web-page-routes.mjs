@@ -3,16 +3,17 @@
 // Builder owns declarations and manifest checks MobileWebBundleRouteSchema. Haptics census derives required token from every reachable seam.
 export const MOBILE_WEB_PAGE_ROUTES = [
   // Home needs navigate/storage for session hops and app pins; shared protocol-wall Update action needs externalLink. Wide ownsHostArea permits sidebar.
+  // Every host route's shared layout shows the host's unsent-prompt notices, whose Copy writes the clipboard.
   {
     pathname: '/h/[hostId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     canOwnHostArea: true,
     canOwnHostAreaAcrossLayouts: true
   },
   // History needs navigate for session/resume, storage for shared sidebar width and externalLink for layout protocol wall.
   {
     pathname: '/h/[hostId]/agent-history/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
   // Tasks needs navigate/storage plus provider externalLink and comment-review clipboard writes; grants persist from opening route.
   {
@@ -21,17 +22,17 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   },
   {
     pathname: '/h/[hostId]/automations',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
   // Accounts needs navigate/storage/externalLink for Back/shared layout wall; haptics census requires seam grant.
   {
     pathname: '/h/[hostId]/accounts',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
   // Create Workspace overlay needs navigate to close/open session; shared form/layout supply other grants.
   {
     pathname: '/h/[hostId]/new-workspace',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
   // Explorer grants cover preview too so push stays in document under opening session’s grants; uncovered target hands off and reopens under its own.
   // externalLink serves layout wall/in-document Markdown preview; clipboard.write serves preview Source Copy. Census checks relation.

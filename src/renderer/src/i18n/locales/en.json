@@ -23458,5 +23458,13 @@
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
     }
+  },
+  "agentPrompt": {
+    "notSent": "Your prompt wasn't sent to {{agent}}. Answer any dialog in its terminal, then paste your prompt.",
+    "deliveryUnconfirmed": "{{agent}} may have received part of your prompt. Check its terminal before sending again.",
+    "copy": "Copy prompt",
+    "notesNotSent": "Your notes weren't sent to {{agent}}. Answer any dialog in its terminal, then paste your notes.",
+    "notesUnconfirmed": "{{agent}} may have received part of your notes. Check its terminal before sending again.",
+    "copyNotes": "Copy notes"
   }
 }

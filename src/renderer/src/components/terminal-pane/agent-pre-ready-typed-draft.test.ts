@@ -61,7 +61,8 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 
 vi.mock('@/lib/agent-draft-readiness', () => ({
   waitForAgentDraftInputReady,
-  agentInputIsAdmitted: async () => true
+  agentInputIsAdmitted: async () => true,
+  forgetLegacyTail: () => {}
 }))
 
 const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
@@ -285,11 +286,13 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.bind('pty-1')
     await flushAsyncTicks(20)
 
+    // The held keys' observation ends with the pane: it carries the pane's abort signal.
     expect(waitForAgentDraftInputReady).toHaveBeenCalledWith(
       'pty-1',
       expect.any(Number),
       expect.any(String),
-      'claude'
+      'claude',
+      expect.any(AbortSignal)
     )
     expect(sendAgentDraftPasteContent).toHaveBeenCalledWith(
       'pty-1',
@@ -400,6 +403,34 @@ describe('agent pane keys typed before its PTY binds', () => {
     expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
     expect(onPasteTimeout).toHaveBeenCalledOnce()
     pane.dispose()
+  })
+
+  // A held-key wait once outlived its pane with a fresh budget of its own.
+  it('ends the readiness wait when the pane closes during it, recovering the exact keys once', async () => {
+    let observed: AbortSignal | undefined
+    waitForAgentDraftInputReady.mockImplementation(
+      (_ptyId: string, _timeout: number, _signal: string, _agent: string, abort: AbortSignal) => {
+        observed = abort
+        return new Promise<boolean>((resolve) =>
+          abort.addEventListener('abort', () => resolve(false))
+        )
+      }
+    )
+    const pane = connectAgentPane()
+    await flushAsyncTicks(20)
+    pane.type('held keys')
+    pane.bind('pty-1')
+    await flushAsyncTicks(20)
+    expect(observed?.aborted).toBe(false)
+
+    pane.dispose()
+    await flushAsyncTicks(20)
+
+    expect(observed?.aborted).toBe(true)
+    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(recoveryNotice).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ content: 'held keys' })
+    )
   })
 
   it('drops the held draft when the pane closes before the bind', async () => {

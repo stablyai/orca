@@ -31,11 +31,15 @@ function harness() {
   const views: GeneratedAgentInputNotice[][] = []
   const pageReads: (() => void)[] = []
   let holdPages = false
+  let pageCalls = 0
+  // Stream messages a lossy link drops before this client sees them.
+  let drop = (_message: unknown) => false
   const feed = createGeneratedInputNoticeFeed({
     readPage: async (from) => {
       if (holdPages) {
         await new Promise<void>((resolve) => pageReads.push(resolve))
       }
+      pageCalls += 1
       const result = await page.handler(from ?? {}, context)
       wire.push(JSON.stringify(result))
       return result
@@ -46,7 +50,9 @@ function harness() {
     'stream' in subscribe
       ? subscribe.handler(null, context, (message) => {
           wire.push(JSON.stringify(message))
-          feed.receive(message)
+          if (!drop(message)) {
+            feed.receive(message)
+          }
         })
       : Promise.reject(new Error('not a stream'))
   const add = (text: string) =>
@@ -70,6 +76,8 @@ function harness() {
     add,
     settle,
     pageReads,
+    pageCalls: () => pageCalls,
+    dropWhen: (predicate: (message: unknown) => boolean) => (drop = predicate),
     hold: (on: boolean) => (holdPages = on)
   }
 }
@@ -126,6 +134,62 @@ it('never revives a notice dismissed while the snapshot is still paging, and dis
       .map((notice) => notice.text)
       .toSorted()
   ).toEqual(['second', 'third'])
+  for (const cleanup of h.cleanups.values()) {
+    cleanup()
+  }
+})
+
+// Thousands of small notices once cost a rescan per page and a full republication per frame.
+async function snapshotCost(tiny: number) {
+  const h = harness()
+  const large = Array.from({ length: 3 }, (_, i) => `${i}${'x'.repeat(700 * 1024)}`)
+  const texts = [
+    ...Array.from({ length: tiny / 2 }, (_, i) => `t${i}`),
+    ...large,
+    ...Array.from({ length: tiny / 2 }, (_, i) => `u${i}`)
+  ]
+  for (const text of texts) {
+    h.add(text)
+  }
+  void h.connect()
+  for (let i = 0; i < 20 && h.views.length === 0; i += 1) {
+    await h.settle()
+  }
+  expect(h.views).toHaveLength(1)
+  expect(h.views[0].map((notice) => notice.text)).toEqual(texts)
+  for (const frame of h.wire) {
+    expect(Buffer.byteLength(frame)).toBeLessThan(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2)
+  }
+  for (const cleanup of h.cleanups.values()) {
+    cleanup()
+  }
+  return { visits: h.notices.pageVisits, pages: h.pageCalls(), count: texts.length }
+}
+
+it('pages 30,000 tiny notices plus large ones exactly, with work linear in what is sent', async () => {
+  const small = await snapshotCost(3_000)
+  const big = await snapshotCost(30_000)
+  // Each page visits its notices once, plus the split notice it resumes.
+  expect(small.visits).toBeLessThanOrEqual(small.count + small.pages)
+  expect(big.visits).toBeLessThanOrEqual(big.count + big.pages)
+  expect(big.pages).toBeLessThan(small.pages * 10 + 3)
+})
+
+it('reads the host again after a dropped change, keeping additions and dismissals', async () => {
+  const h = harness()
+  h.add('first')
+  h.add('second')
+  void h.connect()
+  await h.settle()
+  await h.settle()
+  const [first] = [...h.notices.page().frames]
+  h.dropWhen((message) => (message as { type?: string }).type === 'dismissed')
+  h.notices.dismiss(first.id)
+  h.dropWhen(() => false)
+  h.add('third')
+  await h.settle()
+  await h.settle()
+  expect(h.views.at(-1)!.map((notice) => notice.text)).toEqual(['second', 'third'])
   for (const cleanup of h.cleanups.values()) {
     cleanup()
   }
