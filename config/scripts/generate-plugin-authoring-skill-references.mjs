@@ -43,7 +43,8 @@ function loadSources() {
     schema: 'src/shared/plugins/manifest/plugin-json-schema.ts',
     fieldDocs: 'src/shared/plugins/manifest/plugin-schema-field-docs.ts',
     cli: 'src/cli/specs/plugin.ts',
-    cliView: 'src/cli/specs/plugin-view.ts'
+    cliView: 'src/cli/specs/plugin-view.ts',
+    themeTokens: 'src/shared/plugins/artifacts/plugin-theme-token-reference-doc.ts'
   })
 }
 
@@ -164,12 +165,17 @@ function renderTesting({ testing }) {
       ['## `TestPanel` (from `mount`)', '', ...members('TestPanel'), ''],
       ['## `TestWorker` (from `mountWorker`)', '', ...members('TestWorker'), ''],
       ['## `MockHost` (from `mockHost`)', '', ...members('MockHost'), ''],
+      ['## `MockEditorHost` (from `mockEditorHost`)', '', ...members('MockEditorHost'), ''],
       [
         '## Options',
         '',
-        ...['MountOptions', 'MountWorkerOptions', 'MockHostOptions', 'CheckScenario'].map(
-          (name) => `- ${code(testing.typeDeclaration(name))}`
-        )
+        ...[
+          'MountOptions',
+          'MountWorkerOptions',
+          'MockHostOptions',
+          'MockEditorHostOptions',
+          'CheckScenario'
+        ].map((name) => `- ${code(testing.typeDeclaration(name))}`)
       ]
     ]
   )
@@ -241,6 +247,18 @@ function renderHostApi(sources, { frame, worker }) {
         ...frame
           .literalMembers('EditorDocumentApi')
           .map((m) => bullet({ ...m, text: `document.${m.text}` })),
+        ''
+      ],
+      [
+        '## Theme variables in frames',
+        '',
+        "HTML panels and custom editors get these CSS variables from Orca's active theme, plus a `light` or `dark` class on `<html>`. A theme change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.",
+        '',
+        ...sources.themeTokens.pluginFrameThemeVariables().map(({ variable, paints }) => {
+          // Name the frame's own variables, not the app theme tokens behind them.
+          const role = paints.replace(/`--([\w-]+)`/g, '`--orca-$1`')
+          return `- ${code(variable)}${role ? `: ${role}` : ''}`
+        }),
         ''
       ],
       ['## Methods', '', ...methods, ''],
@@ -394,10 +412,23 @@ function renderCli({ cli, cliView }) {
   const exitCodes = specs
     .flatMap((spec) => spec.notes ?? [])
     .find((note) => note.startsWith('Exit codes'))
+  // Why: commands whose exit codes differ (such as check's plugin_check_failed) would otherwise be invisible here.
+  const otherExitCodes = specs.flatMap((spec) =>
+    (spec.notes ?? [])
+      .filter((note) => note.startsWith('Exit codes') && note !== exitCodes)
+      .map((note) => `\`${spec.path.join(' ')}\`: ${note.replace(/^Exit codes: /u, '')}`)
+  )
   return document(
     'Plugin CLI commands',
     [
-      `\`ORCA\` is the Orca executable you resolved. Every command takes \`--json\`; branch on \`error.code\`. ${exitCodes ?? ''} Run \`ORCA <command> --help\` for a command's notes.`,
+      [
+        '`ORCA` is the Orca executable you resolved. Every command takes `--json`; branch on `error.code`.',
+        exitCodes,
+        ...otherExitCodes.map((note) => `Except ${note}`),
+        "Run `ORCA <command> --help` for a command's notes."
+      ]
+        .filter(Boolean)
+        .join(' '),
       ''
     ],
     [specs.map((spec) => `- ${code(spec.usage.replace(/^orca /u, 'ORCA '))}: ${spec.summary}`)]

@@ -17,7 +17,7 @@ export function mobileNativeChatFollowUpPreference(
 }
 
 class MobileNativeChatFollowUpPreference {
-  private value = nativeChatQueueFollowUps(null)
+  private value: boolean | null = null
   private readonly listeners = new Set<() => void>()
   private stopState?: () => void
   private stopStream?: () => void
@@ -26,7 +26,8 @@ class MobileNativeChatFollowUpPreference {
 
   constructor(private readonly client: RpcClient) {}
 
-  getSnapshot = (): boolean => this.value
+  getSnapshot = (): boolean => this.value ?? nativeChatQueueFollowUps(null)
+  getReportedSnapshot = (): boolean | null => this.value
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
@@ -47,7 +48,7 @@ class MobileNativeChatFollowUpPreference {
     }
   }
 
-  private publish(value: boolean): void {
+  private publish(value: boolean | null): void {
     if (value !== this.value) {
       this.value = value
       for (const listener of this.listeners) {

@@ -35,7 +35,8 @@ export type PluginWorkerManagerOptions = {
   executeHostCall: (
     pluginKey: string,
     method: string,
-    params: unknown
+    params: unknown,
+    signal?: AbortSignal
   ) => ReturnType<PluginWorkerHostCallExecutor>
   onPanelPost?: (pluginKey: string, post: PluginWorkerPanelPost) => void
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
@@ -156,8 +157,8 @@ export class PluginWorkerManager {
           slots: this.slots.for(spec, log),
           entryPath: this.options.entryPath,
           factory: this.options.workerFactory,
-          executeHostCall: (method, params) =>
-            this.options.executeHostCall(spec.pluginKey, method, params),
+          executeHostCall: (method, params, callSignal) =>
+            this.options.executeHostCall(spec.pluginKey, method, params, callSignal),
           onPanelPost: (post) => this.options.onPanelPost?.(spec.pluginKey, post),
           log,
           assertActive: () => this.throwIfCancelled(spec.pluginKey, generation, signal),
