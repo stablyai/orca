@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
-import type { DirCache } from './file-explorer-types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import {
   noteUserWorkspaceSwitch,
@@ -9,133 +8,61 @@ import {
   WORKSPACE_SWITCH_MOUNT_WINDOW_MS
 } from '@/lib/workspace-switch-user-act'
 
+import { StrictMode, type PropsWithChildren } from 'react'
+import { useAppStore } from '@/store'
+import {
+  initializeExplorerSubscriptions,
+  useVisibleTree,
+  visibleProps,
+  listing
+} from './file-explorer-lifecycle-test-support'
+
+const read = vi.hoisted(() => vi.fn())
+const stat = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/user-opened-local-path', () => ({ statUserOpenedPath: stat }))
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => async () => true
+}))
+vi.mock('./file-explorer-directory-listing', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  readFileExplorerDirectory: read
+}))
+const ownerMock = vi.hoisted(() => vi.fn())
+const owner = vi.hoisted(() => ({
+  kind: 'runtime' as const,
+  environmentId: 'host-a',
+  executionHostId: 'runtime:host-a' as const
+}))
+vi.mock('./file-explorer-operation-owner', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  getFileExplorerOperationOwner: ownerMock,
+  getFileExplorerOperationOwnerFromState: ownerMock
+}))
+
 afterEach(() => {
   cleanup()
   resetWorkspaceSwitchUserActsForTests()
 })
-function pendingRefresh() {
-  let resolve!: () => void
-  const promise = new Promise<void>((finish) => {
-    resolve = finish
-  })
-  return { promise, resolve }
-}
-function params(path = '/repo') {
-  const dir = `${path}/link`
-  const stale = new Set([dir])
-  const dirCache: Record<string, DirCache> = { [dir]: { children: [] } }
-  const errors: { rootError: string | null } = { rootError: null }
+function params() {
   return {
-    stale,
     props: {
-      workspaceKey: `repo-1::${path}`,
-      visibleFilesWorktreePath: path,
-      expanded: new Set([dir]),
-      dirCache,
-      loadingDirPaths: new Set([dir]),
-      ...errors,
-      isDirStale: (candidate: string) => stale.has(candidate),
-      loadDir: vi.fn().mockResolvedValue(true),
-      refreshTree: vi.fn<() => Promise<unknown>>(),
+      workspaceKey: 'repo-1::/repo',
+      activeWorktreeId: 'repo-1::/repo',
+      visibleFilesWorktreePath: '/repo',
+      expanded: new Set<string>(),
+      dirCache: {},
+      loadingDirPaths: new Set<string>(),
+      rootError: null,
+      invalidateTree: vi.fn(),
+      retireView: vi.fn(),
+      reconcileView: vi.fn(),
+      loadRevision: 0,
       resetAndLoad: vi.fn(),
       resetSelection: vi.fn(),
       setNameFilterQuery: vi.fn()
     }
   }
 }
-it('runs one bounded retry across root and expanded-wave loading transitions', async () => {
-  const { props, stale } = params()
-  const pending = pendingRefresh()
-  props.refreshTree.mockReturnValue(pending.promise)
-  const hook = renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
-  hook.rerender({ ...props, loadingDirPaths: new Set() })
-  expect(props.refreshTree).toHaveBeenCalledTimes(1)
-  for (const loading of [
-    new Set(['/repo']),
-    new Set<string>(),
-    new Set(['/repo/link']),
-    new Set<string>()
-  ]) {
-    hook.rerender({ ...props, loadingDirPaths: loading })
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(props.refreshTree).toHaveBeenCalledTimes(1)
-  }
-  stale.clear()
-  await act(async () => {
-    pending.resolve()
-    await pending.promise
-  })
-  expect(props.refreshTree).toHaveBeenCalledTimes(1)
-  expect(props.loadDir).not.toHaveBeenCalled()
-})
-it.each(['fresh-empty', 'directory-error', 'root-error'])('does not loop on %s', async (state) => {
-  const { props, stale } = params()
-  if (state === 'fresh-empty') {
-    stale.clear()
-  }
-  if (state === 'directory-error') {
-    props.dirCache['/repo/link'].error = 'ENOENT'
-  }
-  if (state === 'root-error') {
-    props.rootError = 'ETIMEDOUT'
-  }
-  const hook = renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
-  for (let i = 0; i < 3; i++) {
-    hook.rerender({ ...props, loadingDirPaths: new Set() })
-    await act(async () => {
-      await Promise.resolve()
-    })
-  }
-  expect(props.refreshTree).not.toHaveBeenCalled()
-  expect(props.loadDir).not.toHaveBeenCalled()
-})
-it.each(['root', 'directory'])('stops after a retry records a %s error', async (failure) => {
-  const { props } = params()
-  const pending = pendingRefresh()
-  props.refreshTree.mockReturnValue(pending.promise)
-  const hook = renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
-  hook.rerender({ ...props, loadingDirPaths: new Set() })
-  expect(props.refreshTree).toHaveBeenCalledTimes(1)
-  if (failure === 'root') {
-    props.rootError = 'ETIMEDOUT'
-  } else {
-    props.dirCache['/repo/link'].error = 'ENOENT'
-  }
-  hook.rerender({ ...props, loadingDirPaths: new Set() })
-  await act(async () => {
-    pending.resolve()
-    await pending.promise
-  })
-  expect(props.refreshTree).toHaveBeenCalledTimes(1)
-})
-it('does not let an old workspace completion release a new workspace retry', async () => {
-  const first = params('/first')
-  const second = params('/second')
-  const oldRefresh = pendingRefresh()
-  const newRefresh = pendingRefresh()
-  first.props.refreshTree.mockReturnValue(oldRefresh.promise)
-  second.props.refreshTree.mockReturnValue(newRefresh.promise)
-  const hook = renderHook(useFileExplorerTreeLoadEffects, { initialProps: first.props })
-  hook.rerender({ ...first.props, loadingDirPaths: new Set() })
-  hook.rerender(second.props)
-  hook.rerender({ ...second.props, loadingDirPaths: new Set() })
-  expect(second.props.refreshTree).toHaveBeenCalledTimes(1)
-  await act(async () => {
-    oldRefresh.resolve()
-    await oldRefresh.promise
-  })
-  hook.rerender({ ...second.props, loadingDirPaths: new Set() })
-  expect(first.props.refreshTree).toHaveBeenCalledTimes(1)
-  expect(second.props.refreshTree).toHaveBeenCalledTimes(1)
-  second.stale.clear()
-  await act(async () => {
-    newRefresh.resolve()
-    await newRefresh.promise
-  })
-  expect(second.props.refreshTree).toHaveBeenCalledTimes(1)
-})
 it("only the user's own switch to a workspace lets its open read start a stopped WSL distro", () => {
   const { props } = params()
   noteUserWorkspaceSwitch(props.workspaceKey)
@@ -167,4 +94,69 @@ it('a restore, remount or re-open with no new switch never wakes WSL', () => {
   expect(props.resetAndLoad).toHaveBeenNthCalledWith(2, { wakeWslDistro: true })
   expect(props.resetAndLoad).toHaveBeenNthCalledWith(3, undefined)
   remount.unmount()
+})
+
+describe('visible tree wake provenance', () => {
+  beforeEach(() => {
+    resetWorkspaceSwitchUserActsForTests()
+    initializeExplorerSubscriptions()
+    vi.useFakeTimers()
+    useAppStore.setState({
+      expandedDirs: {},
+      sshConnectedGeneration: 0,
+      activeFileId: null,
+      openFiles: [],
+      pendingExplorerReveal: null
+    })
+    ownerMock.mockReturnValue(owner)
+    read.mockReset().mockResolvedValue(listing('fresh.txt'))
+    stat.mockReset().mockResolvedValue({ isDirectory: true, escapesWorktree: false })
+  })
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+  const settle = () =>
+    act(async () => {
+      await vi.runAllTimersAsync()
+    })
+  function StrictWrapper({ children }: PropsWithChildren) {
+    return <StrictMode>{children}</StrictMode>
+  }
+  function renderVisibleTree(strict = false) {
+    noteUserWorkspaceSwitch('wt')
+    const resetSelection = vi.fn()
+    const setNameFilterQuery = vi.fn()
+    return renderHook((props) => useVisibleTree(props, resetSelection, setNameFilterQuery, owner), {
+      initialProps: visibleProps,
+      wrapper: strict ? StrictWrapper : undefined
+    })
+  }
+  function restore(paths: string[], id = 'wt') {
+    act(() =>
+      useAppStore.setState((state) => ({
+        expandedDirs: { ...state.expandedDirs, [id]: new Set(paths) }
+      }))
+    )
+  }
+
+  it('opening wakes the root, background full refresh does not, and verified cache reuse adds no read', async () => {
+    const hook = renderVisibleTree()
+    await settle()
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(read.mock.calls[0][3]?.wakeWslDistro).toBe(true)
+    await act(async () => {
+      await hook.result.current.loadDir('/repo/link', 0, { force: true, wakeWslDistro: true })
+      hook.result.current.requestDir('/repo/link')
+    })
+    expect(read).toHaveBeenCalledTimes(2)
+    restore(['/repo/link'])
+    read.mockClear()
+    await act(async () => {
+      expect(await hook.result.current.refreshTree()).toBe('refreshed')
+    })
+    expect(read.mock.calls.map((call) => call[2])).toEqual(['/repo', '/repo/link'])
+    expect(read.mock.calls.every((call) => !call[3]?.wakeWslDistro)).toBe(true)
+  })
 })

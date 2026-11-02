@@ -1,13 +1,11 @@
-import type { Dispatch, RefObject, SetStateAction } from 'react'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import type { OpenFile } from '@/store/slices/editor'
-import type { Repo } from '../../../../shared/repo-types'
-import type { FileExplorerRowProjection } from './file-explorer-row-projection'
-import type { TreeNode } from './file-explorer-types'
+import type {
+  UseFileExplorerTreePaneStateParams,
+  UseFileExplorerTreePaneStateResult
+} from './file-explorer-types'
 import { buildFolderStatusMap, buildStatusMap } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
@@ -19,49 +17,7 @@ import { useFileExplorerRowScrolling } from './use-file-explorer-row-scrolling'
 import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
-import type { useFileExplorerSelection } from './useFileExplorerSelection'
-import type { useFileExplorerTree } from './useFileExplorerTree'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
-import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
-
-type UseFileExplorerTreePaneStateParams = {
-  onRevealOutsideRoot?: () => void
-  activeWorktreeId: string | null
-  activeRepo: Repo | null
-  worktreePath: string | null
-  visibleFilesWorktreePath: string | null
-  displayRootPath: string | null
-  effectiveExpanded: Set<string>
-  expanded: Set<string>
-  activeFileId: string | null
-  openFiles: OpenFile[]
-  hasNameFilter: boolean
-  setNameFilterQuery: Dispatch<SetStateAction<string>>
-  handleToggleNameFilterDir: (worktreeId: string, dirPath: string) => void
-  tree: ReturnType<typeof useFileExplorerTree>
-  selection: ReturnType<typeof useFileExplorerSelection>
-  selectedNode: TreeNode | null
-  rowProjection: FileExplorerRowProjection
-  rowExpandedPaths: Set<string>
-  visibleRowCount: number
-  pathOwner: LocalPathOpenOwner
-}
-
-type UseFileExplorerTreePaneStateResult = {
-  scrollRef: RefObject<HTMLDivElement | null>
-  runtimeDownloadContext: RuntimeFileOperationArgs | null
-  supportsFolderDownload: boolean
-  canOpenWorkspaceFileBrowserForPath: ReturnType<typeof useWorkspaceFileBrowserActionPredicate>
-  statusByRelativePath: ReturnType<typeof buildStatusMap>
-  folderStatusByRelativePath: ReturnType<typeof buildFolderStatusMap>
-  deletion: ReturnType<typeof useFileDeletion>
-  dragDrop: ReturnType<typeof useFileExplorerDragDrop>
-  inlineInputState: ReturnType<typeof useFileExplorerInlineInput>
-  rowScrolling: ReturnType<typeof useFileExplorerRowScrolling>
-  handlers: ReturnType<typeof useFileExplorerHandlers>
-  nodeCommands: ReturnType<typeof useFileExplorerNodeCommands>
-  fileDropOwnerRef: (root: HTMLElement | null) => void
-}
 
 /** Call above FileExplorer’s null-worktree return; losing reset/SSH refs for one render would discard the returning workspace’s directory cache. */
 export function useFileExplorerTreePaneState({
@@ -98,7 +54,6 @@ export function useFileExplorerTreePaneState({
     refreshTree,
     refreshDir,
     loadMoreDir,
-    isDirStale,
     resetAndLoad
   } = tree
   const {
@@ -129,7 +84,18 @@ export function useFileExplorerTreePaneState({
   const ownerRuntimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
-  const toggleDir = useAppStore((s) => s.toggleDir)
+  const { requestDir } = tree
+  const storeToggleDir = useAppStore((s) => s.toggleDir)
+  const toggleDir = useCallback(
+    (id: string, path: string) => {
+      const opening = !useAppStore.getState().expandedDirs[id]?.has(path)
+      storeToggleDir(id, path)
+      if (opening) {
+        requestDir(path)
+      }
+    },
+    [storeToggleDir, requestDir]
+  )
   const openFile = useAppStore((s) => s.openFile)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
@@ -171,26 +137,10 @@ export function useFileExplorerTreePaneState({
     activeWorktreeId,
     expanded,
     toggleDir,
+    requestDir: tree.requestDir,
     refreshDir,
     scrollRef,
     getOperationOwnerForPath: (path) => rowProjection.getRowByPath(path)?.operationOwner
-  })
-
-  useFileExplorerTreeLoadEffects({
-    workspaceKey: activeWorktreeId,
-    visibleFilesWorktreePath,
-    displayRootPath,
-    expanded: effectiveExpanded,
-    dirCache,
-    loadingDirPaths,
-    rootError:
-      rootError ?? (displayRootPath ? tree.dirCache[displayRootPath]?.error : null) ?? null,
-    isDirStale,
-    loadDir,
-    refreshTree,
-    resetAndLoad,
-    resetSelection,
-    setNameFilterQuery
   })
 
   const inlineInputState = useFileExplorerInlineInput({
@@ -200,7 +150,31 @@ export function useFileExplorerTreePaneState({
     expanded,
     rowProjection,
     scrollRef,
-    refreshDir
+    refreshDir,
+    requestDir: tree.requestDir
+  })
+
+  useFileExplorerTreeLoadEffects({
+    workspaceKey: activeWorktreeId,
+    visibleFilesWorktreePath,
+    activeWorktreeId,
+    displayRootPath,
+    expanded: effectiveExpanded,
+    dirCache,
+    loadingDirPaths,
+    rootError:
+      rootError ?? (displayRootPath ? tree.dirCache[displayRootPath]?.error : null) ?? null,
+    invalidateTree: tree.invalidateTree,
+    retireView: tree.retireView,
+    reconcileView: tree.reconcileView,
+    loadRevision: tree.loadRevision,
+    interactionBlocked:
+      inlineInputState.inlineInput !== null ||
+      dragDrop.dragSourcePath !== null ||
+      dragDrop.isNativeDragOver,
+    resetAndLoad,
+    resetSelection,
+    setNameFilterQuery
   })
 
   useFileExplorerWatch({
@@ -241,8 +215,10 @@ export function useFileExplorerTreePaneState({
     dirCache,
     loadingDirPaths,
     rootCache,
-    loadDir,
     loadMoreDir,
+    observeDirForReveal: tree.observeDirForReveal,
+    getRevealAuthority: tree.getRevealAuthority,
+    loadRevision: tree.loadRevision,
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
     openFiles

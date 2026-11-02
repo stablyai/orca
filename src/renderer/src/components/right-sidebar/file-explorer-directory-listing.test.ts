@@ -16,7 +16,7 @@ vi.mock('./file-explorer-operation-owner', () => ({
 
 import {
   keepOpenedDirectoryLinks,
-  clearFailedOpenedDirectoryLink,
+  clearFailedOpenedDirectoryLinks,
   canFollowFolderLink,
   readFileExplorerDirectory
 } from './file-explorer-directory-listing'
@@ -193,7 +193,7 @@ describe('keepOpenedDirectoryLinks', () => {
   })
 })
 
-describe('clearFailedOpenedDirectoryLink', () => {
+describe('clearFailedOpenedDirectoryLinks', () => {
   it.each(['/w/link', 'C:\\link'])('drops only inferred folder state for failed %s', (linkPath) => {
     const parentPath = linkPath.startsWith('C:') ? 'C:\\' : '/w'
     const cache: Record<string, DirCache> = {
@@ -212,9 +212,9 @@ describe('clearFailedOpenedDirectoryLink', () => {
       }
     }
     expect(
-      clearFailedOpenedDirectoryLink(cache, linkPath)[parentPath].children[0].isDirectory
+      clearFailedOpenedDirectoryLinks(cache, [linkPath])[parentPath].children[0].isDirectory
     ).toBe(false)
     cache[parentPath].children[0].isDirectoryFromOpenedLink = false
-    expect(clearFailedOpenedDirectoryLink(cache, linkPath)).toBe(cache)
+    expect(clearFailedOpenedDirectoryLinks(cache, [linkPath])).toBe(cache)
   })
 })

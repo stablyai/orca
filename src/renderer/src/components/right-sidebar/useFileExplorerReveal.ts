@@ -1,38 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { Dispatch, RefObject, SetStateAction } from 'react'
-import type { Virtualizer } from '@tanstack/react-virtual'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { getExplorerDisplayDepth, FILE_EXPLORER_FULL_ROOT } from './file-explorer-display-root'
 import { useAppStore } from '@/store'
 import { getRevealAncestorDirs } from './file-explorer-paths'
-import type { DirCache } from './file-explorer-types'
-import type { FileExplorerRowProjection } from './file-explorer-row-projection'
+import { useFileExplorerRevealRequestCurrency } from './use-file-explorer-reveal-observation'
+import type { UseFileExplorerRevealParams } from './file-explorer-types'
 import { fileExplorerRevealDirToReadOn } from './file-explorer-dir-pages'
-
-type UseFileExplorerRevealParams = {
-  onRevealOutsideRoot?: () => void
-  activeWorktreeId: string | null
-  worktreePath: string | null
-  displayRootPath?: string | null
-  pendingExplorerReveal: {
-    worktreeId: string
-    filePath: string
-    requestId: number
-    flash?: boolean
-  } | null
-  clearPendingExplorerReveal: () => void
-  expanded: Set<string>
-  dirCache: Record<string, DirCache>
-  loadingDirPaths: ReadonlySet<string>
-  rootCache: DirCache | undefined
-  rowProjection: FileExplorerRowProjection
-  loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
-  loadMoreDir?: (dirPath: string) => Promise<void>
-  setSelectedPath: (path: string | null) => void
-  setFlashingPath: Dispatch<SetStateAction<string | null>>
-  flashTimeoutRef: RefObject<number | null>
-  virtualizer: Virtualizer<HTMLDivElement, Element>
-}
 
 /** Expands and selects reveal targets; explicit outside-scope requests restore full-root navigation. */
 export function useFileExplorerReveal({
@@ -47,13 +20,19 @@ export function useFileExplorerReveal({
   loadingDirPaths,
   rootCache,
   rowProjection,
-  loadDir,
   loadMoreDir,
+  observeDirForReveal,
+  getRevealAuthority,
+  loadRevision,
   setSelectedPath,
   setFlashingPath,
   flashTimeoutRef,
   virtualizer
 }: UseFileExplorerRevealParams): () => void {
+  const currentRequestRef = useRef(pendingExplorerReveal)
+  useLayoutEffect(() => {
+    currentRequestRef.current = pendingExplorerReveal
+  }, [pendingExplorerReveal])
   const revealScrollFrameRef = useRef<number | null>(null)
   const revealScrollTimeoutRef = useRef<number | null>(null)
 
@@ -76,6 +55,13 @@ export function useFileExplorerReveal({
     }
   }, [cancelRevealScroll, flashTimeoutRef])
 
+  useEffect(
+    () => cancelRevealScroll,
+    [activeWorktreeId, worktreePath, displayRootPath, cancelRevealScroll]
+  )
+
+  const isCurrentRequest = useFileExplorerRevealRequestCurrency(activeWorktreeId, displayRootPath)
+
   const pendingRevealAncestorDirs = useMemo(() => {
     if (
       !pendingExplorerReveal ||
@@ -97,7 +83,10 @@ export function useFileExplorerReveal({
       return
     }
 
-    if (pendingExplorerReveal.worktreeId !== activeWorktreeId) {
+    if (
+      pendingExplorerReveal.worktreeId !== activeWorktreeId ||
+      !isCurrentRequest(pendingExplorerReveal)
+    ) {
       return
     }
     if (
@@ -142,29 +131,35 @@ export function useFileExplorerReveal({
       }
     })
 
+    let alive = true
+    const request = pendingExplorerReveal
+    const isCurrent = () =>
+      alive && currentRequestRef.current === request && isCurrentRequest(request)
     void (async () => {
-      const rootLoaded = await loadDir(
-        displayRootPath ?? worktreePath,
-        getExplorerDisplayDepth(worktreePath, displayRootPath) - 1
-      )
-      if (!rootLoaded) {
-        return
-      }
-
-      for (let depth = 0; depth < pendingRevealAncestorDirs.length; depth += 1) {
-        const ancestorLoaded = await loadDir(
-          pendingRevealAncestorDirs[depth],
-          getExplorerDisplayDepth(worktreePath, pendingRevealAncestorDirs[depth]) - 1
+      const paths = [displayRootPath ?? worktreePath, ...pendingRevealAncestorDirs]
+      for (const path of paths) {
+        if (!isCurrent()) {
+          return
+        }
+        const outcome = await observeDirForReveal(
+          path,
+          getExplorerDisplayDepth(worktreePath, path) - 1,
+          request.origin,
+          isCurrent
         )
-        if (!ancestorLoaded) {
+        if (!isCurrent() || outcome !== 'refreshed') {
           return
         }
       }
     })()
+    return () => {
+      alive = false
+    }
   }, [
     activeWorktreeId,
     clearPendingExplorerReveal,
-    loadDir,
+    observeDirForReveal,
+    isCurrentRequest,
     pendingExplorerReveal,
     pendingRevealAncestorDirs,
     onRevealOutsideRoot,
@@ -178,7 +173,8 @@ export function useFileExplorerReveal({
       !activeWorktreeId ||
       pendingExplorerReveal.worktreeId !== activeWorktreeId ||
       !worktreePath ||
-      !pendingRevealAncestorDirs
+      !pendingRevealAncestorDirs ||
+      !isCurrentRequest(pendingExplorerReveal)
     ) {
       return
     }
@@ -195,21 +191,22 @@ export function useFileExplorerReveal({
     const missingAncestor = pendingRevealAncestorDirs.find(
       (dirPath) => !rowProjection.hasPath(dirPath)
     )
-    const rootStillLoading = !rootCache || loadingDirPaths.has(displayRootPath ?? worktreePath)
-    const parentDirStillLoading =
-      parentDirPath === (displayRootPath ?? worktreePath)
-        ? rootStillLoading
-        : !parentDirCache || loadingDirPaths.has(parentDirPath)
-    const parentDirKnown =
-      parentDirPath === (displayRootPath ?? worktreePath) ? !!rootCache : !!parentDirCache
-
-    if (
-      !rootStillLoading &&
-      (rootCache?.error ||
-        parentDirCache?.error ||
-        pendingRevealAncestorDirs.some((path) => dirCache[path]?.error))
-    ) {
-      clearPendingExplorerReveal()
+    const prerequisites = [
+      ...new Set([
+        worktreePath,
+        displayRootPath ?? worktreePath,
+        ...pendingRevealAncestorDirs,
+        parentDirPath
+      ])
+    ]
+    const authority = getRevealAuthority(prerequisites, dirCache)
+    if (authority === 'pending') {
+      return
+    }
+    if (prerequisites.some((path) => dirCache[path]?.error)) {
+      if (isCurrentRequest(pendingExplorerReveal)) {
+        clearPendingExplorerReveal()
+      }
       return
     }
     const readOn = loadMoreDir
@@ -224,13 +221,7 @@ export function useFileExplorerReveal({
       }
       return
     }
-    if (
-      rootStillLoading ||
-      missingExpandedAncestor ||
-      missingAncestor ||
-      parentDirStillLoading ||
-      !parentDirKnown
-    ) {
+    if (missingExpandedAncestor || missingAncestor || !parentDirCache) {
       return
     }
 
@@ -241,6 +232,16 @@ export function useFileExplorerReveal({
       return
     }
 
+    if (!isCurrentRequest(pendingExplorerReveal)) {
+      return
+    }
+    const selectedActiveFileId = useAppStore.getState().activeFileId
+    const canDeliver = () => {
+      const state = useAppStore.getState()
+      return (
+        isCurrentRequest(pendingExplorerReveal, true) && state.activeFileId === selectedActiveFileId
+      )
+    }
     clearPendingExplorerReveal()
     setSelectedPath(revealPath)
 
@@ -259,8 +260,14 @@ export function useFileExplorerReveal({
     cancelRevealScroll()
     revealScrollFrameRef.current = requestAnimationFrame(() => {
       revealScrollFrameRef.current = null
+      if (!canDeliver()) {
+        return
+      }
       revealScrollTimeoutRef.current = window.setTimeout(() => {
         revealScrollTimeoutRef.current = null
+        if (!canDeliver()) {
+          return
+        }
         const targetIndex = rowProjection.getIndexByPath(revealPath)
         if (targetIndex !== null) {
           virtualizer.scrollToIndex(targetIndex, { align: 'center' })
@@ -275,6 +282,9 @@ export function useFileExplorerReveal({
     expanded,
     loadMoreDir,
     loadingDirPaths,
+    getRevealAuthority,
+    loadRevision,
+    isCurrentRequest,
     pendingExplorerReveal,
     pendingRevealAncestorDirs,
     rowProjection,

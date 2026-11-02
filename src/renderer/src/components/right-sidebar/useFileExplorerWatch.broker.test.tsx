@@ -3,7 +3,10 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
-import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import {
+  markWorktreeCatchUpPayload,
+  ORCA_WORKTREE_FILE_CHANGE_EVENT
+} from '@/hooks/worktree-file-change-event'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 
 const owner = vi.hoisted((): { current: FileExplorerOperationOwner } => ({
@@ -88,6 +91,14 @@ afterEach(() => {
 })
 
 describe('remote file explorer using the recovered app watcher', () => {
+  it('refreshes from the app broker without opening an independent remote subscription', async () => {
+    renderWatch()
+    emit()
+    await settle()
+    expect(refreshDir).toHaveBeenCalledExactlyOnceWith('/repo')
+    expect(runtime.subscribe).not.toHaveBeenCalled()
+  })
+
   it('ignores other hosts and roots, including an identical local path', async () => {
     renderWatch()
     emit('host-b')
@@ -123,5 +134,38 @@ describe('remote file explorer using the recovered app watcher', () => {
     emit('host-b')
     await settle()
     expect(refreshDir).toHaveBeenCalledOnce()
+  })
+})
+
+const ROOT = '/repo'
+
+function dispatch(payload: FsChangedPayload, runtimeEnvironmentId: string | null = null): void {
+  window.dispatchEvent(
+    new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, { detail: { payload, runtimeEnvironmentId } })
+  )
+}
+
+const overflow = (): FsChangedPayload => ({
+  worktreePath: ROOT,
+  events: [{ kind: 'overflow', absolutePath: ROOT }]
+})
+
+describe('local file explorer catch-up after watch reacquisition', () => {
+  beforeEach(() => {
+    owner.current = { kind: 'local', executionHostId: 'local' }
+    renderWatch()
+  })
+
+  it('refreshes a local Files tree on the catch-up sent when its workspace is watched again', async () => {
+    act(() => dispatch(markWorktreeCatchUpPayload(overflow())))
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves ordinary bus events to the IPC listener so nothing is processed twice', async () => {
+    act(() => dispatch(overflow()))
+    act(() => dispatch(markWorktreeCatchUpPayload(overflow()), 'env-1'))
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(refreshTree).not.toHaveBeenCalled()
   })
 })

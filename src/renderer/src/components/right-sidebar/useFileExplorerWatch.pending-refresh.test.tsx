@@ -120,16 +120,22 @@ describe('useFileExplorerWatch pending refreshes', () => {
     )
   }
 
-  it('resyncs on reopen when hiding Files cancelled a received remote event', async () => {
-    ownerRef.current = { kind: 'ssh', connectionId: 'ssh-1' }
+  it('forwards a retired same-key callback during listener registration, but isolates other roots', async () => {
+    const subscribe = vi.mocked(window.api.fs.onFsChanged)
     const hook = renderWatch()
-    expect(mainWatchHandler).not.toBeNull()
-
-    act(() => emit(mainWatchHandler!))
+    const oldHandler = mainWatchHandler!
     hook.rerender({ visiblePath: null, activeInteraction: null })
+    subscribe.mockImplementationOnce((handler) => {
+      mainWatchHandler = handler
+      emit(oldHandler)
+      return vi.fn()
+    })
     hook.rerender({ visiblePath: '/repo', activeInteraction: null })
     await act(async () => vi.advanceTimersByTimeAsync(0))
-
+    expect(refreshTree).toHaveBeenCalledOnce()
+    hook.rerender({ visiblePath: '/other', activeInteraction: null })
+    act(() => emit(oldHandler))
+    await act(async () => vi.advanceTimersByTimeAsync(0))
     expect(refreshTree).toHaveBeenCalledOnce()
     expect(refreshDir).not.toHaveBeenCalled()
   })
@@ -161,20 +167,6 @@ describe('useFileExplorerWatch pending refreshes', () => {
     expect(refreshDir).toHaveBeenCalledOnce()
   })
 
-  it('resyncs on reopen after hiding Files canceled a received broker event', async () => {
-    ownerRef.current = {
-      kind: 'runtime',
-      environmentId: 'runtime-1',
-      executionHostId: 'runtime:runtime-1'
-    }
-    const hook = renderWatch()
-    act(emitRuntimeBatch)
-    hook.rerender({ visiblePath: null, activeInteraction: null })
-    hook.rerender({ visiblePath: '/repo', activeInteraction: null })
-    await act(async () => vi.advanceTimersByTimeAsync(0))
-    expect(refreshTree).toHaveBeenCalledOnce()
-    expect(refreshDir).not.toHaveBeenCalled()
-  })
   it.each(['rename', 'drag', 'native'] as const)(
     'does not refresh the current root on reopen after foreign events during %s',
     async (interaction) => {

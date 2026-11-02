@@ -9,6 +9,7 @@ export type ExplorerDirState = {
   pendingExplorerReveal: {
     worktreeId: string
     filePath: string
+    origin: 'manual' | 'active-file'
     requestId: number
     flash?: boolean
   } | null
@@ -68,7 +69,7 @@ export function createExplorerDirState(set: EditorSet, _get: EditorGet): Explore
           ...s.rightSidebarExplorerViewByWorktree,
           [worktreeId]: 'files'
         },
-        pendingExplorerReveal: { worktreeId, filePath, requestId: Date.now() }
+        pendingExplorerReveal: { worktreeId, filePath, requestId: Date.now(), origin: 'manual' }
       })),
     clearPendingExplorerReveal: () => set({ pendingExplorerReveal: null })
   }

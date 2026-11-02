@@ -32,14 +32,16 @@ function render(workspaceKey: string, rootError: string | null) {
     ({ error }: { error: string | null }) =>
       useFileExplorerTreeLoadEffects({
         workspaceKey,
+        activeWorktreeId: workspaceKey,
         visibleFilesWorktreePath: '/home/u/app',
         expanded: new Set(),
         dirCache: {},
         loadingDirPaths: new Set(),
         rootError: error,
-        isDirStale: () => false,
-        loadDir: vi.fn(async () => true),
-        refreshTree: vi.fn(async () => undefined),
+        invalidateTree: vi.fn(),
+        retireView: vi.fn(),
+        reconcileView: vi.fn(),
+        loadRevision: 0,
         resetAndLoad,
         resetSelection: vi.fn(),
         setNameFilterQuery: vi.fn()

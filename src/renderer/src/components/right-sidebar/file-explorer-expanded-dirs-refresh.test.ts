@@ -4,26 +4,9 @@ import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import type { DirCache } from './file-explorer-types'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
-import type { FileExplorerLoadingDirsUpdater } from './file-explorer-dir-load-state'
+import { createLoadingDirPathsRecorder, entry } from './file-explorer-expanded-refresh-test-support'
 
 type CacheUpdate = SetStateAction<Record<string, DirCache>>
-
-function createLoadingDirPathsRecorder(): {
-  updateLoadingDirPaths: FileExplorerLoadingDirsUpdater
-  isLoading: (dirPath: string) => boolean
-} {
-  let loadingDirPaths: ReadonlySet<string> = new Set<string>()
-  return {
-    updateLoadingDirPaths: (update) => {
-      loadingDirPaths = update(loadingDirPaths)
-    },
-    isLoading: (dirPath: string) => loadingDirPaths.has(dirPath)
-  }
-}
-
-function entry(name: string, isDirectory = false): DirEntry {
-  return { name, isDirectory, isSymlink: false }
-}
 
 describe('refreshFileExplorerExpandedDirs', () => {
   it('rebuilds the dirCache identity once per refresh of already-cached dirs', async () => {
@@ -431,22 +414,29 @@ describe('refreshFileExplorerExpandedDirs', () => {
       }
     })
 
-    await expect(
-      refreshFileExplorerExpandedDirs({
-        dirs: ['a', 'b', 'c', 'd'].map((name) => ({ dirPath: `/repo/${name}`, depth: 0 })),
-        worktreePath: '/repo',
-        dirLoadTracker: createFileExplorerDirLoadTracker(),
-        setDirCache,
-        updateLoadingDirPaths,
-        readDirectory: async () => ({
-          entries: [entry('index.ts')],
-          operationOwner: { kind: 'local' as const }
-        }),
-        // Two dirs per commit batch, so /repo/c and /repo/d belong to a later batch.
-        maxConcurrentReads: 2,
-        onDirCommitted
-      })
-    ).rejects.toBe(commitError)
+    const tracker = createFileExplorerDirLoadTracker()
+    const refresh = refreshFileExplorerExpandedDirs({
+      dirs: ['a', 'b', 'c', 'd'].map((name) => ({ dirPath: `/repo/${name}`, depth: 0 })),
+      worktreePath: '/repo',
+      dirLoadTracker: tracker,
+      setDirCache,
+      updateLoadingDirPaths,
+      readDirectory: async () => ({
+        entries: [entry('index.ts')],
+        operationOwner: { kind: 'local' as const }
+      }),
+      // Two dirs per commit batch, so /repo/c and /repo/d belong to a later batch.
+      maxConcurrentReads: 2,
+      onDirCommitted
+    })
+    const logical = ['a', 'b', 'c', 'd'].map((name) => tracker.get(`/repo/${name}`)!.promise)
+    await expect(refresh).rejects.toBe(commitError)
+    expect(await Promise.all(logical)).toEqual([
+      'superseded',
+      'superseded',
+      'superseded',
+      'superseded'
+    ])
 
     // Surviving workers must stop after rejection rather than commit later data/staleness writes.
     expect(onDirCommitted.mock.calls.map(([dirPath]) => dirPath).sort()).toEqual([
@@ -460,51 +450,65 @@ describe('refreshFileExplorerExpandedDirs', () => {
     expect(isLoading('/repo/d')).toBe(false)
   })
 
-  it('drops a queued directory superseded while an earlier read is blocked', async () => {
-    const tracker = createFileExplorerDirLoadTracker()
-    let cache: Record<string, DirCache> = {}
-    const setDirCache = vi.fn((update: CacheUpdate) => {
-      cache = typeof update === 'function' ? update(cache) : update
-    })
-    const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
-    let releaseFirst!: () => void
-    const firstGate = new Promise<void>((resolve) => {
-      releaseFirst = resolve
-    })
-    const readDirectory = vi.fn(async (dirPath: string) => {
-      if (dirPath === '/repo/a') {
-        await firstGate
+  it.each(['superseded', 'protected'] as const)(
+    'drops a queued directory %s while an earlier read is blocked',
+    async (reason) => {
+      const tracker = createFileExplorerDirLoadTracker()
+      let allowed = true
+      let cache: Record<string, DirCache> = {}
+      const setDirCache = vi.fn((update: CacheUpdate) => {
+        cache = typeof update === 'function' ? update(cache) : update
+      })
+      const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
+      let releaseFirst!: () => void
+      const firstGate = new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+      const readDirectory = vi.fn(async (dirPath: string) => {
+        if (dirPath === '/repo/a') {
+          await firstGate
+        }
+        return { entries: [entry('x.ts')], operationOwner: { kind: 'local' as const } }
+      })
+
+      const refreshPromise = refreshFileExplorerExpandedDirs({
+        dirs: [
+          { dirPath: '/repo/a', depth: 0 },
+          { dirPath: '/repo/b', depth: 0 }
+        ],
+        worktreePath: '/repo',
+        dirLoadTracker: tracker,
+        setDirCache,
+        updateLoadingDirPaths,
+        readDirectory,
+        maxConcurrentReads: 1,
+        canCommit: () => allowed
+      })
+      await Promise.resolve()
+      const queued = tracker.get('/repo/b')!.promise
+
+      // A watcher-driven refreshDir supersedes the queued dir before it starts reading.
+      if (reason === 'superseded') {
+        tracker.begin('/repo/b')
+        expect(await queued).toBe('superseded')
+      } else {
+        allowed = false
       }
-      return { entries: [entry('x.ts')], operationOwner: { kind: 'local' as const } }
-    })
+      const newerBCache: DirCache = { children: [] }
+      setDirCache((prev) => ({ ...prev, '/repo/b': newerBCache }))
 
-    const refreshPromise = refreshFileExplorerExpandedDirs({
-      dirs: [
-        { dirPath: '/repo/a', depth: 0 },
-        { dirPath: '/repo/b', depth: 0 }
-      ],
-      worktreePath: '/repo',
-      dirLoadTracker: tracker,
-      setDirCache,
-      updateLoadingDirPaths,
-      readDirectory,
-      maxConcurrentReads: 1
-    })
-    await Promise.resolve()
+      releaseFirst()
+      const refreshed = await refreshPromise
 
-    // A watcher-driven refreshDir supersedes the queued dir before it starts reading.
-    tracker.begin('/repo/b')
-    const newerBCache: DirCache = { children: [] }
-    setDirCache((prev) => ({ ...prev, '/repo/b': newerBCache }))
-
-    releaseFirst()
-    const refreshed = await refreshPromise
-
-    expect(refreshed).toBe(false)
-    expect(cache['/repo/a']).toMatchObject({ children: [{ name: 'x.ts' }] })
-    expect(readDirectory).toHaveBeenCalledTimes(1)
-    expect(cache['/repo/b']).toEqual(newerBCache)
-  })
+      expect(refreshed).toBe(false)
+      expect(await queued).toBe('superseded')
+      expect(cache['/repo/a'].children.map((node) => node.name)).toEqual(
+        reason === 'superseded' ? ['x.ts'] : []
+      )
+      expect(readDirectory).toHaveBeenCalledTimes(1)
+      expect(cache['/repo/b']).toEqual(newerBCache)
+    }
+  )
 
   it('keeps an opened folder link folder-shaped when a refresh re-reads its parent (#29069)', async () => {
     let cache: Record<string, DirCache> = {

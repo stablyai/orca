@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store'
+import type { FileExplorerRevealOrigin } from './file-explorer-types'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 
@@ -10,7 +11,12 @@ type UseFileExplorerAutoRevealParams = {
   activeWorktreeId: string | null
   worktreePath: string | null
   displayRootPath?: string | null
-  pendingExplorerReveal: { worktreeId: string; filePath: string; requestId: number } | null
+  pendingExplorerReveal: {
+    worktreeId: string
+    filePath: string
+    requestId: number
+    origin: FileExplorerRevealOrigin
+  } | null
   openFiles: OpenFile[]
   rowProjection: FileExplorerRowProjection
   setSelectedPath: (path: string | null) => void
@@ -40,7 +46,10 @@ export function useFileExplorerAutoReveal({
     scrollFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelScrollFrame, [cancelScrollFrame])
+  useEffect(
+    () => cancelScrollFrame,
+    [activeWorktreeId, worktreePath, displayRootPath, cancelScrollFrame]
+  )
 
   useEffect(() => {
     if (activeFileId === prevActiveFileIdRef.current) {
@@ -48,12 +57,19 @@ export function useFileExplorerAutoReveal({
     }
     prevActiveFileIdRef.current = activeFileId
 
-    if (!activeFileId || !activeWorktreeId || !worktreePath) {
+    cancelScrollFrame()
+    const state = useAppStore.getState()
+    if (state.activeFileId !== activeFileId || state.activeWorktreeId !== activeWorktreeId) {
       return
     }
-
-    // Don't override a pending manual reveal (e.g. from Source Control "Reveal in Explorer")
-    if (pendingExplorerReveal) {
+    // Manual priority is provenance, including a quiet manual request.
+    if (state.pendingExplorerReveal?.origin === 'manual') {
+      return
+    }
+    if (state.pendingExplorerReveal?.origin === 'active-file') {
+      state.clearPendingExplorerReveal()
+    }
+    if (!activeFileId || !activeWorktreeId || !worktreePath) {
       return
     }
 
@@ -79,7 +95,18 @@ export function useFileExplorerAutoReveal({
         cancelScrollFrame()
         scrollFrameRef.current = requestAnimationFrame(() => {
           scrollFrameRef.current = null
-          virtualizer.scrollToIndex(targetIndex, { align: 'auto' })
+          const latest = useAppStore.getState()
+          const current = latest.openFiles.find((file) => file.id === latest.activeFileId)
+          if (
+            latest.activeFileId === activeFileId &&
+            latest.activeWorktreeId === activeWorktreeId &&
+            !latest.pendingExplorerReveal &&
+            current?.filePath === filePath &&
+            current.worktreeId === activeWorktreeId &&
+            (current.mode === 'edit' || current.mode === 'markdown-preview')
+          ) {
+            virtualizer.scrollToIndex(targetIndex, { align: 'auto' })
+          }
         })
       }
     } else {
@@ -88,7 +115,8 @@ export function useFileExplorerAutoReveal({
           worktreeId: activeWorktreeId,
           filePath,
           requestId: Date.now(),
-          flash: false
+          flash: false,
+          origin: 'active-file'
         }
       })
     }

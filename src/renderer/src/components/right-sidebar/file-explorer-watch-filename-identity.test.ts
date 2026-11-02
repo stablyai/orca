@@ -11,7 +11,12 @@ import {
 describe('Explorer watcher filename identity', () => {
   it('does not clear a nested pending reveal when a distinct literal-backslash path is deleted', () => {
     const previous = useAppStore.getState().pendingExplorerReveal
-    const pending = { worktreeId: 'wt-posix', filePath: '/repo/a/b/file.txt', requestId: 1 }
+    const pending = {
+      worktreeId: 'wt-posix',
+      filePath: '/repo/a/b/file.txt',
+      requestId: 1,
+      origin: 'manual' as const
+    }
     try {
       useAppStore.setState({ pendingExplorerReveal: pending })
       clearStalePendingReveal('/repo/a\\b')
