@@ -4217,8 +4217,26 @@
   "components.native-chat.subagents.state.working": {
     "ko": "작업 중"
   },
+  "components.workspace.cleanup.browse.host": {
+    "ko": "호스트"
+  },
+  "components.workspace.cleanup.browse.sort.host": {
+    "ko": "호스트"
+  },
+  "components.workspace.cleanup.browse.agent.idle": {
+    "ko": "유휴 상태"
+  },
   "components.workspace.cleanup.browse.agent.working": {
     "ko": "작업 중"
+  },
+  "auto.components.artifacts.ArtifactListTableHeader.actions": {
+    "ko": "작업"
+  },
+  "auto.components.settings.browser.search.terminalLinkActions.actions": {
+    "ko": "작업"
+  },
+  "auto.components.right.sidebar.source.control.branch.line.total.chip.c8d5b21e07": {
+    "ko": "소스 코드"
   },
   "auto.lib.orchestration.usage.examples.ab0e9803b7": {
     "ko": "다른 작업 트리로 작업 인계"

@@ -90,6 +90,54 @@ describe('locale-translation-policy ko round 5', () => {
         locale: 'ko'
       })
     ).toBe('파이프라인')
+    expect(
+      repairTranslatedValue({
+        key: 'components.workspace.cleanup.browse.host',
+        enValue: 'Host',
+        localeValue: '주인',
+        locale: 'ko'
+      })
+    ).toBe('호스트')
+    expect(
+      repairTranslatedValue({
+        key: 'components.workspace.cleanup.browse.sort.host',
+        enValue: 'Host',
+        localeValue: '주인',
+        locale: 'ko'
+      })
+    ).toBe('호스트')
+    expect(
+      repairTranslatedValue({
+        key: 'components.workspace.cleanup.browse.agent.idle',
+        enValue: 'Idle',
+        localeValue: '게으른',
+        locale: 'ko'
+      })
+    ).toBe('유휴 상태')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.artifacts.ArtifactListTableHeader.actions',
+        enValue: 'Actions',
+        localeValue: '행위',
+        locale: 'ko'
+      })
+    ).toBe('작업')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.browser.search.terminalLinkActions.actions',
+        enValue: 'Actions',
+        localeValue: '행위',
+        locale: 'ko'
+      })
+    ).toBe('작업')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.right.sidebar.source.control.branch.line.total.chip.c8d5b21e07',
+        enValue: 'Source',
+        localeValue: '원천',
+        locale: 'ko'
+      })
+    ).toBe('소스 코드')
   })
 
   // Why: #12113 — brand names stay Latin, but generic workflow nouns keep their Korean.
