@@ -8,6 +8,12 @@ export type LegacyWorkerReadResult = {
 }
 
 export type WorkerStartReceipt = {
+  agentSelection?: {
+    agent: string
+    source: 'project' | 'global' | 'automatic' | 'explicit'
+    projectId?: string
+    projectName?: string
+  }
   mode?: { detail: string }
   run?: { id: string; objective: string; created: boolean }
   taskId: string
@@ -26,6 +32,12 @@ export function formatWorkerStart(value: WorkerStartReceipt): string {
   if (value.run) {
     lines.push(
       `${value.run.created ? 'Created and bound Run' : 'In Run'} ${value.run.id}: ${value.run.objective}`
+    )
+  }
+  if (value.agentSelection) {
+    const project = value.agentSelection.projectName ?? value.agentSelection.projectId
+    lines.push(
+      `Agent: ${value.agentSelection.agent} (${value.agentSelection.source}${project ? `, target project ${project}` : ''})`
     )
   }
   // Show the mode that actually ran so a fallback from the user's default is visible.

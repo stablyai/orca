@@ -41,14 +41,14 @@ Task IDs printed in terminals, such as `task_...`, are clickable links. Clicking
 ```bash
 orca orchestration run-create --objective "Split checkout QA and summarize blockers"
 orca orchestration task-create --spec "Audit billing settings for mobile layout" --task-title "Billing audit"
-orca orchestration worker-start --task <taskId> --worktree current --agent codex
+orca orchestration worker-start --task <taskId> --worktree current --agent default
 # or new worktree:
-orca orchestration worker-start --task <taskId> --worktree new-child --name billing-audit --agent codex --setup run
+orca orchestration worker-start --task <taskId> --worktree new-child --name billing-audit --agent default --setup run
 # optional per-worker model / effort (Claude, Codex, Cursor, Antigravity, Grok, Muse; not with --terminal):
 orca orchestration worker-start --task <taskId> --worktree current --agent claude --model <opaque-model-id> --effort high
 ```
 
-`--agent` takes any Orca agent ID enabled on the worker server, for example `claude`, `codex`, `cursor`, `antigravity`, `muse`, `opencode`, or `opencode2`. `--model` accepts opaque provider model IDs for Claude, Codex, Cursor, Antigravity, Grok, and Muse (for example `--agent muse --model muse-spark-1.3`); OpenCode accepts a per-launch model only in an existing worktree, when the execution host verifies its CLI version and model availability; OpenCode effort remains unsupported. Other agents run the model from their own config. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show as `model` / `effort` in the start receipt (`--full --json` shows `launch.requested` / `launch.effective`). Federated starts need a worker host that advertises launch-preference support.
+`--agent default` resolves the target workspace or repository project default on the worker execution host. Use it when no agent was named; an explicit agent ID overrides it for one launch. The coordinator project and agent do not select for the target. Blank Terminal, an unavailable configured agent, or an older host unable to resolve defaults fails before workspace creation or dispatch. `worker-start` still requires `--agent` or `--terminal`. `--agent` also takes any Orca agent ID enabled on the worker server, for example `claude`, `codex`, `cursor`, `antigravity`, `muse`, `opencode`, or `opencode2`. `--model` accepts opaque provider model IDs for Claude, Codex, Cursor, Antigravity, Grok, and Muse (for example `--agent muse --model muse-spark-1.3`); OpenCode accepts a per-launch model only in an existing worktree, when the execution host verifies its CLI version and model availability; OpenCode effort remains unsupported. Other agents run the model from their own config. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show as `model` / `effort` in the start receipt (`--full --json` shows `launch.requested` / `launch.effective`). Federated starts need a worker host that advertises launch-preference support.
 
 After starting workers, end your turn. Orca wakes the coordinator when a worker reports, asks, or stops; run the `check` command the wake gives you and handle every message it prints:
 
@@ -83,7 +83,7 @@ orca orchestration worker-release --dispatch <dispatchId>
 # Keep a worker open after it finishes (or start it with worker-start --keep-open):
 orca orchestration worker-keep-open --dispatch <dispatchId>
 # retry placement is explicit — --retry-of does not inherit --on/worktree:
-orca orchestration worker-start --task <taskId> --retry-of <dispatchId> --worktree current --agent codex
+orca orchestration worker-start --task <taskId> --retry-of <dispatchId> --worktree current --agent default
 ```
 
 When a worker stops at a permission prompt, the escalation names the prompt. Only a person can allow it, so carry on with other work until its closing message arrives; if it is holding up the task, deny it with a reason and the worker carries on another way:
@@ -109,7 +109,7 @@ orca orchestration worker-start \
   --worktree new-top-level \
   --repo <exact_remote_repo_selector> \
   --name remote-worker \
-  --agent codex \
+  --agent default \
   --setup run
 orca orchestration send --to dispatch:<dispatchId> --subject "Follow-up" --body "…"
 ```
@@ -121,7 +121,7 @@ Later commands route by Dispatch ID; do not repeat `--on`.
 ## Low-level dispatch (custom topology)
 
 ```bash
-orca worktree create --name billing-audit --agent codex --json
+orca worktree create --name billing-audit --agent default --json
 orca terminal wait --terminal <workerHandle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration dispatch --task <taskId> --to <workerHandle> --inject
 ```

@@ -40,6 +40,7 @@ import { useNewWorkspaceExecutionTarget } from './use-new-workspace-execution-ta
 import { useNewWorkspaceRepositories } from './use-new-workspace-repositories'
 import { useNewWorkspaceRuntimeContext } from './use-new-workspace-runtime-context'
 import { useNewWorkspaceSetupScript } from './use-new-workspace-setup-script'
+import { useNewWorkspaceProjectDefaultAgent } from './use-new-workspace-project-default-agent'
 import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-navigation'
 
 /** The server a repo runs on; undefined for the desktop's own (local, SSH, folder). */
@@ -118,6 +119,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     repoId: selectedRepo?.id,
     visible
   })
+  const projectDefault = useNewWorkspaceProjectDefaultAgent(client, selectedRepo, visible)
   const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
   // A kept note opens Options until the user folds them, so it isn't sent unseen.
   const [noteOptions, setNoteOptions] = useState<'closed' | 'open' | 'folded'>('closed')
@@ -153,7 +155,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const agentSelection = useNewWorkspaceAgentSelection({
     visible,
     runtimeSettings: runtime.runtimeSettings,
-    detectedAgentIds: executionTarget.detectedAgentIds
+    detectedAgentIds: executionTarget.detectedAgentIds,
+    resolvedDefaultAgent: projectDefault && !projectDefault.error ? projectDefault.agent : undefined
   })
   const retiredNamesRefreshKey = useMemo(
     () => buildRetiredWorktreeNamesRefreshKey(existingWorktreePaths),
@@ -169,6 +172,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     repos: allRepos,
     selectedRepo,
     selectedAgent: agentSelection.selectedAgent,
+    agentOverridden: agentSelection.agentOverridden,
     setSelectedAgent: agentSelection.setSelectedAgent,
     setAgentOverridden: agentSelection.setAgentOverridden,
     runtimeSettings: runtime.runtimeSettings,
@@ -250,7 +254,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     selectedRepo != null &&
     !createSubmit.creating &&
     !executionTarget.sshGate.requiresConnection &&
-    (!needsSetupChoice || setupScript.setupDecisionChoice != null)
+    (!needsSetupChoice || setupScript.setupDecisionChoice != null) &&
+    (agentSelection.agentOverridden || (projectDefault != null && !projectDefault.error))
 
   function openPicker(view: 'project' | 'runTarget' | 'agent'): void {
     Keyboard.dismiss()
@@ -300,6 +305,16 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         sshGate={executionTarget.sshGate}
         composer={composer}
         selectedAgent={agentSelection.selectedAgent}
+        agentLabel={
+          agentSelection.agentOverridden
+            ? agentSelection.selectedAgent.label
+            : !projectDefault
+              ? 'Resolving default agent…'
+              : projectDefault.error
+                ? 'Default agent unavailable'
+                : `${agentSelection.selectedAgent.label} · ${projectDefault.source === 'project' ? 'Project default' : projectDefault.source === 'global' ? 'Global default' : 'Automatic'}`
+        }
+        agentError={agentSelection.agentOverridden ? null : (projectDefault?.error ?? null)}
         showAdvanced={showOptions}
         note={note}
         setupCommand={setupScript.setupCommand}
