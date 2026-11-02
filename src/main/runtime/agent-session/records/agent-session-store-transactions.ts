@@ -78,6 +78,7 @@ function readOnlyStoreRefusal(): Error {
 
 type StagedStoreTransaction<T> = {
   result: T
+  draft: AgentSessionStoreState
   writes: AgentSessionStoreRowWrites | null
   /** Publish only after row commit. */
   adopt: () => void
@@ -89,6 +90,8 @@ export class AgentSessionStoreTransactions {
   private readonly admittedSends = new Map<string, number>()
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   private published: AgentSessionStoreState
+  /** Receipts co-written in one transaction build on each other's drafts, so adoption keeps both. */
+  private staged: { transaction: number; draft: AgentSessionStoreState } | null = null
   /** Loaded takeover evidence; immutable for this runtime. */
   readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
@@ -152,6 +155,8 @@ export class AgentSessionStoreTransactions {
           throw readOnlyStoreRefusal()
         }
         admitted = row?.kind === 'submission' ? options.submissionSessionId : undefined
+        const transaction = this.journalDatabase.transactionNumber
+        const base = this.staged?.transaction === transaction ? this.staged.draft : this.published
         // The ledger and wake share one draft as well as one commit.
         staged = this.stage((draft) => {
           apply(draft)
@@ -163,7 +168,8 @@ export class AgentSessionStoreTransactions {
               updatedAt: row?.ts ?? record.updatedAt
             })
           }
-        })
+        }, base)
+        this.staged = { transaction, draft: staged.draft }
         const writes = staged.writes
         if (writes) {
           // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
@@ -180,6 +186,9 @@ export class AgentSessionStoreTransactions {
       },
       committed: () => {
         staged?.adopt()
+        if (this.staged?.draft === staged?.draft) {
+          this.staged = null
+        }
         if (admitted) {
           this.admittedSends.set(admitted, this.admittedSendCount(admitted) + 1)
           for (const listener of this.acceptedSendListeners) {
@@ -216,14 +225,17 @@ export class AgentSessionStoreTransactions {
     return staged.result
   }
 
-  private stage<T>(apply: (draft: AgentSessionStoreState) => T): StagedStoreTransaction<T> {
-    const published = this.published
+  private stage<T>(
+    apply: (draft: AgentSessionStoreState) => T,
+    published = this.published
+  ): StagedStoreTransaction<T> {
     const draft = draftAgentSessionStoreState(published)
     const result = apply(draft)
     attributeAgentSessionRuntime(published, draft)
     const writes = agentSessionStoreDraftRowWrites(published, draft)
     return {
       result,
+      draft,
       writes,
       adopt: () => {
         if (writes) {

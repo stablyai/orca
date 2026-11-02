@@ -21236,6 +21236,9 @@
         "finished": "Временный воркер оркестрации завершён · Закроется через {{countdown}}",
         "keepOpen": "Оставить открытым"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Работает в WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {

@@ -6,7 +6,7 @@ import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocom
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { buildNativeChatPickerItems } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat/input/native-chat-slash-commands'
-import type { ComposerAutocomplete } from '../../../../shared/native-chat-composer-autocomplete'
+import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
 
 function autocomplete(
   overrides: Partial<Extract<ComposerAutocomplete, { mode: 'slash' }>> = {}
