@@ -23,6 +23,15 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
     catalog: { origin: 'probe', fetchedAt: 1, models: [] },
     rows: [{ kind: 'cli', agent: 'codex', chat: true }]
   }
+  // Chat is not offered over this SSH host, so the row's own reason would be "No chat over SSH".
+  const sshOnly: AgentPickerEntry = {
+    ...entry,
+    agent: 'claude',
+    label: 'Claude',
+    surfaces: ['terminal'],
+    defaultSurface: 'terminal',
+    rows: [{ kind: 'chat-unavailable', agent: 'claude', reason: 'ssh' }]
+  }
   const launch = vi.fn()
   const menu = (terminalPending: boolean) => (
     <TooltipProvider>
@@ -30,7 +39,7 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
         <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
         <DropdownMenuContent>
           <AgentLaunchPickerMenu
-            entries={[entry]}
+            entries={[entry, sshOnly]}
             runLaunch={launch}
             terminalPending={terminalPending}
           />
@@ -40,9 +49,20 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
   )
   const view = render(menu(true))
   const row = screen.getByRole('menuitem', { name: /Codex/ })
-  expect(row.getAttribute('aria-disabled')).toBe('true')
+  // The row's launch waits and says why, without disabling Configure inside it.
+  expect(row.getAttribute('aria-disabled')).toBeNull()
+  const reason = document.getElementById(row.getAttribute('aria-describedby') ?? '')
+  expect(reason?.textContent).toBe('Connecting…')
+  const configure = screen.getByRole('button', { name: 'Configure Codex' })
+  expect(configure.closest('[aria-disabled="true"], [disabled]')).toBeNull()
   fireEvent.click(row)
   expect(launch).not.toHaveBeenCalled()
+  // One reason per row: the wait, not also the missing chat.
+  const reasons = () =>
+    [...screen.getByRole('menuitem', { name: /Claude/ }).querySelectorAll('.text-xs')].map(
+      (node) => node.textContent
+    )
+  expect(reasons()).toEqual(['Connecting…'])
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Configure Codex' }))
   const buttons = () =>
@@ -58,6 +78,7 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
   const args = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')
   fireEvent.change(args()!, { target: { value: '--search' } })
   view.rerender(menu(false))
+  expect(reasons()).toEqual(['No chat over SSH'])
   expect(args()?.value).toBe('--search')
   expect(buttons()).toEqual([
     { name: 'Launch chat', disabled: false },

@@ -189,6 +189,13 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   const pendingReason = (surface: AgentPickerSurface) =>
     terminalPendingReason(terminalPending, pickerLaunchRow(entry, surface))
   const defaultUnavailable = pendingReason(entry.defaultSurface)
+  // One reason per row: why its primary action can't run now.
+  const reason =
+    defaultUnavailable ??
+    (unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat')
+      ? chatUnavailableLabel(unavailable.reason)
+      : null)
+  const reasonId = `${setupId}-reason`
   return (
     <AgentLaunchSetupButton
       entry={entry}
@@ -212,7 +219,8 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           ref={item}
           variant="launch"
           disabled={disabled || !entry.surfaces.length}
-          aria-disabled={disabled || !!defaultUnavailable}
+          // Why no aria-disabled while waiting: Configure inside the row must stay usable.
+          aria-describedby={defaultUnavailable ? reasonId : undefined}
           onSelect={(event) => {
             const draft = configured.current ?? initial
             configured.current = undefined
@@ -244,15 +252,16 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           onPointerLeave={keepSetupFocus}
         >
           <AgentIcon agent={entry.agent} size={14} />
-          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {/* Why flex-auto: the name keeps its width and the reason truncates first. */}
+          <span className="min-w-0 flex-auto truncate">{label}</span>
           {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-          {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
-            <span className="text-xs text-muted-foreground">
-              {chatUnavailableLabel(unavailable.reason)}
+          {reason ? (
+            <span
+              id={reasonId}
+              className="min-w-0 shrink-[4] truncate text-xs text-muted-foreground"
+            >
+              {reason}
             </span>
-          ) : null}
-          {defaultUnavailable ? (
-            <span className="text-xs text-muted-foreground">{defaultUnavailable}</span>
           ) : null}
           {trigger}
         </DropdownMenuItem>
