@@ -13,7 +13,6 @@ import type { WorkspaceVisibleTabType } from '../../../src/shared/tab-types'
 import type { TerminalTab } from '../../../src/shared/terminal-tab-types'
 import type { Worktree } from '../../../src/shared/worktree/types'
 import type { DictationMeterState } from '../../../src/shared/dictation-audio-meter'
-import type { ReactCommitHook } from './tab-render-recorder'
 
 // window.__store is the bound Zustand store, including its StoreApi.
 export type AppStore = {
@@ -70,8 +69,6 @@ declare global {
     __store?: AppStore
     __dictationMeterE2E?: { publish(meter: DictationMeterState): void }
     __paneManagers?: Map<string, PaneManagerLike>
-    __REACT_DEVTOOLS_GLOBAL_HOOK__?: ReactCommitHook
-    __tabsRenderedPerCommit?: number[]
   }
 }
 
