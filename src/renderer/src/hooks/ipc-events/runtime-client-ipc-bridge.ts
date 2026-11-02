@@ -1,6 +1,6 @@
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
-  applyGeneratedInputNotices,
+  withEnvironmentGeneratedInputNotices,
   subscribeLocalGeneratedInputNotices
 } from '@/runtime/generated-agent-input-notices'
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
@@ -103,10 +103,6 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
-    if (event.type === 'generatedInputNoticesChanged') {
-      applyGeneratedInputNotices({ kind: 'environment', environmentId }, event.notices)
-      return
-    }
     if (event.type === 'worktreeTerminalSleepState') {
       applyHostWorktreeTerminalSleepState(environmentId, event)
       return
@@ -276,7 +272,8 @@ export function registerRuntimeClientIpcBridge(
           })
         }
       )
-      return subscription
+      // Notices ride their own bounded stream from the runtime that owns them, beside these events.
+      return withEnvironmentGeneratedInputNotices(environmentId, subscription)
     },
     onEvent: handleRuntimeClientEvent
   })

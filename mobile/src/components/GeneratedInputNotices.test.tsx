@@ -11,13 +11,29 @@ vi.mock('./HostRouteNoticeBanner', () => ({
   HostRouteNoticeBanner: (props: object) => createElement('notice', props)
 }))
 
-it('projects reconnect snapshots, preserves Copy, and removes notices only on host dismissal', async () => {
+const frame = (chunk: string, offset: number, textLength: number) => ({
+  id: 'refused',
+  agent: 'claude',
+  handle: 'h',
+  worktreeId: 'w',
+  ptyId: null,
+  certainty: 'unconfirmed',
+  textLength,
+  offset,
+  chunk
+})
+
+it('pages, copies only complete text, and dismisses on the runtime that owns the notice', async () => {
   let emit = (_payload: unknown): void => {}
-  const sendRequest = vi.fn(async () => ({
-    id: 'dismiss',
-    ok: true as const,
-    result: { dismissed: true }
-  }))
+  const sendRequest = vi.fn(async (method: string) =>
+    method === 'terminal.generatedInputNotices.page'
+      ? {
+          id: 'page',
+          ok: true as const,
+          result: { session: 's', revision: 1, frames: [frame('exact\n', 0, 10)], next: null }
+        }
+      : { id: 'dismiss', ok: true as const, result: { dismissed: true } }
+  )
   const client = stubRpcClient({
     sendRequest,
     subscribe: (_method, _params, listener) => {
@@ -34,16 +50,15 @@ it('projects reconnect snapshots, preserves Copy, and removes notices only on ho
       })
     )
   })
-  if (!renderer) {
-    throw new Error('not mounted')
-  }
-  const notices = [
-    { id: 'refused', agent: 'claude', text: 'exact\ntext', certainty: 'unconfirmed' }
-  ]
-  const mounted = renderer
+  const mounted = renderer!
   const banners = () => mounted.root.findAll((node) => String(node.type) === 'notice')
-  act(() => {
-    emit({ type: 'ready', snapshot: { generatedInputNotices: notices } })
+  await act(async () => {
+    emit({ type: 'ready', subscriptionId: 'sub', session: 's', revision: 1 })
+  })
+  // The page held only part of the text: no Copy of a partial prompt yet.
+  expect(banners()).toHaveLength(0)
+  await act(async () => {
+    emit({ type: 'notice', session: 's', revision: 2, frame: frame('text', 6, 10) })
   })
   expect(banners()).toHaveLength(1)
   expect(banners()[0].props.message).toContain('may have received part')
@@ -51,11 +66,6 @@ it('projects reconnect snapshots, preserves Copy, and removes notices only on ho
     banners()[0].props.action.onPress()
   })
   expect(writeText).toHaveBeenCalledExactlyOnceWith('exact\ntext')
-  expect(sendRequest).not.toHaveBeenCalled()
-  act(() => {
-    emit({ type: 'ready', snapshot: { generatedInputNotices: notices } })
-  })
-  expect(banners()).toHaveLength(1)
   await act(async () => {
     banners()[0].props.onDismiss()
   })
@@ -65,8 +75,8 @@ it('projects reconnect snapshots, preserves Copy, and removes notices only on ho
     undefined
   )
   expect(banners()).toHaveLength(1)
-  act(() => {
-    emit({ type: 'generatedInputNoticesChanged', notices: [] })
+  await act(async () => {
+    emit({ type: 'dismissed', session: 's', revision: 3, id: 'refused' })
   })
   expect(banners()).toHaveLength(0)
   act(() => {

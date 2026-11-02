@@ -12,7 +12,6 @@ import { useHostClient } from '../transport/host-client-hooks'
 import { WorkspaceServerContext } from '../transport/use-workspace-client'
 import { useWorkspaceServer } from '../transport/workspace-server'
 import { GeneratedInputNotices } from '../components/GeneratedInputNotices'
-import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal-runtime-capabilities'
 
 const NO_CAPABILITIES: readonly string[] = []
 const UNREACHABLE_SERVER_MESSAGE =
@@ -40,8 +39,8 @@ export function WorkspaceRoute({ children }: { children: ReactNode }) {
   }
   const screens = (
     <WorkspaceExecutionHostContext.Provider value={executionHost}>
-      {server &&
-      desktopGates?.hostCapabilities.includes(GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY) ? (
+      {/* A server workspace's notices live on that server; the desktop's own are shown by its gate. */}
+      {server ? (
         <GeneratedInputNotices
           client={server.client}
           capabilities={server.gates.hostCapabilities}

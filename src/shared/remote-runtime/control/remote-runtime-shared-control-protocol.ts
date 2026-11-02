@@ -79,6 +79,15 @@ export function getCleanupRequest(
       subscription.remoteSubscriptionId
     )
   }
+  if (
+    subscription.method === 'terminal.generatedInputNotices.subscribe' &&
+    subscription.remoteSubscriptionId
+  ) {
+    return cleanupBySubscriptionId(
+      'terminal.generatedInputNotices.unsubscribe',
+      subscription.remoteSubscriptionId
+    )
+  }
   if (subscription.method === 'files.watch' && subscription.remoteSubscriptionId) {
     return cleanupBySubscriptionId('files.unwatch', subscription.remoteSubscriptionId)
   }
