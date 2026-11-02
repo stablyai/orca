@@ -121,8 +121,6 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return { state: 'admitted' }
   }
 
-  compactUsesPrompt = () => true
-
   historicalInputBytes: NonNullable<SessionAdapter['historicalInputBytes']> = async (input) => ({
     bytes: Buffer.byteLength(
       JSON.stringify(
@@ -133,15 +131,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   })
 
   compact: NonNullable<SessionAdapter['compact']> = async (input) =>
-    this.live(input.sessionId).turns.compact(
-      input.command,
-      input.body
-        ? await acpPromptBlocks(
-            input.body,
-            await acpSessionAcceptsImages(this.live(input.sessionId))
-          )
-        : undefined
-    )
+    this.live(input.sessionId).turns.compact(input.command)
 
   cancelTurn: SessionAdapter['cancelTurn'] = async (input) => {
     const session = this.live(input.sessionId)

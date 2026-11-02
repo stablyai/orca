@@ -141,11 +141,10 @@ export type StructuredAgentSessionCommandHandoverContext = {
 export async function handOverStructuredAgentSessionCommand(
   ctx: StructuredAgentSessionCommandHandoverContext,
   submission: AgentJournalSubmission,
-  body: AgentJournalMessageItem,
-  providerBody?: AgentJournalMessageItem
+  body: AgentJournalMessageItem
 ): Promise<void> {
   const { clientMessageId } = submission
-  const blocked = structuredAgentSessionCommandBlocked(ctx, body)
+  const blocked = commandBlocked(ctx, body)
   if (blocked) {
     const refused = {
       state: 'rejected' as const,
@@ -176,8 +175,7 @@ export async function handOverStructuredAgentSessionCommand(
     admission = await ctx.adapter.compact!({
       sessionId: ctx.sessionId,
       fence: ctx.fence,
-      command: { clientMessageId, ...turn, running },
-      ...(providerBody ? { body: providerBody } : {})
+      command: { clientMessageId, ...turn, running }
     })
   } catch (error) {
     // Ready-child writes can lose replies after running; never infer non-delivery from throws.
@@ -293,7 +291,7 @@ async function settleUnsentCommand(
   })
 }
 
-export function structuredAgentSessionCommandBlocked(
+function commandBlocked(
   ctx: StructuredAgentSessionCommandHandoverContext,
   body: AgentJournalMessageItem
 ): SubmissionRejectionFact | null {

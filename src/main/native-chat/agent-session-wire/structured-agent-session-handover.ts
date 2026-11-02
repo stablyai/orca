@@ -22,7 +22,6 @@ import type { AgentSessionDispatchOutcome } from './structured-agent-session-ada
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   handOverStructuredAgentSessionCommand,
-  structuredAgentSessionCommandBlocked,
   structuredAgentSessionHandoverOrigin
 } from './structured-agent-session-command-turn'
 import { carriedStoppedHistory } from './structured-agent-session-stopped-history-selection'
@@ -57,13 +56,7 @@ export async function beginSubmissionHandover(
     })
     return null
   }
-  let carrier = prepareRecoveryCarrier(ctx, clientMessageId)
-  if (
-    body.command &&
-    (!ctx.adapter.compactUsesPrompt?.(ctx.sessionId) ||
-      !carrier.required ||
-      structuredAgentSessionCommandBlocked(ctx, body))
-  ) {
+  if (body.command) {
     await whileStructuredAgentSessionHandingOver(
       ctx.journal,
       clientMessageId,
@@ -72,6 +65,7 @@ export async function beginSubmissionHandover(
     )
     return null
   }
+  let carrier = prepareRecoveryCarrier(ctx, clientMessageId)
   // Join only current turns; persist stopped-history carry before writing to the provider.
   const turnScope = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   let carried = carriedStoppedHistory(ctx, turnScope, submission, body)
@@ -154,33 +148,17 @@ export async function beginSubmissionHandover(
               outcome = unwritten
                 ? cancelledDispatch(queued)
                 : ownsChild()
-                  ? body.command
-                    ? await (async () => {
-                        await commit(async () => {
-                          attempt?.signal.throwIfAborted()
-                          if (!ownsChild()) {
-                            throw new Error('Context command lost its provider child')
-                          }
-                          await handOverStructuredAgentSessionCommand(
-                            ctx,
-                            submission,
-                            body,
-                            dispatchBody
-                          )
-                        })
-                        return null
-                      })()
-                    : await dispatchStructuredInputSafely(
-                        ctx,
-                        clientMessageId,
-                        dispatchBody,
-                        requestedAt,
-                        submission.options,
-                        queued,
-                        ownsChild,
-                        prepareFresh,
-                        attempt?.signal
-                      )
+                  ? await dispatchStructuredInputSafely(
+                      ctx,
+                      clientMessageId,
+                      dispatchBody,
+                      requestedAt,
+                      submission.options,
+                      queued,
+                      ownsChild,
+                      prepareFresh,
+                      attempt?.signal
+                    )
                   : null
               break
             } catch (error) {

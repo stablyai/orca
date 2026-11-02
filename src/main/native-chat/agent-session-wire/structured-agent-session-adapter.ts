@@ -254,12 +254,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     { ok: true; fork: AgentSessionRewindFork } | { ok: false; reason: AgentSessionRewindReason }
   >
   /** Return provider compaction admission; translator ends the command turn unless child-exit recovery does first. */
-  compactUsesPrompt?(sessionId: string): boolean
   compact?(input: {
     sessionId: string
     fence: number
     command: StructuredAgentSessionCommandRun
-    body?: AgentJournalMessageItem
   }): Promise<AgentSessionCommandAdmission>
   /** Rejection proves refusal; thrown changes have unknown effects. */
   changeThreadGoal?(input: {

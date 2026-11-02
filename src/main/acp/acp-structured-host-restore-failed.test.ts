@@ -217,7 +217,7 @@ describe('a created Grok session Grok reports missing on the first reopen', () =
     await host.close(SESSION, 'user-close')
   })
 
-  it('carries saved context on a prompt-producing compact command and waits for provider settlement', async () => {
+  it('sends Compact as the exact control and leaves saved context owed for the next input', async () => {
     const { host, fence, ready, exchange, rig, journalDatabase } = await openRestoreRig(
       -32002,
       'Resource not found'
@@ -228,37 +228,39 @@ describe('a created Grok session Grok reports missing on the first reopen', () =
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
     await ready()
-    const compact = envelope(
-      'agentSession.conversationCommand',
-      { command: 'compact' },
-      {
-        expectedRuntimeFence: fence()
-      }
-    )
+    const target = currentContextTransferTarget(readContextTransfers(journalDatabase.db, SESSION))!
     const promptIndex = rig.sent('session/prompt').length
-    const command = host.conversationCommand(CALLER, { command: 'compact', envelope: compact })
-    const result = await command
+    const result = await host.conversationCommand(CALLER, {
+      command: 'compact',
+      envelope: envelope(
+        'agentSession.conversationCommand',
+        { command: 'compact' },
+        { expectedRuntimeFence: fence() }
+      )
+    })
     expect(result).toMatchObject({ ok: true, value: { state: 'completed' } })
-    if (result.ok) {
-      expect(result.value.error).toBeUndefined()
-      expect(result.value).not.toHaveProperty('queued')
-    }
     const prompt = await rig.frame('session/prompt', promptIndex)
-    expect(JSON.stringify(prompt.params)).toContain('remember command context 42')
-    expect(JSON.stringify(prompt.params)).toContain('/compact')
-    const before = readContextTransfers(journalDatabase.db, SESSION)
-    const target = currentContextTransferTarget(before)!
-    expect(target.firstInputId).toBeTruthy()
-    expect(contextTransferDelivered(before, target.id)).toBe(false)
+    expect(prompt.params).toMatchObject({ prompt: [{ type: 'text', text: '/compact' }] })
+    expect(z.object({ prompt: z.array(z.unknown()) }).parse(prompt.params).prompt).toHaveLength(1)
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
     await rig.settle()
-    expect(await command).toMatchObject({ ok: true })
     await host.flushStreamedEvents(SESSION)
+    const afterCompact = readContextTransfers(journalDatabase.db, SESSION)
+    expect(afterCompact.some((row) => row.kind === 'delivery')).toBe(false)
+    expect(contextTransferDelivered(afterCompact, target.id)).toBe(false)
+
+    const next = await exchange('continue', 'still 42', FRESH)
+    const blocks = z
+      .object({ prompt: z.array(z.object({ text: z.string() })) })
+      .parse(next.params).prompt
+    expect(blocks[0]?.text).toContain('remember command context 42')
+    expect(blocks.at(-1)?.text).toBe('continue')
     expect(
       contextTransferDelivered(readContextTransfers(journalDatabase.db, SESSION), target.id)
     ).toBe(true)
-    const journal = await host.journalSnapshot(SESSION)
-    expect(JSON.stringify(journal)).not.toContain('orca_context_handoff')
+    expect(JSON.stringify(await host.journalSnapshot(SESSION))).not.toContain(
+      'orca_context_handoff'
+    )
     await host.close(SESSION, 'user-close')
   })
 

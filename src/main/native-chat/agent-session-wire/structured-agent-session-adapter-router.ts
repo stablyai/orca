@@ -90,9 +90,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.owner(input.sessionId).recoverRewind?.(input) ??
     Promise.resolve({ ok: false, reason: 'unsupported' })
 
-  compactUsesPrompt = (sessionId: string) =>
-    this.owner(sessionId).compactUsesPrompt?.(sessionId) ?? false
-
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) => {
     const compact = this.owner(input.sessionId).compact
     if (!compact) {

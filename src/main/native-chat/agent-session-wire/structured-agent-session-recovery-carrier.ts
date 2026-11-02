@@ -39,9 +39,7 @@ export function prepareRecoveryCarrier(ctx: AgentSessionHandoverContext, clientM
           if (!isCurrent()) {
             throw new Error('Context carrier lost its provider child')
           }
-          if (!body.command) {
-            await pending()
-          }
+          await pending()
         })
         return delivered
       } catch (error) {
