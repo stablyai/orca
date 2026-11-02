@@ -422,20 +422,21 @@ it('classifies cached rows with no filesystem probes and picks up a retargeted a
     })
     f.repos.push(...fleet)
     asyncProbe.mockClear()
-    await Promise.all(
-      [...fleet, wsl, folder].map((repo) =>
-        listDetectedGitWorktrees(f.ipcStore, repo).catch(() => null)
-      )
-    )
+    const [scans] = await Promise.all([
+      Promise.all(fleet.map((repo) => listDetectedGitWorktrees(f.ipcStore, repo))),
+      ...[wsl, folder].map((repo) => listDetectedGitWorktrees(f.ipcStore, repo).catch(() => null))
+    ])
     expect(asyncProbe.mock.calls.map(([path]) => path).sort()).toEqual(
       fleet.map((repo) => repo.path).sort()
     )
+    // Classify the pass's own rows repeatedly; re-listing would depend on the cache TTL.
     asyncProbe.mockClear()
-    for (const repo of fleet) {
-      const cached = await listDetectedGitWorktrees(f.ipcStore, repo)
-      expect(buildDetectedGitWorktrees(f.ipcStore, repo, cached.gitWorktrees)).toEqual([
-        expect.objectContaining({ selectedCheckout: true, visible: true })
-      ])
+    for (let pass = 0; pass < 2; pass++) {
+      fleet.forEach((repo, index) => {
+        expect(buildDetectedGitWorktrees(f.ipcStore, repo, scans[index].gitWorktrees)).toEqual([
+          expect.objectContaining({ selectedCheckout: true, visible: true })
+        ])
+      })
     }
     expect(asyncProbe).not.toHaveBeenCalled()
   }
