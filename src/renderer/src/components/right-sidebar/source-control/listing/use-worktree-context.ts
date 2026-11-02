@@ -43,6 +43,9 @@ export function useSourceControlWorktreeContext() {
   const repositoryHuge = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
   )
+  const statusReadError = useAppStore((s) =>
+    activeWorktreeId ? s.gitStatusReadErrorByWorktree?.[activeWorktreeId] : undefined
+  )
   const branchEntries = useAppStore((s) =>
     activeWorktreeId
       ? (s.gitBranchChangesByWorktree[activeWorktreeId] ?? EMPTY_BRANCH_CHANGE_ENTRIES)
@@ -68,7 +71,13 @@ export function useSourceControlWorktreeContext() {
     activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
   )
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
-  const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
+  const inFlightRemoteOpKind = useAppStore(
+    (s) =>
+      s.remoteOperations.findLast((operation) => operation.worktreeId === activeWorktreeId)?.kind ??
+      null
+  )
+  const isRemoteOperationInAnotherWorktree =
+    isRemoteOperationActive && inFlightRemoteOpKind === null
   const settings = useAppStore((s) => s.settings)
   const hostedReviewCacheKey =
     activeRepo && branchName
@@ -161,6 +170,7 @@ export function useSourceControlWorktreeContext() {
     hostedReviewEntry,
     hostedReviewEntryData,
     inFlightRemoteOpKind,
+    isRemoteOperationInAnotherWorktree,
     isBranchVisible,
     isFolder,
     isRemoteOperationActive,
@@ -168,6 +178,7 @@ export function useSourceControlWorktreeContext() {
     repositoryHuge,
     rightSidebarTab,
     settings,
+    statusReadError,
     worktreeMap,
     worktreePath
   }

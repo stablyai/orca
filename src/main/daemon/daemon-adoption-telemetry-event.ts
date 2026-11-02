@@ -3,10 +3,10 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
+  classifyDaemonAppVersionMatch,
   classifyDaemonPtyCwd,
   classifyDaemonSpawnerPath,
   isMacTccFolderClass,
-  type DaemonAdoptedAppVersionMatch,
   type DaemonSpawnerPathClass
 } from '../../shared/daemon-adoption-telemetry'
 import { bucketDaemonLiveSessionCount } from '../../shared/daemon-lifecycle-telemetry'
@@ -43,11 +43,10 @@ function stableCopyPrefix(): string | null {
 export async function classifyDaemonAdoptionOrigin(
   pidRecord: ParsedDaemonPid | null
 ): Promise<DaemonAdoptionOrigin> {
-  const appVersionMatch: DaemonAdoptedAppVersionMatch = !pidRecord?.appVersion
-    ? 'unknown'
-    : pidRecord.appVersion === getAppEnvironment().getVersion()
-      ? 'same'
-      : 'different'
+  const appVersionMatch = classifyDaemonAppVersionMatch(
+    pidRecord?.appVersion,
+    getAppEnvironment().getVersion()
+  )
   const spawnerPathClass: DaemonSpawnerPathClass = classifyDaemonSpawnerPath(
     pidRecord?.spawnerExecPath ?? null,
     existsSync,

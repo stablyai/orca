@@ -194,29 +194,37 @@ function buildSuggestionRows({
     inline === true ? findInlineCompletion(value, historySuggestions) : shownCompletion(inline)
   if (completion) {
     const { text, url } = completion
-    const visited = historySuggestions.find((row) => row.url === url)
-    const completedRow = visited
-      ? { ...visited, inlineText: text }
-      : {
-          url,
-          title: text,
-          subtitle: '',
-          lastVisitedAt: 0,
-          visitCount: 0,
-          isSearch: false,
-          inlineText: text
-        }
-    const rest = historySuggestions.filter((row) => row !== visited && row.url !== topAction?.url)
-    return [completedRow, ...rest.slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS - 2), topAction]
-      .filter((row): row is BrowserAddressBarSuggestion => row !== null)
-      .slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
+    const completedRow: BrowserAddressBarSuggestion = {
+      ...(historySuggestions.find((row) => row.url === url) ?? {
+        lastVisitedAt: 0,
+        visitCount: 0
+      }),
+      url,
+      title: text,
+      subtitle: '',
+      isSearch: false,
+      inlineText: text
+    }
+    const typedAction = topAction && topAction.url !== url ? [topAction] : []
+    const rest = historySuggestions.filter((row) => row.url !== url && row.url !== topAction?.url)
+    return [
+      completedRow,
+      ...rest.slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS - 1 - typedAction.length),
+      ...typedAction
+    ]
   }
   if (!topAction) {
     return historySuggestions.slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
   }
-  // A duplicate history row supplies real metadata for the same Enter target.
-  const duplicate = historySuggestions.find((h) => h.url === topAction.url)
-  return [duplicate ?? topAction, ...historySuggestions.filter((h) => h !== duplicate)].slice(
+  // Keep the navigation action recognizable even when history has a title for this URL.
+  const visited = historySuggestions.find((row) => row.url === topAction.url)
+  const topRow = {
+    ...(visited ?? topAction),
+    title: topAction.title,
+    subtitle: topAction.subtitle,
+    isSearch: topAction.isSearch
+  }
+  return [topRow, ...historySuggestions.filter((row) => row.url !== topAction.url)].slice(
     0,
     MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS
   )

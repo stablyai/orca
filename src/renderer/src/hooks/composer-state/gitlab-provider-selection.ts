@@ -40,6 +40,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { reviewStartPointErrorText } from '@/lib/code-host-error-copy'
 
 export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) {
   const {
@@ -115,11 +116,13 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
       }
       const startPointSelection = { kind: 'gitlab-mr', repoId: runRepo.id, item } as const
       smartSourceSelectionRef.current = startPointSelection
+      // Picking an MR to create from is a user act: it may start the repo's stopped WSL distro.
       const resolveMrBase =
         target.kind === 'local'
           ? window.api.worktrees.resolveMrBase({
               repoId: runRepo.id,
               mrIid: item.number,
+              wakeWslDistro: true,
               ...(item.branchName ? { sourceBranch: item.branchName } : {}),
               ...(item.baseRefName ? { targetBranch: item.baseRefName } : {}),
               ...(item.isCrossRepository !== undefined
@@ -135,6 +138,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
               {
                 repo: runRepo.id,
                 mrIid: item.number,
+                wakeWslDistro: true,
                 ...(item.branchName ? { sourceBranch: item.branchName } : {}),
                 ...(item.baseRefName ? { targetBranch: item.baseRefName } : {}),
                 ...(item.isCrossRepository !== undefined
@@ -153,7 +157,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
             setBaseBranch(undefined)
             setCompareBaseRef(undefined)
             setPushTarget(undefined)
-            toast.error(result.error)
+            toast.error(reviewStartPointErrorText(result))
             return
           }
           handleBaseBranchMrSelect(

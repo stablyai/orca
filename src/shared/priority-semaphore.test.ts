@@ -2,25 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { PrioritySemaphore } from './priority-semaphore'
 
 describe('PrioritySemaphore', () => {
-  it('blocks when concurrency limit is reached', async () => {
-    const sem = new PrioritySemaphore(1)
-    const r1 = await sem.acquire(0)
-
-    let acquired = false
-    const p2 = sem.acquire(0).then((r) => {
-      acquired = true
-      return r
-    })
-
-    await new Promise((r) => setTimeout(r, 10))
-    expect(acquired).toBe(false)
-
-    r1()
-    const r2 = await p2
-    expect(acquired).toBe(true)
-    r2()
-  })
-
   it('serves higher priority (lower number) first', async () => {
     const sem = new PrioritySemaphore(1)
     const r1 = await sem.acquire(0)

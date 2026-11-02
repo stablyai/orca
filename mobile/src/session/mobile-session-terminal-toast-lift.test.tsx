@@ -3,6 +3,11 @@ import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
+vi.mock('../layout/use-shell-side-rail', () => ({
+  useShellSideRail: () => false,
+  useDirectionPadAvailable: () => false
+}))
 
 import { useMobileSessionPresentation } from './use-mobile-session-presentation'
 
@@ -14,6 +19,7 @@ function present(options: {
   resizeForKeyboard: boolean
   showNativeChat: boolean
   displayMode?: 'auto' | 'phone' | 'desktop'
+  splitOtherMode?: 'phone' | 'desktop'
 }): Presentation {
   const scope = {
     created: undefined,
@@ -33,12 +39,16 @@ function present(options: {
     terminalKeyboardResizeEnabled: options.resizeForKeyboard,
     showNativeChat: options.showNativeChat,
     terminalKeyboardMetrics: new Map(),
-    terminalModes:
-      options.displayMode === undefined ? new Map() : new Map([['term-1', options.displayMode]]),
+    terminalModes: new Map([
+      ['term-1', options.displayMode ?? 'auto'],
+      ['term-2', options.splitOtherMode ?? 'auto']
+    ]),
+    terminalSplitActive: options.splitOtherMode !== undefined,
+    visibleTerminalHandles: ['term-1', 'term-2'],
     toastOpacityRef: { current: 1 },
     hostEndpoint: null,
     initialSessionAutoCreateRef: { current: null },
-    terminalFrameHeightRef: { current: 600 },
+    terminalFrameRef: { current: { width: 400, height: 600 } },
     handleCreateTerminal: () => Promise.resolve(),
     visibleTabs: [],
     forceReconnectHost: null
@@ -95,4 +105,15 @@ describe('toast lift while the Android keyboard is open', () => {
     expect(view.activeTerminalKeyboardLift).toBe(0)
     expect(liftOf(view.terminalToastAnimatedStyle)).toBe(0)
   })
+
+  it.each(['phone', 'desktop'] as const)(
+    'resizes split panes only when the other pane also uses phone dimensions (%s)',
+    (splitOtherMode) => {
+      const view = present({ resizeForKeyboard: true, showNativeChat: false, splitOtherMode })
+      expect(view.terminalKeyboardResizeActive).toBe(splitOtherMode === 'phone')
+      expect(liftOf(view.terminalToastAnimatedStyle)).toBe(
+        splitOtherMode === 'phone' ? 0 : KEYBOARD_HEIGHT
+      )
+    }
+  )
 })

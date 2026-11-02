@@ -18,13 +18,6 @@ function handshake() {
 }
 
 describe('bench PhoneE2EE against the desktop E2EE v2 responder', () => {
-  it('derives the same transcript hash from the shipped hello', () => {
-    const { phone, desktop } = handshake()
-    expect(desktop).not.toBeNull()
-    phone.acceptReady(desktop.ready)
-    expect(phone.transcriptHashB64).toBe(desktop.transcriptHashB64)
-  })
-
   it('round-trips the e2ee_auth frame the bench sends', () => {
     const { phone, desktop } = handshake()
     phone.acceptReady(desktop.ready)

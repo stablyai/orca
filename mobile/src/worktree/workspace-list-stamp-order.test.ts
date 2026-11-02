@@ -75,13 +75,13 @@ describe('sortWorktrees with host stamps', () => {
       worktreeId: 'busy',
       displayName: 'B',
       lastActivityAt: 5,
-      lastOutputAt: 99
+      createdAt: 0
     })
     const all = [stamped, quiet, busy]
     const order = (rows: Worktree[]) =>
       sortWorktrees(rows, 'recent', 0, hostSortsByStamps(all)).map((item) => item.worktreeId)
     expect(order([quiet, busy])).toEqual(['quiet', 'busy'])
-    // Without the host's answer the old algorithm reads output recency.
+    // Without the host's answer the phone applies the new-workspace grace.
     expect(sortWorktrees([quiet, busy], 'recent', 0).map((item) => item.worktreeId)).toEqual([
       'busy',
       'quiet'

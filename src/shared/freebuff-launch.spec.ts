@@ -5,7 +5,7 @@ import { pickTuiAgent } from './tui-agent-selection'
 
 describe('Freebuff terminal launches', () => {
   it.each(['darwin', 'linux', 'win32'] as const)(
-    'delivers task text through the interactive terminal on %s',
+    'plans task text as a follow-up to the interactive launch on %s',
     (platform) => {
       const prompt = '--help\nFix "quoted" paths and $HOME handling'
       const plan = buildAgentStartupPlan({

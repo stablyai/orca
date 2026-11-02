@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   formatMarkdownReviewNotes,
   sortMarkdownReviewNotes,
@@ -34,6 +35,7 @@ export function useMarkdownPreviewFoundation({
   largePreview?: boolean
   markdownAnnotationsEnabled: boolean
 }) {
+  const languageRevision = useUiLanguageRevision()
   const source = useMarkdownPreviewSourceFoundation({
     content,
     filePath,
@@ -110,7 +112,8 @@ export function useMarkdownPreviewFoundation({
         formatPrompt: (notes) => formatMarkdownReviewNotes(notes, renderedContent)
       }
     ],
-    [renderedContent, unsentMarkdownReviewNotes]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    [renderedContent, unsentMarkdownReviewNotes, languageRevision]
   )
   const canShowReviewTools = Boolean(
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null

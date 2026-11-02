@@ -6,7 +6,7 @@ import type {
   OrcadMigrationManifest
 } from '../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadMigrationBlobDescriptor } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 /** A moved history waits while a shell runs in its worktree: that shell would overwrite it. */
 type WorktreeHasLiveShells = (worktreeId: string) => boolean
@@ -87,11 +87,11 @@ export async function abortStagedOrcadMigrationCatalogByReferenceDurably(args: {
 }): Promise<OrcadMigrationCatalogReferenceAbortResult> {
   // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
   const result = args.store.abortStagedOrcadMigrationCatalogByReference!(args.reference)
-  if (result.state === 'absent') {
-    await flushMigrationState(args.store, args.signal)
-    return { ...result, durableAbsent: true }
-  }
-  return result
+  await flushMigrationState(args.store, args.signal)
+  // Either answer is flushed first, so a source that cannot re-send the manifest may act on it.
+  return result.state === 'absent'
+    ? { ...result, durableAbsent: true }
+    : { ...result, durableCommitted: true }
 }
 
 export function getOrcadMigrationCatalogState(args: {

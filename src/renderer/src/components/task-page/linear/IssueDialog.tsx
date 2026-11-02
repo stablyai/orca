@@ -1,5 +1,5 @@
 import { ImeInput } from '@/lib/ime-text-field'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { translate } from '@/i18n/i18n'
@@ -115,7 +115,7 @@ export function TaskPageLinearIssueDialog({
             }}
             placeholder={translate('auto.components.TaskPage.d9151fd4e9', 'Issue title')}
             disabled={newLinearIssueSubmitting}
-            className="text-lg font-semibold bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground/40 text-foreground w-full"
+            className="text-lg font-semibold bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground text-foreground w-full"
           />
 
           <textarea
@@ -124,7 +124,7 @@ export function TaskPageLinearIssueDialog({
             placeholder={translate('auto.components.TaskPage.9bc8aea407', 'Add description...')}
             rows={5}
             disabled={newLinearIssueSubmitting}
-            className="w-full min-w-0 text-sm bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground/45 text-foreground resize-none max-h-60 overflow-y-auto scrollbar-sleek py-1"
+            className="w-full min-w-0 text-sm bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground text-foreground resize-none max-h-60 overflow-y-auto scrollbar-sleek py-1"
           />
 
           <TaskPageLinearIssueAttributes model={model} />
@@ -132,7 +132,9 @@ export function TaskPageLinearIssueDialog({
 
         <div className="flex items-center justify-between border-t border-border/60 px-6 py-4 bg-muted/5">
           <span className="text-[10px] text-muted-foreground/60 font-medium">
-            {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+              shortcut: submitShortcutLabel
+            })}
           </span>
           <div className="flex items-center gap-2">
             <Button

@@ -1,13 +1,13 @@
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import type { SidebarHostOption } from '@/components/sidebar/sidebar-host-options'
-import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
+import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
 import { buildWorktreePaletteDocuments } from '@/lib/worktree-palette-document'
 import {
   getPaletteWorktreeIdentity,
   getPaletteWorktreeExecutionHostId,
   resolvePaletteRepoForWorktree
 } from '@/lib/palette-repo-resolution'
-import type { PaletteDocument } from '@/lib/palette-match/palette-document'
+import type { PaletteDocument } from '../../../shared/palette-match/palette-document'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'

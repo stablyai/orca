@@ -90,14 +90,4 @@ describe('project-picker-browse-cache', () => {
 
     expect(getProjectPickerBrowseCacheEntry('runtime:0', 42)).toBeNull()
   })
-
-  it('refreshes an existing scope without growing the cache', () => {
-    rememberProjectPickerBrowseCacheEntry('runtime:one', { projects: [project('old')] }, 1_000)
-    rememberProjectPickerBrowseCacheEntry('runtime:one', { projects: [project('new')] }, 1_001)
-
-    expect(_getProjectPickerBrowseCacheSizeForTest()).toBe(1)
-    expect(getProjectPickerBrowseCacheEntry('runtime:one', 1_002)).toMatchObject({
-      projects: [expect.objectContaining({ owner: 'new' })]
-    })
-  })
 })

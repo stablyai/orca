@@ -229,6 +229,48 @@ describe('a cursor chord pressed during a composition', () => {
     harness.dispose()
   })
 
+  function pressOptionArrowLeft(
+    harness: ReturnType<typeof createHarness>,
+    press: { isComposing: boolean; keyCode: number; timeStamp: number }
+  ): void {
+    const event = keyboardEvent('keydown', {
+      key: 'ArrowLeft',
+      code: 'ArrowLeft',
+      keyCode: press.keyCode,
+      altKey: true,
+      isComposing: press.isComposing
+    })
+    Object.defineProperty(event, 'timeStamp', { value: press.timeStamp })
+    harness.terminalInput.dispatchEvent(event)
+  }
+
+  // Chromium (crbug.com/48161): the IME's composing keydown, the commit, then the same NSEvent replayed unmarked.
+  it.each([
+    ['before xterm ends the session', false],
+    ['after xterm ends the session', true]
+  ])('sends a chord the IME replays %s once (#17616)', (_label, sessionEndedFirst) => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+
+    harness.startComposition()
+    pressOptionArrowLeft(harness, { isComposing: true, keyCode: 229, timeStamp: 23884 })
+    harness.terminalElement.dispatchEvent(new Event('compositionend'))
+    if (sessionEndedFirst) {
+      harness.endComposition('사')
+    }
+    pressOptionArrowLeft(harness, { isComposing: false, keyCode: 37, timeStamp: 23884 })
+    if (!sessionEndedFirst) {
+      harness.endComposition('사')
+    }
+    vi.runAllTimers()
+    expect(harness.wire).toEqual(['사', '\x1bb'])
+
+    pressOptionArrowLeft(harness, { isComposing: false, keyCode: 37, timeStamp: 23999 })
+    expect(harness.wire, 'a genuine next press is not a replay').toEqual(['사', '\x1bb', '\x1bb'])
+    hook.unmount()
+    harness.dispose()
+  })
+
   it('sends immediately when no composition is in flight', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))

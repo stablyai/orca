@@ -39,6 +39,7 @@ const WSL_HOST: ExecutionHostId = 'runtime:wsl%3AUbuntu'
 function setup(initial: { selectedHostId: ExecutionHostId | null; dropped?: string }) {
   const setServerPath = vi.fn()
   const setStep = vi.fn()
+  const onWindowsDriveRefusal = vi.fn()
   const droppedHostPath = initial.dropped ? { hostId: WSL_HOST, path: initial.dropped } : null
   const view = renderHook(
     ({ selectedHostId, isOpen }: { selectedHostId: ExecutionHostId | null; isOpen: boolean }) =>
@@ -47,11 +48,12 @@ function setup(initial: { selectedHostId: ExecutionHostId | null; dropped?: stri
         droppedHostPath,
         selectedHostId,
         setServerPath,
-        setStep
+        setStep,
+        onWindowsDriveRefusal
       }),
     { initialProps: { selectedHostId: initial.selectedHostId, isOpen: true } }
   )
-  return { view, setServerPath, setStep }
+  return { view, setServerPath, setStep, onWindowsDriveRefusal }
 }
 
 beforeEach(() => {
@@ -90,6 +92,29 @@ describe('useAddRepoWslHostPaths', () => {
       defaultPath: '\\\\wsl.localhost\\Ubuntu\\home\\me'
     })
   })
+
+  it.each([
+    ['C:\\Users\\me\\src', 'C:\\Users\\me\\src'],
+    ['\\\\wsl.localhost\\Ubuntu\\mnt\\c\\work', 'C:\\work']
+  ])(
+    'refuses a %s pick before it reaches the host path step or any scan',
+    async (picked, windowsPath) => {
+      mocks.pickDirectory.mockResolvedValue(picked)
+      const { view, setServerPath, setStep, onWindowsDriveRefusal } = setup({
+        selectedHostId: WSL_HOST
+      })
+      act(() => view.result.current.browseWslHost?.())
+      await waitFor(() =>
+        expect(onWindowsDriveRefusal).toHaveBeenCalledWith({
+          kind: 'wsl_host_windows_drive_path',
+          windowsPath
+        })
+      )
+      // The host path step is what scans and adds; a refused pick never gets there.
+      expect(setServerPath).not.toHaveBeenCalled()
+      expect(setStep).not.toHaveBeenCalled()
+    }
+  )
 
   it('drops a pick that lands after the dialog closed', async () => {
     let resolvePick: (path: string) => void = () => {}

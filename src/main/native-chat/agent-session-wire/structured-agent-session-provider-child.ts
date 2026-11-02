@@ -1,7 +1,7 @@
 // Match child endings by generation/fence so stale exits cannot end newer children; conversation state outlives them.
 
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type {
@@ -17,10 +17,10 @@ type ChildBearer = Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedC
 
 /** Conversation writes use the record fence; provider writes retain the child’s acquisition fence. */
 export function structuredAgentSessionConversationFence(
-  store: Pick<AgentSessionRecordStore, 'getRecord'>,
+  store: Pick<AgentSessionRecordStore, 'getConversation'>,
   sessionId: string
 ): number {
-  return store.getRecord(sessionId)?.lease.runtimeFence ?? 0
+  return store.getConversation(sessionId)?.currentFence ?? 0
 }
 
 /** Index only successful attaches; failures have no child to remove. */
@@ -28,6 +28,9 @@ export function indexProviderChild(
   session: ChildBearer,
   child: StructuredAgentSessionProviderChild
 ): void {
+  if (session.child !== child) {
+    session.child?.catalogSource?.release?.()
+  }
   session.child = child
 }
 
@@ -95,6 +98,7 @@ export function recordProviderChildEnd(
   if (!child) {
     return false
   }
+  child.catalogSource?.release?.()
   session.lastEndedChild = {
     ...ended,
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),

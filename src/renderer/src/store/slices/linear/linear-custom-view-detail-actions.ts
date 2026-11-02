@@ -56,7 +56,7 @@ export function createLinearCustomViewDetailActions(
         inflight &&
         inflight.contextKey === contextKey &&
         inflight.mutationGeneration === getLinearMutationGeneration() &&
-        (!options?.force || inflight.force)
+        !options?.force
       ) {
         return inflight.promise
       }
@@ -130,7 +130,6 @@ export function createLinearCustomViewDetailActions(
 
       entry = {
         promise,
-        force: Boolean(options?.force),
         contextKey,
         mutationGeneration: requestMutationGeneration
       }

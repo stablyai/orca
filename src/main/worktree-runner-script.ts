@@ -6,6 +6,10 @@ import { scriptDeclaresPosixShell } from '../shared/setup-script-shebang'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from './git-bash'
 import { gitExecFileSync } from './git/runner'
+import { isLocalGitRuntimeRouterInstalled } from './git/command-runner/local-git-runtime-route'
+import { readWorktreeGitPath } from './git/worktree-git-path'
+import { resolveWslWorktreeGitPath } from './git/wsl-worktree-git-path'
+import { knownWslAutomountRoots } from './wsl/wsl-automount-root'
 import { isWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { SETUP_RUNNER_PATH_ENV_KEYS, getSetupRunnerEnvVars } from './setup-hook-env-vars'
@@ -19,21 +23,22 @@ import type { SetupRunnerShell } from '../shared/setup-runner-command'
 
 type SetupRunnerShellSettings = Record<string, unknown> | undefined
 
-function getGitPath(cwd: string, relativePath: string, runtimeTarget?: HookRuntimeTarget): string {
+function getGitPath(cwd: string, relativePath: string): string {
   return gitExecFileSync(['rev-parse', '--git-path', relativePath], {
     cwd,
-    ...(runtimeTarget?.wslDistro ? { wslDistro: runtimeTarget.wslDistro } : {})
+    // Host Git on purpose: a read-only path lookup, kept off a synchronous wsl.exe.
+    hostGit: true
   }).trim()
 }
 
-export function createSetupRunnerScript(
+export async function createSetupRunnerScript(
   repo: Repo,
   worktreePath: string,
   script: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
   setupShell?: SetupRunnerShell,
   projectStartupPolicy?: SetupAgentStartupPolicy
-): WorktreeSetupLaunch {
+): Promise<WorktreeSetupLaunch> {
   return createWorktreeRunnerScript({
     repo,
     worktreePath,
@@ -48,7 +53,7 @@ export function createSetupRunnerScript(
   })
 }
 
-function createWorktreeRunnerScript(args: {
+async function createWorktreeRunnerScript(args: {
   repo: Repo
   worktreePath: string
   script: string
@@ -56,7 +61,7 @@ function createWorktreeRunnerScript(args: {
   runtimeTarget?: HookRuntimeTarget
   waitForAgentStartup?: boolean
   setupShell?: SetupRunnerShell
-}): WorktreeSetupLaunch {
+}): Promise<WorktreeSetupLaunch> {
   const {
     repo,
     worktreePath,
@@ -84,10 +89,17 @@ function createWorktreeRunnerScript(args: {
   // Linked worktrees have .git files; resolve the per-worktree gitdir through Git.
   const runnerExtension = runnerShell.family === 'cmd' ? 'cmd' : 'sh'
   const gitRelPath = `orca/${runnerBaseName}.${runnerExtension}`
-  let runnerScriptPath = getGitPath(worktreePath, gitRelPath, runtimeTarget)
+  // Read the link with the D1c Git router (if WSL Git made the worktree, host Git can't). A worktree
+  // inside a distro never runs synchronous Git: that would be a synchronous wsl.exe on the main thread.
+  const fromLink = isWslPath(worktreePath)
+    ? await resolveWslWorktreeGitPath(worktreePath, gitRelPath)
+    : isLocalGitRuntimeRouterInstalled()
+      ? readWorktreeGitPath(worktreePath, gitRelPath, knownWslAutomountRoots())
+      : null
+  let runnerScriptPath = fromLink ?? getGitPath(worktreePath, gitRelPath)
 
   // Convert WSL Git's Linux path to a path Windows filesystem calls can reach.
-  if (wslWorktree) {
+  if (wslWorktree && !fromLink) {
     const wslInfo = getHookWslContext(worktreePath, runtimeTarget)
     if (wslInfo?.distro) {
       runnerScriptPath = toWindowsWslPath(runnerScriptPath.trim(), wslInfo.distro)

@@ -17,7 +17,7 @@ import {
   wslGatedStat
 } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import { sessionIdFromFileName, sessionSortTime } from './session-scanner-accumulator'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import {
@@ -27,7 +27,6 @@ import {
 } from './session-scanner-subagent-transcripts'
 import {
   asRecord,
-  errorMessage,
   extractString,
   normalizeTitleText,
   parseJsonObject
@@ -73,7 +72,11 @@ export async function listClaudeSubagentSessions(args: {
   } catch (err) {
     // Surface WSL gate refusal so the panel can retry instead of reporting no subagents.
     if (err instanceof WslTranscriptFsError) {
-      recordSessionScanIssue(issues, { agent: 'claude', path: subagentsDir, message: err.message })
+      recordSessionScanIssue(issues, {
+        agent: 'claude',
+        path: subagentsDir,
+        ...scanIssueTextFromError(err)
+      })
     }
     return { sessions: [], issues }
   }
@@ -160,7 +163,7 @@ async function parseSubagentTranscript(args: {
     recordSessionScanIssue(args.issues, {
       agent: 'claude',
       path: args.filePath,
-      message: errorMessage(err)
+      ...scanIssueTextFromError(err)
     })
     return null
   }

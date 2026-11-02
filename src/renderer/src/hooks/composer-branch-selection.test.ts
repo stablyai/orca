@@ -246,7 +246,7 @@ describe('resolveComposerReuseOverride', () => {
     ).toBeUndefined()
   })
 
-  it('keeps the override for a remote-only ref even if its local name is busy', () => {
+  it('drops the branch-off override when the remote branch has a busy local copy', () => {
     // Remote-only refs need fresh local tracking branches; local-name busy checks must preserve their override.
     expect(
       resolveComposerReuseOverride({
@@ -255,17 +255,16 @@ describe('resolveComposerReuseOverride', () => {
         branchNameOverride: 'feature-x',
         branchCheckedOutElsewhere: true
       })
-    ).toBe('feature-x')
+    ).toBeUndefined()
   })
 })
 
 describe('resolveComposerBranchReuse', () => {
-  it('reuses a qualified local selector but does not reuse a qualified remote selector', () => {
+  it('offers reuse for qualified local and remote selectors', () => {
     expect(
       resolveComposerBranchReuse({
         refName: 'refs/heads/feature/加',
         localBranchName: 'feature/加',
-        selectionProducedOverride: true,
         branchCheckedOutElsewhere: false
       })
     ).toEqual({ reuseEligibleBranch: 'feature/加', defaultReuse: true })
@@ -273,10 +272,9 @@ describe('resolveComposerBranchReuse', () => {
       resolveComposerBranchReuse({
         refName: 'refs/remotes/origin/feature/加',
         localBranchName: 'feature/加',
-        selectionProducedOverride: true,
         branchCheckedOutElsewhere: false
       })
-    ).toEqual({ reuseEligibleBranch: null, defaultReuse: false })
+    ).toEqual({ reuseEligibleBranch: 'feature/加', defaultReuse: true })
     expect(
       resolveComposerReuseOverride({
         refName: 'refs/heads/feature/加',
@@ -291,44 +289,28 @@ describe('resolveComposerBranchReuse', () => {
       resolveComposerBranchReuse({
         refName: 'feature-x',
         localBranchName: 'feature-x',
-        selectionProducedOverride: true,
         branchCheckedOutElsewhere: false
       })
     ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: true })
   })
 
-  it('does not offer reuse for a remote-only ref (ref carries an origin/ prefix)', () => {
+  it('offers reuse for a remote-only ref', () => {
     expect(
       resolveComposerBranchReuse({
         refName: 'origin/feature/something',
         localBranchName: 'feature/something',
-        selectionProducedOverride: true,
         branchCheckedOutElsewhere: false
       })
-    ).toEqual({ reuseEligibleBranch: null, defaultReuse: false })
+    ).toEqual({ reuseEligibleBranch: 'feature/something', defaultReuse: true })
   })
 
-  it('does not offer reuse when the branch is already checked out in another worktree', () => {
-    // Why: git refuses a branch in two worktrees, so reuse is impossible here.
+  it('retains reuse intent for a busy branch so the host can report or open its workspace', () => {
     expect(
       resolveComposerBranchReuse({
         refName: 'feature-x',
         localBranchName: 'feature-x',
-        selectionProducedOverride: true,
         branchCheckedOutElsewhere: true
       })
-    ).toEqual({ reuseEligibleBranch: null, defaultReuse: false })
-  })
-
-  it('keeps a local branch reuse-eligible but defaults reuse OFF when the user typed a custom name', () => {
-    // Without an override, custom-name creation branches off the ref; reuse remains opt-in.
-    expect(
-      resolveComposerBranchReuse({
-        refName: 'feature-x',
-        localBranchName: 'feature-x',
-        selectionProducedOverride: false,
-        branchCheckedOutElsewhere: false
-      })
-    ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: false })
+    ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: true })
   })
 })

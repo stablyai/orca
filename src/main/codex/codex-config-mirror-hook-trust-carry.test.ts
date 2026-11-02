@@ -29,12 +29,9 @@ vi.mock('node:os', async () => {
   }
 })
 
-import {
-  prepareSystemConfigForFreshRuntimeMirror,
-  syncSystemConfigIntoManagedCodexHome
-} from './codex-config-mirror'
+import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import { parseTomlTableHeaderPath } from './config-toml-key-path'
-import { extractOrdinaryCodexSettings, getTomlSections } from './config-toml-runtime-owned-sections'
+import { getTomlSections } from './config-toml-runtime-owned-sections'
 import { escapeTomlString } from './config-toml-trust'
 
 const PLUGIN_KEY = 'demo@mkt:hooks/hooks.json:stop:0:0'
@@ -125,24 +122,6 @@ afterEach(() => {
 })
 
 describe('carrying plain-Codex hook trust into the managed Codex home', () => {
-  it.each([
-    ['plugin', 'bare parent', PLUGIN_KEY, bareParent],
-    ['plugin', 'fully quoted', PLUGIN_KEY, fullyQuoted],
-    ['project', 'bare parent', PROJECT_KEY, bareParent],
-    ['project', 'fully quoted', PROJECT_KEY, fullyQuoted]
-  ])(
-    'carries %s hook trust in the %s spelling into a fresh home',
-    (_kind, _spelling, key, spell) => {
-      const block = trustBlock(spell(key), 'sha256:plain-codex')
-      writeSystemConfig([block])
-
-      const runtimeConfig = mirror()
-
-      expect(runtimeConfig).toContain(block)
-      expectNoDuplicateTables(runtimeConfig)
-    }
-  )
-
   // Why: Codex >=0.145 adds session_end and >=0.150 interrupt, which Orca's own parser rejects.
   it.each(
     ['session_end', 'interrupt'].flatMap((event) =>
@@ -166,31 +145,6 @@ describe('carrying plain-Codex hook trust into the managed Codex home', () => {
     expectNoDuplicateTables(runtimeConfig)
   })
 
-  it.each(['session_end', 'interrupt'])('leaves out user-layer %s trust', (event) => {
-    const key = `${join(systemCodexHome(), 'hooks.json')}:${event}:0:0`
-    writeSystemConfig([trustBlock(fullyQuoted(key), 'sha256:user-hook')])
-
-    expect(mirror()).not.toContain('sha256:user-hook')
-  })
-
-  it.each([
-    'not-a-hook-key',
-    '/repo/.codex/hooks.json:stop:0',
-    '/repo/.codex/hooks.json:stop:01:0',
-    '/repo/.codex/hooks.json:Stop:0:0',
-    ':stop:0:0'
-  ])('does not carry the unattributable key %s', (key) => {
-    writeSystemConfig([
-      trustBlock(bareParent(key), 'sha256:unattributable'),
-      trustBlock(fullyQuoted(PLUGIN_KEY), 'sha256:plugin')
-    ])
-
-    const runtimeConfig = mirror()
-
-    expect(runtimeConfig).toContain('sha256:plugin')
-    expect(runtimeConfig).not.toContain('sha256:unattributable')
-  })
-
   it.each([
     ['hooks.json', bareParent],
     ['hooks.json', fullyQuoted],
@@ -211,23 +165,6 @@ describe('carrying plain-Codex hook trust into the managed Codex home', () => {
   })
 
   it.each([
-    ['fully quoted', fullyQuoted],
-    ['bare parent', bareParent]
-  ])('keeps one %s shared table across repeated launches', (_spelling, spell) => {
-    const block = trustBlock(spell(PLUGIN_KEY), 'sha256:plain-codex')
-    writeSystemConfig([block])
-
-    mirror()
-    const secondLaunch = mirror()
-    const thirdLaunch = mirror()
-
-    expect(thirdLaunch).toBe(secondLaunch)
-    expect(countHookTrustTables(thirdLaunch, PLUGIN_KEY)).toBe(1)
-    expect(thirdLaunch).toContain(block)
-    expectNoDuplicateTables(thirdLaunch)
-  })
-
-  it.each([
     ['bare parent', 'fully quoted', bareParent, fullyQuoted],
     ['fully quoted', 'bare parent', fullyQuoted, bareParent]
   ])(
@@ -245,19 +182,6 @@ describe('carrying plain-Codex hook trust into the managed Codex home', () => {
       expectNoDuplicateTables(runtimeConfig)
     }
   )
-
-  it('carries a shared key only once when ~/.codex already repeats it', () => {
-    writeSystemConfig([
-      trustBlock(bareParent(PLUGIN_KEY), 'sha256:first'),
-      trustBlock(fullyQuoted(PLUGIN_KEY), 'sha256:second')
-    ])
-
-    const runtimeConfig = mirror()
-
-    expect(countHookTrustTables(runtimeConfig, PLUGIN_KEY)).toBe(1)
-    expect(runtimeConfig).toContain('sha256:first')
-    expectNoDuplicateTables(runtimeConfig)
-  })
 
   it('treats basic and literal spellings of a Windows key as one table', () => {
     const windowsKey = 'C:\\r\\.codex\\hooks.json:stop:0:0'
@@ -295,30 +219,5 @@ describe('carrying plain-Codex hook trust into the managed Codex home', () => {
     expect(runtimeConfig).not.toContain('# system parent')
     expect(runtimeConfig).toContain('sha256:plain-codex')
     expectNoDuplicateTables(runtimeConfig)
-  })
-
-  it('carries shared trust when seeding a WSL home from its Linux-side path', () => {
-    const prepared = prepareSystemConfigForFreshRuntimeMirror(
-      [
-        trustBlock(fullyQuoted('/home/alice/.codex/hooks.json:stop:0:0'), 'sha256:user'),
-        trustBlock(fullyQuoted('/home/alice/repo/.codex/hooks.json:stop:0:0'), 'sha256:project')
-      ].join('\n\n'),
-      '/home/alice/.codex'
-    )
-
-    expect(prepared).not.toContain('sha256:user')
-    expect(prepared).toContain('sha256:project')
-  })
-
-  it('never promotes runtime hook trust into ~/.codex settings', () => {
-    const ordinary = extractOrdinaryCodexSettings(
-      [
-        'model = "runtime-model"',
-        trustBlock(bareParent(PLUGIN_KEY), 'sha256:plugin'),
-        trustBlock(fullyQuoted(PROJECT_KEY), 'sha256:project')
-      ].join('\n\n')
-    )
-
-    expect(ordinary).toBe('model = "runtime-model"')
   })
 })

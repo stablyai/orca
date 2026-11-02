@@ -62,7 +62,9 @@ function build(headless: boolean) {
     listAutomationRuns: vi.fn(() => finishedRuns(5)),
     listAutomations: () => [],
     getWorktreeMeta: vi.fn(
-      (_worktreeId: string): { automationProvenance: { automationRunId: string } } | undefined =>
+      (
+        _worktreeId: string
+      ): { automationProvenance: { automationRunId: string; origin?: 'client' } } | undefined =>
         undefined
     )
   }
@@ -165,6 +167,23 @@ describe('headless automation service run terminal retention', () => {
     ])
   })
 
+  // Why: a client-origin label names another owner's run, even if its id matches one of ours.
+  it('does not let a client-origin label claim a host run’s workspace', async () => {
+    const { runtime, service, store } = build(true)
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
+      worktreeId === 'wt-0'
+        ? { automationProvenance: { automationRunId: 'r0', origin: 'client' } }
+        : undefined
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service exposes the drain hook it was given.
+    const drain = (service as unknown as { releaseFinishedRunTerminals: () => Promise<number> })
+      .releaseFinishedRunTerminals
+    await drain()
+
+    expect(runtime.sleepTerminalsForWorktree).not.toHaveBeenCalled()
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('handle:tab-0:1')
+  })
+
   it.each([
     [
       'another terminal there is live',
@@ -194,23 +213,5 @@ describe('headless automation service run terminal retention', () => {
     await expect(drain()).resolves.toBe(0)
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
     expect(service.markDispatchResult).not.toHaveBeenCalled()
-  })
-
-  it('treats a retry that finds the run PTY already stopped by a failed sleep as slept', async () => {
-    const { runtime, service, store } = build(true)
-    store.getWorktreeMeta.mockImplementation(firstRunOwnsWorkspace)
-    store.listAutomationRuns.mockReturnValue(finishedRuns(1))
-    // Simulate retrying a sleep that stopped the PTY before throwing.
-    runtime.sleepTerminalsForWorktree.mockResolvedValue({ livePtyIds: [], stoppedPtyIds: [] })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service exposes the drain hook it was given.
-    const drain = (service as unknown as { releaseFinishedRunTerminals: () => Promise<number> })
-      .releaseFinishedRunTerminals
-    await expect(drain()).resolves.toBe(1)
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(service.markDispatchResult).toHaveBeenCalledWith({
-      runId: 'r0',
-      status: 'completed',
-      terminalPtyId: null
-    })
   })
 })

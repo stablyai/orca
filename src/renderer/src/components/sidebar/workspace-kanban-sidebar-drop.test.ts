@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
 import {
   buildWorkspaceKanbanSidebarDropUpdates,
@@ -548,12 +552,20 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
 })
 
 function rowsFrom(byId: ReadonlyMap<string, Worktree>) {
-  const rowsFor = (worktreeId: string): Worktree[] => {
-    const row = byId.get(worktreeId)
-    return row ? [row] : []
+  const byKey = new Map<string, Worktree[]>(
+    [...byId.values()].map((row) => [getWorktreeHostIdentity(row), [row]])
+  )
+  return {
+    status: (worktreeId: string): Worktree[] => {
+      const row = byId.get(worktreeId)
+      return row ? [row] : []
+    },
+    orderByKey: (key: string): Worktree[] => byKey.get(key) ?? []
   }
-  return { status: rowsFor, order: rowsFor }
 }
+
+// Board lanes and manual ranks key cards by host identity; these rows carry no host.
+const k = (id: string): string => composeWorktreeHostIdentity(undefined, id)
 
 describe('workspace kanban sidebar drop updates', () => {
   it('writes a status-only update for cross-lane drops outside Manual sort', () => {
@@ -567,12 +579,12 @@ describe('workspace kanban sidebar drop updates', () => {
       status: 'doing',
       dropIndex: 1,
       groups: [
-        { key: 'todo', worktreeIds: ['todo-a'] },
-        { key: 'doing', worktreeIds: ['doing-a'] }
+        { key: 'todo', worktreeIds: [k('todo-a')] },
+        { key: 'doing', worktreeIds: [k('doing-a')] }
       ],
       rowsFor: rowsFrom(worktreeById),
-      allWorktreeIds: [...worktreeById.keys()],
-      rankByWorktreeId: new Map(),
+      allWorktreeKeys: [...worktreeById.keys()].map(k),
+      rankByKey: new Map(),
       workspaceStatuses,
       sortBy: 'recent',
       now: 10_000
@@ -596,12 +608,12 @@ describe('workspace kanban sidebar drop updates', () => {
       status: 'doing',
       dropIndex: 1,
       groups: [
-        { key: 'todo', worktreeIds: ['todo-a'] },
-        { key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }
+        { key: 'todo', worktreeIds: [k('todo-a')] },
+        { key: 'doing', worktreeIds: [k('doing-a'), k('doing-b')] }
       ],
       rowsFor: rowsFrom(worktreeById),
-      allWorktreeIds: [...worktreeById.keys()],
-      rankByWorktreeId: new Map(),
+      allWorktreeKeys: [...worktreeById.keys()].map(k),
+      rankByKey: new Map(),
       workspaceStatuses,
       sortBy: 'manual',
       now: 10_000
@@ -650,11 +662,11 @@ describe('workspace kanban sidebar drop updates', () => {
         })
       ]
     ])
-    const rankByWorktreeId = new Map([
-      ['todo-a', 4000],
-      ['filtered', 3000],
-      ['doing-a', 2000],
-      ['doing-b', 1000]
+    const rankByKey = new Map([
+      [k('todo-a'), 4000],
+      [k('filtered'), 3000],
+      [k('doing-a'), 2000],
+      [k('doing-b'), 1000]
     ])
 
     const result = buildWorkspaceKanbanSidebarDropUpdates({
@@ -662,12 +674,12 @@ describe('workspace kanban sidebar drop updates', () => {
       status: 'doing',
       dropIndex: 1,
       groups: [
-        { key: 'todo', worktreeIds: ['todo-a'] },
-        { key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }
+        { key: 'todo', worktreeIds: [k('todo-a')] },
+        { key: 'doing', worktreeIds: [k('doing-a'), k('doing-b')] }
       ],
       rowsFor: rowsFrom(worktreeById),
-      allWorktreeIds: ['todo-a', 'filtered', 'doing-a', 'doing-b'],
-      rankByWorktreeId,
+      allWorktreeKeys: ['todo-a', 'filtered', 'doing-a', 'doing-b'].map(k),
+      rankByKey,
       workspaceStatuses,
       sortBy: 'manual',
       now: 10_000

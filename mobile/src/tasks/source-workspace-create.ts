@@ -17,6 +17,7 @@ import {
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
 import type { WorktreeCreateAgentLaunch } from './agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
+import { getClientWorktreeCreateCandidate } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 
 // Host resolution applies agent permission flags and shell quoting.
 export type WorkspaceCreateAgentBundle = {
@@ -34,6 +35,7 @@ export type CreateWorkspaceFromComposerArgs = {
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
+  branchIntentSupported?: boolean | Promise<boolean>
 }
 
 export async function createWorkspaceFromComposerSource(
@@ -173,6 +175,7 @@ async function createBranchWorkspace(args: {
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
+  branchIntentSupported?: boolean | Promise<boolean>
 }): Promise<WorktreeCreateResult> {
   const {
     client,
@@ -208,6 +211,7 @@ async function createBranchWorkspace(args: {
       worktreeCreateIdempotency: args.worktreeCreateIdempotency,
       ...(agentLaunch ? { agentLaunch } : {}),
       maxAttempts: 1,
+      branchIntentSupported: args.branchIntentSupported,
       buildParams: (name) =>
         applyCommon({
           repo: `id:${targetRepoId}`,
@@ -217,7 +221,8 @@ async function createBranchWorkspace(args: {
             : {}),
           setupDecision,
           baseBranch: selection.refName,
-          branchNameOverride: selection.localBranchName
+          branchNameOverride: selection.localBranchName,
+          branchIntent: 'open-existing-v2'
         })
     })
   }
@@ -230,19 +235,24 @@ async function createBranchWorkspace(args: {
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
+    branchIntentSupported: args.branchIntentSupported,
     ...(agentLaunch ? { agentLaunch } : {}),
-    buildParams: (candidate) => {
+    buildParams: (candidate, attempt) => {
       const params: WorkspaceCreateParams = {
         repo: `id:${targetRepoId}`,
         name: candidate,
         setupDecision,
+        branchIntent: 'create-new',
         baseBranch: selection.baseBranch,
         ...(manualDisplayName
           ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
           : {})
       }
       if (selection.branchNameOverride) {
-        params.branchNameOverride = candidate
+        params.branchNameOverride = getClientWorktreeCreateCandidate(
+          selection.branchNameOverride,
+          attempt
+        )
       }
       return applyCommon(params)
     }

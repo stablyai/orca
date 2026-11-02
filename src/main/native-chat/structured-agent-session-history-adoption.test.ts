@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   findCommittedStructuredAgentSessionAdoptionReplay,
   findConflictingStructuredAdoption,
@@ -14,7 +15,7 @@ import { PI_SESSION_HISTORY } from '../pi/pi-session-history'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const OPERATION = '1800000000000-00000000000000000000000000000001'
 
@@ -63,13 +64,14 @@ function ownership(
     workspaceId: 'workspace-owner',
     provider: 'codex',
     providerSessionId: 'thread-1',
-    lease: agentSessionLeaseFixture(),
+    ownerObservation: agentSessionConversationView(agentSessionRecordFixture()).ownerObservation,
+    role: 'head',
     ...overrides
   }
 }
 
 describe('findConflictingStructuredAdoption', () => {
-  it('names the session that already holds the conversation', () => {
+  it('names the session continuing the conversation now, never one that held it earlier', () => {
     const owner = ownership()
 
     expect(
@@ -77,7 +79,11 @@ describe('findConflictingStructuredAdoption', () => {
         agent: 'codex',
         providerSessionId: 'thread-1',
         selfSessionId: 'codex_new',
-        ownership: [ownership({ sessionId: 'other', providerSessionId: 'thread-2' }), owner]
+        ownership: [
+          ownership({ sessionId: 'other', providerSessionId: 'thread-2' }),
+          ownership({ sessionId: 'moved_on', role: 'earlier' }),
+          owner
+        ]
       })
     ).toBe(owner)
   })
@@ -233,7 +239,11 @@ describe('structuredAdoptionConflictError', () => {
   ])('calls %s an unknown owner rather than a conflict', (_label, leaseOverrides) => {
     expect(
       structuredAdoptionConflictError(
-        ownership({ lease: agentSessionLeaseFixture(leaseOverrides) })
+        ownership({
+          ownerObservation: agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture(leaseOverrides))
+          ).ownerObservation
+        })
       ).message
     ).toBe('agent_session_ownership_unknown')
   })

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
+import {
+  resolveMobileBranchBaseRefs,
+  resolveMobileBranchCompareBaseRef
+} from './mobile-branch-base-ref'
 import type { RpcClient } from '../transport/rpc-client'
 
 type RpcResponse =
@@ -66,5 +69,35 @@ describe('resolveMobileBranchCompareBaseRef', () => {
       'repo.list',
       'repo.baseRefDefault'
     ])
+  })
+
+  it('compares against the upstream but rebases from the default when nothing is pinned', async () => {
+    const { client } = clientWith([
+      ok({ worktree: { baseRef: null } }),
+      ok({ repos: [{ id: 'repo-1', worktreeBaseRef: null }] }),
+      ok({ defaultBaseRef: 'origin/main' })
+    ])
+
+    const refs = await resolveMobileBranchBaseRefs(client, 'repo-1::/tmp/wt', {
+      compareAgainstUpstream: true,
+      upstreamName: 'origin/feature'
+    })
+    expect(refs.compareBaseRef).toBe('origin/feature')
+    await expect(refs.readEffectiveBaseRef()).resolves.toBe('origin/main')
+  })
+
+  it('still compares against the upstream when the default lookup fails', async () => {
+    const { client } = clientWith([
+      ok({ worktree: { baseRef: null } }),
+      ok({ repos: [{ id: 'repo-1', worktreeBaseRef: null }] }),
+      fail('lookup failed')
+    ])
+
+    const refs = await resolveMobileBranchBaseRefs(client, 'repo-1::/tmp/wt', {
+      compareAgainstUpstream: true,
+      upstreamName: 'origin/feature'
+    })
+    expect(refs.compareBaseRef).toBe('origin/feature')
+    await expect(refs.readEffectiveBaseRef()).resolves.toBeNull()
   })
 })

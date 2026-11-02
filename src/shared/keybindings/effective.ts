@@ -5,7 +5,13 @@ import type {
   KeybindingOverrides,
   TerminalShortcutPolicy
 } from './types'
-import { DEFINITIONS_BY_ID, getKeybindingPlatform, isDigitIndexActionId } from './definitions'
+import {
+  DEFINITIONS_BY_ID,
+  KEYBINDING_DEFINITIONS,
+  getKeybindingPlatform,
+  isDigitIndexActionId
+} from './definitions'
+import { keybindingConflictIdentities } from './matching-key'
 import {
   normalizeKeybindingWithOptions,
   normalizeOptionsForAction,
@@ -25,12 +31,12 @@ export function getDefaultBindings(
   })
 }
 
-export function getEffectiveKeybindingsForAction(
+function getConfiguredBindings(
   actionId: KeybindingActionId,
   platform: NodeJS.Platform,
-  overrides?: KeybindingOverrides
+  overrides?: KeybindingOverrides,
+  definition = DEFINITIONS_BY_ID.get(actionId)
 ): string[] {
-  const definition = DEFINITIONS_BY_ID.get(actionId)
   const override = overrides?.[actionId]
   if (Array.isArray(override)) {
     // Canonicalize hand-edited digit overrides to <mods>+1 so display/conflicts agree across the range.
@@ -55,16 +61,81 @@ export function getEffectiveKeybindingsForAction(
   return definition ? getDefaultBindings(definition, platform) : []
 }
 
-export function getEffectiveKeybindingsForDefinition(
-  definition: KeybindingDefinition,
+export function keybindingConflictGroups(definition: KeybindingDefinition): readonly string[] {
+  return (
+    definition.conflictGroups ?? [definition.conflictGroup ?? definition.scope, definition.scope]
+  )
+}
+
+export function bindingsOverlap(
+  left: KeybindingDefinition,
+  a: string,
+  right: KeybindingDefinition,
+  b: string,
+  platform: NodeJS.Platform
+): boolean {
+  return (
+    keybindingConflictGroups(left).some((group) =>
+      keybindingConflictGroups(right).includes(group)
+    ) &&
+    keybindingConflictIdentities(left.id, a, platform).some((identity) =>
+      keybindingConflictIdentities(right.id, b, platform).includes(identity)
+    )
+  )
+}
+
+export function getEffectiveKeybindingsForAction(
+  actionId: KeybindingActionId,
   platform: NodeJS.Platform,
   overrides?: KeybindingOverrides
 ): string[] {
-  const override = overrides?.[definition.id]
-  if (Array.isArray(override)) {
-    return getEffectiveKeybindingsForAction(definition.id, platform, overrides)
+  const definition = DEFINITIONS_BY_ID.get(actionId)
+  return definition
+    ? getEffectiveKeybindingsForDefinition(definition, platform, overrides)
+    : getConfiguredBindings(actionId, platform, overrides)
+}
+
+const implicitBindings = new WeakMap<KeybindingOverrides, Map<NodeJS.Platform, string[]>>()
+const emptyOverrides: KeybindingOverrides = {}
+
+export function getEffectiveKeybindingsForDefinition(
+  definition: KeybindingDefinition,
+  platform: NodeJS.Platform,
+  overrides: KeybindingOverrides = emptyOverrides,
+  definitions: readonly KeybindingDefinition[] = KEYBINDING_DEFINITIONS
+): string[] {
+  const configured = getConfiguredBindings(definition.id, platform, overrides, definition)
+  if (!definition.implicitDefaultYields || Object.hasOwn(overrides, definition.id)) {
+    return configured
   }
-  return getDefaultBindings(definition, platform)
+  const cacheable =
+    definition === DEFINITIONS_BY_ID.get('terminal.toggleNativeChat') &&
+    definitions === KEYBINDING_DEFINITIONS
+  const cached = cacheable ? implicitBindings.get(overrides)?.get(platform) : undefined
+  if (cached) {
+    return cached
+  }
+  const effective = configured.filter(
+    (binding) =>
+      !definitions.some(
+        (other) =>
+          other.id !== definition.id &&
+          Object.hasOwn(overrides, other.id) &&
+          getConfiguredBindings(other.id, platform, overrides, other).some(
+            (claim) =>
+              bindingsOverlap(definition, binding, other, claim, platform) &&
+              !getDefaultBindings(other, platform).some((ownDefault) =>
+                bindingsOverlap(other, claim, other, ownDefault, platform)
+              )
+          )
+      )
+  )
+  if (cacheable) {
+    const byPlatform = implicitBindings.get(overrides) ?? new Map()
+    byPlatform.set(platform, effective)
+    implicitBindings.set(overrides, byPlatform)
+  }
+  return effective
 }
 
 export function normalizeTerminalShortcutPolicy(

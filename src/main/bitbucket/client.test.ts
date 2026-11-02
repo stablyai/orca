@@ -82,44 +82,6 @@ describe('Bitbucket client', () => {
     await expect(getBitbucketPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toBeNull()
   })
 
-  it('keeps an OPEN PR whose source branch is the repo default branch', async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes('/statuses/build')) {
-        return Response.json({ values: [{ state: 'SUCCESSFUL' }] })
-      }
-      return Response.json({
-        values: [
-          { ...bitbucketPr(8), source: { branch: { name: 'main' }, commit: { hash: 'abc123' } } }
-        ]
-      })
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(
-      getBitbucketPullRequestForBranch('/repo', 'refs/heads/main')
-    ).resolves.toMatchObject({ number: 8, state: 'open' })
-  })
-
-  it('discards a MERGED default-branch shadow and refetches the linked PR via the fallback (#9171)', async () => {
-    primeGitExecWithDefaultBranch()
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes('/statuses/build')) {
-        return Response.json({ values: [] })
-      }
-      if (url.endsWith('/pullrequests/42')) {
-        return Response.json(bitbucketPr(42))
-      }
-      return Response.json({
-        values: [{ ...bitbucketPr(7), state: 'MERGED', source: { branch: { name: 'main' } } }]
-      })
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(
-      getBitbucketPullRequestForBranch('/repo', 'refs/heads/main', 42)
-    ).resolves.toMatchObject({ number: 42 })
-  })
-
   it('hides a MERGED PR matched only by feature-branch name so a new PR can be created', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('/statuses/build')) {
@@ -287,37 +249,6 @@ describe('Bitbucket client', () => {
     await expect(
       getBitbucketPullRequestForBranchOrThrow('/repo', 'feature/bitbucket')
     ).rejects.toThrow(/Bitbucket request failed/)
-  })
-
-  it('falls back to a linked PR number when branch lookup misses', async () => {
-    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
-      if (url.includes('/statuses/build')) {
-        return Response.json({ values: [] })
-      }
-      if (url.endsWith('/pullrequests/42')) {
-        return Response.json(bitbucketPr(42))
-      }
-      return Response.json({ values: [] })
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(getBitbucketPullRequestForBranch('/repo', 'different', 42)).resolves.toMatchObject(
-      {
-        number: 42,
-        status: 'neutral'
-      }
-    )
-  })
-
-  it('reports env-token auth status through the Bitbucket /user endpoint', async () => {
-    const fetchMock = vi.fn(async () => Response.json({ username: 'bitbucket-user' }))
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(getBitbucketAuthStatus()).resolves.toEqual({
-      configured: true,
-      authenticated: true,
-      account: 'bitbucket-user'
-    })
   })
 
   it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {

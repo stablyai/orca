@@ -13,6 +13,10 @@ vi.mock('@/lib/client-environment-info', () => ({
 }))
 
 import { i18n } from '@/i18n/i18n'
+import {
+  formatTerminalStartFailure,
+  terminalStartError
+} from '../../../../shared/terminal-start-failure'
 import { appendPaneTerminalError, terminalErrorForPane } from './terminal-error-accumulation'
 
 import {
@@ -123,7 +127,8 @@ describe('humanizeTerminalError', () => {
           if (kind === 'startup') {
             expect(tokenChecks).toBe(2 * rowCount)
           }
-          expect(startupTranslations).toBe(2 * matchingRows)
+          // Upper bound only: option-free translations are cached after their first lookup.
+          expect(startupTranslations).toBeLessThanOrEqual(2 * matchingRows)
           expect(
             view.container.textContent?.match(/Codex exited while starting\./g) ?? []
           ).toHaveLength(matchingRows)
@@ -207,6 +212,26 @@ describe('humanizeTerminalError', () => {
 
   it('leaves other errors untouched', () => {
     expect(humanizeTerminalError('Paste failed.')).toBe('Paste failed.')
+  })
+
+  it("drops Electron's IPC wrapper from a refusal main threw, keeping other lines as they are", () => {
+    const wrapped =
+      "Error invoking remote method 'runtimeEnvironments:call': Error: Ubuntu was stopped. Start it again."
+    expect(humanizeTerminalError(wrapped)).toBe('Ubuntu was stopped. Start it again.')
+    expect(humanizeTerminalError(`Paste failed.\n${wrapped}\n  indented detail`)).toBe(
+      'Paste failed.\nUbuntu was stopped. Start it again.\n  indented detail'
+    )
+  })
+
+  // SSH pin: only the wrapper goes; the SSH host's own words, and other channels' wrappers, stay.
+  it("leaves an SSH host's refusal words and other IPC channels' wrappers as they were", () => {
+    expect(
+      humanizeTerminalError(
+        "Error invoking remote method 'runtimeEnvironments:call': Error: Remote Orca runtime is not connected: ssh desk"
+      )
+    ).toBe('Remote Orca runtime is not connected: ssh desk')
+    const otherChannel = "Error invoking remote method 'ssh:connect': Error: Permission denied"
+    expect(humanizeTerminalError(otherChannel)).toBe(otherChannel)
   })
 
   it('replaces the terminal-host-gone code with copy that explains the loss', () => {
@@ -415,6 +440,43 @@ describe('shouldOfferDaemonRestart', () => {
 })
 
 describe('TerminalErrorToast environment footer', () => {
+  it('renders a formatted capacity failure once with ordinary reporting and dismissal', async () => {
+    const error = formatTerminalStartFailure(
+      terminalStartError(
+        'agent_session_exited_during_start',
+        {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        },
+        'test-incarnation'
+      )
+    )
+    if (error === undefined) {
+      throw new Error('Capacity start failure must have a human explanation')
+    }
+    const onDismiss = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, { error, paneOnClient: true, onDismiss })
+    )
+    const footer = '---\nOrca: 1.4.178-rc.2\nOS: darwin 25.0.0 (arm64)\nShell: /bin/zsh'
+    await waitFor(() => expect(view.container.textContent).toContain(footer))
+
+    const text = view.container.querySelector('span')?.textContent ?? ''
+    expect(text).toBe(`${error}\nIf this persists, please file an issue.\n\n${footer}`)
+    expect(text.match(/128 open terminals on this PC/g)).toHaveLength(1)
+    expect(text.match(/Close some Git Bash terminals and try again\./g)).toHaveLength(1)
+    expect(text).not.toContain('agent_session_exited_during_start')
+    expect(view.getAllByRole('link')).toHaveLength(1)
+    expect(view.getByRole('link', { name: 'file an issue' }).getAttribute('href')).toBe(
+      'https://github.com/stablyai/orca/issues'
+    )
+    expect(environmentMocks.resolveFooter).toHaveBeenCalledOnce()
+    expect(onDismiss).not.toHaveBeenCalled()
+    fireEvent.click(view.getByRole('button', { name: '×' }))
+    expect(onDismiss).toHaveBeenCalledOnce()
+  })
+
   it('appends client environment details to local errors', async () => {
     const view = render(
       React.createElement(TerminalErrorToast, {
@@ -659,4 +721,29 @@ it('uses existing Korean recovery copy and preserves the path', async () => {
   } finally {
     await i18n.changeLanguage('en')
   }
+})
+
+// #21342: dismissing hid the toast but left the dead pane with no way out.
+it('offers Close Pane only for a pane whose remote terminal was closed', () => {
+  const onClosePane = vi.fn()
+  const view = render(
+    React.createElement(TerminalErrorToast, {
+      error: 'Remote terminal was closed.',
+      paneOnClient: false,
+      onDismiss: vi.fn(),
+      onClosePane
+    })
+  )
+  fireEvent.click(view.getByText('Close Pane'))
+  expect(onClosePane).toHaveBeenCalledTimes(1)
+
+  view.rerender(
+    React.createElement(TerminalErrorToast, {
+      error: 'Paste failed.',
+      paneOnClient: false,
+      onDismiss: vi.fn(),
+      onClosePane
+    })
+  )
+  expect(view.queryByText('Close Pane')).toBeNull()
 })

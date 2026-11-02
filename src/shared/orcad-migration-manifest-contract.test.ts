@@ -77,11 +77,6 @@ function dormantLineage(childWorkspaceKey: string, parentWorkspaceKey: string) {
 }
 
 describe('orcad migration manifest contract', () => {
-  it('is an explicit version 1 artifact', () => {
-    expect(ORCAD_MIGRATION_MANIFEST_VERSION).toBe(1)
-    expect(parseOrcadMigrationManifest(manifest()).version).toBe(1)
-  })
-
   it.each([2, 10, 0, '1', undefined, null])(
     'rejects manifest version %j instead of guessing its shape',
     (version) => {

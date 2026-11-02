@@ -1,15 +1,22 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createElement } from 'react'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { NewWorkspaceComposerNameSection } from '@/components/new-workspace/NewWorkspaceComposerNameSection'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../shared/worktree/retired-name-registry'
+import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { Repo } from '../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
 import { useComposerState } from './useComposerState'
 import * as publicComposerDecisions from './useComposerState'
 import * as composerDecisions from './composer-state/composer-decisions'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 let originalApiDescriptor: PropertyDescriptor | undefined
 
@@ -121,6 +128,94 @@ describe('useComposerState integrated lifecycle', () => {
       'runtime:remote'
     )
     composer.unmount()
+  })
+
+  it('preserves new-branch intent through name edits and submission in the real composer', async () => {
+    const original = useAppStore.getState()
+    const response = Promise.withResolvers<CreateWorktreeResult>()
+    const create = vi.fn<Window['api']['worktrees']['create']>().mockReturnValue(response.promise)
+    const gh = {
+      repoSlug: vi.fn<Window['api']['gh']['repoSlug']>().mockResolvedValue(null),
+      listWorkItems: vi.fn<Window['api']['gh']['listWorkItems']>().mockResolvedValue({
+        items: [],
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      })
+    } satisfies Pick<Window['api']['gh'], 'repoSlug' | 'listWorkItems'>
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ...window.api, gh, worktrees: { ...window.api.worktrees, create } }
+    })
+    useAppStore.setState(useAppStore.getInitialState(), true)
+    const repo: Repo = {
+      id: 'branch-repo',
+      path: '/branch-repo',
+      displayName: 'Branch repo',
+      badgeColor: '',
+      addedAt: 0
+    }
+    const projection = projectHostSetupProjectionFromRepos([repo])
+    useAppStore.setState({
+      repos: [repo],
+      projects: [...projection.projects],
+      projectHostSetups: [...projection.setups],
+      sparsePresetsByRepo: { [repo.id]: [] }
+    })
+    const holder: { composer?: ReturnType<typeof useComposerState> } = {}
+    function BranchEditor() {
+      const composer = useComposerState({ initialRepoId: repo.id, persistDraft: false })
+      holder.composer = composer
+      return createElement(NewWorkspaceComposerNameSection, {
+        ...composer.cardProps,
+        nameInputRef: composer.nameInputRef,
+        onNamePlainEnter: () => {}
+      })
+    }
+    const user = userEvent.setup()
+    let view: ReturnType<typeof render> | undefined
+    setLocalRuntimeCapabilitiesForTests(['worktree.open-existing-branch.v2'])
+    try {
+      view = render(createElement(TooltipProvider, null, createElement(BranchEditor)))
+      act(() => holder.composer?.cardProps.onSmartBranchSelect('feature/source', 'feature/source'))
+      await user.click(screen.getByRole('radio', { name: 'New branch' }))
+      const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'New branch name' })
+      await user.type(input, 'feature/my-review')
+      expect(screen.getByRole('textbox', { name: 'New branch name' })).toBe(input)
+      expect(input.value).toBe('feature/my-review')
+      expect(document.activeElement).toBe(input)
+      expect(holder.composer?.cardProps.baseBranch).toBe('feature/source')
+      await user.clear(input)
+      await user.type(input, 'feature/source')
+      expect(input.value).toBe('feature/source')
+      await act(async () => holder.composer?.submitQuick(null))
+      await waitFor(() => expect(create).toHaveBeenCalledOnce())
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branchIntent: 'create-new',
+          baseBranch: 'feature/source',
+          branchNameOverride: 'feature/source'
+        })
+      )
+      await act(async () =>
+        response.resolve({
+          worktree: makeWorktree({
+            id: 'branch-repo::feature-source',
+            repoId: repo.id,
+            path: '/branch-repo-source'
+          })
+        })
+      )
+      await waitFor(() =>
+        expect(useAppStore.getState().worktreesByRepo[repo.id]?.[0].id).toBe(
+          'branch-repo::feature-source'
+        )
+      )
+      await user.click(screen.getByRole('radio', { name: 'Existing branch' }))
+      expect(screen.queryByRole('textbox', { name: 'New branch name' })).toBeNull()
+    } finally {
+      view?.unmount()
+      setLocalRuntimeCapabilitiesForTests(null)
+      useAppStore.setState(original, true)
+    }
   })
 
   it('composes two live composers and exposes the parent-worktree control state', () => {

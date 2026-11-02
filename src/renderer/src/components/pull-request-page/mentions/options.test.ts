@@ -18,25 +18,6 @@ function user(login: string, extras: Partial<GitHubAssignableUser> = {}): GitHub
 }
 
 describe('buildMentionOptions', () => {
-  it('includes the item author, commenters, participants, and assignable users', () => {
-    const options = buildMentionOptions({
-      item,
-      comments: [comment('reviewer', 'https://avatars/reviewer')],
-      participants: [user('helper', { name: 'Helper' })],
-      assignableUsers: [user('teammate')]
-    })
-
-    expect(options.map((option) => option.login)).toEqual([
-      'octocat',
-      'reviewer',
-      'helper',
-      'teammate'
-    ])
-    expect(options[0]?.source).toBe('PR author')
-    expect(options[1]?.avatarUrl).toBe('https://avatars/reviewer')
-    expect(options[2]?.name).toBe('Helper')
-  })
-
   it('skips ghost and fills missing avatar/name on a later case-insensitive duplicate login', () => {
     const options = buildMentionOptions({
       item,

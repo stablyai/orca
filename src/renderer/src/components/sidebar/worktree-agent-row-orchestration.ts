@@ -3,21 +3,7 @@ import type {
   AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
 
-function orchestrationContextsEqual(
-  a: AgentStatusOrchestrationContext,
-  b: AgentStatusOrchestrationContext
-): boolean {
-  return (
-    a.taskId === b.taskId &&
-    a.dispatchId === b.dispatchId &&
-    a.taskTitle === b.taskTitle &&
-    a.displayName === b.displayName &&
-    a.parentTerminalHandle === b.parentTerminalHandle &&
-    a.parentPaneKey === b.parentPaneKey &&
-    a.coordinatorHandle === b.coordinatorHandle &&
-    a.orchestrationRunId === b.orchestrationRunId
-  )
-}
+import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
 
 export function entryWithRuntimeOrchestration(
   entry: AgentStatusEntry,

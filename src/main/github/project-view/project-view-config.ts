@@ -137,7 +137,10 @@ export async function fetchProjectViewsPage(args: {
   const top = res.data[root]
   const project = top?.projectV2 ?? null
   if (!project || typeof project.id !== 'string') {
-    return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Project not found.', reason: 'project_not_found' }
+    }
   }
   const pageInfo = project.views?.pageInfo
   const views = (project.views?.nodes ?? []).filter((v): v is RawProjectView => v !== null)

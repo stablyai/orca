@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import {
   getMcpConfigCandidateParentDir,
   getMcpConfigParentDirs,
@@ -41,7 +42,12 @@ export async function loadMcpConfigInspections(
       } catch (error) {
         unreadableParentDirMessages.set(
           relativeDir,
-          extractIpcErrorMessage(error, `Unable to inspect ${relativeDir}.`)
+          extractIpcErrorMessage(
+            error,
+            translate('settings.mcp.inspectFailed', 'Unable to inspect {{directory}}.', {
+              directory: relativeDir
+            })
+          )
         )
       }
     })

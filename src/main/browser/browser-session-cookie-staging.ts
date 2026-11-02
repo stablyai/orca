@@ -1,7 +1,6 @@
 import { app } from 'electron'
-import { copyFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { isBrowserRoutePartition } from './browser-route-identity'
 import {
   loadBrowserSessionMeta,
   persistBrowserSessionMeta,
@@ -12,15 +11,12 @@ import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import {
   applyScopedStagedCookieImport,
   isScopedStagedCookieImport,
+  isPermanentStagedCookieImportFailure,
+  InvalidStagedCookieImportError,
   removeCookieImportScopeMarker,
   SCOPED_COOKIE_IMPORT_FORMAT
 } from './cookies/browser-cookie-staged-import'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
-
-// Runtime-derived route partitions lack startup replay metadata and would strand plaintext cookie DBs.
-export function supportsPendingBrowserCookieImportReplay(partition: string): boolean {
-  return !isBrowserRoutePartition(partition)
-}
 
 function unlinkStagedCookieDb(stagedPath: string): void {
   for (const suffix of ['', '-wal', '-shm']) {
@@ -104,13 +100,26 @@ export function applyPendingBrowserCookieImports({
       }
 
       const liveCookiesPath = partitionCookiesPath(partition)
+      let expired = false
       try {
+        expired = Date.now() - statSync(stagedPath).mtimeMs >= 14 * 24 * 60 * 60 * 1_000
         mkdirSync(join(liveCookiesPath, '..'), { recursive: true })
         // A scoped stage is a complete image; copy it if no live DB exists to merge into.
         const liveCookiesExist = existsSync(liveCookiesPath)
         const markedScopedImage = isScopedStagedCookieImport(stagedPath)
-        if (scopedPath && !markedScopedImage) {
-          throw new Error('Scoped cookie import is missing its scope marker')
+        if (!markedScopedImage) {
+          if (scopedPath) {
+            throw new InvalidStagedCookieImportError(
+              'Scoped cookie import is missing its scope marker'
+            )
+          }
+          // Never replace the live jar with an unmarked legacy whole-image stage.
+          if (!expired) {
+            continue
+          }
+          unlinkStagedCookieDb(stagedPath)
+          delete remainingEntries[partition]
+          continue
         }
         const copiedScopedImage = !liveCookiesExist && markedScopedImage
         const appliedScopedImport =
@@ -118,7 +127,7 @@ export function applyPendingBrowserCookieImports({
             ? applyScopedStagedCookieImport(liveCookiesPath, stagedPath)
             : false
         if (!appliedScopedImport) {
-          // Preserve whole-image replay for legacy stages without scope markers.
+          // Only a validated scoped image may initialize an absent live database.
           copyFileSync(stagedPath, liveCookiesPath)
           // Stale WAL/SHM sidecars would corrupt the replaced cookie DB.
           let sidecarCopyFailed = false
@@ -137,8 +146,7 @@ export function applyPendingBrowserCookieImports({
             }
           }
           if (sidecarCopyFailed) {
-            // Retry incomplete sidecar copies.
-            continue
+            throw new Error('Could not copy scoped cookie import sidecars')
           }
           if (copiedScopedImage) {
             removeCookieImportScopeMarker(liveCookiesPath)
@@ -146,8 +154,12 @@ export function applyPendingBrowserCookieImports({
         }
         consumeStagedCookieImport(stagedPath)
         delete remainingEntries[partition]
-      } catch {
-        // Keep failed entries pending without interrupting other partitions.
+      } catch (error) {
+        // Retry transient failures for fourteen days without persisting another lifetime field.
+        if (isPermanentStagedCookieImportFailure(error) || expired) {
+          unlinkStagedCookieDb(stagedPath)
+          delete remainingEntries[partition]
+        }
       }
     }
     persistBrowserSessionMeta(resolveMetadataPath, defaultPartition, {
@@ -155,23 +167,6 @@ export function applyPendingBrowserCookieImports({
       pendingCookieDbPath: legacyPendingPath(remainingEntries[defaultPartition])
     })
   } catch {}
-}
-
-export function setPendingBrowserCookieImport({
-  resolveMetadataPath,
-  defaultPartition,
-  partition,
-  stagingDbPath
-}: PendingCookieImportTarget & { partition: string; stagingDbPath: string }): void {
-  const meta = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
-  const pendingCookieImports = {
-    ...meta.pendingCookieImports,
-    [partition]: { format: SCOPED_COOKIE_IMPORT_FORMAT, path: stagingDbPath }
-  }
-  persistBrowserSessionMeta(resolveMetadataPath, defaultPartition, {
-    pendingCookieImports,
-    pendingCookieDbPath: legacyPendingPath(pendingCookieImports[defaultPartition])
-  })
 }
 
 // Even a degraded import must prevent older staged cookies from overwriting it on restart.

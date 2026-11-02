@@ -40,6 +40,8 @@ import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { buildShortcutRowVisibility } from './shortcut-row-visibility'
 import { useMacCapturedDigitChords } from './use-mac-captured-digit-chords'
+import { keybindingValidationErrorText } from './keybinding-diagnostic-text'
+import { KeybindingFileDiagnostics } from './KeybindingFileDiagnostics'
 
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
@@ -162,7 +164,9 @@ export function ShortcutsPane(): React.JSX.Element {
     if (!Array.isArray(normalizedResult)) {
       setErrors((prev) => ({
         ...prev,
-        [actionId]: normalizedResult.ok ? 'Unable to parse shortcut.' : normalizedResult.error
+        [actionId]: normalizedResult.ok
+          ? translate('settings.shortcuts.parseFailed', 'Unable to parse shortcut.')
+          : keybindingValidationErrorText(normalizedResult)
       }))
       return false
     }
@@ -180,8 +184,9 @@ export function ShortcutsPane(): React.JSX.Element {
     }
     const defaults = getEffectiveKeybindingsForDefinition(definition, platform, {})
     const next =
-      sameBindings(normalizedResult, defaults) ||
-      (normalizedResult.length === 0 && defaults.length === 0)
+      (sameBindings(normalizedResult, defaults) ||
+        (normalizedResult.length === 0 && defaults.length === 0)) &&
+      !hasCommonBindingOverride(keybindingSnapshot, actionId)
         ? removeBindingOverride(keybindings, actionId)
         : { ...keybindings, [actionId]: normalizedResult }
     const blockingConflict = findKeybindingConflictsForDefinitions(definitions, platform, next, {
@@ -194,7 +199,11 @@ export function ShortcutsPane(): React.JSX.Element {
         .join(', ')
       setErrors((prev) => ({
         ...prev,
-        [actionId]: `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with ${labels}.`
+        [actionId]: translate(
+          'auto.components.settings.shortcutDefinitionCatalog.bindingConflict',
+          '{{binding}} conflicts with {{actions}}.',
+          { binding: formatKeybindingList([blockingConflict.binding], platform), actions: labels }
+        )
       }))
       return false
     }
@@ -225,7 +234,7 @@ export function ShortcutsPane(): React.JSX.Element {
   ): Promise<void> => {
     const captured = keybindingFromInputForAction(actionId, input, platform)
     if (!captured.ok) {
-      setErrors((prev) => ({ ...prev, [actionId]: captured.error }))
+      setErrors((prev) => ({ ...prev, [actionId]: keybindingValidationErrorText(captured) }))
       return
     }
 
@@ -324,22 +333,7 @@ export function ShortcutsPane(): React.JSX.Element {
           action={<KeybindingsFileActions />}
         />
 
-        {keybindingSnapshot?.diagnostics.length ? (
-          <div className="space-y-1">
-            {keybindingSnapshot.diagnostics.map((diagnostic, index) => (
-              <p
-                key={`${diagnostic.section ?? 'root'}-${diagnostic.actionId ?? index}`}
-                className={
-                  diagnostic.severity === 'error'
-                    ? 'text-xs text-destructive'
-                    : 'text-xs text-muted-foreground'
-                }
-              >
-                {diagnostic.message}
-              </p>
-            ))}
-          </div>
-        ) : null}
+        <KeybindingFileDiagnostics diagnostics={keybindingSnapshot?.diagnostics ?? []} />
 
         {/* Below xl, give the rail only content height and the list the remaining space; equal auto rows can overlap. */}
         <div className="grid min-h-0 flex-1 gap-6 max-xl:grid-rows-[auto_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">

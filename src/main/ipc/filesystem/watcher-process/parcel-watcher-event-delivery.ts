@@ -11,8 +11,15 @@ import type {
 const DIRECTORY_STAT_CONCURRENCY = 8
 const directoryStatSlots = new PrioritySemaphore(DIRECTORY_STAT_CONCURRENCY)
 
+// FSEvents MustScanSubDirs: events were dropped but the native stream keeps running.
+export function isParcelWatcherRescanRequiredError(error: Error): boolean {
+  return error.message.endsWith('File system must be re-scanned.')
+}
+
 export type WatcherProcessEventDeliveryQueue = {
   enqueue(events: readonly ParcelWatcherEvent[]): void
+  /** Replace pending paths with one overflow; the subscription stays live. */
+  overflow(): void
   flush(): Promise<void>
   close(): void
 }
@@ -116,21 +123,30 @@ export function createWatcherProcessEventDeliveryQueue(
     }
   }
 
+  const overflow = (): void => {
+    if (!active) {
+      return
+    }
+    pendingEvents = []
+    pendingOverflow = true
+    void drain()
+  }
+
   return {
     enqueue(events): void {
       if (!active || events.length === 0 || pendingOverflow) {
         return
       }
       if (events.length > eventLimit || pendingEvents.length + events.length > eventLimit) {
-        pendingEvents = []
-        pendingOverflow = true
-      } else {
-        for (const event of events) {
-          pendingEvents.push(event)
-        }
+        overflow()
+        return
+      }
+      for (const event of events) {
+        pendingEvents.push(event)
       }
       void drain()
     },
+    overflow,
     flush(): Promise<void> {
       if (!active || !draining) {
         return Promise.resolve()

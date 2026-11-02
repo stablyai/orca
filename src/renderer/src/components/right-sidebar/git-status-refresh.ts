@@ -124,6 +124,7 @@ export async function refreshGitStatusForWorktree({
     signal?: AbortSignal
     shouldApply?: () => boolean
     onStatusAccepted?: (status: GitStatusResult) => void
+    wakeWslDistro?: boolean
   }
 }): Promise<void> {
   const refreshOrder = beginAutomaticUpstreamRefresh(worktreeId)
@@ -131,17 +132,13 @@ export async function refreshGitStatusForWorktree({
   const branchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
   try {
     const status = await getRuntimeGitStatus(
-      {
-        target,
-        worktreeId,
-        worktreePath,
-        connectionId
-      },
+      { target, worktreeId, worktreePath, connectionId },
       {
         admissionTier: request?.admissionTier ?? 'status',
         ...(request?.reuseLineStats === true ? { reuseLineStats: true } : {}),
         ...(request?.signal ? { signal: request.signal } : {}),
-        ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
+        ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {}),
+        ...(request?.wakeWslDistro ? { wakeWslDistro: true } : {})
       }
     )
 

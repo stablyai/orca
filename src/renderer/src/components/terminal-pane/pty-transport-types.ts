@@ -1,3 +1,4 @@
+import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import type {
   RestoreSpawnIntent,
@@ -5,13 +6,14 @@ import type {
 } from '../../../../shared/host-spawn-admission'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type {
+  TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
@@ -51,6 +53,8 @@ export type PtyBufferSnapshot = {
    *  means unknown; never rewrite that silence into a known `0`. */
   kittyKeyboardFlags?: number
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken; absent from older hosts. */
+  lastTitle?: string
 }
 
 /** Metadata for one authoritative replay payload. */
@@ -64,6 +68,8 @@ export type PtyReplayDataMeta = {
   snapshotSeq?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken, so live-agent judgement cannot race a separate title publication. */
+  lastTitle?: string
   /** Grid the payload was serialized at. Present only when the producer proved
    *  it; the drain replays there and fits back to the pane afterwards. */
   snapshotCols?: number
@@ -80,7 +86,7 @@ export type LocalPtySessionMetadata = {
   shellOverride?: string
 }
 
-export type PtyConnectResult = {
+export type PtyConnectResult = TerminalLaunchResult & {
   id: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string
@@ -112,11 +118,15 @@ export type PtyConnectResult = {
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
   /** Main declined an unverifiable provider-session resume and launched fresh. */
   agentResumeUnavailable?: true
+  /** Main refused the resume and started the plain shell: a native chat is the conversation's home
+   *  or may be writing it, or no record could be checked (the saved session is kept to retry). */
+  agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
   /** Write daemon’s trailing partial escape after reset so racing live bytes can complete it (#7329). */
   pendingEscapeTailAnsi?: string
 }
 
 type PtyCallbacks = {
+  onLaunchResult?: (result: TerminalAttachmentLaunchResult) => void
   /** Called before an adopted PTY can publish buffered/live bytes. */
   onReattachDetermined?: () => void
   onConnect?: () => void
@@ -172,12 +182,15 @@ export type PtyTransport = {
     attachOnlyView?: true
     /** Sent only when this connect resumes an agent, and only to hosts that accept it. */
     resumeSpawnIntent?: RestoreSpawnIntent
+    /** A restore no user act asked for: main holds a stopped WSL distro's pane instead of starting it. */
+    wslPassiveRestore?: true
     command?: string
     commandDelivery?: 'renderer' | 'provider'
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -223,6 +236,11 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /**
+   * The host the pane met stopped is running again: reopen a pane whose connect or attach was
+   * refused and left it idle (no retry armed), the way it opened. False when there is none to reopen.
+   */
+  reopenAfterHostReturned?: () => boolean
   /** True while the transport has a retry armed or parked; pane-level remounts must defer to it. */
   ownsRecovery?: () => boolean
   /** Typed input the host has not applied yet, which a remount would discard. */
@@ -259,11 +277,18 @@ export type PtyTransport = {
 }
 
 export type IpcPtyTransportOptions = {
+  /** Renderer-local observation before admission; never controls dispatch. */
+  onDrivingInputAttempt?: (ptyId: string | null) => void
   cwd?: string
   /** Retain bounded user input until the pane's first PTY connection binds. */
   bufferInputUntilConnect?: boolean
+  /** A new pane with no old screen: typing before its first remote terminal exists goes to it. */
+  /** 'connect' decides once that the pane looked blank; 'bind' re-checks only what a create can't cause. */
+  keepTypeAheadForNewTerminal?: (phase: 'connect' | 'bind') => boolean
   /** Re-checked when held input would flush; false drops it (startup work appeared after the hold began). */
   releasePreconnectInput?: () => boolean
+  /** Keys typed before a remote pane bound its terminal were dropped for safety, unsent. */
+  onTypingDiscardedBeforeBind?: () => void
   /** Seed a fresh transport with input handed off from a remounted deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]
   /** Records newly retained input against a remount-safe deferred split handoff. */
@@ -274,6 +299,7 @@ export type IpcPtyTransportOptions = {
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  resumeOrigin?: 'saved'
   agentPrompt?: string
   agentPromptDelivery?: AgentPromptDelivery
   agentArgsOverride?: string | null

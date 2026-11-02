@@ -1,4 +1,5 @@
 import { setLocalPtyProvider } from '../ipc/pty/provider/registry'
+import { setLocalDaemonPidReader } from '../memory/local-daemon-pid'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { getDaemonRuntimeDir as getRuntimeDir } from './daemon-launch-paths'
@@ -28,6 +29,7 @@ export function installDaemonProvider(
 ): void {
   spawner = newSpawner
   replaceDaemonProvider(newAdapter)
+  setLocalDaemonPidReader(() => readDaemonPidRecord()?.pid ?? null)
 }
 
 export function getDaemonSpawner(): DaemonSpawner | null {

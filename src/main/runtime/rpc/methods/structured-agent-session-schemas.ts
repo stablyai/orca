@@ -6,6 +6,7 @@ export {
   AvailabilityParams,
   CancelParams,
   ConversationCommandParams,
+  ContinuationContextParams,
   CreateIntentParams,
   CreateParams,
   CreateSupportParams,
@@ -16,6 +17,7 @@ export {
   ModelCatalogParams,
   MutationEnvelope,
   OptionsParams,
+  RevealParams,
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
   RespondParams,
@@ -33,7 +35,9 @@ export {
   UnsubscribeParams
 } from '../../../../shared/rpc-contract/structured-agent-session-params'
 export { ContinueInterruptedParams } from '../../../../shared/rpc-contract/structured-agent-session-continue-params'
+export { RenameParams } from '../../../../shared/rpc-contract/structured-agent-session-rename-params'
 export {
+  QueuedMessageMoveParams,
   QueuedMessageUpdateParams,
   QueuedMessageEditHoldParams
 } from '../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'

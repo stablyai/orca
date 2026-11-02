@@ -1,6 +1,10 @@
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
-import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoExecutionHostIdOrDefault,
+  getWorktreeExecutionHostId
+} from '../execution-host'
 import type { ExecutionHostId } from '../execution-host'
 import {
   getHostContextLabel,
@@ -59,6 +63,64 @@ export function getMixedHostContextLabels(
     }
   }
   return uniqueHostIds.size > 1 ? labelsByRepoId : undefined
+}
+
+/** Each host owning one of a project section's rows, with that host's own registration of the project.
+ * Undefined when the rows sit only where the single header already does. */
+export function getProjectHeaderHostRepos(args: {
+  group: WorktreeGroupEntry
+  repoMap: Map<string, Repo>
+  repoOf: RepoOfWorktree
+  /** Notice rows carry their own registration, which can differ from repoMap's for a shared repo id. */
+  noticeRepoOf: (repoId: string) => readonly Repo[]
+  hasPendingCreation: (repoId: string) => boolean
+  defaultHostId: ExecutionHostId
+}): Map<ExecutionHostId, Repo> | undefined {
+  const { group, defaultHostId } = args
+  const hostOf = (repo: Repo | undefined): ExecutionHostId =>
+    getRepoExecutionHostIdOrDefault(repo, defaultHostId)
+  const rowHostIds = new Set<ExecutionHostId>()
+  const registrations: Repo[] = group.repo ? [group.repo] : []
+  for (const worktree of group.items) {
+    const repo = args.repoOf(worktree)
+    rowHostIds.add(getWorktreeExecutionHostId(worktree, repo, defaultHostId))
+    if (repo) {
+      registrations.push(repo)
+    }
+  }
+  for (const repoId of group.repoIds) {
+    const repo = args.repoMap.get(repoId)
+    if (repo) {
+      registrations.push(repo)
+      // Pending rows resolve their repo by id, so they land on that registration's host.
+      if (args.hasPendingCreation(repoId)) {
+        rowHostIds.add(hostOf(repo))
+      }
+    }
+    for (const noticeRepo of args.noticeRepoOf(repoId)) {
+      registrations.push(noticeRepo)
+      rowHostIds.add(hostOf(noticeRepo))
+    }
+  }
+  if (rowHostIds.size === 0 || (rowHostIds.size === 1 && rowHostIds.has(hostOf(group.repo)))) {
+    return undefined
+  }
+  const projectRepoIds = new Set(group.repoIds)
+  if (group.repo) {
+    projectRepoIds.add(group.repo.id)
+  }
+  const hostRepos = new Map<ExecutionHostId, Repo>()
+  for (const hostId of rowHostIds) {
+    // Only this project's own registration on this host: another host's would act on that host,
+    // and another project's (a lineage child shown here) would act on that project.
+    const repo = registrations.find(
+      (candidate) => hostOf(candidate) === hostId && projectRepoIds.has(candidate.id)
+    )
+    if (repo) {
+      hostRepos.set(hostId, repo)
+    }
+  }
+  return hostRepos.size > 0 ? hostRepos : undefined
 }
 
 /** Label notice rows by project-wide host ambiguity, even when rendered in pinned fallback.

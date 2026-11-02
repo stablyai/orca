@@ -1,11 +1,17 @@
 import React from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isIterationCurrent, type ProjectGroup } from '../../../../shared/github/project-group-sort'
+import {
+  EMPTY_PROJECT_GROUP_KEY,
+  isIterationCurrent,
+  type ProjectGroup
+} from '../../../../shared/github/project-group-sort'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
   group: ProjectGroup
+  /** Names the empty bucket; shared grouping words it in English for other clients. */
+  groupFieldName: string
   expanded: boolean
   onToggle: () => void
   /** Set the roadmap band width while pinning its label within the visible viewport. */
@@ -14,6 +20,7 @@ type Props = {
 
 export default function ProjectGroupHeader({
   group,
+  groupFieldName,
   expanded,
   onToggle,
   bandWidth
@@ -37,8 +44,10 @@ export default function ProjectGroupHeader({
       <span className={cn('flex items-center gap-2', bandWidth != null && 'sticky left-3')}>
         {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         <span className="font-medium">
-          {group.label ||
-            translate('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')}
+          {group.key === EMPTY_PROJECT_GROUP_KEY
+            ? translate('projectBoard.noField', 'No {{field}}', { field: groupFieldName })
+            : group.label ||
+              translate('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')}
         </span>
         <span className="rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
           {group.rows.length}

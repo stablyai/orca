@@ -1,3 +1,4 @@
+import type { CurrentActionSelection } from '../../../../shared/source-control-action-selection'
 import React from 'react'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
@@ -12,13 +13,17 @@ import type {
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { SourceControlAgentActionDialogForm } from './SourceControlAgentActionDialogForm'
 import { useSourceControlAgentActionDialog } from './useSourceControlAgentActionDialog'
+import { translate } from '@/i18n/i18n'
 
 export type SourceControlAgentActionDialogProps = {
   open: boolean
+  initialRecipe?: SourceControlActionRecipe
+  initialSelection?: CurrentActionSelection
   onOpenChange: (open: boolean) => void
   actionId: SourceControlLaunchActionId
   title: string
@@ -48,15 +53,16 @@ export type SourceControlAgentActionDialogProps = {
   onLaunchAborted?: () => void
   onLaunched?: () => void
   startLabel?: string
-  onStart?: (args: {
-    agent: TuiAgent
-    commandInput: string
-    /** Omitted when CLI arguments do not apply to this launch, so it resolves the global setting. */
-    agentArgs?: string
-  }) => boolean | Promise<boolean>
+  onStart?: RunSourceControlAgentActionStartArgs['onStart']
 }
 
 export function SourceControlAgentActionDialog(
+  props: SourceControlAgentActionDialogProps
+): React.JSX.Element | null {
+  return props.open ? <SourceControlAgentActionEditor {...props} /> : null
+}
+
+function SourceControlAgentActionEditor(
   props: SourceControlAgentActionDialogProps
 ): React.JSX.Element {
   const {
@@ -67,20 +73,24 @@ export function SourceControlAgentActionDialog(
     baseCommandInput,
     savedCommandInputTemplate,
     onOpenSettings,
-    startLabel = 'Start agent',
+    startLabel = translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.startAgent',
+      'Start agent'
+    ),
     onSaveAgentDefault
   } = props
   const {
     handleOpenChange,
-    shouldRenderDialog,
     agentScopeNote,
     agentOptions,
     selectedAgent,
     hasEnabledAgents,
     detecting,
+    surfaceRows,
     statusCopy,
     agentArgs,
     agentArgsApply,
+    recipe,
     commandTemplate,
     saveLaunchRecipe,
     saveTargetValue,
@@ -90,7 +100,7 @@ export function SourceControlAgentActionDialog(
     deliveryPlan,
     canStart,
     isStarting,
-    onSelectedAgentChange,
+    onAgentPick,
     onAgentArgsChange,
     onCommandTemplateChange,
     onSaveLaunchRecipeChange,
@@ -100,47 +110,50 @@ export function SourceControlAgentActionDialog(
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      {/* Saved receipts auto-start; leave fallback content unmounted to prevent a dialog flash. */}
-      {shouldRenderDialog ? (
-        <DialogContent className="flex max-h-[min(82vh,42rem)] min-w-0 flex-col overflow-hidden sm:max-w-2xl">
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="text-sm">{title}</DialogTitle>
-            <DialogDescription className="text-xs">{description}</DialogDescription>
-          </DialogHeader>
-          <SourceControlAgentActionDialogForm
-            actionId={actionId}
-            baseCommandInput={baseCommandInput}
-            agentScopeNote={agentScopeNote}
-            agentOptions={agentOptions}
-            selectedAgent={selectedAgent}
-            hasEnabledAgents={hasEnabledAgents}
-            detecting={detecting}
-            statusCopy={statusCopy}
-            agentArgs={agentArgs}
-            agentArgsApply={agentArgsApply}
-            commandTemplate={commandTemplate}
-            savedCommandInputTemplate={savedCommandInputTemplate}
-            saveLaunchRecipe={saveLaunchRecipe}
-            saveTargetValue={saveTargetValue}
-            saveTargets={saveTargets}
-            settings={settings}
-            repo={repo}
-            canSaveAgentDefault={Boolean(onSaveAgentDefault)}
-            deliveryPlan={deliveryPlan}
-            canStart={canStart}
-            isStarting={isStarting}
-            startLabel={startLabel}
-            onSelectedAgentChange={onSelectedAgentChange}
-            onAgentArgsChange={onAgentArgsChange}
-            onCommandTemplateChange={onCommandTemplateChange}
-            onSaveLaunchRecipeChange={onSaveLaunchRecipeChange}
-            onSaveAgentDefaultChange={onSaveAgentDefaultChange}
-            onOpenSettings={onOpenSettings}
-            onCancel={() => handleOpenChange(false)}
-            onStart={() => void handleStart()}
-          />
-        </DialogContent>
-      ) : null}
+      <DialogContent className="flex max-h-[min(82vh,42rem)] min-w-0 flex-col overflow-hidden sm:max-w-2xl">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="text-sm">{title}</DialogTitle>
+          <DialogDescription className="text-xs">{description}</DialogDescription>
+        </DialogHeader>
+        <SourceControlAgentActionDialogForm
+          actionId={actionId}
+          baseCommandInput={baseCommandInput}
+          agentScopeNote={agentScopeNote}
+          agentOptions={agentOptions}
+          selectedAgent={selectedAgent}
+          hasEnabledAgents={hasEnabledAgents}
+          detecting={detecting}
+          surfaceRows={surfaceRows}
+          statusCopy={statusCopy}
+          agentArgs={agentArgs}
+          agentArgsApply={agentArgsApply}
+          recipe={recipe}
+          commandTemplate={commandTemplate}
+          savedCommandInputTemplate={
+            props.initialSelection?.current.commandInputTemplate ??
+            props.initialRecipe?.commandInputTemplate ??
+            savedCommandInputTemplate
+          }
+          saveLaunchRecipe={saveLaunchRecipe}
+          saveTargetValue={saveTargetValue}
+          saveTargets={saveTargets}
+          settings={settings}
+          repo={repo}
+          canSaveAgentDefault={Boolean(onSaveAgentDefault)}
+          deliveryPlan={deliveryPlan}
+          canStart={canStart}
+          isStarting={isStarting}
+          startLabel={startLabel}
+          onAgentPick={onAgentPick}
+          onAgentArgsChange={onAgentArgsChange}
+          onCommandTemplateChange={onCommandTemplateChange}
+          onSaveLaunchRecipeChange={onSaveLaunchRecipeChange}
+          onSaveAgentDefaultChange={onSaveAgentDefaultChange}
+          onOpenSettings={onOpenSettings}
+          onCancel={() => handleOpenChange(false)}
+          onStart={() => void handleStart()}
+        />
+      </DialogContent>
     </Dialog>
   )
 }

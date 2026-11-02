@@ -138,9 +138,15 @@ export function RichMarkdownReviewNoteLayer({
                         formatMarkdownReviewNotes(notes, markdownReviewContent)
                     }
                   ]}
-                  targetModeLabel="This note"
+                  targetModeLabel={translate(
+                    'auto.components.editor.NotesSendMenu.thisNote',
+                    'This note'
+                  )}
                   triggerClassName="rich-markdown-review-note-action"
-                  disabledTooltip="Note already sent"
+                  disabledTooltip={translate(
+                    'auto.components.editor.NotesSendMenu.noteAlreadySent',
+                    'Note already sent'
+                  )}
                   onDelivered={onDelivered}
                 />
               </>

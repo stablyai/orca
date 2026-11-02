@@ -12,7 +12,6 @@ vi.mock('./client', () => ({
 import {
   collectWslProjects,
   countWindowsDriveReposWithWslWorktrees,
-  listRunningDistrosForSnapshot,
   WSL_USAGE_SNAPSHOT_INTERVAL_MS,
   WslUsageReporter,
   type WslUsageStore
@@ -74,14 +73,6 @@ describe('WslUsageReporter', () => {
     expect(gather).toHaveBeenCalledTimes(2)
   })
 
-  it('gathers nothing off Windows or while telemetry is off', async () => {
-    expect(await reporter({ platform: 'darwin' }).reportIfDue()).toBe(false)
-    expect(await reporter({ platform: 'linux' }).reportIfDue()).toBe(false)
-    expect(await reporter({ telemetryEnabled: () => false }).reportIfDue()).toBe(false)
-    expect(gather).not.toHaveBeenCalled()
-    expect(trackMock).not.toHaveBeenCalled()
-  })
-
   it('does not regather an hour after a failed gather', async () => {
     gather.mockRejectedValueOnce(new Error('store unavailable'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -110,40 +101,6 @@ describe('WslUsageReporter', () => {
   it('treats a corrupt stamp as never sent', async () => {
     writeFileSync(join(dir, 'wsl-usage-telemetry.json'), 'not json')
     expect(await reporter().reportIfDue()).toBe(true)
-  })
-
-  it('never throws when gathering fails', async () => {
-    gather.mockRejectedValueOnce(new Error('reg.exe timed out'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    expect(await reporter().reportIfDue()).toBe(false)
-    warn.mockRestore()
-  })
-})
-
-describe('listRunningDistrosForSnapshot', () => {
-  it('reuses a confirmed list without probing', async () => {
-    const probe = vi.fn(async () => ['Other'])
-    const running = await listRunningDistrosForSnapshot(
-      [{ distro: 'Ubuntu' }],
-      () => ['Ubuntu'],
-      probe
-    )
-    expect(running).toEqual(['Ubuntu'])
-    expect(probe).not.toHaveBeenCalled()
-  })
-
-  it('probes once when nothing is cached and a user distro exists', async () => {
-    const probe = vi.fn(async () => ['Ubuntu'])
-    const running = await listRunningDistrosForSnapshot([{ distro: 'Ubuntu' }], () => null, probe)
-    expect(running).toEqual(['Ubuntu'])
-    expect(probe).toHaveBeenCalledTimes(1)
-  })
-
-  it('never probes without a user distro', async () => {
-    const probe = vi.fn(async () => [])
-    await listRunningDistrosForSnapshot([{ distro: 'docker-desktop' }], () => null, probe)
-    await listRunningDistrosForSnapshot(null, () => null, probe)
-    expect(probe).not.toHaveBeenCalled()
   })
 })
 

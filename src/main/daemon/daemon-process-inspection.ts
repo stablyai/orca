@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
+import { psLocaleEnvironment } from '../../shared/ps-locale-environment'
+import { readPsStdoutInProcess } from '../../shared/libproc-process-table'
 import { parseLinuxBootTimeSeconds, parseLinuxProcStartTicks } from './daemon-process-start-time'
 import type {
   LinuxStatEvidence,
@@ -201,8 +203,16 @@ async function runInspectionCommand(
   args: string[],
   timeoutMs: number
 ): Promise<string> {
+  const inProcess =
+    file === 'ps'
+      ? await readPsStdoutInProcess(args, { env: psLocaleEnvironment(), timeoutMs })
+      : null
+  if (inProcess !== null) {
+    return inProcess
+  }
   const { stdout } = await execFileAsync(file, args, {
     encoding: 'utf8',
+    env: psLocaleEnvironment(),
     timeout: timeoutMs,
     windowsHide: true
   })

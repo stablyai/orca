@@ -123,6 +123,28 @@ describe('daemon pty foreground degraded-scan handling', () => {
     return { proc, handle }
   }
 
+  it('keeps raw confirmation separate from a known detached writer decision', async () => {
+    resolveAgentForegroundProcessMock
+      .mockResolvedValueOnce({ available: true, processName: 'claude', processId: 999 })
+      .mockResolvedValue({ available: true, processName: 'powershell.exe' })
+    readConptyMock.mockReturnValue(new Set([12345, 999]))
+    const { handle } = await spawnWindowsShell()
+    await readForegroundAt(handle, 0)
+    if (!handle.confirmForegroundProcess) {
+      throw new Error('fixture confirmer missing')
+    }
+    vi.setSystemTime(BASE_TIME_MS + 40_000)
+    resolveAgentForegroundProcessMock.mockClear()
+    expect(await handle.confirmForegroundProcess({ decision: true })).toBe('claude')
+    expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(1)
+    expect(await handle.confirmForegroundProcess()).toBe('powershell.exe')
+    expect(resolveAgentForegroundProcessMock).toHaveBeenLastCalledWith(
+      12345,
+      'powershell.exe',
+      expect.not.objectContaining({ anchorProcessId: 999 })
+    )
+  })
+
   it('keeps a cached agent across a degraded (timed-out) scan', async () => {
     resolveAgentForegroundProcessMock
       .mockResolvedValueOnce({ available: true, processName: 'claude' })

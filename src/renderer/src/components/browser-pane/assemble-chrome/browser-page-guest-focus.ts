@@ -26,6 +26,8 @@ export function useWebviewGuestFocus(
           return false
         }
         try {
+          // Why: focus the window first so the close shortcut closes the new tab, not the original tab.
+          window.focus()
           webview.focus()
         } catch {
           // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).

@@ -4,6 +4,7 @@ import type {
   AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
 import {
+  automationCreateEligibleProjects,
   automationCreateHostOffered,
   automationCreateHostStableKey,
   automationCreateProjectMismatch,
@@ -291,4 +292,27 @@ describe('create project mismatch', () => {
     expect(automationCreateProjectMismatch(tables, runtimeSelf, 'missing')).toBe(true)
     expect(automationCreateProjectMismatch(tables, desktopSelf, 'missing')).toBe(true)
   })
+
+  it.each([false, true])(
+    'offers the exact copied project on its selected host (reverse=%s)',
+    (reverse) => {
+      const local = repo({ executionHostId: 'local' })
+      const ssh = repo({ executionHostId: 'ssh:box' })
+      const repos = reverse ? [ssh, local] : [local, ssh]
+      const tables = groupReposByAutomationAuthority(repos)
+      const remote = {
+        ...desktopSelf,
+        destination: { selector: { kind: 'ssh' as const, targetId: 'box', targetGeneration: 3 } }
+      }
+      expect(automationCreateEligibleProjects(tables, desktopSelf, repos)).toEqual([local])
+      expect(automationCreateEligibleProjects(tables, remote, repos)).toEqual([ssh])
+      expect(automationCreateProjectMismatch(tables, remote, ssh.id)).toBe(false)
+      const ambiguous = groupReposByAutomationAuthority([
+        ...repos,
+        { ...ssh, displayName: 'duplicate' }
+      ])
+      expect(automationCreateEligibleProjects(ambiguous, remote, repos)).toEqual([])
+      expect(automationCreateEligibleProjects(ambiguous, desktopSelf, repos)).toEqual([local])
+    }
+  )
 })

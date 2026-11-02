@@ -3,7 +3,7 @@ import {
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
   parseNativeChatVisualDirectiveLine,
   type NativeChatVisualDirective
-} from '../../../src/shared/native-chat-visual-directive'
+} from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { mobileMarkdownCodeLines } from './mobile-markdown-tree'
 // Private-use delimiters, as the preview normalizer's own code placeholders use.
 const PLACEHOLDER_PREFIX = '\uE000ORCA_VISUAL_'

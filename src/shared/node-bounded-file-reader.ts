@@ -109,7 +109,8 @@ export async function readNodeFileHandleWithinLimit(
   }
   validateSize(stats.size, maxBytes)
 
-  let buffer = Buffer.allocUnsafe(stats.size)
+  // Sysctl files report zero size and may return EOF after a partial first read.
+  let buffer = Buffer.allocUnsafe(stats.size || Math.min(MIN_GROWTH_BYTES, maxBytes))
   let offset = 0
   while (true) {
     options.signal?.throwIfAborted()
@@ -169,7 +170,8 @@ export function readNodeFileSyncWithinLimit(
     }
     validateSize(stats.size, maxBytes)
 
-    let buffer = Buffer.allocUnsafe(stats.size)
+    // Sysctl files report zero size and may return EOF after a partial first read.
+    let buffer = Buffer.allocUnsafe(stats.size || Math.min(MIN_GROWTH_BYTES, maxBytes))
     let offset = 0
     while (true) {
       while (offset < buffer.length) {

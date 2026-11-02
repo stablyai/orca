@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
+import { LINT_STEPS } from './run-lint.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const tempDirs = []
@@ -43,7 +44,9 @@ const validReadmes = {
     "<img src='resources/build/icon.png' />",
     '<img src="https://img.shields.io/badge/x-y-z" />',
     '[Contributing](.github/CONTRIBUTING.md) [Docs](https://example.com/docs) [Top](#top)',
-    '![hero](docs/assets/hero%20image.jpg "Hero")'
+    '![hero](docs/assets/hero%20image.jpg "Hero")',
+    // src/href hold one URL; only srcset is a comma-separated list.
+    '<img src="docs/assets/hero image,wide.jpg" /> <a href=\'https://example.com/docs?pages=one,two\'>Docs</a>'
   ].join('\n'),
   'docs/readme/README.ja.md': [
     '<img src="../../resources/build/icon.png" />',
@@ -55,6 +58,7 @@ const validReadmes = {
   'resources/onboarding/feature-wall/tile-01.poster.jpg': 'jpg',
   'docs/site/public/docs/tab-split.gif': 'gif',
   'docs/assets/hero image.jpg': 'jpg',
+  'docs/assets/hero image,wide.jpg': 'jpg',
   '.github/CONTRIBUTING.md': 'contributing',
   LICENSE: 'mit'
 }
@@ -74,6 +78,94 @@ describe('README local link check', () => {
 
   it('accepts local links in every supported shape', () => {
     expect(findBrokenReadmeLinks(makeFixture(validReadmes))).toEqual([])
+  })
+
+  it('checks mixed-case HTML attributes without changing their URLs', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md':
+        '<img SRC="docs/Hero.png"><a HrEf=\'Missing.png\'>x</a><source SrcSet="docs/Hero.png 1x, docs/Gone@2x.png 2x">',
+      'docs/Hero.png': 'png'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual([
+      'Missing.png',
+      'docs/Gone@2x.png'
+    ])
+  })
+
+  it('rejects a missing full URL even when its split fragments are tracked', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<img src="docs/assets/missing image,wide.jpg" />',
+      'docs/assets/missing': 'fragment',
+      'wide.jpg': 'fragment'
+    })
+
+    expect(findBrokenReadmeLinks(root)).toEqual([
+      {
+        readme: 'README.md',
+        target: 'docs/assets/missing image,wide.jpg',
+        resolved: 'docs/assets/missing image,wide.jpg'
+      }
+    ])
+  })
+
+  it('continues checking each srcset candidate without its descriptor', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="resources/build/icon.png 1x, docs/assets/missing.png 2x">'
+    })
+
+    expect(findBrokenReadmeLinks(root)).toEqual([
+      {
+        readme: 'README.md',
+        target: 'docs/assets/missing.png',
+        resolved: 'docs/assets/missing.png'
+      }
+    ])
+  })
+
+  it('preserves commas inside srcset URLs', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source SrcSet=" ,,\t docs/Hero,wide.png 1x,, \n docs/Hero,tall.png,, ">',
+      'docs/Hero,wide.png': 'png',
+      'docs/Hero,tall.png': 'png'
+    })
+
+    expect(findBrokenReadmeLinks(root)).toEqual([])
+  })
+
+  it('rejects a missing srcset URL even when its comma-separated fragments are tracked', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="docs/Missing,wide.png 1x">',
+      'docs/Missing': 'fragment',
+      'wide.png': 'fragment'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual([
+      'docs/Missing,wide.png'
+    ])
+  })
+
+  it('ignores a srcset data URL while checking the following local candidate', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="data:image/png;base64,AAAA 1x, docs/missing.png 2x">'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual(['docs/missing.png'])
+  })
+
+  it('does not treat commas inside srcset descriptors as new candidates', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="resources/build/icon.png future(1,2), docs/missing.png 2x">'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual(['docs/missing.png'])
   })
 
   it('checks tracked media outside the detector sparse checkout', () => {
@@ -175,6 +267,6 @@ describe('README local link check', () => {
     expect(scripts['check:readme-local-links']).toBe(
       'node config/scripts/check-readme-local-links.mjs'
     )
-    expect(scripts.lint).toContain('pnpm run check:readme-local-links')
+    expect(LINT_STEPS).toContain('check:readme-local-links')
   })
 })

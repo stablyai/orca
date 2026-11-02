@@ -2,6 +2,7 @@ import { runProcess } from '@orca/process-host'
 import { buildWslExecArgs } from '../shared/wsl-login-shell-command'
 import { parseWslPath } from './wsl'
 import { wslExeFailure, wslExeProcessSpec } from './wsl-exe-process'
+import { runAsWslUserAct } from './wsl/wsl-unc-access-gate'
 import {
   containedDeleteCommand,
   rejectionFromWslDeleteStderr,
@@ -47,7 +48,8 @@ export async function tryDeleteWslUncPath(
     const flags = options.recursive ? '-rf' : '-f'
     command = ['rm', flags, '--', info.linuxPath]
   }
-  await runWslDelete(info.distro, command)
+  // A user's delete may start a stopped distro; as a user act, background reads stop trusting "stopped".
+  await runAsWslUserAct(info.distro, () => runWslDelete(info.distro, command))
   return true
 }
 

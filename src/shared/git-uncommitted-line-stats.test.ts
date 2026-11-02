@@ -1,3 +1,4 @@
+import { basename } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { lstatMock, readFileMock } = vi.hoisted(() => ({
@@ -85,11 +86,11 @@ describe('collectUntrackedAdditions', () => {
 
   it('counts file lines as additions, with or without a trailing newline', async () => {
     lstatMock.mockImplementation((target: string) =>
-      Promise.resolve(mockFileStat(String(target).endsWith('trailing.ts') ? 6 : 5))
+      Promise.resolve(mockFileStat(basename(target) === 'trailing.ts' ? 6 : 5))
     )
     readFileMock.mockImplementation((target: string) =>
       Promise.resolve(
-        String(target).endsWith('trailing.ts') ? Buffer.from('a\nb\nc\n') : Buffer.from('a\nb\nc')
+        basename(target) === 'trailing.ts' ? Buffer.from('a\nb\nc\n') : Buffer.from('a\nb\nc')
       )
     )
     const stats = await collectUntrackedAdditions('/repo', ['trailing.ts', 'no-trailing.ts'])

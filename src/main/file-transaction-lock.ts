@@ -19,13 +19,28 @@ export async function withFileTransactionLock<T>(
   const directory = dirname(filePath)
   await mkdir(directory, { recursive: true, mode: 0o700 })
   await chmod(directory, 0o700)
+  let compromised: Error | undefined
   const release = await lock(filePath, {
     realpath: false,
-    retries: options.retries ?? LOCK_RETRIES
+    retries: options.retries ?? LOCK_RETRIES,
+    // The default rethrows from proper-lockfile's refresh timer, an uncaught main-process exception.
+    onCompromised: (error) => {
+      compromised = error
+    }
   })
   try {
-    return await apply()
+    const result = await apply()
+    if (compromised) {
+      throw new Error(
+        `Lost the lock on ${filePath} during the transaction; this change may or may not be saved, and another process may have changed the file.`,
+        { cause: compromised }
+      )
+    }
+    return result
   } finally {
-    await release()
+    // A compromised lock is already released and may belong to another process now.
+    if (!compromised) {
+      await release()
+    }
   }
 }

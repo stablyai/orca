@@ -10,6 +10,12 @@ const LOCAL_PROBE_TIMEOUT_MS = 5000
 export type GitRemoteIdentityProbeOptions = {
   signal?: AbortSignal
   timeoutMs?: number
+  /** The distro a local project's runtime runs Git in. */
+  wslDistro?: string
+  /** Before the project exists: its remote is read with the host's Git. */
+  hostGit?: true
+  /** A sweep's read waits for a stopped distro rather than booting it. */
+  admissionTier?: 'background'
 }
 
 /** no-remote proves absence; unavailable leaves the repo identity unknown. */
@@ -32,7 +38,10 @@ export async function runGitProbeOnHost(
   return gitExecFileAsync(args, {
     cwd: repoPath,
     timeout: options.timeoutMs ?? LOCAL_PROBE_TIMEOUT_MS,
-    signal: options.signal
+    signal: options.signal,
+    ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+    ...(options.hostGit ? { hostGit: options.hostGit } : {}),
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
   })
 }
 

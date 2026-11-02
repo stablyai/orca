@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { BoundedMap } from '../../shared/bounded-map'
 import { MAX_PROVIDER_TIMELINE_OPEN_ENTRIES } from '../native-chat/agent-session-timeline/provider-timeline-budget'
-import type { AgentJournalToolCallItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalToolCallItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   boundToolInput,
   JOURNAL_RUNNING_PREVIEW_LIMITS,
@@ -14,6 +14,19 @@ import type { PiRpcContextUsage } from './rpc-context-usage'
 const resultSchema = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() }))
 })
+
+/** One row per turn: a second close of the same item is dropped. */
+export function piRpcSkippedEventNotice(turn: string): ProviderTimelineEvent {
+  return {
+    type: 'item.close',
+    item: `oversized:${turn}`,
+    body: {
+      kind: 'status',
+      tone: 'warning',
+      text: 'Pi sent an update too large to show, so part of this turn is missing here.'
+    }
+  }
+}
 
 const PI_TEXT_CHANNELS: Partial<Record<string, 'assistant' | 'reasoning'>> = {
   text_delta: 'assistant',

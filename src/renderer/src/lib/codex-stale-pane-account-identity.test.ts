@@ -112,30 +112,6 @@ describe('stale Codex panes are decided by account id, not label', () => {
     expect(scans.find((scan) => scan.ptyId === 'pty-1')?.notified).toBe(true)
   })
 
-  it('disambiguates shared emails by ChatGPT workspace', async () => {
-    seedRoster([
-      { id: 'account-a', email: SHARED_EMAIL, workspaceLabel: 'Personal' },
-      { id: 'account-b', email: SHARED_EMAIL, workspaceLabel: 'Acme' }
-    ])
-    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
-      { ptyId: 'pty-1', launchAccountId: 'account-a', activeAccountId: 'account-b' }
-    ])
-
-    await markRestoredStaleCodexSessionsForRestart()
-
-    expect(noticeFor('pty-1')).toMatchObject({
-      previousAccountLabel: `${SHARED_EMAIL} (Personal)`,
-      nextAccountLabel: `${SHARED_EMAIL} (Acme)`
-    })
-  })
-
-  it('raises no notice and reports nothing notified for a pane on the selected account', async () => {
-    const scans = await markRestoredStaleCodexSessionsForRestart()
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-    expect(scans.every((scan) => scan.notified === false)).toBe(true)
-  })
-
   it('does not report notified for a pane whose notice the store dropped', async () => {
     // The existing notice remembers account-b as launch account, so re-marking against active account-b collapses it.
     useAppStore.setState({

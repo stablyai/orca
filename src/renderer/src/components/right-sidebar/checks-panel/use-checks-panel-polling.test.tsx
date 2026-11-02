@@ -38,6 +38,11 @@ import { useChecksPanelPolling } from './use-checks-panel-polling'
 
 import { createModel } from './checks-panel-polling-test-model'
 
+const baseRepo = createModel().repo
+if (!baseRepo) {
+  throw new Error('The polling fixture requires a repository.')
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(1_000_000)
@@ -106,6 +111,49 @@ describe('useChecksPanelPolling live behavior', () => {
     expect(poller.getDelayMs?.()).toBe(120_000)
   })
 
+  it('lets the read that opens the panel start a stopped WSL distro, but not later polls (E9)', async () => {
+    const model = createModel()
+    const hook = renderHook(({ input }) => useChecksPanelPolling(input), {
+      initialProps: { input: model }
+    })
+    const wakes = (): unknown[] =>
+      vi.mocked(model.fetchPRChecks).mock.calls.map((call) => call[5]?.wakeWslDistro)
+
+    await act(async () => poller.run?.())
+    vi.setSystemTime(Date.now() + 60_000)
+    await act(async () => poller.run?.())
+    expect(wakes()).toEqual([true, undefined])
+
+    hook.rerender({ input: { ...model, isPanelVisible: false } })
+    hook.rerender({ input: model })
+    vi.setSystemTime(Date.now() + 15 * 60_000)
+    await act(async () => poller.run?.())
+    expect(wakes()).toEqual([true, undefined, true])
+  })
+
+  it('polls GitLab MR details in the background after the opening read (E9)', async () => {
+    const model = createModel({
+      activeGitLabReview: {
+        provider: 'gitlab',
+        number: 17,
+        headSha: 'gitlab-head',
+        title: 'MR',
+        state: 'open',
+        url: '',
+        status: 'pending',
+        updatedAt: '',
+        mergeable: 'UNKNOWN'
+      }
+    })
+    renderHook(() => useChecksPanelPolling(model))
+
+    await act(async () => poller.run?.())
+    vi.setSystemTime(Date.now() + 60_000)
+    await act(async () => poller.run?.())
+
+    expect(gitlab.fetchDetails.mock.calls.map((call) => call[0].background)).toEqual([false, true])
+  })
+
   it('selects the GitLab adapter without calling the GitHub checks provider', async () => {
     const model = createModel({
       activeGitLabReview: {
@@ -128,8 +176,9 @@ describe('useChecksPanelPolling live behavior', () => {
     expect(model.fetchPRChecks).not.toHaveBeenCalled()
   })
 
-  it('uses the workspace owner and missing head override for a replacement MR', async () => {
+  it('uses the selected repository owner and missing head override for a replacement MR', async () => {
     const model = createModel({
+      repo: { ...baseRepo, executionHostId: 'runtime:owner-runtime' },
       activeGitLabReview: {
         provider: 'gitlab',
         number: 17,
@@ -167,6 +216,7 @@ describe('useChecksPanelPolling live behavior', () => {
   it('reports a failed MR read as an error naming the machine, not as no checks (#24264)', async () => {
     gitlab.fetchDetails.mockRejectedValue(new Error('glab: not logged in'))
     const model = createModel({
+      repo: { ...baseRepo, connectionId: 'devbox' },
       activeGitLabReview: {
         provider: 'gitlab',
         number: 17,
@@ -193,6 +243,17 @@ describe('useChecksPanelPolling live behavior', () => {
     expect(Math.max(0, ...setChecks.invocationCallOrder)).toBeLessThan(
       setChecksError.invocationCallOrder[0]
     )
+  })
+
+  it('reports conflicting repository/workspace context through the normal MR error path', async () => {
+    const model = createModel({
+      activeWorktree: makeWorktree({ id: 'worktree-1', repoId: 'repo-1', hostId: 'runtime:other' })
+    })
+    const { result } = renderHook(() => useChecksPanelPolling(model))
+    await act(async () => result.current.fetchGitLabDetails({ mrNumberOverride: 18 }))
+    expect(gitlab.fetchDetails).not.toHaveBeenCalled()
+    expect(model.setChecksError).toHaveBeenCalledWith(expect.stringContaining('owning host'))
+    expect(model.setCommentsError).toHaveBeenCalledWith(expect.stringContaining('owning host'))
   })
 
   it('drops replacement MR details when the relink scope changes in flight', async () => {

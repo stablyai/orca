@@ -1,10 +1,12 @@
-// No upstream checksums are published; pin each verified archive and executable.
+// Pin the official registry archives and each executable verified inside them.
 
 import { join } from 'node:path'
 import type { ManagedRuntime, ManagedRuntimePin } from '../node-runtime/managed-runtime-release'
 import { probeAntigravityAcpServer } from './antigravity-acp-runtime-probe'
 
-const VERSION = '1.3.0'
+// 1.4.2 through 1.4.5 are reported to write skills/system/run-workflow/SKILL.md into the chat's
+// workspace when a session starts; check a newer release in an empty folder before moving this pin.
+const VERSION = '1.4.1'
 const RELEASES = 'https://dl.google.com/agy-extensions/releases'
 const COMMAND = 'agy_acp_server.par'
 // The server finds its harness beside itself.
@@ -21,40 +23,40 @@ type Pinned = {
 }
 const PINNED: Record<string, Pinned> = {
   'darwin-arm64': {
-    path: 'macos/agy-acp-server-1.3.0-darwin-arm64.zip',
-    archive: '7cd97045f7b4fe81175a107cdf16f9c51484e3c78a5162cae415338bb6aa5b88',
-    archiveBytes: 111456962,
-    server: 'cb1f0725183ed922079ed6cd1d2422b4d8be44c5fb60be3e9a43d8d04f99a18e',
-    serverBytes: 278535456,
-    harness: 'b04b00662c1821b953a409d43626b86d1229130eeb2078b4e1304c06199aa481',
-    harnessBytes: 118611392
+    path: 'macos/agy-acp-server-1.4.1-darwin-arm64.zip',
+    archive: 'f9bdd68291ae78c38d2141e63bc86b84e6cc7b9f60f71652c68435a7943deb17',
+    archiveBytes: 112737434,
+    server: 'ee664236c317b38f33fb8d14188c5e32887bf493ab1372f1185cde126a3b130d',
+    serverBytes: 280996576,
+    harness: 'b5b921d79c849806204901a24cb6a961bf2a689edd8a2e226401c96e368cfb6f',
+    harnessBytes: 120246928
   },
   'darwin-x64': {
-    path: 'macos/agy-acp-server-1.3.0-darwin-x86_64.zip',
-    archive: 'bb23956b89984bf5d354af2c3725e6c57f0cc1b7228e77a0e91c9c2bc1d47646',
-    archiveBytes: 117245544,
-    server: 'f31bd5797eeb225a5efa12e24573f1f4eb157ec00698dd6a2cda6f0d924705cf',
-    serverBytes: 282840688,
-    harness: 'd724f49b2c9e440c5d37925b1da203fc204c17dd9c662df45094c641f9806bc6',
-    harnessBytes: 124175392
+    path: 'macos/agy-acp-server-1.4.1-darwin-x86_64.zip',
+    archive: '27e31f096874704f14167b07ef9e84cc77134615ee41d024f7b1c957add85307',
+    archiveBytes: 118349036,
+    server: '022ae66dd99e7a6ea17846641963942c72c00bce1c5a32a1ccb32ec889c5023d',
+    serverBytes: 285186624,
+    harness: 'c6a2c260ca03899e8a3e4fe3279a2f9aa1d701a01721720db73d95ade9dfe511',
+    harnessBytes: 124910048
   },
   'linux-x64': {
-    path: 'linux/agy-acp-server-1.3.0-linux-x86_64.zip',
-    archive: '9fb60956af0a9d76220a4db91ca9ac88e2a2372ad68f985ab5fceace6b825b96',
-    archiveBytes: 333727150,
-    server: 'cf6feaebdacfc2255dcfc8883db99b15de8554698554e2a1e78e5ccec1c68a20',
-    serverBytes: 926533965,
-    harness: '63042ca43fc7a69600683920f7706689b82cf8aecefe21dc18cf35e99c9dde4d',
-    harnessBytes: 130388040
+    path: 'linux/agy-acp-server-1.4.1-linux-x86_64.zip',
+    archive: '2e37012ceb2a5c7fc7309b6e6596234fb637ee3c62a5199f65d4cbe777871384',
+    archiveBytes: 336170339,
+    server: '57e7c4c505fdc8787993d4ff868274f44fd7aa4e4c82cf424fece3bf6c487643',
+    serverBytes: 930826753,
+    harness: '5ba6f2f24faffa6bceaf9344871ccc8624ebeccb27a7d0d45a9ffdda851d72c7',
+    harnessBytes: 131187512
   },
   'linux-arm64': {
-    path: 'linux/agy-acp-server-1.3.0-linux-arm64.zip',
-    archive: '500b0bc0fb858e88f4df404d4cedf80bf9298c178291e39e383d6c50b111cbdf',
-    archiveBytes: 321690363,
-    server: '03ea51ff7a60cb1b44e65da40fdb35f1f457db7950d1651d9e86945c8aa584c6',
-    serverBytes: 930848992,
-    harness: '7fe676f1234889900800bad3ca50fb9b55f1e16ee4cb82b789f84ae5145fd582',
-    harnessBytes: 123224968
+    path: 'linux/agy-acp-server-1.4.1-linux-arm64.zip',
+    archive: '609336a1c97545487e3ddd55dbd153dc0f40f4e6534486cc1c5f4c0ebb85c2da',
+    archiveBytes: 321922507,
+    server: '7d3eb1fab7b5b60a545004f91850609ae6c345abceffbd82b4959385069f9ffe',
+    serverBytes: 933416796,
+    harness: '18bcd9a2ab80b66d90f61add7a52a37f53d3113bb0429a0b92709ed09f32a6e1',
+    harnessBytes: 124895000
   }
 }
 

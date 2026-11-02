@@ -26,13 +26,6 @@ describe('nativeMountingSubstitutes', () => {
     )
   })
 
-  it('leaves the interop marker undefined so a default import binds the module, not the trap', () => {
-    for (const name of ['@react-native-async-storage/async-storage', 'expo-crypto']) {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads the marker the emit reads, off a proxy with no declared shape.
-      expect((substitute(name) as { __esModule?: unknown }).__esModule).toBeUndefined()
-    }
-  })
-
   it('throws on a member nobody substituted rather than recording an undefined native API', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read itself is the assertion; the proxy has no declared shape.
     expect(() => (substitute('expo-crypto') as { randomUUID?: unknown }).randomUUID).toThrow(

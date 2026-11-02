@@ -35,7 +35,10 @@ import { readRemoteOrcadBuildHash } from '../managed-server/install/orcad-remote
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
 import type { OrcadUpdateForce } from './orcad-update-plan'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
-import { pruneManagedOrcadVersions } from '../managed-server/lifecycle/orcad-managed-version-gc'
+import {
+  pruneManagedOrcadVersions,
+  pruneSupersededOrcadCandidates
+} from '../managed-server/lifecycle/orcad-managed-version-gc'
 import { clearOrcadUpdateFailedThisLaunch } from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
 import { admitOrcadRecordForIntent } from '../managed-server/lifecycle/orcad-managed-update-decision'
 import { rollbackOrcad } from '../managed-server/install/orcad-remote-rollback'
@@ -156,6 +159,7 @@ export async function runManagedOrcadUpdate(
     if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {
       recordManagedOrcadUpdateDeferral(environment.id, deferral)
     }
+    await pruneSupersededOrcadCandidates(slot, context.serverTarget, result.fullVersion)
     return deferral
   }
   clearManagedOrcadUpdateDeferral(environment.id)

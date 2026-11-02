@@ -1,3 +1,4 @@
+import { parseTerminalKittyKeyboardFlags } from '../../../../src/shared/terminal-kitty-keyboard-flags'
 import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
 import { stopSurfaceTouchGestures } from './surface-touch-gestures'
 import { clearLongPress } from './tap-dispatch'
@@ -17,7 +18,11 @@ import {
 } from './mouse-mode-decset-scan'
 import { captureInitialOscLinkTexts } from './osc-link-tap'
 import { attachOsc52ClipboardBridge } from './osc52-clipboard-bridge'
-import { attachTerminalQueryReplyBridge, resetTerminalDataReplyAuthority } from './query-reply'
+import {
+  attachProgramStatusQueryReplies,
+  attachTerminalQueryReplyBridge,
+  resetTerminalDataReplyAuthority
+} from './query-reply'
 import { cancelSelect } from './selection-mode'
 import { resetEvictionCounter } from './selection-state-and-eviction'
 import { beginTerminalSurfaceSwap, commitTerminalSurfaceSwap } from './surface-swap'
@@ -25,6 +30,8 @@ import { attachTermObservers } from './term-observers'
 import { applyTerminalTheme } from './terminal-theme'
 import { attachWebglAddon, cancelWebglContextRecovery } from './webgl-recovery'
 import { afterWritesDrained, enqueueWrite, pumpWrites, resetWriteQueue } from './write-queue'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal-scrollback-policy'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../src/shared/terminal-unicode-provider'
 
 function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) {
   const term = scope.createTerminal({
@@ -36,7 +43,7 @@ function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) 
     fontSize: fontPxForScale(scope.currentTextScale),
     fontWeight: '300',
     fontWeightBold: '500',
-    scrollback: 5000,
+    scrollback: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
     // Parser query replies need stdin enabled; native still validates their grammar.
     disableStdin: false,
     cursorBlink: MOBILE_TERMINAL_CARET_OPTIONS.cursorBlink,
@@ -48,13 +55,14 @@ function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) 
   })
   scope.term = term
   attachOsc52ClipboardBridge(scope, term)
+  attachProgramStatusQueryReplies(scope, term)
   term.open(scope.surface!)
   attachWebglAddon(scope, true)
   try {
     const unicodeAddon = scope.createUnicode11Addon()
     if (unicodeAddon) {
       term.loadAddon(unicodeAddon)
-      term.unicode.activeVersion = '11'
+      activateOrcaTerminalUnicodeProvider(term)
     }
   } catch {}
   return term
@@ -85,7 +93,8 @@ export function init(
   nextTheme: Parameters<typeof applyTerminalTheme>[1],
   nextFontScale: unknown,
   preserveScroll: boolean,
-  nextOscLinks: unknown
+  nextOscLinks: unknown,
+  kittyKeyboardFlags: unknown
 ) {
   // Replay replaces the scroll target; retire momentum and pending drags belonging to the old one.
   stopSurfaceTouchGestures(scope)
@@ -100,7 +109,12 @@ export function init(
     preserveScroll && scope.term && scope.term.buffer && scope.term.buffer.active
       ? scope.term.buffer.active
       : null
-  const scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1
+  // A hidden replay never moved what the reader sees, so one that overtakes it keeps its anchor.
+  const supersededAnchorRows = scope.pendingTerm ? scope.pendingReplayScrollAnchorRows : null
+  const scrollAnchorRows = !preserveScroll
+    ? -1
+    : (supersededAnchorRows ??
+      (prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1))
   scope.terminalGeneration++
   const gen = scope.terminalGeneration
   const reused = scope.provisionalTerm
@@ -125,17 +139,16 @@ export function init(
   scope.mouseEncodingKnown = false
   scope.sgrMouseMode = false
   scope.sgrMousePixelsMode = false
-  scope.lastEmittedModes = {
-    bracketedPasteMode: false,
-    altScreen: false,
-    mouseTrackingMode: 'none',
-    sgrMouseMode: false,
-    sgrMousePixelsMode: false
-  }
+  // lastEmittedModes stays what native last received, so a cleared snapshot still publishes its modes.
+  scope.keyboardModes.adoptSnapshot(
+    typeof initialData === 'string' ? initialData : '',
+    parseTerminalKittyKeyboardFlags(kittyKeyboardFlags)
+  )
   const replayData = normalizeInitialData(initialData)
   // Mirror only replayed modes after normal-buffer prefixes are discarded.
   updateMouseModeFromData(scope, replayData)
   scope.activeAltScreenSnapshot = isAltScreenActive(replayData)
+  scope.pendingReplayScrollAnchorRows = scope.activeAltScreenSnapshot ? null : scrollAnchorRows
   scope.initialOscLinks = Array.isArray(nextOscLinks) ? nextOscLinks : []
   scope.initialOscLinkRowOffset = 0
   scope.initialOscLinkEvictionReady = false
@@ -184,11 +197,10 @@ export function init(
         scope.surface!.style.visibility = ''
       }
       // Replay lands at bottom; restore only readers who had scrolled upward before reflow.
-      if (scrollAnchorRows > 0 && scope.term && scope.term.buffer && scope.term.buffer.active) {
+      const anchorRows = scope.pendingReplayScrollAnchorRows ?? 0
+      if (anchorRows > 0 && scope.term && scope.term.buffer && scope.term.buffer.active) {
         try {
-          scope.term.scrollToLine(
-            Math.max(0, (scope.term.buffer.active.baseY || 0) - scrollAnchorRows)
-          )
+          scope.term.scrollToLine(Math.max(0, (scope.term.buffer.active.baseY || 0) - anchorRows))
         } catch {}
       }
       captureInitialOscLinkTexts(scope)
@@ -204,6 +216,7 @@ export function init(
 
 export function write(scope: TerminalDocumentScope, data: string) {
   updateMouseModeFromData(scope, data, true)
+  scope.keyboardModes.scan(data)
   enqueueWrite(scope, data)
   pumpWrites(scope, scope.terminalGeneration)
   // Refit once after first live output reveals a wider line; later chunks preserve manual zoom.

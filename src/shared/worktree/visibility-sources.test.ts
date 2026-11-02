@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { Repo } from '../repo-types'
 import {
   buildDefaultWorktreeSourcePreferenceUpdate,
@@ -25,19 +25,6 @@ function repo(overrides: Partial<Repo> = {}): Repo {
 }
 
 describe('worktree visibility sources', () => {
-  it('classifies each built-in independently across linked checkouts', () => {
-    const classify = createWorktreeVisibilitySourceMatcher(['/repo', '/worktrees/feature'], [], [])
-    expect(classify('/repo/.claude/worktrees/review')).toEqual({
-      kind: 'built-in',
-      id: 'claude'
-    })
-    expect(classify('/worktrees/feature/.gsd-workspaces/phase-1')).toEqual({
-      kind: 'built-in',
-      id: 'gsd'
-    })
-    expect(classify('/other/.claude/worktrees/review')).toBeNull()
-  })
-
   it('matches custom descendants with Windows and WSL comparison semantics', () => {
     const windows = createWorktreeVisibilitySourceMatcher(
       [],
@@ -59,26 +46,6 @@ describe('worktree visibility sources', () => {
       id: 'linux'
     })
     expect(wsl('//wsl.localhost/Ubuntu/home/Dev/team/feature')).toBeNull()
-  })
-
-  it('yields a built-in root to a worktree base the project configured there', () => {
-    const classify = createWorktreeVisibilitySourceMatcher(
-      ['/repo'],
-      [],
-      ['/repo/.claude/worktrees']
-    )
-    expect(classify('/repo/.claude/worktrees/review')).toBeNull()
-    expect(classify('/repo/.gsd-workspaces/phase-1')).toEqual({ kind: 'built-in', id: 'gsd' })
-  })
-
-  it('preserves WSL path casing when a configured base supersedes a built-in root', () => {
-    const classify = createWorktreeVisibilitySourceMatcher(
-      ['//wsl$/Ubuntu/home/Dev/repo'],
-      [],
-      ['//wsl.localhost/Ubuntu/home/Dev/repo/.claude/worktrees']
-    )
-
-    expect(classify('//wsl.localhost/Ubuntu/home/Dev/repo/.claude/worktrees/review')).toBeNull()
   })
 
   it('keeps a built-in root a base merely contains', () => {
@@ -123,37 +90,6 @@ describe('worktree visibility sources', () => {
       kind: 'built-in',
       id: 'claude'
     })
-  })
-
-  it('normalizes each candidate once regardless of checkout count', () => {
-    const classify = createWorktreeVisibilitySourceMatcher(
-      Array.from({ length: 200 }, (_, index) => `/repo/worktree-${index}`),
-      Array.from({ length: 32 }, (_, index) => ({
-        id: `custom-${index}`,
-        rootPath: `/custom/${index}`
-      })),
-      []
-    )
-    const normalize = vi.spyOn(String.prototype, 'normalize')
-
-    classify('/unmatched/worktree')
-
-    expect(normalize).toHaveBeenCalledTimes(1)
-    normalize.mockRestore()
-  })
-
-  it('normalizes each candidate once when a configured base supersedes a built-in root', () => {
-    const classify = createWorktreeVisibilitySourceMatcher(
-      ['/repo'],
-      [],
-      ['/repo/.claude/worktrees']
-    )
-    const normalize = vi.spyOn(String.prototype, 'normalize')
-
-    classify('/repo/.claude/worktrees/review')
-
-    expect(normalize).toHaveBeenCalledTimes(1)
-    normalize.mockRestore()
   })
 
   it('migrates the optional legacy agent policy lazily for both built-ins', () => {

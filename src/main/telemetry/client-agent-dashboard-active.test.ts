@@ -57,7 +57,7 @@ describe('Agent Dashboard daily visible use', () => {
 
   it('preserves the daily limit across restarts without consuming the event budget on repeats', () => {
     track('agent_dashboard_active', { surface: 'popout' })
-    initTelemetry(state.store)
+    initTelemetry(state.store, () => {})
     for (let index = 0; index < 1500; index++) {
       expect(track('agent_dashboard_active', { surface: 'popout' })).toBe(false)
     }

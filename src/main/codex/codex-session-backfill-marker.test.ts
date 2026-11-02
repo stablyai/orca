@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   captureCodexSessionBackfillMarkerGeneration,
   hasCompletedCodexSessionBackfillMarker,
+  markCodexSessionBackfillMarkerNeedsFullScan,
   markCodexSessionBackfillMarkerPending,
   readCodexSessionBackfillBaseline,
   writeCodexSessionBackfillMarker
@@ -147,17 +148,6 @@ describe('codex session backfill marker', () => {
     expect(hasCompletedCodexSessionBackfillMarker(markerPath, WINDOWS_ROOT)).toBe(false)
   })
 
-  it('records a launch date without destroying the historical baseline', () => {
-    writeFullBaseline(WINDOWS_ROOT)
-
-    markCodexSessionBackfillMarkerPending(markerPath, 'C:/Users/Me/.codex/sessions', [LAUNCH_DATE])
-
-    expect(readMarker()).toMatchObject({ coverage: 'full', pendingScanDates: [LAUNCH_DATE] })
-    expect(readCodexSessionBackfillBaseline(markerPath, WINDOWS_ROOT)).toEqual({
-      pendingScanDates: [LAUNCH_DATE]
-    })
-  })
-
   it('leaves a marker for a different history untouched', () => {
     writeFullBaseline(WINDOWS_ROOT)
 
@@ -183,15 +173,6 @@ describe('codex session backfill marker', () => {
     writeFullBaseline(WINDOWS_ROOT, { coveredScanDates: [LAUNCH_DATE], retain: true })
 
     expect(readMarker()).toMatchObject({ launchActive: true, pendingScanDates: [LAUNCH_DATE] })
-  })
-
-  it('settles every pending date once a full walk covers them', () => {
-    writeFullBaseline(WINDOWS_ROOT)
-    markCodexSessionBackfillMarkerPending(markerPath, WINDOWS_ROOT, [LAUNCH_DATE])
-
-    writeFullBaseline(WINDOWS_ROOT)
-
-    expect(readMarker()).toMatchObject({ pendingScanDates: [] })
   })
 
   it('demands a full walk once the pending window outgrows its bound', () => {
@@ -243,5 +224,19 @@ describe('codex session backfill marker', () => {
 
     expect(readMarker()).toMatchObject({ coverage: 'bounded', pendingScanDates: [TODAY] })
     expect(hasCompletedCodexSessionBackfillMarker(markerPath, WINDOWS_ROOT)).toBe(false)
+  })
+
+  it('a full-scan demand outlives later launches and only a full pass clears it', () => {
+    writeFullBaseline(WINDOWS_ROOT)
+    markCodexSessionBackfillMarkerNeedsFullScan(markerPath)
+
+    expect(readCodexSessionBackfillBaseline(markerPath, WINDOWS_ROOT)).toBeNull()
+    expect(markCodexSessionBackfillMarkerPending(markerPath, WINDOWS_ROOT, [LAUNCH_DATE])).toBe(
+      true
+    )
+    writeFullBaseline(WINDOWS_ROOT)
+    expect(readCodexSessionBackfillBaseline(markerPath, WINDOWS_ROOT)).toEqual({
+      pendingScanDates: []
+    })
   })
 })

@@ -78,7 +78,10 @@ export { getAccountsPaneSearchEntries }
 export function AccountsPane({
   settings,
   updateSettings,
+  updateSettingsOrThrow,
   hostScope,
+  nativeAccounts = false,
+  onAccountLocationChange,
   wslSupportedPlatform = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
@@ -97,7 +100,7 @@ export function AccountsPane({
     new Set()
   )
   const localAccountRuntime = getSelectedAccountRuntime(
-    settings,
+    nativeAccounts ? { ...settings, localAccountRuntime: 'host' } : settings,
     wslSupportedPlatform,
     wslAvailable,
     wslDistros,
@@ -284,6 +287,8 @@ export function AccountsPane({
     settings,
     accountOwner,
     updateSettings,
+    updateSettingsOrThrow,
+    onAccountLocationChange,
     searchQuery,
     recordFeatureInteraction,
     wslSupportedPlatform,
@@ -350,6 +355,7 @@ export function AccountsPane({
         owner={accountOwner}
         target={{ runtime: accountRuntime.runtime, wslDistro: accountRuntime.wslDistro }}
         label={accountRuntimeSentenceLabel}
+        ownerPlatform={accountOwnerPlatform}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())

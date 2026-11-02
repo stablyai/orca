@@ -118,12 +118,18 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
   })
 
-  it('omits the checkbox unless the caller opts in', async () => {
-    renderDialog({ title: 'Delete artifact?' })
-
+  it('shows only the confirm button for a notice', async () => {
+    const { onSettled } = renderDialog({
+      title: "Can't use p1 here yet",
+      confirmLabel: 'OK',
+      acknowledgeOnly: true,
+      initialFocus: 'confirm'
+    })
     await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    expect(await screen.findByText('Delete artifact?')).toBeInTheDocument()
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'OK' })).toHaveFocus())
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
   })
 
   it('runs the skip callback when confirmed with the box checked', async () => {

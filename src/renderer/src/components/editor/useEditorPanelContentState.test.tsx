@@ -69,9 +69,10 @@ vi.mock('@/store', () => ({
 }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import { registerEditorPanelHostContentRecoveryTests } from './editor-panel-host-content-recovery.spec'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -114,7 +115,7 @@ const onLocalLogTailChanged = vi.fn(() => () => {})
 const fsApi = { onLocalLogTailChanged }
 let latestFileContents: Record<string, FileContent> = {}
 let latestDiffContents: Record<string, DiffContent> = {}
-let latestReloadContent: (file: OpenFile) => void = () => {}
+let latestReloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void = () => {}
 const EMPTY_GIT_STATUS_BY_WORKTREE: Record<string, GitStatusEntry[]> = {}
 
 function HookProbe({
@@ -146,6 +147,26 @@ function createOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
     mode: 'edit',
     ...overrides
   }
+}
+
+function mockDiskBaselineStore(activeFile: OpenFile) {
+  const setLastKnownDiskSignature = vi.fn()
+  const store = createTestStore()
+  const worktree = makeWorktree({
+    id: activeFile.worktreeId,
+    repoId: 'repo-1',
+    path: '/repo',
+    hostId: 'local'
+  })
+  store.setState({
+    settings: null,
+    openFiles: [activeFile],
+    worktreesByRepo: { 'repo-1': [worktree] },
+    setLastKnownDiskSignature
+  })
+  mocks.getState.mockImplementation(store.getState)
+  mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
+  return setLastKnownDiskSignature
 }
 
 describe('useEditorPanelContentState', () => {
@@ -183,6 +204,19 @@ describe('useEditorPanelContentState', () => {
     container = null
     root = null
   })
+
+  registerEditorPanelHostContentRecoveryTests(
+    mocks,
+    () => latestFileContents,
+    createOpenFile,
+    (file, options) => latestReloadContent(file, options),
+    async (file) => {
+      container = document.createElement('div')
+      document.body.appendChild(container)
+      root = createRoot(container)
+      await act(async () => root?.render(<HookProbe activeFile={file} openFiles={[file]} />))
+    }
+  )
 
   it('loads folder workspace files through the path-specific SSH connection', async () => {
     const activeFile = createOpenFile({
@@ -308,37 +342,6 @@ describe('useEditorPanelContentState', () => {
     )
   })
 
-  it('rejects an unstamped external tab in a remote runtime workspace', async () => {
-    const activeFile = createOpenFile({
-      id: '/work/reports/audit.md',
-      filePath: '/work/reports/audit.md',
-      relativePath: '/work/reports/audit.md',
-      worktreeId: 'repo-runtime::/work/demo-project'
-    })
-    mocks.getConnectionIdForFile.mockReturnValue(undefined)
-    mocks.getState.mockReturnValue({
-      ...createTestStore().getState(),
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
-      openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestFileContents[activeFile.id]?.loadError).toBe(
-        'External local files are not available for remote workspaces.'
-      )
-    )
-    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
-  })
-
   it('rejects an external SSH-host tab after its target owner changes', async () => {
     const activeFile = createOpenFile({
       id: '/tmp/ssh-preview.png',
@@ -423,7 +426,9 @@ describe('useEditorPanelContentState', () => {
       expect.objectContaining({
         compare: expect.objectContaining({ headOid: 'head', mergeBase: 'merge-base' }),
         filePath: 'api/src/file.ts'
-      })
+      }),
+      // Showing the tab is a user act; the client drops the hint for an SSH connection.
+      { wakeWslDistro: true }
     )
   })
 
@@ -875,14 +880,7 @@ describe('useEditorPanelContentState', () => {
 
   it('stamps the disk baseline when a clean tab load resolves', async () => {
     const activeFile = createOpenFile()
-    const setLastKnownDiskSignature = vi.fn()
-    mocks.getState.mockReturnValue({
-      ...createTestStore().getState(),
-      settings: null,
-      openFiles: [activeFile],
-      setLastKnownDiskSignature
-    })
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
+    const setLastKnownDiskSignature = mockDiskBaselineStore(activeFile)
 
     container = document.createElement('div')
     document.body.appendChild(container)
@@ -902,14 +900,7 @@ describe('useEditorPanelContentState', () => {
   it('keeps a dirty tab baseline untouched by content loads', async () => {
     // Dirty drafts retain their original disk baseline so content loading cannot hide external conflicts.
     const activeFile = createOpenFile({ isDirty: true })
-    const setLastKnownDiskSignature = vi.fn()
-    mocks.getState.mockReturnValue({
-      ...createTestStore().getState(),
-      settings: null,
-      openFiles: [activeFile],
-      setLastKnownDiskSignature
-    })
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
+    const setLastKnownDiskSignature = mockDiskBaselineStore(activeFile)
 
     container = document.createElement('div')
     document.body.appendChild(container)

@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   ProjectHostSetupCreateArgs,
@@ -64,7 +64,7 @@ function alignRepoWithRequestedProject(
     const updated = store.updateRepo(
       repo,
       resolveImportedFolderProjectLink(
-        folderRemote,
+        { ...repo, ...folderRemote },
         projectId,
         project?.providerIdentity ?? requestedProviderIdentity
       )

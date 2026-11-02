@@ -6,7 +6,7 @@ import type { TerminalUpdateViewportCapability } from './terminal-viewport-refit
 
 type TerminalViewportReassertionOptions = {
   connState: ConnectionState
-  viewportMeasuredRef: RefObject<boolean>
+  invalidateViewports: () => void
   updateViewportCapabilityRef: RefObject<TerminalUpdateViewportCapability>
   scheduleForcedViewportRefit: () => void
 }
@@ -15,7 +15,7 @@ type TerminalViewportReassertionOptions = {
 export function useTerminalViewportReassertion(options: TerminalViewportReassertionOptions) {
   const {
     connState,
-    viewportMeasuredRef,
+    invalidateViewports,
     updateViewportCapabilityRef,
     scheduleForcedViewportRefit
   } = options
@@ -36,11 +36,11 @@ export function useTerminalViewportReassertion(options: TerminalViewportReassert
         return
       }
       // Why: cached grid can match while the host PTY changed in background; reassert equal dims to converge after iOS resume.
-      viewportMeasuredRef.current = false
+      invalidateViewports()
       scheduleForcedViewportRefit()
     })
     return () => sub.remove()
-  }, [viewportMeasuredRef, scheduleForcedViewportRefit])
+  }, [invalidateViewports, scheduleForcedViewportRefit])
 
   const previousConnStateRef = useRef(connState)
   useEffect(() => {
@@ -52,7 +52,7 @@ export function useTerminalViewportReassertion(options: TerminalViewportReassert
     // Why: an in-place desktop upgrade may add updateViewport; reconnect is where the cached method_not_found goes stale.
     updateViewportCapabilityRef.current = 'unknown'
     // Why: reconnect can restore a PTY resized while the socket was down, so equal cached dims still need reassertion.
-    viewportMeasuredRef.current = false
+    invalidateViewports()
     scheduleForcedViewportRefit()
-  }, [connState, viewportMeasuredRef, updateViewportCapabilityRef, scheduleForcedViewportRefit])
+  }, [connState, invalidateViewports, updateViewportCapabilityRef, scheduleForcedViewportRefit])
 }

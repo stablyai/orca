@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store'
-import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
 import { resolveCliChatResumeSource } from './cli-chat-resume-source'
@@ -17,15 +17,16 @@ export function CliChatResumeMenuItems({
 }): React.JSX.Element | null {
   const [source] = useState(() => resolveCliChatResumeSource(useAppStore.getState(), { tab }))
   const pending = useCliChatResumePending(source)
-  if (!source) {
+  // Radix disables pointer events on disabled items, so a tooltip-less "update" item would only confuse.
+  if (!source || source.hostUpdateRequired) {
     return null
   }
   return (
     <>
-      {leadingSeparator ? <DropdownMenuSeparator /> : null}
+      {leadingSeparator ? <ContextMenuSeparator /> : null}
       <AiVaultSessionSurfaceSwitchMenuItems
         action="switch"
-        menuKind="dropdown"
+        menuKind="context"
         tooltipSide="right"
         chatPending={pending}
         onResumeInNewChat={(event) => {

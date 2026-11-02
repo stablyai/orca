@@ -82,6 +82,7 @@ function unwrapShallowSelector(selector, state) {
   if (
     selector?.type === 'CallExpression' &&
     selector.callee.type === 'Identifier' &&
+    state.hookNames.has(selector.callee.name) &&
     state.shallowHooks.has(variableFor(selector.callee, state))
   ) {
     return { selector: selector.arguments[0], shallow: true }
@@ -201,6 +202,7 @@ function createRuleState(sourceCode) {
   return {
     appStoreHooks: new Set(),
     shallowHooks: new Set(),
+    hookNames: new Set(),
     sourceCode,
     deferredCalls: []
   }
@@ -213,20 +215,22 @@ function recordImports(node, state) {
       continue
     }
     const imported = identifierName(specifier.imported)
-    const variable = variableFor(specifier.local, state)
-    if (!imported || !variable) {
-      continue
-    }
-    if (source === 'zustand/react/shallow' && imported === 'useShallow') {
-      state.shallowHooks.add(variable)
-    }
+    const shallow = source === 'zustand/react/shallow' && imported === 'useShallow'
     // useAppStore is the app store wherever it is re-exported from; sibling
     // stores are trusted by naming convention only when they come from this codebase.
-    if (
-      STORE_HOOK_NAME.test(imported) &&
+    const store =
+      STORE_HOOK_NAME.test(imported ?? '') &&
       !NON_STORE_HOOKS.has(imported) &&
       (imported === 'useAppStore' || isLocalModuleSource(source))
-    ) {
+    // Why: getScope builds the whole scope tree, so only resolve bindings this rule tracks.
+    const variable = shallow || store ? variableFor(specifier.local, state) : null
+    if (!variable) {
+      continue
+    }
+    state.hookNames.add(specifier.local.name)
+    if (shallow) {
+      state.shallowHooks.add(variable)
+    } else {
       state.appStoreHooks.add(variable)
     }
   }
@@ -235,6 +239,7 @@ function recordImports(node, state) {
 function isAppStoreCall(node, state) {
   return (
     node.callee.type === 'Identifier' &&
+    state.hookNames.has(node.callee.name) &&
     state.appStoreHooks.has(variableFor(node.callee, state)) &&
     node.optional !== true
   )
@@ -316,6 +321,78 @@ function noFreshSelectorResultRule(sourceCode) {
   })
 }
 
+// Host observations replace this map on every meaningful change (runtime-status.ts).
+const HOT_STORE_FIELDS = new Set(['runtimeStatusByEnvironmentId'])
+
+function selectorLocalConstant(variable, selector) {
+  const definition = variable?.defs[0]
+  const declaration = definition?.node
+  if (definition?.type !== 'Variable' || declaration.parent.kind !== 'const') {
+    return null
+  }
+  for (let parent = declaration.parent; parent; parent = parent.parent) {
+    if (parent === selector) {
+      return declaration
+    }
+  }
+  return null
+}
+
+// Resolve only the selector parameter and its local const aliases, never a same-named outer value.
+function selectorValue(expression, selector, state, seen = new Set()) {
+  if (expression?.type === 'MemberExpression') {
+    const field = propertyName(expression)
+    return HOT_STORE_FIELDS.has(field) &&
+      selectorValue(expression.object, selector, state, seen) === 'state'
+      ? field
+      : null
+  }
+  const variable = variableFor(expression, state)
+  if (!variable || seen.has(variable)) {
+    return null
+  }
+  seen.add(variable)
+  const parameter = selector.params[0]
+  if (parameter?.type === 'Identifier' && variableFor(parameter, state) === variable) {
+    return 'state'
+  }
+  const declaration = selectorLocalConstant(variable, selector)
+  const pattern = declaration?.id ?? parameter
+  if (pattern?.type === 'ObjectPattern') {
+    const property = pattern.properties.find(
+      (entry) => entry.type === 'Property' && variable.identifiers.includes(entry.value)
+    )
+    const field = property && !property.computed ? identifierName(property.key) : null
+    if (
+      HOT_STORE_FIELDS.has(field) &&
+      (pattern === parameter || selectorValue(declaration.init, selector, state, seen) === 'state')
+    ) {
+      return field
+    }
+  }
+  return declaration?.id.type === 'Identifier'
+    ? selectorValue(declaration.init, selector, state, seen)
+    : null
+}
+
+function noWholeHotMapSelectorRule(sourceCode) {
+  return deferredSelectorRule(sourceCode, ({ selector, state }) => {
+    if (!selector) {
+      return null
+    }
+    const result = returnedExpressions(selector).find((expression) =>
+      HOT_STORE_FIELDS.has(selectorValue(expression, selector, state))
+    )
+    return result
+      ? {
+          node: result,
+          message:
+            'This whole host-status map changes for every host. Select the derived answer for your own host/item with a stable result (see paired-runtime-parking-capabilities.ts), or add a disable comment with a reason if this consumer needs every host.'
+        }
+      : null
+  })
+}
+
 /** useShallow compares one level deep, so a fresh reference nested inside its result never matches. */
 function nestedFreshValues(expression) {
   if (expression?.type === 'ObjectExpression') {
@@ -349,8 +426,20 @@ function noNestedFreshUnderShallowRule(sourceCode) {
   })
 }
 
+// Skip JS AST deserialization in files that cannot name a store hook.
+const STORE_HOOK_TEXT = /use[A-Z][A-Za-z0-9]*Store/
+
 function bindContext(createVisitors) {
   return (context) => {
+    if (!STORE_HOOK_TEXT.test(context.sourceCode.text) && !context.sourceCode.text.includes('\\')) {
+      return {}
+    }
+    if (
+      createVisitors === noWholeHotMapSelectorRule &&
+      /\.(?:test|spec)\.[^/\\]+$/.test(context.filename)
+    ) {
+      return {}
+    }
     const visitors = createVisitors(context.sourceCode)
     for (const [nodeType, visit] of Object.entries(visitors)) {
       visitors[nodeType] = visit.bind(context)
@@ -365,6 +454,7 @@ export default {
     'require-selector': { create: bindContext(requireSelectorRule) },
     'no-identity-selector': { create: bindContext(noIdentitySelectorRule) },
     'no-fresh-selector-result': { create: bindContext(noFreshSelectorResultRule) },
+    'no-whole-hot-map-selector': { create: bindContext(noWholeHotMapSelectorRule) },
     'no-nested-fresh-under-shallow': { create: bindContext(noNestedFreshUnderShallowRule) }
   }
 }

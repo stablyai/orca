@@ -16,6 +16,8 @@ export const MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES = 32 * 1024 * 1024
 export const MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES = 10 * 1024 * 1024
 export const MOBILE_WEB_BUNDLE_MAX_ROUTES = 64
 export const MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS = 16
+// What a route's two lists can grant together; released shells cap each list alone, never the pair.
+export const MOBILE_WEB_BUNDLE_MAX_GRANTED_ROUTE_GRANTS = 2 * MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS
 
 export const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const ASSET_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/
@@ -108,22 +110,11 @@ export const MobileWebBundleRouteSchema = z
       .max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
       .optional(),
     /** The page can draw the wide host area, sidebar included, when `init` says it owns it. */
-    canOwnHostArea: z.literal(true).optional()
+    canOwnHostArea: z.literal(true).optional(),
+    /** This page also renders the narrow host area; legacy ownership remains wide-only. */
+    canOwnHostAreaAcrossLayouts: z.literal(true).optional()
   })
   .strict()
-  // Cap the combined session grant set as well as each input array; separate caps would allow twice the limit.
-  .superRefine((route, context) => {
-    if (
-      route.grants.length + (route.optionalGrants?.length ?? 0) >
-      MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['optionalGrants'],
-        message: 'grants and optionalGrants together must not exceed the route grant ceiling'
-      })
-    }
-  })
 
 export type MobileWebBundleRoute = z.infer<typeof MobileWebBundleRouteSchema>
 

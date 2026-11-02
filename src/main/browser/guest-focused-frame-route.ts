@@ -10,7 +10,6 @@ import {
 } from './guest-frame-input-sessions'
 
 // Cross-site frames need their own CDP session; widget input only reaches the guest renderer.
-// See docs/reference/agent-browser-focus-isolation.md.
 
 export { isOrcaFrameSessionTraffic, settleWithin } from './guest-frame-input-sessions'
 export type { GuestSessionCdpSender } from './guest-frame-input-sessions'

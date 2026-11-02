@@ -5,8 +5,10 @@ import React, { createRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import type * as I18n from '@/i18n/i18n'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../shared/clipboard-image'
 import {
   emptyNativeChatContextMenuActions,
@@ -109,10 +111,12 @@ function Harness({
 
 function ImageHarness({
   enabled = true,
-  src = 'blob:full-size'
+  src = 'blob:full-size',
+  source
 }: {
   enabled?: boolean
   src?: string
+  source?: string
 }) {
   const rootRef = createRef<HTMLDivElement>()
   const { menu, onContextMenuCapture, onPointerDownCapture } = useNativeChatContextMenu({
@@ -130,8 +134,17 @@ function ImageHarness({
       <button type="button" data-native-chat-copy-image-src={src}>
         <img alt="shot" src="data:thumbnail" />
       </button>
-      <p>text</p>
+      <div data-native-chat-scroll>
+        {source ? (
+          <div data-selection-prose>
+            <NativeChatMarkdown content={source} />
+          </div>
+        ) : (
+          <p>text</p>
+        )}
+      </div>
       <textarea aria-label="composer" />
+      <input aria-label="answer" disabled defaultValue="read only" />
       <div role="textbox" aria-label="prompt" contentEditable suppressContentEditableWarning>
         typo
         <span contentEditable={false}>pill</span>
@@ -187,6 +200,26 @@ function pngOfText(): void {
   )
 }
 
+it('updates nominal toggle labels, including an unassigned binding', () => {
+  const initial = useAppStore.getState()
+  vi.stubGlobal('navigator', { userAgent: 'Windows NT 10.0' })
+  useAppStore.setState({ keybindings: {} })
+  const view = render(<Harness onSwitchToTerminal={() => {}} />)
+  expect(view.container.textContent).toContain('Ctrl+⇧+J')
+  act(() =>
+    useAppStore.setState({
+      keybindings: { 'terminal.toggleNativeChat': ['Mod+Alt+Y', 'Mod+Alt+K'] }
+    })
+  )
+  expect(view.container.textContent).toContain('Ctrl+Alt+Y')
+  act(() => useAppStore.setState({ keybindings: { 'terminal.toggleNativeChat': [] } }))
+  expect(view.container.textContent).not.toContain('Ctrl+Alt+Y')
+  expect(view.container.textContent).not.toContain('Unassigned')
+  view.unmount()
+  useAppStore.setState(initial, true)
+  vi.unstubAllGlobals()
+})
+
 describe('useNativeChatContextMenu', () => {
   beforeEach(() => {
     items.list = []
@@ -200,6 +233,29 @@ describe('useNativeChatContextMenu', () => {
     toasts.error.mockReset()
     toasts.success.mockReset()
   })
+
+  it.each(['Before $x^2$ after.', 'Ordinary words.', '```math\nx^2\n```'])(
+    'copies authored selection through the actual menu action: %s',
+    async (source) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('api', { ui: { writeClipboardText } })
+      const view = render(<ImageHarness source={source} />)
+      const prose = view.container.querySelector('[data-selection-prose]')
+      if (!prose) {
+        throw new Error('Missing rendered source')
+      }
+      const range = document.createRange()
+      range.selectNodeContents(prose)
+      const selection = document.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      fireEvent.contextMenu(prose)
+      selection?.removeAllRanges()
+      expect(copyTextItem()).toBeDefined()
+      await act(async () => copyTextItem()?.onSelect?.())
+      expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(source)
+    }
+  )
 
   it('copies the right-clicked image as a PNG of its full-size source', async () => {
     pngOfText()
@@ -272,6 +328,50 @@ describe('useNativeChatContextMenu', () => {
       expect(fireEvent.pointerDown(screen.getByText('text'), init)).toBe(defaultRuns)
     }
   )
+
+  it.each([
+    ['on a reply selection offers it', 'text', () => screen.getByText('text'), 'text', true],
+    [
+      'away from a reply selection drops it',
+      'text',
+      () => screen.getByRole('button'),
+      undefined,
+      false
+    ],
+    [
+      'a disabled field still offers the reply selection',
+      'text',
+      () => screen.getByRole('textbox', { name: 'answer' }),
+      'text',
+      true
+    ],
+    [
+      'away from a composer selection keeps it unoffered',
+      'typo',
+      () => screen.getByText('text'),
+      undefined,
+      true
+    ]
+  ])('right-clicking %s', (_case, selected, pressed, copied, kept) => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('api', { ui: { writeClipboardText } })
+    render(<ImageHarness />)
+    const selection = window.getSelection()
+    selection?.selectAllChildren(screen.getByText(selected))
+    // happy-dom lays out no text, so map the press to the pressed element as Chromium does.
+    const node = pressed()
+    Object.defineProperty(document, 'caretPositionFromPoint', {
+      configurable: true,
+      value: () => ({ offsetNode: node, offset: node instanceof HTMLInputElement ? 5 : 0 })
+    })
+    fireEvent.contextMenu(node)
+    Reflect.deleteProperty(document, 'caretPositionFromPoint')
+
+    copyTextItem()?.onSelect?.()
+
+    expect(writeClipboardText.mock.calls[0]?.[0]).toBe(copied)
+    expect(selection?.isCollapsed).toBe(!kept)
+  })
 
   it('offers no image copy when the right-click is not on an image', () => {
     render(<ImageHarness />)

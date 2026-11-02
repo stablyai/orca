@@ -9,7 +9,11 @@ import { normalizeDisabledTuiAgents, pickTuiAgent } from '../../../shared/tui-ag
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
 import { loadDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
-import { type AgentLaunchRouteStore, worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import {
+  type AgentLaunchRouteStore,
+  type ProspectiveWorkspace,
+  worktreeLaunchWorkspace
+} from '@/lib/agent-launch-route-input'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
 import { readAgentLaunchPreferencesForWorktree } from '@/components/settings/use-host-agent-launch-preferences'
 
@@ -47,14 +51,31 @@ export function resolveDefaultAgentForNewTab(args: {
   disabledTuiAgents: readonly TuiAgent[] | null | undefined
   chatIn?: { store: AgentLaunchRouteStore; worktreeId: string }
 }): TuiAgent | null {
-  const preferred = args.defaultTuiAgent === 'blank' ? null : args.defaultTuiAgent
   const { chatIn } = args
-  const workspace = chatIn && worktreeLaunchWorkspace(chatIn.worktreeId)
+  return resolveDefaultAgentForWorkspace({
+    ...args,
+    defaultTuiAgent: args.defaultTuiAgent === 'blank' ? null : args.defaultTuiAgent,
+    chatIn: chatIn && { store: chatIn.store, workspace: worktreeLaunchWorkspace(chatIn.worktreeId) }
+  })
+}
+
+/** Workspace creation honors blank; a usable preferred chat need not have a detected CLI. */
+export function resolveDefaultAgentForWorkspace(args: {
+  defaultTuiAgent: TuiAgent | 'blank' | null | undefined
+  detectedAgentIds: readonly TuiAgent[] | null | undefined
+  disabledTuiAgents: readonly TuiAgent[] | null | undefined
+  chatIn?: { store: AgentLaunchRouteStore; workspace: ProspectiveWorkspace }
+}): TuiAgent | null {
+  const { chatIn } = args
   const chosenUsable = (agent: TuiAgent): boolean =>
     !!chatIn &&
-    !!workspace &&
-    agentChoiceMayOpenAsChat(chatIn.store, agent, workspace, args.detectedAgentIds ?? null)
-  return pickTuiAgent(preferred, args.detectedAgentIds ?? [], args.disabledTuiAgents, chosenUsable)
+    agentChoiceMayOpenAsChat(chatIn.store, agent, chatIn.workspace, args.detectedAgentIds ?? null)
+  return pickTuiAgent(
+    args.defaultTuiAgent,
+    args.detectedAgentIds ?? [],
+    args.disabledTuiAgents,
+    chosenUsable
+  )
 }
 
 export async function resolveDefaultAgentForWorktreeNewTab(

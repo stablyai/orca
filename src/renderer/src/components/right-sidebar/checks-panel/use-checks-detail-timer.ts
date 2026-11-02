@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../shared/review-refresh-policy'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
-import type { ChecksDetailPollingPolicy } from './checks-detail-polling-policy'
+import type { ChecksDetailPollingPolicy } from '../../../../../shared/github/checks-detail-polling-policy'
 import type { ChecksPanelPollingInput, ChecksPanelPollingState } from './use-checks-panel-polling'
 
 export function useChecksDetailTimer({
@@ -36,12 +36,15 @@ export function useChecksDetailTimer({
   const lastAttemptAtRef = useRef(-Infinity)
   const nextAttemptAtRef = useRef(-Infinity)
   const inFlightRef = useRef<{ identity: string; token: symbol } | null>(null)
+  // The first read after the panel opens (or its review changes) is the user looking; later polls are background (E9).
+  const wakeNextReadRef = useRef(true)
   useEffect(() => {
     if (lastIdentityRef.current !== requestIdentity) {
       lastIdentityRef.current = requestIdentity
       lastAttemptAtRef.current = -Infinity
       nextAttemptAtRef.current = -Infinity
       forceNextFetchRef.current = false
+      wakeNextReadRef.current = true
       policyRef.current.reset()
       pollIntervalRef.current = 60_000
       prevChecksRef.current = ''
@@ -49,6 +52,7 @@ export function useChecksDetailTimer({
       setComments([])
     }
     if (!isPanelVisible || (!isGitLabReview && !prNumber)) {
+      wakeNextReadRef.current = true
       return
     }
     const policyDelay = (): number | null => {
@@ -78,12 +82,16 @@ export function useChecksDetailTimer({
         }
         const token = Symbol()
         inFlightRef.current = { identity: requestIdentity, token }
+        const shown = wakeNextReadRef.current
+        wakeNextReadRef.current = false
         lastAttemptAtRef.current = now
         nextAttemptAtRef.current = Infinity
         const force = forceNextFetchRef.current
         forceNextFetchRef.current = false
         try {
-          await (isGitLabReview ? fetchGitLabDetails() : fetchChecks({ force }))
+          await (isGitLabReview
+            ? fetchGitLabDetails(shown ? {} : { background: true })
+            : fetchChecks({ force, ...(shown ? { wakeWslDistro: true } : {}) }))
         } finally {
           if (inFlightRef.current?.token === token) {
             inFlightRef.current = null

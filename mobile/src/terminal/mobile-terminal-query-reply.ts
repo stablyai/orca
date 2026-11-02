@@ -1,4 +1,5 @@
 import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
+import { PROGRAM_STATUS_OSC_PREFIX } from '../../../src/shared/program-status/protocol'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { terminalInputSend } from './mobile-terminal-operations'
 
@@ -13,6 +14,7 @@ type MobileTerminalQueryReplyOptions = {
   connected: boolean
   handle: string
   hostSupportsQueryReplyInput: boolean
+  hostSupportsProgramStatus: boolean
   subscribedTerminals: TerminalSubscriptionRegistry
 }
 
@@ -23,6 +25,7 @@ export function sendMobileTerminalQueryReply({
   connected,
   handle,
   hostSupportsQueryReplyInput,
+  hostSupportsProgramStatus,
   subscribedTerminals
 }: MobileTerminalQueryReplyOptions): Promise<boolean> {
   // Subscriptions, including hidden panes, suppress the desktop responder and own replies.
@@ -32,7 +35,9 @@ export function sendMobileTerminalQueryReply({
     !connected ||
     !hostSupportsQueryReplyInput ||
     !subscribedTerminals.has(handle) ||
-    !isTerminalQueryReply(bytes)
+    !isTerminalQueryReply(bytes) ||
+    // Like desktop: answering OSC 7501 makes agents drop title glyphs, so only for hosts that read reports.
+    (!hostSupportsProgramStatus && bytes.startsWith(PROGRAM_STATUS_OSC_PREFIX))
   ) {
     return Promise.resolve(false)
   }

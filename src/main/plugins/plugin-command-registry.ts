@@ -1,13 +1,13 @@
 import {
   pluginCommandKeybindingActionId,
   type PluginCommandAliasActionId
-} from '../../shared/plugins/plugin-command-actions'
+} from '../../shared/plugins/contributions/plugin-command-actions'
 import { getKeybindingConflictIdentity, type KeybindingOverrides } from '../../shared/keybindings'
 import type {
   PluginCommandContribution,
   PluginManifest
-} from '../../shared/plugins/plugin-manifest'
-import type { PluginKeybindingContribution } from '../../shared/plugins/plugin-content-pack-contributions'
+} from '../../shared/plugins/manifest/plugin-manifest'
+import type { PluginKeybindingContribution } from '../../shared/plugins/contributions/plugin-content-pack-contributions'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
@@ -16,14 +16,14 @@ import {
 
 export type PluginCommandKeybinding = {
   key: string
-  when: 'global' | 'worktree'
+  when: 'global' | 'workspace'
 }
 
 export type PluginCommandRegistration = {
   pluginKey: string
   id: string
   title: string
-  context: 'global' | 'worktree'
+  context: 'global' | 'workspace'
   handler: { type: 'built-in'; action: PluginCommandAliasActionId } | { type: 'worker' }
   keybindings: PluginCommandKeybinding[]
 }
@@ -138,7 +138,7 @@ function registrationsForManifest(
     pluginKey,
     id: command.id,
     title: command.title,
-    context: command.context ?? 'global',
+    context: command.when ?? 'global',
     handler:
       command.action === undefined
         ? { type: 'worker' as const }
@@ -153,6 +153,6 @@ function keybindingsForCommand(
 ): PluginCommandKeybinding[] {
   return keybindings.map((keybinding) => ({
     key: keybinding.key,
-    when: keybinding.when ?? command.context ?? 'global'
+    when: keybinding.when ?? command.when ?? 'global'
   }))
 }

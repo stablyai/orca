@@ -7,6 +7,7 @@ import { exposeTerminalOutputSchedulerDebugApi as exposeDebugApi } from './pane-
 import { flushTerminalOutputImpl } from './pane-terminal-output-flusher'
 import { writeTerminalOutputImpl } from './pane-terminal-output-writer'
 import { writeXtermParseBarrier } from './xterm-parse-barrier'
+import { noteTerminalOutputArrival } from './terminal-output-arrival-observer'
 import {
   requestRegisteredTerminalBacklogRecovery,
   type TerminalOutputTarget,
@@ -37,7 +38,6 @@ export {
   registerTerminalBacklogRecovery,
   requestRegisteredTerminalBacklogRecovery,
   scheduleDrain,
-  setUseMessageChannelDrainForTesting,
   type QueueEntry,
   type QueuedWrite,
   type TerminalOutputBeforeWrite,
@@ -53,6 +53,9 @@ export function writeTerminalOutput(
   data: string,
   options: WriteTerminalOutputOptions
 ): void {
+  if (data) {
+    noteTerminalOutputArrival(terminal)
+  }
   writeTerminalOutputImpl(terminal, data, options)
 }
 

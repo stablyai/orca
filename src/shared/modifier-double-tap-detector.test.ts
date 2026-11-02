@@ -80,7 +80,7 @@ describe('ModifierDoubleTapDetector', () => {
     const d = new ModifierDoubleTapDetector()
     d.process(down('Shift'), 0)
     // A missed keyUp makes a fresh keyDown restart the first tap.
-    d.process(down('Shift'), 50)
+    expect(d.process(down('Shift'), 50)).toBeNull()
     d.process(up('Shift'), 60)
     // The next press within the window still completes the gesture.
     expect(d.process(down('Shift'), 200)).toEqual({ modifier: 'Shift' })

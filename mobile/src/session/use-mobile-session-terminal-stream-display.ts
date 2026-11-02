@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react'
 import { terminalDisplayModeSet } from './mobile-session-write-operations'
-import { useMobileNativeChatTerminalStream } from './use-mobile-native-chat-terminal-stream'
+import { useMobileNativeChatTerminalStream } from './native-chat/use-mobile-native-chat-terminal-stream'
 import type { MobileSessionTerminalSubscriptionModel } from './use-mobile-session-terminal-subscription'
 
 export function useMobileSessionTerminalStreamDisplay(
@@ -13,6 +13,7 @@ export function useMobileSessionTerminalStreamDisplay(
     terminalModes,
     deviceTokenRef,
     viewportRef,
+    getTerminalPaneViewport,
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef,
@@ -50,6 +51,7 @@ export function useMobileSessionTerminalStreamDisplay(
       // Phone is observed state; request auto or desktop rather than persisting it.
       const next: 'auto' | 'desktop' =
         current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
+      const viewport = getTerminalPaneViewport?.(handle).viewportRef.current ?? viewportRef.current
       toggleInFlightRef.current.add(handle)
       try {
         await terminalDisplayModeSet.request(client, {
@@ -60,7 +62,7 @@ export function useMobileSessionTerminalStreamDisplay(
             ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
             : {}),
           // Measure viewport live so pre-measure subscriptions can switch to auto successfully.
-          ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})
+          ...(viewport && next === 'auto' ? { viewport } : {})
         })
       } catch {
         // Mode change failed — server state unchanged, UI stays in sync.

@@ -1,7 +1,7 @@
 import type WebSocket from 'ws'
 import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
-import type { RemoteRuntimeHandshakeState } from '../../remote-runtime-client-handshake'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeHandshakeState } from '../remote-runtime-client-handshake'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { RuntimeRpcEnvelopeSchema, type RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
 

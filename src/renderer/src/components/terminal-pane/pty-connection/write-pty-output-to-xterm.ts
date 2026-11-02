@@ -1,7 +1,6 @@
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../../shared/terminal-mode-reset-profiles'
 import { forceFullViewportPresent } from '@/lib/pane-manager/terminal-render-pause-release'
 
 import { FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS } from './foreground-output-budgets'
@@ -24,6 +23,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     foreground: boolean,
     opts?: { hiddenStartupRendererQuery?: boolean; liveStartupBatch?: boolean }
   ): void {
+    data = session.idleCursorReset.processOutput(data)
     // Why: every application byte funnels through here, so it's the one place the kitty keyboard mirror observes the pane's protocol negotiation.
     session.kittyKeyboardModes.scan(data)
     // Why before classification: this chunk may be the echo that calibrates its own window.
@@ -134,9 +134,12 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     if (session.disposed) {
       return
     }
-    session.writePtyOutputToXterm(
-      RESET_TERMINAL_CURSOR_STYLE,
-      shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
-    )
+    const reset = session.idleCursorReset.request()
+    if (reset) {
+      session.writePtyOutputToXterm(
+        reset,
+        shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
+      )
+    }
   }
 }

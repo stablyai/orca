@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -6,11 +6,14 @@ const loadMock = vi.hoisted(() => vi.fn<() => Promise<boolean>>())
 const saveMock = vi.hoisted(() => vi.fn<(enabled: boolean) => Promise<void>>())
 
 vi.mock('react-native', () => ({
-  Platform: { OS: 'android' },
-  StyleSheet: { create: (styles: unknown) => styles },
-  Switch: 'Switch',
-  Text: 'Text',
-  View: 'View'
+  Platform: { OS: 'android' }
+}))
+vi.mock('../components/list/ListGroup', () => ({
+  ListRow: ({ accessory }: { accessory: ReactNode }) => accessory
+}))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('../settings/settings-screen-frame', () => ({
+  SettingsSection: ({ children }: { children: ReactNode }) => children
 }))
 
 vi.mock('../storage/preferences', () => ({

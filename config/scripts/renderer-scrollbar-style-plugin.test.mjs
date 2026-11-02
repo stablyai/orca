@@ -18,6 +18,11 @@ function lintSources(sources) {
 
 const violations = [
   [
+    'escaped class expression',
+    String.raw`export const X = () => <div className={'\x6fverflow-y-auto'} />`,
+    String.raw`'\x6fverflow-y-auto'`
+  ],
+  [
     'unstyled class',
     'export const X = () => <div className="max-h-64 overflow-y-auto" />',
     '"max-h-64 overflow-y-auto"'

@@ -7,7 +7,7 @@ import { useStore } from 'zustand'
 import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { OpenFile } from '@/store/slices/editor'
-import { editorSelectionCache, scrollTopCache } from '@/lib/scroll-cache'
+import { editorSelectionCache, editorViewStateCache, scrollTopCache } from '@/lib/scroll-cache'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 const testState = vi.hoisted(() => {
@@ -33,6 +33,11 @@ vi.mock('@/store', () => {
 })
 vi.mock('@/lib/monaco-setup', async () => {
   const { loader } = await import('@monaco-editor/react')
+  // Why: the real setup installs this guard; without it a disposed editor's pending word
+  // highlight rejects with Monaco's "Canceled" and the run reports unhandled errors.
+  const { installMonacoDelayerCancellationGuard } =
+    await import('@/lib/monaco-delayer-cancellation-guard')
+  installMonacoDelayerCancellationGuard()
   loader.config({ monaco })
   return {}
 })
@@ -59,6 +64,7 @@ afterEach(() => {
     model.dispose()
   }
   editorSelectionCache.clear()
+  editorViewStateCache.clear()
   scrollTopCache.clear()
   Reflect.set(HTMLCanvasElement.prototype, 'getContext', originalGetContext)
   testState.store = null

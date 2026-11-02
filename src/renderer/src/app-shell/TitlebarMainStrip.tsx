@@ -5,6 +5,7 @@ import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { ActivityTitlebarControls } from '../components/activity/ActivityTitlebarControls'
 import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
+import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
 import { hasCustomTitleBar } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 
@@ -33,12 +34,13 @@ export function RightSidebarToggle(): React.JSX.Element {
 
 export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const handleToggleExpand = (): void => {
-    if (!layout.effectiveActiveTabId) {
+    const { effectiveActiveTabId } = selectActiveTerminalChromeState(useAppStore.getState())
+    if (!effectiveActiveTabId) {
       return
     }
     window.dispatchEvent(
       new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, {
-        detail: { tabId: layout.effectiveActiveTabId }
+        detail: { tabId: effectiveActiveTabId }
       })
     )
   }

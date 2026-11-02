@@ -23,7 +23,11 @@ export const getBrowserSitePermissionsSearchEntry = createLocalizedCatalog(
         'settings.browser.sitePermissions.search.notifications',
         'notifications'
       ),
-      ...translateSearchKeyword('settings.browser.sitePermissions.search.clipboard', 'clipboard')
+      ...translateSearchKeyword('settings.browser.sitePermissions.search.clipboard', 'clipboard'),
+      ...translateSearchKeyword(
+        'settings.browser.sitePermissions.search.localNetwork',
+        'local network'
+      )
     ]
   })
 )

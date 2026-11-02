@@ -12,6 +12,19 @@ const IMPORT_SCOPE_TABLE = 'orca_cookie_import_scope'
 const IMPORT_SCOPE_FORMAT_VERSION = 1
 export const SCOPED_COOKIE_IMPORT_FORMAT = `scoped-v${IMPORT_SCOPE_FORMAT_VERSION}`
 
+export class InvalidStagedCookieImportError extends Error {}
+
+export function isPermanentStagedCookieImportFailure(error: unknown): boolean {
+  if (error instanceof InvalidStagedCookieImportError) {
+    return true
+  }
+  if (typeof error !== 'object' || error === null || !('errcode' in error)) {
+    return false
+  }
+  // SQL/schema errors, corrupt images and non-databases cannot become usable on retry.
+  return typeof error.errcode === 'number' && [1, 11, 26].includes(error.errcode & 0xff)
+}
+
 type StagedHostKeyRow = { host_key: unknown }
 type StagedScopeRow = { domain: unknown; format_version: unknown }
 type SqliteColumnRow = { name: unknown }
@@ -66,45 +79,14 @@ function readImportedScope(
       typeof row.domain !== 'string' ||
       normalizeCookieImportDomain(row.domain) !== row.domain
     ) {
-      throw new Error('Staged cookie import has an invalid domain scope')
+      throw new InvalidStagedCookieImportError('Staged cookie import has an invalid domain scope')
     }
     scopeDomains.push(row.domain)
   }
   if (scopeDomains.length === 0) {
-    throw new Error('Staged cookie import has an invalid domain scope')
+    throw new InvalidStagedCookieImportError('Staged cookie import has an invalid domain scope')
   }
   return importedDomainScope(scopeDomains)
-}
-
-// Record exact import scope so replay preserves unrelated sessions created after staging.
-export function prepareStagedCookiesForImport(
-  stagingDb: DatabaseSync,
-  importScope: ImportedDomainScope
-): void {
-  if (importScope.exact.size === 0) {
-    return
-  }
-  stagingDb.exec(
-    `CREATE TABLE IF NOT EXISTS ${quotedIdentifier(IMPORT_SCOPE_TABLE)} (` +
-      'domain TEXT PRIMARY KEY, format_version INTEGER NOT NULL)'
-  )
-  stagingDb.exec(`DELETE FROM ${quotedIdentifier(IMPORT_SCOPE_TABLE)}`)
-  const insertScope = stagingDb.prepare(
-    `INSERT INTO ${quotedIdentifier(IMPORT_SCOPE_TABLE)} (domain, format_version) VALUES (?, ?)`
-  )
-  for (const domain of importScope.exact) {
-    insertScope.run(domain, IMPORT_SCOPE_FORMAT_VERSION)
-  }
-
-  const hostKeys = (
-    stagingDb.prepare('SELECT DISTINCT host_key FROM cookies').all() as StagedHostKeyRow[]
-  ).map((row) => row.host_key)
-  const deleteByHostKey = stagingDb.prepare('DELETE FROM cookies WHERE host_key = ?')
-  for (const hostKey of hostKeys) {
-    if (isHostKeyInScope(hostKey, importScope)) {
-      deleteByHostKey.run(hostKey)
-    }
-  }
 }
 
 export function isScopedStagedCookieImport(stagedCookiesPath: string): boolean {
@@ -149,7 +131,9 @@ export function applyScopedStagedCookieImport(
       liveColumns.length !== stagedColumns.length ||
       liveColumns.some((column, index) => column !== stagedColumns[index])
     ) {
-      throw new Error('Staged cookie import has an incompatible cookie schema')
+      throw new InvalidStagedCookieImportError(
+        'Staged cookie import has an incompatible cookie schema'
+      )
     }
     // Require schema parity to avoid dropping partition keys or guessing new column defaults.
     const columnList = liveColumns.map(quotedIdentifier).join(', ')

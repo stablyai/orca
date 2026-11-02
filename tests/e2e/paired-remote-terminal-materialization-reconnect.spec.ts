@@ -117,7 +117,8 @@ async function hostSurfaceStatus(
   page: Page,
   environmentId: string,
   worktreeId: string,
-  parentTabId: string
+  parentTabId: string,
+  expectedLeafId?: string
 ): Promise<string | null> {
   const snapshot = await callRuntime<RuntimeMobileSessionTabsResult>(
     page,
@@ -126,25 +127,29 @@ async function hostSurfaceStatus(
     { worktree: `id:${worktreeId}` }
   )
   const surface = snapshot.tabs.find(
-    (candidate) => candidate.type === 'terminal' && candidate.parentTabId === parentTabId
+    (candidate) =>
+      candidate.type === 'terminal' &&
+      candidate.parentTabId === parentTabId &&
+      (expectedLeafId === undefined || candidate.leafId === expectedLeafId)
   )
   return surface?.type === 'terminal' ? surface.status : null
 }
 
-// Retry until the host publishes the parked pending handle; stop verification can miss PTY exit under headless load.
 async function parkHostTerminal(
   page: Page,
   environmentId: string,
   worktreeId: string,
   parentTabId: string,
-  options: { expectedPtyId: string }
+  options: { expectedPtyId: string; original: RuntimeTerminalShow }
 ): Promise<void> {
   let lastError = 'terminal.stopExact was never attempted'
   for (let attempt = 0; attempt < 10; attempt += 1) {
+    const stopStartedAt = Date.now()
     const stop = await callRuntime<{
       stopped: number
       stoppedPtyIds: string[]
       postStopVerified: boolean
+      postStopFailure?: string
     }>(page, environmentId, 'terminal.stopExact', {
       worktree: `id:${worktreeId}`,
       expectedPtyIds: [options.expectedPtyId],
@@ -155,9 +160,57 @@ async function parkHostTerminal(
       return null
     })
     if (stop) {
-      expect(stop.postStopVerified).toBe(true)
-      expect(stop.stopped).toBe(1)
-      expect(stop.stoppedPtyIds).toEqual([options.expectedPtyId])
+      const diagnostic: Record<string, unknown> = {
+        expectedPtyId: options.expectedPtyId,
+        expectedHostId: options.original.executionHostId ?? null,
+        expectedLeafId: options.original.leafId,
+        elapsedMs: Date.now() - stopStartedAt,
+        stop
+      }
+      let parked = stop.postStopVerified === true
+      if (stop.postStopVerified === false) {
+        const inventory = await readFreshTerminalInventory(() =>
+          callRuntime<RuntimeTerminalListResult>(page, environmentId, 'terminal.list', {
+            requireFreshPtyLiveness: true
+          })
+        ).catch((error: unknown) => ({ error: String(error) }))
+        const surface = await hostSurfaceStatus(
+          page,
+          environmentId,
+          worktreeId,
+          parentTabId,
+          options.original.leafId
+        )
+          .then((status) => ({ parentTabId, leafId: options.original.leafId, status }))
+          .catch((error: unknown) => ({ parentTabId, error: String(error) }))
+        Object.assign(diagnostic, { inventory, surface })
+        parked =
+          stop.postStopFailure === 'terminal_liveness_unavailable' &&
+          inventory !== null &&
+          'terminals' in inventory &&
+          inventory.truncated === false &&
+          inventory.totalCount === inventory.terminals.length &&
+          options.original.executionHostId !== undefined &&
+          inventory.hostScope?.hostIds.includes(options.original.executionHostId) === true &&
+          inventory.hostScope.omittedHostIds.length === 0 &&
+          !inventory.terminals.some((terminal) => terminal.ptyId === options.expectedPtyId) &&
+          options.original.tabId === parentTabId &&
+          'status' in surface &&
+          surface.status === 'pending-handle'
+      }
+      await test
+        .info()
+        .attach('host-terminal-park', {
+          body: JSON.stringify(diagnostic, null, 2),
+          contentType: 'application/json'
+        })
+        .catch((error: unknown) => {
+          diagnostic.attachmentError = String(error)
+        })
+      const evidence = JSON.stringify(diagnostic, null, 2)
+      expect(stop.stopped, evidence).toBe(1)
+      expect(stop.stoppedPtyIds, evidence).toEqual([options.expectedPtyId])
+      expect(parked, evidence).toBe(true)
       return
     }
     // Set mismatch also confirms the no-longer-live PTY is parked when stop verification misses exit.
@@ -224,7 +277,8 @@ async function runMaterializationJourney(
     gate.holdEnd([terminal])
   }, originalHandle)
   await parkHostTerminal(page, environmentId, worktreeId, created.tab.parentTabId, {
-    expectedPtyId: originalTerminal.terminal.ptyId
+    expectedPtyId: originalTerminal.terminal.ptyId,
+    original: originalTerminal.terminal
   })
   // Require an already-parked surface before applying the stale error.
   await expect

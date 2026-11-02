@@ -163,7 +163,7 @@ async function unlinkEnvironmentLocally(
   await policy.retireLocalState(environment.id)
   await closeOrcadManagedTunnel(environment.id)
   const { claims } = requireManagedOrcadInfrastructure()
-  claims.release(deployment.sshTargetId, environment.id)
+  claims.releaseForUserRemoval(deployment.sshTargetId, environment.id)
   clearManagedOrcadUpdateDeferral(environment.id)
   await claims.flush()
   // Clear journals after the fence; stale leftovers are recoverable on later conversion.

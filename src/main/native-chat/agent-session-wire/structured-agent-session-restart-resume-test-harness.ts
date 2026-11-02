@@ -2,15 +2,17 @@ import type {
   AgentJournalApprovalItem,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import type { StructuredAgentSessionCurrentWorkJournal } from './structured-agent-session-current-work'
 import { structuredAgentSessionResumableSet } from './structured-agent-session-restart-resume-set'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export const SESSION = 'session-working-1'
 export const THREAD = 'thread-1'
@@ -143,13 +145,24 @@ export function journal(
   items: AgentJournalRenderItem[],
   submissions: AgentJournalSubmission[] = []
 ) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only snapshot(), submissions(), appendItem() and the provenance reads; a real AgentSessionJournal needs an on-disk SQLite store.
-  return {
-    snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
+  const currentWork: StructuredAgentSessionCurrentWorkJournal = {
+    item: (itemId) => items.find((item) => item.itemId === itemId) ?? null,
+    cursor: () => ({ epoch: EPOCH, sequence: items.length }),
+    visitItems: (visit) => {
+      for (const item of items) {
+        visit(item.itemId, item.sequence, item.body)
+      }
+    },
+    runningTurn: () => runningStructuredAgentSessionTurnItemBySequence(items),
     submissions: () => submissions,
-    appendItem: async () => undefined,
     itemFence: () => undefined,
     wroteBeforeOpen: () => false
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: current-work reads are checked above; the remaining exercised methods use the held fixture, without an on-disk SQLite store.
+  return {
+    ...currentWork,
+    snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
+    appendItem: async () => undefined
   } as never
 }
 

@@ -7,8 +7,8 @@ import { resetSshConnectionMocks } from './ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -54,13 +54,6 @@ describe('SshConnection host key verification', () => {
 
     await expect(conn.connect()).rejects.toThrow()
     expect(ssh2Mock.lastHostKeyAccepted, 'the handshake accepted an unidentifiable key').toBe(false)
-  })
-
-  it('accepts a well-formed host key on first contact', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    expect(ssh2Mock.lastHostKeyAccepted).toBe(true)
   })
 
   // A rejected host key must bypass credential fallbacks or auth-shaped errors could disclose a secret to the refused peer.

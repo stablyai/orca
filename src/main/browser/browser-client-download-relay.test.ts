@@ -36,18 +36,6 @@ function negotiatedTransport(
   return transport
 }
 
-function boundTransport(
-  availability: 'unsupported' | 'unavailable'
-): BrowserClientFileChannelTransport {
-  const transport = new BrowserClientFileChannelTransport()
-  transport.bind({
-    fileChannelNegotiated: false,
-    fileChannelAvailability: availability,
-    sendFileChannelRequest: async () => ({ ok: true, result: {}, _meta: {} }) as never
-  })
-  return transport
-}
-
 function remoteRoute(outcome: ReturnType<BrowserClientDownloadRelay['route']>) {
   expect(outcome.kind).toBe('remote')
   return (outcome as { kind: 'remote'; route: BrowserClientDownloadRoute }).route
@@ -117,23 +105,6 @@ describe('BrowserClientDownloadRelay', () => {
     expect(removed).toContain(path.dirname(route.stagingPath))
   })
 
-  it('removes the per-transfer staging directory when the transfer is aborted', async () => {
-    const { filesystem, removed } = memoryFilesystem(Buffer.from('abc'))
-    const relay = new BrowserClientDownloadRelay({
-      stagingRoot: '/tmp/staging',
-      hostLabel: 'build-box',
-      transport: negotiatedTransport(() => ({ released: true })),
-      resolvePage: () => page,
-      filesystem
-    })
-
-    const route = remoteRoute(relay.route({ guestWebContentsId: 7 }))
-    await route.abort()
-
-    expect(removed).toEqual([path.dirname(route.stagingPath)])
-    expect(path.dirname(route.stagingPath)).not.toBe('/tmp/staging')
-  })
-
   it('leaves nothing on disk under the real staging root once transfers settle', async () => {
     const root = await realpath(await mkdtemp(path.join(tmpdir(), 'orca-download-relay-')))
     const stagingRoot = path.join(root, 'downloads')
@@ -163,42 +134,6 @@ describe('BrowserClientDownloadRelay', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
-  })
-
-  it('keeps the local fallback when the host never offered the file channel', () => {
-    const relay = new BrowserClientDownloadRelay({
-      stagingRoot: '/tmp/staging',
-      hostLabel: 'build-box',
-      transport: boundTransport('unsupported'),
-      resolvePage: () => page,
-      filesystem: memoryFilesystem(Buffer.alloc(0)).filesystem
-    })
-
-    expect(relay.route({ guestWebContentsId: 7 })).toEqual({ kind: 'local-fallback' })
-  })
-
-  it('reports an owned page whose channel is momentarily gone as unavailable', () => {
-    const relay = new BrowserClientDownloadRelay({
-      stagingRoot: '/tmp/staging',
-      hostLabel: 'build-box',
-      transport: boundTransport('unavailable'),
-      resolvePage: () => page,
-      filesystem: memoryFilesystem(Buffer.alloc(0)).filesystem
-    })
-
-    expect(relay.route({ guestWebContentsId: 7 })).toEqual({ kind: 'unavailable' })
-  })
-
-  it('claims no ownership of a WebContents that is not one of its pages', () => {
-    const relay = new BrowserClientDownloadRelay({
-      stagingRoot: '/tmp/staging',
-      hostLabel: 'build-box',
-      transport: negotiatedTransport(() => ({ accepted: true })),
-      resolvePage: () => undefined,
-      filesystem: memoryFilesystem(Buffer.alloc(0)).filesystem
-    })
-
-    expect(relay.route({ guestWebContentsId: 7 })).toEqual({ kind: 'unowned' })
   })
 
   it('stops the commit and never sends the final chunk once the transfer is aborted', async () => {

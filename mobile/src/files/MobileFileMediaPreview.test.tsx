@@ -16,6 +16,7 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles }
 }))
 vi.mock('./MobileMediaPlayback', () => ({ MobileMediaPlayback: 'Player' }))
+vi.mock('./MobilePdfPreview', () => ({ MobilePdfPreview: 'PdfPreview' }))
 vi.mock('./mobile-media-preview-cache', () => ({
   createMobileMediaSink: () => {
     const sink = {

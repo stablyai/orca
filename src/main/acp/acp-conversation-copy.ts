@@ -1,10 +1,10 @@
-import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AiVaultConversationCopy } from '../../shared/ai-vault-resume-preparation'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
@@ -44,15 +44,13 @@ export async function copyAcpConversation(
   let connection: AcpStructuredConnection | null = null
   try {
     signal.throwIfAborted()
-    const assertCopyLaunchArgs = deps.spec.assertCopyLaunchArgs
-    if (assertCopyLaunchArgs) {
-      assertCopyLaunchArgs(
-        await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
-      )
-    }
+    deps.spec.assertCopyLaunchArgs?.(
+      await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
+    )
     signal.throwIfAborted()
     const launch = await waitForPromiseWithSignal(deps.readLaunch(input.identity), signal)
     signal.throwIfAborted()
+    deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
     await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
     signal.throwIfAborted()
     connection = deps.connect(

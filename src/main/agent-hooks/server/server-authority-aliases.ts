@@ -136,6 +136,19 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     }
   }
 
+  /** Undoes the move `ptyId` made out of `physicalPaneKey`: its status and later posts land there again. */
+  returnPaneAuthority(physicalPaneKey: string, ptyId: string): void {
+    const alias = this.legacyPaneKeyAliases.get(physicalPaneKey)
+    if (alias?.ptyId !== ptyId) {
+      return
+    }
+    if (alias.stablePaneKey !== physicalPaneKey) {
+      this.transferPaneAuthority(alias.stablePaneKey, physicalPaneKey, ptyId)
+    }
+    this.legacyPaneKeyAliases.delete(physicalPaneKey)
+    this.notifyPaneKeyAliasPersistenceListener()
+  }
+
   transferPaneAuthority(
     fromPaneKey: string,
     toPaneKey: string,

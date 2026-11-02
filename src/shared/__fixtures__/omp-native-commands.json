@@ -1,0 +1,33 @@
+{
+  "enabled": {
+    "sessionUpdate": "available_commands_update",
+    "availableCommands": [
+      {
+        "name": "compact",
+        "description": "Compact the conversation",
+        "input": {
+          "hint": "[soft|remote|snapcompact] [focus]"
+        }
+      },
+      {
+        "name": "skill:plan",
+        "description": "Write a plan",
+        "input": {
+          "hint": "arguments"
+        }
+      }
+    ]
+  },
+  "disabled": {
+    "sessionUpdate": "available_commands_update",
+    "availableCommands": [
+      {
+        "name": "compact",
+        "description": "Compact the conversation",
+        "input": {
+          "hint": "[soft|remote|snapcompact] [focus]"
+        }
+      }
+    ]
+  }
+}

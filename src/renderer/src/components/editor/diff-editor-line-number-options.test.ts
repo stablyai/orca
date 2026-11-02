@@ -1,25 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  applyDiffEditorLineNumberOptions,
-  buildDiffEditorLineNumberOptions
-} from './diff-editor-line-number-options'
+import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { editor } from 'monaco-editor'
-
-describe('buildDiffEditorLineNumberOptions', () => {
-  it('hides original line numbers in inline mode', () => {
-    expect(buildDiffEditorLineNumberOptions(false)).toEqual({
-      original: 'off',
-      modified: 'on'
-    })
-  })
-
-  it('shows both gutters in side-by-side mode', () => {
-    expect(buildDiffEditorLineNumberOptions(true)).toEqual({
-      original: 'on',
-      modified: 'on'
-    })
-  })
-})
 
 function createMockCodeEditor(initialLineNumbers: editor.LineNumbersType = 'on'): {
   editor: editor.ICodeEditor

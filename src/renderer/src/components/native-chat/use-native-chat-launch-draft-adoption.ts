@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../store'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
-} from './native-chat-launch-draft-resolution'
+} from '../../../../shared/native-chat-launch-draft-resolution'
 
 export function useNativeChatLaunchDraftSignal(args: {
   terminalTabId: string

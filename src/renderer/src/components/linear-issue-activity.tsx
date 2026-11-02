@@ -71,10 +71,20 @@ export function LinearIssueActivity({
           className="size-5"
         />
         <span>
-          {issue.assignee?.displayName ??
-            translate('auto.components.LinearIssueWorkspace.8a33c85e9c', 'Someone')}{' '}
-          {translate('auto.components.LinearIssueWorkspace.fabbd3f974', 'updated the issue ·')}{' '}
-          {formatLinearIssueRelativeTime(issue.updatedAt)}
+          {issue.assignee?.displayName
+            ? translate(
+                'auto.components.LinearIssueWorkspace.namedUserUpdatedIssue',
+                '{{name}} updated the issue · {{time}}',
+                {
+                  name: issue.assignee.displayName,
+                  time: formatLinearIssueRelativeTime(issue.updatedAt)
+                }
+              )
+            : translate(
+                'auto.components.LinearIssueWorkspace.someoneUpdatedIssue',
+                'Someone updated the issue · {{time}}',
+                { time: formatLinearIssueRelativeTime(issue.updatedAt) }
+              )}
         </span>
       </div>
 

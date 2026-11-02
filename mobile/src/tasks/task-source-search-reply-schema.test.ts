@@ -39,8 +39,9 @@ describe('the provider lists require items, and a row requires its labels', () =
 
   it('reads the representative GitLab row whole', () => {
     const row = { ...githubRow, id: 'issue:2', number: 2, title: 'two', state: 'opened' }
-    const parsed = taskGitLabWorkItemListSchema.safeParse({ items: [row] })
-    expect(parsed.success && parsed.data).toMatchObject({ items: [row] })
+    const result = { items: [row], page: 1, perPage: 1, totalCount: 0, totalPages: 2 }
+    const parsed = taskGitLabWorkItemListSchema.safeParse(result)
+    expect(parsed.success && parsed.data).toEqual(result)
   })
 
   it('names a list with no items, which the task screen mapped unguarded', () => {

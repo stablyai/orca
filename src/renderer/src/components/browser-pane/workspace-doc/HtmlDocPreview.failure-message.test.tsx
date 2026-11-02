@@ -4,8 +4,11 @@ import { act } from 'react'
 import type * as WebviewRegistryModule from '../host-guest/webview-registry'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DocPreviewFailure } from '../../../../../shared/doc-preview-scheme'
+
+const confirmExternalLink = async (): Promise<boolean> => false
 
 const GRANT_ID = 'a'.repeat(32)
 const REMINTED_GRANT_ID = 'c'.repeat(32)
@@ -29,11 +32,15 @@ vi.mock('@/lib/doc-preview-grants', () => ({
     root: '/repo/docs',
     entryRelativePath: ENTRY_RELATIVE_PATH
   }),
-  ensureDocPreviewGrant: () => {
+  ensureDocPreviewGrant: (_previewId: string, location: unknown) => {
     grantRuntime.mints += 1
     // Why a fresh id per mint: a re-mint after a reconnect must bind the guest to the new grant.
     const grantId = grantRuntime.mints === 1 ? GRANT_ID : REMINTED_GRANT_ID
-    return Promise.resolve({ grantId, url: `orca-preview://${grantId}/${ENTRY_RELATIVE_PATH}` })
+    return Promise.resolve({
+      grantId,
+      url: `orca-preview://${grantId}/${ENTRY_RELATIVE_PATH}`,
+      location
+    })
   },
   releaseDocPreviewGrant: (previewId: string) => {
     grantRuntime.released.push(previewId)
@@ -88,14 +95,17 @@ async function renderPreview(container: HTMLDivElement, root: Root): Promise<voi
   const { HtmlDocPreview } = await import('./HtmlDocPreview')
   await act(async () => {
     root.render(
-      <TooltipProvider>
-        <HtmlDocPreview
-          previewId="preview-1"
-          filePath="/repo/docs/doc.html"
-          relativePath="docs/doc.html"
-          worktreeId="wt-1"
-        />
-      </TooltipProvider>
+      <ConfirmationDialogContext.Provider value={confirmExternalLink}>
+        <TooltipProvider>
+          <HtmlDocPreview
+            previewId="preview-1"
+            browserWorkspaceId="browser-1"
+            filePath="/repo/docs/doc.html"
+            relativePath="docs/doc.html"
+            worktreeId="wt-1"
+          />
+        </TooltipProvider>
+      </ConfirmationDialogContext.Provider>
     )
   })
   expect(container.querySelector('webview')).not.toBeNull()

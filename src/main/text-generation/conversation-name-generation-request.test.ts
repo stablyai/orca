@@ -1,3 +1,7 @@
+import {
+  sourceShapedKimiOutput,
+  realKimiOccupiedOutput
+} from '../../shared/__fixtures__/kimi-generation-source-shaped'
 import { describe, expect, it, vi } from 'vitest'
 import { createMockDiscoveryChild } from './commit-message-text-generation-test-harness'
 import { generateConversationNameFromContext } from './commit-message-text-generation'
@@ -62,7 +66,7 @@ describe('generateConversationName', () => {
     })
   })
 
-  it('runs in the local generation lane and accepts cancellation', async () => {
+  it.each(['cancel', 'occupied'])('handles a local %s outcome', async (outcome) => {
     const child = createMockDiscoveryChild()
     const spawnAgent = vi.fn(() => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The test child implements every process member the generation lane reads.
@@ -70,16 +74,28 @@ describe('generateConversationName', () => {
     })
     const pending = generateConversationName({
       context: { firstPrompt: 'Fix login' },
-      params: { agentId: 'custom', model: '', customAgentCommand: 'agent' },
+      params:
+        outcome === 'cancel'
+          ? { agentId: 'custom', model: '', customAgentCommand: 'agent' }
+          : { agentId: 'kimi', model: 'default' },
       target: { kind: 'local', cwd: '/repo' },
       spawnAgent
     })
     expect(spawnAgent).toHaveBeenCalledOnce()
+    if (outcome === 'occupied') {
+      child.stdout.emit('data', Buffer.from(realKimiOccupiedOutput))
+      child.emit('close', 4)
+      expect(await pending).toMatchObject({
+        success: false,
+        error: expect.stringMatching(/Kimi.*active.*Stop.*exit.*try again/)
+      })
+      return
+    }
     cancelLocalGeneration('conversation-name', '/repo')
     expect(await pending).toMatchObject({ success: false, canceled: true })
   })
 
-  it('returns a sanitized name from the local generation lane', async () => {
+  it.each(['custom', 'kimi'] as const)('%s local title', async (agentId) => {
     const child = createMockDiscoveryChild()
     const spawnAgent = vi.fn(() => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The test child implements every process member the generation lane reads.
@@ -87,12 +103,23 @@ describe('generateConversationName', () => {
     })
     const pending = generateConversationName({
       context: { firstPrompt: 'Fix login' },
-      params: { agentId: 'custom', model: '', customAgentCommand: 'agent' },
+      params: { agentId, model: agentId === 'kimi' ? 'default' : '', customAgentCommand: 'agent' },
       target: { kind: 'local', cwd: '/repo' },
       spawnAgent
     })
-    child.stdout.emit('data', Buffer.from('Title: "Fix login flow"\n'))
+    child.stdout.emit(
+      'data',
+      Buffer.from(
+        agentId === 'kimi'
+          ? sourceShapedKimiOutput('Title: "Fix login flow"')
+          : 'Title: "Fix login flow"\n'
+      )
+    )
     child.emit('close', 0)
-    expect(await pending).toEqual({ success: true, name: 'Fix login flow', agentLabel: 'agent' })
+    expect(await pending).toEqual({
+      success: true,
+      name: 'Fix login flow',
+      agentLabel: agentId === 'kimi' ? 'Kimi' : 'agent'
+    })
   })
 })

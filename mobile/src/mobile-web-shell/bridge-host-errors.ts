@@ -51,7 +51,11 @@ export const BRIDGE_NATIVE_REFUSAL_CODES = [
   'native_media_permission_denied',
   'native_verb_not_a_stream',
   // A missing capture means dictation ended, whether never started, stopped or disposed with its page.
-  'native_audio_not_capturing'
+  'native_audio_not_capturing',
+  // Android only: no installed app handles application/pdf, so retrying cannot help.
+  'native_pdf_no_viewer',
+  // The workspace's host predates mobile file downloads (files.stat/readChunk).
+  'native_pdf_host_outdated'
 ] as const
 
 export type BridgeNativeRefusalCode = (typeof BRIDGE_NATIVE_REFUSAL_CODES)[number]

@@ -1,16 +1,18 @@
-import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session-host-authority'
+import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session/agent-session-host-authority'
 import {
   agentSessionLedgerRefusal,
   refuseUnlessWriterAdmitted
-} from '../../../shared/agent-session-mutation-envelope'
+} from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError
-} from '../../../shared/agent-session-wire-refusals'
-import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
-import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
-import { commandReceiptScope } from '../agent-session-journal/command-receipt-schema'
-import type { CommandReceipt } from '../agent-session-journal/command-receipt-schema'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionOperationOutcome } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionMutationResult } from '../../../shared/agent-session/agent-session-wire'
+import {
+  commandReceiptScope,
+  type CommandReceipt
+} from '../agent-session-journal/command-receipt-schema'
 import type { ExistingCommandReceipt } from '../agent-session-journal/command-receipt-table'
 import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import {
@@ -19,7 +21,10 @@ import {
 } from './structured-agent-session-mutation-refusals'
 import type { AgentSessionMutationRequest } from './structured-agent-session-mutation-admission'
 import type { MutationCommandReceipt } from './structured-agent-session-mutation-plans'
-import { mutationTurnContext } from './structured-agent-session-mutation-turn-context'
+import {
+  mutationTurnContext,
+  mutationReplayContext
+} from './structured-agent-session-mutation-turn-context'
 import { runCommandReceiptMutation } from './structured-agent-session-command-receipt'
 import {
   agentSessionOperationOutcomeUnknown,
@@ -42,8 +47,7 @@ export async function admitCommandReceiptMutation<TValue>(
       })
     )
   }
-  const record = store.getRecord(envelope.sessionId)
-  if (!record) {
+  if (store.selectWritableRecord(envelope.sessionId).kind === 'missing') {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
   let read
@@ -64,15 +68,19 @@ export async function admitCommandReceiptMutation<TValue>(
   if (read.verdict !== 'absent') {
     return answerCommandReceipt(request, hostFingerprint, read)
   }
-  const prepared = await request.prepareSession?.('admit', record)
+  store.requireWritableRecord(envelope.sessionId)
+  const prepared = await request.prepareSession?.(
+    'admit',
+    store.getConversation(envelope.sessionId)!
+  )
   if (prepared && !prepared.ok) {
     return prepared
   }
   const journal = request.journal()
-  const current = store.getRecord(envelope.sessionId)
-  if (!journal || !current) {
+  if (!journal || store.selectWritableRecord(envelope.sessionId).kind === 'missing') {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
+  const current = store.requireWritableRecord(envelope.sessionId)
   // Journal fences protect conversation writes; provider effects also require the lease.
   const leaseRefusal = plan.conversationWrite ? null : refuseUnlessWriterAdmitted(current.lease)
   if (leaseRefusal) {
@@ -143,7 +151,7 @@ async function answerCommandReceipt<TValue>(
       )
     )
   }
-  const record = request.store.getRecord(envelope.sessionId)
+  const record = request.store.getConversation(envelope.sessionId)
   if (!record) {
     return unknown(request)
   }
@@ -152,11 +160,11 @@ async function answerCommandReceipt<TValue>(
     return prepared
   }
   const journal = request.journal()
-  const current = request.store.getRecord(envelope.sessionId)
+  const current = request.store.getConversation(envelope.sessionId)
   if (!journal || !current) {
     return unknown(request)
   }
-  const context = mutationTurnContext(request, journal, current)
+  const context = mutationReplayContext(request, journal, current)
   const outcome = commandReceiptOutcome(receipt)
   const replay = resolveAgentSessionReplayOutcome({
     operationId: envelope.clientOperationId,

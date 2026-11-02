@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
-import { buildPaletteTabDocument } from './palette-match/tab-document'
-import { PALETTE_QUERY_MAX_TOKENS } from './palette-match/palette-query'
+import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../shared/palette-match/palette-query'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName

@@ -1,7 +1,7 @@
 import { getDefaultSettings } from '../../../shared/constants'
 import { buildPtyHostEnv } from './host-env/assembly'
 import { registerPtyHandlers } from './register-handlers'
-import { createDaemonActiveProviderFixtures } from '../pty-ipc-daemon-provider-fixtures'
+import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { join } from 'node:path'
 import { withFreshOmpLaunch } from '../../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
@@ -11,55 +11,55 @@ import {
   openCodeBuildPtyEnvMock,
   mimoCodeBuildPtyEnvMock,
   piBuildPtyEnvMock
-} from '../pty-ipc-mock-registry'
-import { posixOnlyIt, TEST_MANAGED_ROOT } from '../pty-ipc-test-constants'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
+} from './pty-ipc-mock-registry'
+import { posixOnlyIt, TEST_MANAGED_ROOT } from './pty-ipc-test-constants'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../shared/setup-agent-sequencing'
 
 const consumerConfigHome = join(TEST_MANAGED_ROOT, 'opencode-consumer-config')
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 describe('registerPtyHandlers', () => {
@@ -264,9 +264,9 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'mimo')
 
       expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
-      expect(env.MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
-      expect(env.ORCA_MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
-      expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
     })
     it.each([
       '/usr/local/bin/mimo --prompt hi',
@@ -276,8 +276,8 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, launchCommand)
 
       expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
-      expect(env.MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
-      expect(env.ORCA_MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
     })
     it('uses sequenced startup env as the MiMo launch hint when command is a wrapper', async () => {
       const env = await spawnAndGetEnv(
@@ -289,20 +289,20 @@ describe('registerPtyHandlers', () => {
       )
 
       expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
-      expect(env.MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
-      expect(env.ORCA_MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
     })
     it('does not inject MiMo overlay for non-mimo launches', async () => {
       await spawnAndGetEnv()
 
       expect(mimoCodeBuildPtyEnvMock).not.toHaveBeenCalled()
     })
-    it('restores user MiMo home when agent status hooks are disabled in a nested Orca shell', async () => {
+    it('restores user MiMo config dir when agent status hooks are disabled in a nested Orca shell', async () => {
       const env = await spawnAndGetEnv(
         {
-          MIMOCODE_HOME: '/tmp/parent-orca-mimocode-overlay',
-          ORCA_MIMOCODE_HOME: '/tmp/parent-orca-mimocode-overlay',
-          ORCA_MIMOCODE_SOURCE_HOME: '/tmp/user-mimocode-home'
+          MIMOCODE_CONFIG_DIR: '/tmp/parent-orca-mimocode-overlay',
+          ORCA_MIMOCODE_CONFIG_DIR: '/tmp/parent-orca-mimocode-overlay',
+          ORCA_MIMOCODE_SOURCE_CONFIG_DIR: '/tmp/user-mimocode-config'
         },
         undefined,
         undefined,
@@ -311,9 +311,27 @@ describe('registerPtyHandlers', () => {
       )
 
       expect(mimoCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/user-mimocode-config')
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+    it("leaves MiMo's home alone and drops an older build's MIMOCODE_HOME overlay", async () => {
+      const env = await spawnAndGetEnv(
+        {
+          MIMOCODE_HOME: '/tmp/parent-orca-mimocode-home',
+          ORCA_MIMOCODE_HOME: '/tmp/parent-orca-mimocode-home',
+          ORCA_MIMOCODE_SOURCE_HOME: '/tmp/user-mimocode-home'
+        },
+        undefined,
+        undefined,
+        undefined,
+        'mimo'
+      )
+
       expect(env.MIMOCODE_HOME).toBe('/tmp/user-mimocode-home')
       expect(env.ORCA_MIMOCODE_HOME).toBeUndefined()
       expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
     })
     posixOnlyIt(
       'reproduces issue #1534: GUI-launched Orca mirrors zshrc-only OpenCode config',

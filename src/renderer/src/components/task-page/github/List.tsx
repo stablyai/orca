@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import {
@@ -7,7 +7,7 @@ import {
   GITHUB_TASK_STICKY_TITLE_HEADER_CLASS,
   GITHUB_TASK_STICKY_ID_CELL_CLASS,
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { LoaderCircle } from 'lucide-react'
@@ -136,9 +136,15 @@ export function TaskPageGitHubList({
         {!tasksError && !githubUnavailable && failedCount > 0 ? (
           // Why: per-repo partial-failure signal, distinct from a hard IPC reject (tasksError); the two are mutually exclusive.
           <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-            {failedCount} {translate('auto.components.TaskPage.7762f4b03a', 'of')}{' '}
-            {selectedRepos.length}{' '}
-            {translate('auto.components.TaskPage.d1766fd62d', 'projects failed to load')}
+            {translate(
+              'auto.components.TaskPage.projectsFailedToLoad',
+              '{{failed}} of {{count}} projects failed to load',
+              {
+                failed: failedCount,
+                count: selectedRepos.length,
+                defaultValue_one: '{{failed}} of {{count}} project failed to load'
+              }
+            )}
           </div>
         ) : null}
 

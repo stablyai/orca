@@ -39,7 +39,10 @@ export class RelayProviderHookNormalization {
       lastToolByPaneKey: state.lastToolByPaneKey,
       lastStatusByPaneKey: state.lastStatusByPaneKey
     }
-    const event = normalizeHookPayload(view, source, body, env, options)
+    const event = normalizeHookPayload(view, source, body, env, {
+      ...options,
+      bindingStatusByPaneKey: canonical.lastStatusByPaneKey
+    })
     if (event) {
       const providerState = state
       cacheRelayLegacyAgentStatus(state, event, MAX_CACHED_PANES, (paneKey) =>

@@ -3,7 +3,8 @@
 
 import { AGENT_LAUNCH_SURFACES } from '../agent-launch-surface'
 import { z } from 'zod'
-import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
+import { isAgentSessionOptions } from '../agent-session/lifecycle/agent-session-record'
+import { parseAgentSessionOperationTimestamp } from '../agent-session/agent-session-host-authority'
 import { parsePaneKey } from '../stable-pane-id'
 import { isValidHostTerminalTabId } from '../terminal-tab-id'
 import { isTuiAgent } from '../tui-agent-config'
@@ -13,7 +14,7 @@ import { FolderWorkspaceCreate } from './folder-workspace-params'
 import { LaunchSourceParam } from './launch-source-param'
 import { TerminalTabIdParam } from './agent-session-params'
 import { SessionId } from './structured-agent-session-params'
-import { isStructuredAgentSessionIdFor } from '../structured-agent-session-create'
+import { isStructuredAgentSessionIdFor } from '../agent-session/structured-agent-session-create'
 import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
 
 const LaunchAgent = z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown TUI agent' })
@@ -60,6 +61,8 @@ export const AgentLaunchFields = z.object({
     .optional(),
   /** A chat seeds the options it accepts; a terminal launch reads the model, effort and mode. */
   sessionOptions: z.record(z.string(), z.string()).optional(),
+  /** A saved launch choice; absent `sessionOptions`, a terminal applies it as flags too. */
+  chatOptions: z.record(z.string(), z.string()).refine(isAgentSessionOptions).optional(),
   reuseTerminal: z.object({ handle: z.string().min(1, 'Missing terminal handle') }).optional(),
   /** Nullable on purpose: `null` is "no arguments", absent is "use the settings default". */
   agentArgs: z.string().nullable().optional(),

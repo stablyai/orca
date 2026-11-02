@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { readMirroredStorage } from './mirrored-storage-keys'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readMirroredStorage, retainMirroredStorage } from './mirrored-storage-keys'
 import { pageStorageKeysForRoute } from '../mobile-web-shell/page-storage-keys'
 import {
   HOST_SIDEBAR_MAX_WIDTH,
@@ -399,10 +399,16 @@ describe('terminal autocomplete preference', () => {
 })
 
 describe('terminal keyboard resize preference', () => {
+  let releaseMirror: () => void
   beforeEach(() => {
+    releaseMirror = retainMirroredStorage(
+      pageStorageKeysForRoute('host-1', '/h/host-1/session/wt-1')
+    )
+    stored.clear()
     vi.mocked(AsyncStorage.getItem).mockReset()
     vi.mocked(AsyncStorage.setItem).mockReset()
   })
+  afterEach(() => releaseMirror())
 
   it('defaults to disabled when unset or unreadable', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)

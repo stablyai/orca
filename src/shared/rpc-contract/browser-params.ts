@@ -44,14 +44,6 @@ export const Scroll = BrowserTarget.extend({
     .optional()
 })
 
-export const Screenshot = BrowserTarget.extend({
-  format: z
-    .unknown()
-    .transform((v) => (v === 'png' || v === 'jpeg' ? v : undefined))
-    .pipe(z.union([z.enum(['png', 'jpeg']), z.undefined()]))
-    .optional()
-})
-
 export const Screencast = BrowserTarget.extend({
   format: z
     .unknown()
@@ -128,6 +120,10 @@ export const TabProfileClone = BrowserTarget.extend({
 })
 
 export const ProfileDelete = z.object({ profileId: requiredString('Missing required --profile') })
+
+export const ProfileClearGoogleCookies = ProfileDelete.extend({
+  executorRuntimeId: z.string().min(1)
+})
 
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),

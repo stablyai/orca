@@ -633,6 +633,7 @@ async function connectAgain(): Promise<void> {
       if (head?.phase === 'destination-committed') {
         await retainOrcadMigrationSource(userDataPath, head.migrationId, store, now)
       }
+      return 0
     }
   })
 }

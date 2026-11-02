@@ -82,7 +82,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       isDestroyed: () => false,
       send: vi.fn(),
       removeListener: vi.fn(),
-      once: vi.fn((event: string, callback: () => void) => {
+      on: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
         }
@@ -155,7 +155,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       isDestroyed: () => false,
       send: vi.fn(),
       removeListener: vi.fn(),
-      once: vi.fn((event: string, callback: () => void) => {
+      on: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
         }
@@ -176,7 +176,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     await watchPromise
 
     expect(unsubscribeMock).toHaveBeenCalledTimes(1)
-    expect(sender.once).toHaveBeenCalledWith('destroyed', expect.any(Function))
+    expect(sender.on).toHaveBeenCalledWith('destroyed', expect.any(Function))
   })
 
   it('dedupes concurrent local watcher opens for the same root', async () => {
@@ -228,8 +228,8 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       await Promise.allSettled([watchOne, watchTwo])
     }
 
-    expect(senderOne.once).toHaveBeenCalledWith('destroyed', expect.any(Function))
-    expect(senderTwo.once).toHaveBeenCalledWith('destroyed', expect.any(Function))
+    expect(senderOne.on).toHaveBeenCalledWith('destroyed', expect.any(Function))
+    expect(senderTwo.on).toHaveBeenCalledWith('destroyed', expect.any(Function))
   })
 
   it('keeps a single grace teardown timer for duplicate local unwatch calls', async () => {
@@ -251,18 +251,6 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('closes a live local watcher immediately for worktree deletion', async () => {
-    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
-    const unsubscribeMock = vi.fn()
-    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
-    const sender = createWatcherSender(1)
-
-    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
-    await closeLocalWatcherForWorktreePath('/tmp/repo')
-
-    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -341,7 +329,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       isDestroyed: () => false,
       send: vi.fn(),
       removeListener: vi.fn(),
-      once: vi.fn((event: string, callback: () => void) => {
+      on: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
         }
@@ -383,7 +371,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       isDestroyed: () => false,
       send: vi.fn(),
       removeListener: vi.fn(),
-      once: vi.fn((event: string, callback: () => void) => {
+      on: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
         }
@@ -511,15 +499,15 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       { sender },
       { worktreePath: '/tmp/repo' }
     ) as Promise<unknown>
+    let watchSettled = false
+    void watchPromise.then(() => {
+      watchSettled = true
+    })
     // Unwatch must settle before the native subscribe crawl finishes.
-    const watchSettledEarly = await Promise.race([
-      watchPromise.then(() => true),
-      new Promise<false>((resolve) => setTimeout(() => resolve(false), 20))
-    ])
+    await vi.waitFor(() => expect(watchSettled).toBe(true))
     resolveSubscribe({ unsubscribe: unsubscribeMock })
     await Promise.all([watchPromise, unwatchPromise])
 
-    expect(watchSettledEarly).toBe(true)
     expect(unsubscribeMock).toHaveBeenCalledTimes(1)
   })
 
@@ -702,7 +690,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       isDestroyed: () => false,
       send: vi.fn(),
       removeListener: vi.fn(),
-      once: vi.fn((event: string, callback: () => void) => {
+      on: vi.fn((event: string, callback: () => void) => {
         if (event === 'destroyed') {
           destroyedCallbacks.push(callback)
         }

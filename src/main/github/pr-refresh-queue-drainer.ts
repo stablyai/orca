@@ -18,6 +18,8 @@ import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { outsideWslUserAct } from '../wsl/wsl-user-act-scope'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
 
@@ -47,7 +49,8 @@ export class PRRefreshQueueDrainer {
     }
     this.timer = setTimeout(() => {
       this.timer = null
-      void this.drain()
+      // The drain serves every queued repo; a scheduling call inside a WSL user act must not lend it that act.
+      void outsideWslUserAct(() => this.drain())
     }, delay)
   }
 
@@ -180,7 +183,14 @@ export class PRRefreshQueueDrainer {
         }
         if (
           !(this.registrationCheck?.(next.candidate) ?? true) ||
-          (next.reason === 'visible' && !this.visibility.has(next.key))
+          (next.reason === 'visible' && !this.visibility.has(next.key)) ||
+          // E9: gh/Git in a stopped distro's repo boots it; a queued refresh keeps the current status.
+          (isBackground(next.reason) &&
+            wslDistroForPath(next.candidate.repoPath, next.candidate.localGitOptions?.wslDistro) &&
+            (await blockedWslDistroForPath(
+              next.candidate.repoPath,
+              next.candidate.localGitOptions?.wslDistro
+            )))
         ) {
           this.events.broadcast({
             aliases,

@@ -90,6 +90,7 @@ export function useNativeChatTranscriptWindow({
   )
 
   const scaledGapPx = NATIVE_CHAT_ROW_GAP_PX * typography.spacingScale
+  // Keep offscreen sizes as estimates through reflows; ResizeObserver refreshes mounted rows.
   const virtualizer = useVirtualizer({
     count: slots.length,
     getScrollElement: () => scrollRef.current,
@@ -138,7 +139,12 @@ export function useNativeChatTranscriptWindow({
       setScrollMargin((current) => (current === offset ? current : offset))
     }
   }, [scrollRef])
-  useLayoutEffect(readScrollMargin)
+  // A hidden pane is display:none: its offset walk would only force layout on every retained chat's render.
+  useLayoutEffect(() => {
+    if (isVisible) {
+      readScrollMargin()
+    }
+  })
 
   useLayoutEffect(() => {
     const container = scrollRef.current

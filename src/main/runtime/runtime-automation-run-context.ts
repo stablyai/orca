@@ -1,8 +1,13 @@
-import type { Repo } from '../../shared/repo-types'
+import type { AutomationDestination } from '../../shared/automation-owner-precondition'
+import type { RuntimeRepoSelector } from './runtime-repo-selector'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import type { Worktree } from '../../shared/worktree/types'
 import type {
-  RuntimeAutomationCreateInput,
-  RuntimeAutomationUpdateInput
-} from './runtime-automation-controller'
+  AutomationUpdateInput,
+  AutomationCreateInput,
+  AutomationWorkspaceMode
+} from '../../shared/automations-types'
+import type { Repo } from '../../shared/repo-types'
 
 export function assertAutomationRunContextMatchesTarget(
   runContext:
@@ -17,3 +22,35 @@ export function assertAutomationRunContextMatchesTarget(
     throw new Error('Automation project does not match its run context.')
   }
 }
+
+export type RuntimeAutomationTargetResolvers = {
+  showRepo: (selector: RuntimeRepoSelector) => Promise<Repo>
+  showManagedWorktree: (
+    selector: string,
+    hostId?: ExecutionHostId
+  ) => Promise<Pick<Worktree, 'id' | 'repoId' | 'path' | 'hostId'>>
+}
+
+export type RuntimeAutomationCreateInput = Omit<
+  AutomationCreateInput,
+  'projectId' | 'workspaceId' | 'workspaceMode' | 'timezone'
+> & {
+  repo?: string
+  workspace?: string
+  workspaceMode?: AutomationWorkspaceMode
+  timezone?: string
+  destination?: AutomationDestination
+}
+
+export type RuntimeAutomationUpdateInput = Omit<
+  AutomationUpdateInput,
+  'projectId' | 'workspaceId'
+> & {
+  repo?: string
+  workspace?: string
+}
+
+export type RuntimeAutomationTargetInput = Pick<
+  RuntimeAutomationCreateInput,
+  'repo' | 'workspace' | 'workspaceMode' | 'runContext'
+>

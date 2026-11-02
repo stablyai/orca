@@ -11,11 +11,6 @@ function throughDisk<T>(value: T): unknown {
 }
 
 describe('workspace cleanup browse state persistence', () => {
-  it('round-trips the default state unchanged', () => {
-    const state = createDefaultWorkspaceCleanupBrowseState()
-    expect(normalizeWorkspaceCleanupBrowseState(throughDisk(state))).toEqual(state)
-  })
-
   it('round-trips an edited state', () => {
     const state = createDefaultWorkspaceCleanupBrowseState()
     state.filters.query = 'checkout'

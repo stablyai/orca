@@ -4,6 +4,8 @@ import { mcpToolIdentity, type NativeChatMcpIdentity } from './native-chat-tool-
 import { EDIT_TOOL_NAMES } from './native-chat-diff'
 import { isCommandToolName } from './native-chat-tool-activity'
 import { toolInputCommand } from './native-chat-tool-summary'
+import { nativeChatFullCommand } from './native-chat-tool-input-text'
+import { parseOrcaBrowserCommand } from '../../orca-browser-cli-commands'
 
 export type NativeChatToolCategory =
   | 'read'
@@ -13,6 +15,8 @@ export type NativeChatToolCategory =
   | 'unknown'
   | 'fileChange'
   | 'webSearch'
+  /** A shell command that drove Orca's browser through its CLI. */
+  | 'browser'
   | 'mcpToolCall'
   | 'subAgentActivity'
   | 'todoList'
@@ -43,6 +47,7 @@ export const NATIVE_CHAT_TOOL_ICON_NAMES: Record<NativeChatToolCategory, NativeC
   unknown: 'square-terminal',
   fileChange: 'pencil',
   webSearch: 'globe',
+  browser: 'globe',
   mcpToolCall: 'plug',
   subAgentActivity: 'bot',
   todoList: 'list-checks',
@@ -83,11 +88,35 @@ const EDIT_ROW_WORDS = new Set([...EDIT_TOOL_NAMES].map((name) => name.toLowerCa
  *  tool, so only the prefix identifies one. */
 const MCP_TOOL_PREFIX = 'mcp__'
 
+export type NativeChatToolCategoryCall = {
+  name: string
+  mcpIdentity?: NativeChatMcpIdentity
+  input?: unknown
+}
+
+// A run's header, icon and rows all classify the same call on every render; parse it once.
+const browserCommandByInput = new WeakMap<object, boolean>()
+
+function runsOrcaBrowserCommand(input: unknown): boolean {
+  const cached =
+    input !== null && typeof input === 'object' ? browserCommandByInput.get(input) : undefined
+  if (cached !== undefined) {
+    return cached
+  }
+  const command = nativeChatFullCommand(input)
+  const runs = command !== null && parseOrcaBrowserCommand(command) !== null
+  if (input !== null && typeof input === 'object') {
+    browserCommandByInput.set(input, runs)
+  }
+  return runs
+}
+
 /** The category a row word names, or null when the lane emitted something this
- *  vocabulary doesn't model yet. */
+ *  vocabulary doesn't model yet. A command tool's input can narrow it to `browser`. */
 export function nativeChatToolCategory(
   rowWord: string,
-  mcpIdentity?: NativeChatMcpIdentity
+  mcpIdentity?: NativeChatMcpIdentity,
+  input?: unknown
 ): NativeChatToolCategory | null {
   const word = rowWord.trim().toLowerCase()
   if (word.startsWith(MCP_TOOL_PREFIX) || mcpToolIdentity(rowWord, mcpIdentity) !== null) {
@@ -95,7 +124,7 @@ export function nativeChatToolCategory(
   }
   // Commands can carry patches without applying them; command identity takes precedence over edit vocabulary.
   if (isCommandToolName(word)) {
-    return 'unknown'
+    return runsOrcaBrowserCommand(input) ? 'browser' : 'unknown'
   }
   return CATEGORY_BY_ROW_WORD.get(word) ?? (EDIT_ROW_WORDS.has(word) ? 'fileChange' : null)
 }
@@ -103,18 +132,19 @@ export function nativeChatToolCategory(
 /** Unknown words retain generic aligned glyphs; reserve terminal claims for calls proven to run commands. */
 export function nativeChatToolIconName(
   rowWord: string,
-  mcpIdentity?: NativeChatMcpIdentity
+  mcpIdentity?: NativeChatMcpIdentity,
+  input?: unknown
 ): NativeChatToolIconName {
-  return NATIVE_CHAT_TOOL_ICON_NAMES[nativeChatToolCategory(rowWord, mcpIdentity) ?? 'other']
+  return NATIVE_CHAT_TOOL_ICON_NAMES[nativeChatToolCategory(rowWord, mcpIdentity, input) ?? 'other']
 }
 
 /** Use a category only when every call shares it; mixed/empty runs return null. */
 export function nativeChatToolRunCategory(
-  calls: readonly { name: string; mcpIdentity?: NativeChatMcpIdentity }[]
+  calls: readonly NativeChatToolCategoryCall[]
 ): NativeChatToolCategory | null {
   let shared: NativeChatToolCategory | null = null
   for (const call of calls) {
-    const category = nativeChatToolCategory(call.name, call.mcpIdentity) ?? 'other'
+    const category = nativeChatToolCategory(call.name, call.mcpIdentity, call.input) ?? 'other'
     if (shared !== null && shared !== category) {
       return null
     }
@@ -125,7 +155,7 @@ export function nativeChatToolRunCategory(
 
 /** Shared-category glyph, generic for mixed runs, or null for empty headers. */
 export function nativeChatToolRunIconName(
-  calls: readonly { name: string; mcpIdentity?: NativeChatMcpIdentity }[]
+  calls: readonly NativeChatToolCategoryCall[]
 ): NativeChatToolIconName | null {
   if (calls.length === 0) {
     return null

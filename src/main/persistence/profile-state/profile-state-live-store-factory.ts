@@ -4,17 +4,15 @@ import {
   type ProfileStateStoreFactoryOptions,
   type ProfileStateStoreFactoryResult
 } from './profile-state-store-factory'
-import { ProfileStateWorkerAuthority } from './profile-state-worker-authority'
+import {
+  ProfileStateWorkerAuthority,
+  type ProfileStateWorkerAuthorityOptions
+} from './profile-state-worker-authority'
 
 /** Publish state only after a worker owns its exact bootstrap revision. */
 export async function createLiveProfileStateStore(
   options: ProfileStateStoreFactoryOptions,
-  workerOptions: {
-    workerPath?: string
-    backupWorkerPath?: string
-    onFailure?: (error: Error) => void
-    onSaveDelayChanged?: (delayed: boolean) => void
-  } = {}
+  workerOptions: ProfileStateWorkerAuthorityOptions = {}
 ): Promise<ProfileStateStoreFactoryResult> {
   const { initialState: initial, ...prepared } = prepareProfileStateStore(options)
 

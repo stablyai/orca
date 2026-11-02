@@ -1,3 +1,4 @@
+import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { expect, it, vi } from 'vitest'
 import type {
   StructuredAgentSessionProviderOpen,
@@ -10,7 +11,7 @@ import {
   envelope,
   hostTestState
 } from './structured-agent-session-host-test-harness'
-import { hostTestMessage } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
 
 const OPENED: StructuredAgentSessionProviderOpenResult = {
   reportedOptions: { model: 'gpt-test' }
@@ -55,4 +56,25 @@ it('cancels the open on quit after a second client attach is refused', async () 
     pending.resolve(OPENED)
     await ended
   }
+})
+
+it('journals a typed writer refusal and cleans up the real starting child', async () => {
+  const { host, open, close, dispatch, pending, send } = awaitOpen()
+  await attach()
+  await send('continue C')
+  await vi.waitFor(() => expect(open).toHaveBeenCalledOnce())
+  pending.reject(
+    new AgentSessionAcquisitionRefusal(
+      'thread C already has an active writer',
+      'conversationOpenElsewhere'
+    )
+  )
+  await vi.waitFor(async () => {
+    const snapshot = await host.journalSnapshot(HOST_TEST_SESSION)
+    expect(
+      snapshot.submissions.some((entry) => entry.rejection?.kind === 'conversationOpenElsewhere')
+    ).toBe(true)
+  })
+  expect(close).toHaveBeenCalledOnce()
+  expect(dispatch).not.toHaveBeenCalled()
 })

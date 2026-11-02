@@ -1,3 +1,7 @@
+import {
+  applyTerminalLaunchResult,
+  captureTerminalLaunchContext
+} from './terminal-launch-result-policy'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
 import {
   POST_REPLAY_MODE_RESET,
@@ -125,7 +129,10 @@ export function createReattachPayloadHandlers(
       if (modelSnapshot) {
         // Scan/reset needs composed snapshot bytes; actual writes use alt-screen choreography to preserve scrollback.
         const modelData = `${modelSnapshot.scrollbackAnsi ?? ''}${modelSnapshot.data}`
-        session.rememberReattachPayloadAgentSignal(modelData, { fullScreenReplay: true })
+        session.rememberReattachPayloadAgentSignal(modelData, {
+          fullScreenReplay: true,
+          imageTitle: modelSnapshot.lastTitle
+        })
         const modelCols = modelSnapshot.cols
         const modelRows = modelSnapshot.rows
         if (
@@ -160,7 +167,8 @@ export function createReattachPayloadHandlers(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
             modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
-            modelSnapshot.terminalOwner
+            modelSnapshot.terminalOwner,
+            modelSnapshot.lastTitle
           )
         )
         if (modelSnapshot.pendingEscapeTailAnsi) {
@@ -187,10 +195,7 @@ export function createReattachPayloadHandlers(
           `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
         )
         // Replay Kitty pushes with set semantics to avoid stack growth; fresh mirrors stay unproven for negotiations predating replay.
-        if (!session.kittyKeyboardModes.hasProvenBaseline) {
-          session.kittyKeyboardModes.resetForSnapshot()
-        }
-        session.kittyKeyboardModes.scanReplay(ctx.connectResult.replay)
+        session.kittyKeyboardModes.adoptSnapshot(ctx.connectResult.replay, undefined)
         session.writeReplayData(
           `${ctx.connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${ctx.connectResult.replay}`
         )
@@ -249,18 +254,37 @@ export function createReattachPayloadHandlers(
       session.writeReplayData(
         `${RESET_GRAPHIC_RENDITION}${ctx.connectResult.coldRestore.scrollback}`
       )
-      // Why: main started the pane and its agent; the window only paints it.
-      const preparedStartup = mainStartsPane(session)
-        ? null
-        : (ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup())
-      const didPrepareResume = session.applyColdRestoreAgentResumeStartup(preparedStartup)
-      if (didPrepareResume) {
-        if (ctx.connectResult.agentResumeUnavailable) {
-          // Dropped resume argv starts a new session; the restored banner must not claim the old session returned.
-          session.showSessionRestoredBanner('resume-unavailable')
-        } else if (preparedStartup?.hasSleepingRecord) {
-          session.showSessionRestoredBanner()
+      // An existing owner permits history replay, not another saved continuation.
+      let resumeUnavailable = Boolean(ctx.connectResult.agentResumeUnavailable)
+      let preparedStartup =
+        mainStartsPane(session) ||
+        ctx.connectResult.isReattach === true ||
+        ctx.connectResult.agentResumeRefused ||
+        resumeUnavailable
+          ? null
+          : (ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup())
+      if (preparedStartup && !ctx.coldRestoreStartup) {
+        const rejected = applyTerminalLaunchResult(
+          session,
+          ctx.connectResult,
+          captureTerminalLaunchContext(session, preparedStartup),
+          'candidate'
+        )
+        if (rejected) {
+          resumeUnavailable = true
+          preparedStartup = null
         }
+      }
+      const didPrepareResume =
+        ctx.connectResult.isReattach !== true &&
+        session.applyColdRestoreAgentResumeStartup(preparedStartup)
+      if (resumeUnavailable) {
+        // Dropped resume argv starts a new session; the restored banner must not claim the old session returned.
+        session.showSessionRestoredBanner('resume-unavailable')
+      } else if (didPrepareResume && preparedStartup?.hasSleepingRecord) {
+        session.showSessionRestoredBanner()
+      }
+      if (didPrepareResume) {
         session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.

@@ -20,7 +20,7 @@ import {
   ORCA_DISPATCH_PROMPT_LEAD_LINE,
   ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
 } from './orca-dispatch-status-prompt'
-import { parseAskFromStatus } from './native-chat-ask'
+import { parseAskFromStatus } from './native-chat/input/native-chat-ask'
 
 afterEach(() => {
   vi.restoreAllMocks()

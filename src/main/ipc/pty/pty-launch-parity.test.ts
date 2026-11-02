@@ -4,8 +4,8 @@ import { WorktreeTerminalMutationLock } from '../../runtime/worktree-terminal-mu
 import * as teamsPlan from '../../runtime/terminal/launch/agent-teams-launch-plan'
 import { SessionNotFoundError } from '../../daemon/daemon-errors'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
-import { classifyErrorMock, statSyncMock, trackMock } from '../pty-ipc-mock-registry'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { classifyErrorMock, statSyncMock, trackMock } from './pty-ipc-mock-registry'
 import {
   providerFacts,
   recordOf,
@@ -14,7 +14,7 @@ import {
   startParityLanes,
   type ParityLanes,
   spawnBoth
-} from '../pty-launch-parity.test-fixture'
+} from './pty-launch-parity.test-fixture'
 import {
   POSIX_PATH,
   WIN_PATH,
@@ -33,7 +33,7 @@ import {
   HOST_LEAF_ID,
   HOST_TAB_ID,
   type HostLaunchCase
-} from '../pty-launch-parity-host.test-cases'
+} from './pty-launch-parity-host.test-cases'
 import { WINDOW_LANE_CASES } from './pty-launch-parity-window.test-cases'
 import { isHiddenRendererPty } from './delivery/pty-hidden-delivery-gate'
 import { ptySizes } from './delivery/visibility-state'
@@ -43,7 +43,7 @@ import {
   paneSpawnReservationsByOwnerKey
 } from './pane/spawn-reservation'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { CALLER_LAUNCH_CASES, OPENCODE_MODEL } from '../pty-launch-parity-caller.test-cases'
+import { CALLER_LAUNCH_CASES } from './pty-launch-parity-caller.test-cases'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../../runtime/rpc/rpc-caller-identity'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../desktop-renderer-runtime-capabilities'
@@ -51,66 +51,65 @@ import { TERMINAL_LIFECYCLE_METHODS } from '../../runtime/rpc/methods/terminal/t
 import { AGENT_SESSION_METHODS } from '../../runtime/rpc/methods/agent-session'
 import { applyManagedDataAccountEnvironment } from '../../managed-data-accounts/launch-environment'
 import { probeOpenCodeLaunchCapabilities } from '../../opencode/opencode-launch-capabilities'
-import {
-  probeOpenCodeModelAvailability,
-  resolveOpenCodeDirectModelExecutable
-} from '../../opencode/opencode-model-availability'
+import { resolveOpenCodeDirectModelExecutable } from '../../opencode/opencode-model-executable'
 import { probeOpenCodeLaunchModelContext } from '../../opencode/opencode-launch-model-context'
 import { readOpenSshDefaultShell } from '../../../shared/openssh-default-shell'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('node:fs/promises', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 // Model an OpenCode v2 install with the selected model without running its binary.
 vi.mock('../../managed-data-accounts/launch-environment', () => ({
   applyManagedDataAccountEnvironment: vi.fn()
 }))
+vi.mock('../../managed-data-accounts/service', () => ({
+  getManagedDataAccountService: () => ({ transcriptEnvironments: () => [] })
+}))
 vi.mock('../../opencode/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: vi.fn()
 }))
-vi.mock('../../opencode/opencode-model-availability', () => ({
-  resolveOpenCodeDirectModelExecutable: vi.fn(),
-  probeOpenCodeModelAvailability: vi.fn()
+vi.mock('../../opencode/opencode-model-executable', () => ({
+  resolveOpenCodeDirectModelExecutable: vi.fn()
 }))
 vi.mock('../../opencode/opencode-launch-model-context', () => ({
   probeOpenCodeLaunchModelContext: vi.fn()
@@ -125,11 +124,16 @@ vi.mock('../../antigravity/native-account-launch', () => ({
   prepareAntigravityAccountForLaunch: vi.fn(async () => {})
 }))
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 // Only managed Windows SSH-host cases supply OpenSSH DefaultShell.
 vi.mock('../../../shared/openssh-default-shell', () => ({
   readOpenSshDefaultShell: vi.fn(() => '')
+}))
+// Fake-win32 runs have no wsl.exe: the distro runs, so main's background-start hold passes (E9).
+vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
 }))
 
 // Exercise real window-lane spawning through provider, telemetry and pane binding.
@@ -176,19 +180,9 @@ function stubOpenCodeV2(): void {
   vi.mocked(probeOpenCodeLaunchCapabilities)
     .mockReset()
     .mockResolvedValue({ version: '2.0.16', pluginApi: 'v2', promptMode: 'prefill' })
-  vi.mocked(probeOpenCodeModelAvailability).mockReset().mockResolvedValue(true)
   vi.mocked(probeOpenCodeLaunchModelContext)
     .mockReset()
-    .mockResolvedValueOnce({
-      primaryAgent: 'build',
-      availableModels: [OPENCODE_MODEL],
-      primaryModel: 'opencode/big-pickle'
-    })
-    .mockResolvedValue({
-      primaryAgent: 'build',
-      availableModels: [OPENCODE_MODEL],
-      primaryModel: OPENCODE_MODEL
-    })
+    .mockResolvedValue({ primaryAgent: 'build' })
 }
 
 async function runHostCall(lanes: ParityLanes, c: HostLaunchCase): Promise<unknown> {
@@ -284,9 +278,9 @@ describe('launch facts outside the tables', () => {
         const paneKey = makePaneKey(pane.tabId, pane.leafId)
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exposes the existing selector; empty-inventory Sleep needs only this local workspace identity.
         const selecting = lanes.runtime as unknown as {
-          resolveWorktreeSelector: () => Promise<{ id: string }>
+          resolveGitWorktreeSelector: () => Promise<{ id: string }>
         }
-        vi.spyOn(selecting, 'resolveWorktreeSelector').mockResolvedValue({ id: pane.worktreeId })
+        vi.spyOn(selecting, 'resolveGitWorktreeSelector').mockResolvedValue({ id: pane.worktreeId })
         const events: string[] = []
         const releases: ReturnType<typeof vi.fn<() => void>>[] = []
         const finishes: ReturnType<typeof vi.fn<() => void>>[] = []
@@ -778,33 +772,35 @@ describe('spawn preflight: where the lanes differ today', () => {
     )
   })
 
-  it.each([
-    {
-      name: 'a folder containing a WSL-project repo',
-      workspace: {
-        kind: 'folder',
-        path: String.raw`C:\Users\alice`,
-        repoPath: WIN_PATH,
-        projectRuntime: WSL_UBUNTU
-      } satisfies LaunchWorkspace,
-      host: { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
-    },
-    {
-      name: 'a \\wsl$ repo with no saved runtime',
-      workspace: { kind: 'repo', path: WSL_PATH } satisfies LaunchWorkspace,
-      // The distro comes from the path, but the shell stays the settings' PowerShell.
-      host: { shellOverride: 'powershell.exe', terminalWindowsWslDistro: 'Ubuntu' }
-    }
-  ])('Windows plain terminal, $name: the window uses the sent runtime', async (c) => {
+  it('Windows folder plain terminal: both lanes use its saved local project runtime', async () => {
     setMainPlatform('win32')
-    const lanes = startParityLanes(suite, { workspace: c.workspace })
-    const facts = await spawnBoth(lanes, c.workspace, { projectRuntime: WSL_PROJECT_SENT })
+    const workspace = {
+      kind: 'folder',
+      path: String.raw`C:\Users\alice`,
+      repoPath: WIN_PATH,
+      projectRuntime: WSL_UBUNTU
+    } satisfies LaunchWorkspace
+    const lanes = startParityLanes(suite, { workspace })
+    const facts = await spawnBoth(lanes, workspace, { projectRuntime: WSL_PROJECT_SENT })
+    const expected = { shellOverride: 'wsl.exe', terminalWindowsWslDistro: 'Ubuntu' }
+    expect(facts.window).toMatchObject(expected)
+    expect(facts.host).toMatchObject(expected)
+  })
 
+  it('Windows plain terminal on a WSL share: only the window has a sent runtime', async () => {
+    setMainPlatform('win32')
+    const workspace = { kind: 'repo', path: WSL_PATH } satisfies LaunchWorkspace
+    const lanes = startParityLanes(suite, { workspace })
+    const facts = await spawnBoth(lanes, workspace, { projectRuntime: WSL_PROJECT_SENT })
     expect(facts.window).toMatchObject({
       shellOverride: 'wsl.exe',
       terminalWindowsWslDistro: 'Ubuntu'
     })
-    expect(facts.host).toMatchObject(c.host)
+    // The distro comes from the path, but the host shell stays the settings' PowerShell.
+    expect(facts.host).toMatchObject({
+      shellOverride: 'powershell.exe',
+      terminalWindowsWslDistro: 'Ubuntu'
+    })
   })
 
   // Managed SSH hosts expose this shell environment; the shared resolver serves both lanes.

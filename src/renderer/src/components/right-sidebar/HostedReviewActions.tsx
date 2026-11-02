@@ -16,6 +16,11 @@ import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { resolveGitHubPRMergeMethods } from '../../../../shared/github/pull-request-merge-methods'
+import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
+import {
+  isGitHubPRStackMergeQueueRequired,
+  resolveGitHubPRStackMergeDecision
+} from '../../../../shared/github/pull-request-stack-merge'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { getDeleteStateForWorktreeHost } from '../sidebar/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
@@ -32,11 +37,9 @@ import {
   RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
-import {
-  getGitHubPRStackMergeBlocker,
-  getGitHubPRStackMergeScope,
-  isGitHubPRStackMergeQueueRequired
-} from './github-pr-stack-merge'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
+import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
 
 export default function HostedReviewActions({
   review,
@@ -51,12 +54,12 @@ export default function HostedReviewActions({
   worktree: Worktree
   onRefreshReview: () => Promise<void>
 }): React.JSX.Element | null {
+  const languageRevision = useUiLanguageRevision()
   const isDeletingWorktree = useAppStore(
     (s) => getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)?.isDeleting ?? false
   )
   const isGitLab = review.provider === 'gitlab'
-  const shortLabel = isGitLab ? 'MR' : 'PR'
-  const reviewLabel = isGitLab ? 'merge request' : 'pull request'
+  const { shortLabel, reviewLabel } = localizedHostedReviewCopy(isGitLab ? 'gitlab' : 'github')
   const stackMergeScope = useMemo(
     () => (githubPR?.stack ? getGitHubPRStackMergeScope(githubPR.stack, review.number) : null),
     [githubPR?.stack, review.number]
@@ -112,12 +115,24 @@ export default function HostedReviewActions({
               'auto.components.right.sidebar.HostedReviewActions.a32fe6dba6',
               'GitHub will merge this pull request and every pull request below it in the stack.'
             )),
-      directMergeAvailable:
-        !stackBlocker &&
-        (stackMergeScope.complete || presentation.directMergeAvailable || stackUsesMergeQueue),
+      directMergeAvailable: resolveGitHubPRStackMergeDecision({
+        stack: githubPR.stack,
+        reviewMergeQueueRequired: review.mergeQueueRequired,
+        stackMergeQueueRequired: githubPR.mergeQueueRequired,
+        directMergeAvailable: presentation.directMergeAvailable
+      }).directMergeAvailable,
       autoMergeAction: null
     }
-  }, [githubPR, isGitLab, review, stackMergeLabel, stackMergeScope, stackUsesMergeQueue])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [
+    githubPR,
+    isGitLab,
+    review,
+    stackMergeLabel,
+    stackMergeScope,
+    stackUsesMergeQueue,
+    languageRevision
+  ])
   const mergeMethods = useMemo(
     () => resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
     [githubPR?.mergeMethodSettings, isGitLab]
@@ -224,7 +239,8 @@ export default function HostedReviewActions({
                               'Working...'
                             )
                         : mergePresentation.directMergeAvailable
-                          ? (stackMergeLabel ?? mergeMethods.defaultLabel)
+                          ? (stackMergeLabel ??
+                            getPullRequestMergeMethodLabel(mergeMethods.defaultMethod))
                           : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
                     </span>
                   </Button>
@@ -278,14 +294,14 @@ export default function HostedReviewActions({
                   </>
                 )}
                 {(!stackMergeScope || !stackUsesMergeQueue) &&
-                  mergeMethods.methods.map(({ method, label }) => (
+                  mergeMethods.methods.map((method) => (
                     <DropdownMenuItem
                       key={method}
                       disabled={directMergeDisabled}
                       onSelect={() => void handleMerge(method)}
                     >
                       <GitMerge className="size-3.5" />
-                      {label}
+                      {getPullRequestMergeMethodLabel(method)}
                     </DropdownMenuItem>
                   ))}
                 <DropdownMenuSeparator />
@@ -296,10 +312,10 @@ export default function HostedReviewActions({
                 >
                   <GitPullRequestClosed className="size-3.5" />
                   {translate(
-                    'auto.components.right.sidebar.HostedReviewActions.4d5fb5a284',
-                    'Close'
-                  )}{' '}
-                  {shortLabel}
+                    'auto.components.right.sidebar.HostedReviewActions.closeReview',
+                    'Close {{review}}',
+                    { review: shortLabel }
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -205,7 +205,9 @@ describe('OpenCode SQLite process retirement', () => {
     signal.abort(new Error('read cancelled'))
     expect(await active).toMatchObject({ message: 'read cancelled' })
     client.dispose()
-    expect(await Promise.all(queued)).toHaveLength(64)
+    for (const error of await Promise.all(queued)) {
+      expect(error).toMatchObject({ message: 'Worker request queue disposed' })
+    }
     await expect(client.parse(args)).rejects.toThrow('disposed')
   })
 
@@ -234,6 +236,40 @@ describe('OpenCode SQLite process retirement', () => {
       ).rejects.toThrow('byte limit')
     } finally {
       noisy.dispose()
+    }
+  })
+
+  // A WSL reader dies with its distro; the client reports that so the respawn re-checks the distro.
+  it('reports an unexpected child exit, but not its own retirement', async () => {
+    const onUnexpectedExit = vi.fn()
+    const dying = createOpenCodeSqliteProcessClient({
+      executable,
+      args: ['-e', 'process.exit(3)'],
+      onUnexpectedExit
+    })
+    try {
+      await dying.list({ dbPaths: [dbPath], limit: 1, issues: [] })
+      await vi.waitFor(() => expect(onUnexpectedExit).toHaveBeenCalled())
+    } finally {
+      dying.dispose()
+    }
+
+    const spawn = vi.spyOn(processRunner, 'spawnProcess')
+    const retiredExit = vi.fn()
+    const healthy = createOpenCodeSqliteProcessClient({
+      executable,
+      args: [entry],
+      onUnexpectedExit: retiredExit
+    })
+    try {
+      await healthy.list({ dbPaths: [dbPath], limit: 1, issues: [] })
+      const child = spawn.mock.results[0]?.value
+      const exited = new Promise((resolve) => child?.once('exit', resolve))
+      healthy.dispose()
+      await exited
+      expect(retiredExit).not.toHaveBeenCalled()
+    } finally {
+      spawn.mockRestore()
     }
   })
 })

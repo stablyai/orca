@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentLaunchCreateParams,
+  agentLaunchExistingParams,
   isAgentLaunchUnsupportedRefusal,
   readAgentLaunchCreateOutcome
 } from './agent-launch-request'
@@ -33,6 +34,23 @@ describe('agentLaunchCreateParams', () => {
         }
       }
     })
+  })
+})
+
+describe('agentLaunchExistingParams', () => {
+  const launch = { agent: 'codex', worktreeId: 'wt-1', operationId: 'op-1' } as const
+
+  it("sends an action's model and effort as session options", () => {
+    expect(
+      agentLaunchExistingParams({
+        ...launch,
+        sessionOptions: { model: 'gpt-5.6-terra', effort: 'high' }
+      }).sessionOptions
+    ).toEqual({ model: 'gpt-5.6-terra', effort: 'high' })
+  })
+
+  it('omits session options when the action saved no model', () => {
+    expect(agentLaunchExistingParams(launch)).not.toHaveProperty('sessionOptions')
   })
 })
 

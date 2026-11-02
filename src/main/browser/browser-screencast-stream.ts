@@ -7,6 +7,10 @@ import { createBrowserScreencastDeviceMetrics } from './browser-screencast-devic
 import { createBrowserScreencastFramePacer } from './browser-screencast-frame-pacer'
 import { createBrowserScreencastSnapshotCapture } from './browser-screencast-snapshot-capture'
 import {
+  answerBrowserJavaScriptDialog,
+  getBrowserJavaScriptDialog
+} from './browser-javascript-dialogs'
+import {
   clampScreencastViewportToGuestView,
   isEmbedderSizedScreencastGuest,
   readScreencastGuestViewSize,
@@ -42,10 +46,6 @@ export async function startBrowserScreencast(
 
   let closed = false
   let stopping = false
-  let dialogOpen = false
-  // Reuse the in-flight answer; a duplicate command could settle the next dialog unseen.
-  let dialogSettlement: Promise<boolean> | null = null
-  let dialogGeneration = 0
   let resolveDone!: () => void
   // Serializes viewport and frame-budget changes against the snapshot capture they trigger.
   let pendingUpdate = Promise.resolve()
@@ -122,11 +122,7 @@ export async function startBrowserScreencast(
       // Reject old-layout crops until queued viewport metrics have landed.
       return appliedEmulationGeneration < emulationGeneration
     },
-    setDialogOpen: (open: boolean) => {
-      dialogOpen = open
-      dialogGeneration += 1
-      dialogSettlement = null
-    }
+    openDialog: () => getBrowserJavaScriptDialog(webContents.id)
   })
 
   const reemulate = (): Promise<void> => {
@@ -159,8 +155,6 @@ export async function startBrowserScreencast(
       return
     }
     closed = true
-    dialogOpen = false
-    dialogSettlement = null
     snapshotCapture.clearNavigationCaptureTimer()
     framePacer.clearPending()
     dbg.removeListener('message', handleMessage as never)
@@ -203,29 +197,6 @@ export async function startBrowserScreencast(
   }
 
   return {
-    settleDialog: (accept: boolean, promptText?: string) => {
-      if (!dialogOpen) {
-        return Promise.resolve(false)
-      }
-      if (dialogSettlement !== null) {
-        return dialogSettlement
-      }
-      const generation = dialogGeneration
-      const settlement = sendDebuggerCommand(dbg, 'Page.handleJavaScriptDialog', {
-        accept,
-        ...(promptText === undefined ? {} : { promptText })
-      })
-        .then(() => true)
-        .catch((error: unknown) => {
-          // A failed answer must not clear a newer dialog's in-flight answer.
-          if (dialogGeneration === generation) {
-            dialogSettlement = null
-          }
-          throw error
-        })
-      dialogSettlement = settlement
-      return settlement
-    },
     updateViewport: (viewport: BrowserScreencastViewport) => {
       if (!closed && !stopping) {
         requestedViewport = { ...viewport }
@@ -258,14 +229,7 @@ export async function startBrowserScreencast(
         void (async () => {
           await pendingUpdate.catch(() => {})
           // Dismiss before releasing this CDP session; a replacement may block while the dialog is open.
-          if (dialogOpen) {
-            dialogOpen = false
-            const pending = dialogSettlement
-            dialogSettlement = null
-            await (
-              pending ?? sendDebuggerCommand(dbg, 'Page.handleJavaScriptDialog', { accept: false })
-            ).catch(() => {})
-          }
+          answerBrowserJavaScriptDialog(webContents.id, { accept: false, promptText: '' })
           await sendDebuggerCommand(dbg, 'Page.stopScreencast').catch(() => {})
           if (deviceMetrics.isOverridden()) {
             await deviceMetrics.clear().catch(() => {})

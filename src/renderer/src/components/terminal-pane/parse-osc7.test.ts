@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { Terminal } from '@xterm/headless'
+import { OSC7_PARSER_AGREEMENT_CASES } from '../../../../shared/osc7-parser-agreement-cases'
 import { parseOsc7 } from './parse-osc7'
 
 describe('parseOsc7', () => {
@@ -41,7 +43,55 @@ describe('parseOsc7', () => {
     expect(parseOsc7('file://host')).toBeNull()
   })
 
-  it('returns null for invalid percent-encoding', () => {
-    expect(parseOsc7('file:///bad%ZZ')).toBeNull()
+  // The daemon's parser follows the same rules (src/shared/osc7-path-text.ts), so both agree.
+  it('keeps a % not followed by two hex digits as a literal %, as nushell sends it', () => {
+    expect(parseOsc7('file:///bad%ZZ')).toBe('/bad%ZZ')
+    expect(parseOsc7('file://Desktop/home/me/100%')).toBe('/home/me/100%')
+    expect(parseOsc7('file://Desktop/home/me/h#a?b')).toBe('/home/me/h#a?b')
   })
+
+  it('returns null for valid hex that is not UTF-8', () => {
+    expect(parseOsc7('file:///tmp/%FF')).toBeNull()
+  })
+
+  it.each(['file:///tmp/%00x', 'file:///tmp/a\u0000b'])('returns null for a NUL: %j', (uri) => {
+    expect(parseOsc7(uri)).toBeNull()
+  })
+
+  it.each([
+    ['file:///tmp/%01x', '/tmp/\u0001x'],
+    ['file:///tmp/%0Ax', '/tmp/\nx'],
+    ['file:///tmp/%1Bx', '/tmp/\u001bx'],
+    ['file:///tmp/%7Fx', '/tmp/\u007fx']
+  ])('keeps other control characters, which folder names may hold: %j', (uri, path) => {
+    expect(parseOsc7(uri)).toBe(path)
+  })
+})
+
+describe('OSC 7 payloads both parsers must agree on (renderer side)', () => {
+  it.each(OSC7_PARSER_AGREEMENT_CASES)('$name, as a payload', ({ uri, folder }) => {
+    expect(parseOsc7(uri)).toBe(folder)
+  })
+
+  // Real traffic: the renderer only sees what xterm's OSC parser delivers.
+  it.each(OSC7_PARSER_AGREEMENT_CASES)(
+    '$name, through xterm',
+    async ({ uri, folder, viaXterm, xtermCancels }) => {
+      const term = new Terminal({ allowProposedApi: true })
+      const payloads: string[] = []
+      term.parser.registerOscHandler(7, (data) => {
+        payloads.push(data)
+        return true
+      })
+      await new Promise<void>((resolve) => term.write(`\x1b]7;${uri}\x07`, resolve))
+      term.dispose()
+      if (xtermCancels) {
+        expect(payloads).toEqual([])
+        return
+      }
+      expect(payloads.map((data) => parseOsc7(data))).toEqual([
+        viaXterm === undefined ? folder : viaXterm
+      ])
+    }
+  )
 })

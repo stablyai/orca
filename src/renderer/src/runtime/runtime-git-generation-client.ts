@@ -1,4 +1,6 @@
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../shared/text-generation-client-timeout'
+import { localizeTextGenerationResult } from '@/lib/text-generation-error-copy'
 import { antigravityGenerationCompatibilityError } from './antigravity-generation-compatibility'
 import {
   getRuntimeCommitMessageSettings,
@@ -20,7 +22,7 @@ export async function generateRuntimeCommitMessage(
 ): Promise<RuntimeGenerateCommitMessageResult> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.generateCommitMessage({
+    const result = await window.api.git.generateCommitMessage({
       worktreePath: resolveLocalWorktreePath(context),
       // Why: the workspace suffix is part of the worktree metadata key.
       ...(context.worktreeId ? { worktreeId: context.worktreeId } : {}),
@@ -31,7 +33,8 @@ export async function generateRuntimeCommitMessage(
         : {}),
       ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
-    }) as Promise<RuntimeGenerateCommitMessageResult>
+    })
+    return localizeTextGenerationResult(result)
   }
   const compatibilityError = await antigravityGenerationCompatibilityError(
     target.environmentId,
@@ -42,7 +45,7 @@ export async function generateRuntimeCommitMessage(
   if (compatibilityError) {
     return { success: false, error: compatibilityError }
   }
-  return callRuntimeRpc<RuntimeGenerateCommitMessageResult>(
+  const result = await callRuntimeRpc<RuntimeGenerateCommitMessageResult>(
     target,
     'git.generateCommitMessage',
     {
@@ -54,8 +57,9 @@ export async function generateRuntimeCommitMessage(
       ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     },
-    { timeoutMs: 75_000 }
+    { timeoutMs: TEXT_GENERATION_CLIENT_TIMEOUT_MS }
   )
+  return localizeTextGenerationResult(result)
 }
 
 export async function discoverRuntimeCommitMessageModels(
@@ -80,7 +84,7 @@ export async function discoverRuntimeCommitMessageModels(
         ? { agentCmdOverrides: context.prefs.agentCmdOverrides }
         : {})
     },
-    { timeoutMs: 75_000 }
+    { timeoutMs: TEXT_GENERATION_CLIENT_TIMEOUT_MS }
   )
 }
 
@@ -110,7 +114,7 @@ export async function generateRuntimePullRequestFields(
 ): Promise<RuntimeGeneratePullRequestFieldsResult> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.generatePullRequestFields({
+    const result = await window.api.git.generatePullRequestFields({
       worktreePath: resolveLocalWorktreePath(context),
       // Why: the workspace suffix is part of the worktree metadata key.
       ...(context.worktreeId ? { worktreeId: context.worktreeId } : {}),
@@ -122,7 +126,8 @@ export async function generateRuntimePullRequestFields(
         : {}),
       ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
-    }) as Promise<RuntimeGeneratePullRequestFieldsResult>
+    })
+    return localizeTextGenerationResult(result)
   }
   const compatibilityError = await antigravityGenerationCompatibilityError(
     target.environmentId,
@@ -133,7 +138,7 @@ export async function generateRuntimePullRequestFields(
   if (compatibilityError) {
     return { success: false, error: compatibilityError }
   }
-  return callRuntimeRpc<RuntimeGeneratePullRequestFieldsResult>(
+  const result = await callRuntimeRpc<RuntimeGeneratePullRequestFieldsResult>(
     target,
     'git.generatePullRequestFields',
     {
@@ -146,8 +151,9 @@ export async function generateRuntimePullRequestFields(
       ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     },
-    { timeoutMs: 75_000 }
+    { timeoutMs: TEXT_GENERATION_CLIENT_TIMEOUT_MS }
   )
+  return localizeTextGenerationResult(result)
 }
 
 export async function cancelRuntimeGeneratePullRequestFields(

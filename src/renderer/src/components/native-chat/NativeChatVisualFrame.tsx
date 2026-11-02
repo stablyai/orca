@@ -8,9 +8,9 @@ import {
   nativeChatVisualThemeMessage,
   readNativeChatVisualFrameMessage,
   readNativeChatVisualPong
-} from '../../../../shared/native-chat-visual-shell'
+} from '../../../../shared/native-chat/native-chat-visual-shell'
 import type { NativeChatVisualDocument } from './native-chat-visual-read-client'
-import { createNativeChatVisualHeightGovernor } from '../../../../shared/native-chat-visual-height-governor'
+import { createNativeChatVisualHeightGovernor } from '../../../../shared/native-chat/native-chat-visual-height-governor'
 import type { ReaderGesture } from './native-chat-autoscroll'
 import { useNativeChatVisualTheme } from './use-native-chat-visual-theme'
 import { useWebviewDragPassthroughActive } from '../browser-pane/host-guest/use-webview-drag-passthrough-active'

@@ -250,6 +250,34 @@ describe('createSystemTray', () => {
     }
   })
 
+  it.each(['win32', 'darwin'] as const)(
+    'offers Quit Completely directly above Quit on %s when a handler is supplied',
+    async (platform) => {
+      setPlatform(platform)
+      const { createSystemTray } = await loadModule()
+      const options = { ...createOptions(), onQuitAndStopAllSessions: vi.fn() }
+
+      createSystemTray(options)
+
+      expect(builtMenuItems().map((item) => item.label)).toEqual(
+        platform === 'darwin'
+          ? [
+              'Open Orca',
+              undefined,
+              'Settings',
+              'Check for Updates...',
+              undefined,
+              'Quit Completely...',
+              'Quit'
+            ]
+          : ['Open Orca', undefined, 'Quit Completely...', 'Quit']
+      )
+      builtMenuItems().at(-2)?.click?.()
+      expect(options.onQuitAndStopAllSessions).toHaveBeenCalledOnce()
+      expect(options.onQuit).not.toHaveBeenCalled()
+    }
+  )
+
   it('does not create a blank macOS item when the template asset fails to load', async () => {
     setPlatform('darwin')
     baseMacImage.getSize.mockReturnValue({ width: 0, height: 0 })
@@ -628,7 +656,7 @@ describe('language changes', () => {
       const { createSystemTray, rebuildSystemTrayMenu } = await loadModule()
       const { setMainUiLanguage } = await import('../i18n/main-i18n')
       await setMainUiLanguage('en')
-      const options = createOptions()
+      const options = { ...createOptions(), onQuitAndStopAllSessions: vi.fn() }
       createSystemTray(options)
       expect(builtMenuItems()[0].label).toBe('Open Orca')
 
@@ -640,10 +668,13 @@ describe('language changes', () => {
       expect(trayInstances).toHaveLength(1)
       expect(trayInstances[0].setContextMenu).toHaveBeenCalledTimes(2)
       expect(builtMenuItems()[0].label).toBe('Orca を開く')
+      expect(builtMenuItems().at(-2)?.label).toBe('完全に終了…')
       expect(builtMenuItems().at(-1)?.label).toBe('終了')
       builtMenuItems()[0].click?.()
+      builtMenuItems().at(-2)?.click?.()
       builtMenuItems().at(-1)?.click?.()
       expect(options.onOpen).toHaveBeenCalledOnce()
+      expect(options.onQuitAndStopAllSessions).toHaveBeenCalledOnce()
       expect(options.onQuit).toHaveBeenCalledOnce()
       if (platform === 'darwin') {
         expect(builtMenuItems()[2].label).toBe('設定')

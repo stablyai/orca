@@ -289,7 +289,3 @@ export function parkBrowserPageViewport(browserPageId: string): void {
     viewport.shell.style.opacity = '0'
   }
 }
-
-export function _getRememberedBrowserPageInsetCountForTests(): number {
-  return browserPageChromeInsetHeights.size
-}

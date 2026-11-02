@@ -1,5 +1,6 @@
 import type { WorktreeSetupLaunch } from '../../../shared/worktree/launch-types'
 import { buildSetupRunnerCommand } from './setup-runner'
+import { translate } from '@/i18n/i18n'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
@@ -37,7 +38,9 @@ export function queueSetupAndIssueCommands(
     if (opts?.activateCreatedTabs !== false && terminalTabId) {
       store.setActiveTab(terminalTabId)
     }
-    store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
+    store.setTabCustomTitle(setupTab.id, translate('worktree.setupTerminalTitle', 'Setup'), {
+      recordInteraction: false
+    })
   }
 
   // Queue issue work independently in its own split so setup and automation run in parallel.

@@ -3,6 +3,7 @@ import { spawnProcess } from '@orca/process-host'
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
+import { hostMallocTunablesDaemonEnv } from '../memory/host-malloc-tunables'
 import {
   appImageDaemonIdentityPath,
   buildAppImageDaemonCommand,
@@ -15,6 +16,9 @@ import {
 } from './daemon-appimage-generation-launch'
 import { daemonLogArgs } from './daemon-launch-paths'
 import { TERMINAL_SPAWN_ADMISSION_ARG } from './terminal-spawn-gate'
+
+// Idle terminal polling churns short-lived strings; uncapped, V8 grows the young generation to 64 MB semispaces (~120 MB resident).
+export const DAEMON_V8_FLAGS = ['--max-semi-space-size=4'] as const
 
 export type DaemonChildSpawnOptions = {
   entryPath: string
@@ -89,6 +93,7 @@ export function spawnDaemonChildProcess(
   const daemonEnv: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
+    ...hostMallocTunablesDaemonEnv(),
     // The detached daemon lacks AppEnvironment; rcfiles must stay outside swept temporary directories.
     ORCA_USER_DATA_PATH: userDataPath
   }
@@ -108,21 +113,24 @@ export function spawnDaemonChildProcess(
       args: scriptArgs,
       // Keep the byte-identical Orca.exe outside the updater's kill zone.
       ...(relocatedExecPath ? { execPath: relocatedExecPath } : {}),
+      execArgv: [...process.execArgv, ...DAEMON_V8_FLAGS],
       env: daemonEnv
     })
   }
   const scopeArgs = useDurableScope ? ['--fresh-daemon-scope'] : []
   const direct = extractedGeneration
-    ? buildAppImageGenerationDaemonCommand(
-        extractedGeneration,
-        [...scriptArgs, ...scopeArgs],
-        daemonEnv
+    ? withDaemonV8Flags(
+        buildAppImageGenerationDaemonCommand(
+          extractedGeneration,
+          [...scriptArgs, ...scopeArgs],
+          daemonEnv
+        )
       )
     : appImage
       ? buildAppImageDaemonCommand(appImage, [...scriptArgs, ...scopeArgs], daemonEnv)
       : {
           command: relocatedExecPath ?? process.execPath,
-          args: [forkEntryPath, ...scriptArgs, ...scopeArgs],
+          args: [...DAEMON_V8_FLAGS, forkEntryPath, ...scriptArgs, ...scopeArgs],
           env: daemonEnv
         }
   const scoped = useDurableScope
@@ -134,4 +142,9 @@ export function spawnDaemonChildProcess(
     args: scoped.args,
     env: scoped.env
   })
+}
+
+// The AppImage `-e` bootstrap path is left alone: AppRun owns that argv shape.
+function withDaemonV8Flags<T extends { args: string[] }>(command: T): T {
+  return { ...command, args: [...DAEMON_V8_FLAGS, ...command.args] }
 }

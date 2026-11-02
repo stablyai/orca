@@ -1,8 +1,6 @@
+import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control-action-selection'
 import { useCallback, useMemo, useState } from 'react'
-import type {
-  SourceControlActionRecipe,
-  SourceControlLaunchActionId
-} from '../../../../../../shared/source-control-ai-actions'
+import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control-ai-actions'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { buildFixCommitFailurePrompt } from './prompts'
 import { summarizeCommitFailure } from '../commit/commit-failure-summary'
@@ -22,7 +20,9 @@ type SourceControlRecoveryAiParams = {
   commitError: string | null
   pushRecoveryPrompt: string | null
   stagedEntries: Pick<GitStatusEntry, 'path' | 'status' | 'area'>[]
-  getLaunchActionRecipe: (actionId: SourceControlLaunchActionId) => SourceControlActionRecipe
+  getLaunchActionRecipe: (
+    actionId: SourceControlLaunchActionId
+  ) => SelectedSourceControlActionRecipe
   getStoreState: () => SourceControlAiStoreSnapshot
 }
 

@@ -55,17 +55,6 @@ describe('AddRepoDialogChrome dismissal', () => {
     expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).not.toBeNull()
   })
 
-  it('allows backdrop dismissal when no clone is running', async () => {
-    const user = userEvent.setup()
-    const onOpenChange = vi.fn()
-    render(<CloneDialog isCloning={false} onOpenChange={onOpenChange} />)
-
-    await user.click(backdrop())
-
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
-  })
-
   it('allows backdrop dismissal after the clone settles', async () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()

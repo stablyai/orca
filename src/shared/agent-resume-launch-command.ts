@@ -1,4 +1,4 @@
-import type { ResumableTuiAgent } from './agent-session-resume'
+import type { ResumableTuiAgent } from './agent-session/lifecycle/agent-session-resume'
 import {
   isPosixStartupShell,
   quoteStartupArg,
@@ -23,7 +23,10 @@ function isClaudeExecutableToken(token: string): boolean {
 }
 
 /** Accept claude only in command position (start, wrapper --, PowerShell &, or POSIX assignments); path-shaped arguments cannot claim execution. */
-function findClaudeExecutableIndex(tokens: readonly string[], shell: AgentStartupShell): number {
+export function findClaudeExecutableIndex(
+  tokens: readonly string[],
+  shell: AgentStartupShell
+): number {
   let commandPosition = true
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]

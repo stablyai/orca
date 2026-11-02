@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS federated_dispatches (
   remote_terminal_handle  TEXT,
   to_home_imported_sequence INTEGER NOT NULL DEFAULT 0,
   to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0,
+  home_auto_release_at    TEXT,
+  home_auto_release_state TEXT,
   created_at              TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -112,6 +114,8 @@ CREATE TABLE IF NOT EXISTS remote_questions (
 CREATE INDEX IF NOT EXISTS idx_remote_questions_dispatch_status
   ON remote_questions(dispatch_id, status);
 
+-- Deletes from tasks, dispatch_contexts and worker tables are recorded in removed_orchestration_work
+-- (removed-orchestration-work-store.ts).
 CREATE TABLE IF NOT EXISTS tasks (
   id            TEXT PRIMARY KEY,
   run_id        TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',
@@ -137,6 +141,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
 
+-- Deletes are recorded in removed_orchestration_work (removed-orchestration-work-store.ts).
 CREATE TABLE IF NOT EXISTS dispatch_contexts (
   id                  TEXT PRIMARY KEY,
   run_id              TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',
@@ -176,7 +181,11 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   dispatched_at       TEXT,
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-  last_heartbeat_at   TEXT
+  last_heartbeat_at   TEXT,
+  -- The settled Dispatch whose worker this one continues (a follow-up sent to it).
+  follow_up_of_dispatch_id TEXT,
+  -- Set when the worker reported with coordinator mail unread; cleared once that mail continues it.
+  follow_up_mail_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);

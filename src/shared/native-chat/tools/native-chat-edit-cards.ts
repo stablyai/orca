@@ -2,7 +2,7 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 import { editFilesFromToolPair, isEditToolName } from './native-chat-edit-normalize'
 import type { NativeChatEditFile, NativeChatEditLine } from './native-chat-edit-model'
 import {

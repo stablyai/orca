@@ -2,6 +2,8 @@
 
 React Native companion app for Orca. Monitor worktrees, view terminal output, and send commands from your phone.
 
+Terminal preferences, including Android keyboard resizing, are documented in the [mobile guide](../docs/site/content/docs/mobile.mdx).
+
 Local development uses two processes:
 
 - Orca desktop/Electron from the repo root. This hosts the mobile WebSocket RPC server on port `6768`.
@@ -169,6 +171,22 @@ The same gate censuses the program first: every `*.test.ts(x)` on disk must be i
 the script's `TESTS_OUTSIDE_PROGRAM` with a reason. Without that, a test excluded from
 `tsconfig.test.json` — or a `Foo.test.tsx` shadowed by a `Foo.test.ts` beside it, which a wildcard
 `include` drops for the higher-priority extension — would leave the ratchet silently.
+
+## Localization
+
+UI copy goes through `src/i18n`, with the same call shape and languages as desktop:
+
+- In components and hooks: `const t = useMobileTranslation()`, then `t('area.thing.label', 'English text')`.
+  The function changes with the language, so list it in memo and callback dependencies.
+- In helpers and imperative code (alerts, notifications): `translate(key, fallback, options)` from
+  `src/i18n/mobile-i18n`, called when the text is shown, never at module scope.
+- Counts: `count === 1 ? t('x.files_one', '{{count}} file', { count }) : t('x.files_other', '{{count}} files', { count })`.
+- Dates and numbers: pass `getUiIntlLocale()` to `Intl` formatters instead of `undefined`.
+- Keep identity separate from display text: never compare or key on a translated string.
+
+Run `pnpm sync:mobile-localization` from the repo root to add new keys to `src/i18n/locales/en.json`;
+other catalogs may lag and fall back to English. `pnpm verify:mobile-localization` and
+`pnpm verify:mobile-localization-coverage` run in CI. iOS permission prompts live in `locales/<lang>.json`.
 
 ## Protocol Version Compatibility
 

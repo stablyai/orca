@@ -2,12 +2,13 @@ import { availableParallelism } from 'node:os'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runProcess, runProcessSync } from '@orca/process-host'
-import { resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
+import { runProcess } from '@orca/process-host'
 import { describeProcessFailure } from './process-failure-message.mjs'
 import { isDirectInvocation } from './script-entry-detection.mjs'
+import { supportsTsrs } from './tsrs-typecheck-compiler.mjs'
 import {
   resolveProjectCompiler,
+  resolveTypecheckBunExecutable,
   runTypecheckProjects,
   selectTypecheckCompiler
 } from './run-typecheck-projects-in-parallel.mjs'
@@ -21,7 +22,7 @@ export async function buildCli({
   check = runTypecheckProjects,
   execute = runProcess,
   compiler = process.env.ORCA_CLI_BUILD_COMPILER ?? 'bun',
-  resolveBunExecutable = (directory) => resolvePinnedBunExecutable(directory, runProcessSync)
+  resolveBunExecutable = resolveTypecheckBunExecutable
 } = {}) {
   if (compiler !== 'bun' && compiler !== 'tsrs') {
     throw new Error(`Invalid ORCA_CLI_BUILD_COMPILER: ${compiler}`)
@@ -50,7 +51,11 @@ export async function buildCli({
     }
     return
   }
-  const selection = selectTypecheckCompiler('bun', { root, resolveBunExecutable })
+  const selection = selectTypecheckCompiler('bun', {
+    root,
+    resolveBunExecutable,
+    fallbackHint: supportsTsrs() ? 'set ORCA_CLI_BUILD_COMPILER=tsrs' : null
+  })
   const failures = await check({
     ...selection,
     root,

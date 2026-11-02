@@ -23,6 +23,7 @@ import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import { attachInlineImages, detachInlineImages } from './pane-inline-images'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 import { cancelPendingTerminalViewportPresents } from './pane-viewport-present'
+import { releaseReplayGuardsForDisposedTerminal } from '@/components/terminal-pane/replay-guard'
 
 export { createPaneDOM } from './pane-dom-creation'
 
@@ -230,5 +231,6 @@ export function disposePane(
   try {
     pane.terminal.dispose()
   } catch {}
+  releaseReplayGuardsForDisposedTerminal(pane.terminal)
   panes.delete(pane.id)
 }

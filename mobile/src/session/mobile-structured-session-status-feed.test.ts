@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionStatusSummary } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
@@ -81,6 +81,19 @@ describe("the phone's status stream", () => {
     expect(read()).toMatchObject({ status: 'working' })
     expect(read()).not.toHaveProperty('stopping')
     expect(listener).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a retrying host owned and starting until readiness, then revokes ownership on disconnect', () => {
+    mobileStructuredSessionStatusFeed(client).subscribe(() => {})
+    const starting = { ...summary(false), hostExecutionPhase: 'starting' as const }
+    frames[0]?.({ type: 'snapshot', sessions: [starting] })
+    frames[0]?.({ type: 'status', session: starting })
+    expect(read()).toMatchObject({ hostExecutionOwned: true, hostExecutionPhase: 'starting' })
+    frames[0]?.({ type: 'status', session: { ...starting, hostExecutionPhase: 'ready' } })
+    expect(read()).toMatchObject({ hostExecutionOwned: true, hostExecutionPhase: 'ready' })
+    connection('reconnecting')
+    expect(read()?.hostExecutionOwned).toBeUndefined()
+    expect(read()?.hostExecutionPhase).toBeUndefined()
   })
 
   it('drops Stopping when the host ends the stream, and opens it again on the next connection', () => {

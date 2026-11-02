@@ -1,5 +1,6 @@
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import { resolveChecksActionAgent } from '@/lib/fix-checks-agent-launch'
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { resolveChecksActionAgent } from '@/lib/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../shared/source-control-ai-actions'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { useCallback, useEffect } from 'react'
@@ -7,23 +8,30 @@ import { toast } from 'sonner'
 import {
   markPRCommentThreadResolved,
   restorePRCommentThreadSnapshot
-} from '../pr-comment-thread-resolution'
+} from '@/lib/pr-comment-thread-resolution'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
-import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import { resolveGitLabMRDiscussionForChecks } from './gitlab-review-client'
-import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
+import {
+  checksPanelReviewStableKey,
+  clearPendingPRCommentAiAck
+} from '../pr-comments-ai-launch-ack'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
 import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { errorMessage } from '../../../../../shared/error-message'
+import type { GitLabDiscussionResolveResult } from '../../../../../shared/gitlab-types'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,
   | 'activeWorktree'
   | 'activeWorktreeId'
+  | 'asyncResultKeyRef'
   | 'branch'
   | 'claimedCommentResolutionRef'
   | 'commentResolutionAckBusy'
@@ -41,7 +49,6 @@ type ChecksPanelCommentResolutionInput = Pick<
     ChecksPanelContextState,
     'activeGitLabReview' | 'activeReview' | 'pr' | 'prCacheKey' | 'prNumber'
   > &
-  Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'> &
   Pick<ChecksPanelReviewState, 'sourceControlAiActionsVisible'>
 
 export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolutionInput) {
@@ -50,12 +57,12 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     activeReview,
     activeWorktree,
     activeWorktreeId,
+    asyncResultKeyRef,
     branch,
     claimedCommentResolutionRef,
     commentResolutionAckBusy,
     commentsLoading,
     detectedAgentIds,
-    isCurrentAsyncResult,
     pendingCommentResolutionRef,
     pr,
     prCacheKey,
@@ -79,22 +86,30 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       }
       if (repo && activeGitLabReview) {
         let previousThreadComments: PRComment[] = []
-        setComments((prev) => {
-          previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
-          return markPRCommentThreadResolved(prev, threadId, resolve)
-        })
-        const result = await resolveGitLabMRDiscussionForChecks({
-          repoPath: repo.path,
-          repoId: repo.id,
-          iid: activeGitLabReview.number,
-          discussionId: threadId,
-          resolved: resolve,
-          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
-        })
+        let result: GitLabDiscussionResolveResult
+        try {
+          const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+          setComments((prev) => {
+            previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
+            return markPRCommentThreadResolved(prev, threadId, resolve)
+          })
+          result = await resolveGitLabMRDiscussionForChecks({
+            repoPath: repo.path,
+            repoId: repo.id,
+            iid: activeGitLabReview.number,
+            discussionId: threadId,
+            resolved: resolve,
+            repoOwnerExecutionHostId
+          })
+        } catch (error) {
+          result = { ok: false, error: errorMessage(error) }
+        }
         if (!result.ok) {
-          rollbackThread(previousThreadComments)
+          if (previousThreadComments.length > 0) {
+            rollbackThread(previousThreadComments)
+          }
           if (notifyOnFailure) {
-            toast.error(result.error)
+            toast.error(codeHostErrorText(result))
           }
           return false
         }
@@ -102,6 +117,10 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       }
       if (!repo || !prNumber) {
         return false
+      }
+      // Why: skip the local optimistic flip too; the store no-ops overlapping requests.
+      if (isReviewThreadResolutionInFlight(useAppStore.getState(), threadId)) {
+        return true
       }
       const requestKey = checksPanelAsyncResultKey(
         prCacheKey,
@@ -111,19 +130,30 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         pr?.headSha
       )
       let previousThreadComments: PRComment[] = []
-      setComments((prev) => {
-        previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
-        return markPRCommentThreadResolved(prev, threadId, resolve)
-      })
-      const ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
-        repoId: repo.id,
-        prRepo: pr?.prRepo
-      })
-      if (!isCurrentAsyncResult(requestKey)) {
-        return ok
+      let ok: boolean
+      try {
+        const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+        setComments((prev) => {
+          previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
+          return markPRCommentThreadResolved(prev, threadId, resolve)
+        })
+        ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
+          repoId: repo.id,
+          repoOwnerExecutionHostId,
+          prRepo: pr?.prRepo
+        })
+      } catch {
+        ok = false
       }
       if (!ok) {
-        rollbackThread(previousThreadComments)
+        // Why: a head push mid-request must not strand the optimistic state the cache re-read copied in.
+        if (
+          previousThreadComments.length > 0 &&
+          checksPanelReviewStableKey(asyncResultKeyRef.current) ===
+            checksPanelReviewStableKey(requestKey)
+        ) {
+          rollbackThread(previousThreadComments)
+        }
         if (notifyOnFailure) {
           toast.error(
             translate(
@@ -137,8 +167,8 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     },
     [
       activeGitLabReview,
+      asyncResultKeyRef,
       branch,
-      isCurrentAsyncResult,
       pr?.headSha,
       pr?.prRepo,
       prCacheKey,
@@ -153,19 +183,40 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const canTargetPRComments = Boolean(repo && prNumber && pr?.prRepo)
   const commentsDisabledReason = canTargetPRComments
     ? undefined
-    : 'Commenting requires a GitHub PR repository target.'
+    : translate(
+        'auto.components.right.sidebar.checks.panel.content.commentingRequiresGitHubPrTarget',
+        'Commenting requires a GitHub PR repository target.'
+      )
   const workspace = worktreeLaunchWorkspace(activeWorktreeId ?? '')
-  useChatProgramFacts(workspace, Boolean(activeWorktreeId) && sourceControlAiActionsVisible)
+  const observation = useAgentMenuObservation(
+    activeWorktreeId,
+    sourceControlAiActionsVisible,
+    useAgentDetectionTargetForWorktree(activeWorktreeId)
+  )
   const launchState = useAppStore.getState()
   const noAgentFor = (actionId: SourceControlActionId): boolean =>
+    !observation.preferencesPending &&
     detectedAgentIds != null &&
-    resolveChecksActionAgent(launchState, actionId, repo?.id, workspace, detectedAgentIds) == null
+    resolveChecksActionAgent(
+      launchState,
+      actionId,
+      repo?.id,
+      workspace,
+      detectedAgentIds,
+      observation.preferences
+    ) == null
   const noEnabledAgentKnown = noAgentFor('resolveConflicts')
   const actionDisabledReason = (actionId: SourceControlActionId): string | undefined =>
     !activeWorktreeId
-      ? 'Select a workspace before launching an AI action.'
+      ? translate(
+          'auto.components.right.sidebar.checks.panel.content.selectWorkspaceBeforeAiAction',
+          'Select a workspace before launching an AI action.'
+        )
       : noAgentFor(actionId)
-        ? 'No enabled AI agents. Configure agents in Settings.'
+        ? translate(
+            'auto.components.right.sidebar.source.control.ai.recovery.launch.9bbd9077a2',
+            'No enabled AI agents. Configure agents in Settings.'
+          )
         : undefined
   const aiActionDisabledReason = actionDisabledReason('resolveConflicts')
   const fixChecksDisabledReason = actionDisabledReason('fixChecks')

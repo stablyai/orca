@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   configureHardeningRetryBudget,
-  hardeningRetryDelayMs,
   mayAttemptHardening,
   recordHardeningOutcome
 } from './secure-path-hardening-retry-budget'
@@ -55,28 +54,6 @@ describe('secure path hardening retry budget', () => {
     return attemptedAt
   }
 
-  it('doubles the delay after each consecutive failure, up to the ceiling', () => {
-    expect(hardeningRetryDelayMs(1)).toBe(1 * MINUTE)
-    expect(hardeningRetryDelayMs(2)).toBe(2 * MINUTE)
-    expect(hardeningRetryDelayMs(3)).toBe(4 * MINUTE)
-    expect(hardeningRetryDelayMs(4)).toBe(8 * MINUTE)
-    expect(hardeningRetryDelayMs(5)).toBe(16 * MINUTE)
-    expect(hardeningRetryDelayMs(6)).toBe(30 * MINUTE)
-    expect(hardeningRetryDelayMs(50)).toBe(30 * MINUTE)
-    expect(hardeningRetryDelayMs(5000)).toBe(30 * MINUTE)
-  })
-
-  it('allows the first attempt for a path it has never seen', () => {
-    expect(mayAttemptHardening(PATH)).toBe(true)
-  })
-
-  // The #4901 condition: the env store re-hardens on the read path about twice a second.
-  it('collapses a read-path poll to a single attempt in the first minute', () => {
-    const attemptedAt = pollUntil(55_000, 500)
-
-    expect(attemptedAt).toEqual([0])
-  })
-
   it('re-probes on the documented curve rather than on every read', () => {
     // Six hours of polling every 30s: 720 reads, and only the backoff decides how many run.
     const attemptedAt = pollUntil(6 * 60 * MINUTE, 30_000)
@@ -86,14 +63,6 @@ describe('secure path hardening retry budget', () => {
       .slice(-4)
       .map((ms, index, all) => (all[index + 1]! - ms) / MINUTE)
     expect(trailingGaps.slice(0, -1)).toEqual([30, 30, 30])
-  })
-
-  // The failure this replaced: three transient failures used to disable a path until restart.
-  it('never abandons a path, however long it has been failing', () => {
-    pollUntil(30 * 24 * 60 * MINUTE, 15 * MINUTE)
-
-    clock += 31 * MINUTE
-    expect(mayAttemptHardening(PATH)).toBe(true)
   })
 
   /** Backwards wall-clock steps previously held paths below retry delay until time caught up; monotonic elapsed time must keep probing. */

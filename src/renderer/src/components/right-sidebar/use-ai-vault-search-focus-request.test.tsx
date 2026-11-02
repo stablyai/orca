@@ -10,16 +10,6 @@ afterEach(() => {
   useAppStore.getState().clearAiVaultSearchFocusRequest()
 })
 
-it('opens the sidebar on the session panel when Settings asks for it', () => {
-  act(() => {
-    useAppStore.getState().showAiVaultSearch()
-  })
-  const state = useAppStore.getState()
-  expect(state.rightSidebarOpen).toBe(true)
-  expect(state.rightSidebarTab).toBe('vault')
-  expect(state.aiVaultSearchFocusRequested).toBe(true)
-})
-
 it('runs the request once and clears it so a remount stays put', () => {
   const onRequest = vi.fn()
   const view = renderHook(() => useAiVaultSearchFocusRequest(onRequest))

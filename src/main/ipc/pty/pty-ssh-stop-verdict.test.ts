@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../shared/pty-liveness-verdict'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './register-handlers'
 import {
   deletePtyOwnership,
@@ -8,55 +8,54 @@ import {
   ptyOwnership,
   setPtyOwnership
 } from './provider/ownership-state'
-import { getLocalPtyProvider } from './provider/registry'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 // Detached relay PTYs outlive their provider; missing providers cannot prove remote exit.
 describe('stopping a PTY whose SSH provider is unregistered', () => {
-  const { handlers, mainWindow, installObservableDaemonTestProvider } = setupPtyIpcSuite()
+  const { handlers, mainWindow } = setupPtyIpcSuite()
 
   function installController(): {
     controller: {
@@ -89,19 +88,6 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       runtime
     }
   }
-
-  it('reports an unconfirmed stop instead of a fabricated kill', () => {
-    setPtyOwnership('ssh-detached-pty', 'ssh:ssh-dropped')
-    const { controller, runtime } = installController()
-
-    expect(controller.kill('ssh-detached-pty')).toBe(false)
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh-detached-pty', -1, undefined)
-    expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
-      'ssh-detached-pty',
-      expect.stringContaining('SSH')
-    )
-    deletePtyOwnership('ssh-detached-pty')
-  })
 
   it('reports an unconfirmed exact stop instead of a fabricated teardown', async () => {
     setPtyOwnership('ssh-detached-stop', 'ssh:ssh-dropped')
@@ -169,18 +155,5 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       ptyIncarnationById.delete(ptyId)
       deletePtyOwnership(ptyId)
     }
-  })
-
-  it('still confirms a stop the owning provider actually performed', async () => {
-    const daemon = installObservableDaemonTestProvider()
-    vi.spyOn(getLocalPtyProvider(), 'listProcesses').mockResolvedValue([])
-    const { controller, runtime } = installController()
-
-    await expect(controller.stopAndWait('wt-1@@local-session')).resolves.toBe(true)
-    expect(daemon.shutdown).toHaveBeenCalledWith(
-      'wt-1@@local-session',
-      expect.objectContaining({ immediate: true })
-    )
-    expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
   })
 })

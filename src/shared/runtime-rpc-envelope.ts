@@ -98,3 +98,16 @@ export function isKeepaliveFrame(frame: unknown): frame is RuntimeRpcKeepaliveFr
     (frame as { _keepalive: unknown })._keepalive === true
   )
 }
+
+/** Same-machine IPC observation only; remote hosts own their own monotonic operation budget. */
+export type RuntimeRpcDispatchObservation = {
+  expiresAt: number
+  responseTimeoutMs: number
+  responseExpiresAt?: number
+}
+
+/** Select request params from the status of the socket that will send them. */
+export type RuntimeRequestSelection = {
+  paramsForStatus: (status: unknown) => unknown
+  onDispatch?: () => void
+}

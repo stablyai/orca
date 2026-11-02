@@ -36,7 +36,7 @@ const ASK_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--permission-mode default',
   'claude-agent-teams': '--permission-mode default',
   grok: '--permission-mode default',
-  codex: '-a on-request -s workspace-write -c approvals_reviewer=user'
+  codex: '-a on-request -s read-only -c approvals_reviewer=user'
 }
 
 const ACCEPT_EDITS_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
@@ -64,11 +64,32 @@ export function agentPermissionEnv(
   return choice === 'full-access' ? { ...YOLO_TUI_AGENT_ENV[agent] } : {}
 }
 
+export function readLaunchPermissionChoice(
+  values: Readonly<Record<string, unknown>> | null | undefined
+): AgentPermissionChoice | undefined {
+  const choice = values?.permissionMode ?? values?.mode
+  return isAgentPermissionChoice(choice) ? choice : undefined
+}
+
+export function agentPermissionHasTerminalChoice(
+  agent: TuiAgent,
+  choice: AgentPermissionChoice
+): boolean {
+  if (choice === 'own') {
+    return AGENT_PERMISSION_CHOICES.some(
+      (mode) => mode !== 'own' && agentPermissionHasTerminalChoice(agent, mode)
+    )
+  }
+  return (
+    agentPermissionArgs(agent, choice) !== '' ||
+    Object.keys(agentPermissionEnv(agent, choice)).length > 0
+  )
+}
+
 function supportsChoice(agent: TuiAgent, choice: AgentPermissionChoice): boolean {
   return (
     choice === 'own' ||
-    agentPermissionArgs(agent, choice) !== '' ||
-    Object.keys(agentPermissionEnv(agent, choice)).length > 0 ||
+    agentPermissionHasTerminalChoice(agent, choice) ||
     agentChatPermissionModes(agent)?.modes.includes(choice) === true
   )
 }
@@ -117,16 +138,16 @@ export function normalizeAgentPermissionOverrides(
   )
 }
 
-/** Apply globally, preserving unsupported agents during Auto as the toggle always did; falling to own could change their permissions. */
+/** Global writes own the default; explicit agent choices keep their scope. */
 export function applyAllAgentsPermission(
   settings: AgentPermissionSettings,
   choice: AgentPermissionChoice
 ): Required<AgentPermissionSettings> {
-  const overrides: Partial<Record<TuiAgent, AgentPermissionChoice>> = {}
+  const overrides = { ...settings.agentPermissionOverrides }
   if (choice === 'auto') {
     for (const agent of PERMISSION_CHOICE_AGENTS) {
       const previous = resolveAgentPermission(agent, settings).choice
-      if (!supportsChoice(agent, 'auto')) {
+      if (overrides[agent] === undefined && previous !== 'auto' && !supportsChoice(agent, 'auto')) {
         overrides[agent] = previous
       }
     }

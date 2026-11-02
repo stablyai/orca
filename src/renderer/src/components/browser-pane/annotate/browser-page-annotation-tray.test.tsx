@@ -86,6 +86,8 @@ function renderTray(currentUrl?: string): {
         worktreeId="wt-1"
         activeGroupId={undefined}
         browserAnnotationsPrompt="prompt"
+        includePageDetails={false}
+        handleIncludePageDetailsChange={vi.fn()}
         handleBrowserAnnotationsSentToAgent={vi.fn()}
         handleBrowserAnnotationsHandedOff={vi.fn()}
         handleCopyBrowserAnnotations={vi.fn()}
@@ -101,7 +103,7 @@ function renderTray(currentUrl?: string): {
 }
 
 describe('BrowserPageAnnotationTray edit mode', () => {
-  it('attributes a retained note to its captured page while preserving edit and delete controls', () => {
+  it('attributes a retained note to its captured page while preserving deletion', () => {
     const { handleDeleteBrowserAnnotation } = renderTray('https://example.com/next')
     expect(screen.getByTitle('https://example.com')).toHaveTextContent('https://example.com')
     fireEvent.click(screen.getByRole('button', { name: 'Delete annotation 1' }))
@@ -139,7 +141,8 @@ describe('BrowserPageAnnotationTray edit mode', () => {
     expect(handleUpdateBrowserAnnotation).toHaveBeenCalledWith(
       'annotation-1',
       'Updated comment',
-      'question'
+      'question',
+      []
     )
   })
 
@@ -208,7 +211,8 @@ describe('BrowserPageAnnotationTray collapse', () => {
     expect(handleUpdateBrowserAnnotation).toHaveBeenCalledWith(
       'annotation-1',
       'Unsaved draft',
-      'question'
+      'question',
+      []
     )
   })
 })

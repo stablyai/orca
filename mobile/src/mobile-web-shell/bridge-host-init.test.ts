@@ -227,6 +227,20 @@ describe('init and state', () => {
     expect(bridge.frames().filter((frame) => frame.type === 'error')).toEqual([])
   })
 
+  it('tells the screen whether the page asked to replace it', () => {
+    const opened: [string, boolean][] = []
+    const bridge = harness({ onNavigate: (href, replace) => opened.push([href, replace]) })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-a/tasks' }))
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-a/tasks', replace: true })
+    )
+    expect(opened).toEqual([
+      ['/h/host-a/tasks', false],
+      ['/h/host-a/tasks', true]
+    ])
+  })
+
   it('refuses a navigate frame that is not a path this app could open', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
@@ -377,6 +391,67 @@ describe('init and state', () => {
     bridge.client.pushState('disconnected')
     const pushed = bridge.last()
     expect(pushed.type === 'state' && pushed.connection.state).toBe('disconnected')
+  })
+
+  it('sends a page that reads them a path frame when a relay dial starts without a state change', () => {
+    let pendingPath: 'relay' | null = null
+    let notifyPath = () => {}
+    const client = createFakeRpcClient({
+      getState: () => 'reconnecting',
+      getActivePath: () => 'lan',
+      getPendingPath: () => pendingPath,
+      getRelayHostReachability: () => 'host-offline',
+      onConnectionPathChange: (listener) => {
+        notifyPath = listener
+        return () => {}
+      }
+    })
+    const bridge = harness({ client })
+    bridge.host.receive(clientFrame({ type: 'ready', connectionPathFrames: true }))
+
+    pendingPath = 'relay'
+    notifyPath()
+
+    const pushed = bridge.last()
+    expect(pushed.type === 'connectionPath' && pushed.connection).toMatchObject({
+      state: 'reconnecting',
+      activePath: 'lan',
+      pendingPath: 'relay',
+      relayHostReachability: 'host-offline'
+    })
+  })
+
+  it('sends no path frame to a page that never said it reads them', () => {
+    let notifyPath = () => {}
+    const client = createFakeRpcClient({
+      onConnectionPathChange: (listener) => {
+        notifyPath = listener
+        return () => {}
+      }
+    })
+    const bridge = harness({ client })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const sent = bridge.frames().length
+
+    notifyPath()
+
+    expect(bridge.frames()).toHaveLength(sent)
+  })
+
+  it("hands the page the shell's proven host status, and nothing while it has none", () => {
+    let hostStatus: { protocolVersion: number; capabilities: string[] } | null = null
+    const bridge = harness({ readHostStatus: () => hostStatus })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const before = bridge.last()
+    hostStatus = { protocolVersion: 3, capabilities: ['a'] }
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const after = bridge.last()
+
+    expect(before.type === 'init' && 'hostStatus' in before).toBe(false)
+    expect(after.type === 'init' && after.hostStatus).toEqual({
+      protocolVersion: 3,
+      capabilities: ['a']
+    })
   })
 
   it('drops the state listener on dispose', () => {

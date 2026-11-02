@@ -54,17 +54,18 @@ export function getSpawnArgsForWindows(
   if (isWindowsBatchScript(command)) {
     assertWindowsCmdSafeTokens([command, ...args])
 
-    // Why: separate argv entries let Node quote spaces without breaking cmd.
+    // cmd /c strips the outer quotes of a line starting with one, splitting spaced launchers; `@` avoids that without `call`'s /? and exit-code changes.
+    const batchInvocation = ['@', command, ...args]
     if (options.detachedGui) {
       // start normally nests cmd /K and leaks a hidden interpreter; explicitly use cmd /d /c to exit with the shim.
       // Pass an empty argv entry for the title: libuv emits the required double quotes. A literal quote-pair is re-escaped and breaks spaced paths.
       const cmdExePath = getCmdExePath()
       return {
         spawnCmd: cmdExePath,
-        spawnArgs: ['/d', '/c', 'start', '', '/B', cmdExePath, '/d', '/c', command, ...args]
+        spawnArgs: ['/d', '/c', 'start', '', '/B', cmdExePath, '/d', '/c', ...batchInvocation]
       }
     }
-    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/c', command, ...args] }
+    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/c', ...batchInvocation] }
   }
   return { spawnCmd: command, spawnArgs: args }
 }

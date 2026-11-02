@@ -10,9 +10,13 @@ export function makePtyDataPayload(
   startSeq: number | undefined,
   containsBackgroundOutput: boolean | undefined,
   rawLength = data.length,
-  transformed = false
+  transformed = false,
+  gapEscapeState?: string
 ): PtyDataPayload {
   const payload: PtyDataPayload = { id, data }
+  if (gapEscapeState) {
+    payload.gapEscapeState = gapEscapeState
+  }
   if (typeof startSeq === 'number') {
     payload.seq = startSeq + rawLength
   }

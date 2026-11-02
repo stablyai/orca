@@ -1,6 +1,6 @@
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({ graph: vi.fn(), stat: vi.fn(), realpath: vi.fn() }))
@@ -15,10 +15,9 @@ vi.mock('./worktree-logic', () => ({
   getWorktreePathSettings: vi.fn()
 }))
 vi.mock('../project-runtime-git-options', () => ({
-  getWorktreeMirrorDistroForRuntime: vi.fn(),
-  resolveLocalProjectRuntimesForRepos: vi.fn()
+  getWorktreeMirrorDistroForRuntime: vi.fn()
 }))
-import { resolveAuthorizedPath } from './filesystem-auth'
+import { resolveAuthorizedPath } from './filesystem/filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,

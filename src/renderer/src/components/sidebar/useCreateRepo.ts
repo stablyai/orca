@@ -7,12 +7,18 @@ import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/repo-types'
+import type { RepoCreateFailure } from '../../../../shared/repo-create-failure-copy'
+import { repoCreateErrorText } from './repo-create-error-copy'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { resolveAddRepoRuntimeTarget, worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  readWslHostWindowsDriveRefusal,
+  type WslHostWindowsDriveRefusal
+} from '../../../../shared/wsl-host-windows-drive-refusal'
 
 export function useCreateRepo(
   fetchWorktrees: (
@@ -27,8 +33,10 @@ export function useCreateRepo(
   options: {
     hostId?: string | null
     runtimeEnvironmentId?: string | null
+    onWindowsDriveRefusal?: (refusal: WslHostWindowsDriveRefusal) => void
   } = {}
 ) {
+  const { onWindowsDriveRefusal } = options
   const [createName, setCreateName] = useState('')
   const [createParent, setCreateParent] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
@@ -90,7 +98,9 @@ export function useCreateRepo(
       const createKind = 'git' as const
       const result =
         target.kind === 'environment'
-          ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
+          ? await callRuntimeRpc<
+              { repo: Repo } | (RepoCreateFailure & { windowsDriveRefusal?: unknown })
+            >(
               target,
               'repo.create',
               {
@@ -109,7 +119,15 @@ export function useCreateRepo(
         return
       }
       if ('error' in result) {
-        setCreateError(result.error)
+        const refusal =
+          'windowsDriveRefusal' in result
+            ? readWslHostWindowsDriveRefusal(result.windowsDriveRefusal)
+            : null
+        if (refusal && onWindowsDriveRefusal) {
+          onWindowsDriveRefusal(refusal)
+        } else {
+          setCreateError(repoCreateErrorText(result))
+        }
         return
       }
       const { alreadyPresent: wasDeduped, repo } = upsertAddedRepoWithProjectHostSetup(
@@ -189,6 +207,7 @@ export function useCreateRepo(
     mountedRef,
     closeModal,
     onGitRepoReady,
+    onWindowsDriveRefusal,
     options.hostId,
     options.runtimeEnvironmentId
   ])

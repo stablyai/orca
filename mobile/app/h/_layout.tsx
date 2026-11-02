@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { View, StyleSheet, PanResponder, Platform } from 'react-native'
+import { View, PanResponder, Platform } from 'react-native'
 import { useGlobalSearchParams, usePathname } from 'expo-router'
 import { colors } from '../../src/theme/mobile-theme'
+import { themedStyleSheet } from '../../src/theme/themed-styles'
+import { useMobileColorScheme } from '../../src/theme/use-mobile-color-scheme'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
+import { useFoldSplit } from '../../src/layout/use-fold-split'
 import {
   HOST_SIDEBAR_DEFAULT_WIDTH,
   HOST_SIDEBAR_MAX_WIDTH,
@@ -32,13 +35,16 @@ function clampSidebarToWindow(width: number, windowWidth: number): number {
 }
 
 export default function HostGroupLayout() {
+  useMobileColorScheme()
   // Wide layout = tablet/foldable canvas (see responsive-layout-metrics).
   const { isWideLayout, width: windowWidth } = useResponsiveLayout()
   const { hostId } = useGlobalSearchParams<{ hostId?: string }>()
   const pathname = usePathname()
   const overlayRoute = isOverlayPageRoute(pathname)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [sidebarWidth, setSidebarWidth] = useState(HOST_SIDEBAR_DEFAULT_WIDTH)
+  // Keep the chosen width and clamp it per window, so a narrow pose (fold, rotation) never shrinks it for good.
+  const [chosenSidebarWidth, setSidebarWidth] = useState(HOST_SIDEBAR_DEFAULT_WIDTH)
+  const sidebarWidth = clampSidebarToWindow(chosenSidebarWidth, windowWidth)
 
   // Refs keep once-created PanResponder handlers reading current widths.
   const widthRef = useRef(sidebarWidth)
@@ -51,18 +57,13 @@ export default function HostGroupLayout() {
     let stale = false
     void loadHostSidebarWidth().then((saved) => {
       if (!stale) {
-        setSidebarWidth(clampSidebarToWindow(saved, windowWidthRef.current))
+        setSidebarWidth(saved)
       }
     })
     return () => {
       stale = true
     }
   }, [])
-
-  // Re-clamp on fold/rotation/split-screen to preserve MIN_DETAIL_WIDTH.
-  useEffect(() => {
-    setSidebarWidth((current) => clampSidebarToWindow(current, windowWidth))
-  }, [windowWidth])
 
   const hideSidebar = useCallback(() => setSidebarOpen(false), [])
   const revealSidebar = useCallback(() => setSidebarOpen(true), [])
@@ -73,7 +74,18 @@ export default function HostGroupLayout() {
     Platform.OS === 'web' ? pageOwnsHostArea : !(pathname === `/h/${hostId}` && hostAreaServing)
   const showSidebar = isWideLayout && !!hostId && sidebarDrawnHere
   const detailHasContent = !!hostId && pathname !== `/h/${hostId}`
-  const canCollapseSidebar = showSidebar && detailHasContent
+  // Book posture: the sidebar takes the half before the fold and the detail the half after it, so
+  // the terminal never runs across the crease.
+  const foldSplit = useFoldSplit()
+  const foldSidebarWidth =
+    showSidebar &&
+    foldSplit?.axis === 'vertical' &&
+    foldSplit.start >= HOST_SIDEBAR_MIN_WIDTH &&
+    foldSplit.size - foldSplit.end >= MIN_DETAIL_WIDTH
+      ? foldSplit.start
+      : null
+  const foldGap = foldSidebarWidth === null || !foldSplit ? 0 : foldSplit.end - foldSplit.start
+  const canCollapseSidebar = showSidebar && detailHasContent && foldSidebarWidth === null
 
   // Base host detail is a placeholder; hiding its sidebar would leave nothing useful.
   useEffect(() => {
@@ -110,21 +122,26 @@ export default function HostGroupLayout() {
   return (
     <HostProtocolGate hostId={hostId} transparentWhilePending={overlayRoute}>
       <View style={[styles.row, overlayRoute && styles.transparent]}>
-        {showSidebar && sidebarOpen ? (
-          <View style={[styles.sidebar, { width: sidebarWidth }]}>
+        {showSidebar && (sidebarOpen || foldSidebarWidth !== null) ? (
+          <View style={[styles.sidebar, { width: foldSidebarWidth ?? sidebarWidth }]}>
             <HostScreen
               embedded
               hostId={hostId}
               onHideSidebar={canCollapseSidebar ? hideSidebar : undefined}
             />
             {/* Edge drag handle captures Android gestures above the list. */}
-            <View style={styles.resizeHandle} {...resizer.panHandlers} />
+            {foldSidebarWidth === null ? (
+              <View style={styles.resizeHandle} {...resizer.panHandlers} />
+            ) : null}
           </View>
         ) : null}
+        {foldGap > 0 ? <View style={{ width: foldGap }} /> : null}
         <View style={styles.detail}>
           <HostAreaServingContext.Provider value={setHostAreaServing}>
             <HostSidebarRevealContext.Provider
-              value={showSidebar && !sidebarOpen ? revealSidebar : null}
+              value={
+                showSidebar && !sidebarOpen && foldSidebarWidth === null ? revealSidebar : null
+              }
             >
               <HostStack animation={showSidebar ? 'none' : 'default'} />
             </HostSidebarRevealContext.Provider>
@@ -135,7 +152,7 @@ export default function HostGroupLayout() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flex: 1,
     flexDirection: 'row',
@@ -162,4 +179,4 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0
   }
-})
+}))

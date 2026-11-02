@@ -11,11 +11,7 @@ import {
   resolveJsonlRpcPeerOptions,
   type JsonlRpcPeerOptions
 } from './peer-limits'
-import {
-  JsonlRpcReplyTooLargeError,
-  oversizedReplyRequest,
-  type JsonlRpcRequestOptions
-} from './peer-oversized-reply'
+import { settleOversizedJsonlRecord, type JsonlRpcRequestOptions } from './peer-oversized-record'
 
 const recordSchema = z.looseObject({ type: z.string() })
 const responseSchema = z.looseObject({
@@ -46,6 +42,8 @@ export class JsonlRpcResponseError extends Error {
 export type JsonlRpcPeerHandlers = {
   /** Includes id-less deferred prompt acknowledgements; dialect failures are fatal to preserve lifecycle evidence. */
   onRecord?: (record: JsonlRpcRecord) => void
+  /** An event over the line limit was dropped, leaving only its bounded prefix; the stream stays open. */
+  onOversizedEvent?: (type: string, prefix: string) => void
   onClose?: (error: Error) => void
   onDiagnostic?: (message: string) => void
 }
@@ -88,20 +86,17 @@ export class JsonlRpcPeer {
       (record) => this.dispatch(record),
       (rejected) => {
         if (rejected.kind === 'line-too-long') {
-          const id = oversizedReplyRequest(rejected, this.nextOptionalId)
-          if (id) {
-            const request = this.pending.get(id)
-            if (request) {
-              const error = new JsonlRpcReplyTooLargeError(
-                request.command,
-                rejected.observedBytes,
-                this.limits.maxLineBytes
-              )
-              this.rejectPending(id, error)
-            }
-          } else {
-            this.close(new Error('JSON-lines RPC record exceeded the size limit'))
-          }
+          settleOversizedJsonlRecord(rejected, {
+            highestOptionalAssigned: this.nextOptionalId,
+            maxLineBytes: this.limits.maxLineBytes,
+            pendingCommand: (id) => this.pending.get(id)?.command,
+            rejectPending: (id, error) => this.rejectPending(id, error),
+            skipEvent: (type) => {
+              this.diagnose(`Skipped oversized agent RPC event: ${type}`)
+              this.handlers.onOversizedEvent?.(type, rejected.prefix)
+            },
+            close: (error) => this.close(error)
+          })
         } else {
           this.diagnose('Ignored non-JSON agent output')
         }

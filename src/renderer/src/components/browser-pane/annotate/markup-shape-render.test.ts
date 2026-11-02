@@ -61,8 +61,11 @@ describe('drawShape dispatch', () => {
       ]
     }
     drawShape(ctx, shape)
-    expect(methods('moveTo')).toHaveLength(1)
-    expect(methods('lineTo')).toHaveLength(2)
+    expect(methods('moveTo')).toEqual([{ method: 'moveTo', args: [0, 0] }])
+    expect(methods('lineTo')).toEqual([
+      { method: 'lineTo', args: [5, 5] },
+      { method: 'lineTo', args: [9, 1] }
+    ])
     expect(methods('stroke')).toHaveLength(1)
   })
 
@@ -132,7 +135,7 @@ describe('drawShape dispatch', () => {
   })
 
   it('renders single-line text with a halo (stroke behind fill)', () => {
-    const { ctx, methods } = makeRecordingCtx()
+    const { ctx, calls } = makeRecordingCtx()
     drawShape(ctx, {
       id: 't',
       kind: 'text',
@@ -141,13 +144,14 @@ describe('drawShape dispatch', () => {
       text: 'fix this',
       fontSize: 18
     })
-    expect(methods('strokeText')).toHaveLength(1)
-    expect(methods('fillText')).toHaveLength(1)
-    expect(methods('fillText')[0].args[0]).toBe('fix this')
+    expect(calls.filter((call) => call.method.endsWith('Text'))).toEqual([
+      { method: 'strokeText', args: ['fix this', 5, 5] },
+      { method: 'fillText', args: ['fix this', 5, 5] }
+    ])
   })
 
-  it('save/restore brackets every shape so state never leaks', () => {
-    const { ctx, methods } = makeRecordingCtx()
+  it('brackets rectangle drawing with save and restore calls', () => {
+    const { ctx, calls } = makeRecordingCtx()
     drawShape(ctx, {
       id: 'r',
       kind: 'rect',
@@ -156,8 +160,11 @@ describe('drawShape dispatch', () => {
       from: { x: 0, y: 0 },
       to: { x: 1, y: 1 }
     })
-    expect(methods('save')).toHaveLength(1)
-    expect(methods('restore')).toHaveLength(1)
+    expect(calls).toEqual([
+      { method: 'save', args: [] },
+      { method: 'strokeRect', args: [0, 0, 1, 1] },
+      { method: 'restore', args: [] }
+    ])
   })
 })
 

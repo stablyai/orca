@@ -72,7 +72,7 @@ for (const { theme, sessionCount, viewportHeight } of [
   { theme: 'dark', sessionCount: 20, viewportHeight: 500 },
   { theme: 'light', sessionCount: 10_000, viewportHeight: 500 }
 ] as const) {
-  test(`local PTY review and checked confirmation with ${sessionCount} sessions (${theme}, ${viewportHeight}px)`, async ({
+  test(`local PTY review and background ending with ${sessionCount} sessions (${theme}, ${viewportHeight}px)`, async ({
     electronApp,
     orcaPage
   }, testInfo) => {
@@ -194,6 +194,10 @@ for (const { theme, sessionCount, viewportHeight } of [
     await firstTerminal.focus()
     for (let index = 1; index <= Math.min(30, sessionCount - 3); index++) {
       await orcaPage.keyboard.press('Tab')
+      await expect(
+        body.getByRole('checkbox', { name: `Select Terminal ${index}`, exact: true })
+      ).toBeFocused()
+      await orcaPage.keyboard.press('Tab')
       await orcaPage.keyboard.press('Tab')
       const terminal = orcaPage.getByRole('button', { name: `End Terminal ${index}`, exact: true })
       await expect(terminal).toBeFocused()
@@ -223,24 +227,8 @@ for (const { theme, sessionCount, viewportHeight } of [
     expect(after.metrics).toBe(before.metrics)
     await lastTerminal.click()
     await expect(
-      orcaPage.getByRole('heading', { name: `End Terminal ${sessionCount - 1}?` })
-    ).toBeVisible()
-    await expect(
-      orcaPage
-        .getByRole('dialog', { name: `End Terminal ${sessionCount - 1}?` })
-        .getByText(`/workspace/folder-${sessionCount - 1}`, { exact: true })
-    ).toBeVisible()
-    expect(
-      (
-        await electronApp.evaluate(() => {
-          if (!globalThis.__ptyViewCounts) {
-            throw new Error('PTY view counters missing')
-          }
-          return globalThis.__ptyViewCounts
-        })
-      ).kills
-    ).toHaveLength(0)
-    await orcaPage.getByRole('button', { name: 'End terminal', exact: true }).click()
+      orcaPage.getByRole('dialog', { name: `End Terminal ${sessionCount - 1}?` })
+    ).toHaveCount(0)
     await expect(
       orcaPage.getByText(
         'A client is now attached to this terminal. Refresh before trying again.',
@@ -264,6 +252,28 @@ for (const { theme, sessionCount, viewportHeight } of [
         requireUnattached: true
       }
     ])
+    await body
+      .getByRole('checkbox', {
+        name: `Select Terminal ${sessionCount - 1}`,
+        exact: true
+      })
+      .check()
+    await body.evaluate((element) => {
+      element.scrollTop = 0
+    })
+    await body.getByRole('checkbox', { name: 'Select Terminal 0', exact: true }).check()
+    await orcaPage.screenshot({
+      path: testInfo.outputPath(`local-ptys-selected-${theme}.png`),
+      animations: 'disabled'
+    })
+    await panel.getByRole('button', { name: 'End selected (2)', exact: true }).click()
+    await expect(
+      panel.getByRole('button', { name: 'End selected (0)', exact: true })
+    ).toBeDisabled()
+    await expect(orcaPage.getByRole('dialog', { name: /^End / })).toHaveCount(0)
+    await expect
+      .poll(() => electronApp.evaluate(() => globalThis.__ptyViewCounts?.kills?.length))
+      .toBe(3)
     await orcaPage.screenshot({
       path: testInfo.outputPath(`local-ptys-${theme}.png`),
       animations: 'disabled'

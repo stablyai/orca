@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import type { NativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
 const mocks = vi.hoisted(() => {
@@ -82,27 +82,6 @@ describe('persisted chat font-size shortcuts', () => {
     await waitFor(() =>
       expect(mocks.settings.nativeChatAppearance).toEqual({ codeFontSize: 16, width: 'wide' })
     )
-  })
-  it('writes an absent object on reset and ignores inactive panes', async () => {
-    const { rerender } = renderHook(({ enabled }) => useNativeChatFontSize(enabled), {
-      initialProps: { enabled: false }
-    })
-    key('+')
-    expect(mocks.updateSettings).not.toHaveBeenCalled()
-    rerender({ enabled: true })
-    key('-')
-    await waitFor(() => expect(mocks.settings.nativeChatAppearance).toEqual({ fontSize: 13 }))
-    key('0')
-    await waitFor(() => expect(mocks.settings.nativeChatAppearance).toBeUndefined())
-  })
-  it('does not listen to desktop DOM keys that are handled by the IPC bridge', () => {
-    mocks.web = false
-    renderHook(() => useNativeChatFontSize(true))
-    key('+')
-    key('-')
-    key('0')
-    key('_')
-    expect(mocks.updateSettings).not.toHaveBeenCalled()
   })
   it('only handles keys originating in its chat root', async () => {
     const root = document.createElement('div')

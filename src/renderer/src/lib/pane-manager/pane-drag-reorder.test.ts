@@ -408,7 +408,7 @@ describe('attachPaneDrag', () => {
     expect(handle.listenerCount('lostpointercapture')).toBe(0)
     expect(handle.hasPointerCapture(1)).toBe(false)
     expect(state.cleanupActiveDrag).toBeNull()
-    expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function), true)
+    expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function))
   })
 
   it('ignores context-menu pointer buttons so the pane menu can open', () => {

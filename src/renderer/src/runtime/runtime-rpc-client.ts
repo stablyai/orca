@@ -3,37 +3,27 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
-import { assertRuntimeStatusCompatible, isRuntimeStatusCompatible } from './runtime-protocol-compat'
+import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import {
+  clearRuntimeCompatibilityCache,
+  compatibilityEntry,
+  getCachedRuntimeCompatibilityCheck,
+  rememberRuntimeEnvironmentCompatibility,
+  runtimeCompatibilityChecks,
+  RUNTIME_CAPABILITY_STATUS_TTL_MS
+} from './runtime-compatibility-cache'
 
-const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
-const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
-// Why: capability verdicts must eventually follow a saved environment's version changes.
-const RUNTIME_CAPABILITY_STATUS_TTL_MS = 60_000
-
-type RuntimeCompatibilityCacheEntry = {
-  check: Promise<void>
-  failedAt: number | null
-  // False while probing so recovery can drop a doomed pending compatibility check.
-  provenCompatible: boolean
-  status: RuntimeStatus | null
-  statusCheckedAt: number | null
-}
-
-const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
-
-/** A pending probe by default; an observed status is proof of itself. */
-function compatibilityEntry(
-  status: RuntimeStatus | null = null,
-  provenCompatible = status !== null
-): RuntimeCompatibilityCacheEntry {
-  const statusCheckedAt = status ? Date.now() : null
-  return { check: Promise.resolve(), failedAt: null, provenCompatible, status, statusCheckedAt }
-}
+export {
+  clearRecentRuntimeCompatibilityFailure,
+  clearRuntimeCompatibilityCache,
+  markRuntimeEnvironmentCompatible,
+  peekRuntimeEnvironmentCapability
+} from './runtime-compatibility-cache'
 
 export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
@@ -122,6 +112,7 @@ export async function ensureRuntimeEnvironmentCompatible(
     assertRuntimeStatusCompatible(status)
     entry.status = status
     entry.statusCheckedAt = Date.now()
+    entry.statusObservedAt = entry.statusCheckedAt
   })()
   entry.check = check
   rememberRuntimeEnvironmentCompatibility(environmentId, entry)
@@ -137,90 +128,6 @@ export async function ensureRuntimeEnvironmentCompatible(
     }
     throw error
   }
-}
-
-function getCachedRuntimeCompatibilityCheck(
-  environmentId: string,
-  options: { reuseRecentCompatibilityFailure?: boolean }
-): RuntimeCompatibilityCacheEntry | null {
-  const cached = runtimeCompatibilityChecks.get(environmentId)
-  if (!cached) {
-    return null
-  }
-  if (
-    cached.failedAt !== null &&
-    Date.now() - cached.failedAt >= RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS
-  ) {
-    runtimeCompatibilityChecks.delete(environmentId)
-    return null
-  }
-  if (cached.failedAt !== null && options.reuseRecentCompatibilityFailure !== true) {
-    return null
-  }
-  runtimeCompatibilityChecks.delete(environmentId)
-  runtimeCompatibilityChecks.set(environmentId, cached)
-  return cached
-}
-
-function rememberRuntimeEnvironmentCompatibility(
-  environmentId: string,
-  entry: RuntimeCompatibilityCacheEntry
-): void {
-  // Bound compatibility cache across saved/removed environment ID churn in long sessions.
-  runtimeCompatibilityChecks.delete(environmentId)
-  runtimeCompatibilityChecks.set(environmentId, entry)
-  while (runtimeCompatibilityChecks.size > RUNTIME_COMPATIBILITY_CACHE_MAX) {
-    const oldest = runtimeCompatibilityChecks.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    runtimeCompatibilityChecks.delete(oldest)
-  }
-}
-
-// Live status invalidates dead-connection failures/pending probes; only proven-compatible success remains reusable.
-export function clearRecentRuntimeCompatibilityFailure(
-  environmentId: string,
-  observedStatus?: RuntimeStatus
-): void {
-  const trimmed = environmentId.trim()
-  if (!trimmed) {
-    return
-  }
-  const cached = runtimeCompatibilityChecks.get(trimmed)
-  if (
-    cached &&
-    (!cached.provenCompatible ||
-      (observedStatus &&
-        cached.status !== null &&
-        cached.status.runtimeId !== observedStatus.runtimeId))
-  ) {
-    // Replacement runtimes can be older; predecessor capability proof must not authorize structured calls.
-    runtimeCompatibilityChecks.delete(trimmed)
-    // Why (STA-11921): the host publishes a probe's answer before settling it, so the detached
-    // probe never records it; the published answer is the proof synchronous readers need.
-    const answersPendingProbe = cached.failedAt === null && !cached.provenCompatible
-    if (observedStatus && answersPendingProbe && isRuntimeStatusCompatible(observedStatus)) {
-      rememberRuntimeEnvironmentCompatibility(trimmed, compatibilityEntry(observedStatus))
-    }
-  }
-}
-
-export function clearRuntimeCompatibilityCache(environmentId?: string | null): void {
-  const trimmed = environmentId?.trim()
-  if (trimmed) {
-    runtimeCompatibilityChecks.delete(trimmed)
-    return
-  }
-  runtimeCompatibilityChecks.clear()
-}
-
-export function markRuntimeEnvironmentCompatible(environmentId: string): void {
-  const trimmed = environmentId.trim()
-  if (!trimmed) {
-    return
-  }
-  rememberRuntimeEnvironmentCompatibility(trimmed, compatibilityEntry(null, true))
 }
 
 export async function getRuntimeEnvironmentStatus(
@@ -242,6 +149,7 @@ export async function getRuntimeEnvironmentStatus(
     assertRuntimeStatusCompatible(status)
     entry.status = status
     entry.statusCheckedAt = Date.now()
+    entry.statusObservedAt = entry.statusCheckedAt
     entry.provenCompatible = true
   })()
   entry.check = check

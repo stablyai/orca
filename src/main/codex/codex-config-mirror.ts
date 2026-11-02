@@ -7,7 +7,10 @@ import {
   writeFileAtomicallyIfUnchanged
 } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
-import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
+import {
+  rebaseBundledMarketplaceSources,
+  rewriteRelativePathConfigValues
+} from './codex-config-path-reference-rewrite'
 import { normalizeDeprecatedCodexHookFeatureFlag } from './config-toml-deprecated-hook-flag'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -144,11 +147,19 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
       runtimeConfigBeforeMirror !== null
         ? mergeSystemCodexConfigIntoRuntime(
             runtimeConfigBeforeMirror,
-            prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir),
+            prepareSystemConfigForRuntimeMirror(
+              rawSystemConfig,
+              sourceConfigDir,
+              homes.runtimeHomePath
+            ),
             sourceConfigDir,
             ...readLegacySharedHomeMcpOwnership(homes.runtimeHomePath)
           )
-        : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+        : prepareSystemConfigForFreshRuntimeMirror(
+            rawSystemConfig,
+            sourceConfigDir,
+            homes.runtimeHomePath
+          )
   }
   const nextRuntimeConfig = applyCodexDaemonSocketGuard(
     mirroredRuntimeConfig,
@@ -226,7 +237,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
     const freshRuntimeConfig = applyCodexDaemonSocketGuard(
-      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir),
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
       runtimeHomePath
     )
     const ownership = readMcpServerTomlOwnership(freshRuntimeConfig)
@@ -239,7 +250,11 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     }
   }
 
-  const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+  const systemConfig = prepareSystemConfigForRuntimeMirror(
+    rawSystemConfig,
+    sourceConfigDir,
+    runtimeHomePath
+  )
   const { names: mirroredMcpServerNames, ownsRoot: mirroredMcpServerRoot } =
     readMcpServerTomlOwnership(systemConfig)
   // Reuse the observed snapshot rather than mixing reads across path-state changes.
@@ -277,21 +292,30 @@ export function resolveCodexConfigMirrorSourceDirectory(
   )
 }
 
-function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {
-  return rewriteRelativePathConfigValues(
+function prepareSystemConfigForRuntimeMirror(
+  config: string,
+  systemConfigDir: string,
+  runtimeHomePath?: string
+): string {
+  const prepared = rewriteRelativePathConfigValues(
     normalizeDeprecatedCodexHookFeatureFlag(config),
     systemConfigDir
   )
+  // WSL guest homes do not receive host resource links.
+  return runtimeHomePath && !parseWslUncPath(runtimeHomePath)
+    ? rebaseBundledMarketplaceSources(prepared, systemConfigDir, runtimeHomePath)
+    : prepared
 }
 
 // Install re-keys user-hook trust; plugin/project trust carries unchanged.
 // WSL systemConfigDir must name the Linux-side config directory.
 export function prepareSystemConfigForFreshRuntimeMirror(
   config: string,
-  systemConfigDir: string
+  systemConfigDir: string,
+  runtimeHomePath?: string
 ): string {
   return stripRuntimeOwnedTomlSections(
-    prepareSystemConfigForRuntimeMirror(config, systemConfigDir),
+    prepareSystemConfigForRuntimeMirror(config, systemConfigDir, runtimeHomePath),
     new Set(),
     { systemHomeDir: systemConfigDir, runtimeHookTrustKeys: new Set() }
   )

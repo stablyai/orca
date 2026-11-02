@@ -151,10 +151,10 @@ describe.runIf(RUN_LIVE)('live foreground recovery (issue #5049)', () => {
     }
   })
 
-  it(
-    'reaps a half-open link via the foreground probe and recovers',
+  it.each(['focus', 'app-resume', 'network-change'] as const)(
+    'reaps a half-open link via %s and recovers',
     { timeout: 60_000 },
-    async () => {
+    async (reason) => {
       wss = await startServer()
       client = connect(`ws://127.0.0.1:${serverPort(wss)}`, AUTH_TOKEN, serverPublicKeyB64)
       const c = client
@@ -164,14 +164,14 @@ describe.runIf(RUN_LIVE)('live foreground recovery (issue #5049)', () => {
       // Half-open: server keeps TCP up but stops answering, then the app
       // comes back to the foreground.
       blackhole = true
-      c.notifyForeground()
-      // Three fair probe windows tolerate transient mobile/Tailscale stalls.
+      c.notifyForeground(reason)
       const detectMs = await waitFor(
         'half-open detected',
         32_000,
         () => c.getState() !== 'connected'
       )
-      expect(detectMs).toBeLessThan(30_000)
+      console.log('[direct-revival-capture]', { reason, detectMs })
+      expect(detectMs).toBeLessThan(reason === 'focus' ? 30_000 : 6_000)
 
       blackhole = false
       await waitFor('recovered after link healed', 15_000, () => c.getState() === 'connected')

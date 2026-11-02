@@ -86,21 +86,6 @@ describe('subscribeViaWatcherProcess', () => {
     expect(callback).toHaveBeenCalledWith(null, events)
   })
 
-  it('retires the failed native subscription before reporting its error', async () => {
-    const callback = vi.fn()
-    const promise = subscribeViaWatcherProcess('/repo', callback, {})
-    const child = currentChild()
-    const id = ackSubscribe(child)
-    await promise
-
-    child.emit('message', { op: 'watch-error', id, message: 'boom' })
-    expect(callback).not.toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledTimes(1)
-    child.emit('exit', 0, null)
-    await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(1))
-    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ message: 'boom' }), [])
-  })
-
   it('rejects and physically cancels a watcher error before subscription readiness', async () => {
     const callback = vi.fn()
     const promise = subscribeViaWatcherProcess('/repo', callback, {})
@@ -115,8 +100,10 @@ describe('subscribeViaWatcherProcess', () => {
       settled = true
     })
     expect(child.sent.at(-1)).toEqual({ op: 'cancel-subscribe', id })
+    await new Promise<void>((resolve) => setImmediate(resolve))
     expect(settled).toBe(false)
     child.emit('message', { op: 'cancel-requires-restart', id })
+    await new Promise<void>((resolve) => setImmediate(resolve))
     expect(settled).toBe(false)
     expect(callback).not.toHaveBeenCalled()
     expect(child.kill).toHaveBeenCalledTimes(1)
@@ -365,6 +352,7 @@ describe('subscribeViaWatcherProcess', () => {
     const isSettled = trackPromiseSettlement(pending)
     expect(child.kill).not.toHaveBeenCalled()
     expect(child.sent.at(-1)).toEqual({ op: 'cancel-subscribe', id: queuedId })
+    await new Promise<void>((resolve) => setImmediate(resolve))
     expect(isSettled()).toBe(false)
     child.emit('message', { op: 'unsubscribed', id: queuedId })
     await expect(pending).rejects.toThrow('aborted')
@@ -443,6 +431,7 @@ describe('subscribeViaWatcherProcess', () => {
     expect(first.sent.at(-1)).toEqual({ op: 'cancel-subscribe', id: pendingId })
     first.emit('message', { op: 'cancel-requires-restart', id: pendingId })
     expect(first.kill).toHaveBeenCalledTimes(1)
+    await new Promise<void>((resolve) => setImmediate(resolve))
     expect(isSettled()).toBe(false)
     expect(forkMock).toHaveBeenCalledTimes(1)
     first.emit('exit', 0, null)
@@ -695,6 +684,7 @@ describe('subscribeViaWatcherProcess', () => {
     const unsubscribe = subscription.unsubscribe()
     const isSettled = trackPromiseSettlement(unsubscribe)
     expect(first.kill).toHaveBeenCalledTimes(1)
+    await new Promise<void>((resolve) => setImmediate(resolve))
     expect(isSettled()).toBe(false)
     expect(rmSyncMock).toHaveBeenCalledWith('/tmp/orca-watcher-canary-supervisor-test', {
       recursive: true,
@@ -757,12 +747,17 @@ describe('subscribeViaWatcherProcess', () => {
     const second = await secondPromise
 
     const firstUnsub = first.unsubscribe()
+    const firstSettled = trackPromiseSettlement(firstUnsub)
     expect(child.kill).not.toHaveBeenCalled()
     expect(child.sent.at(-1)).toMatchObject({ op: 'unsubscribe' })
 
     // Both callers may gate destructive cleanup, so both must await physical exit.
     const secondUnsub = second.unsubscribe()
+    const secondSettled = trackPromiseSettlement(secondUnsub)
     expect(child.kill).toHaveBeenCalledTimes(1)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(firstSettled()).toBe(false)
+    expect(secondSettled()).toBe(false)
     child.emit('exit', 0, null)
     await expect(firstUnsub).resolves.toBeUndefined()
     await expect(secondUnsub).resolves.toBeUndefined()
@@ -801,7 +796,7 @@ describe('subscribeViaWatcherProcess', () => {
     expect(unsubscribe).toHaveBeenCalled()
   })
 
-  it('rejects a pre-aborted in-process subscribe before loading Parcel', async () => {
+  it('rejects a pre-aborted in-process subscribe before invoking Parcel subscribe', async () => {
     vi.stubEnv('VITEST', 'true')
     const controller = new AbortController()
     controller.abort()

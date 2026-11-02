@@ -1,6 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
-import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
-import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -15,7 +13,6 @@ import {
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { createCommandCodeOutputStatusDetector } from '../../../../../shared/command-code-output-status'
 import { readInFlightCommandCodeTurn } from '../parked-terminal-command-status'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
@@ -26,7 +23,8 @@ import { isMainTerminalSideEffectAuthorityForPty } from '../terminal-side-effect
 import { isRendererHiddenPtyDeliveryGateEnabled } from '../terminal-hidden-delivery-gate'
 import {
   markRendererOwnedAgentStatusWrite,
-  registerRendererOwnedAgentStatusPane
+  registerRendererOwnedAgentStatusPane,
+  resolveRendererOwnedAgentStatusTiming
 } from '../renderer-owned-agent-status-registry'
 
 import { resolveLatestAgentDoneStartedAt } from './agent-done-started-at'
@@ -40,10 +38,12 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): void {
   session.shellOverride = session.tab?.shellOverride
-  // Only local execution hosts can be native ConPTY; remote Linux panes on Windows must not inherit cursor-stripping output protection.
-  session.executionHostId = session.terminalOwnerUnresolved
-    ? UNRESOLVED_OWNER_HOST_ID
-    : getExecutionHostIdForWorktree(session.state, session.deps.worktreeId)
+  // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
+  // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
+  // enables ConPTY synchronized-output protection, which strips an agent's
+  // transient cursor-show (?25h) and leaves the cursor invisible. The execution
+  // host is the authoritative signal: only a 'local' host is a local native PTY.
+  session.executionHostId = session.ownerContext.executionHostId
   session.isNativeWindowsConpty = isLocalNativeWindowsConpty({
     userAgent: navigator.userAgent,
     connectionId: null,
@@ -99,11 +99,19 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
     ? getCachedWindowsTerminalCapabilities()
     : null
   session.projectRuntime =
-    !session.tab?.forceHostRuntime && session.runtimeEnvironmentId === null
-      ? getLocalProjectExecutionRuntimeContext(session.state, session.deps.worktreeId, undefined, {
-          wslAvailable: session.localWindowsTerminalCapabilities?.wslAvailable,
-          availableWslDistros: session.localWindowsTerminalCapabilities?.wslDistros ?? null
-        })
+    !session.tab?.forceHostRuntime &&
+    session.runtimeEnvironmentId === null &&
+    (!session.ownerContext.selectedHost || session.ownerContext.projectRuntimeTarget)
+      ? getLocalProjectExecutionRuntimeContext(
+          session.state,
+          session.deps.worktreeId,
+          undefined,
+          {
+            wslAvailable: session.localWindowsTerminalCapabilities?.wslAvailable,
+            availableWslDistros: session.localWindowsTerminalCapabilities?.wslDistros ?? null
+          },
+          session.ownerContext.projectRuntimeTarget
+        )
       : undefined
   session.shouldOwnAgentStatusInRenderer = session.runtimeEnvironmentId !== null
   // Claim renderer-derived status once per transport so host mirroring cannot overwrite or delete its live row.
@@ -138,12 +146,15 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
       : resolvedStatusTitle
     // Only actual byte-derived status proves authority to fence out host mirroring.
     markRendererOwnedAgentStatusWrite(session.cacheKey)
+    const timing = resolveRendererOwnedAgentStatusTiming(
+      currentState.agentStatusByPaneKey[session.cacheKey]
+    )
     if (session.launchToken) {
       currentState.setAgentStatus(
         session.cacheKey,
         observedStatusPayload,
         statusTitle,
-        undefined,
+        timing,
         routing,
         {
           launchToken: session.launchToken
@@ -154,7 +165,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
         session.cacheKey,
         observedStatusPayload,
         statusTitle,
-        undefined,
+        timing,
         routing
       )
     }
@@ -224,12 +235,14 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
   // Record real input from xterm’s core signal; onData also carries query replies that falsely prevent hibernation. Fall back only if that signal is absent.
   session.recordRealUserTerminalInput = (): void => {
     session.recordTerminalInputForHibernation()
-    // Takeover must never fire from the onData fallback below: it mixes in auto-replies.
-    reportWorkerTerminalUserInput(session.cacheKey, session.runtimeEnvironmentId)
   }
-  session.userInputActivityDisposable = subscribeToTerminalUserInput(
-    session.pane.terminal,
-    session.recordRealUserTerminalInput
+  // Why: xterm fires onUserInput before onData, so publishing here made the key wait on every store subscriber before reaching the PTY.
+  session.userInputActivityDisposable = subscribeToTerminalUserInput(session.pane.terminal, () =>
+    queueMicrotask(() => {
+      if (!session.disposed) {
+        session.recordRealUserTerminalInput()
+      }
+    })
   )
   session.recordTerminalInputForHibernationFallback = (): void => {
     if (session.userInputActivityDisposable === null) {

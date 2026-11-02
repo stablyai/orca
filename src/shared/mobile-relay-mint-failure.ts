@@ -9,6 +9,7 @@ export type MobileRelayMintFailure = {
   code: string
   stage: MobileRelayMintFailureStage
   message: string
+  clockOffsetMs?: number
 }
 
 export function mobileRelayMintFailureFromUnknown(args: {
@@ -30,9 +31,19 @@ export function mobileRelayMintFailureFromUnknown(args: {
     candidateCode != null && /^relay_[a-z0-9_]{1,74}$/.test(candidateCode)
       ? candidateCode
       : args.fallbackCode
+  const clockOffsetMs =
+    code === 'relay_clock_skew' &&
+    typeof args.error === 'object' &&
+    args.error !== null &&
+    'clockOffsetMs' in args.error &&
+    typeof args.error.clockOffsetMs === 'number' &&
+    Number.isFinite(args.error.clockOffsetMs)
+      ? args.error.clockOffsetMs
+      : undefined
   return {
     code,
     stage: args.stage,
-    message: args.fallbackMessage
+    message: args.fallbackMessage,
+    ...(clockOffsetMs === undefined ? {} : { clockOffsetMs })
   }
 }

@@ -1,3 +1,4 @@
+import type { OptionalProjectItemField } from './project-view-cache'
 import type { GitHubProjectOwnerType } from '../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
 import {
@@ -20,7 +21,7 @@ import { ownerQueryRoot } from './project-view-config'
 import type { RawItem } from './project-view-item-normalization'
 import {
   FIELD_CONFIG_FRAGMENT,
-  FIELD_VALUES_SELECTION,
+  fieldValuesSelection,
   itemContentSelection
 } from './project-view-query-fragments'
 
@@ -38,7 +39,7 @@ export async function fetchItemsPageWithRaw(args: {
   query: string
   first: number
   after: string | null
-  includeParent: boolean
+  unsupportedFields: ReadonlySet<OptionalProjectItemField>
   host?: string
 }): Promise<
   | { ok: true; page: RawItemsPage }
@@ -67,8 +68,10 @@ export async function fetchItemsPageWithRaw(args: {
               id
               type
               updatedAt
-              content { ${itemContentSelection(args.includeParent)} }
-              ${FIELD_VALUES_SELECTION}
+              content {
+                ${itemContentSelection(!args.unsupportedFields.has('parent'), !args.unsupportedFields.has('subIssuesSummary'))}
+              }
+              ${fieldValuesSelection(!args.unsupportedFields.has('linkedPullRequests'))}
             }
           }
         }
@@ -156,7 +159,11 @@ export async function fetchItemsPageWithRaw(args: {
     if (!page) {
       return {
         ok: false,
-        error: { type: 'not_found', message: 'Project or view not found.' },
+        error: {
+          type: 'not_found',
+          message: 'Project or view not found.',
+          reason: 'project_or_view_not_found'
+        },
         rawErrors: [],
         stderr
       }

@@ -54,16 +54,19 @@ function NativeChatGlyphSlot({
 export function NativeChatToolIcon({
   rowWord,
   mcpIdentity,
+  input,
   className
 }: {
   /** The word the row renders, which is the row's whole identity. */
   rowWord: string
   mcpIdentity?: NativeChatMcpIdentity
+  /** A command tool's input, which can narrow its glyph to the browser's. */
+  input?: unknown
   className?: string
 }): React.JSX.Element {
   return (
     <NativeChatGlyphSlot
-      glyph={NATIVE_CHAT_TOOL_GLYPHS[nativeChatToolIconName(rowWord, mcpIdentity)]}
+      glyph={NATIVE_CHAT_TOOL_GLYPHS[nativeChatToolIconName(rowWord, mcpIdentity, input)]}
       className={className}
     />
   )

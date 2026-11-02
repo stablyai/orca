@@ -5,6 +5,8 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { useRefreshOnHostContact } from './use-refresh-on-host-contact'
 import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
@@ -131,6 +133,9 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         if (!copy) {
           return
         }
+        // Only the first status after the user's own switch here may start WSL (E9); polls, remounts
+        // and restores stay gated.
+        const wakeWslDistro = takeRecentWorkspaceSwitchWake(activeWorktreeId, 'git-status')
         await refreshGitStatusForWorktree({
           target: copy.transport,
           ownerHostId: copy.hostId,
@@ -144,7 +149,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
             ...(request.reason === 'safety' ? { reuseLineStats: true } : {}),
             signal: request.signal,
             shouldApply: request.shouldApply,
-            onStatusAccepted: publishUpstreamRefWatch
+            onStatusAccepted: publishUpstreamRefWatch,
+            ...(wakeWslDistro ? { wakeWslDistro: true } : {})
           }
         })
       } catch {}
@@ -243,6 +249,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [activeStatusPollScope, canFetchActiveWorktreeGitStatus])
+
+  useRefreshOnHostContact(activeExecutionHostId, statusSchedulerRef, canApplyScheduledStatusRef)
 
   const previousConsumerVisibilityRef = useRef({
     worktreeId: activeWorktreeId,

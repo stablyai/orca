@@ -30,10 +30,8 @@ function createLoadingHandlers(currentUrl: string) {
     lastKnownWebviewUrlRef: ref<string | null>(null),
     keepAddressBarFocusRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
-    invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),
     onUpdatePageStateRef: ref(vi.fn()),
     onSetUrlRef: ref(vi.fn()),
-    setBrowserOverlayViewport: vi.fn(),
     setAddressBarValue: vi.fn(),
     focusAddressBarNow: () => false
   })
@@ -47,8 +45,6 @@ describe('browser page mount admission', () => {
   it('ends once the guest finishes its first load', () => {
     admitBrowserPageMount(PAGE_ID)
     const loading = createLoadingHandlers('https://example.com/')
-
-    loading.handleDidStartLoading()
     expect(isBrowserPageMountAdmitted(PAGE_ID)).toBe(true)
 
     loading.handleDidStopLoading()

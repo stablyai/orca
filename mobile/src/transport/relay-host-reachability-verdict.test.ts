@@ -111,7 +111,7 @@ describe('RelayReconnectController relay host reachability', () => {
     const reported: RelayHostReachability[] = []
     const controller = controllerReportingTo(changesReportedTo(reported))
     controller.registerFailure(hostOffline(), false)
-    controller.setActiveSession({ getFailure: () => null, probeAfterBackground: () => {} })
+    controller.setActiveSession({ getFailure: () => null, notifyForeground: () => {} })
     controller.registerFailure(hostOffline(), false)
     controller.registerFailure(hostOffline(), false)
     expect(reported).toEqual(['connecting'])
@@ -122,7 +122,7 @@ describe('RelayReconnectController relay host reachability', () => {
     const controller = controllerReportingTo(changesReportedTo(reported))
     controller.registerFailure(hostOffline(), false)
     controller.registerFailure(hostOffline(), false)
-    controller.setActiveSession({ getFailure: () => null, probeAfterBackground: () => {} })
+    controller.setActiveSession({ getFailure: () => null, notifyForeground: () => {} })
     expect(reported).toEqual(['connecting', 'host-offline', 'connecting'])
   })
 

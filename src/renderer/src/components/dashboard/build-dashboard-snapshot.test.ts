@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
+import {
+  buildDashboardSnapshot,
+  type DashboardSnapshotInput as DashboardSnapshotState
+} from './build-dashboard-snapshot'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -106,7 +109,8 @@ function worktree(id = 'w1', displayName = 'wt-one'): Worktree {
 
 function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapshotState {
   return {
-    repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000' }],
+    chatNames: new Map(),
+    repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000', addedAt: NOW }],
     worktreesByRepo: { r1: [worktree()] },
     tabsByWorktree: { w1: [tab()] },
     agentStatusByPaneKey: {},
@@ -117,14 +121,16 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
       [TAB_ID]: {
         root: { type: 'leaf', leafId: LEAF_ID },
         activeLeafId: LEAF_ID,
+        expandedLeafId: null,
         ptyIdsByLeafId: { [LEAF_ID]: 'pty1' }
       }
     },
     ptyIdsByTabId: { [TAB_ID]: ['pty1'] },
     runtimePaneTitlesByTabId: {},
     acknowledgedAgentsByPaneKey: {},
+    settings: null,
     ...overrides
-  } as unknown as DashboardSnapshotState
+  }
 }
 
 describe('buildDashboardSnapshot', () => {

@@ -12,8 +12,20 @@ import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 const DSB_TITLE_RE = /(?:^| - )deepseek build$/i
 // Why: DSB separates its spinner with " - "; a Claude task can end on the same suffix.
-const DSB_WORKING_TITLE_RE =
-  /^(?:\u26A0 Action Required - )?[\u2800-\u28ff]+\s+-\s+[\s\S]+?\s-\s+deepseek build$/i
+const DSB_WORKING_PREFIX = String.raw`^(?:\u26A0 Action Required - )?[\u2800-\u28ff]+\s+-\s+`
+const DSB_WORKING_PREFIX_RE = new RegExp(DSB_WORKING_PREFIX, 'i')
+const DSB_WORKING_TITLE_RE = new RegExp(
+  DSB_WORKING_PREFIX + String.raw`[\s\S]+?\s-\s+deepseek build$`,
+  'i'
+)
+
+export function hasDeepSeekBuildWorkingTitlePrefix(header: string): boolean {
+  return DSB_WORKING_PREFIX_RE.test(header)
+}
+
+export function isDeepSeekBuildWorkingTitle(title: string): boolean {
+  return DSB_WORKING_TITLE_RE.test(title)
+}
 const NATIVE_VENDOR_PREFIXES = [
   `${CLAUDE_IDLE} `,
   '. ',
@@ -39,7 +51,7 @@ export function isDeepSeekBuildTerminalTitle(title: string): boolean {
   return segments.some(
     (segment) =>
       DSB_TITLE_RE.test(segment) &&
-      (!containsAgentSpinnerGlyph(segment) || DSB_WORKING_TITLE_RE.test(segment))
+      (!containsAgentSpinnerGlyph(segment) || isDeepSeekBuildWorkingTitle(segment))
   )
 }
 
@@ -51,5 +63,5 @@ export function getDeepSeekBuildTitleStatus(title: string): AgentStatus | null {
   if (segments.some((segment) => segment.startsWith('⚠ Action Required - '))) {
     return 'permission'
   }
-  return segments.some((segment) => DSB_WORKING_TITLE_RE.test(segment)) ? 'working' : 'idle'
+  return segments.some((segment) => isDeepSeekBuildWorkingTitle(segment)) ? 'working' : 'idle'
 }

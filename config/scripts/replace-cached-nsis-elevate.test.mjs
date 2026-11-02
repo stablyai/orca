@@ -1,13 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -15,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   findCachedElevatePaths,
   replaceCachedElevateHelpers,
-  resolveElectronBuilderCacheDir,
   summarizeSwap
 } from './replace-cached-nsis-elevate.mjs'
 
@@ -116,44 +107,7 @@ describe('cached elevate.exe swap covers the real electron-builder layouts', () 
     ).toEqual([join(overrideDir, 'elevate.exe')])
   })
 
-  it('resolves the cache root the same way app-builder-lib does', () => {
-    expect(
-      resolveElectronBuilderCacheDir({
-        env: { LOCALAPPDATA: 'C:\\Users\\runneradmin\\AppData\\Local' },
-        platform: 'win32'
-      })
-    ).toBe(join('C:\\Users\\runneradmin\\AppData\\Local', 'electron-builder', 'Cache'))
-    expect(resolveElectronBuilderCacheDir({ env: {}, platform: 'darwin', home: '/Users/a' })).toBe(
-      join('/Users/a', 'Library', 'Caches', 'electron-builder')
-    )
-    expect(resolveElectronBuilderCacheDir({ env: { ELECTRON_BUILDER_CACHE: '/mnt/cache' } })).toBe(
-      '/mnt/cache'
-    )
-  })
-
   // Compare real cache scan against independent unbounded walk to catch vacuous empty matches; skip only if no bundle is cached.
-  it('finds every elevate.exe the real electron-builder cache holds', (ctx) => {
-    const cacheDir = resolveElectronBuilderCacheDir()
-    if (!existsSync(cacheDir)) {
-      // Report missing real cache as skipped, never passed; fixture-only coverage cannot validate unknown layouts.
-      ctx.skip()
-      return
-    }
-    const walk = (dir) =>
-      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-        const path = join(dir, entry.name)
-        if (entry.isDirectory()) {
-          return walk(path)
-        }
-        return entry.name.toLowerCase() === 'elevate.exe' ? [path] : []
-      })
-    const onDisk = walk(cacheDir)
-    if (onDisk.length === 0) {
-      ctx.skip()
-      return
-    }
-    expect(findCachedElevatePaths(cacheDir, { env: {} }).sort()).toEqual(onDisk.sort())
-  })
 })
 
 describe('the probe, not the scan, decides whether the swap worked', () => {

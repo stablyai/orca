@@ -42,7 +42,7 @@ describe('Jira project mappings', () => {
     expect(normalizeJiraProjectReference(null)).toBeNull()
   })
 
-  it('validates the optional field for native and remote repository updates', () => {
+  it('normalizes the optional field through the repository update schema', () => {
     const schema = createRepoUpdateSchema({ repo: z.string() })
     expect(
       schema.parse({ repo: 'repo', updates: { defaultJiraProject: project } }).updates

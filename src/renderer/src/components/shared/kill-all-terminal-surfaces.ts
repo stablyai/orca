@@ -17,6 +17,7 @@ type DaemonKillAllResult = {
   killedCount: number
   remainingCount: number
   killedSessionIds?: string[]
+  listingIncomplete?: boolean
 }
 
 export type KillAllTerminalSurfaceState = TerminalTabRetirementState &

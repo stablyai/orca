@@ -209,7 +209,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
           stdout: JSON.stringify({
             data: {
               repository: {
-                pullRequest: {
+                viewedPullRequest: {
                   id: 'PR_enterprise',
                   files: {
                     pageInfo: { hasNextPage: false, endCursor: null },

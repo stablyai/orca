@@ -1,3 +1,4 @@
+import { TerminalKittyKeyboardModeTracker } from '../../../../src/shared/terminal-kitty-keyboard-mode-tracker'
 import type { TerminalLaidOutCellBox } from '../terminal-cell-box'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
 import {
@@ -59,6 +60,7 @@ export type TerminalDocumentState = {
   trackedMouseTrackingMode: string
   sgrMouseMode: boolean
   sgrMousePixelsMode: boolean
+  keyboardModes: TerminalKittyKeyboardModeTracker
   scrollIndicatorHideTimer: ReturnType<typeof setTimeout> | null
   handledMessageIds: number[]
   currentTextScale: number
@@ -93,10 +95,13 @@ export type TerminalDocumentState = {
   sel: TerminalDocumentSelection | null
   longPressTimer: ReturnType<typeof setTimeout> | null
   longPressOrigin: TerminalDocumentTouchOrigin | null
+  interactionActive: boolean
   tapCandidate: TerminalDocumentTapCandidate | null
   bottomRowBackdrop: string
   surface: HTMLElement | null
   pendingTerm: TerminalDocumentTerminal | null
+  // The anchor the pending replay will restore; null after a clear or an alternate-screen snapshot.
+  pendingReplayScrollAnchorRows: number | null
   committedTerm: TerminalDocumentTerminal | null
   provisionalTerm: TerminalDocumentTerminal | null
   committedSurface: HTMLElement | null
@@ -140,6 +145,9 @@ export type TerminalDocumentModes = {
   mouseTrackingMode: string
   sgrMouseMode: boolean
   sgrMousePixelsMode: boolean
+  applicationCursorKeysMode: boolean
+  kittyKeyboardFlags: number
+  modifyOtherKeys: number
 }
 
 export type TerminalWriteQueueEntry = string | (() => void) | undefined
@@ -167,7 +175,10 @@ function createTerminalDocumentState(): TerminalDocumentState {
       altScreen: false,
       mouseTrackingMode: 'none',
       sgrMouseMode: false,
-      sgrMousePixelsMode: false
+      sgrMousePixelsMode: false,
+      applicationCursorKeysMode: false,
+      kittyKeyboardFlags: 0,
+      modifyOtherKeys: 0
     },
     everReady: false,
     mouseEncodingKnown: false,
@@ -175,6 +186,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     trackedMouseTrackingMode: 'none',
     sgrMouseMode: false,
     sgrMousePixelsMode: false,
+    keyboardModes: new TerminalKittyKeyboardModeTracker(),
     scrollIndicatorHideTimer: null,
     handledMessageIds: [],
     currentTextScale: 1,
@@ -208,11 +220,13 @@ function createTerminalDocumentState(): TerminalDocumentState {
     sel: null,
     longPressTimer: null,
     longPressOrigin: null,
+    interactionActive: true,
     tapCandidate: null,
     wheelAccumDeltaY: 0,
     bottomRowBackdrop: '',
     surface: null,
     pendingTerm: null,
+    pendingReplayScrollAnchorRows: null,
     committedTerm: null,
     provisionalTerm: null,
     committedSurface: null,
@@ -241,6 +255,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     scheduledFrames: [],
     framesStopped: false,
     touchGesture: {
+      active: false,
       lastX: 0,
       lastY: 0,
       lastTime: 0,

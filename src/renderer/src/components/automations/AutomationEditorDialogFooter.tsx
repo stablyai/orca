@@ -40,7 +40,7 @@ export function AutomationEditorDialogFooter({
         <Button variant="outline" onClick={() => onOpenChange(false)}>
           {translate('auto.components.automations.AutomationEditorDialog.fb1896a5e7', 'Cancel')}
         </Button>
-        <Button onClick={onSave} disabled={isSaving || !hasProjects || !canSave}>
+        <Button onClick={onSave} disabled={isSaving || (!isEditing && !hasProjects) || !canSave}>
           {saveLabel}
         </Button>
       </div>

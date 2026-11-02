@@ -7,7 +7,6 @@ import {
 } from './http-link-localhost-route'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 
-import type { BrowserLinkOpenContext } from './browser-link-destination'
 import type { LinkOpenIntent, LinkSourceState } from './link-open-intent'
 import { captureLinkOpenIntent, canOpenLinkInSourceGroup } from './link-open-intent'
 import type { AppState } from '@/store/types'
@@ -25,22 +24,26 @@ import {
   isHttpLinkBackgroundOpen,
   openLocalHttpLinkTab,
   prepareRemoteHttpLinkTab,
-  type HttpLinkBrowserRequestFields,
   type HttpLinkBrowserTabState
 } from './http-link-browser-placement'
 
-export type OpenHttpLinkOptions = {
-  worktreeId?: string | null
-  /** Terminal-only opt-in for routing a remote-owned source through its managed browser. */
-  allowRemoteInApp?: boolean
-  /** Unconditional: always use the system browser regardless of settings. */
-  forceSystemBrowser?: boolean
-  /** Unconditional for local sources: open inside Orca regardless of settings. */
-  forceInApp?: boolean
-  /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
-  modifierHeld?: boolean
-  sourceOwner?: HttpLinkSourceOwner
-  linkContext?: BrowserLinkOpenContext
+import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
+export type { OpenHttpLinkOptions, HttpLinkBrowserCompletion } from './http-link-destinations'
+
+function settleHttpLinkBrowserOpen(
+  opening: Promise<string | null | void>,
+  reveal: { dispose: () => void },
+  background: boolean,
+  onComplete?: OpenHttpLinkOptions['onBrowserOpenComplete']
+): void {
+  if (onComplete) {
+    void opening
+      .then((pageId) => onComplete({ pageId: pageId ?? null, background }))
+      .catch(reportHttpLinkBrowserOpenFailure)
+      .finally(reveal.dispose)
+    return
+  }
+  void opening.catch(reportHttpLinkBrowserOpenFailure).finally(reveal.dispose)
 }
 
 export type HttpLinkSourceOwner =
@@ -87,29 +90,13 @@ export function registerHttpLinkGroupActionAvailability(
   groupActionAvailability = check
 }
 
-type StoreAccessor = () => HttpLinkStoreState
-
-type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
-  workspaceId: string
-  url: string
-  intent: { kind: 'url' }
-  linkContext?: BrowserLinkOpenContext
-  expectedRuntimeEnvironmentId?: string
-  expectedSshConnectionId?: string
-}
-
-/** Resolves to the page id when the page renders on this desktop, else null. */
-type WorkspaceHttpLinkBrowserOpener = (
-  request: WorkspaceHttpLinkBrowserRequest
-) => Promise<string | null | void>
-
 // Inject store access to break editor-slice → HTTP routing → store initialization cycles.
-let storeAccessor: StoreAccessor | null = null
+let storeAccessor: (() => HttpLinkStoreState) | null = null
 let storeSubscriber: BrowserLinkSelectionSubscriber | undefined
 let workspaceHttpLinkBrowserOpener: WorkspaceHttpLinkBrowserOpener | null = null
 
 export function registerHttpLinkStoreAccessor(
-  fn: StoreAccessor,
+  fn: () => HttpLinkStoreState,
   subscribe?: BrowserLinkSelectionSubscriber
 ): void {
   storeAccessor = fn
@@ -173,30 +160,48 @@ function reportHttpLinkBrowserOpenFailure(error: unknown): void {
   )
 }
 
+async function openSystemHttpLink(url: string): Promise<void> {
+  try {
+    await window.api.shell.openUrl(url)
+  } catch {
+    reportHttpLinkBrowserOpenFailure(null)
+  }
+}
+
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
+  // Ownerless legacy callers retain their default-server classification without asserting an owner.
+  const ownerlessRemoteActive =
+    !opts.sourceOwner && Boolean(storeAccessor?.()?.settings?.activeRuntimeEnvironmentId?.trim())
+  executeHttpLink(url, opts, ownerlessRemoteActive)
+}
+
+export function openOwnedHttpLink(
+  url: string,
+  opts: OpenHttpLinkOptions & { sourceOwner: HttpLinkSourceOwner }
+): void {
+  executeHttpLink(url, opts, false)
+}
+
+function executeHttpLink(
+  url: string,
+  opts: OpenHttpLinkOptions,
+  remoteRuntimeActive: boolean
+): void {
   if (opts.linkContext?.isCurrentRequest?.() === false) {
     return
   }
-  const {
-    worktreeId,
-    allowRemoteInApp,
-    forceSystemBrowser,
-    forceInApp,
-    modifierHeld,
-    sourceOwner
-  } = opts
+  const { worktreeId, allowRemoteInApp, forceSystemBrowser, forceInApp, sourceOwner } = opts
   if (sourceOwner?.kind === 'unknown') {
     return
   }
   const state = storeAccessor?.()
-  const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
   const effectiveSourceOwner = sourceOwner
   const sourceIsLocal = effectiveSourceOwner
     ? effectiveSourceOwner.kind === 'local'
     : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
   const modifier = resolveModifierRouting(
-    Boolean(modifierHeld),
+    Boolean(opts.modifierHeld),
     openLinksInApp,
     state?.settings?.openLinksInAppModifierInverts === true
   )
@@ -221,20 +226,25 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
         storeSubscriber,
         opts.linkContext?.canReveal
       )
-      void workspaceHttpLinkBrowserOpener({
+      const opening = workspaceHttpLinkBrowserOpener({
         workspaceId: worktreeId,
         url,
         intent: { kind: 'url' },
         ...fields,
         linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
+        ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'
             ? { expectedSshConnectionId: effectiveSourceOwner.connectionId }
             : {})
       })
-        .catch(reportHttpLinkBrowserOpenFailure)
-        .finally(reveal.dispose)
+      settleHttpLinkBrowserOpen(
+        opening,
+        reveal,
+        opts.onBrowserOpenComplete ? isHttpLinkBackgroundOpen(state) : false,
+        opts.onBrowserOpenComplete
+      )
     }
     return
   }
@@ -248,7 +258,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
         return
       }
       if (workspaceHttpLinkBrowserOpener) {
-        void workspaceHttpLinkBrowserOpener({
+        const opening = workspaceHttpLinkBrowserOpener({
           workspaceId: worktreeId,
           url: chosenUrl,
           intent: { kind: 'url' },
@@ -257,8 +267,12 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
             ? { focusOnCreate: false, selectWorktree: false }
             : {})
         })
-          .catch(reportHttpLinkBrowserOpenFailure)
-          .finally(reveal.dispose)
+        settleHttpLinkBrowserOpen(
+          opening,
+          reveal,
+          opts.onBrowserOpenComplete ? isHttpLinkBackgroundOpen(state) : false,
+          opts.onBrowserOpenComplete
+        )
         return
       }
       const activate = !isHttpLinkBackgroundOpen(state) && reveal.canReveal()
@@ -279,14 +293,14 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    void window.api.shell.openUrl(url)
+    void openSystemHttpLink(url)
     return
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
     if (opts.linkContext?.isCurrentRequest?.() === false) {
       return
     }
-    void window.api.shell.openUrl(labeledUrl)
+    void openSystemHttpLink(labeledUrl)
   })
 }
 

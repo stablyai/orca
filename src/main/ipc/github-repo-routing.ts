@@ -10,15 +10,17 @@ import {
   notePRRefreshValidationDenial,
   type PRRefreshValidationDenialReason
 } from '../github/pr-refresh-validation-backoff'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
 } from '../project-runtime-git-options'
+import { guardWslUncPathAccess, WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
 
 export type GitHubRepoScopedArgs = {
   repoPath: string
   repoId?: string | null
+  repoOwnerExecutionHostId?: string
   sourceContext?: TaskSourceContext | null
 }
 
@@ -29,6 +31,7 @@ type RegisteredRepoValidationResult =
 type RegisteredRepoQuery = {
   repoPath: string
   repoId?: string | null
+  repoOwnerExecutionHostId?: string
   /** Picks between twins (one id on two hosts); a lone row's own fields still win (they may be stale). */
   hostHint?: Parameters<typeof getRepoExecutionHostId>[0] | null
   sourceContext?: TaskSourceContext | null
@@ -65,9 +68,14 @@ function validateRegisteredRepo(
           message: 'Access denied: unknown repository path'
         }
   }
-  if (sourceContext?.provider === 'github') {
+  const ownerHostId =
+    query.repoOwnerExecutionHostId ??
+    (sourceContext?.provider === 'github' ? sourceContext.hostId : null)
+  if (ownerHostId) {
     const repo = pathRows.find(
-      (candidate) => getRepoExecutionHostId(candidate) === sourceContext.hostId
+      (candidate) =>
+        getRepoExecutionHostId(candidate) === ownerHostId &&
+        (sourceContext?.provider !== 'github' || sourceContext.hostId === ownerHostId)
     )
     return repo
       ? { kind: 'ok', repo }
@@ -88,7 +96,12 @@ function validateRegisteredRepo(
 function registeredRepoQuery(args: string | GitHubRepoScopedArgs): RegisteredRepoQuery {
   return typeof args === 'string'
     ? { repoPath: args }
-    : { repoPath: args.repoPath, repoId: args.repoId, sourceContext: args.sourceContext }
+    : {
+        repoPath: args.repoPath,
+        repoId: args.repoId,
+        repoOwnerExecutionHostId: args.repoOwnerExecutionHostId,
+        sourceContext: args.sourceContext
+      }
 }
 
 function prRefreshCandidateQuery(candidate: GitHubPRRefreshCandidate): RegisteredRepoQuery {
@@ -143,6 +156,30 @@ export function getGitHubLocalGitOptionArgs(
 ): [] | [LocalProjectGhExecOptions] {
   const localGitOptions = getLocalProjectGhExecOptions(store, repo)
   return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
+}
+
+/**
+ * gh (and its git remote probe) for a WSL repo runs in that distro, which boots it when stopped.
+ * A poll refuses instead (E9); `wake` marks a user act, e.g. Refresh, that may start it.
+ * `retryStartsIt: false` words the refusal for surfaces whose Retry is itself a background read.
+ */
+export async function readGitHubRepoUnlessWslStopped<T>(
+  store: Store,
+  repo: Repo,
+  read: () => Promise<T>,
+  options: { wake?: boolean; retryStartsIt?: boolean } = {}
+): Promise<T> {
+  try {
+    return await guardWslUncPathAccess(repo.path, read, {
+      wake: options.wake,
+      wslDistro: getLocalProjectGhExecOptions(store, repo).wslDistro
+    })
+  } catch (error) {
+    if (options.retryStartsIt === false && error instanceof WslDistroStoppedError) {
+      throw new WslDistroStoppedError(error.distro, { retryStartsIt: false })
+    }
+    throw error
+  }
 }
 
 export function applyRegisteredRepoToPRRefreshCandidate(

@@ -32,6 +32,20 @@ export function getOptionalStringFlag(
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+export function getPresentStringFlag(
+  flags: Map<string, string | boolean>,
+  name: string
+): string | undefined {
+  if (!flags.has(name)) {
+    return undefined
+  }
+  const value = flags.get(name)
+  if (typeof value === 'string' && value.length > 0) {
+    return value
+  }
+  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
+}
+
 // A missing valued flag must fail: silently regenerating mutation IDs can submit prompts twice.
 export function rejectValuelessFlag(value: string | boolean | undefined, name: string): void {
   if (value === true) {

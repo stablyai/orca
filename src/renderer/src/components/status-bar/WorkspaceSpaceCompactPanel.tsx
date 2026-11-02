@@ -6,6 +6,7 @@ import { Button } from '../ui/button'
 import {
   formatBytes,
   getWorkspaceSpaceProgressLabel,
+  getWorkspaceSpaceScanningFallbackLabel,
   getWorkspaceSpaceScanTimeLabel
 } from './workspace-space-format'
 import { translate } from '@/i18n/i18n'
@@ -59,7 +60,9 @@ export function WorkspaceSpaceCompactPanel({
                   ? translate(
                       'auto.components.status.bar.WorkspaceSpaceCompactPanel.3d8d47ce77',
                       '{{value0}} · last result kept',
-                      { value0: progressLabel ?? 'Scanning workspace sizes' }
+                      {
+                        value0: progressLabel ?? getWorkspaceSpaceScanningFallbackLabel()
+                      }
                     )
                   : analysis.unavailableWorktreeCount > 0
                     ? translate(
@@ -71,11 +74,12 @@ export function WorkspaceSpaceCompactPanel({
                         }
                       )
                     : translate(
-                        'workspaceSpace.compact.linkedAndScanned',
-                        '{{value0}} in linked worktrees · {{value1}} workspaces',
+                        'workspaceSpace.compact.linkedAndScannedCount',
+                        '{{size}} in linked worktrees · {{count}} workspaces',
                         {
-                          value0: formatBytes(analysis.reclaimableBytes),
-                          value1: analysis.scannedWorktreeCount
+                          size: formatBytes(analysis.reclaimableBytes),
+                          count: analysis.scannedWorktreeCount,
+                          defaultValue_one: '{{size}} in linked worktrees · {{count}} workspace'
                         }
                       )
                 : isScanning

@@ -133,19 +133,25 @@ it('counts every chat as unconfirmed when the answer carried no outcomes', () =>
   expect(titles()).toEqual(['Couldn’t confirm 2 chats were resumed'])
 })
 
-it('counts an unconfirmed chat the host no longer lists as resumed', () => {
+// The host retires an unconfirmed send once the agent is seen carrying on it; the resume must still
+// report the chat, and as resumed, not as a failure the list can no longer show.
+it('preserves normalized uncertainty when a pending-list read omits the chat', () => {
   announceRestartResults(['a'], [{ sessionId: 'a', outcome: 'unknown' }], [], show)
-  expect(titles()).toEqual(['Resumed 1 chat'])
+  expect(titles()).toEqual(['Couldn’t confirm 1 chat was resumed'])
 })
 
-// Unconfirmed sends may already be running; use the host’s recorded outcome to avoid inviting duplicate sends.
-it('counts a chat the host filed as unconfirmed on its own line, as the list does', () => {
+// Unconfirmed means the agent may well be working; "couldn't be resumed" would invite a second send.
+// The normalized action result takes precedence over a different host observation.
+it('counts normalized uncertainty separately from matching refusal', () => {
   announceRestartResults(
     ['a', 'b'],
-    [{ sessionId: 'a', outcome: 'refused' }],
     [
       { sessionId: 'a', outcome: 'refused' },
-      { sessionId: 'b', outcome: 'unconfirmed' }
+      { sessionId: 'b', outcome: 'unknown' }
+    ],
+    [
+      { sessionId: 'a', outcome: 'unconfirmed' },
+      { sessionId: 'b', outcome: 'refused' }
     ],
     show
   )

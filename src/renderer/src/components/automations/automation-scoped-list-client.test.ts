@@ -112,6 +112,7 @@ describe('listScopedAutomations', () => {
     await expect(listScopedAutomations(RUNTIME, { kind: 'self' })).rejects.toThrow(
       'runtime_environment_revision_changed'
     )
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
   })
 
   it('does not query a host that never advertised host scope', async () => {
@@ -125,10 +126,10 @@ describe('listScopedAutomations', () => {
 
   // An unreachable host proves nothing about its version, so it must not be reported as too old.
   it('propagates an unreachable authority instead of calling it incompatible', async () => {
-    const { listScopedAutomations, AutomationHostScopeUnsupportedError } = await client()
+    const { listScopedAutomations } = await client()
     getRuntimeEnvironmentStatus.mockRejectedValue(new Error('runtime_unavailable'))
-    await expect(listScopedAutomations(RUNTIME, { kind: 'self' })).rejects.not.toBeInstanceOf(
-      AutomationHostScopeUnsupportedError
+    await expect(listScopedAutomations(RUNTIME, { kind: 'self' })).rejects.toThrow(
+      'runtime_unavailable'
     )
   })
 })
@@ -136,19 +137,24 @@ describe('listScopedAutomations', () => {
 describe('capability probe dedupe', () => {
   it('shares one in-flight probe across concurrent calls to the same incarnation', async () => {
     const { listScopedAutomations } = await client()
-    getRuntimeEnvironmentStatus.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      return ALL_CAPABILITIES
+    let completeProbe = (_status: typeof ALL_CAPABILITIES): void => {}
+    const probe = new Promise<typeof ALL_CAPABILITIES>((resolve) => {
+      completeProbe = resolve
     })
+    getRuntimeEnvironmentStatus.mockReturnValue(probe)
     callRuntimeRpc.mockResolvedValue({ automations: [], items: [], orphanCount: 0 })
-    await Promise.all([
+    const requests = [
       listScopedAutomations(RUNTIME, { kind: 'self' }),
       listScopedAutomations(RUNTIME, { kind: 'orphan' })
-    ])
+    ]
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(1)
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    completeProbe(ALL_CAPABILITIES)
+    await Promise.all(requests)
     expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('never re-asks about a capability the incarnation already confirmed', async () => {
+  it('caches confirmed list capabilities and re-probes mutations', async () => {
     const { listScopedAutomations, updateAutomationForOwner } = await client()
     getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)
     callRuntimeRpc.mockResolvedValue({
@@ -159,7 +165,7 @@ describe('capability probe dedupe', () => {
     })
     await listScopedAutomations(RUNTIME, { kind: 'self' })
     await listScopedAutomations(RUNTIME, { kind: 'orphan' })
-    // A different capability confirmed by the same status answer is also cached.
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(1)
     await updateAutomationForOwner(SSH_OWNER, 'a1', { enabled: false })
     // Mutations re-probe because in-place runtime replacement can invalidate capabilities under the same pairing.
     expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(2)
@@ -325,11 +331,9 @@ describe('orphan-fenced mutations', () => {
 
   // An unreachable host is a retry, not an upgrade prompt — the orphan arm inherits this.
   it('propagates an unreachable authority instead of calling it incompatible', async () => {
-    const { deleteOrphanAutomation, AutomationHostScopeUnsupportedError } = await client()
+    const { deleteOrphanAutomation } = await client()
     getRuntimeEnvironmentStatus.mockRejectedValue(new Error('runtime_unavailable'))
-    await expect(deleteOrphanAutomation(RUNTIME, 'a1')).rejects.not.toBeInstanceOf(
-      AutomationHostScopeUnsupportedError
-    )
+    await expect(deleteOrphanAutomation(RUNTIME, 'a1')).rejects.toThrow('runtime_unavailable')
   })
 
   it('routes a desktop orphan over the local runtime target, unprobed', async () => {
@@ -385,22 +389,13 @@ describe('orphan-fenced mutations', () => {
   })
 
   // Keep orphan and owned read-only history arms equally unprobed.
-  it('probes on the orphan history read exactly as often as the owned read does', async () => {
+  it('does not probe either owned or orphan history reads', async () => {
     const { listAutomationRunsForOwner, listOrphanAutomationRuns } = await client()
     callRuntimeRpc.mockResolvedValue({ runs: [] })
     await listAutomationRunsForOwner(SSH_OWNER, 'a1')
-    const ownedProbes = getRuntimeEnvironmentStatus.mock.calls.length
-    getRuntimeEnvironmentStatus.mockClear()
+    expect(getRuntimeEnvironmentStatus).not.toHaveBeenCalled()
     await listOrphanAutomationRuns(RUNTIME, 'a1')
-    expect(getRuntimeEnvironmentStatus.mock.calls.length).toBe(ownedProbes)
-  })
-
-  it('cannot be handed an owner precondition — the fence is not a parameter', async () => {
-    const { updateOrphanAutomation, ORPHAN_OWNER_PRECONDITION } = await client()
-    callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
-    await updateOrphanAutomation(DESKTOP, 'a1', { enabled: false })
-    expect(callRuntimeRpc.mock.calls[0]?.[2]?.expectedOwner).toEqual(ORPHAN_OWNER_PRECONDITION)
-    expect(updateOrphanAutomation.length).toBe(3)
+    expect(getRuntimeEnvironmentStatus).not.toHaveBeenCalled()
   })
 })
 

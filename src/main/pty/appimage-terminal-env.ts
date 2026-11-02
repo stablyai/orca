@@ -29,6 +29,17 @@ function removeAppDirPathEntries(value: string | undefined, appDir: string): str
   return cleaned.length > 0 ? cleaned : undefined
 }
 
+export function envWithoutAppImageRuntime(env: NodeJS.ProcessEnv): Record<string, string> {
+  const copy: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) {
+      copy[key] = value
+    }
+  }
+  removeAppImageRuntimeEnv(copy)
+  return copy
+}
+
 export function removeAppImageRuntimeEnv(env: Record<string, string>): void {
   if (process.platform !== 'linux' || (!env.APPIMAGE && !env.APPDIR && !env.ARGV0)) {
     return

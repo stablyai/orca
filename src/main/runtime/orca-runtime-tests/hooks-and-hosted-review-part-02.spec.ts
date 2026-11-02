@@ -183,7 +183,8 @@ describe('OrcaRuntimeService', () => {
       42,
       'pr',
       null,
-      localGitOptions
+      localGitOptions,
+      {}
     )
     expect(getGitHubWorkItemDetailsMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,

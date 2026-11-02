@@ -1,7 +1,22 @@
 import type { Repo } from './repo-types'
-import { getRepoSshConnectionId } from './execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ParsedExecutionHost
+} from './execution-host'
+import { isWslUncPath } from './wsl-paths'
 
-/** SSH file owners use relay orca/orca.cmd, never the Linux desktop orca-ide rename. Resolve executionHostId over stale connectionId; runtime hosts are remote only with nested SSH. Local-PTY routing uses getSshTargetIdForExecutionHost; already-resolved launch connections need no re-derivation. */
-export function repoIsRemote(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): boolean {
-  return getRepoSshConnectionId(repo) !== null
+/** SSH relays and Orca servers put plain `orca` on PATH; the Linux `orca-ide` rename is for local desktops and WSL. */
+export function launchHostIsRemote(
+  hostKind: ParsedExecutionHost['kind'],
+  workspacePath: string | null | undefined
+): boolean {
+  return hostKind !== 'local' && !(workspacePath && isWslUncPath(workspacePath))
+}
+
+export function repoIsRemote(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> & { path?: string | null }
+): boolean {
+  const hostKind = parseExecutionHostId(getRepoExecutionHostId(repo))?.kind ?? 'local'
+  return launchHostIsRemote(hostKind, repo.path)
 }

@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
+import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
 import type { useForgetHostClient } from '../transport/host-client-hooks'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
@@ -14,20 +15,12 @@ import {
 import { serverUpdateNeededNotice } from '../host-route-notice'
 import type { ConnectionState } from '../transport/types'
 import { leaveHostRoute } from '../host-route-exit'
-import {
-  getWorktreeRowIdentity,
-  isSameWorktreeRow,
-  removeWorktreeRow
-} from '../worktree/worktree-host-row-identity'
+import { getWorktreeRowIdentity, isSameWorktreeRow } from '../worktree/worktree-host-row-identity'
 import { noteLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { isWorktreePinned, type Worktree } from '../worktree/workspace-list-sections'
-import {
-  worktreeActivate,
-  worktreePinWrite,
-  worktreeRemove,
-  worktreeSleep
-} from './host-screen-operations'
+import { worktreeActivate, worktreePinWrite, worktreeSleep } from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
+import { useHostWorktreeDelete } from './use-host-worktree-delete'
 
 export function useHostWorktreeActions(args: {
   client: RpcClient | null
@@ -75,8 +68,11 @@ export function useHostWorktreeActions(args: {
     [client, hostCapabilities]
   )
 
+  // A removed host leaves unconditionally; this is the user's own leave, which a recording session holds first.
   const leaveHost = useCallback(() => {
-    leaveHostRoute(router)
+    if (!holdSessionLeave()) {
+      leaveHostRoute(router)
+    }
   }, [router])
 
   const openNewWorktreeModal = useCallback(
@@ -169,34 +165,7 @@ export function useHostWorktreeActions(args: {
     [client, setSleptIds]
   )
 
-  const handleDeleteWorktree = useCallback(
-    async (item: Worktree) => {
-      const rowClient = clientForRow(item)
-      if (!rowClient) {
-        return
-      }
-
-      const removeFromList = (list: Worktree[]) => removeWorktreeRow(list, item)
-      setWorktrees(removeFromList)
-      setLastKnownWorktrees(removeFromList)
-
-      try {
-        const reply = await worktreeRemove.request(rowClient, {
-          worktree: `id:${item.worktreeId}`,
-          force: true
-        })
-        if (!worktreeRemove.interpret(reply).accepted) {
-          setWorktrees((prev) => [...prev, item])
-          setLastKnownWorktrees((prev) => [...prev, item])
-        }
-        void fetchWorktrees()
-      } catch {
-        setWorktrees((prev) => [...prev, item])
-        setLastKnownWorktrees((prev) => [...prev, item])
-      }
-    },
-    [clientForRow, fetchWorktrees]
-  )
+  const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })
 
   const handleRemoveHost = useCallback(async () => {
     if (!hostId) {
@@ -204,7 +173,7 @@ export function useHostWorktreeActions(args: {
     }
     try {
       await removeHostAndCloseClient(hostId, forgetHostClient)
-      leaveHost()
+      leaveHostRoute(router)
     } catch (error) {
       if (isPageHostRemovalUnavailable(error)) {
         // Page removal is unsupported; do not offer a confirm or retry that cannot work.
@@ -216,15 +185,23 @@ export function useHostWorktreeActions(args: {
       // React Native Web Alert is a no-op; show a dismissible action error while keeping the list, header and confirm usable.
       setActionError('Could not remove host. Please try again.')
     }
-  }, [hostId, leaveHost, forgetHostClient, setActionError, setConfirmRemoveHost])
+  }, [hostId, router, forgetHostClient, setActionError, setConfirmRemoveHost])
 
+  // beforeNavigate runs unless the open session holds the leave, so a held tap leaves the target untouched.
   const navigateFromHostList = useCallback(
-    (target: string, selectPane = false) => {
+    (target: string, selectPane = false, beforeNavigate?: () => void) => {
       if (!embedded) {
+        beforeNavigate?.()
         router.push(target)
         return
       }
-      if (!selectPane && pathname === (target.split('?')[0] ?? target)) {
+      // In the page every replace remounts the open session, even a pane tap, so only a no-op is not a leave.
+      const noop = !selectPane && pathname === (target.split('?')[0] ?? target)
+      if (!noop && holdSessionLeave()) {
+        return
+      }
+      beforeNavigate?.()
+      if (noop) {
         return
       }
       if (pathname === `/h/${hostId}`) {
@@ -247,27 +224,28 @@ export function useHostWorktreeActions(args: {
       if (routeHost === null) {
         return
       }
-      // Record this phone’s visit before navigation; a session opened in another page cannot publish its stored write back here.
-      if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-        setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
-      } else if (hostId) {
-        noteLastVisitedWorktree({ hostId, worktreeId: item.worktreeId, executionHost: routeHost })
-      }
-      const rowClient = clientForRow(item)
-      if (rowClient && connState === 'connected') {
-        void worktreeActivate
-          .request(rowClient, {
-            worktree: `id:${item.worktreeId}`,
-            notifyClients: false,
-            navigation: 'caller'
-          })
-          .catch(() => null)
-      }
       // Use an empty missing hostId: the shell refuses /h//session, whereas the string undefined would name an accepted host.
       const executionHost = routeHost ? `&executionHost=${encodeURIComponent(routeHost)}` : ''
       const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
       const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${executionHost}${pane}`
-      navigateFromHostList(target, Boolean(paneKey))
+      navigateFromHostList(target, Boolean(paneKey), () => {
+        // Record this phone’s visit before navigation; a session opened in another page cannot publish its stored write back here.
+        if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
+        } else if (hostId) {
+          noteLastVisitedWorktree({ hostId, worktreeId: item.worktreeId, executionHost: routeHost })
+        }
+        const rowClient = clientForRow(item)
+        if (rowClient && connState === 'connected') {
+          void worktreeActivate
+            .request(rowClient, {
+              worktree: `id:${item.worktreeId}`,
+              notifyClients: false,
+              navigation: 'caller'
+            })
+            .catch(() => null)
+        }
+      })
     },
     [
       client,
@@ -286,7 +264,7 @@ export function useHostWorktreeActions(args: {
   }, [hostId, navigateFromHostList])
 
   return {
-    handleDeleteWorktree,
+    ...worktreeDelete,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,

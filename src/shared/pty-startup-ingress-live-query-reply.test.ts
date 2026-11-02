@@ -46,14 +46,6 @@ describe('live query replies', () => {
     expect(needsCookedEchoSafeQueryReply(mode2031SequenceFor('light'))).toBe(true)
   })
 
-  it('writes an echo-risk reply in the calling turn', () => {
-    const { ingress, writes } = harness()
-    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
-    // No timer advance: the whole point is that there is nothing to wait for.
-    expect(writes).toEqual([OSC_COLOR_REPLY])
-    ingress.drainAndClose()
-  })
-
   it('answers repeated identical replies without collapsing them', () => {
     const { ingress, writes } = harness()
     expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)

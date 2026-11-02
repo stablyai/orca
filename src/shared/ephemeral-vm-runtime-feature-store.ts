@@ -248,7 +248,7 @@ export function sortRuntimeFeatures<T extends { id: string; recipeId: string; cr
 ): T[] {
   return features
     .map((feature) => ({ feature, identity: featureIdentity(feature) }))
-    .sort((left, right) => left.identity.localeCompare(right.identity))
+    .sort((left, right) => left.identity.localeCompare(right.identity, 'en'))
     .map(({ feature }) => feature)
 }
 

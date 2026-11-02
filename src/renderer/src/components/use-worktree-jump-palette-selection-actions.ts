@@ -1,3 +1,4 @@
+import { skipPaletteExitAnimation } from './worktree-jump-palette-exit-animation'
 import { useWorktreeJumpPaletteTaskSelection } from './use-worktree-jump-palette-task-selection'
 import type { WorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 import { useCallback } from 'react'
@@ -65,6 +66,7 @@ export function useWorktreeJumpPaletteSelectionActions({
   // Why: the selection moves focus itself, so closing must not restore the prior target.
   const dismissForSelection = useCallback(() => {
     skipRestoreFocusRef.current = true
+    skipPaletteExitAnimation()
     closeModal()
     setSelectedItemId('')
   }, [closeModal, setSelectedItemId, skipRestoreFocusRef])

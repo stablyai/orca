@@ -1,9 +1,9 @@
+import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import {
-  isCodexAppServerUnsupportedError,
   runCodexHookTrustGrantSession,
   type CodexHookTrustGrantRequest,
   type CodexHookTrustGrantSessionResult
-} from './codex-app-server-client'
+} from './app-server/codex-app-server-client'
 import {
   classifyCodexTrustGrantError,
   emitCodexTrustGrantTelemetry,

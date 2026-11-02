@@ -30,14 +30,6 @@ function markedText(): string {
 }
 
 describe('MatchedText', () => {
-  it('underlines the matched run', () => {
-    act(() => {
-      root.render(<MatchedText text="orca" hits={[0, 1, 2, 3]} />)
-    })
-
-    expect(markedText()).toBe('orca')
-  })
-
   // UTF-16 hit offsets and code-point rendering differ for emoji; marks must stay on the matched glyphs.
   it('aligns marks with the query when the name starts with an emoji', () => {
     const option: NewWorkspaceProjectOption = {

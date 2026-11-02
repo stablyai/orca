@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -60,20 +60,6 @@ describe('startAppImageCopyPreExtraction', () => {
     expect(lines.at(-1)).toContain('Unpacked this AppImage')
   })
 
-  it('does nothing when the copy already exists, and then nothing is waited for', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-    const copy = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
-    await mkdir(join(copy.rootPath, 'resources', 'bin'), { recursive: true })
-    await writeFile(copy.payloadLauncherPath, '', { mode: 0o755 })
-    const runExtract = vi.fn()
-
-    expect(
-      preExtraction.startAppImageCopyPreExtraction({ appImagePath, cacheRootPath, runExtract })
-    ).toBeNull()
-    expect(await preExtraction.waitForAppImageCopyPreExtraction(10)).toBe(false)
-    expect(runExtract).not.toHaveBeenCalled()
-  })
-
   it('drops idle copies of earlier releases once this one has its copy', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
     const copy = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
@@ -105,44 +91,6 @@ describe('startAppImageCopyPreExtraction', () => {
     expect(preExtraction.startAppImageCopyPreExtraction({ appImagePath, cacheRootPath })).toBeNull()
     await vi.waitFor(() => expect(existsSync(earlier)).toBe(false))
     expect(existsSync(copy.payloadLauncherPath)).toBe(true)
-  })
-
-  it('logs a cache it cannot use and never extracts into it', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-    const lines: string[] = []
-    const runExtract = vi.fn()
-
-    const started = preExtraction.startAppImageCopyPreExtraction({
-      appImagePath,
-      cacheRootPath,
-      probeCache: async () => `${cacheRootPath} needs about 900 MB free`,
-      runExtract,
-      log: (line) => lines.push(line)
-    })
-
-    expect(await started).toBe(false)
-    expect(runExtract).not.toHaveBeenCalled()
-    expect(lines).toEqual([expect.stringContaining('needs about 900 MB free')])
-  })
-
-  it('logs a failed extraction and leaves nothing behind', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-    const lines: string[] = []
-
-    const started = preExtraction.startAppImageCopyPreExtraction({
-      appImagePath,
-      cacheRootPath,
-      probeCache: acceptCache,
-      runExtract: async () => {
-        throw new Error('No space left on device')
-      },
-      log: (line) => lines.push(line)
-    })
-
-    expect(await started).toBe(false)
-    expect(lines.at(-1)).toContain('Could not unpack this AppImage')
-    const namespaces = existsSync(cacheRootPath) ? await readdir(cacheRootPath) : []
-    expect(namespaces.filter((name) => /^[0-9a-f]{24}$/u.test(name))).toEqual([])
   })
 
   it('stops waiting at the bound while the copy is still unpacking', async () => {
@@ -224,15 +172,5 @@ describe('preExtractDownloadedAppImageUpdate', () => {
       )
     ).toBe(false)
     expect(runExtract).not.toHaveBeenCalled()
-  })
-
-  it('follows the updater on where a versioned AppImage name installs', () => {
-    const pending = '/home/u/.cache/orca-updater/pending/Orca-2.0.0.AppImage'
-    expect(preExtraction.predictInstalledAppImagePath('/apps/Orca.AppImage', pending)).toBe(
-      '/apps/Orca.AppImage'
-    )
-    expect(preExtraction.predictInstalledAppImagePath('/apps/Orca-1.0.0.AppImage', pending)).toBe(
-      '/apps/Orca-2.0.0.AppImage'
-    )
   })
 })

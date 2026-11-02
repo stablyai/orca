@@ -49,6 +49,7 @@ export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   }[]
   worktreesByRepo: Record<string, readonly WorkspaceRuntimeOwnerProjection[]>
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
+  hydratedRuntimeSessionHostIds?: readonly ExecutionHostId[]
   /** Entries a co-claimant host lost to the primary of a contested workspace id; written straight
    *  back to their own partition so the primary's write cannot erase them. */
   contestedHostWorkspaceSessions?: HostSessionSlices
@@ -201,10 +202,22 @@ function splitWorkspaceSessionForWrite(
   mode: HostSessionWriteMode
 ): HostSessionSlices {
   const routing = buildHostSessionRouting(state)
+  const catalogRuntimeHostIds = new Set(state.repos.map((repo) => getRepoExecutionHostId(repo)))
+  // A patch replaces fields fieldwise, so a host whose last entry went needs the emptied field. Only a
+  // partition this window loaded and still catalogs is one its state speaks for in full.
+  // The contested shadow restores only worktree-keyed rows, so a host holding parked rows keeps today's rule.
+  const emptyContainerHostIds =
+    mode === 'patch'
+      ? (state.hydratedRuntimeSessionHostIds ?? []).filter(
+          (hostId) =>
+            catalogRuntimeHostIds.has(hostId) && !state.contestedHostWorkspaceSessions?.[hostId]
+        )
+      : []
   // Use live tab catalogs for layouts-only patches; payload-only routing loses remote park scrollback in local pruning (#21295).
   const worktreeIdByTabId = extendWorktreeIdByTabId(buildWorktreeIdByTabId(payload), state)
   const slices = splitWorkspaceSessionByHost(payload, routing.hostIdByWorktreeId, {
-    worktreeIdByTabId
+    worktreeIdByTabId,
+    emptyContainerHostIds
   })
   attachHostSessionShadow(slices, state.contestedHostWorkspaceSessions, routing.claims, mode)
   return slices

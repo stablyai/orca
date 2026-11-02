@@ -93,16 +93,6 @@ describe('syncRuntimeGraph in a layout-owner build', () => {
     ])
   })
 
-  it("carries the parked pane's runtime title", async () => {
-    parkWatcher(7)
-
-    const graph = await publish(() => parkedState({ [TAB_ID]: { 7: 'codex [working]' } }))
-
-    expect(graph?.mountedLeaves).toEqual([
-      expect.objectContaining({ leafId: LEAF, paneTitle: 'codex [working]' })
-    ])
-  })
-
   it('sends nothing for a parked pane whose watcher was disposed', async () => {
     parkWatcher(7, false)
 

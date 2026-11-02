@@ -1,11 +1,10 @@
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import type {
-  AgentJournalStatusItem,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalStatusItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
+import type { AgentSessionStopOutcome } from './structured-agent-session-adapter-stop'
 import type { AgentSessionCancelOutcome } from './structured-agent-session-adapter'
 import {
   isStructuredAgentSessionCommandTurnId,
@@ -186,6 +185,7 @@ async function cancelAndNote(
       ? writeNote(note)
       : undefined
   // undefined means cancel threw and its effect is unknown.
+  let stopOutcome: AgentSessionStopOutcome | undefined
   let taken: boolean | undefined
   let interruptFailed = false
   let refusal: AgentSessionCancelOutcome['refusal']
@@ -203,6 +203,7 @@ async function cancelAndNote(
           ...(dispatchStatus ? { dispatchStatus } : {}),
           ...(input.prompt ? { prompt: { itemId: input.prompt.itemId } } : {})
         })
+    stopOutcome = outcome.stop
     taken = outcome.cancelled
     cancelled = outcome.cancelled
     refusal = outcome.refusal
@@ -232,13 +233,16 @@ async function cancelAndNote(
   if (endsSession && (input.acceptedStop || !namesTurnNotLive || taken !== false)) {
     // Accepted interrupts warrant wind-down even before their turn echo arrives.
     binding.closedByWindDown = true
-    // Child exit confirms Stop, superseding interrupt uncertainty.
+    // Wind-down settles execution; provider control uncertainty survives in its outcome.
     const ended: AgentJournalStatusItem | null =
       note === null || (input.acceptedStop && !requestNoteWrite)
         ? null
         : { kind: 'status', text: STOP_NOTE_CANCELLATION_REQUESTED }
     const stopNoteWrite = ended !== null ? (requestNoteWrite ?? writeNote(ended)) : undefined
     input.endSession?.({
+      outcome: stopOutcome,
+      noteFence: input.noteFence,
+      operationId: input.clientOperationId,
       waitsForProvider: taken === true,
       stoppedAt,
       stopNote: noteIdentity,

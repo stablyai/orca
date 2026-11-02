@@ -41,6 +41,10 @@ describe('AgentSessionResumeClaims', () => {
   it('keeps a lost-reply attempt held unless a retry of the same request binds', () => {
     const { claims, exits } = makeClaims()
     claims.claim(SESSION, 'tab:a', 'request-1')?.settleFailure(true, new Error('reply lost'))
+    // Proof that this share dispatched no agent cannot account for the earlier lost reply.
+    claims.claim(SESSION, 'tab:a', 'request-1')?.settleFailure(false)
+    expect(exits.has('plain-shell')).toBe(false)
+    expect(claims.claim(SESSION, 'tab:b')).toBeNull()
     // Another request's spawn accounts only for itself.
     claims.claim(SESSION, 'tab:a', 'request-2')?.bind('pty-2')
     exits.get('pty-2')?.()

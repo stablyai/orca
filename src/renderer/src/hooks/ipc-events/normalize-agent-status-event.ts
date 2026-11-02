@@ -1,4 +1,4 @@
-import type { AgentStatusMetadata } from '../../store/slices/agent-status-contract'
+import type { AgentStatusMetadata } from '../../store/slices/agent-status/agent-status-contract'
 import {
   normalizeAgentStatusPayload,
   type AgentStatusIpcPayload,

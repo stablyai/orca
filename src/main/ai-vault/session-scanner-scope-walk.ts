@@ -77,7 +77,14 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
   }
   args.inventory.length = 0
   noteAiVaultScanWorkChanged(args.options.signal)
-  const walked = await walkInScopeSessions(args, scopePaths).finally(clearSessionScopeCwdKnowledge)
+  // OMP walks Pi's buckets when it inherits PI_CODING_AGENT_DIR; the Pi parse already labels them.
+  const alreadyParsedFilePaths = new Set(args.alreadyParsedFilePaths)
+  for (const candidate of candidates) {
+    alreadyParsedFilePaths.add(candidate.file.path)
+  }
+  const walked = await walkInScopeSessions({ ...args, alreadyParsedFilePaths }, scopePaths).finally(
+    clearSessionScopeCwdKnowledge
+  )
   if (candidates.length === 0) {
     return walked
   }

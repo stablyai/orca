@@ -46,6 +46,7 @@ vi.mock('@/store', () => {
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),
     tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
     updateWorktreeMeta,
     workspacePortScan: null,
     worktreeCardProperties

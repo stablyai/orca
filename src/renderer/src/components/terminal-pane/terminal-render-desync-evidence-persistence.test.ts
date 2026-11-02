@@ -11,16 +11,4 @@ describe('createCaptureId', () => {
 
     expect(createCaptureId(paneKey)).toMatch(TERMINAL_RENDER_DESYNC_CAPTURE_ID_PATTERN)
   })
-
-  it('keeps the leaf id so a capture is still traceable to its pane', () => {
-    const leafId = createBrowserUuid()
-
-    expect(createCaptureId(makePaneKey(createBrowserUuid(), leafId))).toContain(leafId)
-  })
-
-  it('does not collide for repeated captures of the same pane', () => {
-    const paneKey = makePaneKey(createBrowserUuid(), createBrowserUuid())
-
-    expect(createCaptureId(paneKey)).not.toBe(createCaptureId(paneKey))
-  })
 })

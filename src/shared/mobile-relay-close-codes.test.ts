@@ -1,27 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isMobileRelayCloseCode,
-  MOBILE_RELAY_CLOSE_CODE,
-  MOBILE_RELAY_PHONE_CLOSE_REASON,
-  mobileRelayRecoveryFor
-} from './mobile-relay-close-codes'
+import { isMobileRelayCloseCode, mobileRelayRecoveryFor } from './mobile-relay-close-codes'
 
 describe('mobile relay close-code contract', () => {
-  it('locks all application close codes', () => {
-    expect(MOBILE_RELAY_CLOSE_CODE).toEqual({
-      BAD_OUTER_CREDENTIAL: 4401,
-      HOST_OFFLINE: 4404,
-      PEER_DROPPED: 4408,
-      WRONG_CELL: 4409,
-      LIMIT_EXCEEDED: 4429,
-      DRAINING: 4503
-    })
-    expect(isMobileRelayCloseCode(4409)).toBe(true)
-    expect(isMobileRelayCloseCode(1006)).toBe(false)
-  })
-
-  it('locks the phone close reasons the relay mirrors', () => {
-    expect(MOBILE_RELAY_PHONE_CLOSE_REASON).toEqual({ HOST_ATTACH_TIMEOUT: 'attach-timeout' })
+  it('recognizes relay application codes and rejects unrelated websocket codes', () => {
+    for (const code of [4401, 4404, 4408, 4409, 4429, 4503]) {
+      expect(isMobileRelayCloseCode(code)).toBe(true)
+    }
+    for (const code of [1000, 1006, 4400, 4504]) {
+      expect(isMobileRelayCloseCode(code)).toBe(false)
+    }
   })
 
   it('uses the configured director and never a cell-supplied URL', () => {

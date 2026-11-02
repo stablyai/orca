@@ -1,6 +1,6 @@
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessageUpdateResult } from '../../../shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessageUpdateResult } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit, type QueuedMessageEdit } from '../../../shared/queued-message-edit'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
 
@@ -9,7 +9,7 @@ export type QueuedMessageUpdate = QueuedMessageEdit & {
   expectedBodyFingerprint: string
 }
 
-/** Check the resulting body before CAS so lost Save replies retry safely without overwriting newer edits. */
+/** A user edit: reconcile lost replies before CAS, then durably attribute changed content to the user. */
 export function queuedMessageUpdateDecision(
   row: QueuedMessageRow | null,
   sessionId: string,
@@ -40,5 +40,6 @@ export function queuedMessageUpdateDecision(
   if (row.fingerprint !== input.expectedBodyFingerprint) {
     return { status: 'changed', messageId }
   }
-  return { status: 'ready', body: edited.body, previous: row.body, fingerprint }
+  const { from: _sender, ...body } = edited.body
+  return { status: 'ready', body, previous: row.body, fingerprint }
 }

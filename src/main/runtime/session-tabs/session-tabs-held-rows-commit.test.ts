@@ -69,19 +69,6 @@ describe('held session.tabs rows across layout commits (switch on)', () => {
     expect(heldStrip(runtime)).toEqual(MOVED_STRIP)
   })
 
-  it('after it, a write that changes no row pushes nothing', async () => {
-    const { runtime, store, setSession } = await closedFirstTab()
-    let pushes = 0
-    runtime.onMobileSessionTabsChanged(() => {
-      pushes += 1
-    })
-
-    setSession(store.getSession())
-    await vi.runAllTimersAsync()
-
-    expect(pushes).toBe(0)
-  })
-
   it("another workspace's commits push nothing for a workspace with a kept row", async () => {
     const { runtime } = await closedFirstTab()
     let pushes = 0

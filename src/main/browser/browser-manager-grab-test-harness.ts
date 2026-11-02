@@ -53,7 +53,9 @@ export function routeWebContentsIds(
     if (id === GRAB_RENDERER_WEB_CONTENTS_ID) {
       return {
         isDestroyed: mocks.rendererIsDestroyedMock,
-        send: mocks.rendererSendMock
+        send: mocks.rendererSendMock,
+        setBackgroundThrottling: vi.fn(),
+        capturePage: vi.fn(async () => null)
       }
     }
     return null

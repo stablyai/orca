@@ -9,14 +9,14 @@ type ParentCandidateArgs = {
   child: Worktree
   worktrees: readonly Worktree[]
   lineageById: Record<string, WorktreeLineage>
-  worktreeMap: Map<string, Worktree>
-  repoMap: Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
+  worktreeMap: ReadonlyMap<string, Worktree>
+  repoMap: ReadonlyMap<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
   cyclicLineageIds?: ReadonlySet<string>
 }
 
 function getWorktreeOwnerHostId(
   worktree: Worktree,
-  repoMap: Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
+  repoMap: ReadonlyMap<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
 ): string | null {
   const repo = repoMap.get(worktree.repoId)
   return repo ? getWorktreeExecutionHostId(worktree, repo) : (worktree.hostId ?? null)

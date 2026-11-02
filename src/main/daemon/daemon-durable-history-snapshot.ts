@@ -1,5 +1,6 @@
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
+import { historyReplayWindowsPty } from './daemon-history-replay-pty'
 import {
   DurableHistoryReplayEmulator,
   type NormalBufferHead
@@ -21,6 +22,8 @@ export async function buildDurableCheckpointSnapshot(opts: {
   pendingRecords: readonly PendingOutputRecord[]
   /** Records span the live session's whole life, so restoreInfo is the base it was seeded from. */
   isFirstTake: boolean
+  /** The hosting daemon's, which recorded pendingRecords; absent or null means xterm's. */
+  resizeModel?: string | null
 }): Promise<TerminalSnapshot> {
   const { liveSnapshot, restoreInfo, pendingRecords } = opts
   if (!restoreInfo && pendingRecords.length === 0) {
@@ -40,7 +43,8 @@ export async function buildDurableCheckpointSnapshot(opts: {
   const emulator = new DurableHistoryReplayEmulator({
     cols: restoreInfo?.cols ?? liveSnapshot.cols,
     rows: restoreInfo?.rows ?? liveSnapshot.rows,
-    scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS
+    scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS,
+    windowsPty: historyReplayWindowsPty(opts.resizeModel)
   })
   const replay = new ColdRestoreReplayWriter(emulator)
   try {
@@ -68,10 +72,7 @@ export async function buildDurableCheckpointSnapshot(opts: {
     )
     return {
       ...rebaseOnOlderRows(liveSnapshot, head),
-      ...(!liveSnapshot.cwd && restoreInfo?.cwd ? { cwd: restoreInfo.cwd } : {}),
-      ...(!liveSnapshot.lastTitle && restoreInfo?.lastTitle
-        ? { lastTitle: restoreInfo.lastTitle }
-        : {})
+      ...(!liveSnapshot.cwd && restoreInfo?.cwd ? { cwd: restoreInfo.cwd } : {})
     }
   } catch (error) {
     console.warn('[history] durable snapshot rebuild failed:', error)
@@ -95,9 +96,15 @@ function diskCheckpointWithLiveIdentity(
   info: ColdRestoreInfo,
   live: TerminalSnapshot
 ): TerminalSnapshot {
-  const { terminalOwner: _diskOwner, pendingOutputSeq: _diskSeq, ...disk } = info
+  const {
+    terminalOwner: _diskOwner,
+    pendingOutputSeq: _diskSeq,
+    lastTitle: _diskTitle,
+    ...disk
+  } = info
   return {
     ...disk,
+    ...(live.lastTitle ? { lastTitle: live.lastTitle } : {}),
     // Normal-screen snapshotAnsi already includes scrollback.
     scrollbackAnsi: info.modes.alternateScreen ? info.scrollbackAnsi : '',
     scrollbackLines:

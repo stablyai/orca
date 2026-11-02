@@ -11,6 +11,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import {
+  projectedStructuredChatTabSavedName,
+  type StructuredChatTabNames
+} from '@/runtime/structured-chat-tab-name'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   effectiveWorktreeAgentRowStartedAt,
@@ -23,33 +27,36 @@ export type ActivityTabContext = { worktreeId: string; tab: TerminalTab }
 export type ActivityEventOwner = { worktree: Worktree; repo: Repo | null; knownWorktree: boolean }
 export type ActivityTabHostIndex = Map<string, Map<string, ExecutionHostId | null>>
 
-// Cache derived tab context by stable source identity so agent-session/missing-tab rows can reuse pane builds.
-const agentSessionTerminalTabs = new WeakMap<Tab, TerminalTab>()
+// Key derived tab context by original native tab and saved name so unchanged pane builds retain identity.
+const agentSessionTerminalTabs = new WeakMap<Tab, { name: string | null; tab: TerminalTab }>()
 const attributedTabContexts = new WeakMap<AgentStatusEntry, ActivityTabContext | null>()
 
-function terminalTabFromAgentSessionTab(tab: Tab): TerminalTab {
+function terminalTabFromAgentSessionTab(tab: Tab, names: StructuredChatTabNames): TerminalTab {
+  // The chat's name lives on its host, so a rename changes it without changing the tab.
+  const name = projectedStructuredChatTabSavedName(tab, names)
   const cached = agentSessionTerminalTabs.get(tab)
-  if (cached) {
-    return cached
+  if (cached && cached.name === name) {
+    return cached.tab
   }
   const derived: TerminalTab = {
     id: tab.id,
     ptyId: null,
     worktreeId: tab.worktreeId,
-    title: tab.customLabel ?? tab.generatedLabel ?? tab.label,
-    customTitle: tab.customLabel,
+    title: name ?? tab.generatedLabel ?? tab.label,
+    customTitle: name,
     color: tab.color,
     isPinned: tab.isPinned,
     sortOrder: tab.sortOrder,
     createdAt: tab.createdAt
   }
-  agentSessionTerminalTabs.set(tab, derived)
+  agentSessionTerminalTabs.set(tab, { name, tab: derived })
   return derived
 }
 
 export function buildActivityTabContext(
   tabsByWorktree: Record<string, TerminalTab[]>,
-  unifiedTabsByWorktree?: Record<string, Tab[]>
+  unifiedTabsByWorktree: Record<string, Tab[]> | undefined,
+  names: StructuredChatTabNames
 ): Map<string, ActivityTabContext> {
   const contexts = new Map<string, ActivityTabContext>()
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
@@ -62,7 +69,7 @@ export function buildActivityTabContext(
       if (tab.contentType !== 'agent-session' || contexts.has(tab.id)) {
         continue
       }
-      contexts.set(tab.id, { worktreeId, tab: terminalTabFromAgentSessionTab(tab) })
+      contexts.set(tab.id, { worktreeId, tab: terminalTabFromAgentSessionTab(tab, names) })
     }
   }
   return contexts

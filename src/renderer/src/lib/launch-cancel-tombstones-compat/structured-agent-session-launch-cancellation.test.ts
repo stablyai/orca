@@ -1,19 +1,19 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
+import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { suppressCancelledStructuredSessionTabs } from '@/runtime/structured-agent-session-tab-retirement'
-import type { StructuredLaunchState } from '../structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from '../agent-session/launch/structured-agent-session-launch-registry'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchCancelled,
   retireAbsentStructuredAgentSessionLaunchCancellationTombstones,
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState
-} from '../structured-agent-session-launch-registry'
+} from '../agent-session/launch/structured-agent-session-launch-registry'
 import { beginStructuredAgentSessionAuthoritativeInventory } from './structured-agent-session-launch-cancellation'
-import { resetStructuredAgentLaunchPersistenceForTests } from '../structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchPersistenceForTests } from '../agent-session/launch/structured-agent-session-launch-persistence'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -106,7 +106,7 @@ function setLaunch(
     promise,
     visibilityUnknown: false,
     cancelled: false,
-    selection: { held: {} }
+    selection: {}
   } satisfies StructuredLaunchState)
 }
 
@@ -280,7 +280,7 @@ describe('structured launch cancellation retirement', () => {
         promise: Promise.resolve({ sessionId: SESSION_ID, fence: 1 }),
         visibilityUnknown: false,
         cancelled: false,
-        selection: { held: {} }
+        selection: {}
       } satisfies StructuredLaunchState)
       markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local', layoutOwner)
       await new Promise((resolve) => setTimeout(resolve, 0))

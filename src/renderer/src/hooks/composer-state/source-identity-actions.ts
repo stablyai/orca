@@ -4,6 +4,7 @@ type SourceIdentityActionsInput = Pick<
   ComposerModel,
   | 'applyLinkedWorkItem'
   | 'branchAutoNameRef'
+  | 'branchIntent'
   | 'branchNameOverride'
   | 'branchNameOverridePreservesNameEdits'
   | 'forkPushWarning'
@@ -12,6 +13,7 @@ type SourceIdentityActionsInput = Pick<
   | 'name'
   | 'pushTarget'
   | 'setBranchNameOverride'
+  | 'setBranchIntent'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCreateError'
   | 'setForkPushWarning'
@@ -27,7 +29,6 @@ type SourceIdentityActionsInput = Pick<
   | 'setLinkedWorkItem'
   | 'setName'
   | 'setPushTarget'
-  | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'smartSourceSelectionRef'
 >
@@ -44,6 +45,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
   const {
     applyLinkedWorkItem,
     branchAutoNameRef,
+    branchIntent,
     branchNameOverride,
     branchNameOverridePreservesNameEdits,
     forkPushWarning,
@@ -52,6 +54,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     name,
     pushTarget,
     setBranchNameOverride,
+    setBranchIntent,
     setBranchNameOverridePreservesNameEdits,
     setCreateError,
     setForkPushWarning,
@@ -67,7 +70,6 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     setLinkedWorkItem,
     setName,
     setPushTarget,
-    setReuseEligibleBranch,
     setReuseSelectedBranch,
     smartSourceSelectionRef
   } = input
@@ -249,10 +251,12 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         forkPushWarning
       })
       setBranchNameOverride(next.branchNameOverride)
+      if (branchIntent === 'create-new') {
+        setBranchIntent('create-new')
+      }
       setBranchNameOverridePreservesNameEdits(Boolean(next.branchNameOverride))
       setPushTarget(next.pushTarget)
       setForkPushWarning(next.forkPushWarning)
-      setReuseEligibleBranch(null)
       setReuseSelectedBranch(false)
       branchAutoNameRef.current = ''
     },
@@ -260,11 +264,12 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       forkPushWarning,
       pushTarget,
       branchAutoNameRef,
+      branchIntent,
       setBranchNameOverride,
+      setBranchIntent,
       setBranchNameOverridePreservesNameEdits,
       setForkPushWarning,
       setPushTarget,
-      setReuseEligibleBranch,
       setReuseSelectedBranch,
       smartSourceSelectionRef
     ]

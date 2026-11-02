@@ -11,6 +11,23 @@ const SEAM_MODULE = 'src/platform/text-input-font-size.ts'
 
 const FLOOR_EXPORT = 'TEXT_INPUT_FONT_SIZE_FLOOR'
 
+// Inputs that forward `style` to their own TextInput: read at every call site, so the forwarded prop is no hole.
+const STYLE_FORWARDING_INPUTS = new Set(['FieldTextInput'])
+
+const isTextInputTag = (element) => {
+  const name = element.tagName.getText()
+  return name === 'TextInput' || STYLE_FORWARDING_INPUTS.has(name)
+}
+
+function insideStyleForwardingInput(node) {
+  for (let current = node.parent; current !== undefined; current = current.parent) {
+    if (ts.isFunctionDeclaration(current) && current.name !== undefined) {
+      return STYLE_FORWARDING_INPUTS.has(current.name.text)
+    }
+  }
+  return false
+}
+
 const parse = (file, source) => ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
 
 const floorByRoot = new Map()
@@ -169,7 +186,7 @@ function textInputStyleRefs(parsed) {
       : ts.isJsxOpeningElement(node)
         ? node
         : null
-    if (element !== null && element.tagName.getText() === 'TextInput') {
+    if (element !== null && isTextInputTag(element)) {
       for (const attribute of element.attributes.properties) {
         if (
           !ts.isJsxAttribute(attribute) ||
@@ -191,6 +208,13 @@ function textInputStyleRefs(parsed) {
           }
           if (ts.isObjectLiteralExpression(expression)) {
             refs.push({ kind: 'inline', node: expression, key: 'inline style', line })
+            continue
+          }
+          if (
+            ts.isIdentifier(expression) &&
+            expression.text === 'style' &&
+            insideStyleForwardingInput(element)
+          ) {
             continue
           }
           refs.push({ kind: 'opaque', key: expression.getText().slice(0, 40), line })
@@ -269,16 +293,22 @@ function declarationOf(parsed, name) {
   return found
 }
 
+// Unwrap StyleSheet.create({...}) and themedStyleSheet(() => ({...})) to the object they build.
 function styleObjectOf(initializer) {
-  if (initializer === null) {
+  if (initializer === null || initializer === undefined) {
     return null
   }
   if (ts.isObjectLiteralExpression(initializer)) {
     return initializer
   }
+  if (ts.isParenthesizedExpression(initializer)) {
+    return styleObjectOf(initializer.expression)
+  }
+  if (ts.isArrowFunction(initializer) && !ts.isBlock(initializer.body)) {
+    return styleObjectOf(initializer.body)
+  }
   if (ts.isCallExpression(initializer) && initializer.arguments.length > 0) {
-    const first = initializer.arguments[0]
-    return ts.isObjectLiteralExpression(first) ? first : null
+    return styleObjectOf(initializer.arguments[0])
   }
   return null
 }
@@ -327,10 +357,13 @@ function resolveStyleKey(mobileDir, file, exportName, key, seen = new Set()) {
 
 // Numeric literals at/above floor are valid without seam binding; forcing larger fields onto seam could shrink them.
 // Do not evaluate expressions: theme arithmetic can drift and census must not become second renderer.
-function isLiteralAtOrAboveFloor(mobileDir, initializer) {
+// A same-module const naming a literal (the composer's text size) is still a literal.
+function isLiteralAtOrAboveFloor(mobileDir, parsed, initializer) {
+  const value = ts.isIdentifier(initializer) ? declarationOf(parsed, initializer.text) : initializer
   return (
-    ts.isNumericLiteral(initializer) &&
-    Number(initializer.text) >= textInputFontSizeFloor(mobileDir)
+    value !== null &&
+    ts.isNumericLiteral(value) &&
+    Number(value.text) >= textInputFontSizeFloor(mobileDir)
   )
 }
 
@@ -343,7 +376,7 @@ function fontSizeIn(mobileDir, parsed, file, object) {
         line: parsed.getLineAndCharacterOfPosition(entry.getStart(parsed)).line + 1,
         onSeam:
           isSeamBinding(mobileDir, parsed, file, entry.initializer) ||
-          isLiteralAtOrAboveFloor(mobileDir, entry.initializer)
+          isLiteralAtOrAboveFloor(mobileDir, parsed, entry.initializer)
       }
     }
   }

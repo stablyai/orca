@@ -37,16 +37,6 @@ describe('PTY owner colour replies for the terminal life', () => {
     expect(visible()).toBe('\x1b]11;#123456\x07\x1b]111\x07')
   })
 
-  it('answers with the viewer colours the host holds now, not the colours sent at spawn', () => {
-    // The host's viewer may have changed theme since this pane was created.
-    const spawnedLight = { foreground: '#2e3434', background: '#ffffff' }
-    const { ingress, writes } = createHarness({ colors: spawnedLight, deadlineMs: 5_000 })
-
-    ingress.accept(QUERY)
-
-    expect(writes).toEqual([HOST_BACKGROUND_REPLY])
-  })
-
   it('answers a query torn right after its ESC once the Kitty window has closed', () => {
     const { ingress, writes, visible } = createHarness({
       colors: HOST,

@@ -12,6 +12,7 @@ import {
   PR_STATE,
   REVIEW_DECISION,
   prCheckList,
+  prFileSchema,
   prCheckSummary,
   prCommentList,
   prCount,
@@ -86,6 +87,30 @@ export const hostedReviewForBranchSchema = z
   )
   .nullable()
 
+// Merge gating reads each downstack entry; drop malformed entries rather than the stack.
+const prStackSchema = z.looseObject({
+  number: z.number(),
+  position: z.number(),
+  size: z.number(),
+  baseRefName: z.string(),
+  entries: salvagedOptional(
+    'entries',
+    salvagingArray(
+      z.looseObject({
+        position: z.number(),
+        number: z.number(),
+        title: z.string().catch(''),
+        url: z.string().catch(''),
+        state: z.enum(PR_STATE),
+        checksStatus: z.enum(CHECK_STATUS).catch('pending'),
+        mergeable: z.enum(MERGEABLE_STATE).catch('UNKNOWN'),
+        reviewDecision: salvagedOptional('reviewDecision', z.enum(REVIEW_DECISION).nullable()),
+        mergeStateStatus: prNullableText('mergeStateStatus')
+      })
+    )
+  )
+})
+
 // Preserve prRepo and merge settings because checks and merge choices depend on them.
 const pullRequestSchema = z
   .looseObject({
@@ -102,8 +127,12 @@ const pullRequestSchema = z
     mergeQueueRequired: prNullableFlag('mergeQueueRequired'),
     mergeStateStatus: prNullableText('mergeStateStatus'),
     headSha: prText('headSha'),
+    headRefName: prText('headRefName'),
+    confirmedContainedHeadOid: prText('confirmedContainedHeadOid'),
+    headDivergedFromMergedPRAtOid: prText('headDivergedFromMergedPRAtOid'),
     prRepo: prRepoIdentity('prRepo'),
-    mergeMethodSettings: prMergeMethodSettings('mergeMethodSettings')
+    mergeMethodSettings: prMergeMethodSettings('mergeMethodSettings'),
+    stack: salvagedOptional('stack', prStackSchema)
   })
   .transform((pr): PRInfo | null =>
     pr.number === undefined || pr.state === undefined
@@ -122,8 +151,12 @@ const pullRequestSchema = z
           mergeQueueRequired: pr.mergeQueueRequired,
           mergeStateStatus: pr.mergeStateStatus,
           headSha: pr.headSha,
+          headRefName: pr.headRefName,
+          confirmedContainedHeadOid: pr.confirmedContainedHeadOid,
+          headDivergedFromMergedPRAtOid: pr.headDivergedFromMergedPRAtOid,
           prRepo: pr.prRepo,
-          mergeMethodSettings: pr.mergeMethodSettings
+          mergeMethodSettings: pr.mergeMethodSettings,
+          stack: pr.stack
         }
   )
 
@@ -228,8 +261,11 @@ export const githubWorkItemDetailsSchema = z
     pullRequestId: prText('pullRequestId'),
     checks: prCheckList('checks'),
     participants: prUserList('participants'),
+    filesUnavailable: prFlag('filesUnavailable'),
     // Absent assignees means unreported, distinct from a confirmed empty list.
-    assignees: salvagedOptional('assignees', salvagingArray(z.string()))
+    assignees: salvagedOptional('assignees', salvagingArray(z.string())),
+    // Older hosts send no files; the diff screen then keeps viewed state on the phone.
+    files: salvagedOptional('files', salvagingArray(prFileSchema))
   })
   .transform((details): GitHubWorkItemDetails | null =>
     details.item === null
@@ -243,7 +279,10 @@ export const githubWorkItemDetailsSchema = z
           pullRequestId: details.pullRequestId,
           checks: details.checks ?? [],
           participants: details.participants ?? [],
-          assignees: details.assignees
+          assignees: details.assignees,
+          ...(details.files ? { files: details.files } : {}),
+          // A host that could not list files says so, so the PR tab hides its changes card rather than showing zero.
+          ...(details.filesUnavailable === true ? { filesUnavailable: true } : {})
         }
   )
   .nullable()
