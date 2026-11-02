@@ -12,7 +12,8 @@ import {
   type WslHostRuntimeAccess
 } from './wsl-host-server-stop'
 
-const FakeDistrosSchema = z.array(
+// Pure so release builds, which never call into this module, drop the schemas with it.
+const FakeDistrosSchema = /* @__PURE__ */ z.array(
   z.object({
     name: z.string().min(1),
     state: z.enum(['running', 'stopped']),
@@ -20,7 +21,7 @@ const FakeDistrosSchema = z.array(
   })
 )
 
-const FakeWslHostsSchema = z.object({
+const FakeWslHostsSchema = /* @__PURE__ */ z.object({
   distros: FakeDistrosSchema,
   /** Re-read on every listing, so a test can register a distro while the app runs, or stop one:
    *  a distro marked `stopped` loses its bridge, and only a booting connect starts it again. */
