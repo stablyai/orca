@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { formatToolDuration } from '../../../../shared/native-chat-tool-identity'
+import { memo, useMemo } from 'react'
+import { formatToolDuration } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import { IpynbCellOutputs } from './IpynbCellOutputs'
 import { IpynbRunPrompt } from './IpynbCellToolbar'
 import { useCellRun } from './ipynb-kernel-store'
@@ -30,7 +30,8 @@ export function IpynbCellRunPrompt({
 }
 
 /** A cell's outputs: live from its run until the document takes them in, then from the document. */
-export function IpynbCellRunOutputs({
+// Why: every keystroke re-renders the viewer, and re-parsing each cell's saved outputs costs ms.
+export const IpynbCellRunOutputs = memo(function IpynbCellRunOutputs({
   filePath,
   cellKey,
   cell
@@ -50,4 +51,4 @@ export function IpynbCellRunOutputs({
     [cell, run]
   )
   return <IpynbCellOutputs cell={live ?? cell} />
-}
+})

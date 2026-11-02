@@ -65,6 +65,30 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
     expect(server.usedPortFallback).toBe(false)
   })
 
+  it('authenticates the Claude view route and returns its host reply', async () => {
+    const forwardClaudeAgentView = vi.fn(async () => ({ requestId: 'request', agentId: 'child' }))
+    server = new RelayAgentHookServer({
+      endpointDir: tmpDir,
+      token: 'test-token',
+      forward: () => {},
+      forwardClaudeAgentView
+    })
+    await server.start()
+    const { port } = server.getCoordinates()
+    const body = { action: 'take', paneKey: PANE_KEY, sessionId: 'session', instanceId: 'instance' }
+    const post = (token: string) =>
+      fetch(`http://127.0.0.1:${port}/claude/agent-view`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-orca-agent-hook-token': token },
+        body: JSON.stringify(body)
+      })
+    expect((await post('wrong')).status).toBe(403)
+    expect(forwardClaudeAgentView).not.toHaveBeenCalled()
+    const response = await post('test-token')
+    expect(await response.json()).toEqual({ requestId: 'request', agentId: 'child' })
+    expect(forwardClaudeAgentView).toHaveBeenCalledWith(body)
+  })
+
   it('falls back to an ephemeral port when the preferred port is occupied', async () => {
     const occupant = createServer()
     const occupiedPort = await new Promise<number>((resolve) => {

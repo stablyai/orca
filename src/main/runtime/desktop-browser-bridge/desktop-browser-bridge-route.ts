@@ -6,6 +6,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE,
   isDesktopBrowserBridgeMethod
 } from '../../../shared/desktop-browser-bridge-protocol'
+import { browserWaitRequestTimeoutMs } from '../../../shared/browser-wait-timeout'
 import type { RpcCallerIdentity } from '../rpc/rpc-caller-identity'
 import { assertClientOpenableUrl } from '../browser/browser-client-page-opening'
 import type { DesktopBrowserBridgeRegistry } from './desktop-browser-bridge-registry'
@@ -13,7 +14,6 @@ import type { DesktopBrowserBridgeRegistry } from './desktop-browser-bridge-regi
 export type DesktopBrowserBridgeRoute = { handled: false } | { handled: true; result: unknown }
 
 const DEFAULT_TIMEOUT_MS = 60_000
-const WAIT_MARGIN_MS = 30_000
 const MAX_TIMEOUT_MS = 10 * 60_000
 
 export async function routeDesktopBrowserBridgeRpc(options: {
@@ -75,9 +75,9 @@ export async function routeDesktopBrowserBridgeRpc(options: {
 }
 
 function forwardTimeoutMs(method: string, params: Record<string, unknown>): number {
-  const requested = typeof params.timeout === 'number' ? params.timeout : 0
-  const base = method === 'browser.wait' ? requested + WAIT_MARGIN_MS : DEFAULT_TIMEOUT_MS
-  return Math.min(Math.max(base, DEFAULT_TIMEOUT_MS), MAX_TIMEOUT_MS)
+  return method === 'browser.wait'
+    ? Math.min(browserWaitRequestTimeoutMs(params.timeout), MAX_TIMEOUT_MS)
+    : DEFAULT_TIMEOUT_MS
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

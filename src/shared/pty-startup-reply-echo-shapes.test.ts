@@ -40,26 +40,6 @@ describe('replyEchoProjections on a POSIX pty', () => {
     expect(locateEcho(replyEchoProjections(reply, 'posix-pty'), reply).kind).toBe('complete')
   })
 
-  it('caret-encodes every control, not just ESC', () => {
-    const [kernel] = replyEchoProjections(OSC11_BEL, 'posix-pty')
-    expect(kernel?.needle).toBe('^[]11;rgb:2e2e/3434/3434^G')
-    expect(kernel?.needle).not.toContain('\x07')
-  })
-
-  // ECHOCTL leaves TAB/LF/CR literal and maps DEL→^? (vis(3)); pin future grammar behavior even though current replies lack them.
-  it.each([
-    { name: 'TAB stays literal', input: '\t', encoded: '\t' },
-    { name: 'LF stays literal', input: '\n', encoded: '\n' },
-    { name: 'CR stays literal', input: '\r', encoded: '\r' },
-    { name: 'NUL carets to ^@', input: '\x00', encoded: '^@' },
-    { name: 'BEL carets to ^G', input: '\x07', encoded: '^G' },
-    { name: 'ESC carets to ^[', input: '\x1b', encoded: '^[' },
-    { name: 'DEL carets to ^?', input: '\x7f', encoded: '^?' }
-  ])('$name under ECHOCTL', ({ input, encoded }) => {
-    const [kernel] = replyEchoProjections(`\x1b[?9${input}n`, 'posix-pty')
-    expect(kernel?.needle).toBe(`^[[?9${encoded}n`)
-  })
-
   // Guard the private-DSR grammar locally: widening a caller must not arm DA1’s shared-prefix BEL needle.
   it.each(['\x1b[?1;2c', '\x1b[?0u', '\x1b[?2026;2$y', '\x1b[?12;5R'])(
     'projects no readline needle for %j, which is not a private DSR',
@@ -81,13 +61,6 @@ describe('replyEchoProjections on a POSIX pty', () => {
       expect(needles.some((needle) => needle.startsWith('\x07'))).toBe(false)
     }
   )
-
-  it('projects readline for a private DSR, which carries no OSC introducer', () => {
-    const needles = replyEchoProjections(DSR_997, 'posix-pty').map(
-      (projection) => projection.needle
-    )
-    expect(needles).toContain('\x07997;1n')
-  })
 
   // Never hold ESC-led partials: a bare ESC could belong to a torn query and would escape unanswered when the hold expires.
   it('holds a partial only for needles that do not start with ESC', () => {

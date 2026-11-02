@@ -7,6 +7,8 @@ export type PendingPtyData = {
   rawLength?: number
   transformed?: true
   containsBackgroundOutput?: boolean
+  /** Escape the stream was inside when `data` begins, set only right after a delivery gap. */
+  gapEscapeState?: string
   droppedOutput?: true
   droppedMode2031Data?: string
   droppedMode2031ScanState?: Mode2031ReplyScanState

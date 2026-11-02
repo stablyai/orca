@@ -25,7 +25,7 @@ vi.mock('../git/worktree', () => ({
 
 import { BrowserManager } from './browser-manager'
 import { CdpBridge } from './cdp-bridge'
-import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from './browser-text-insertion'
+import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from '../../shared/browser-text-insertion-chunks'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
@@ -185,6 +185,7 @@ function createMockGuest(
     id,
     isDestroyed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),
+    setIgnoreMenuShortcuts: vi.fn(),
     getType: vi.fn(() => 'webview'),
     getURL: vi.fn(() => currentUrl),
     getTitle: vi.fn(() => currentTitle),

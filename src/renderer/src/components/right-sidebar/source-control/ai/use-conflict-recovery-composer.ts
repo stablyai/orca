@@ -5,6 +5,7 @@ import {
   admitSourceControlRecovery,
   sourceControlRecoveryScopeKey
 } from '../../source-control-recovery-admission'
+import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { SourceControlAiControllerParams } from './controller-types'
 import { buildResolveConflictsPrompt } from './prompts'
 
@@ -14,7 +15,8 @@ export function useConflictRecoveryComposer({
   activeConnectionId,
   conflictOperation,
   unresolvedConflicts,
-  worktreePath
+  worktreePath,
+  onAdmitted
 }: Pick<
   SourceControlAiControllerParams,
   | 'target'
@@ -23,7 +25,9 @@ export function useConflictRecoveryComposer({
   | 'conflictOperation'
   | 'unresolvedConflicts'
   | 'worktreePath'
->) {
+> & {
+  onAdmitted?: (context: RuntimeGitContext, signal: AbortSignal) => Promise<void>
+}) {
   const context = useMemo(
     () =>
       target && activeWorktreeId && worktreePath
@@ -86,14 +90,19 @@ export function useConflictRecoveryComposer({
     try {
       const admitted = await admitSourceControlRecovery(context, check.signal)
       if (!check.signal.aborted) {
-        setComposer(admitted ? { scope, phase: 'open' } : null)
+        if (admitted && onAdmitted) {
+          setComposer(null)
+          await onAdmitted(context, check.signal)
+        } else {
+          setComposer(admitted ? { scope, phase: 'open' } : null)
+        }
       }
     } finally {
       if (checkRef.current === check) {
         checkRef.current = null
       }
     }
-  }, [context, scope, conflictOperation, unresolvedConflicts.length])
+  }, [context, scope, conflictOperation, unresolvedConflicts.length, onAdmitted])
 
   return {
     resolveConflictsPrompt,

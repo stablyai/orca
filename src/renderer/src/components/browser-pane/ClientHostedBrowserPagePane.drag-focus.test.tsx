@@ -48,6 +48,8 @@ function createGuest(): { webview: Electron.WebviewTag; focus: ReturnType<typeof
   const webview = document.createElement('webview') as Electron.WebviewTag
   const focus = vi.fn()
   Object.assign(webview, {
+    // An attached guest has a WebContents id; focus waits for one.
+    getWebContentsId: vi.fn(() => 7),
     getURL: vi.fn(() => 'about:blank'),
     getTitle: vi.fn(() => 'New Tab'),
     isLoading: vi.fn(() => false),

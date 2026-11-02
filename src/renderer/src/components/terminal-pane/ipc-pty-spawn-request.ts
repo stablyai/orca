@@ -1,5 +1,5 @@
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
-import type { RuntimeCreateAgentSessionResult } from '../../../../shared/agent-session-host-authority'
+import type { RuntimeCreateAgentSessionResult } from '../../../../shared/agent-session/agent-session-host-authority'
 import {
   createAgentSessionCreateOperation,
   type AgentSessionCreateOperation
@@ -75,6 +75,7 @@ export async function spawnIpcPty(
     commandDelivery,
     launchConfig,
     resumeProviderSession,
+    resumeOrigin,
     launchToken,
     launchAgent,
     startupCommandDelivery,
@@ -113,6 +114,9 @@ export async function spawnIpcPty(
     ...((connectOptions.resumeProviderSession ?? resumeProviderSession)
       ? { resumeProviderSession: connectOptions.resumeProviderSession ?? resumeProviderSession }
       : {}),
+    ...(resumesAgent && (connectOptions.resumeOrigin ?? resumeOrigin)
+      ? { resumeOrigin: connectOptions.resumeOrigin ?? resumeOrigin }
+      : {}),
     ...((connectOptions.launchToken ?? launchToken)
       ? { launchToken: connectOptions.launchToken ?? launchToken }
       : {}),
@@ -133,6 +137,7 @@ export async function spawnIpcPty(
     ...(leafId ? { leafId } : {}),
     ...(placement && !admittedSessionId ? { placement } : {}),
     ...(spawnIntent ? { spawnIntent } : {}),
+    ...(connectOptions.wslPassiveRestore ? { wslPassiveRestore: true as const } : {}),
     ...(replacesPtyId ? { replacesPtyId } : {}),
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),

@@ -1,5 +1,6 @@
-import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
-import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
+import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { useBrowserAgentCursor } from './agent-cursor/use-browser-agent-cursor'
+import { BrowserPageFeedbackBadge } from './assemble-chrome/browser-page-feedback-badge'
 import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-bubble'
 import { useAppStore } from '@/store'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
@@ -29,9 +30,7 @@ import { useBrowserAddressBarEditSession } from './assemble-chrome/use-browser-a
 import { useBrowserPageFindShortcuts } from './assemble-chrome/use-browser-page-find-shortcuts'
 import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus'
 import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
-import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom'
 import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
-import { useClientHostedGuestActivationFocus } from './host-guest/use-client-hosted-guest-activation-focus'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview-navigation-handlers'
 import { ClientHostedBrowserLoadFailure } from './client-hosted-browser-load-failure'
@@ -44,6 +43,9 @@ import { resolveActiveBrowserLoadFailure } from './navigate/browser-load-failure
 import { consumeBrowserPageDeferredNavigation } from './navigate/browser-page-deferred-navigation'
 import { getBrowserDisplayTitle, toDisplayUrl } from './describe-page/browser-page-url-display'
 import type { ClientHostedBrowserPagePaneProps } from './describe-page/browser-page-types'
+import { BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME } from './host-guest/browser-page-viewport'
+import { BrowserDevToolsDock } from './devtools-dock/BrowserDevToolsDock'
+import { useBrowserDevToolsDockPageFlex } from './devtools-dock/browser-devtools-docked-pages'
 
 export function ClientHostedBrowserPagePane({
   browserTab,
@@ -57,6 +59,7 @@ export function ClientHostedBrowserPagePane({
   onSetUrl
 }: ClientHostedBrowserPagePaneProps): React.JSX.Element {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const devToolsPageFlex = useBrowserDevToolsDockPageFlex(browserTab.id)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   // Seed retained failures from the page: a fresh null on remount would clear both the error and its certificate record.
@@ -90,7 +93,7 @@ export function ClientHostedBrowserPagePane({
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
-  const { keepAddressBarFocusRef, startAddressBarFocusGrab } = useBrowserPageChromeFocus({
+  const { startAddressBarFocusGrab } = useBrowserPageChromeFocus({
     ...shortcutOwner,
     addressBarInputRef,
     guestFocus
@@ -133,6 +136,12 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValue
   })
   const runDeferredNavigation = useEffectEvent(navigateToUrl)
+  // The guest lives in a body-level host that paints above the pane, so the cursor joins it there.
+  const getAgentCursorHost = useCallback(
+    () => webviewRef.current?.parentElement ?? null,
+    [webviewRef]
+  )
+  useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
@@ -206,6 +215,7 @@ export function ClientHostedBrowserPagePane({
       // A commit is a successful load; did-stop-loading must preserve the preceding did-fail-load overlay.
       if (event?.type === 'did-navigate') {
         activeLoadFailureRef.current = null
+        setFindOpen(false)
       }
       const activeLoadFailure = activeLoadFailureRef.current
       // URL writes clear certificate challenges, so preserve them while a failure stands.
@@ -270,12 +280,7 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValueFromPage
   ])
 
-  useClientHostedGuestActivationFocus({ isActive, guestFocus, keepAddressBarFocusRef })
-
   const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
-  const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
-    feedbackVisible: zoom.browserZoomFeedbackVisible
-  })
 
   const markup = useClientHostedBrowserMarkup({
     webviewRef,
@@ -342,36 +347,40 @@ export function ClientHostedBrowserPagePane({
           {markup.drawButton}
         </BrowserNavigationControlRow>
       </div>
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
-        {markup.overlay}
-        <BrowserPageZoomIndicator
-          state={browserZoomIndicatorState}
-          percent={zoom.browserZoomPercent}
-        />
-        <BrowserFind
-          isOpen={findOpen}
-          onClose={() => setFindOpen(false)}
-          webviewRef={webviewRef}
-          guestGeneration={pageHostGeneration}
-        />
-        <BrowserLinkStatusBubble browserPageId={browserTab.id} />
-        {showFailureOverlay ? (
-          <ClientHostedBrowserLoadFailure
-            browserTab={browserTab}
-            isActive={isActive}
-            onRetry={() => reload.runReloadTrigger('reload')}
+      <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
+        <div
+          ref={viewportRef}
+          className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+          style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
+        >
+          {markup.overlay}
+          <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
+          <BrowserFind
+            isOpen={findOpen}
+            onClose={() => setFindOpen(false)}
+            webviewRef={webviewRef}
+            guestGeneration={pageHostGeneration}
           />
-        ) : null}
-        {attachmentError || restoredPageUnrecovered ? (
-          <ClientHostedBrowserUnavailableNotice
-            runtimeEnvironmentId={runtimeEnvironmentId}
-            worktreeId={worktreeId}
-            lastCommittedUrl={browserTab.url}
-            placementHostClientId={browserHostClientId}
-          />
-        ) : isBlankBrowserUrl(browserTab.url) ? (
-          <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} serversElsewhere />
-        ) : null}
+          <BrowserLinkStatusBubble browserPageId={browserTab.id} />
+          {showFailureOverlay ? (
+            <ClientHostedBrowserLoadFailure
+              browserTab={browserTab}
+              isActive={isActive}
+              onRetry={() => reload.runReloadTrigger('reload')}
+            />
+          ) : null}
+          {attachmentError || restoredPageUnrecovered ? (
+            <ClientHostedBrowserUnavailableNotice
+              runtimeEnvironmentId={runtimeEnvironmentId}
+              worktreeId={worktreeId}
+              lastCommittedUrl={browserTab.url}
+              placementHostClientId={browserHostClientId}
+            />
+          ) : isBlankBrowserUrl(browserTab.url) ? (
+            <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} serversElsewhere />
+          ) : null}
+        </div>
+        {devToolsPageFlex === null ? null : <BrowserDevToolsDock browserPageId={browserTab.id} />}
       </div>
     </div>
   )

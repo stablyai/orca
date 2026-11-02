@@ -241,7 +241,13 @@ describe('native chat transcript follow', () => {
     Object.defineProperties(scrollElement, {
       clientHeight: { configurable: true, get: () => 100 },
       scrollHeight: { configurable: true, get: () => scrollHeight },
-      scrollTop: { configurable: true, get: () => scrollTop, set: (value) => (scrollTop = value) }
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value) => {
+          scrollTop = value
+        }
+      }
     })
 
     scrollHeight = 700

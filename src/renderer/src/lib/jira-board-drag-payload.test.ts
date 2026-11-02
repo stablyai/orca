@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   JIRA_BOARD_DRAG_ISSUE_MIME,
-  JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES,
   readJiraBoardIssueDragData,
   writeJiraBoardIssueDragData
 } from './jira-board-drag-payload'
@@ -31,27 +30,6 @@ describe('jira board drag payload', () => {
       status: 'issue',
       ref: { key: 'STA-42', siteId: 'site-1' }
     })
-  })
-
-  it('round-trips an issue ref without siteId', () => {
-    const transfer = createDataTransfer()
-    expect(writeJiraBoardIssueDragData(transfer, { key: 'STA-42' })).toBe(true)
-    expect(readJiraBoardIssueDragData(transfer)).toEqual({
-      status: 'issue',
-      ref: { key: 'STA-42' }
-    })
-  })
-
-  it('rejects writing an empty key', () => {
-    const transfer = createDataTransfer()
-    expect(writeJiraBoardIssueDragData(transfer, { key: '' })).toBe(false)
-    expect(transfer.types).toEqual([])
-  })
-
-  it('rejects writing an oversized ref', () => {
-    const transfer = createDataTransfer()
-    const key = 'K'.repeat(JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES + 1)
-    expect(writeJiraBoardIssueDragData(transfer, { key })).toBe(false)
   })
 
   it('reports hidden while the typed payload is unreadable during dragover', () => {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { useAppStore } from '@/store'
@@ -498,16 +498,16 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[second.paneKey]).toBeUndefined()
   })
 
-  it("leaves a workspace sleep's records to main: no fresh tab, record kept", () => {
+  it("leaves a workspace sleep's records to main while their tab remains", () => {
     const record = makeRecord({ origin: 'worktree-sleep' })
     useAppStore.setState({
-      tabsByWorktree: { 'wt-1': [] },
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
     const state = useAppStore.getState()
-    expect(state.tabsByWorktree['wt-1']).toEqual([])
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
@@ -538,7 +538,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
     const startup = state.pendingStartupByTabId[resumedTab!.id]
     expect(startup?.command).toBe(
-      "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'sess-1'"
+      "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' '-c' 'disable_paste_burst=true' 'resume' 'sess-1'"
     )
     expect(startup?.env).toEqual({ CODEX_PROFILE: 'captured' })
     expect(startup?.command).not.toContain('changed')

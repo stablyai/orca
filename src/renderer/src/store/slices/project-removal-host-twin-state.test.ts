@@ -29,11 +29,11 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { ClosedEditorTabSnapshot } from './editor/types/open-file'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import {

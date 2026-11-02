@@ -15,6 +15,7 @@ import { fetchProjectHostSetupCompatibility } from '../projects/project-host-rou
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
 import { dropWorktreeRowsOfDroppedRepos } from './dropped-repo-worktree-rows'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { withoutPendingRuntimeRepoRemovals } from './pending-runtime-repo-removals'
 
 export type FetchedRepoCatalog = {
   repos: readonly Repo[]
@@ -54,7 +55,11 @@ export function mergeFetchedRepoCatalog(
   projectHostSetupCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
-  const repos = mergeFetchedReposForHost(currentRepos, catalog.repos, catalog.hostId)
+  const repos = mergeFetchedReposForHost(
+    currentRepos,
+    withoutPendingRuntimeRepoRemovals(catalog.repos, catalog.hostId),
+    catalog.hostId
+  )
   return {
     repos,
     projectHostSetupCompatibility: catalog.projectHostSetupCompatibility,

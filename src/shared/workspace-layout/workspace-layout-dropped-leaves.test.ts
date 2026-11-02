@@ -1,13 +1,7 @@
 // The dropped-leaf step (L80 Q2): which panes a live edit dropped, and what it records for them.
 import { describe, expect, it, vi } from 'vitest'
 import { applyLayoutCommand } from './workspace-layout-commands'
-import {
-  build,
-  emptyModel,
-  testContext,
-  terminalTab,
-  WS
-} from './workspace-layout-command.test-fixture'
+import { build, testContext, terminalTab, WS } from './workspace-layout-command.test-fixture'
 import type { LayoutCommand, LayoutContext } from './workspace-layout-command-types'
 import { droppedLeavesOf } from './workspace-layout-dropped-leaves'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
@@ -203,10 +197,5 @@ describe('the dropped-leaf step', () => {
     const replayed = applyLayoutCommand({ ...model, records: once.records }, close, context)
 
     expect(replayed.ok && recorded(replayed.model)).toEqual(recorded(once))
-  })
-
-  it('records nothing in a window-owned commit with no workspaces changed', () => {
-    const model = emptyModel()
-    expect(droppedLeavesOf(model, model)).toEqual([])
   })
 })

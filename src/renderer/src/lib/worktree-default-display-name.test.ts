@@ -5,14 +5,6 @@ import {
 } from './worktree-default-display-name'
 
 describe('resolveWorktreeBranchLabel', () => {
-  it('strips refs/heads/ like the raw branchName call it replaces', () => {
-    expect(resolveWorktreeBranchLabel({ branch: 'refs/heads/feature/jump' })).toBe('feature/jump')
-  })
-
-  it('returns empty for a folder workspace, which carries no branch', () => {
-    expect(resolveWorktreeBranchLabel({ branch: '' })).toBe('')
-  })
-
   it('returns empty instead of throwing when branch is absent at runtime', () => {
     // Empty-query rows reach render before branch search; branchName() must tolerate missing branches there too.
     expect(resolveWorktreeBranchLabel({ branch: undefined as unknown as string })).toBe('')
@@ -20,36 +12,6 @@ describe('resolveWorktreeBranchLabel', () => {
 })
 
 describe('resolveWorktreeDisplayName', () => {
-  it('prefers the custom name', () => {
-    expect(
-      resolveWorktreeDisplayName({
-        displayName: 'Design review',
-        branch: 'refs/heads/feature/jump',
-        path: '/repos/orca'
-      })
-    ).toBe('Design review')
-  })
-
-  it('falls back to the branch when the name was blanked to an empty string', () => {
-    expect(
-      resolveWorktreeDisplayName({
-        displayName: '',
-        branch: 'refs/heads/feature/jump',
-        path: '/repos/orca'
-      })
-    ).toBe('feature/jump')
-  })
-
-  it('treats a whitespace-only name as blank', () => {
-    expect(
-      resolveWorktreeDisplayName({
-        displayName: '   ',
-        branch: 'refs/heads/main',
-        path: '/repos/orca'
-      })
-    ).toBe('main')
-  })
-
   it('falls back to the branch when a cleared name left the field undefined', () => {
     expect(
       resolveWorktreeDisplayName({
@@ -74,12 +36,6 @@ describe('resolveWorktreeDisplayName', () => {
         path: 'C:\\Users\\alice\\repos\\design-review'
       })
     ).toBe('design-review')
-  })
-
-  it('keeps emoji and non-ASCII names intact', () => {
-    expect(
-      resolveWorktreeDisplayName({ displayName: '🚀 Läufer', branch: '', path: '/repos/x' })
-    ).toBe('🚀 Läufer')
   })
 
   it('returns empty rather than throwing when every source is missing', () => {

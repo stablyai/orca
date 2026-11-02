@@ -12,13 +12,13 @@ import {
   SquareTerminal,
   Wrench
 } from 'lucide-react'
-import type { NativeChatMcpIdentity } from '../../../../shared/native-chat-tool-identity'
+import type { NativeChatMcpIdentity } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   nativeChatToolIconName,
   type NativeChatToolIconName
-} from '../../../../shared/native-chat-tool-icon'
+} from '../../../../shared/native-chat/tools/native-chat-tool-icon'
 
 const NATIVE_CHAT_TOOL_GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
   eye: Eye,
@@ -54,16 +54,19 @@ function NativeChatGlyphSlot({
 export function NativeChatToolIcon({
   rowWord,
   mcpIdentity,
+  input,
   className
 }: {
   /** The word the row renders, which is the row's whole identity. */
   rowWord: string
   mcpIdentity?: NativeChatMcpIdentity
+  /** A command tool's input, which can narrow its glyph to the browser's. */
+  input?: unknown
   className?: string
 }): React.JSX.Element {
   return (
     <NativeChatGlyphSlot
-      glyph={NATIVE_CHAT_TOOL_GLYPHS[nativeChatToolIconName(rowWord, mcpIdentity)]}
+      glyph={NATIVE_CHAT_TOOL_GLYPHS[nativeChatToolIconName(rowWord, mcpIdentity, input)]}
       className={className}
     />
   )

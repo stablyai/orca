@@ -124,6 +124,62 @@ describe('adopted Run binding without --takeover-legacy', () => {
     })
   })
 
+  it('withholds legacy takeover advice and refuses explicit worker takeovers without effects', () => {
+    const { db, adoptedRunId, recoveryMessageId } = createAdoptedFixture({ settleWork: false })
+    const home = db.createRun({
+      objective: 'worker home',
+      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
+    })
+    const worker = createRootDispatch(
+      db,
+      db.createTask({ runId: home.id, spec: 'worker' }).id,
+      'term_foreign_worker',
+      'tab_foreign:22222222-2222-4222-8222-222222222222'
+    )
+    const before = {
+      adoptedRun: db.getRun(adoptedRunId),
+      homeRun: db.getRun(home.id),
+      dispatch: db.getDispatchContextById(worker.id),
+      mail: db.getMessageById(recoveryMessageId)
+    }
+    try {
+      db.bindRun({
+        runId: adoptedRunId,
+        coordinatorHandle: 'term_foreign_worker',
+        coordinatorPaneKey: 'tab_foreign:22222222-2222-4222-8222-222222222222'
+      })
+      throw new Error('Expected the legacy bind to be fenced')
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'consumer_fenced', data: { effectsApplied: false } })
+      expect(JSON.stringify(error)).not.toContain('run-use')
+    }
+    for (const [runId, code] of [
+      [adoptedRunId, 'worker_cannot_take_over_run'],
+      [home.id, 'worker_cannot_coordinate_own_run']
+    ] as const) {
+      expect(() =>
+        db.bindRun({
+          runId,
+          coordinatorHandle: 'term_foreign_worker',
+          coordinatorPaneKey: 'tab_foreign:22222222-2222-4222-8222-222222222222',
+          takeoverLegacy: true
+        })
+      ).toThrowError(
+        expect.objectContaining({
+          code,
+          data: { effectsApplied: false, dispatchId: worker.id }
+        })
+      )
+      expect({
+        adoptedRun: db.getRun(adoptedRunId),
+        homeRun: db.getRun(home.id),
+        dispatch: db.getDispatchContextById(worker.id),
+        mail: db.getMessageById(recoveryMessageId)
+      }).toEqual(before)
+    }
+  })
+
   it('claims the settled adopted Run and inherits its recovered task graph', () => {
     const { db, adoptedRunId } = createAdoptedFixture({ settleWork: true })
 
@@ -292,6 +348,11 @@ describe('pane-bound Run lookup', () => {
 
     const rebound = db.createRun({
       objective: 'second',
+      coordinatorHandle: 'term_d',
+      coordinatorPaneKey: 'tab_reminted:99999999-9999-4999-8999-999999999999'
+    })
+    db.bindRun({
+      runId: rebound.id,
       coordinatorHandle: 'term_d',
       coordinatorPaneKey: 'tab_reminted:99999999-9999-4999-8999-999999999999'
     })

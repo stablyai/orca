@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import {
+  resolveConflict,
   stageFile,
   unstageFile,
   discardChanges,
@@ -14,11 +15,15 @@ import {
   getLocalRepoForRegisteredWorktree
 } from '../local-worktree-runtime-options'
 import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
-import { validateGitRelativeFilePath } from '../filesystem-path-containment'
+import { validateGitRelativeFilePath } from './filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { parseGitStageWorktreeScope } from '../../../shared/git-stage-worktree-scope'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import {
+  CONFLICT_RESOLUTIONS,
+  type ConflictResolution
+} from '../../../shared/source-control-entry-actions'
 
 export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -37,6 +42,35 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
         worktreePath
       )
       await stageFile(worktreePath, filePath, { ...gitOptions, admissionTier: 'interactive' })
+    }
+  )
+
+  ipcMain.handle(
+    'git:resolveConflict',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        filePath: string
+        resolution: ConflictResolution
+        connectionId?: string
+      }
+    ): Promise<void> => {
+      if (!CONFLICT_RESOLUTIONS.includes(args.resolution)) {
+        throw new Error('Unknown conflict resolution')
+      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await resolveConflict(worktreePath, filePath, args.resolution, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 

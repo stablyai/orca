@@ -1,3 +1,7 @@
+import {
+  combinedDiffViewportAttributes,
+  combinedDiffRowAttributes
+} from '@/components/editor/combined-diff-viewport'
 import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
@@ -9,7 +13,6 @@ import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import type { GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
-import type { DiffSectionItemProps } from '@/components/editor/diff-section-item-props'
 import { PRFilesCombinedDiffToolbar } from './pr-files-combined-diff-toolbar'
 
 export function PRFilesCombinedDiffBody({
@@ -32,7 +35,6 @@ export function PRFilesCombinedDiffBody({
   virtualizer,
   sections,
   isDark,
-  settings,
   sectionHeights,
   inlineReviewComments,
   loadSection,
@@ -66,7 +68,6 @@ export function PRFilesCombinedDiffBody({
   virtualizer: Virtualizer<HTMLDivElement, Element>
   sections: DiffSection[]
   isDark: boolean
-  settings: DiffSectionItemProps['settings']
   sectionHeights: Record<number, number>
   inlineReviewComments: DecoratedDiffComment[]
   loadSection: (index: number) => void
@@ -108,7 +109,11 @@ export function PRFilesCombinedDiffBody({
           onCollapsedChange={setFileTreeCollapsed}
           onNavigate={handleTreeNavigate}
         />
-        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+        <div
+          {...combinedDiffViewportAttributes}
+          ref={scrollContainerRef}
+          className="min-w-0 flex-1 overflow-auto scrollbar-editor"
+        >
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const section = sections[virtualItem.index]
@@ -118,6 +123,7 @@ export function PRFilesCombinedDiffBody({
               return (
                 <div
                   key={virtualItem.key}
+                  {...combinedDiffRowAttributes}
                   data-index={virtualItem.index}
                   ref={virtualizer.measureElement}
                   className="absolute left-0 top-0 w-full"
@@ -129,7 +135,6 @@ export function PRFilesCombinedDiffBody({
                     isBranchMode={false}
                     sideBySide={sideBySide}
                     isDark={isDark}
-                    settings={settings}
                     sectionHeight={sectionHeights[virtualItem.index]}
                     worktreeId={`github-pr:${repoId}:${prNumber}`}
                     inlineComments={inlineReviewComments}

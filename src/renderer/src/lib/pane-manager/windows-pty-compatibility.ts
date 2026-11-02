@@ -1,6 +1,12 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  buildXtermConptyOptions,
+  parseWindowsBuildNumber,
+  windowsPtyForOwnerBackend
+} from '../../../../shared/xterm-conpty-options'
+import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../../../../shared/pty-owner-backend'
 
 export type WindowsPtyCompatibilityContext = {
   userAgent?: string
@@ -22,40 +28,36 @@ function isWslShellOverride(shellOverride: string | null | undefined): boolean {
   return /(?:^|[/\\])wsl(?:\.exe)?$/i.test(shellOverride ?? '')
 }
 
-function parseWindowsBuildNumber(osRelease: string | null | undefined): number | undefined {
-  const build = osRelease?.split('.')[2]
-  if (!build) {
-    return undefined
-  }
-  const parsed = Number.parseInt(build, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
-}
-
-function buildXtermWindowsPtyOptions(
-  buildNumber: number | undefined
-): NonNullable<ITerminalOptions['windowsPty']> {
-  // Old ConPTY lacks reliable wrap markers; low build numbers make xterm misclassify full-width rows as wrapped.
-  if (buildNumber === undefined || buildNumber < 21376) {
-    return { backend: 'conpty' }
-  }
-  return { backend: 'conpty', buildNumber }
-}
-
-/** Apply ConPTY options only to genuine local Windows panes. executionHostId excludes serve/runtime panes that look local to raw connectionId/cwd heuristics. */
+/**
+ * xterm's ConPTY model for every pane this Windows machine's daemon owns, WSL shells included: the
+ * same owner-backend rule as the daemon's and main's emulators. Native-only workarounds (cursor,
+ * CJK, keyboard) stay behind `isLocalNativeWindowsConpty`. executionHostId excludes serve/runtime
+ * panes that look local to raw connectionId/cwd heuristics.
+ */
 export function buildWindowsPtyCompatibilityOptions(
   context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
 ): Partial<ITerminalOptions> {
-  if (!isLocalNativeWindowsConpty(context)) {
-    return {}
+  const windowsPty = windowsPtyForOwnerBackend(localPaneOwnerBackend(context), context.osRelease)
+  return windowsPty ? { windowsPty } : {}
+}
+
+function localPaneOwnerBackend(
+  context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
+): PtyOwnerBackend | undefined {
+  if (context.executionHostId !== LOCAL_EXECUTION_HOST_ID || context.connectionId !== null) {
+    return undefined
   }
-  return buildLocalConptyTerminalOptions(context.osRelease)
+  return resolvePtyOwnerBackend({
+    platform: isWindowsUserAgent(context.userAgent) ? 'win32' : 'linux',
+    shellPath: context.shellOverride ?? undefined
+  })
 }
 
 /** Reuse ConPTY options after dashboard preview has already resolved local native-Windows ownership. */
 export function buildLocalConptyTerminalOptions(
   osRelease: string | null | undefined
 ): Partial<ITerminalOptions> {
-  return { windowsPty: buildXtermWindowsPtyOptions(parseWindowsBuildNumber(osRelease)) }
+  return { windowsPty: buildXtermConptyOptions(parseWindowsBuildNumber(osRelease)) }
 }
 
 /** Match main’s effectiveShellOverride/isNativeWindowsLocalPtySpawn: tab override wins, else global Windows setting, so global WSL classifies identically. */

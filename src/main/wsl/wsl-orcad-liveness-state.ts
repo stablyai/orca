@@ -1,3 +1,4 @@
+import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import type { SystemPowerLifecycleListener } from '../system-power-lifecycle'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
@@ -14,13 +15,27 @@ export const WSL_ORCAD_HEARTBEAT_MS = 120_000
 export type WslOrcadTimer = { cancel(): void }
 
 export type WslOrcadLivenessDependencies = {
-  manager: Pick<WslOrcadConnectionManager, 'ensure' | 'get' | 'publish' | 'close'>
-  readRunning: () => Promise<WslRunningDistrosRead>
+  manager: Pick<
+    WslOrcadConnectionManager,
+    'ensure' | 'get' | 'publish' | 'close' | 'retireListener'
+  >
+  /**
+   * A settled read for `distro`: never a list probed while it may still be stopping (E9). With
+   * `exitedAt`, also only a probe started once that exit's settle window has passed.
+   */
+  readRunning: (target: {
+    distro: string
+    exitedAt?: number | null
+    /** Only a probe started at or after this instant (monotonic) may answer; a cached list won't. */
+    probedAfter?: number
+  }) => Promise<WslRunningDistrosRead>
   readIdentity: (distro: string, orcadPid: number | null) => Promise<WslGuestIdentity | null>
   openWatch: (connection: WslOrcadConnection) => Promise<WslOrcadWatch>
   collectCensus: (connection: WslOrcadConnection) => Promise<OrcadTerminalCensus>
   /** A WSL project or terminal the user can see is open on this distro. */
   hasUserVisibleWork: (distro: string) => boolean
+  /** E9: recovery reconnects only into a distro confirmed running right before it spawns. */
+  requireRunning?: (distro: string) => Promise<boolean>
   deferUntilRunning: (distro: string, key: string, task: () => unknown) => void
   /** C3's `ensureHeld`; called only while the distro is confirmed running, so it never boots. */
   ensureHolder?: (distro: string) => Promise<unknown>
@@ -48,6 +63,8 @@ export type Supervised = {
   pending: Trigger | null
   state: WslOrcadConnectionStatus['state'] | null
   lastBeatMs: number
+  /** When a watch or holder last exited; a running list read soon after may still be stale. */
+  lastExitMs: number | null
 }
 
 export function newSupervised(
@@ -69,7 +86,8 @@ export function newSupervised(
     busy: false,
     pending: null,
     state: null,
-    lastBeatMs: nowMs
+    lastBeatMs: nowMs,
+    lastExitMs: null
   }
 }
 
@@ -81,4 +99,38 @@ export function disarmSupervised(entry: Supervised): void {
   entry.wakeWait = null
   entry.watch?.close()
   entry.watch = null
+}
+
+// Covers the exit settle and the re-read after it, with room for a slow running-list read.
+const EXIT_VERDICT_WINDOW_MS = EXIT_SETTLE_MS * 10
+
+/**
+ * A verdict is in progress, or the watch or holder just exited: a stopping distro can still be
+ * listed as running, so a reconnect now could boot it again.
+ */
+export function isSupervisedSettling(entry: Supervised | undefined, nowMs: number): boolean {
+  if (!entry) {
+    return false
+  }
+  return (
+    entry.busy ||
+    entry.pending !== null ||
+    (entry.lastExitMs !== null && nowMs - entry.lastExitMs < EXIT_VERDICT_WINDOW_MS)
+  )
+}
+
+/** Any watch or holder exit, a clean one (code 0 from `wsl --shutdown`) included. */
+export function isWatchOrHolderExit(trigger: Trigger): boolean {
+  return trigger !== 'heartbeat' && trigger.source !== 'verify'
+}
+
+export function noteSupervisedExit(entry: Supervised, trigger: Trigger, nowMs: number): void {
+  if (isWatchOrHolderExit(trigger)) {
+    entry.lastExitMs = nowMs
+    // An exit during a recovery backoff ends that recovery, so the exit re-reads the list now.
+    if (entry.busy && entry.wakeWait) {
+      entry.generation += 1
+      entry.wakeWait()
+    }
+  }
 }

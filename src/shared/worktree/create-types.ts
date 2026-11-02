@@ -97,6 +97,8 @@ export type CreateWorktreeArgs = {
   compareBaseRef?: string
   /** Existing local branches may contain slashes that the filesystem-safe worktree name cannot. */
   branchNameOverride?: string
+  /** V1 open-existing retains legacy tip/collision policy; V2 pins explicit reuse regardless of remote divergence. */
+  branchIntent?: 'open-existing' | 'open-existing-v2' | 'create-new'
   setupDecision?: SetupDecision
   /** Per-create choice; omitted callers use the execution host's saved default. */
   setupOnly?: boolean
@@ -144,6 +146,8 @@ export type CreateWorktreeProgressEvent = {
   creationId?: string
   phase: 'fetching' | 'creating'
   checkout?: WorktreeCheckoutProgress | null
+  /** Local creates name the checkout before Git publishes it. */
+  worktreeId?: string
 }
 
 export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {

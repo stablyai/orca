@@ -23,7 +23,7 @@ function createRegistry(initialState: ConnectionState = 'connected') {
       if (state !== 'connected') {
         return false
       }
-      sent.push(request as SentRequest)
+      sent.push(request)
       return true
     }
   })
@@ -72,6 +72,9 @@ describe('RpcClientStreamRegistry', () => {
     registry.markForReplay()
     registry.replayAfterAuthentication()
     registry.handleBinary(terminalOutput(7, 'stale'))
+    registry.handleResponse(streamingResponse(first.id, { type: 'subscribed', streamId: 8 }))
+    registry.handleBinary(terminalOutput(8, 'after'))
+    registry.handleBinary(terminalOutput(7, 'still-stale'))
 
     expect(sent[1]).toMatchObject({
       id: first.id,
@@ -80,7 +83,9 @@ describe('RpcClientStreamRegistry', () => {
     })
     expect(events).toEqual([
       { type: 'subscribed', streamId: 7 },
-      { type: 'data', streamId: 7, chunk: 'before' }
+      { type: 'data', streamId: 7, chunk: 'before' },
+      { type: 'subscribed', streamId: 8 },
+      { type: 'data', streamId: 8, chunk: 'after' }
     ])
   })
 
@@ -383,8 +388,11 @@ describe('RpcClientStreamRegistry', () => {
   it('ends one transcript stream on dispose and leaves a sibling on the same socket (U-03)', () => {
     const { registry, sent } = createRegistry()
     const disposeFirst = registry.subscribe('agentSession.subscribe', { sessionId: 's1' }, () => {})
-    registry.subscribe('agentSession.subscribe', { sessionId: 's2' }, () => {})
-    const [first] = sent
+    const siblingEvents: unknown[] = []
+    registry.subscribe('agentSession.subscribe', { sessionId: 's2' }, (event) =>
+      siblingEvents.push(event)
+    )
+    const [first, sibling] = sent
 
     disposeFirst()
     expect(sent.at(-1)).toMatchObject({
@@ -392,6 +400,9 @@ describe('RpcClientStreamRegistry', () => {
       params: { sessionId: 's1', subscriptionId: first!.id }
     })
     expect(sent.filter((request) => request.method === 'agentSession.unsubscribe')).toHaveLength(1)
+    registry.handleResponse(streamingResponse(sibling!.id, { type: 'chunk', text: 'still active' }))
+    expect(siblingEvents).toEqual([{ type: 'chunk', text: 'still active' }])
+    expect(registry.size()).toBe(1)
   })
 
   it('names the terminal request it sent when unsubscribing, and keeps the slot for older hosts', () => {

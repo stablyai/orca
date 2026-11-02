@@ -247,6 +247,44 @@ describe('connectPanePty pre-connect input', () => {
     binding.dispose()
   })
 
+  it('keeps a brand-new pane’s typing for the terminal it creates, but not a restored pane’s', async () => {
+    transportFactoryQueue.push(createMockTransport(), createMockTransport())
+    mockStoreState.terminalLayoutsByTabId = {}
+
+    const fresh = connectPlainPane()
+    const restored = connectPlainPane({
+      restoredLeafId: leafIdForPane(1),
+      restoredPtyIdByLeafId: { [leafIdForPane(1)]: 'remote:env-1@@terminal-1' }
+    })
+
+    const keepFresh = createdTransportOptions[0]?.keepTypeAheadForNewTerminal
+    const keepRestored = createdTransportOptions[1]?.keepTypeAheadForNewTerminal
+    expect(typeof keepFresh === 'function' && keepFresh()).toBe(true)
+    expect(typeof keepRestored === 'function' && keepRestored()).toBe(false)
+    fresh.dispose()
+    restored.dispose()
+  })
+
+  // Why: a cleared binding can still replay saved history into the pane.
+  it('stops keeping a new pane’s typing once replayed history shows in it', async () => {
+    transportFactoryQueue.push(createMockTransport())
+    mockStoreState.terminalLayoutsByTabId = {}
+    const pane = createPane(1)
+    const connectArgs = [pane, createManager(1), buildPaneConnectionDeps(() => mockStoreState)]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures implement the members connectPanePty touches.
+    const binding = connectPanePty(...(connectArgs as unknown as Parameters<typeof connectPanePty>))
+    const keep = createdTransportOptions[0]?.keepTypeAheadForNewTerminal
+    expect(typeof keep === 'function' && keep()).toBe(true)
+
+    // The fresh create's own prompt and leaf binding count only before it starts, never at bind.
+    pane.terminal.buffer.active.baseY = 12
+    expect(typeof keep === 'function' && keep('connect')).toBe(false)
+    expect(typeof keep === 'function' && keep('bind')).toBe(true)
+    // Replayed history (checked at bind too) is covered through the real restore path in
+    // pty-connection-remote-new-terminal-typeahead.test.ts.
+    binding.dispose()
+  })
+
   it('drops keys typed into a deliberately slept pane instead of replaying them on wake', async () => {
     markWorktreeSleepIntent('wt-1')
     const transport = Object.assign(createMockTransport(), { abandonPreconnectInput: vi.fn() })

@@ -1,8 +1,7 @@
 import { discoverAndroidSdkFromHost } from './android-sdk-host-discovery'
 import { EmulatorError } from '../emulator-errors'
+import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
-
-const SDK_MISSING = 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
 
 // Rediscover host SDKs per call so installs and settings changes work without restarting.
 export class AndroidSdkState {
@@ -18,7 +17,7 @@ export class AndroidSdkState {
   require(): AndroidSdkPaths {
     const sdk = this.resolve()
     if (!sdk) {
-      throw new EmulatorError('emulator_error', SDK_MISSING)
+      throw new EmulatorError('emulator_error', emulatorFailureText('androidSdkMissing'))
     }
     return sdk
   }

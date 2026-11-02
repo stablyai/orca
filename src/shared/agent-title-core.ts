@@ -60,6 +60,10 @@ export const STRONG_WORKING_KEYWORDS_RE = new RegExp(
 
 export const STRONG_WORKING_KEYWORDS_RE_GLOBAL = new RegExp(STRONG_WORKING_KEYWORDS_RE.source, 'gi')
 
+// Same boundaries so ~/x/permission, permission-check and awaiting are not prompts.
+export const STRONG_PERMISSION_KEYWORDS_RE =
+  /(^|[^\w./\\-])(action required|permission|waiting)(?![\w-])/i
+
 export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 
 export function hasGeminiStatusGlyph(title: string): boolean {
@@ -120,11 +124,6 @@ export function containsAgentName(title: string): boolean {
   )
 }
 
-export function containsAny(title: string, words: readonly string[]): boolean {
-  const lower = title.toLowerCase()
-  return words.some((word) => lower.includes(word))
-}
-
 export function isClaudeManagementTitle(title: string): boolean {
   return CLAUDE_MANAGEMENT_TITLE_RE.test(title)
 }
@@ -167,4 +166,16 @@ export function isCursorAgentTitle(title: string | null | undefined): boolean {
 // Ignore bare Cursor redraws only after Cursor owns the title, preserving hook spinner state while still identifying hookless panes.
 export function shouldSuppressCursorNativeTitle(lastEmittedTitle: string | null): boolean {
   return lastEmittedTitle !== null && isCursorAgentTitle(lastEmittedTitle)
+}
+
+// Collapse only Grok’s spinner - phrase - grok frame; both delimiters exclude Claude/Codex task mentions.
+// Keep unspun session titles unchanged and accept spinner + grok so our collapsed label stays idempotent.
+const GROK_ROTATING_FRAME_RE = /^[\u2800-\u28FF]+\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
+const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
+
+export function isGrokRotatingWorkingTitle(title: string): boolean {
+  if (!containsBrailleSpinner(title)) {
+    return false
+  }
+  return GROK_ROTATING_FRAME_RE.test(title) || GROK_COLLAPSED_WORKING_TITLE_RE.test(title)
 }

@@ -1,4 +1,5 @@
 import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { XtermConptyOptions } from '../../shared/xterm-conpty-options'
 import { HeadlessEmulator } from './headless-emulator'
 import { StartupDeviceAttributesQueryFilter } from './startup-device-attributes-responder'
 import { normalizePtySize } from './daemon-pty-size'
@@ -23,6 +24,7 @@ export type SessionOutputPlaneOptions = {
   scrollback?: number | undefined
   wslDistro?: string | undefined
   historySeedChunks?: readonly string[] | undefined
+  windowsPty?: XtermConptyOptions | undefined
   /** Read ownership after the barrier scans bytes, keeping snapshot metadata aligned with the emulator. */
   getTerminalOwner?: (() => TerminalOwner | undefined) | undefined
 }
@@ -46,7 +48,8 @@ export class SessionOutputPlane {
       cols: size.cols,
       rows: size.rows,
       scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro
+      wslDistro: opts.wslDistro,
+      ...(opts.windowsPty ? { windowsPty: opts.windowsPty } : {})
       // Keep the emulator silent; the shell-ready barrier separately owns startup DA1 replies.
     })
     // Seed before subscribing to synchronous shell output; stop at any failed chunk to avoid a torn stream.

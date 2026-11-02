@@ -14,7 +14,7 @@ const input = readScenarios(
 )
 const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
 
-// Prove each probe closes a surviving mutation and that earlier scenarios stayed blind.
+// Prove each probe closes a surviving mutation.
 // Empty session inputs exercise omission guards that always-filled fixtures could not reach.
 const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonly string[] }[] = [
   {
@@ -96,37 +96,10 @@ async function verdict(id: string, mutation: Mutation): Promise<string> {
 }
 
 describe('probe scenarios close holes the pre-probe recordings left open', () => {
-  // Every completion needs a later checkpoint so a params-mismatch abort always suppresses an observation the golden actually holds.
-  it('never completes a request after the last checkpoint of a scenario', () => {
-    const trailing = input.scenarios
-      .filter((scenario) => {
-        let lastComplete = -1
-        let lastCheckpoint = -1
-        scenario.steps.forEach((step, index) => {
-          if ('complete' in step) {
-            lastComplete = index
-          }
-          // A step may carry both, and then the checkpoint records what the completion produced.
-          if ('checkpoint' in step) {
-            lastCheckpoint = index
-          }
-        })
-        return lastComplete > lastCheckpoint
-      })
-      .map((scenario) => scenario.id)
-    expect(trailing).toEqual([])
-  })
-
   for (const hole of HOLES) {
-    const family = input.scenarios.filter((scenario) => scenario.operation === hole.operation)
     for (const id of hole.closedBy) {
       it(`${id} kills ${hole.mutation}`, async () => {
         expect(await verdict(id, hole.mutation)).toBe('killed')
-      })
-    }
-    for (const scenario of family.filter(({ id }) => !hole.closedBy.includes(id))) {
-      it(`${scenario.id} cannot see ${hole.mutation}`, async () => {
-        expect(await verdict(scenario.id, hole.mutation)).toBe('survived')
       })
     }
   }

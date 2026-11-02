@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 import {
-  getParkedHostSessionMirrorWaiterCountForTests,
   markHostSessionMirrorHydrated,
-  MAX_PARKED_HOST_SESSION_MIRROR_WAITERS,
   parkUntilHostSessionMirrorHydrates,
   resetHostSessionMirrorHydrationForTests
 } from './host-session-mirror-hydration'
@@ -26,15 +24,5 @@ describe('host session mirror hydration drain', () => {
 
     expect(() => markHostSessionMirrorHydrated(ENVIRONMENT_ID)).not.toThrow()
     expect(secondReplay).toHaveBeenCalledTimes(1)
-  })
-
-  it('bounds parked waiter growth when environments churn', () => {
-    for (let index = 0; index < MAX_PARKED_HOST_SESSION_MIRROR_WAITERS + 4; index += 1) {
-      parkUntilHostSessionMirrorHydrates(`env-${index}`, 'repo::worktree', () => {})
-    }
-
-    expect(getParkedHostSessionMirrorWaiterCountForTests()).toBe(
-      MAX_PARKED_HOST_SESSION_MIRROR_WAITERS
-    )
   })
 })

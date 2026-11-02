@@ -1,6 +1,12 @@
 import type * as React from 'react'
+import { Terminal } from '@xterm/headless'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushAsyncTicks, createDeferred, renderHeadlessBuffer } from './pty-connection-test-async'
+import {
+  flushAsyncTicks,
+  createDeferred,
+  renderHeadlessBuffer,
+  writeHeadlessTerminal
+} from './pty-connection-test-async'
 import {
   createMockTransport,
   createPane,
@@ -152,6 +158,9 @@ describe('connectPanePty', () => {
     { name: 'overflowed', pending: 'v'.repeat(512 * 1024 + 1), repaint: true, covered: 0 },
     { name: 'small', pending: 'Working\r\n', repaint: false, covered: 0 },
     { name: 'partially covered', pending: 'Working\r\n', repaint: false, covered: 4 },
+    { name: 'split escape', pending: '14mWorking\r\n', repaint: false, covered: 0 },
+    { name: 'styled', pending: 'Working\r\n', repaint: false, covered: 0 },
+    { name: 'styled gap', pending: 'Working\r\n', repaint: true, covered: 0 },
     { name: 'unmapped', pending: 'Working\r\n', repaint: true, covered: 4 },
     { name: 'unhide gap', pending: 'Working\r\n', repaint: true, covered: 0 },
     { name: 'fresh snapshot gap', pending: 'Working\r\n', repaint: true, covered: 0 }
@@ -173,12 +182,24 @@ describe('connectPanePty', () => {
 
       const getSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
       const hidden = 'hidden-before-flood\r\n'
-      const snapshot = covered > 0 ? `${hidden}v${pending.slice(0, covered)}` : hidden
+      const pendingEscapeTailAnsi = name === 'split escape' ? '\x1b[38;5;' : ''
+      const style = name.startsWith('styled') ? '\x1b[38;5;214m' : ''
+      const hiddenData = `${hidden}${style}${pendingEscapeTailAnsi}`
+      const firstLive = name === 'split escape' ? '2' : 'v'
+      const snapshot =
+        covered > 0 ? `${hidden}${firstLive}${pending.slice(0, covered)}` : `${hidden}${style}`
+      const snapshotSeq = hiddenData.length + (covered > 0 ? firstLive.length + covered : 0)
       const done = 'HIDDEN_FLOOD_DONE\r\n'
       const rawLength = pending.length + (name === 'unmapped' ? 5 : 0)
-      let seq = hidden.length + 1 + rawLength
+      let seq = hiddenData.length + firstLive.length + rawLength
       getSnapshot
-        .mockResolvedValueOnce({ data: snapshot, cols: 120, rows: 40, seq: snapshot.length })
+        .mockResolvedValueOnce({
+          data: snapshot,
+          pendingEscapeTailAnsi,
+          cols: 120,
+          rows: 40,
+          seq: snapshotSeq
+        })
         .mockResolvedValue({
           data: done,
           cols: 120,
@@ -207,11 +228,14 @@ describe('connectPanePty', () => {
         })
       }
       isVisibleRef.current = true
-      onData?.('v', { seq: hidden.length + 1, rawLength: 1 })
+      onData?.(firstLive, {
+        seq: hiddenData.length + firstLive.length,
+        rawLength: firstLive.length
+      })
       await flushAsyncTicks(30)
       expect(safeFitAndThen).toHaveBeenCalledTimes(1)
       onData?.(pending, { seq, rawLength })
-      if (name === 'unhide gap' || name === 'fresh snapshot gap') {
+      if (name === 'unhide gap' || name === 'fresh snapshot gap' || name === 'styled gap') {
         isVisibleRef.current = name === 'unhide gap'
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',
@@ -245,7 +269,7 @@ describe('connectPanePty', () => {
       expect(getSnapshot).toHaveBeenCalledTimes(repaint ? 2 : 1)
       disposable.dispose()
       vi.useRealTimers()
-      const drained = `${hidden}v${pending}`
+      const drained = `${hiddenData}${firstLive}${pending}`
       expect(await renderHeadlessBuffer([output])).toEqual(
         await renderHeadlessBuffer([repaint ? done : drained + laterOutput])
       )
@@ -253,6 +277,21 @@ describe('connectPanePty', () => {
         expect(await renderHeadlessBuffer([deadlineOutput])).toEqual(
           await renderHeadlessBuffer([drained])
         )
+      }
+      if (pendingEscapeTailAnsi || style) {
+        const terminal = new Terminal({ cols: 80, rows: 8, allowProposedApi: true })
+        try {
+          await writeHeadlessTerminal(terminal, deadlineOutput)
+          const cell = terminal.buffer.active.getLine(1)?.getCell(0)
+          if (name === 'styled gap') {
+            expect(cell?.isFgDefault()).toBe(true)
+          } else {
+            expect(cell?.isFgPalette()).toBe(true)
+            expect(cell?.getFgColor()).toBe(214)
+          }
+        } finally {
+          terminal.dispose()
+        }
       }
     }
   )

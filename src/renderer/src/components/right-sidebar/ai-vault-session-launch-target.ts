@@ -1,6 +1,6 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
 import {
-  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'

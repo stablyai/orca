@@ -3,7 +3,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   createHostKeyVerifier,
-  DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
+  getDefaultServerHostKeyAlgorithms,
   orderServerHostKeyAlgorithms
 } from '../ssh-host-key-verifier'
 import { HostKeyVerificationError, hostKeyPolicyForOwner } from '../ssh-host-key-decision'
@@ -76,7 +76,11 @@ type Ssh2HostKeyVerificationHost = {
 }
 
 /** The denial this attempt's verifier recorded; local to one attempt so a stale one cannot leak. */
-type Ssh2HostKeyVerdict = { rejection: HostKeyVerificationError | null }
+type Ssh2HostKeyVerdict = {
+  rejection: HostKeyVerificationError | null
+  /** Orca's own store holds a key for this endpoint, which system OpenSSH never consults. */
+  pinnedByOrcaStore: boolean
+}
 
 /** Installs the host verifier and key-type order on `config` before ssh2 dials. */
 export async function installSsh2HostKeyVerification(
@@ -97,19 +101,28 @@ export async function installSsh2HostKeyVerification(
     await host.loadTrustSources(sshGSuppressedSiteConfig)
   const siteConfigSuppressed = siteMayRestrict
   const knownHostsEntries = knownHostsEvidence.entries
+  const storedKeyTypes = storedKeyTypesForEndpoint(
+    trustedHostKeys,
+    hostKeyLookupHost,
+    config.port ?? 22
+  )
   // If ssh2's own algorithm list is unreadable, keep its defaults rather than guessing a reorder.
-  const serverHostKeyOrder = DEFAULT_SERVER_HOST_KEY_ALGORITHMS
+  const defaultServerHostKeyAlgorithms = getDefaultServerHostKeyAlgorithms()
+  const serverHostKeyOrder = defaultServerHostKeyAlgorithms
     ? orderServerHostKeyAlgorithms(
         knownHostsEntries,
         hostKeyLookupHost,
         config.port ?? 22,
-        DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
-        storedKeyTypesForEndpoint(trustedHostKeys, hostKeyLookupHost, config.port ?? 22),
+        defaultServerHostKeyAlgorithms,
+        storedKeyTypes,
         isHostKeyAlias
       )
     : undefined
   // Keep denial attempt-local and retain original ssh2 error codes so stale attempts and transient failures stay distinguishable.
-  const verdict: Ssh2HostKeyVerdict = { rejection: null }
+  const verdict: Ssh2HostKeyVerdict = {
+    rejection: null,
+    pinnedByOrcaStore: storedKeyTypes.length > 0
+  }
 
   // Accepted server fingerprints isolate shared-home relay locks across hosts; preserve mixed-version format and leave hostHash unset.
   config.hostVerifier = createHostKeyVerifier({

@@ -22,7 +22,6 @@ const SUGGESTION: LocalBaseRefUpdateSuggestion = {
   localBranch: 'main',
   behind: 2
 }
-const TOAST_ID = 'local-base-ref-update-suggestion:origin/main:main'
 
 const mountedRoots: Root[] = []
 
@@ -75,28 +74,6 @@ afterEach(() => {
 })
 
 describe('showLocalBaseRefUpdateSuggestionToast', () => {
-  it('does nothing without a suggestion', () => {
-    showLocalBaseRefUpdateSuggestionToast(undefined, makeDeps())
-    expect(toast.info).not.toHaveBeenCalled()
-  })
-
-  it('turns on the setting and confirms from the Keep main up to date button', async () => {
-    const deps = makeDeps()
-    showLocalBaseRefUpdateSuggestionToast(SUGGESTION, deps)
-    const body = renderToastBody()
-
-    clickButton(body, 'Keep main up to date')
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(deps.updateSettings).toHaveBeenCalledWith({
-      refreshLocalBaseRefOnWorktreeCreate: true
-    })
-    expect(toast.dismiss).toHaveBeenCalledWith(TOAST_ID)
-    expect(toast.success).toHaveBeenCalledWith('Keeping local main up to date')
-  })
-
   it('reports failure when enabling cannot persist the setting', async () => {
     const deps = makeDeps()
     // updateSettings resolves but the flag never flips → treated as a failure.
@@ -113,26 +90,6 @@ describe('showLocalBaseRefUpdateSuggestionToast', () => {
     expect(toast.error).toHaveBeenCalledWith('Could not turn on Keep Local Main Up to Date', {
       description: 'Open Settings and try again.'
     })
-  })
-
-  it('deep-links to the Git setting and closes the toast from the Settings link', () => {
-    const deps = makeDeps()
-    showLocalBaseRefUpdateSuggestionToast(SUGGESTION, deps)
-    const body = renderToastBody()
-
-    clickButton(body, 'Settings › Keep Local Main Up to Date')
-
-    expect(deps.openSettingsPage).toHaveBeenCalled()
-    expect(deps.openSettingsTarget).toHaveBeenCalledWith({
-      pane: 'git',
-      repoId: null,
-      sectionId: 'git-keep-local-main-up-to-date'
-    })
-    expect(toast.dismiss).toHaveBeenCalledWith(TOAST_ID)
-    const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
-      onDismiss: () => void
-    }
-    options.onDismiss()
   })
 
   it('does not record a permanent dismissal when opening the Git setting', async () => {

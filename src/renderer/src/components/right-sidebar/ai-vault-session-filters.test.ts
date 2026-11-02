@@ -11,7 +11,7 @@ import {
 import {
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
-} from './ai-vault-scope-paths'
+} from '../../../../shared/ai-vault-scope-paths'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',

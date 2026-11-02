@@ -1,4 +1,5 @@
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
 import type {
   ActivityGroupBy,
   AgentActivityDisplayMode,
@@ -93,10 +94,16 @@ export type UISlicePreferences = {
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void
   setWorktreeCardProperties: (properties: readonly WorktreeCardProperty[]) => void
+  showAgentModels: boolean
+  setShowAgentModels: (show: boolean) => void
   agentActivityDisplayMode: AgentActivityDisplayMode
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
+  /** Each paired runtime host's own columns, keyed by environment id; never persisted locally. */
+  hostWorkspaceStatuses: Readonly<Record<string, readonly WorkspaceStatusDefinition[]>>
+  fetchHostWorkspaceStatuses: (environmentId: string) => Promise<void>
+  clearHostWorkspaceStatuses: (environmentIds: readonly string[]) => void
   workspaceBoardOpacity: number
   setWorkspaceBoardOpacity: (opacity: number) => void
   workspaceBoardColumnWidth: number
@@ -147,8 +154,8 @@ export type UISliceSurfaces = {
   pendingRevealSidebarRow: UISliceCore['pendingRevealSidebarRow']
   revealWorktreeInSidebar: UISliceCore['revealWorktreeInSidebar']
   revealSidebarRow: UISliceCore['revealSidebarRow']
-  clearPendingRevealWorktreeId: () => void
-  clearPendingRevealSidebarRow: () => void
+  clearPendingRevealWorktreeId: (expected?: UISliceCore['pendingRevealWorktree']) => void
+  clearPendingRevealSidebarRow: (expected?: UISliceCore['pendingRevealSidebarRow']) => void
   // Why: cleared by the diff decorator after it reveals the line, so the same id can be requested again without a stale value.
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void
@@ -215,4 +222,6 @@ export type UISlicePersistence = {
   setBrowserDefaultZoomLevel: (level: number) => void
   browserKagiSessionLink: string | null
   setBrowserKagiSessionLink: (link: string | null) => void
+  browserDevToolsDock: BrowserDevToolsDockLayout
+  setBrowserDevToolsDock: (layout: BrowserDevToolsDockLayout) => void
 }

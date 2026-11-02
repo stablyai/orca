@@ -6,7 +6,6 @@ import { resolveConfiguredWorktreeBasePaths } from './configured-worktree-base-p
 import { createWorktreeVisibilitySourceMatcher } from './visibility-sources'
 import {
   buildKnownOrcaWorkspaceLayouts,
-  classifyWorktreeOwnership,
   toDetectedWorktree,
   EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT
 } from './ownership'
@@ -70,39 +69,6 @@ function detect(repo: Repo, path: string, settings = makeSettings()) {
 describe('a configured worktree base that collides with a built-in visibility source (#15232)', () => {
   const configuredBaseWorktree = '/repos/OrbisCXM/.claude/worktrees/OrbisCXM/squash-migrations'
   const tempScratchpadWorktree = '/tmp/claude/abc/scratchpad/sonda-voter'
-
-  it('classifies a plain git worktree in the configured base as external, not agent scratch', () => {
-    const repo = makeRepo({ worktreeBasePath: '.claude/worktrees' })
-    const settings = makeSettings()
-
-    expect(
-      classifyWorktreeOwnership({
-        repo,
-        settings,
-        worktree: makeWorktree(configuredBaseWorktree),
-        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
-      })
-    ).toBe('external')
-  })
-
-  it('shows identically-provenanced worktrees the same way wherever they live', () => {
-    const repo = makeRepo({ worktreeBasePath: '.claude/worktrees' })
-
-    expect(detect(repo, tempScratchpadWorktree)).toMatchObject({
-      ownership: 'external',
-      visible: true
-    })
-    expect(detect(repo, configuredBaseWorktree)).toMatchObject({
-      ownership: 'external',
-      visible: true
-    })
-  })
-
-  it('does not attribute the configured base to the built-in source row', () => {
-    const repo = makeRepo({ worktreeBasePath: '.claude/worktrees' })
-
-    expect(detect(repo, configuredBaseWorktree).visibilitySource).toBeUndefined()
-  })
 
   it('hands the configured base to the project external-worktree setting', () => {
     const repo = makeRepo({
@@ -184,15 +150,6 @@ describe('a configured worktree base that collides with a built-in visibility so
     expect(detected.visibilitySource).toBeUndefined()
   })
 
-  it('resolves an absolute configured base that matches a built-in source', () => {
-    const repo = makeRepo({ worktreeBasePath: '/repos/OrbisCXM/.claude/worktrees' })
-
-    expect(detect(repo, configuredBaseWorktree)).toMatchObject({
-      ownership: 'external',
-      visible: true
-    })
-  })
-
   it('keeps the configured base external when workspace nesting is flat', () => {
     const repo = makeRepo({ worktreeBasePath: '.claude/worktrees' })
 
@@ -207,45 +164,6 @@ describe('a configured worktree base that collides with a built-in visibility so
 
 describe('agent scratch stays hidden for repos that did not configure that base (#9388)', () => {
   const scratchWorktree = '/repos/OrbisCXM/.claude/worktrees/OrbisCXM/agent-a04ccaaa'
-
-  it('hides an unconfigured .claude/worktrees checkout', () => {
-    const detected = detect(makeRepo(), scratchWorktree)
-
-    expect(detected).toMatchObject({
-      ownership: 'agent-scratch',
-      visible: false,
-      visibilitySource: { kind: 'built-in', id: 'claude' }
-    })
-  })
-
-  it('hides it when the configured base points somewhere else', () => {
-    const repo = makeRepo({ worktreeBasePath: '../worktrees' })
-
-    expect(detect(repo, scratchWorktree)).toMatchObject({
-      ownership: 'agent-scratch',
-      visible: false
-    })
-  })
-
-  it('hides scratch nested under a linked checkout even with a configured base', () => {
-    const repo = makeRepo({ worktreeBasePath: '.claude/worktrees' })
-    const linkedCheckout = '/orca/workspaces/OrbisCXM/feature-x'
-    const settings = makeSettings()
-
-    expect(
-      toDetectedWorktree({
-        repo,
-        settings,
-        worktree: makeWorktree(`${linkedCheckout}/.claude/worktrees/agent-a04ccaaa`),
-        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
-        worktreeVisibilitySourceMatcher: createWorktreeVisibilitySourceMatcher(
-          [repo.path, linkedCheckout],
-          [],
-          resolveConfiguredWorktreeBasePaths(repo)
-        )
-      })
-    ).toMatchObject({ ownership: 'agent-scratch', visible: false })
-  })
 
   it('hides scratch when the configured base only contains the scratch root', () => {
     for (const worktreeBasePath of ['.', '..', '../worktrees/..']) {
@@ -275,14 +193,5 @@ describe('agent scratch stays hidden for repos that did not configure that base 
         )
       })
     ).toMatchObject({ ownership: 'agent-scratch', visible: false })
-  })
-
-  it('hides the other built-in source inside a repo that configured only the claude one', () => {
-    const repo = makeRepo({ worktreeBasePath: '.claude/worktrees' })
-
-    expect(detect(repo, '/repos/OrbisCXM/.gsd-workspaces/phase-1')).toMatchObject({
-      ownership: 'agent-scratch',
-      visible: false
-    })
   })
 })

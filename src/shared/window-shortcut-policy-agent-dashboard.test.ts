@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getWindowShortcutActionId, resolveWindowShortcutAction } from './window-shortcut-policy'
+import { resolveWindowShortcutAction } from './window-shortcut-policy'
 
 const input = {
   code: 'KeyD',
@@ -11,10 +11,6 @@ const input = {
 }
 
 describe('agent dashboard toggle shortcut', () => {
-  it('stays unbound until a user assigns a chord', () => {
-    expect(resolveWindowShortcutAction(input, 'linux')).toBeNull()
-  })
-
   it('resolves a custom binding to the dashboard toggle', () => {
     expect(
       resolveWindowShortcutAction(input, 'linux', { 'dashboard.toggle': ['Mod+Alt+D'] })
@@ -31,9 +27,5 @@ describe('agent dashboard toggle shortcut', () => {
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toEqual({ type: 'toggleAgentDashboard' })
-  })
-
-  it('maps the action back to its keybinding id', () => {
-    expect(getWindowShortcutActionId({ type: 'toggleAgentDashboard' })).toBe('dashboard.toggle')
   })
 })

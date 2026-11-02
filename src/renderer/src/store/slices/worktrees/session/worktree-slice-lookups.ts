@@ -156,7 +156,9 @@ export function createPurgeWorktreeTerminalState(
       )
     )
     settleAttentionRemovedBy(set, get, () =>
-      set((s) => buildWorktreePurgeState(s, purgeableWorktreeTargets))
+      get().updateAgentStatusState((s, changedPaneKeys) =>
+        buildWorktreePurgeState(s, purgeableWorktreeTargets, changedPaneKeys)
+      )
     )
   }
 }

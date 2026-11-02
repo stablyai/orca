@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
+import type { ITerminalOptions } from '@xterm/xterm'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPreviewApi } from '../../../../preload/api/dashboard-api'
@@ -75,6 +76,7 @@ vi.mock('@xterm/xterm', () => ({
     element = document.createElement('div')
     unicode = { activeVersion: '6', versions: ['6', '11'], register: vi.fn() }
     loadAddon = vi.fn()
+    options: ITerminalOptions = {}
     attachCustomWheelEventHandler = vi.fn()
     scrollToTop = vi.fn()
     scrollToBottom = vi.fn()
@@ -504,6 +506,25 @@ describe('AgentTerminalPreview', () => {
     expect(input).not.toHaveBeenCalled()
   })
 
+  it('dismisses the hosting dialog on the pane-close chord', async () => {
+    const onRequestClose = vi.fn()
+    render(<AgentTerminalPreview ptyId="pty-1" onRequestClose={onRequestClose} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'w',
+      code: 'KeyW',
+      ctrlKey: true,
+      cancelable: true
+    })
+    expect(terminal.customKeyHandler!(keydown)).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(onRequestClose).toHaveBeenCalledOnce()
+    expect(input).not.toHaveBeenCalled()
+  })
+
   it('keeps a native input-source chord from inserting text into the preview', async () => {
     storeState.keybindings = { 'terminal.switchInputSource': ['Shift+Space'] }
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
@@ -650,7 +671,7 @@ describe('AgentTerminalPreview', () => {
     expect(terminalHarness.instances).toHaveLength(1)
     expect(terminal.dispose).not.toHaveBeenCalled()
     expect(terminal.reset).not.toHaveBeenCalled()
-    expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+    expect(view.queryByText(/No preview available/)).not.toBeInTheDocument()
 
     await act(async () => {
       resolveRefresh({
@@ -662,7 +683,7 @@ describe('AgentTerminalPreview', () => {
     expect(terminal.resize).toHaveBeenCalledWith(100, 30)
     expect(terminalHarness.instances).toHaveLength(1)
     expect(terminal.dispose).not.toHaveBeenCalled()
-    expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+    expect(view.queryByText(/No preview available/)).not.toBeInTheDocument()
   })
 
   it('disposes a stale terminal when resync confirms the pty is gone', async () => {
@@ -678,7 +699,7 @@ describe('AgentTerminalPreview', () => {
 
     act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
 
-    await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
+    await waitFor(() => expect(view.getByText(/No preview available/)).toBeInTheDocument())
     expect(terminal.dispose).toHaveBeenCalledTimes(1)
     expect(terminalHarness.userInputDispose).toHaveBeenCalledTimes(1)
     expect(unsubscribe).toHaveBeenCalledWith('pty-1')
@@ -698,13 +719,13 @@ describe('AgentTerminalPreview', () => {
       replay: []
     })
     const view = render(<AgentTerminalPreview ptyId="pty-gone" />)
-    await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
+    await waitFor(() => expect(view.getByText(/No preview available/)).toBeInTheDocument())
 
     view.rerender(<AgentTerminalPreview ptyId="pty-live" />)
 
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     expect(connect).toHaveBeenLastCalledWith('pty-live', { scrollbackRows: 24 })
-    expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+    expect(view.queryByText(/No preview available/)).not.toBeInTheDocument()
   })
 
   it('claims a grid sized to the dialog box and never re-requests an unchanged target', async () => {
@@ -791,6 +812,6 @@ describe('AgentTerminalPreview', () => {
     Object.assign(window.api.terminalPreview, { connect: async () => undefined })
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
 
-    await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
+    await waitFor(() => expect(view.getByText(/No preview available/)).toBeInTheDocument())
   })
 })

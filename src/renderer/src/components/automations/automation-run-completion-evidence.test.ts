@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { hasAutomationRunCompletionEvidence } from './automation-run-completion-evidence'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'

@@ -14,7 +14,11 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { AI_VAULT_AGENT_SOURCES, isDiscoverableSessionFile } from './session-scanner-agent-sources'
+import {
+  AI_VAULT_AGENT_SOURCES,
+  isDiscoverableSessionFile,
+  sessionRowRootDirs
+} from './session-scanner-agent-sources'
 import { subagentTranscriptsDirFor } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
@@ -57,8 +61,7 @@ export function validateAiVaultSessionDeleteTarget(
   // Collapse traversal before textual containment checks.
   const resolvedPath = resolve(filePath)
   const source = AI_VAULT_AGENT_SOURCES[agent]
-  const roots = source
-    .rootDirs(args.rootOptions ?? {}, args.wslHomeDirs ?? [])
+  const roots = sessionRowRootDirs(agent, args.rootOptions ?? {}, args.wslHomeDirs ?? [])
     // An empty root resolves to cwd and would silently allowlist it.
     .filter((rootDir) => rootDir.trim().length > 0)
     .map((rootDir) => resolve(rootDir))

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
@@ -12,15 +13,31 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>(
+    '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+  )),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: (intent: unknown) => intent,
     restoreStructuredAgentSessionLaunchIntent: vi.fn(),
     abandonStructuredAgentSessionLaunchIntent: vi.fn(),
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
@@ -66,12 +83,14 @@ import {
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import {
   cancelStructuredAgentLaunch,
-  getStructuredAgentSessionLaunchLifecycle,
   retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch
-} from './structured-agent-session-launch'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch'
+import {
+  getStructuredAgentSessionLaunchLifecycle,
+  resetStructuredAgentLaunchRegistryForTests
+} from './agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 import {
   holdNotesForSend,
   isNoteInFlight,

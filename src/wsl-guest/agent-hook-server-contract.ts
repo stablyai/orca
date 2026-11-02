@@ -17,6 +17,7 @@ export type RelayHookServerOptions = {
   preferredPort?: number
   forwardUnavailable?: (envelope: AgentHookUnavailableEnvelope) => void
   forward: RelayHookForward
+  forwardClaudeAgentView?: (body: unknown) => Promise<unknown>
   // Retired pane posts own no client surface; absent this callback, forward everything for legacy listeners without PTY state.
   getTmuxManagedPty?: (paneKey: string) => Promise<TmuxManagedPty | null>
   /** Token captured from the successful host spawn; absent authority keeps the physical poster. */

@@ -177,7 +177,8 @@ describe('OrcaRuntimeService', () => {
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId: currentTabId,
       leafId: HEADLESS_LEAF_ID,
-      focus: false
+      focus: false,
+      reopensPane: true
     })
   })
 

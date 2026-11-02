@@ -214,7 +214,7 @@ describe('terminal multiplex RPC', () => {
             enter: false,
             interrupt: false
           },
-          { inputKind: 'driving' }
+          { inputKind: 'driving', inputSource: 'desktop' }
         )
       )
       const sentAfterSuccessfulClaim = vi.mocked(runtime.sendTerminal).mock.calls.length
@@ -260,7 +260,7 @@ describe('terminal multiplex RPC', () => {
             enter: false,
             interrupt: false
           },
-          { inputKind: 'driving' }
+          { inputKind: 'driving', inputSource: 'desktop' }
         )
       )
 

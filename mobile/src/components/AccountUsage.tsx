@@ -1,5 +1,7 @@
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
+import { View, Text, ActivityIndicator } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 // Re-export pure account-usage-state selectors/types to keep imports stable and tests free of RN.
 export type {
@@ -36,6 +38,7 @@ export function UsageBar({
   loading?: boolean
   resetText?: string | null
 }) {
+  useMobileColorScheme()
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
   // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
@@ -81,7 +84,7 @@ export function UsageBar({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   usageBarColumn: {
     flex: 1,
     gap: 2
@@ -122,4 +125,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginLeft: 22 + spacing.xs
   }
-})
+}))

@@ -6,8 +6,7 @@ import {
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 
 export function getManagedScriptFileName(): string {
@@ -34,7 +33,6 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
         '  --data-urlencode "hookEventName=%ORCA_COPILOT_HOOK_EVENT%" ^'
       ]),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }

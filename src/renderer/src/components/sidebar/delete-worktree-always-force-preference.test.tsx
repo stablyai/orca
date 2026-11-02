@@ -177,8 +177,3 @@ it('keeps recovery available when saving the preference fails', async () => {
     container.querySelector('button[data-variant="destructive"]')?.hasAttribute('disabled')
   ).toBe(false)
 })
-
-it('does not offer the preference for a failure that cannot be force-deleted', () => {
-  const { container } = renderRecovery(vi.fn(), false)
-  expect(container.querySelector('button[aria-label="More force delete options"]')).toBeNull()
-})

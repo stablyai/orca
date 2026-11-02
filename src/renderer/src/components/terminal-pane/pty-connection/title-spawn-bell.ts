@@ -65,9 +65,10 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
   }
 
   session.applyInitialAgentStatus = (terminalTitle?: string): void => {
-    const initialStatus = session.paneStartup?.initialAgentStatus
+    const startup = session.paneStartup
+    const initialStatus = startup?.initialAgentStatus
     const routing = session.resolveCurrentAgentStatusRouting()
-    if (!initialStatus || !routing) {
+    if (!initialStatus || !routing || startup.resumeSource?.cancelled) {
       return
     }
     const statusPayload = {
@@ -90,11 +91,17 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
           launchConfig: session.paneStartup.launchConfig,
           ...(session.launchToken ? { launchToken: session.launchToken } : {})
         })
-      return
+    } else {
+      useAppStore
+        .getState()
+        .setAgentStatus(session.cacheKey, statusPayload, terminalTitle, undefined, routing)
     }
-    useAppStore
-      .getState()
-      .setAgentStatus(session.cacheKey, statusPayload, terminalTitle, undefined, routing)
+    if (startup.resumeSource) {
+      session.savedStartupStatus = {
+        source: startup.resumeSource,
+        entry: useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      }
+    }
   }
 
   session.canApplyCommandCodeOutputStatus = (): boolean => {

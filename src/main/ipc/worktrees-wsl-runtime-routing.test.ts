@@ -27,6 +27,14 @@ import {
 } from './worktrees-test-fixtures'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
+// The WSL distros these fixtures route through count as running, so the boot gate lets Git run.
+const runningStateMock = vi.hoisted(() =>
+  vi.fn(async (_distro: string, _options?: unknown) => 'running')
+)
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: runningStateMock
+}))
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
@@ -119,6 +127,21 @@ describe('registerWorktreeHandlers', () => {
 
   beforeEach(() => {
     runtimeStub = setupWorktreeHandlers()
+    runningStateMock.mockReset().mockResolvedValue('running')
+  })
+
+  // G6: opening the composer prefetches speculatively; that must not boot a stopped distro.
+  it('skips the speculative create-base prefetch while the WSL project distro is stopped', async () => {
+    mockSelectedWslProjectRuntime()
+    runningStateMock.mockResolvedValue('stopped')
+
+    await handlers['worktrees:prefetchCreateBase'](null, { repoId: 'repo-1' })
+
+    expect(runningStateMock).toHaveBeenCalledWith('Ubuntu', expect.anything())
+    expect(getBaseRefDefaultMock).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(runtimeStub.resolveRemoteTrackingBase).not.toHaveBeenCalled()
+    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalled()
   })
 
   it('routes the speculative create-base prefetch through the selected WSL project runtime', async () => {

@@ -41,6 +41,29 @@ function stateAfterEscByte(code: number): ScanState {
 
 /** Return the incomplete trailing escape (empty when clean), preserving extract(a + b) === extract(extract(a) + b) for incremental ingest. */
 export function extractPartialEscapeTail(stream: string): string {
+  return scanPartialEscapeTail(stream, false)
+}
+
+const STATE_PREFIX: Record<ScanState, string> = {
+  ground: '',
+  esc: '\x1b',
+  escIntermediate: '\x1b ',
+  csi: '\x1b[',
+  osc: '\x1b]',
+  oscEsc: '\x1b',
+  string: '\x1bP',
+  stringEsc: '\x1b'
+}
+
+/** Boundary-only fold; its constant-size state is NOT a replayable application tail. */
+export function advanceTerminalEscapeBoundary(statePrefix: string, chunk: string): string {
+  if (!statePrefix && !chunk.includes('\x1b')) {
+    return ''
+  }
+  return scanPartialEscapeTail(statePrefix + chunk, true)
+}
+
+function scanPartialEscapeTail(stream: string, stateOnly: boolean): string {
   let state: ScanState = 'ground'
   let start = 0
   for (let i = 0; i < stream.length; i++) {
@@ -131,7 +154,82 @@ export function extractPartialEscapeTail(stream: string): string {
   if (state === 'oscEsc' || state === 'stringEsc') {
     return '\x1b'
   }
-  return state === 'ground' ? '' : stream.slice(start)
+  return stateOnly ? STATE_PREFIX[state] : state === 'ground' ? '' : stream.slice(start)
+}
+
+const STATE_BY_PREFIX: Record<string, ScanState> = {
+  '\x1b': 'esc',
+  '\x1b ': 'escIntermediate',
+  '\x1b[': 'csi',
+  '\x1b]': 'osc',
+  '\x1bP': 'string'
+}
+
+/** Chars of chunk that finish the escape left open by advanceTerminalEscapeBoundary's statePrefix; a new ESC ends it unconsumed. -1 when it stays open. */
+export function openEscapeContinuationLength(statePrefix: string, chunk: string): number {
+  let state: ScanState = STATE_BY_PREFIX[statePrefix] ?? 'ground'
+  for (let i = 0; i < chunk.length; i++) {
+    if (state === 'ground') {
+      return i
+    }
+    const code = chunk.charCodeAt(i)
+    if (code === CAN || code === SUB) {
+      return i + 1
+    }
+    switch (state) {
+      case 'esc':
+        if (code === ESC) {
+          return i
+        }
+        state = stateAfterEscByte(code)
+        if (state === 'ground') {
+          return i + 1
+        }
+        break
+      case 'escIntermediate':
+        if (code === ESC) {
+          return i
+        }
+        if (code >= 0x30 && code <= 0x7e) {
+          return i + 1
+        }
+        break
+      case 'csi':
+        if (code === ESC) {
+          return i
+        }
+        if (code >= 0x40 && code <= 0x7e) {
+          return i + 1
+        }
+        break
+      case 'osc':
+      case 'string':
+        if (code === BEL && state === 'osc') {
+          return i + 1
+        }
+        // Keep an ESC that may start a new sequence; if it was a split ST, its backslash later completes a no-op ST.
+        if (code === ESC) {
+          return chunk.charCodeAt(i + 1) === 0x5c ? i + 2 : i
+        }
+        break
+      // Unreachable from a statePrefix (both map to 'esc'); an ESC inside a string either finishes ST or starts a kept sequence.
+      case 'oscEsc':
+      case 'stringEsc':
+        return code === 0x5c ? i + 1 : i
+    }
+  }
+  return state === 'ground' ? chunk.length : -1
+}
+
+/** Drop the part of chunk that continues the escape open in statePrefix; stillOpen carries it when the chunk ends first. */
+export function skipOpenEscapeContinuation(
+  statePrefix: string,
+  chunk: string
+): { rest: string; stillOpen: string } {
+  const length = openEscapeContinuationLength(statePrefix, chunk)
+  return length === -1
+    ? { rest: '', stillOpen: advanceTerminalEscapeBoundary(statePrefix, chunk) }
+    : { rest: chunk.slice(length), stillOpen: '' }
 }
 
 /** Advance the incremental tail; abandon it past the cap. */

@@ -10,7 +10,7 @@ import { readOpenCodeTranscriptPage } from '../../../native-chat/transcript-open
 import type { SubscribeNativeChatTranscriptArgs } from '../../../native-chat/transcript-watch-contract'
 import { createDispatcherStreamingFeatureEmitter } from '../dispatcher-streaming-feature-emitter'
 import { mobileE2EETextPayloadAdmissionBytes } from '../mobile-e2ee-outbound-admission'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { buildRegistry, isStreamingMethod, type RpcContext } from '../core'
 
 const state: { path: string; watcher: SubscribeNativeChatTranscriptArgs | null } = vi.hoisted(
@@ -37,7 +37,7 @@ import {
   boundNativeChatRpcPageByBytes,
   nativeChatRpcAppendBatches
 } from './native-chat-rpc-page-bounds'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 const roots: string[] = []
 afterEach(() => {

@@ -3,7 +3,7 @@ import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 export function getEffectiveLayoutForWorktree(
   worktreeId: string,
   layoutByWorktree: Record<string, TabGroupLayoutNode | undefined>,
-  groupsByWorktree: Record<string, TabGroup[]>,
+  groupsByWorktree: Record<string, readonly Pick<TabGroup, 'id'>[]>,
   activeGroupIdByWorktree: Record<string, string | undefined>
 ): TabGroupLayoutNode | undefined {
   const layout = layoutByWorktree[worktreeId]

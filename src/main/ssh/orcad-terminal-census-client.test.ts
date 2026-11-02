@@ -10,7 +10,7 @@ import {
 } from '../managed-server/activation/orcad-activation-record'
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), ensure: vi.fn(), verify: vi.fn() }))
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: mocks.send
 }))
 vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({

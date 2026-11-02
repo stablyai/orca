@@ -8,6 +8,7 @@ import {
   sessionForwardedReplySchema,
   sessionTerminalInventorySchema,
   sessionWorktreeRecordSchema,
+  skillDiscoveryReplySchema,
   terminalQuickCommandsSchema,
   workspaceFilePathsSchema
 } from './session-read-reply-schema'
@@ -161,5 +162,16 @@ export const markdownTabRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('markdown-tab-doc', markdownTabDocumentSchema)
+  })
+)
+
+// Mobile names the workspace and lets the host resolve and scan it; see SKILL_DISCOVER_WORKSPACE_CAPABILITY.
+export const nativeChatSkillDiscoveryRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'skills.discover-or-skip',
+    method: 'skills.discover',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('skill-discovery', skillDiscoveryReplySchema)
   })
 )

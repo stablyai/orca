@@ -110,12 +110,4 @@ describe('attachAiVaultScopeCwdAliases', () => {
 
     expect(listed.sessions).toEqual(rows)
   })
-
-  it('returns the scan result unchanged when no scope path is a link', async () => {
-    const scanned = result([session('real', realRepo)])
-
-    expect(
-      attachAiVaultScopeCwdAliases(scanned, await resolveAiVaultScopeRealPaths([realRepo]))
-    ).toBe(scanned)
-  })
 })

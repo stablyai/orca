@@ -356,6 +356,7 @@ describe('cursor sidecar enrichment', () => {
 
     expect(session?.title).toBe('transcript first prompt')
     expect(session?.createdAt).toBe('2026-01-01T00:00:00.000Z')
+    expect(session?.updatedAt).toBe('2026-01-01T00:00:00.000Z')
     expect(session?.cwd).toBe('/private/tmp/workspace')
   })
 

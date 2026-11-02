@@ -27,6 +27,10 @@ let xvfbProcess: ChildProcess | null = null
 function configureHeadlessServeChromiumFlags(): void {
   // Small sandbox /dev/shm mounts can exhaust and crash Chromium utility services; use disk-backed temp.
   app.commandLine.appendSwitch('disable-dev-shm-usage')
+  // Opt-in for hosts that expose a GPU to this process (#22450).
+  if (process.env.ORCA_SERVE_GPU === '1') {
+    return
+  }
   // External displays may also be Xvfb; GPU forks can trap before serve readiness.
   app.disableHardwareAcceleration()
   app.commandLine.appendSwitch('disable-gpu')

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { appendBuildOldSpaceOption } from './node-old-space-limit.mjs'
+import { withRolldownThreadLimit } from './rolldown-thread-limit.mjs'
 
 const require = createRequire(import.meta.url)
 const vitePackageJson = require.resolve('vite/package.json')
@@ -16,7 +17,7 @@ const child = spawn(
   {
     stdio: 'inherit',
     env: {
-      ...process.env,
+      ...withRolldownThreadLimit(process.env),
       NODE_OPTIONS: nodeOptions
     }
   }

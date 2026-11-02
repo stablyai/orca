@@ -1,23 +1,23 @@
 /** Structured workers and coordinators need chat sends and journal retry edges; share PTY batch/text policy without requiring PTY input. */
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { MessageRow, OrchestrationDb } from './db'
-import { formatMessagePointer } from './formatter'
+import type { OrchestrationDb } from './db'
 import type { OrchestrationCliCommand } from './cli-command'
 import {
   selectOrchestrationPointerBatch,
-  type OrchestrationMessageWaiter
+  shouldReleaseOrchestrationPointer,
+  type OrchestrationMessageWaiter,
+  type OrchestrationPointerBatch
 } from './mailbox-pointer-eligibility'
-import {
-  resolveStructuredPointerOperation,
-  type StructuredPointerSubmission
-} from './structured-pointer-operation-id'
-import { structuredMailSource } from './structured-mail-source'
-import type { SenderNameResolver } from './agent-message-sender'
+import { resolveStructuredPointerOperation } from './structured-pointer-operation-id'
+import type {
+  StructuredMailboxPointerHost,
+  StructuredPointerSessionFacts
+} from './structured-mailbox-pointer-host-contract'
+import { structuredMailNotice } from './structured-mail-source'
+import type { SenderSnapshotResolver } from './agent-message-sender'
 import {
   retainReasonForDispatch,
   structuredDispatchDelivered,
-  type StructuredDispatchState,
   type StructuredPointerRetainReason
 } from './structured-session-pointer-delivery'
 
@@ -32,35 +32,6 @@ type ParkedPointerDelivery = {
   reservedTypes: ReadonlySet<string> | undefined
 }
 
-export type StructuredPointerSendOutcome =
-  | { kind: 'sent'; state: StructuredDispatchState }
-  | { kind: 'held' }
-  /** The chat's queue took it, as it takes a person's message. */
-  | { kind: 'queued' }
-  | { kind: 'unattached' }
-
-export type StructuredPointerSessionFacts = {
-  /** Current-context sends, oldest first: what the lane's own sends settled as. */
-  submissions: readonly StructuredPointerSubmission[]
-}
-
-export type StructuredMailboxPointerHost = {
-  /** `null` when the session cannot be read. */
-  readSessionFacts: (sessionId: string) => Promise<StructuredPointerSessionFacts | null>
-  hasActionablePromptNow: (sessionId: string) => boolean | null
-  send: (input: {
-    sessionId: string
-    dispatchId: string | null
-    operationId: string
-    expectedRuntimeFence: number
-    /** Names its senders as `from`. */
-    body: AgentJournalMessageItem
-  }) => Promise<StructuredPointerSendOutcome>
-  /** Current lease fence; `null` when no record backs the session any more. */
-  currentFence: (sessionId: string) => number | null
-  currentContextClearOperationId: (sessionId: string) => string | undefined
-}
-
 type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   getDb: () => OrchestrationDb | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
@@ -69,7 +40,7 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
   /** The CLI name the PTY lane types for a local agent, so both lanes send the same pointer. */
   getCliCommand: () => OrchestrationCliCommand
   /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
-  senderName: SenderNameResolver
+  senderSnapshot: SenderSnapshotResolver
   host: StructuredMailboxPointerHost
   onRetain?: (input: {
     mailboxHandle: string
@@ -142,17 +113,22 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     try {
       for (;;) {
         const db = this.deps.getDb()
-        // The consumer's own unacknowledged batch suppresses nudges only for this exact mailbox.
-        if (!db || db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
+        if (!db) {
           return
         }
-        const unread = selectOrchestrationPointerBatch({
+        const batch = selectOrchestrationPointerBatch({
           db,
           mailboxHandle,
           waiters: this.deps.getMessageWaiters(mailboxHandle),
           reservedTypes: currentReservedTypes
         })
-        if (unread.length === 0) {
+        if (batch.messages.length === 0) {
+          return
+        }
+        // A mid-turn steer stamps delivered_at, so one an unacked turn ignores would spend this
+        // mail's only nudge; the send's admission rechecks this, as a turn can start meanwhile.
+        if (batch.heldDeliveryId && this.deps.host.isWorkingNow(current.sessionId)) {
+          this.retain(mailboxHandle, current.sessionId, 'turn-unsettled', currentReservedTypes)
           return
         }
         this.parkedUntilJournalEdge.set(mailboxHandle, {
@@ -172,20 +148,21 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           db,
           mailboxHandle,
           current,
-          unread,
+          batch,
           currentReservedTypes,
           session,
           contextClearOperationId
         )
         while (
           attempt === 'held' &&
-          this.deps.host.hasActionablePromptNow(current.sessionId) === false
+          this.deps.host.hasActionablePromptNow(current.sessionId) === false &&
+          !(batch.heldDeliveryId && this.deps.host.isWorkingNow(current.sessionId))
         ) {
           attempt = await this.attempt(
             db,
             mailboxHandle,
             current,
-            unread,
+            batch,
             currentReservedTypes,
             session,
             contextClearOperationId
@@ -253,7 +230,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     db: OrchestrationDb,
     mailboxHandle: string,
     target: StructuredPointerTarget,
-    unread: readonly MessageRow[],
+    batch: OrchestrationPointerBatch,
     reservedTypes: ReadonlySet<string> | undefined,
     session: StructuredPointerSessionFacts | null,
     contextClearOperationId: string | undefined
@@ -264,24 +241,15 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       this.retain(mailboxHandle, sessionId, 'session-not-attached', reservedTypes)
       return false
     }
-    const body: AgentJournalMessageItem = {
-      kind: 'message',
-      role: 'user',
-      blocks: [
-        {
-          type: 'text',
-          text: formatMessagePointer(unread.length, mailboxHandle, this.deps.getCliCommand()).trim()
-        }
-      ],
-      from: structuredMailSource({
-        db,
-        mailboxHandle,
-        dispatchId: target.dispatchId,
-        batch: unread,
-        senderName: this.deps.senderName
-      })
-    }
-    const staged = unread.map((message) => message.id)
+    const body = structuredMailNotice({
+      db,
+      mailboxHandle,
+      dispatchId: target.dispatchId,
+      batch,
+      cliCommand: this.deps.getCliCommand(),
+      senderSnapshot: this.deps.senderSnapshot
+    })
+    const staged = batch.messages.map((message) => message.id)
     const operation = resolveStructuredPointerOperation({
       db,
       mailboxHandle,
@@ -308,7 +276,15 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       dispatchId: target.dispatchId,
       operationId: operation.operationId,
       expectedRuntimeFence: fence,
-      body
+      body,
+      holdWhileWorking: batch.heldDeliveryId !== undefined,
+      stillOwed: () =>
+        !shouldReleaseOrchestrationPointer(
+          this.deps.getDb(),
+          mailboxHandle,
+          batch.messages,
+          this.deps.getMessageWaiters(mailboxHandle)
+        )
     })
     if (outcome.kind === 'held') {
       return 'held'
@@ -323,7 +299,10 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       this.retain(mailboxHandle, sessionId, retainReasonForDispatch(outcome.state), reservedTypes)
       return false
     }
-    db.markAsDelivered(staged, mailboxHandle)
+    // An obsolete notice ran nothing; reselect whatever mail is still owed.
+    if (outcome.kind !== 'obsolete') {
+      db.markAsDelivered(staged, mailboxHandle)
+    }
     db.deleteStructuredPointerOperation(mailboxHandle)
     this.sentOperationIds.delete(mailboxHandle)
     return true

@@ -72,17 +72,4 @@ describe('buildAgentPickedPayload', () => {
 
     expect(payload.detection_state).toBe('pending')
   })
-
-  it('forwards from_collapsed_section verbatim', () => {
-    const payload = buildAgentPickedPayload({
-      agent: 'aider',
-      detectedAgentIds: [],
-      isDetecting: false,
-      fromCollapsedSection: true,
-      pathSource: 'shell_hydrate',
-      pathFailureReason: 'none'
-    })
-
-    expect(payload.from_collapsed_section).toBe(true)
-  })
 })

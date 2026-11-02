@@ -76,9 +76,10 @@ describe('automatic pnpm store mode', () => {
         )
       const nodeSetup = action.runs.steps.find((step) => step.id === 'default-node')
       expect(evaluate(nodeSetup.with.cache.slice(3, -2))).toBe(cache)
-      expect(evaluate(action.runs.steps.find((step) => step.id === 'pnpm-store-lookup').if)).toBe(
-        lookup
-      )
+      const publish = action.runs.steps.find((step) => step.id === 'pnpm-store-lookup').if
+      expect(evaluate(publish)).toBe(false)
+      context.runner.environment = 'self-hosted'
+      expect(evaluate(publish)).toBe(lookup)
     }
   )
 

@@ -5,6 +5,7 @@ import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
   getNextTabWithinActiveType,
+  getPreviousRecentTab,
   type TabCycleType,
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
@@ -88,7 +89,10 @@ function getFloatingWorkspaceVisibleTabs(
         .filter((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
         .map((file) => file.id)
     ),
-    new Set((store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id))
+    new Set(
+      (store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
+    ),
+    new Set(groupTabs.filter((tab) => tab.contentType === 'simulator').map((tab) => tab.id))
   )
 }
 
@@ -148,7 +152,7 @@ export function resolveFloatingWorkspaceBrowserWorkspaceId(
   )
 }
 
-function activateFloatingWorkspaceCyclableTab(
+export function activateFloatingWorkspaceCyclableTab(
   store: FloatingWorkspaceTabSwitchStore,
   next: TypeCyclableTab
 ): void {
@@ -298,6 +302,22 @@ export function switchFloatingWorkspaceTab(
     return false
   }
 
+  activateFloatingWorkspaceCyclableTab(store, next)
+  return true
+}
+
+export function switchFloatingWorkspaceRecentTab(store: FloatingWorkspaceTabSwitchStore): boolean {
+  const group = getActiveFloatingWorkspaceGroup(store)
+  const next = group
+    ? getPreviousRecentTab(
+        getFloatingWorkspaceVisibleTabs(store, group),
+        group.recentTabIds,
+        group.activeTabId
+      )
+    : null
+  if (!next) {
+    return false
+  }
   activateFloatingWorkspaceCyclableTab(store, next)
   return true
 }

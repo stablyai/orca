@@ -88,12 +88,21 @@ export function getWorktreeCardModeUpdates(mode: WorktreeCardMode): {
   }
 }
 
-export function isDefaultedCompactWorktreeCardProperties(
+/** Raw and normalized (UI-write) forms of today's Compact preset. */
+export function isCurrentCompactWorktreeCardProperties(
   properties: readonly unknown[] | null | undefined
 ): boolean {
   return (
     matchesWorktreeCardProperties(properties, COMPACT_WORKTREE_CARD_PROPERTIES) ||
-    matchesWorktreeCardProperties(properties, NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES) ||
+    matchesWorktreeCardProperties(properties, NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES)
+  )
+}
+
+export function isDefaultedCompactWorktreeCardProperties(
+  properties: readonly unknown[] | null | undefined
+): boolean {
+  return (
+    isCurrentCompactWorktreeCardProperties(properties) ||
     matchesWorktreeCardProperties(
       properties,
       LEGACY_COMPACT_WORKTREE_CARD_PROPERTIES_WITH_AUTOMATION

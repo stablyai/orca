@@ -1,8 +1,14 @@
+import { normalizeAgentLaunchChoices } from '../../../../shared/agent-launch-choices'
 import {
-  isAgentChatPermissionMode,
-  normalizeAgentNativeChatPermissionModes
-} from '../../../../shared/agent-chat-permission-mode'
-import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+  hasLegacyMatchTerminalSidebar,
+  syncLegacyMatchTerminalSidebar
+} from '../../../../shared/plugin-theme-settings'
+import { isAgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import {
+  normalizeAgentDefaultSurface,
+  carriedChatUiLaunchSettings
+} from '../../../../shared/native-chat/native-chat-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
 import {
   getDefaultSettings,
@@ -21,6 +27,7 @@ import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pair
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
+import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-color-overrides'
 import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
@@ -81,6 +88,7 @@ export function mergeHostWebUIState(
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
     sidebarOpen: local.sidebarOpen,
+    showAgentModels: local.showAgentModels !== false,
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,
     agentsHideWorkspacesFromOtherDevices: local.agentsHideWorkspacesFromOtherDevices === true,
@@ -150,16 +158,68 @@ export function mergeOsc52ClipboardNoticePending(
 }
 
 /** A browser-saved settings blob with each load-time migration applied. */
-export function migrateStoredWebSettings(stored: Partial<GlobalSettings>): Partial<GlobalSettings> {
+export function migrateStoredWebSettings(
+  stored: Partial<GlobalSettings> & RetiredWebSettings
+): Partial<GlobalSettings> {
+  const current = stripRetiredWebChatSettings(stored)
   return {
-    ...stored,
+    ...current,
+    ...carryChatUiChoices(stored),
     ...migrateBrowserSavedAgentPermission(stored),
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
     ...normalizeTerminalCursorStyleDefault(stored),
     ...normalizeOsc52ClipboardDefaultOn(stored),
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
-    ...migratePortugueseUiLanguageOnLoad(stored)
+    ...splitLegacyTerminalColorOverrides(stored),
+    ...migratePortugueseUiLanguageOnLoad(stored),
+    ...(hasLegacyMatchTerminalSidebar(stored) ? syncLegacyMatchTerminalSidebar(stored, true) : {})
   }
+}
+
+/** Retired host intent must not become a new browser-owned legacy choice. */
+export function stripRetiredWebChatSettings(
+  settings: Partial<GlobalSettings>
+): Partial<GlobalSettings> {
+  const current = { ...settings }
+  for (const key of [
+    'experimentalNativeChat',
+    'experimentalStructuredNativeChat',
+    'openAgentTabsInChatByDefault'
+  ]) {
+    Reflect.deleteProperty(current, key)
+  }
+  return current
+}
+
+type RetiredWebSettings = { experimentalNativeChat?: unknown }
+
+export function needsChatUiChoiceCarry(stored: Partial<GlobalSettings>): boolean {
+  return (
+    Object.hasOwn(stored, 'experimentalNativeChat') && !Object.hasOwn(stored, 'agentDefaultSurface')
+  )
+}
+
+export function retainOriginalWebChatSetting(
+  settings: Partial<GlobalSettings>,
+  rawOwner: Partial<GlobalSettings> & RetiredWebSettings
+) {
+  return {
+    ...stripRetiredWebChatSettings(settings),
+    ...(Object.hasOwn(rawOwner, 'experimentalNativeChat')
+      ? { experimentalNativeChat: rawOwner.experimentalNativeChat }
+      : {})
+  }
+}
+
+/** Raw modern field presence ends carry; retained old data is never live intent again. */
+function carryChatUiChoices(stored: Partial<GlobalSettings> & RetiredWebSettings) {
+  if (!needsChatUiChoiceCarry(stored)) {
+    return {}
+  }
+  return carriedChatUiLaunchSettings(
+    stored.nativeChatProviders,
+    stored.experimentalNativeChat === true
+  )
 }
 
 /** Move legacy browser-saved permission flags so stored defaults cannot duplicate them; missing keys used the shipped default. */
@@ -167,13 +227,15 @@ function migrateBrowserSavedAgentPermission(stored: Partial<GlobalSettings>) {
   if (hasTypedAgentPermission(stored) || (!stored.agentDefaultArgs && !stored.agentDefaultEnv)) {
     return {}
   }
-  return migrateAgentPermissionChoice(
+  const { agentLaunchChoices: _browserChoices, ...permission } = migrateAgentPermissionChoice(
     {
       agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS, ...stored.agentDefaultArgs },
-      agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV, ...stored.agentDefaultEnv }
+      agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV, ...stored.agentDefaultEnv },
+      agentLaunchChoices: {}
     },
     null
   )
+  return permission
 }
 
 export function mergeSettings(
@@ -201,6 +263,13 @@ export function mergeSettings(
     agentDefaultArgs: normalizeTuiAgentArgsRecord(
       updates.agentDefaultArgs ?? base.agentDefaultArgs
     ),
+    ...(updates.agentLaunchChoices !== undefined || base.agentLaunchChoices !== undefined
+      ? {
+          agentLaunchChoices: normalizeAgentLaunchChoices(
+            updates.agentLaunchChoices ?? base.agentLaunchChoices
+          )
+        }
+      : {}),
     agentDefaultEnv: normalizeTuiAgentEnvRecord(updates.agentDefaultEnv ?? base.agentDefaultEnv),
     voice: {
       ...(base.voice ?? defaults.voice),
@@ -211,6 +280,11 @@ export function mergeSettings(
       : (base.activeRuntimeEnvironmentId ?? null),
     terminalCustomThemes: normalizeTerminalCustomThemes(
       updates.terminalCustomThemes ?? base.terminalCustomThemes
+    ),
+    agentDefaultSurface: normalizeAgentDefaultSurface(
+      Object.hasOwn(updates, 'agentDefaultSurface')
+        ? updates.agentDefaultSurface
+        : base.agentDefaultSurface
     ),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       Object.hasOwn(updates, 'nativeChatAppearance')
@@ -230,18 +304,9 @@ export function mergeSettings(
 /** The host's new-chat permission default (the host seeds from it), kept only when a known mode. */
 export function runtimeChatPermissionSetting(
   settings: Partial<GlobalSettings>,
-  includeAgentOverrides = true
-): Pick<GlobalSettings, 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'> {
-  return {
-    ...(isAgentChatPermissionMode(settings.nativeChatPermissionMode)
-      ? { nativeChatPermissionMode: settings.nativeChatPermissionMode }
-      : {}),
-    ...(includeAgentOverrides
-      ? {
-          agentNativeChatPermissionModes: normalizeAgentNativeChatPermissionModes(
-            settings.agentNativeChatPermissionModes
-          )
-        }
-      : {})
-  }
+  _includeAgentOverrides = true
+): Pick<GlobalSettings, 'nativeChatPermissionMode'> {
+  return isAgentChatPermissionMode(settings.nativeChatPermissionMode)
+    ? { nativeChatPermissionMode: settings.nativeChatPermissionMode }
+    : {}
 }

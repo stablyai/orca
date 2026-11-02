@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import {
   ArrowDown,
   ArrowDownUp,
@@ -10,21 +11,19 @@ import {
   RefreshCw,
   type LucideIcon
 } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
 import type { MobileSourceControlActionIcon } from './mobile-source-control-actions'
-import type { MobileDiffLine } from '../session/mobile-diff-lines'
-import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
 import type {
   MobileGitBranchChangeEntry,
   MobileGitBranchCompareReply
 } from './git-compare-reply-schema'
-import type { MobileGitBranchCompareSummary } from './mobile-branch-compare'
 import type { MobileGitStatusHostPayload } from './git-status-reply-schema'
+import type { ConflictResolution } from '../../../src/shared/source-control-entry-actions'
 import {
   canOpenMobileGitStatusEntry,
+  getMobileConflictResolutions,
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
-  type MobileGitFileStatus,
+  isMobileGitUnstageableEntry,
   type MobileGitStatusEntry
 } from './mobile-git-status'
 
@@ -38,6 +37,7 @@ export type LoadStatusOptions = {
   preserveReadyOnFailure?: boolean
   clearActionErrorOnSuccess?: boolean
   force?: boolean
+  rereadSettings?: boolean
 }
 
 export type StatusLoadInFlight = {
@@ -53,7 +53,10 @@ export type MobileGitStatusEntryView = MobileGitStatusEntry & {
   canDiscard: boolean
   canOpen: boolean
   canStage: boolean
+  canUnstage: boolean
+  conflictResolutions: ConflictResolution[]
   discardActionId: string
+  resolveActionId: string
   stageActionId: string
   unstageActionId: string
 }
@@ -67,7 +70,10 @@ export function buildMobileGitStatusEntryViews(
     canDiscard: isMobileGitDiscardableEntry(entry),
     canOpen: canOpenMobileGitStatusEntry(entry),
     canStage: isMobileGitStageableEntry(entry),
+    canUnstage: isMobileGitUnstageableEntry(entry),
+    conflictResolutions: getMobileConflictResolutions(entry),
     discardActionId: `discard:${entry.path}`,
+    resolveActionId: `resolve:${entry.path}`,
     stageActionId: `stage:${entry.path}`,
     unstageActionId: `unstage:${entry.path}`
   }))
@@ -81,23 +87,6 @@ export type MobileBranchCompareState =
 
 export type MobileBranchEntryView = MobileGitBranchChangeEntry & {
   canOpen: boolean
-}
-
-export type MobileBranchDiffPreviewState =
-  | { kind: 'loading'; entry: MobileGitBranchChangeEntry }
-  | {
-      kind: 'ready'
-      entry: MobileGitBranchChangeEntry
-      summary: MobileGitBranchCompareSummary
-      lines: MobileHighlightedDiffLine<MobileDiffLine>[]
-      truncated: boolean
-    }
-  | { kind: 'error'; entry: MobileGitBranchChangeEntry; message: string }
-
-export type GitDiffTextResult = {
-  kind: 'text'
-  originalContent: string
-  modifiedContent: string
 }
 
 export const KEYBOARD_COMMIT_BAR_CLEARANCE = 10
@@ -126,22 +115,5 @@ export function formatBranchLabel(branch: string | undefined, head: string | und
   if (branch?.startsWith('refs/heads/')) {
     return branch.slice('refs/heads/'.length)
   }
-  return branch || head?.slice(0, 7) || 'No branch'
-}
-
-export function statusColor(status: MobileGitFileStatus): string {
-  switch (status) {
-    case 'added':
-    case 'copied':
-      return colors.statusGreen
-    case 'deleted':
-      return colors.statusRed
-    case 'renamed':
-      return colors.accentBlue
-    case 'untracked':
-      return colors.statusAmber
-    case 'modified':
-    default:
-      return colors.textSecondary
-  }
+  return branch || head?.slice(0, 7) || translate('sourceControl.screenState.noBranch', 'No branch')
 }

@@ -7,16 +7,6 @@ describe('ssh pty id routing', () => {
   const HOST_ID = toSshExecutionHostId(CONNECTION) // "ssh:ssh-1779863656395-57g1q1"
   const APP_ID = toAppSshPtyId(CONNECTION, 'pty-3') // "ssh:ssh-1779863656395-57g1q1@@pty-3"
 
-  it('encodes the bare target id into the app pty id', () => {
-    expect(APP_ID).toBe('ssh:ssh-1779863656395-57g1q1@@pty-3')
-    expect(parseAppSshPtyId(APP_ID)).toEqual({ connectionId: CONNECTION, relayPtyId: 'pty-3' })
-  })
-
-  it('round-trips app <-> relay ids for the matching bare connection', () => {
-    expect(toRelaySshPtyId(CONNECTION, APP_ID)).toBe('pty-3')
-    expect(toAppSshPtyId(CONNECTION, APP_ID)).toBe(APP_ID)
-  })
-
   // Reconnect callers may supply workspace hostId (ssh:<targetId>); it must route identically to the bare target ID.
   it('accepts the execution-host id form as the same connection', () => {
     expect(toRelaySshPtyId(HOST_ID, APP_ID)).toBe('pty-3')

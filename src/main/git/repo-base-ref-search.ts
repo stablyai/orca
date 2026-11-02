@@ -108,9 +108,14 @@ async function runSearchBaseRefsGit(
   path: string,
   normalizedQuery: string,
   limit: number,
-  options: { remoteNames: readonly string[]; patternGroup?: RefSearchPatternGroup }
+  options: {
+    remoteNames: readonly string[]
+    patternGroup?: RefSearchPatternGroup
+    git?: LocalGitExecOptions
+  }
 ): Promise<{ stdout: string }> {
-  return getLocalGitCapabilityCache({ cwd: path }).runWithFallback(
+  const execOptions = gitExecOptions(path, options.git)
+  return getLocalGitCapabilityCache(execOptions).runWithFallback(
     'for-each-ref-exclude',
     () =>
       gitExecFileAsync(
@@ -118,7 +123,7 @@ async function runSearchBaseRefsGit(
           remoteNames: options.remoteNames,
           patternGroup: options.patternGroup
         }),
-        { cwd: path }
+        execOptions
       ),
     () =>
       gitExecFileAsync(
@@ -127,7 +132,7 @@ async function runSearchBaseRefsGit(
           remoteNames: options.remoteNames,
           patternGroup: options.patternGroup
         }),
-        { cwd: path }
+        execOptions
       ),
     isForEachRefExcludeUnsupportedError
   )
@@ -172,7 +177,8 @@ export async function searchBaseRefDetails(
   path: string,
   query: string,
   limit = REPO_SEARCH_REFS_DEFAULT_LIMIT,
-  includeQualifiedRefs = true
+  includeQualifiedRefs = true,
+  git: LocalGitExecOptions = {}
 ): Promise<BaseRefSearchResult[]> {
   if (!isRepoSearchRefsRequestLimit(limit)) {
     return []
@@ -181,19 +187,16 @@ export async function searchBaseRefDetails(
   const normalizedQuery = normalizeRefSearchQuery(query)
 
   try {
-    const remotes = await listRemoteNames(path)
+    const remotes = await listRemoteNames(path, git)
+    const search = (patternGroup?: RefSearchPatternGroup): Promise<{ stdout: string }> =>
+      runSearchBaseRefsGit(path, normalizedQuery, boundedScanLimit, {
+        remoteNames: remotes,
+        patternGroup,
+        git
+      })
     const tokens = getRefSearchTokens(normalizedQuery)
     if (tokens.length > 1) {
-      const results = await Promise.all([
-        runSearchBaseRefsGit(path, normalizedQuery, boundedScanLimit, {
-          remoteNames: remotes,
-          patternGroup: 'segmented'
-        }),
-        runSearchBaseRefsGit(path, normalizedQuery, boundedScanLimit, {
-          remoteNames: remotes,
-          patternGroup: 'branchRoot'
-        })
-      ])
+      const results = await Promise.all([search('segmented'), search('branchRoot')])
       return mergeBaseRefSearchResultGroups(
         results.map((entry) =>
           parseAndFilterSearchRefDetails(
@@ -207,9 +210,7 @@ export async function searchBaseRefDetails(
       )
     }
 
-    const result = await runSearchBaseRefsGit(path, normalizedQuery, boundedScanLimit, {
-      remoteNames: remotes
-    })
+    const result = await search()
     return parseAndFilterSearchRefDetails(
       result.stdout,
       boundedScanLimit,

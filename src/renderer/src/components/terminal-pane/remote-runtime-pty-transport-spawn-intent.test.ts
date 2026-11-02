@@ -21,7 +21,7 @@ function okResponse(result: unknown): unknown {
 }
 
 describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
-  const runtimeCall = vi.fn()
+  const runtimeCall = vi.fn<(args: RpcCall) => Promise<unknown>>()
   let capabilities: string[] = []
   let ensureResponse: unknown = null
 
@@ -65,12 +65,16 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
     vi.unstubAllGlobals()
   })
 
-  async function connectResume(callbacks: Record<string, unknown> = {}): Promise<unknown> {
+  async function connectResume(
+    callbacks: Record<string, unknown> = {},
+    saved = false
+  ): Promise<unknown> {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       launchAgent: 'claude',
       resumeProviderSession: RESUME,
+      ...(saved ? { resumeOrigin: 'saved' as const } : {}),
       tabId: 'tab-1',
       leafId: LEAF_ID
     })
@@ -102,6 +106,46 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
     expect(ensureParams()).toBeDefined()
     expect(ensureParams()).not.toHaveProperty('spawnIntent')
   })
+
+  it.each([false, true])(
+    'keeps saved-origin negotiation stable through an unknown outcome (capability %s)',
+    async (modern) => {
+      if (modern) {
+        capabilities.push('agent-session.saved-resume-origin.v1')
+      }
+      let attempts = 0
+      runtimeCall.mockImplementation(async (args: RpcCall) => {
+        if (args.method === 'status.get') {
+          return okResponse({
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities
+          })
+        }
+        if (args.method === 'terminal.ensureAgentSession' && attempts++ === 0) {
+          capabilities = [...capabilities, 'agent-session.saved-resume-origin.v1']
+          throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+            code: 'runtime_timeout'
+          })
+        }
+        return ensureResponse
+      })
+      const onSpawnDeferred = vi.fn()
+      await connectResume({ onSpawnDeferred }, true)
+      const requests = runtimeCall.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === 'terminal.ensureAgentSession')
+      expect(requests).toHaveLength(2)
+      expect(requests[1].params).toEqual(requests[0].params)
+      expect(requests[0].params).toMatchObject({ kind: 'explicit', providerSession: RESUME })
+      if (modern) {
+        expect(requests[0].params).toHaveProperty('resumeOrigin', 'saved')
+      } else {
+        expect(requests[0].params).not.toHaveProperty('resumeOrigin')
+      }
+      expect(onSpawnDeferred).toHaveBeenCalledWith('paused')
+    }
+  )
 
   it('reports a deferral to the pane instead of surfacing an error', async () => {
     capabilities.push('terminal.spawn-intent.v1')

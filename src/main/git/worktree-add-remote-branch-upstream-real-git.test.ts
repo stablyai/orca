@@ -78,6 +78,9 @@ it('tracks the remote branch it was created from, and nothing else', async () =>
   const fixPath = join(root, 'fix')
   await addWorktree(repo, fixPath, 'alex/fix', 'origin/alex/fix')
   expect(await upstreamOf(fixPath, 'alex/fix')).toBe('origin/alex/fix')
+  const ref = 'refs/remotes/origin/alex/fix'
+  expect(await git(fixPath, 'config', '--get', 'branch.alex/fix.base')).toBe(ref)
+  expect(await git(fixPath, 'config', '--get', 'push.autoSetupRemote')).toBe('true')
   expect(await git(fixPath, 'rev-parse', 'HEAD')).toBe(
     await git(repo, 'rev-parse', 'refs/remotes/origin/alex/fix')
   )
@@ -112,4 +115,10 @@ it('tracks the remote branch when a prepared checkout finalizes the create', asy
     prepared.lockReason
   )
   expect(await upstreamOf(fixPath, 'alex/fix')).toBe('origin/alex/fix')
+  const ref = 'refs/remotes/origin/alex/fix'
+  expect(await git(fixPath, 'config', '--get', 'branch.alex/fix.base')).toBe(ref)
+  expect(await git(fixPath, 'config', '--get', 'push.autoSetupRemote')).toBe('true')
+  expect(await git(fixPath, 'rev-parse', 'HEAD')).toBe(
+    await git(repo, 'rev-parse', 'refs/remotes/origin/alex/fix')
+  )
 })

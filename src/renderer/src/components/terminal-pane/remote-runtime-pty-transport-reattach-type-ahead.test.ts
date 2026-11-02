@@ -55,8 +55,14 @@ async function completeAttach(): Promise<void> {
 }
 
 /** Holds `terminal.create` open until the spec settles it with the handle the host returns. */
-async function createGatedTransport() {
-  const created = createDeferred<string | Error>()
+type CreatedTerminal = {
+  handle: string
+  isReattach?: true
+  coldRestore?: { scrollback: string; cwd: string }
+}
+
+async function createGatedTransport(options: Record<string, unknown> = {}) {
+  const created = createDeferred<string | Error | CreatedTerminal>()
   // Acknowledged writes to a host without input acks go out as `terminal.send` calls.
   const acceptedSends: string[] = []
   const call = runtimeCall.getMockImplementation()
@@ -73,11 +79,13 @@ async function createGatedTransport() {
       if (outcome instanceof Error) {
         throw outcome
       }
-      return { ok: true, result: { terminal: { handle: outcome, isReattach: true } } }
+      // A bare handle stands for the host adopting this pane's existing terminal.
+      const terminal = typeof outcome === 'string' ? { handle: outcome, isReattach: true } : outcome
+      return { ok: true, result: { terminal } }
     }
   )
   const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-  const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+  const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1', ...options })
   const waitForCreate = () =>
     vi.waitFor(() => {
       expect(runtimeCall).toHaveBeenCalledWith(
@@ -235,4 +243,163 @@ describe('remote reattach type-ahead', () => {
       transport.destroy?.()
     }
   )
+
+  describe('a brand-new pane', () => {
+    it('delivers typing from before and during its first create to the terminal it makes', async () => {
+      const { transport, created, waitForCreate } = await createGatedTransport({
+        keepTypeAheadForNewTerminal: () => true
+      })
+      expect(transport.sendInput('ec', 'driving')).toBe(true)
+      const connecting = transport.connect({ url: '', callbacks: {} })
+      await waitForCreate()
+      expect(transport.sendInput('ho hi\r', 'driving')).toBe(true)
+      expect(inputFrameTexts()).toEqual([])
+      created.resolve({ handle: 'terminal-new' })
+      await connecting
+      await completeAttach()
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo hi\r'))
+      transport.destroy?.()
+    })
+
+    it('drops its typing when startup work appeared before the terminal bound', async () => {
+      const { transport, created, waitForCreate } = await createGatedTransport({
+        keepTypeAheadForNewTerminal: () => true,
+        releasePreconnectInput: () => false
+      })
+      expect(transport.sendInput('make the tests pass\r', 'driving')).toBe(true)
+      const connecting = transport.connect({ url: '', callbacks: {} })
+      await waitForCreate()
+      created.resolve({ handle: 'terminal-new' })
+      await connecting
+      await completeAttach()
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).toBe('live')
+      transport.destroy?.()
+    })
+
+    it('drops its typing when the first create binds no terminal', async () => {
+      const { transport, created, waitForCreate } = await createGatedTransport({
+        keepTypeAheadForNewTerminal: () => true
+      })
+      const accepted = transport.sendInputAccepted?.('lost\r', 'driving')
+      const connecting = transport.connect({ url: '', callbacks: {} })
+      await waitForCreate()
+      created.resolve(new Error('offline'))
+      await connecting
+      await expect(accepted).resolves.toBe(false)
+      await flushAsyncTicks()
+      expect(inputFrameTexts()).toEqual([])
+      transport.destroy?.()
+    })
+    // Why: the host adopts a live terminal for this tab and leaf, or restores history into a new
+    // one; typing made for a blank pane must not run in either (#10065).
+    it.each([
+      ['an adopted terminal', { handle: 'terminal-live', isReattach: true as const }],
+      [
+        'a cold-restored terminal',
+        { handle: 'terminal-restored', coldRestore: { scrollback: 'old$ ', cwd: '/w' } }
+      ]
+    ])('drops its typing when the first create returns %s', async (_label, terminal) => {
+      const { transport, created, waitForCreate } = await createGatedTransport({
+        keepTypeAheadForNewTerminal: () => true
+      })
+      expect(transport.sendInput('rm -rf build\r', 'driving')).toBe(true)
+      const connecting = transport.connect({ url: '', callbacks: {} })
+      await waitForCreate()
+      created.resolve(terminal)
+      await connecting
+      await completeAttach()
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).toBe('live')
+      transport.destroy?.()
+    })
+
+    it('drops typing held across a failed first create when a later connect creates', async () => {
+      const { transport, created, waitForCreate } = await createGatedTransport({
+        keepTypeAheadForNewTerminal: () => true
+      })
+      expect(transport.sendInput('first try\r', 'driving')).toBe(true)
+      const first = transport.connect({ url: '', callbacks: {} })
+      await waitForCreate()
+      created.resolve(new Error('offline'))
+      await first
+      const call = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation(async (request: { method: string }) =>
+        request.method === 'terminal.create'
+          ? { ok: true, result: { terminal: { handle: 'terminal-second' } } }
+          : call?.(request)
+      )
+      transport.sendInput('between\r', 'driving')
+      await transport.connect({ url: '', callbacks: {} })
+      await completeAttach()
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).toBe('live')
+      transport.destroy?.()
+    })
+
+    it('drops its typing when replayed history appeared before the terminal bound', async () => {
+      let blank = true
+      const { transport, created, waitForCreate } = await createGatedTransport({
+        keepTypeAheadForNewTerminal: () => blank
+      })
+      const connecting = transport.connect({ url: '', callbacks: {} })
+      await waitForCreate()
+      expect(transport.sendInput('typed on old pixels\r', 'driving')).toBe(true)
+      blank = false
+      created.resolve({ handle: 'terminal-new' })
+      await connecting
+      await completeAttach()
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).toBe('live')
+      transport.destroy?.()
+    })
+  })
+
+  // A remount shows the pane's terminal id before its deferred attach starts; keys typed then are real.
+  describe('a remounted pane attaching its terminal', () => {
+    async function attachRemountedPane(options: Record<string, unknown> = {}) {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        bufferInputUntilConnect: true,
+        ...options
+      })
+      expect(transport.sendInput('ec', 'driving')).toBe(true)
+      transport.attach({ existingPtyId: ORIGINAL_ID, cols: 80, rows: 24, callbacks: {} })
+      expect(transport.sendInput('ho hi\r', 'driving')).toBe(true)
+      expect(inputFrameTexts()).toEqual([])
+      await completeAttach()
+      return transport
+    }
+
+    it('delivers typing from before and during the attach to the terminal it names', async () => {
+      const transport = await attachRemountedPane()
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo hi\r'))
+      transport.destroy?.()
+    })
+
+    it('drops that typing when the host now holds another terminal', async () => {
+      resolvedHandle = 'terminal-2'
+      const transport = await attachRemountedPane()
+      await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-2'))
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).not.toContain('echo')
+      transport.destroy?.()
+    })
+
+    it('drops typing from before the attach when the pane has startup work', async () => {
+      const transport = await attachRemountedPane({ releasePreconnectInput: () => false })
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).toBe('ho hi\rlive')
+      transport.destroy?.()
+    })
+  })
 })

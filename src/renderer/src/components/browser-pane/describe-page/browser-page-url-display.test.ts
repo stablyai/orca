@@ -3,7 +3,6 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import {
   getBrowserDisplayTitle,
   getBrowserPageRuntimeEnvironmentId,
-  getNotebookPathFromBrowserUrl,
   getOpenableExternalUrl,
   isChromiumErrorPage,
   retryBrowserTabLoad,
@@ -28,10 +27,6 @@ describe('browser page URL display', () => {
   it('detects Chromium error pages', () => {
     expect(isChromiumErrorPage('chrome-error://chromewebdata/')).toBe(true)
     expect(isChromiumErrorPage('https://example.com')).toBe(false)
-  })
-
-  it('extracts notebook paths only from file URLs ending in .ipynb', () => {
-    expect(getNotebookPathFromBrowserUrl('https://example.com/notebook.ipynb')).toBeNull()
   })
 
   it('prefers the page-owned runtime environment id when present', () => {

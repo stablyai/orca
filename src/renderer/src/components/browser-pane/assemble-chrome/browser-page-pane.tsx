@@ -17,7 +17,6 @@ import {
 import { isBrowserPagePanePaintable } from '../host-guest/browser-page-paintability'
 import { getShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
 import { useGrabMode } from '../annotate/useGrabMode'
-import { getBrowserPageZoomIndicatorState } from '../host-guest/browser-page-zoom'
 import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import type {
@@ -44,6 +43,8 @@ import { useBrowserPageWebviewPartition } from '../host-guest/use-browser-page-w
 import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webview-url-sync'
 import { useBrowserPageZoomFeedback } from '../host-guest/use-browser-page-zoom-feedback'
 import { useBrowserPageViewportScrollReporting } from '../host-guest/use-browser-page-viewport-scroll-reporting'
+import { BrowserPageDevToolsDock } from '../devtools-dock/BrowserDevToolsDock'
+import { useBrowserPageViewportSizeFeedback } from '../host-guest/use-browser-page-viewport-size-feedback'
 
 export function BrowserPagePane({
   browserTab,
@@ -151,6 +152,13 @@ export function BrowserPagePane({
   const slotViewport = useBrowserPageSlotViewport(workspaceId)
 
   const zoom = useBrowserPageZoomFeedback()
+  // Why: presets and remote viewers override the guest's metrics, so the box no longer is its viewport.
+  useBrowserPageViewportSizeFeedback(
+    pageViewport?.content ?? null,
+    isActive && !browserTab.viewportPresetId && !isMobileDriven && !isRemotelyViewed,
+    webviewRef,
+    zoom
+  )
   const { resourceNotice, setResourceNotice } = useBrowserPageResourceNotices(browserTab.id)
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const {
@@ -163,7 +171,8 @@ export function BrowserPagePane({
     isActive,
     chromeShortcutScope,
     addressBarInputRef,
-    guestFocus
+    guestFocus,
+    inputLocked
   })
   const annotationSend = useBrowserPageAnnotationSend({
     browserTabId: browserTab.id,
@@ -293,9 +302,6 @@ export function BrowserPagePane({
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
-  const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
-    feedbackVisible: zoom.browserZoomFeedbackVisible
-  })
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -369,8 +375,7 @@ export function BrowserPagePane({
         ? createPortal(
             <BrowserPageViewportOverlays
               markup={markup}
-              browserZoomIndicatorState={browserZoomIndicatorState}
-              browserZoomPercent={zoom.browserZoomPercent}
+              feedbackBadgeRef={zoom.feedbackBadgeRef}
               findOpen={findOpen}
               setFindOpen={setFindOpen}
               webviewRef={webviewRef}
@@ -402,6 +407,7 @@ export function BrowserPagePane({
             pageViewport.container
           )
         : null}
+      <BrowserPageDevToolsDock browserPageId={browserTab.id} viewport={pageViewport} />
     </div>
   )
 }

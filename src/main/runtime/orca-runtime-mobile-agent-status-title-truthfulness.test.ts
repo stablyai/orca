@@ -207,6 +207,40 @@ describe('mobile session tabs: live-title evidence vs published agent status', (
       expect.objectContaining({ state: 'done', prompt: '' })
     )
   })
+
+  it('keeps a hook-backed working status that postdates an initial Windows ConPTY shell title', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(T0 - 1_000)
+      const runtime = await createRuntime()
+      runtime.onPtyData(PTY_ID, '\x1b]0;C:\\WINDOWS\\system32\\cmd.exe\x07', T0 - 1_000)
+
+      vi.setSystemTime(T0)
+      publishRendererWorkingPane(runtime, 'C:\\WINDOWS\\system32\\cmd.exe')
+
+      expect(await projectAgentStatus(runtime)).toEqual(
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'Configurar y entender los comprobantes',
+          updatedAt: T0
+        })
+      )
+
+      // Once a newer shell title arrives after the hook, it retires the working status to done.
+      vi.setSystemTime(T0 + 1_000)
+      runtime.onPtyData(PTY_ID, '\x1b]0;C:\\WINDOWS\\system32\\cmd.exe\x07', T0 + 1_000)
+
+      expect(await projectAgentStatus(runtime)).toEqual(
+        expect.objectContaining({
+          state: 'done',
+          prompt: '',
+          updatedAt: T0 + 1_000
+        })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('mobile session tabs: identity-only fallback freshness', () => {

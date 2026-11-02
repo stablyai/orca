@@ -14,6 +14,8 @@ const UNAVAILABLE_REASONS = [
   'libc_unidentified',
   'runtime_self_test',
   'runtime_noexec',
+  'windows_build_unsupported',
+  'windows_no_extractor',
   'security_software',
   'native_preflight'
 ] as const

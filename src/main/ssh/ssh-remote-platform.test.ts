@@ -1,30 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  assertSafeRemotePathSegment,
-  getRemoteHostPlatform,
-  joinRemotePath
-} from './ssh-remote-platform'
-
-describe('joinRemotePath', () => {
-  it('joins POSIX remote paths', () => {
-    expect(joinRemotePath(getRemoteHostPlatform('linux-x64'), '/home/me', '.orca-remote')).toBe(
-      '/home/me/.orca-remote'
-    )
-  })
-
-  it('normalizes and joins Windows remote paths with forward slashes for SFTP and Node', () => {
-    expect(
-      joinRemotePath(getRemoteHostPlatform('win32-x64'), 'C:\\Users\\me', '.orca-remote', 'relay')
-    ).toBe('C:/Users/me/.orca-remote/relay')
-  })
-})
+import { assertSafeRemotePathSegment } from './ssh-remote-platform'
 
 describe('assertSafeRemotePathSegment', () => {
-  it('accepts ordinary names under both path flavors', () => {
-    expect(() => assertSafeRemotePathSegment('report copy.txt', 'posix')).not.toThrow()
-    expect(() => assertSafeRemotePathSegment('report copy.txt', 'windows')).not.toThrow()
-  })
-
   it.each(['.', '..', '../secret', 'child/name', 'nul\0byte'])(
     'rejects invalid segment %j under both path flavors',
     (segment) => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { onOnboardingReopened } from '../components/onboarding/show-onboarding-event'
 import { shouldShowOnboarding } from '../components/onboarding/should-show-onboarding'
@@ -7,13 +7,15 @@ import {
   isCliFeatureTipCompleted
 } from '../components/feature-tips/feature-tip-startup-gate'
 import {
+  isChatUiLaunchTipHeldOut,
+  trackChatUiFeatureTipExposure,
+  trackChatUiFeatureTipShown,
   trackCmdJPaletteFeatureTipShown,
   trackOrcaCliFeatureTipShown
 } from '../components/feature-tips/feature-tip-telemetry'
 import { useAppStore } from '../store'
 import { isWebClientLocation } from '../lib/web-client-location'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import { isInNativeChatUpgradeTipAudience } from '../../../shared/native-chat-upgrade-tip-audience'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
 
@@ -22,6 +24,7 @@ export function useOnboardingAndFeatureTips() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const [onboardingLoaded, setOnboardingLoaded] = useState(false)
   const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
+  const [chatUiHereCornerCardOpen, setChatUiHereCornerCardOpen] = useState(false)
   const promptedThisSessionRef = useRef(false)
   const suppressedByOnboardingThisSessionRef = useRef(false)
 
@@ -30,15 +33,13 @@ export function useOnboardingAndFeatureTips() {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const inNativeChatUpgradeTipAudience = useAppStore((s) =>
-    isInNativeChatUpgradeTipAudience(s.nativeChatUpgradeTipVariant)
-  )
+  const chatUiLaunchTipVariant = useAppStore((s) => s.chatUiLaunchTipVariant)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const actions = useAppStore(
     useShallow((s) => ({
       openModal: s.openModal,
       markFeatureTipsSeen: s.markFeatureTipsSeen,
-      setNativeChatUpgradeTipVariant: s.setNativeChatUpgradeTipVariant,
+      setChatUiLaunchTipVariant: s.setChatUiLaunchTipVariant,
       setContextualToursAutoEligible: s.setContextualToursAutoEligible,
       setContextualToursOnboardingVisible: s.setContextualToursOnboardingVisible
     }))
@@ -99,16 +100,16 @@ export function useOnboardingAndFeatureTips() {
 
     let cancelled = false
     void window.api.onboarding
-      .getNativeChatUpgradeTipVariant()
+      .getChatUiLaunchTipVariant()
       .then((variant) => {
         if (!cancelled) {
-          actions.setNativeChatUpgradeTipVariant(variant)
+          actions.setChatUiLaunchTipVariant(variant)
         }
       })
       .catch(() => {
         // Fail closed without holding other tips behind this read.
         if (!cancelled) {
-          actions.setNativeChatUpgradeTipVariant('none')
+          actions.setChatUiLaunchTipVariant('none')
         }
       })
 
@@ -123,7 +124,7 @@ export function useOnboardingAndFeatureTips() {
       cliInstalled: featureTipCliInstalled,
       featureTipsSeenIds,
       featureInteractions,
-      inNativeChatUpgradeTipAudience,
+      chatUiLaunchTipVariant,
       onboarding,
       persistedUIReady,
       promptedThisSession: promptedThisSessionRef.current,
@@ -142,14 +143,34 @@ export function useOnboardingAndFeatureTips() {
       return
     }
 
+    if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
+      trackChatUiFeatureTipExposure(chatUiLaunchTipVariant, settings ?? null)
+      if (isChatUiLaunchTipHeldOut(settings ?? null)) {
+        // Suppressed profiles leave this launch available for the next pending tip.
+        actions.markFeatureTipsSeen(['chat-ui-here'])
+        return
+      }
+    }
+
     promptedThisSessionRef.current = true
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
     } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
       trackCmdJPaletteFeatureTipShown('app_open')
+    } else if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
+      trackChatUiFeatureTipShown(chatUiLaunchTipVariant)
     }
     // Mark seen when shown so a crash before dismissal cannot repeat the tip.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
+    if (
+      featureTipsDecision.tipId === 'chat-ui-here' &&
+      chatUiLaunchTipVariant === 'chat-ui-off' &&
+      settings?.telemetry?.chatUiLaunchTipCohort !== 'treatment-center'
+    ) {
+      // Terminal-default profiles get the nonblocking card; chat users still acknowledge the modal.
+      setChatUiHereCornerCardOpen(true)
+      return
+    }
     actions.openModal('feature-tips', {
       source: 'app_open',
       tipId: featureTipsDecision.tipId
@@ -157,19 +178,25 @@ export function useOnboardingAndFeatureTips() {
   }, [
     activeModal,
     actions,
+    chatUiLaunchTipVariant,
     featureTipCliInstalled,
     featureInteractions,
     featureTipsSeenIds,
-    inNativeChatUpgradeTipAudience,
     onboarding,
     persistedUIReady,
     settings
   ])
 
-  return {
-    applyStartupOnboardingState,
-    onboarding,
-    setOnboarding,
-    shouldRender: onboarding !== null && shouldShowOnboarding(onboarding)
-  }
+  const shouldRender = onboarding !== null && shouldShowOnboarding(onboarding)
+  return useMemo(
+    () => ({
+      applyStartupOnboardingState,
+      onboarding,
+      setOnboarding,
+      shouldRender,
+      chatUiHereCornerCardOpen,
+      setChatUiHereCornerCardOpen
+    }),
+    [applyStartupOnboardingState, onboarding, shouldRender, chatUiHereCornerCardOpen]
+  )
 }

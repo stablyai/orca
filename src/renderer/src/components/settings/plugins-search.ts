@@ -7,13 +7,15 @@ export const getPluginsPaneSearchEntries = createLocalizedCatalog((): SettingsSe
     title: translate('auto.components.settings.plugins.search.title', 'Plugins'),
     description: translate(
       'auto.components.settings.plugins.search.description',
-      'Install and manage experimental Orca plugins.'
+      'Install and manage Orca plugins (Alpha).'
     ),
     keywords: [
       translate('auto.components.settings.plugins.search.install', 'install plugin'),
       translate('auto.components.settings.plugins.search.permissions', 'plugin permissions'),
       translate('auto.components.settings.plugins.search.logs', 'plugin logs'),
-      translate('auto.components.settings.plugins.search.development', 'development plugins')
+      translate('auto.components.settings.plugins.search.development', 'development plugins'),
+      // Why one string: substring search finds mod/mods and extension/extensions alike.
+      translate('auto.components.settings.plugins.search.aliases', 'plugins mods extensions')
     ]
   }
 ])
@@ -21,13 +23,10 @@ export const getPluginsPaneSearchEntries = createLocalizedCatalog((): SettingsSe
 export function getPluginsSectionPresentation() {
   return {
     title: translate('auto.components.settings.PluginsSettingsSection.title', 'Plugins'),
-    badge: translate(
-      'auto.components.settings.PluginsSettingsSection.experimental',
-      'Experimental'
-    ),
+    badge: translate('auto.components.settings.PluginsSettingsSection.alpha', 'Alpha'),
     description: translate(
       'auto.components.settings.PluginsSettingsSection.description',
-      'Install and manage Orca plugins. Plugins run on this computer, even for SSH workspaces.'
+      'Themes, languages, commands, and more.'
     ),
     searchEntries: getPluginsPaneSearchEntries()
   }

@@ -143,7 +143,10 @@ export function sessionScreenTabMountAdapters(
               timers.push(setTimeout(callback, delayMs))
             },
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
-            subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle }),
+            subscribeToTerminal: (handle: string) => {
+              effect('subscribe-terminal', { handle })
+              return true
+            },
             fetchTerminals: () => {
               effect('fetch-terminals', {})
               return Promise.resolve(true)

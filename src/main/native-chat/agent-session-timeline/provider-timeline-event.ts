@@ -3,14 +3,14 @@
 // Settled rows never regress; external Stop cancels text/prompts but leaves calls for provider settlement.
 // Each provider child gets a new generation; session.ended rejects all later events.
 
-import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import type {
   AgentJournalApprovalItem,
   AgentJournalItemBody,
   AgentJournalProducerLinkage,
-  AgentJournalQuestionItem,
-  AgentJournalTurnOutcome
-} from '../../../shared/agent-session-journal-types'
+  AgentJournalQuestionItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnOutcome } from '../../../shared/agent-turn-outcome'
 import type { StructuredAgentSessionTurnVerdict } from '../agent-session-wire/structured-agent-session-stale-turn-verdict'
 
 /** The assembler owns turn rows; prompts travel as requests. */

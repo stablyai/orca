@@ -26,14 +26,21 @@ vi.mock('@/lib/ensure-hooks-confirmed', () => ({
 }))
 vi.mock('@/lib/launch-work-item-direct-preflight', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  resolveDirectSetupDecision: vi.fn().mockResolvedValue({ kind: 'resolved', decision: 'inherit' })
+  resolveDirectSetupDecision: vi.fn().mockResolvedValue({ kind: 'decided', decision: 'inherit' })
 }))
 vi.mock('@/lib/agent-detection-target-inventory', () => ({
+  loadProjectLaunchContext: vi.fn().mockResolvedValue(undefined),
   ensureDetectedAgentsForRepo: vi.fn().mockResolvedValue(['claude']),
   ensureDetectedAgentsForNewWorktree: vi.fn().mockResolvedValue(['claude'])
 }))
-vi.mock('@/lib/agent-session-launch-plan', () => ({
-  planAgentSessionLaunch: vi.fn(() => ({ route: 'terminal' }))
+vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  awaitStructuredRouteHostAnswer: vi.fn().mockResolvedValue(undefined),
+  planAgentSessionLaunch: vi.fn(() => ({
+    route: 'terminal-tui',
+    agent: 'claude',
+    requestId: 'test-request'
+  }))
 }))
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: vi.fn(),
@@ -103,7 +110,7 @@ function setStore(hostCase: HostCase): void {
   }
 }
 
-function startLinearIssue(): Promise<boolean> {
+function startLinearIssue() {
   return launchWorkItemDirect({
     repoId: 'repo-1',
     launchSource: 'task_page',

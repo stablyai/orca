@@ -19,7 +19,7 @@ export const STRUCTURED_AGENT_SESSION_VISUAL_METHODS = [
     params: ReadVisualParams,
     handler: async (params, ctx): Promise<AgentSessionReadVisualResult> => {
       const host = await requireInstalledStructuredHost(ctx)
-      const record = host.deps.store.getRecord(params.sessionId)
+      const record = host.deps.store.getConversation(params.sessionId)
       if (!record) {
         return { ok: false, error: 'session_not_found' }
       }

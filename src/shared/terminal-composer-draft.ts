@@ -12,6 +12,9 @@ export type TerminalCursorContext = {
   rawAfterCursor: string
   cursorHidden: boolean
   cursorViewportRow: number
+  /** Read only while the native cursor is hidden; absent means unknown. */
+  activeBuffer?: 'normal' | 'alternate'
+  cursorInverse?: boolean
 }
 
 export type TerminalComposerDraft = {
@@ -25,6 +28,7 @@ export type TerminalComposerDraft = {
 type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 
 const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
+const COMPOSER_TOP_FRAME_PREFIX = /^[\u2500\u2501-]{8,}/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[\u00B7\u2022]\s+\S.*$/i
 
 function composerContinuationRows(
@@ -66,23 +70,37 @@ function composerContinuationRows(
   return continuation
 }
 
+function hasFooterGap(context: TerminalCursorContext, index: number): boolean {
+  return index > 0 && !(context.rowsBelow[index - 1] ?? '').trim()
+}
+
+function isCodexFooterRow(context: TerminalCursorContext, index: number): boolean {
+  const row = context.rowsBelow[index] ?? ''
+  const undimmed = context.typedRowsBelow[index] ?? ''
+  const gap = hasFooterGap(context, index)
+  const isDimmedFooter = gap && !undimmed.trim() && context.rowsBelowWrapped?.[index] === false
+  const isColoredFooter =
+    gap &&
+    context.rowsBelowCustomForeground?.[index] === true &&
+    context.rowsBelowWrapped?.[index] === false
+  return isDimmedFooter || isColoredFooter || CODEX_FOOTER_LINE.test(row)
+}
+
 function findCodexFooterIndex(context: TerminalCursorContext): number {
-  for (let index = context.rowsBelow.length - 1; index >= 0; index -= 1) {
-    const row = context.rowsBelow[index] ?? ''
-    if (!row.trim()) {
-      continue
-    }
-    const undimmed = context.typedRowsBelow[index] ?? ''
-    const hasFooterGap = index > 0 && !(context.rowsBelow[index - 1] ?? '').trim()
-    const isDimmedFooter =
-      hasFooterGap && !undimmed.trim() && context.rowsBelowWrapped?.[index] === false
-    const isColoredFooter =
-      hasFooterGap &&
-      context.rowsBelowCustomForeground?.[index] === true &&
-      context.rowsBelowWrapped?.[index] === false
-    return isDimmedFooter || isColoredFooter || CODEX_FOOTER_LINE.test(row) ? index : -1
+  const last = context.rowsBelow.findLastIndex((row) => row.trim())
+  if (last === -1 || isCodexFooterRow(context, last)) {
+    return last
   }
-  return -1
+  // Why: Codex's separate status line keeps its hint row (`? for shortcuts`) directly below it.
+  const status = last - 1
+  if (
+    COMPOSER_FRAME_LINE.test(context.rowsBelow[last] ?? '') ||
+    !(context.rowsBelow[status] ?? '').trim() ||
+    !hasFooterGap(context, status)
+  ) {
+    return -1
+  }
+  return isCodexFooterRow(context, status) ? status : -1
 }
 
 // Codex before 0.152 rotated these (codex-rs/tui/src/chatwidget.rs PLACEHOLDERS, SIDE_PLACEHOLDERS).
@@ -113,16 +131,33 @@ function isStockPlaceholder(
   return /^Try\s+["\u201C]/.test(text) || STOCK_PLACEHOLDERS.has(text)
 }
 
+// Why: Claude's default caret hides the native cursor and parks it at a painted caret cell. That paint
+// drops on focus-out, so it is required only where another program's alternate-screen frame could
+// mimic the box; a complete frame with the cursor inside is always required.
+function isHiddenComposerCaret(
+  context: TerminalCursorContext,
+  cursorOnPromptRow: boolean,
+  closedByFrame: boolean
+): boolean {
+  return (
+    closedByFrame &&
+    (!cursorOnPromptRow || /^\s*\u276F/.test(context.beforeCursor)) &&
+    (context.activeBuffer === 'normal' || context.cursorInverse === true)
+  )
+}
+
 function detectTerminalComposer(
   context: TerminalCursorContext | null | undefined
 ): TerminalComposerMatch | null {
-  if (!context || context.cursorHidden || context.rows.length === 0) {
+  if (!context || context.rows.length === 0) {
     return null
   }
   const cursorIndex = context.rows.length - 1
   const codexFooterIndex = findCodexFooterIndex(context)
   let afterCursor = context.afterCursor || context.rawAfterCursor
   let continuationRows = composerContinuationRows(context, afterCursor, codexFooterIndex)
+  // Why: the continuation walk stops at the row that would close the frame, so no second scan.
+  const closedByFrame = COMPOSER_FRAME_LINE.test(context.rowsBelow[continuationRows.length] ?? '')
   const placeholder = isStockPlaceholder(afterCursor, continuationRows)
   if (placeholder) {
     afterCursor = ''
@@ -134,12 +169,20 @@ function detectTerminalComposer(
     const matched = row.match(/^\s*([\u276F\u203A\u00BB])/)?.[1]
     const glyph = (['❯', '›', '»'] as const).find((candidate) => candidate === matched)
     if (glyph) {
-      if (glyph === '❯' && !COMPOSER_FRAME_LINE.test(context.rows[index - 1] ?? '')) {
-        return null
-      }
-      if (
-        (glyph === '›' || glyph === '»') &&
-        (context.promptGlyphBoldRows[index] !== true || codexFooterIndex === -1)
+      if (glyph === '❯') {
+        const top = context.rows[index - 1] ?? ''
+        if (
+          (!COMPOSER_FRAME_LINE.test(top) &&
+            (!COMPOSER_TOP_FRAME_PREFIX.test(top.trimStart()) || !closedByFrame)) ||
+          (context.cursorHidden &&
+            !isHiddenComposerCaret(context, index === cursorIndex, closedByFrame))
+        ) {
+          return null
+        }
+      } else if (
+        context.cursorHidden ||
+        context.promptGlyphBoldRows[index] !== true ||
+        codexFooterIndex === -1
       ) {
         return null
       }

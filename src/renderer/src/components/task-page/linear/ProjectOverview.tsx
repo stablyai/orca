@@ -1,5 +1,6 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { LinearProjectOverview } from '@/components/linear-project-view-surfaces'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageLinearProjectOverview({
   model
 }: {
@@ -62,7 +63,7 @@ export function TaskPageLinearProjectOverview({
         }}
         onOpenProject={(project) => {
           if (project.url) {
-            void window.api.shell.openUrl(project.url)
+            openAppHttpLink(project.url)
           }
         }}
         onRefresh={() => setLinearRefreshNonce((n) => n + 1)}

@@ -21,7 +21,7 @@ import type {
 } from '../../../../shared/agent-status-types'
 import { buildRuntimeMobileAgentStatus } from '../../runtime-mobile-agent-status-builder'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredWorkerHandleAgentStatus } from '../../orchestration/structured-worker-group-addressing'
 import {
@@ -117,7 +117,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
 
   /** The desktop tab's rename, else the chat's saved name; null leaves the agent's default label. */
   private structuredConversationTabName(workspaceId: string, sessionId: string): string | null {
-    const record = getStructuredAgentSessionHost()?.deps?.store?.getRecord(sessionId)
+    const record = getStructuredAgentSessionHost()?.deps?.store?.getConversation(sessionId)
     const customLabel = this.getWorkspaceSessionForWorktree(workspaceId)?.unifiedTabs?.[
       workspaceId
     ]?.find((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)?.customLabel
@@ -131,7 +131,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       tabs: this.tabs,
       leaves: this.leaves,
       ptysById: this.ptysById,
+      getPtyAvailability: (ptyId) => this.ptyController?.getPtyAvailability?.(ptyId) ?? null,
       getLiveBrowserTabs: (worktreeId) => this.getListedBrowserTabsByPageId(worktreeId),
+      isRendererOwnedMobileBrowserTab: (...args) => this.isRendererOwnedMobileBrowserTab(...args),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
       getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
@@ -297,29 +299,12 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     paneKey: string
   ): AgentStatusOrchestrationContext | undefined {
     const handle = this.getTerminalHandleForPaneKey(paneKey)
-    if (!handle) {
-      return undefined
-    }
-    return this.agentOrchestrationProjection.getForHandle(handle, undefined, { paneKey })
+    return handle
+      ? this.agentOrchestrationProjection.getForHandle(handle, undefined, { paneKey })
+      : undefined
   }
 
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
-  }
-
-  getTerminalHandleForPaneKey(paneKey: string): string | null {
-    const parsed = parsePaneKey(paneKey)
-    const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : undefined
-    if (leaf?.ptyId && leaf.connected) {
-      return this.issueHandle(leaf)
-    }
-    const panePty = this.getPtyRecordForPaneKey(paneKey)
-    if (panePty?.connected) {
-      return this.issuePtyHandle(panePty)
-    }
-    if (leaf?.ptyId) {
-      return this.issueHandle(leaf)
-    }
-    return panePty ? this.issuePtyHandle(panePty) : null
   }
 }

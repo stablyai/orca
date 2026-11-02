@@ -23,13 +23,6 @@ describe('the Orca version a server reports', () => {
     }
   })
 
-  it('is the release its bundle was built from, not a dev placeholder', () => {
-    mkdirSync(join(root, 'out', 'cli'), { recursive: true })
-    writeFileSync(join(root, 'out', 'package.json'), JSON.stringify({ version: '1.4.224' }))
-    stampOrcadAppVersion(() => root)
-    expect(process.env.ORCA_APP_VERSION).toBe('1.4.224')
-  })
-
   it('replaces a version inherited from the Orca that started it', () => {
     process.env.ORCA_APP_VERSION = '1.4.300'
     mkdirSync(join(root, 'out'), { recursive: true })

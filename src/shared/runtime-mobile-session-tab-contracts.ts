@@ -4,7 +4,7 @@ import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
-import type { StructuredAgentId } from './agent-session-provider-handle'
+import type { StructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle'
 
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
@@ -61,6 +61,8 @@ export type RuntimeMobileSessionMarkdownTab = {
   documentVersion: string
   color?: string | null
   isPinned?: boolean
+  /** The paired server the file lives on. Its publisher sets it; runtimes strip it before serving. */
+  hostRuntimeEnvironmentId?: string
 }
 
 export type RuntimeMobileSessionFileTab = {
@@ -72,10 +74,13 @@ export type RuntimeMobileSessionFileTab = {
   language: string
   mode?: 'edit' | 'diff'
   diffSource?: 'staged' | 'unstaged'
+  oldPath?: string
   isDirty: boolean
   color?: string | null
   isPinned?: boolean
   isActive: boolean
+  /** The paired server the file lives on. Its publisher sets it; runtimes strip it before serving. */
+  hostRuntimeEnvironmentId?: string
 }
 
 export type RuntimeMobileSessionBrowserTab = {
@@ -96,6 +101,8 @@ export type RuntimeMobileSessionBrowserTab = {
   color?: string | null
   isPinned?: boolean
   isActive: boolean
+  /** The paired server the page runs on. Its publisher sets it; runtimes strip it before serving. */
+  hostRuntimeEnvironmentId?: string
 }
 
 export type RuntimeMobileSessionAgentTab = {

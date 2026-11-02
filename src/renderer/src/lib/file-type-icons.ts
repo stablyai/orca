@@ -1,6 +1,7 @@
-import { File, FileCog, FileLock, FileTerminal, Smartphone, type LucideIcon } from 'lucide-react'
+import { File, FileCog, FileLock, FileTerminal, type LucideIcon } from 'lucide-react'
 import { COMPOUND_EXTENSIONS, FILE_ICON_BY_EXTENSION } from './file-type-icon-extension-table'
 import { FILE_ICON_BY_NAME } from './file-type-icon-name-table'
+import type { ActivePluginIconTheme } from '../store/plugin-icon-themes'
 
 function getFilename(filePath: string | undefined | null): string {
   if (!filePath) {
@@ -25,20 +26,19 @@ function getExtension(filename: string): string {
   return filename.slice(lastDot + 1).toLowerCase()
 }
 
+function ownIcon(table: Record<string, LucideIcon>, key: string): LucideIcon | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined
+}
+
 export function getFileTypeIcon(filePath: string | undefined | null): LucideIcon {
   const filename = getFilename(filePath)
   if (!filename) {
     return File
   }
   const lowerName = filename.toLowerCase()
-  const exactMatch = FILE_ICON_BY_NAME[lowerName]
+  const exactMatch = ownIcon(FILE_ICON_BY_NAME, lowerName)
   if (exactMatch) {
     return exactMatch
-  }
-
-  // Why: simulator tabs reuse EditorFileTab chrome with a synthetic label path.
-  if (lowerName === 'mobile emulator' || lowerName === 'simulator') {
-    return Smartphone
   }
 
   if (lowerName === '.env' || lowerName.startsWith('.env.')) {
@@ -53,6 +53,70 @@ export function getFileTypeIcon(filePath: string | undefined | null): LucideIcon
     return FileTerminal
   }
 
-  // Match names/extensions deterministically; SSH worktrees have no local OS file associations.
-  return FILE_ICON_BY_EXTENSION[getExtension(filename)] ?? File
+  // Why: filename/extension matching keeps icons deterministic for SSH worktrees
+  // where OS-native file associations are not available.
+  return ownIcon(FILE_ICON_BY_EXTENSION, getExtension(filename)) ?? File
+}
+
+function ownIconIndex(entries: Partial<Record<string, number>>, key: string): number | null {
+  if (!Object.hasOwn(entries, key)) {
+    return null
+  }
+  const index = entries[key]
+  return Number.isInteger(index) && index !== undefined && index >= 0 ? index : null
+}
+
+// Longest dotted suffix first, so a theme's `d.ts` wins over `ts` and `gz` still matches `a.tar.gz`.
+function ownExtensionIconIndex(
+  entries: Partial<Record<string, number>>,
+  filename: string
+): number | null {
+  const parts = filename.split('.')
+  for (let start = 1; start < parts.length; start += 1) {
+    const index = ownIconIndex(entries, parts.slice(start).join('.'))
+    if (index !== null) {
+      return index
+    }
+  }
+  return null
+}
+
+/** The active plugin icon theme's icon index for a path: exact name, then extension, then
+ *  its file icon. */
+export function getPluginFileTypeIconIndex(
+  theme: ActivePluginIconTheme | null,
+  filePath: string | undefined | null
+): number | null {
+  const filename = getFilename(filePath).toLowerCase()
+  if (!theme || !filename) {
+    return null
+  }
+  return (
+    ownIconIndex(theme.fileNames, filename) ??
+    ownExtensionIconIndex(theme.fileExtensions, filename) ??
+    ownIconIndex(theme.icons, 'file')
+  )
+}
+
+/** The active plugin icon theme's icon index for a folder path's last segment. Open folders try
+ *  the expanded name icon, the generic open icon, then fall back like closed ones: the name
+ *  icon, then the generic folder icon. */
+export function getPluginFolderIconIndex(
+  theme: ActivePluginIconTheme | null,
+  folderPath: string | undefined,
+  open: boolean
+): number | null {
+  if (!theme) {
+    return null
+  }
+  const name = getFilename(folderPath).toLowerCase()
+  const named = (entries: Partial<Record<string, number>>) =>
+    name ? ownIconIndex(entries, name) : null
+  return (
+    (open
+      ? (named(theme.folderNamesExpanded) ?? ownIconIndex(theme.icons, 'folder-open'))
+      : null) ??
+    named(theme.folderNames) ??
+    ownIconIndex(theme.icons, 'folder')
+  )
 }

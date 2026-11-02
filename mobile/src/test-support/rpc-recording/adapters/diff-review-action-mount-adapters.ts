@@ -8,6 +8,7 @@ import type {
 } from '../../../session/mobile-diff-review-screen-model'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as NativeChatStaleInput from '../../../session/native-chat/mobile-native-chat-stale-input'
 
 const WORKSPACE = 'workspace-1'
 const HOST = 'host-1'
@@ -26,9 +27,9 @@ export function diffReviewActionMountAdapters(
       const reviewSheets = modules.load<
         typeof import('../../../session/mobile-diff-review-sheets')
       >('mobile/src/session/mobile-diff-review-sheets.ts')
-      const staleInput = modules.load<
-        typeof import('../../../session/mobile-native-chat-stale-input')
-      >('mobile/src/session/mobile-native-chat-stale-input.ts')
+      const staleInput = modules.load<typeof NativeChatStaleInput>(
+        'mobile/src/session/native-chat/mobile-native-chat-stale-input.ts'
+      )
       staleInput.resetMobileNativeChatStaleInputForTests()
       const comment: DiffComment = {
         side: 'modified',
@@ -89,22 +90,20 @@ export function diffReviewActionMountAdapters(
             hostId: HOST,
             worktreeId: WORKSPACE,
             screenState,
-            diffState: { kind: 'idle' },
             currentItem: item,
             queue: [item],
             filteredQueue: [item],
-            filter: 'all',
             currentIndex: 0,
-            activeHunkIndex: null,
             composer: null,
             composerBody: '',
-            listRef: { current: null },
             setScreenState: (update) => {
               screenState = typeof update === 'function' ? update(screenState) : update
             },
-            setFilter: () => {},
-            setCurrentIndex: () => {},
-            setActiveHunkIndex: () => {},
+            selectIndex: () => {},
+            selectKey: () => {},
+            moveSelection: () => {},
+            // Viewed state stays on the phone here; GitHub-viewed files have their own recordings.
+            remoteViewed: () => null,
             setComposerBody: () => {},
             setActionError: (update) => {
               actionError = typeof update === 'function' ? update(actionError) : update
@@ -138,9 +137,6 @@ export function diffReviewActionMountAdapters(
             }
             if (name === 'discard') {
               return interactions.runGitMutation('git.discard', item)
-            }
-            if (name === 'stage-reviewed') {
-              return interactions.stageReviewedFiles()
             }
             if (name === 'open-send-sheet') {
               return interactions.openSendSheet()

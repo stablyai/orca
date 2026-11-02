@@ -1,7 +1,7 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { agentTypeToIconAgent } from './agent-status'
 
 /** Index iconable panes once per status-map identity instead of scanning globally per mounted tab. Preserve insertion order: first-match resolution decides split-tab icons. */

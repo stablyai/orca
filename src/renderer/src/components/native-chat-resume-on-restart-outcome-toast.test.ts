@@ -62,17 +62,28 @@ const resumes = {
   launch: () => continueNativeChatRestartOffer(offered.map((candidate) => candidate.sessionId))
 }
 
+// An unavailable host cannot settle delivery; Review still opens the retained action summary.
 it.each(['click', 'launch'] as const)(
-  'counts every chat of a lost %s resume when the host cannot be read either',
+  'keeps every chat of a lost %s resume unconfirmed when the host cannot be read either',
   async (caller) => {
     hostLostAfterListing()
     await refreshNativeChatRestartOffer()
     await resumes[caller]()
-    expect(vi.mocked(toast).mock.calls).toEqual([['2 chats couldn’t be resumed', {}]])
+    expect(vi.mocked(toast).mock.calls).toEqual([
+      [
+        'Couldn’t confirm 2 chats were resumed',
+        expect.objectContaining({ action: expect.objectContaining({ label: 'Review' }) })
+      ]
+    ])
+    expect(lastToastShow()).toBeDefined()
+    lastToastShow()?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   }
 )
 
-it('answers an opted-in launch that loses its resume request with one toast and Show', async () => {
+// A fresh host offer is an observation, so the lost request still needs Review.
+it('answers an opted-in launch that loses its resume request with one unconfirmed toast', async () => {
   rpc.mockImplementation(async (_target, method) => {
     if (method === 'agentSession.restartResumable') {
       return { sessions: offered, failed: [] }
@@ -83,7 +94,7 @@ it('answers an opted-in launch that loses its resume request with one toast and 
   await resumes.launch()
   expect(getNativeChatRestartOffer().failed.map((entry) => entry.sessionId)).toEqual(['a', 'b'])
   expect(vi.mocked(toast).mock.calls.map(([title]) => title)).toEqual([
-    '2 chats couldn’t be resumed'
+    'Couldn’t confirm 2 chats were resumed'
   ])
   expect(lastToastShow()).toBeDefined()
 })

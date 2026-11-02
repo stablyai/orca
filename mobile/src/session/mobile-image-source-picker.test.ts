@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
 
 vi.mock('expo-image-picker', () => ({
+  UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
   requestMediaLibraryPermissionsAsync: vi.fn(),
   launchImageLibraryAsync: vi.fn()
 }))
@@ -78,7 +79,9 @@ describe('pickMobileImage', () => {
       base64: Buffer.from(bytes).toString('base64'),
       uri: 'file:///x.jpg'
     })
-    expect(launchLibrary).toHaveBeenCalledWith(expect.objectContaining({ base64: false }))
+    expect(launchLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ base64: false, preferredAssetRepresentationMode: 'compatible' })
+    )
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(file.close).toHaveBeenCalledTimes(1)
   })
@@ -152,21 +155,31 @@ describe('pickMobileImage', () => {
     expect(result).toBeNull()
   })
 
-  it('reads a picked file URI into base64 for the files source', async () => {
+  it('reads any picked file into base64 and keeps its name for the files source', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4])
     const file = fileFactory(bytes)
+    const launchFiles = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///book.txt',
+          name: '柴静-看见.txt',
+          mimeType: 'text/plain',
+          size: bytes.length
+        }
+      ]
+    })
 
     const result = await pickMobileImage('files', {
-      launchFiles: vi.fn().mockResolvedValue({
-        canceled: false,
-        assets: [{ uri: 'file:///doc.png', size: bytes.length }]
-      }),
+      launchFiles,
       createFile: file.createFile
     })
 
+    expect(launchFiles).toHaveBeenCalledWith(expect.objectContaining({ type: '*/*' }))
     expect(result).toEqual({
       base64: Buffer.from(bytes).toString('base64'),
-      uri: 'file:///doc.png'
+      uri: 'file:///book.txt',
+      fileName: '柴静-看见.txt'
     })
     expect(file.close).toHaveBeenCalledTimes(1)
   })

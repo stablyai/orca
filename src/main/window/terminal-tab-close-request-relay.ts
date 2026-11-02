@@ -6,6 +6,7 @@ import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
 } from '../../shared/terminal-tab-close'
+import { addFanoutListener, addFanoutListeners } from '../event-listener-fanout'
 
 const TERMINAL_TAB_CLOSE_TIMEOUT_MS = 20_000
 
@@ -24,6 +25,7 @@ export async function requestTerminalTabCloseFromRenderer(
   const requestId = randomUUID()
   await new Promise<void>((resolve, reject) => {
     let settled = false
+    const releaseListeners: (() => void)[] = []
     const onRendererUnavailable = (): void => finish(new Error('renderer_unavailable'))
     const finish = (error?: Error): void => {
       if (settled) {
@@ -31,13 +33,8 @@ export async function requestTerminalTabCloseFromRenderer(
       }
       settled = true
       clearTimeout(timeout)
-      ipcMain.removeListener('ui:terminalTabCloseResponse', onResponse)
-      if (typeof mainWindow.removeListener === 'function') {
-        mainWindow.removeListener('closed', onRendererUnavailable)
-      }
-      if (typeof webContents.removeListener === 'function') {
-        webContents.removeListener('destroyed', onRendererUnavailable)
-        webContents.removeListener('render-process-gone', onRendererUnavailable)
+      for (const release of releaseListeners) {
+        release()
       }
       if (error) {
         reject(error)
@@ -60,13 +57,15 @@ export async function requestTerminalTabCloseFromRenderer(
         finish()
       }
     }
-    ipcMain.on('ui:terminalTabCloseResponse', onResponse)
-    if (typeof mainWindow.once === 'function') {
-      mainWindow.once('closed', onRendererUnavailable)
+    releaseListeners.push(addFanoutListener(ipcMain, 'ui:terminalTabCloseResponse', onResponse))
+    // Lean test windows may lack event methods.
+    if (typeof mainWindow.on === 'function') {
+      releaseListeners.push(addFanoutListener(mainWindow, 'closed', onRendererUnavailable))
     }
-    if (typeof webContents.once === 'function') {
-      webContents.once('destroyed', onRendererUnavailable)
-      webContents.once('render-process-gone', onRendererUnavailable)
+    if (typeof webContents.on === 'function') {
+      releaseListeners.push(
+        addFanoutListeners(webContents, ['destroyed', 'render-process-gone'], onRendererUnavailable)
+      )
     }
     const request: TerminalTabCloseRequest = { requestId, tabId, ...options }
     try {

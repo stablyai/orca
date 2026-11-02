@@ -16,14 +16,21 @@ import {
 } from '../../shared/branch-name-from-work'
 import {
   cleanGeneratedCommitMessage,
+  STAGED_DIFF_BYTE_BUDGET,
   stripPrefilledReasoningPreamble
 } from '../../shared/commit-message-prompt'
 import { isCustomAgentId } from '../../shared/commit-message-agent-spec'
+import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
 import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../shared/text-generation-failure-copy'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
-import { runGenerationRequest } from './agent-generation-request'
+import { commandBackslashMode, runGenerationRequest } from './agent-generation-request'
+import { fitsLocalCommandLine } from './source-control-local-process'
 export { commandBackslashMode } from './agent-generation-request'
 import type {
   CommitMessageGenerationTarget,
@@ -39,6 +46,54 @@ export function trimGeneratedCommitMessage(message: string): string {
   return message.replace(/\s+$/, '')
 }
 
+// Leaves room for retry plans' extra flags.
+const COMMAND_LINE_FIT_HEADROOM = 1_000
+
+/** Argv-delivered prompts must fit the local command line, so shrink only the patch to the largest budget that fits. */
+function fitPromptToLocalCommandLine(
+  params: GenerateParams,
+  target: CommitMessageGenerationTarget,
+  build: (diffBudget?: number) => string
+): string {
+  const prompt = build()
+  // The WSL launcher re-wraps argv in a login-shell script, so this plan's size does not bound it; keep the guard's verdict.
+  if (
+    target.kind !== 'local' ||
+    target.wslDistro ||
+    (process.platform !== 'win32' && process.platform !== 'linux')
+  ) {
+    return prompt
+  }
+  const fits = (candidate: string): boolean => {
+    const planned = planCommitMessageGeneration(
+      { ...params, backslash: commandBackslashMode(target) },
+      candidate
+    )
+    return !planned.ok || fitsLocalCommandLine(planned.plan, COMMAND_LINE_FIT_HEADROOM)
+  }
+  if (fits(prompt)) {
+    return prompt
+  }
+  const minimum = build(0)
+  if (!fits(minimum)) {
+    return prompt
+  }
+  let best = minimum
+  let low = 1
+  let high = STAGED_DIFF_BYTE_BUDGET
+  while (low <= high) {
+    const budget = Math.floor((low + high) / 2)
+    const candidate = build(budget)
+    if (fits(candidate)) {
+      best = candidate
+      low = budget + 1
+    } else {
+      high = budget - 1
+    }
+  }
+  return best
+}
+
 export async function generateCommitMessage(input: {
   context: CommitMessageDraftContext
   params: GenerateParams
@@ -46,25 +101,29 @@ export async function generateCommitMessage(input: {
   spawnAgent: SpawnSourceControlAgent
 }): Promise<GenerateCommitMessageResult> {
   const { context, params } = input
-  const basePrompt = buildCommitMessagePrompt(context, '')
-  const prompt =
+  const prompt = fitPromptToLocalCommandLine(params, input.target, (diffBudget) =>
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
-          basePrompt,
+          basePrompt: buildCommitMessagePrompt(context, '', diffBudget),
           branch: context.branch ?? '(detached)',
           stagedFiles: context.stagedSummary,
           stagedPatch: context.stagedPatch,
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
-      : buildCommitMessagePrompt(context, params.customPrompt ?? '')
+      : buildCommitMessagePrompt(context, params.customPrompt ?? '', diffBudget)
+  )
   const result = await runGenerationRequest({
     ...input,
     prompt,
-    emptyResultName: 'message',
     operation: 'commit-message'
   })
   if (!result.success) {
-    return { success: false, error: result.error, canceled: result.canceled }
+    return {
+      success: false,
+      error: result.error,
+      canceled: result.canceled,
+      ...textGenerationFailureCodeFields(result)
+    }
   }
   try {
     return {
@@ -73,7 +132,10 @@ export async function generateCommitMessage(input: {
       agentLabel: result.agentLabel
     }
   } catch {
-    return { success: false, error: 'Generated commit message could not be parsed.' }
+    return {
+      success: false,
+      ...textGenerationFailure('commitMessageUnparseable')
+    }
   }
 }
 
@@ -84,11 +146,10 @@ export async function generatePullRequestFields(input: {
   spawnAgent: SpawnSourceControlAgent
 }): Promise<GeneratePullRequestFieldsResult<GeneratedPullRequestFields>> {
   const { context, params } = input
-  const basePrompt = buildPullRequestFieldsPrompt(context, '')
-  const prompt =
+  const prompt = fitPromptToLocalCommandLine(params, input.target, (diffBudget) =>
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
-          basePrompt,
+          basePrompt: buildPullRequestFieldsPrompt(context, '', diffBudget),
           branch: context.branch ?? '(detached)',
           baseBranch: context.base,
           currentTitle: context.currentTitle,
@@ -98,11 +159,11 @@ export async function generatePullRequestFields(input: {
           patch: context.patch,
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
-      : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
+      : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '', diffBudget)
+  )
   const result = await runGenerationRequest({
     ...input,
     prompt,
-    emptyResultName: 'details',
     operation: 'pull-request-fields'
   })
   if (!result.success) {
@@ -110,7 +171,8 @@ export async function generatePullRequestFields(input: {
       success: false,
       error: result.error,
       canceled: result.canceled,
-      branchChangedByPreparation: context.branchChangedByPreparation
+      branchChangedByPreparation: context.branchChangedByPreparation,
+      ...textGenerationFailureCodeFields(result)
     }
   }
   try {
@@ -123,7 +185,7 @@ export async function generatePullRequestFields(input: {
   } catch {
     return {
       success: false,
-      error: 'Generated pull request details could not be parsed.',
+      ...textGenerationFailure('pullRequestDetailsUnparseable'),
       branchChangedByPreparation: context.branchChangedByPreparation
     }
   }
@@ -165,7 +227,6 @@ export async function generateBranchName(input: {
   const result = await runGenerationRequest({
     ...input,
     prompt,
-    emptyResultName: 'branch name',
     operation: 'branch-name'
   })
   if (!result.success) {

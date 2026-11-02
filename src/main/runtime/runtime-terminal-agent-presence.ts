@@ -4,6 +4,7 @@ import {
   recognizeAgentProcess
 } from '../../shared/agent-process-recognition'
 import { isOpenCodeNativeTitle } from '../../shared/agent-detection'
+import { isShellProcess } from '../../shared/shell-process-detection'
 import { isKnownReadyPromptPreview } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -31,6 +32,7 @@ type RuntimeTerminalAgentPresenceDependencies = {
   getTrackedPty(ptyId: string): RuntimePtyWorktreeRecord | null
   getTabTitle(tabId: string): string | null
   getForegroundProcess(ptyId: string): Promise<string | null> | null
+  confirmForegroundProcess(ptyId: string): Promise<string | null> | null
   /** The stale-working timer's display-only clear of the PTY's own title, if one stands. */
   getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
 }
@@ -197,14 +199,17 @@ export class RuntimeTerminalAgentPresence {
     suppressClaude: boolean,
     retryForegroundWrappers: boolean
   ): Promise<boolean> {
-    const recognized = recognizeAgentProcess(foregroundProcess)
+    const wrapper = isAgentForegroundWrapperProcess(foregroundProcess)
+    // Why: macOS p_comm names the native Claude install by its version directory (`2.1.310`).
+    const recognized =
+      recognizeAgentProcess(foregroundProcess) ??
+      (retryForegroundWrappers && !wrapper && !isShellProcess(foregroundProcess)
+        ? recognizeAgentProcess(await this.deps.confirmForegroundProcess(ptyId))
+        : null)
     if (recognized) {
       return !(suppressClaude && isExpectedAgentProcess(recognized.processName, 'claude'))
     }
-    if (!isAgentForegroundWrapperProcess(foregroundProcess)) {
-      return false
-    }
-    if (!retryForegroundWrappers) {
+    if (!wrapper || !retryForegroundWrappers) {
       return false
     }
     const startedAt = Date.now()

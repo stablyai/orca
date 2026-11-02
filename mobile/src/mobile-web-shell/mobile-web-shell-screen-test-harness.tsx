@@ -24,6 +24,7 @@ export type ScreenDependencies = {
   reportPagePainted: Mock
   snapshotUnreadable: boolean
   storageRefreshes: number
+  appStateListeners: Set<(state: string) => void>
   openUrl: Mock
   push: Mock
   back: Mock
@@ -47,6 +48,8 @@ export type ScreenDependencies = {
   backHandlers: Map<string, () => boolean>
   setScreenOptions: Mock
   backClaimed: boolean
+  ownsHostArea: boolean
+  screenFocused: boolean
   platform: 'ios' | 'android'
   reportPageBackClaim: Mock
   sendBackDelivers: boolean
@@ -80,6 +83,7 @@ export function createScreenDependencies(): ScreenDependencies {
     reportPagePainted: vi.fn(),
     snapshotUnreadable: false,
     storageRefreshes: 0,
+    appStateListeners: new Set(),
     openUrl: vi.fn(),
     push: vi.fn(),
     back: vi.fn(),
@@ -103,6 +107,8 @@ export function createScreenDependencies(): ScreenDependencies {
     backHandlers: new Map(),
     setScreenOptions: vi.fn(),
     backClaimed: false,
+    ownsHostArea: false,
+    screenFocused: true,
     platform: 'ios',
     reportPageBackClaim: vi.fn(),
     sendBackDelivers: true,
@@ -120,6 +126,7 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.reportPagePainted.mockReset()
   dependencies.snapshotUnreadable = false
   dependencies.storageRefreshes = 0
+  dependencies.appStateListeners.clear()
   dependencies.downloadProgress = createDownloadProgressFeed()
   dependencies.lifecycle.length = 0
   dependencies.viewRenders = 0
@@ -141,6 +148,8 @@ export function resetScreenDependencies(dependencies: ScreenDependencies): void 
   dependencies.setScreenOptions.mockReset()
   dependencies.reportPageBackClaim.mockReset()
   dependencies.backClaimed = false
+  dependencies.ownsHostArea = false
+  dependencies.screenFocused = true
   dependencies.platform = 'ios'
   dependencies.sendBackDelivers = true
   dependencies.backSends = 0

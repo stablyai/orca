@@ -1,11 +1,12 @@
 import { agentImagePasteWrites } from '../../../../../src/shared/agent-image-paste'
-import { buildMobileImagePastePayload } from '../../mobile-clipboard-image'
+import { agentImagePastePath } from '../../../../../src/shared/agent-image-paste-path'
+import { buildNativeChatImagePasteBytes } from '../../../../../src/shared/native-chat-paste-bytes'
 import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
   openMobileNativeChatSendBudget
-} from '../../mobile-native-chat-send'
+} from '../mobile-native-chat-send'
 import { nativeChatTerminalWrite } from '../../mobile-session-write-operations'
-import type { MobileNativeChatRpcSender } from '../../mobile-native-chat-send'
+import type { MobileNativeChatRpcSender } from '../mobile-native-chat-send'
 
 // Wait for the TUI to register bracketed image attachments before text/Enter arrives.
 export const MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS = 300
@@ -49,7 +50,7 @@ export async function pasteMobileNativeChatImagePaths({
     clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
     ...agentImagePasteWrites(
       agent,
-      imagePaths.map((path) => buildMobileImagePastePayload(path, agent)),
+      imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
       followedByText
     )
   ]) {

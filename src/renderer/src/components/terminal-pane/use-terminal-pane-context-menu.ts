@@ -212,7 +212,7 @@ export function useTerminalPaneContextMenu({
 
   const onClosePane = (): void => {
     const pane = resolveMenuPane()
-    if (pane && (managerRef.current?.getPanes().length ?? 0) > 1) {
+    if (pane) {
       onRequestClosePane(pane.id)
     }
   }

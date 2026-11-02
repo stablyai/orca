@@ -31,7 +31,7 @@ describe('markup document undo/redo', () => {
     expect(canRedo(doc)).toBe(false)
   })
 
-  it('commits shapes and clears the redo stack', () => {
+  it('commits shapes in order and enables undo', () => {
     let doc = createMarkupDocument()
     doc = commitShape(doc, pen('a'))
     doc = commitShape(doc, pen('b'))
@@ -115,7 +115,7 @@ describe('markup geometry', () => {
     ])
   })
 
-  it('scales rect/arrow endpoints and text position + font size', () => {
+  it('scales arrow endpoints and text position + font size', () => {
     const arrow: ArrowShape = {
       id: 'a',
       kind: 'arrow',

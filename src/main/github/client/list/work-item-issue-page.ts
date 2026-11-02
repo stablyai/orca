@@ -5,6 +5,7 @@ import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import type { GitHubRepoExecOptions } from '../../github-api-repository'
 import { fetchIssueWorkItem } from '../fetch/work-item-fetch'
 import { mapIssueWorkItem } from '../map/work-item'
+import { restIssueActor } from '../map/issue-actor'
 import type { MainWorkItem } from '../map/work-item-field-coercion'
 import { buildWorkItemListRequest } from './work-item-list-request'
 import { buildSearchQueryString } from './work-item-search-query'
@@ -28,25 +29,6 @@ const ISSUE_NODE_SELECTION = `__typename ... on Issue {
   labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
   assignees(first: 100) { nodes { __typename login avatarUrl } pageInfo { hasNextPage } }
 }`
-
-function restActor(actor: Actor | null): Record<string, unknown> | null {
-  if (!actor) {
-    return null
-  }
-  const login =
-    actor.__typename === 'Bot' && !actor.login.endsWith('[bot]')
-      ? `${actor.login}[bot]`
-      : actor.login
-  let avatar = actor.avatarUrl
-  if (avatar) {
-    const url = new URL(avatar)
-    if (url.hostname === 'avatars.githubusercontent.com') {
-      url.searchParams.delete('u')
-      avatar = url.toString()
-    }
-  }
-  return { login, avatar_url: avatar }
-}
 
 export async function listIssueWorkItemPage(args: {
   repoPath: string
@@ -110,9 +92,9 @@ export async function listIssueWorkItemPage(args: {
           mapIssueWorkItem({
             ...node,
             state: node.state.toLowerCase(),
-            user: restActor(node.author),
+            user: restIssueActor(node.author),
             labels: node.labels.nodes,
-            assignees: node.assignees.nodes.map(restActor)
+            assignees: node.assignees.nodes.map(restIssueActor)
           })
         )
       }

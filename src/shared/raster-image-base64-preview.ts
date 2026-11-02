@@ -131,9 +131,9 @@ export function decodeBase64Prefix(content: string, maxBytes: number): Uint8Arra
 }
 
 // 64 bytes clears fixed headers/JFIF SOF, measuring ordinary screenshots/icons without decoding the full image.
-const RASTER_IMAGE_HEADER_PROBE_BYTES = 64
+export const RASTER_IMAGE_HEADER_PROBE_BYTES = 64
 // JPEG metadata can push SOF arbitrarily far; geometric growth keeps repeated decoding within ~1.07x of needed header bytes.
-const RASTER_IMAGE_HEADER_PROBE_GROWTH = 16
+export const RASTER_IMAGE_HEADER_PROBE_GROWTH = 16
 
 /** Only confidently oversized images suppress previews; unknown/truncated headers mean unmeasurable, not invalid images. */
 export function exceedsRasterImagePreviewLimits(

@@ -11,7 +11,6 @@ import { sendTerminalStreamInput } from './rpc/methods/terminal/terminal-input-d
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import {
   pasteWorktreeStartupDraftWhenReady,
-  sendWorktreeStartupFollowupWhenReady,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
 
@@ -235,20 +234,16 @@ describe('run facts: a created worktree’s startup writes', () => {
     }
   }
 
-  it('reads a run whose only input was its create-time draft and follow-up as untyped', async () => {
+  it('reads a run whose only input was its create-time draft as untyped', async () => {
     vi.useFakeTimers()
     const run = await createFreshRun()
     const host = readinessHost(run)
 
     pasteWorktreeStartupDraftWhenReady(host, run.handle, { agent: 'aider', content: 'plan it' })
-    sendWorktreeStartupFollowupWhenReady(host, run.handle, {
-      expectedProcess: 'aider',
-      prompt: 'and ship it'
-    })
     await vi.runAllTimersAsync()
 
-    expect(run.kinds).toEqual(['launch', 'launch'])
-    expect(run.writes).toHaveLength(2)
+    expect(run.kinds).toEqual(['launch'])
+    expect(run.writes).toHaveLength(1)
     expect(run.firstUserInputAt()).toBeNull()
   })
 })

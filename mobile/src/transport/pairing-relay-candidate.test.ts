@@ -291,7 +291,10 @@ describe('recovering pairing relay candidate', () => {
     })
 
     await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
-    expect(resolveDirector).toHaveBeenCalledOnce()
+    expect(resolveDirector).toHaveBeenCalledExactlyOnceWith({
+      ...journal.metadata.relay,
+      inviteToken: journal.secrets.inviteToken
+    })
   })
 
   it('bounds director recovery and applies full jitter to failures and target retries', async () => {

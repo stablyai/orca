@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc-client'
-import { normalizeSetupHookTrust } from '../tasks/setup-hook-trust'
+import { normalizeSetupHookTrust, readRepoHooksSetupCommand } from '../tasks/setup-hook-trust'
 import { newWorkspaceSetupHooksRead } from './new-workspace-operations'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import type { MobileWorkspaceRepo, SetupHookDetails } from './new-worktree-modal-types'
@@ -75,7 +75,7 @@ export function useNewWorkspaceSetupScript(args: {
           return
         }
         const result = hooks.value
-        const command = result.hooks?.scripts?.setup?.trim() || null
+        const command = readRepoHooksSetupCommand(result)
         const runPolicy = result.setupRunPolicy ?? 'run-by-default'
         updateChoices({
           details: {

@@ -83,7 +83,7 @@ describe('useMobileFileTapHandlers', () => {
         })
       )
     })
-    handlers!.handleFileTap('terminal-1', 'index.ts', null, null)
+    handlers!.handleFileTap('terminal-1', [{ pathText: 'index.ts', line: null, column: null }])
 
     expect(firstSendRequest).not.toHaveBeenCalled()
     expect(latestSendRequest).toHaveBeenCalledTimes(1)
@@ -95,7 +95,7 @@ describe('useMobileFileTapHandlers', () => {
       renderer = create(createElement(Harness, { options: createOptions(sendRequest) }))
     })
 
-    handlers!.handleFileTap('terminal-1', 'index.ts', null, null)
+    handlers!.handleFileTap('terminal-1', [{ pathText: 'index.ts', line: null, column: null }])
     await act(async () => {})
 
     expect(sendRequest).toHaveBeenCalledWith(
@@ -117,7 +117,7 @@ describe('useMobileFileTapHandlers', () => {
       renderer = create(createElement(Harness, { options: createOptions(sendRequest) }))
     })
 
-    handlers!.handleFileTap('terminal-2', 'index.ts', null, null)
+    handlers!.handleFileTap('terminal-2', [{ pathText: 'index.ts', line: null, column: null }])
 
     expect(sendRequest).not.toHaveBeenCalled()
   })

@@ -2,12 +2,13 @@ import type { AppState } from '@/store/types'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import { liveLayoutGroupIds } from '@/store/slices/editor/tabs/editor-open-target-group'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import type { OpenWorkspaceBrowserTabRequest } from './workspace-browser-tab-open'
 import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import { resolveLinkOpenSidePlacement } from './adjacent-link-open-group'
 
 export type HttpLinkBrowserPlacement = { targetGroupId: string } | { split: TabSplitTarget }
 
@@ -17,7 +18,7 @@ export type HttpLinkBrowserTabState = Partial<
   groupsByWorktree?: Record<string, readonly Pick<TabGroup, 'id' | 'activeTabId'>[]>
   unifiedTabsByWorktree?: Record<
     string,
-    readonly (Pick<Tab, 'id'> & Partial<Pick<Tab, 'contentType'>>)[]
+    readonly (Pick<Tab, 'id'> & Partial<Pick<Tab, 'contentType' | 'groupId' | 'lastFocusedAt'>>)[]
   >
   settings?: Partial<Pick<GlobalSettings, 'openLinksInAppInBackground'>> | null
   createBrowserTab: (
@@ -32,30 +33,21 @@ export type HttpLinkBrowserRequestFields = Pick<
   'targetGroupId' | 'split' | 'focusOnCreate' | 'selectWorktree'
 >
 
-/** Use the visible browser or split beside the clicked pane so its terminal/agent stays visible; click focus identifies the source group. */
+/** Reuse the visible browser or a neighbor; only a lone occupied group needs a split. */
 export function resolveHttpLinkBrowserPlacement(
   state: Omit<HttpLinkBrowserTabState, 'createBrowserTab'>,
   worktreeId: string
 ): HttpLinkBrowserPlacement | null {
-  const groups = state.groupsByWorktree?.[worktreeId] ?? []
-  const tabsById = new Map((state.unifiedTabsByWorktree?.[worktreeId] ?? []).map((t) => [t.id, t]))
-  const visibleGroupIds = liveLayoutGroupIds(state, worktreeId)
-  for (const groupId of visibleGroupIds) {
-    const activeTabId = groups.find((group) => group.id === groupId)?.activeTabId
-    if (activeTabId && tabsById.get(activeTabId)?.contentType === 'browser') {
-      return { targetGroupId: groupId }
-    }
+  const visibleBrowser = findVisibleBrowserLinkTarget(state, worktreeId)
+  if (visibleBrowser) {
+    return visibleBrowser
   }
-  const sourceGroupId = state.activeGroupIdByWorktree?.[worktreeId]
-  if (!sourceGroupId || !visibleGroupIds.has(sourceGroupId)) {
-    return null
-  }
-  // Why: an empty pane covers nothing, so the link fills it instead of splitting beside it.
-  if (!groups.find((group) => group.id === sourceGroupId)?.activeTabId) {
-    return { targetGroupId: sourceGroupId }
-  }
-  // Why unactivated: a host snapshot reads an activated empty group as a terminal pane (see file-preview.ts).
-  return { split: { sourceGroupId, splitDirection: 'right', activate: false } }
+  const placement = resolveLinkOpenSidePlacement({
+    layout: state.layoutByWorktree?.[worktreeId],
+    groups: state.groupsByWorktree?.[worktreeId] ?? [],
+    sourceGroupId: state.activeGroupIdByWorktree?.[worktreeId]
+  })
+  return placement && ('groupId' in placement ? { targetGroupId: placement.groupId } : placement)
 }
 
 export function isHttpLinkBackgroundOpen(
@@ -68,11 +60,11 @@ export function openLocalHttpLinkTab(
   state: HttpLinkBrowserTabState,
   worktreeId: string,
   url: string,
-  placement = resolveHttpLinkBrowserPlacement(state, worktreeId)
+  placement = resolveHttpLinkBrowserPlacement(state, worktreeId),
+  activate = !isHttpLinkBackgroundOpen(state)
 ): void {
-  const background = isHttpLinkBackgroundOpen(state)
-  const tab = state.createBrowserTab(worktreeId, url, { activate: !background, ...placement })
-  if (background) {
+  const tab = state.createBrowserTab(worktreeId, url, { activate, ...placement })
+  if (!activate) {
     return
   }
   showWorkspaceTabs(state, worktreeId)
@@ -99,7 +91,7 @@ export function prepareRemoteHttpLinkTab(
 }
 
 /** A link clicked in Agents View lands in the workspace's tab layout, so bring that layout on screen. */
-function showWorkspaceTabs(
+export function showWorkspaceTabs(
   state: Pick<HttpLinkBrowserTabState, 'activeView' | 'setActiveView'>,
   worktreeId: string
 ): void {

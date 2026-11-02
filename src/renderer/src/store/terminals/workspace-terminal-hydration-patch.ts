@@ -35,7 +35,14 @@ export type WorkspaceHydrationPatch = Pick<
   | 'localOnlyScrollbackByTabId'
 > &
   // Only cold reads carry contested-host shadows; scoped hydration must preserve the store’s copy.
-  Partial<Pick<AppState, 'contestedHostWorkspaceSessions' | 'contestedPrimaryHostBySessionKey'>>
+  Partial<
+    Pick<
+      AppState,
+      | 'contestedHostWorkspaceSessions'
+      | 'contestedPrimaryHostBySessionKey'
+      | 'hydratedRuntimeSessionHostIds'
+    >
+  >
 
 export function replaceHydratedRecordKeys<T>(
   current: Record<string, T>,

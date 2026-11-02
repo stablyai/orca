@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   plan:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
@@ -35,6 +35,8 @@ jobs:
         env:
           ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
           ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
+          # Twelve 4-vCPU hosted shards match the old 8-vCPU wall time; the repository variable can request 2 to 16.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}
         run: node config/scripts/ci-unit-plan.mjs
       - uses: actions/upload-artifact@v7
         continue-on-error: true

@@ -1,3 +1,4 @@
+import { readRecord } from './codex-item-field-readers'
 import type { CodexAppServerConnectionHandlers } from './app-server/codex-app-server-connection-types'
 import type { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
@@ -28,6 +29,15 @@ export function codexAcquisitionNotificationHandler(input: {
     const threadId = readCodexThreadId(params)
     if (method === 'thread/status/changed' && threadId && threadId === input.primaryThreadId()) {
       input.dispatchEchoes.observeStatus(codexThreadIsActive(params))
+    }
+    if (method === 'thread/settings/updated' && threadId && threadId === input.primaryThreadId()) {
+      const settings = readRecord(readRecord(params).threadSettings)
+      if (
+        typeof settings.model === 'string' &&
+        (typeof settings.effort === 'string' || settings.effort === null)
+      ) {
+        input.acquisition.appliedSettings.observe(settings)
+      }
     }
     input.deliver(
       input.acquisition,

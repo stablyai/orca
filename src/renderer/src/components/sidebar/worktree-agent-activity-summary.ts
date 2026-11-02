@@ -1,3 +1,8 @@
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import {
+  selectVisibleAgentOrchestration,
+  type VisibleOrchestrationState
+} from '@/runtime/visible-agent-orchestration'
 import type { AppState } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
@@ -11,7 +16,7 @@ import {
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
-import { applyAgentPaneActivityFlags } from '@/lib/agent-pane-activity-flags'
+import { applyAgentPaneActivityFlags } from '../../../../shared/worktree-status-rollup'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
@@ -56,13 +61,16 @@ export type AgentActivityInput = Pick<
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
-> & {
-  tabsByWorktree: AgentActivityTabsByWorktree
-  runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
-}
+> &
+  VisibleOrchestrationState & {
+    tabsByWorktree: AgentActivityTabsByWorktree
+    runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
+  }
 
 type AgentActivityCache = {
   tabsByWorktree: AgentActivityTabsByWorktree
+  unifiedTabsByWorktree: AgentActivityInput['unifiedTabsByWorktree']
+  agentStatusByPaneKey: AgentActivityInput['agentStatusByPaneKey']
   agentStatusEpoch: number
   migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
   retainedAgentsByPaneKey: AppState['retainedAgentsByPaneKey']
@@ -82,10 +90,12 @@ export function selectWorktreeAgentActivitySummary(
 function getWorktreeAgentActivitySummaries(
   state: AgentActivityInput
 ): Map<string, WorktreeAgentActivitySummary> {
-  const runtimeAgentOrchestrationByPaneKey = state.runtimeAgentOrchestrationByPaneKey
+  const runtimeAgentOrchestrationByPaneKey = selectVisibleAgentOrchestration(state)
   if (
     agentActivityCache &&
     agentActivityCache.tabsByWorktree === state.tabsByWorktree &&
+    agentActivityCache.unifiedTabsByWorktree === state.unifiedTabsByWorktree &&
+    agentActivityCache.agentStatusByPaneKey === state.agentStatusByPaneKey &&
     agentActivityCache.agentStatusEpoch === state.agentStatusEpoch &&
     agentActivityCache.migrationUnsupportedByPtyId === state.migrationUnsupportedByPtyId &&
     agentActivityCache.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey &&
@@ -114,7 +124,12 @@ function getWorktreeAgentActivitySummaries(
 
   const now = Date.now()
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    const paneIdentity = parseAgentStatusPaneIdentity(paneKey)
+    const paneIdentity = parseAgentStatusPaneIdentity(
+      paneKey,
+      state.unifiedTabsByWorktree
+        ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
+        : undefined
+    )
     if (!paneIdentity) {
       continue
     }
@@ -183,6 +198,8 @@ function getWorktreeAgentActivitySummaries(
 
   agentActivityCache = {
     tabsByWorktree: state.tabsByWorktree,
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+    agentStatusByPaneKey: state.agentStatusByPaneKey,
     agentStatusEpoch: state.agentStatusEpoch,
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,

@@ -14,11 +14,11 @@ import {
   publicKeyToBase64
 } from '../../../shared/e2ee-crypto'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { encodePairingOffer, parsePairingCode } from '../../../shared/pairing'
 import { createPairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/paired-e2ee-node-primitives'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 
 const mocks = vi.hoisted(() => ({ isWebClient: false }))
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.isWebClient }))

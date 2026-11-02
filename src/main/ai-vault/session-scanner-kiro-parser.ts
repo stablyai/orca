@@ -2,6 +2,7 @@ import { basename } from 'node:path'
 import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { kiroTranscriptPathForMetadata } from '../../shared/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
 import { addSessionContent } from './session-scanner-messages'
@@ -30,9 +31,7 @@ export function isKiroSessionMetadataPath(filePath: string): boolean {
   return KIRO_SESSION_FILE_PATTERN.test(basename(filePath))
 }
 
-export function kiroTranscriptPathForMetadata(filePath: string): string {
-  return filePath.endsWith('.json') ? `${filePath}l` : ''
-}
+export { kiroTranscriptPathForMetadata }
 
 /** Translate Kiro kind/data blocks into preview content blocks. */
 function toPreviewBlocks(content: unknown): Record<string, unknown>[] {

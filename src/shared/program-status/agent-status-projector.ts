@@ -3,6 +3,11 @@ import type { AgentStatusState, ParsedAgentStatusPayload } from '../agent-status
 import type { AgentSubagentSnapshot, AgentSubagentState } from '../agent-status-subagent-snapshot'
 import { AGENT_SUBAGENT_ID_MAX_LENGTH } from '../agent-status-subagent-snapshot'
 import type { AgentTurnOutcome } from '../agent-turn-outcome'
+import { foldMainAgentWithRowChildWork } from '../agent-hook-row-child-work-fold'
+import {
+  heldTurnCountsAsFinished,
+  isAgentStatusHeldOpenByChildWork
+} from '../agent-lead-status-fold'
 import { createProgramStatusOscScanner } from './osc-scanner'
 import {
   programStatusDisplayText,
@@ -45,6 +50,10 @@ function blockedState(record: ProgramStatusRecord): 'waiting' | 'blocked' {
   return isTurnScopedProgramStatusKind(record.kind) ? 'waiting' : 'blocked'
 }
 
+function isRowHoldingChild(child: AgentSubagentSnapshot): boolean {
+  return child.state === 'working' || child.state === 'waiting'
+}
+
 function subagentState(record: ProgramStatusRecord): AgentSubagentState | null {
   switch (record.state) {
     case 'working':
@@ -77,6 +86,24 @@ export type ProgramStatusPayload = {
   removesRow?: true
 }
 
+/** Children report only changes, so a hold none refreshed within `lapseAfterMs` settles to the lead's verdict; its stamp keeps that quiet. */
+export function lapsedProgramStatusChildHold(
+  payload: ParsedAgentStatusPayload,
+  heldSince: number,
+  now: number,
+  lapseAfterMs: number
+): ParsedAgentStatusPayload | null {
+  if (
+    !payload.mainAgent ||
+    !isAgentStatusHeldOpenByChildWork(payload) ||
+    now - heldSince < lapseAfterMs
+  ) {
+    return null
+  }
+  const { subagents: _subagents, ...lead } = payload
+  return { ...lead, state: payload.mainAgent.state }
+}
+
 type ProgramStatusProjector = {
   /** Return lifecycle payloads/root changes in chunk order (including unchanged store projections); facet is new, null when removed,
    * or absent when unchanged. */
@@ -93,6 +120,8 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
   let lastRoot: RootProjection | null = null
   let lastKey: string | null = null
   let rootStateStartedAt = 0
+  // Set once children hold this root's done open; that row and its all-clear share one completion stamp.
+  let rootDoneHeldOpen = false
   let lastFacet: ProgramStatusFacet | undefined
   // Set when the program ends; the next projection starts a new invocation.
   let invocationEnded = false
@@ -176,14 +205,25 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
       projection.outcome !== lastRoot?.outcome
     ) {
       rootStateStartedAt = now()
+      rootDoneHeldOpen = false
       lastKey = null
     }
     lastRoot = projection
     const agentType = agentTypeForProgramStatusApp(root?.app)
     const msg = programStatusDisplayText(root?.msg)
     const subagents = snapshotChildren()
+    // Why: async children outlive a finished turn (pi-subagents); failed/idle children and boundaries hold nothing.
+    const held =
+      projection.state === 'done' && projection.sessionBoundary !== true
+        ? foldMainAgentWithRowChildWork('done', {
+            payload: { subagents: subagents.filter(isRowHoldingChild) }
+          })
+        : null
+    const state = held?.stateName ?? projection.state
+    rootDoneHeldOpen ||=
+      held !== null && state !== 'done' && heldTurnCountsAsFinished(held, projection.outcome, false)
     const payload: ParsedAgentStatusPayload = {
-      state: projection.state,
+      state,
       prompt: '',
       ...(agentType ? { agentType } : {}),
       // Live work names what it is doing or waiting on; a finished turn names its result.
@@ -193,6 +233,8 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
         : {}),
       ...(projection.sessionBoundary ? { sessionBoundary: true } : {}),
       ...(subagents.length > 0 ? { subagents } : {}),
+      // A held turn that counts as finished is announced now; the all-clear restates it so it is not announced twice.
+      ...(rootDoneHeldOpen ? { turnCompletedAt: rootStateStartedAt } : {}),
       mainAgent: {
         state: projection.state,
         ...(projection.outcome ? { outcome: projection.outcome } : {}),

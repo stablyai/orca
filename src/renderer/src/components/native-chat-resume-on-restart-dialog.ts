@@ -1,4 +1,4 @@
-let pendingOpen = false
+const pendingOpen = new Set<string>()
 const listeners = new Set<() => void>()
 
 function notify(): void {
@@ -8,21 +8,21 @@ function notify(): void {
 }
 
 // Keep opens as an external snapshot so requests arriving before subscription survive mount ordering.
-export function requestNativeChatResumeOnRestartDialog(): void {
-  pendingOpen = true
+export function requestNativeChatResumeOnRestartDialog(key = 'local'): void {
+  pendingOpen.add(key)
   notify()
 }
 
-export function consumeNativeChatResumeOnRestartDialogRequest(): void {
-  if (!pendingOpen) {
+export function consumeNativeChatResumeOnRestartDialogRequest(key = 'local'): void {
+  if (!pendingOpen.has(key)) {
     return
   }
-  pendingOpen = false
+  pendingOpen.delete(key)
   notify()
 }
 
-export function getNativeChatResumeOnRestartDialogRequest(): boolean {
-  return pendingOpen
+export function getNativeChatResumeOnRestartDialogRequest(key = 'local'): boolean {
+  return pendingOpen.values().next().value === key
 }
 
 export function subscribeNativeChatResumeOnRestartDialog(listener: () => void): () => void {

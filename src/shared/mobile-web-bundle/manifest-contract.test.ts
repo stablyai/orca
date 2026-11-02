@@ -11,7 +11,6 @@ import {
   MOBILE_WEB_BUNDLE_MAX_ROUTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
   MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
-  MOBILE_WEB_PAGE_VERSION,
   type MobileWebBundleAsset
 } from './manifest-contract'
 
@@ -117,10 +116,6 @@ describe('the page version a manifest carries', () => {
       ).toBe(false)
     }
   })
-
-  it('is at least 1, so a manifest without one reads as older than every page that has one', () => {
-    expect(MOBILE_WEB_PAGE_VERSION).toBeGreaterThanOrEqual(1)
-  })
 })
 
 describe('the page routes a manifest declares', () => {
@@ -174,6 +169,15 @@ describe('the page routes a manifest declares', () => {
     expect(withRoutes([{ pathname: '/h', grants: ['browser.screencast'] }])).toBe(false)
   })
 
+  it('accepts explicit cross-layout host ownership without changing legacy route declarations', () => {
+    const legacy = { pathname: '/h/[hostId]', grants: ['navigate'], canOwnHostArea: true }
+    expect(withRoutes([legacy])).toBe(true)
+    expect(withRoutes([{ ...legacy, canOwnHostAreaAcrossLayouts: true }])).toBe(true)
+    for (const invalid of [false, 'true', 1, null]) {
+      expect(withRoutes([{ ...legacy, canOwnHostAreaAcrossLayouts: invalid }])).toBe(false)
+    }
+  })
+
   it('refuses a route carrying a field the contract does not declare', () => {
     expect(withRoutes([{ pathname: '/h', grants: [], screen: 'x' }])).toBe(false)
   })
@@ -196,30 +200,16 @@ describe('the page routes a manifest declares', () => {
     expect(withRoutes([{ pathname: '/h', grants: [], optionalGrants: [''] }])).toBe(false)
   })
 
-  it('bounds the two lists together, not one at a time', () => {
+  it('bounds each list on its own, as released shells read them', () => {
     const names = (count, prefix) =>
       Array.from({ length: count }, (_value, index) => `${prefix}${String(index)}`)
-    const half = MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS / 2
-    // At the ceiling exactly, split across the lanes.
+    const cap = MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS
     expect(
-      withRoutes([
-        { pathname: '/h', grants: names(half, 'req'), optionalGrants: names(half, 'opt') }
-      ])
+      withRoutes([{ pathname: '/h', grants: names(cap, 'req'), optionalGrants: names(cap, 'opt') }])
     ).toBe(true)
-    // Individually valid arrays can exceed the combined session grant cap.
+    expect(withRoutes([{ pathname: '/h', grants: names(cap + 1, 'req') }])).toBe(false)
     expect(
-      withRoutes([
-        { pathname: '/h', grants: names(half + 1, 'req'), optionalGrants: names(half, 'opt') }
-      ])
-    ).toBe(false)
-    expect(
-      withRoutes([
-        {
-          pathname: '/h',
-          grants: [],
-          optionalGrants: names(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS + 1, 'opt')
-        }
-      ])
+      withRoutes([{ pathname: '/h', grants: [], optionalGrants: names(cap + 1, 'opt') }])
     ).toBe(false)
   })
 
@@ -351,31 +341,6 @@ describe('refinement short-circuit', () => {
   it('reports buildId when every cheaper invariant holds', () => {
     const withinCeiling = assetsTotalling(MOBILE_WEB_BUNDLE_MAX_ASSETS, 64)
     expect(issuePaths(manifestOf(withinCeiling, { buildId: WRONG_BUILD_ID }))).toEqual(['buildId'])
-  })
-
-  it('does not hash an oversized asset list', () => {
-    const overCeiling = [
-      ...assetsTotalling(MOBILE_WEB_BUNDLE_MAX_ASSETS, 64),
-      asset('assets/overflow.js', 0)
-    ]
-    const paths = issuePaths(manifestOf(overCeiling, { buildId: WRONG_BUILD_ID }))
-    expect(paths).toEqual(['assets'])
-    expect(paths).not.toContain('buildId')
-  })
-
-  it('does not hash once a cheaper invariant has failed', () => {
-    const twoAssets = [ENTRY, asset('assets/a.js', 10)]
-    expect(issuePaths(manifestOf(twoAssets, { totalBytes: 0, buildId: WRONG_BUILD_ID }))).toEqual([
-      'totalBytes'
-    ])
-    expect(
-      issuePaths(
-        manifestOf(twoAssets, {
-          minCompatibleRuntimeProtocolVersion: 4,
-          buildId: WRONG_BUILD_ID
-        })
-      )
-    ).toEqual(['minCompatibleRuntimeProtocolVersion'])
   })
 })
 

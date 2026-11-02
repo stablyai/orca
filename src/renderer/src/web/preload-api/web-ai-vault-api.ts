@@ -19,7 +19,15 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
-import { callRuntimeResult } from './web-runtime-calls'
+import {
+  assertEnvironmentPairing,
+  callRuntimeEnvelope,
+  callRuntimeResult
+} from './web-runtime-calls'
+import {
+  readRuntimeAiVaultDeleteSessionResponse,
+  runtimeAiVaultDeleteSessionParams
+} from '../../../../shared/ai-vault-runtime-session-delete'
 import { requireActiveEnvironment } from './web-runtime-session'
 import { noopUnsubscribe } from './web-storage'
 import { translate } from '@/i18n/i18n'
@@ -52,17 +60,27 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       if (requestedScope !== 'all' && requestedScope !== executionHostId) {
         return Promise.resolve(webAiVaultUnavailableResult(requestedScope))
       }
+      const hostPairingRevision = environment.pairingRevision ?? environment.createdAt
       // Why: no local filesystem in the browser, so every history scan runs on and is stamped as the paired runtime host.
       return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
         includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
         limit: args?.limit,
+        unlimited: args?.unlimited,
         force: args?.force,
         ...(requestedScope === executionHostId && args?.afterFingerprint !== undefined
           ? { afterFingerprint: args.afterFingerprint }
           : {}),
         scopePaths: args?.scopePaths,
         executionHostId
-      })
+      }).then((result) =>
+        // Fence later host mutations on these rows to the pairing that listed them.
+        result.sessions
+          ? {
+              ...result,
+              sessions: result.sessions.map((session) => ({ ...session, hostPairingRevision }))
+            }
+          : result
+      )
     },
     resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {
       const environment = requireActiveEnvironment()
@@ -85,13 +103,20 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
     // Why: full first-prompt re-parse is local-FS only; web/runtime falls back to preview text.
     getFirstUserPrompt: () => Promise.resolve({ prompt: null }),
-    // No runtime delete RPC; return the UI’s non-local rejection for host-owned sessions.
-    deleteSession: (args: AiVaultDeleteSessionArgs) =>
-      Promise.resolve({
-        outcome: 'rejected',
-        agent: args.agent,
-        reason: 'non-local-host' as const
-      }),
+    // A browser can delete only on its own paired runtime, which validates the path itself.
+    deleteSession: async (args: AiVaultDeleteSessionArgs) => {
+      if (!addressesOwnRuntime(args.executionHostId)) {
+        return { outcome: 'rejected', agent: args.agent, reason: 'non-local-host' }
+      }
+      assertEnvironmentPairing(
+        requireActiveEnvironment().id,
+        args.expectedEnvironmentPairingRevision
+      )
+      return readRuntimeAiVaultDeleteSessionResponse(
+        await callRuntimeEnvelope('aiVault.deleteSession', runtimeAiVaultDeleteSessionParams(args)),
+        args.agent
+      )
+    },
     onWindowFocused: () => noopUnsubscribe,
     // Why: the runtime RPC has no progress stream, so the panel keeps its plain spinner here.
     getScanProgress: () => Promise.resolve(null),

@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   stop: vi.fn<(home: string) => Promise<boolean>>(),
   legacyAdapters: new Array<{ protocolVersion: number; hasPty: (id: string) => boolean }>()
 }))
-vi.mock('../../pty-host-bindings', () => ({
+vi.mock('../pty-host-bindings', () => ({
   getPtyIpc: () => ({
     handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler)
   })

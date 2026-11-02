@@ -4,7 +4,14 @@ const { existsSync, readFileSync } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { PE_MACHINE, describePeMachine, readPeMachine } = require('./windows-pe-machine.cjs')
 
-const NODE_PTY_JOB_EXPORTS = ['listJobProcessIds', 'terminateJob', 'assignCurrentProcessToJob']
+const NODE_PTY_JOB_EXPORTS = [
+  'listJobProcessIds',
+  'terminateJob',
+  'assignCurrentProcessToJob',
+  'assignCurrentProcessToStrictJob'
+]
+const NATIVE_HOST_JOB_MARKER_TEXT = 'assignCurrentProcessToStrictJob'
+const NATIVE_HOST_JOB_MARKER = Buffer.from(NATIVE_HOST_JOB_MARKER_TEXT)
 
 // Inspect usesCygwinRuntime’s UTF-16 marker: job exports predate MSYS breakaway denial and pass on builds that leak Git Bash children.
 // See docs/reference/windows-msys-job-breakaway.md; windows-process-table.ts uses the same binary-marker strategy.
@@ -25,7 +32,14 @@ function assertNodePtySourceDeniesMsysBreakaway({ nodePtyDir }) {
   if (!existsSync(sourcePath)) {
     return
   }
-  if (readFileSync(sourcePath, 'utf8').includes(`L"${CYGWIN_BREAKAWAY_MARKER_TEXT}"`)) {
+  const source = readFileSync(sourcePath, 'utf8')
+  if (source.includes(`L"${CYGWIN_BREAKAWAY_MARKER_TEXT}"`)) {
+    if (!source.includes(`"${NATIVE_HOST_JOB_MARKER_TEXT}"`)) {
+      throw new Error(
+        `node-pty's source at ${sourcePath} lacks strict native-host process ownership; ` +
+          'run `pnpm install` to apply the current patch before rebuilding.'
+      )
+    }
     return
   }
   throw new Error(
@@ -76,6 +90,7 @@ function assertRebuiltConptyDeniesMsysBreakaway({
   if (existsSync(addonPath)) {
     assertRebuiltConptyMatchesArch(addonPath, rebuildArch)
     assertCygwinBreakawayDenied(addonPath, { dir: addonPath })
+    assertNativeHostJobOwnership(addonPath)
     return
   }
   if (crossHost || !existsSync(nodePtyDir)) {
@@ -115,6 +130,18 @@ function assertNodePtyJobOwnership({ nativeName, native, addonPath, platform = p
     )
   }
   assertCygwinBreakawayDenied(addonPath, native)
+  assertNativeHostJobOwnership(addonPath)
+}
+
+/** The export name is embedded by N-API and can be checked across target architectures. */
+function assertNativeHostJobOwnership(addonPath) {
+  if (readFileSync(addonPath).includes(NATIVE_HOST_JOB_MARKER)) {
+    return
+  }
+  throw new Error(
+    `node-pty's conpty native at ${addonPath} lacks strict native-host process ownership; ` +
+      'reinstall the current node-pty patch and rebuild before packaging.'
+  )
 }
 
 // Fail closed on unreadable addon: loadNativeModule already loaded it, so a missing path means the gate cannot inspect its subject.
@@ -157,6 +184,9 @@ function staleConptySourceBuildError(addonPath) {
 module.exports = {
   CYGWIN_BREAKAWAY_MARKER,
   CYGWIN_BREAKAWAY_MARKER_TEXT,
+  NATIVE_HOST_JOB_MARKER,
+  NATIVE_HOST_JOB_MARKER_TEXT,
+  assertNativeHostJobOwnership,
   assertNodePtyJobOwnership,
   assertCygwinBreakawayDenied,
   assertNodePtySourceDeniesMsysBreakaway,

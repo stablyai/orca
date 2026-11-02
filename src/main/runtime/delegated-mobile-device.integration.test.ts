@@ -9,7 +9,7 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../shared/pairing'
-import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import {
   DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY,
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
@@ -145,7 +145,15 @@ describe('pairing.delegatedMobileDevice.sync', () => {
     // The mobile allowlist applies, including to sync itself.
     await expect(
       sendRemoteRuntimeRequest(pairedRuntimeConnectionFromOffer(phone), 'worktree.list', {}, 5_000)
-    ).resolves.toMatchObject({ ok: false, error: { code: 'forbidden' } })
+    ).resolves.toMatchObject({ ok: true, result: { worktrees: expect.any(Array) } })
+    await expect(
+      sendRemoteRuntimeRequest(
+        pairedRuntimeConnectionFromOffer(phone),
+        'settings.getAgentLaunch',
+        {},
+        5_000
+      )
+    ).resolves.toMatchObject({ ok: true, result: { settings: expect.any(Object) } })
     await expect(
       sendRemoteRuntimeRequest(
         pairedRuntimeConnectionFromOffer(phone),

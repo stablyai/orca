@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { resetLocalStructuredChatsForTests } from '@/runtime/local-structured-chats'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,7 +12,10 @@ import {
   consumeNativeChatResumeOnRestartDialogRequest,
   getNativeChatResumeOnRestartDialogRequest
 } from '../native-chat-resume-on-restart-dialog'
-import { _resetNativeChatRestartOffer } from '../native-chat-resume-on-restart-store'
+import {
+  _resetNativeChatRestartOffer,
+  localNativeChatRestartStore
+} from '../native-chat-resume-on-restart-store'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 
 const rpc = vi.hoisted(() => vi.fn())
@@ -70,7 +74,7 @@ describe('NativeChatResumeStatusSegment', () => {
     consumeNativeChatResumeOnRestartDialogRequest()
     useAppStore.setState({
       ...useAppStore.getInitialState(),
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
+      settings: { ...getDefaultSettings(''), nativeChatProviders: EVERY_AGENT_CHAT }
     })
   })
 
@@ -145,14 +149,6 @@ describe('NativeChatResumeStatusSegment', () => {
     expect(screen.queryByText(/failed to resume/)).toBeNull()
   })
 
-  it('names a single chat in the singular', async () => {
-    rpc.mockResolvedValue({ sessions: candidates.slice(0, 1) })
-    await mount()
-
-    expect(screen.getByRole('button', { name: '1 chat available to resume' })).toBeTruthy()
-    expect(screen.getByText('1 chat to resume')).toBeTruthy()
-  })
-
   // The count can lag the host — another window may have dismissed the offer. The re-read decides.
   it('does not reopen the dialog when the host no longer offers anything', async () => {
     rpc.mockResolvedValueOnce({ sessions: candidates }).mockResolvedValue({ sessions: [] })
@@ -181,7 +177,7 @@ describe('NativeChatResumeStatusSegment', () => {
   it('hides when no chat exists and the setting is off, or the host offers nothing', async () => {
     rpc.mockResolvedValue({ sessions: candidates })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
+      settings: { ...getDefaultSettings(''), nativeChatProviders: {} }
     })
     await mount()
     expect(screen.queryByRole('button')).toBeNull()
@@ -190,7 +186,7 @@ describe('NativeChatResumeStatusSegment', () => {
     cleanup()
     rpc.mockResolvedValue({ sessions: [] })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
+      settings: { ...getDefaultSettings(''), nativeChatProviders: EVERY_AGENT_CHAT }
     })
     await mount()
     expect(screen.queryByRole('button')).toBeNull()
@@ -200,7 +196,7 @@ describe('NativeChatResumeStatusSegment', () => {
   it('offers to continue the chats this machine holds while the setting is off', async () => {
     rpc.mockResolvedValue({ sessions: candidates })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
+      settings: { ...getDefaultSettings(''), nativeChatProviders: {} }
     })
     stageLocalHost(true)
     await mount()
@@ -213,7 +209,7 @@ describe('NativeChatResumeStatusSegment', () => {
   it("does not ask this machine for an offer over a paired server's chats", async () => {
     rpc.mockResolvedValue({ sessions: candidates })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: false },
+      settings: { ...getDefaultSettings(''), nativeChatProviders: {} },
       unifiedTabsByWorktree: {
         'wt-1': [
           {
@@ -240,11 +236,27 @@ describe('NativeChatResumeStatusSegment', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('renders a compact count in icon-only mode', async () => {
-    rpc.mockResolvedValue({ sessions: candidates })
-    await mount(true)
-
-    expect(screen.getByRole('button').textContent).toContain('2')
-    expect(screen.queryByText('2 chats to resume')).toBeNull()
+  it('keeps run-only uncertainty reachable until its viewed summary is closed', async () => {
+    rpc.mockResolvedValue({ sessions: [candidates[0]], failed: [] })
+    await mount()
+    rpc.mockImplementation(async (_target, method) => {
+      if (method === 'agentSession.restartContinue') {
+        throw new Error('accepted reply lost')
+      }
+      return { sessions: [], failed: [] }
+    })
+    await act(async () => localNativeChatRestartStore.continueNativeChatRestartOffer(['a']))
+    const entry = screen.getByRole('button', {
+      name: '1 chat to check after resuming. Click for details.'
+    })
+    expect(screen.queryByText(/failed to resume/)).toBeNull()
+    await act(async () => entry.click())
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+    const run = localNativeChatRestartStore.getNativeChatRestartRun()!
+    act(() => {
+      localNativeChatRestartStore.markFinishedNativeChatRestartRunShown(run)
+      localNativeChatRestartStore.releaseFinishedNativeChatRestartRun()
+    })
+    expect(screen.queryByRole('button')).toBeNull()
   })
 })

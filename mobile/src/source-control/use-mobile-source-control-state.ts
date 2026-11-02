@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
@@ -6,19 +7,18 @@ import { getWorktreeLabel } from '../session/worktree-label'
 import { useMobileGitRequests } from './use-mobile-git-requests'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { useMobileSourceControlOpeners } from './use-mobile-source-control-openers'
-import { buildMobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
+import type { MobileSourceControlPrimaryActionArgs } from './mobile-source-control-primary-action'
+import { useMobileSourceControlSections } from './mobile-source-control-sections'
 import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
 import { useMobileSourceControlCreatePrAction } from './use-mobile-source-control-create-pr-action'
 import { useMobileSourceControlKeyboardLift } from './use-mobile-source-control-keyboard-lift'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import {
   buildMobileBranchCompareSection,
-  canOpenMobileBranchCompareDiff,
-  formatMobileBranchCompareSummary
+  canOpenMobileBranchCompareDiff
 } from './mobile-branch-compare'
 
 import {
-  buildMobileSourceControlSections,
   countStagedEntries,
   countUnstagedEntries,
   getStageablePaths,
@@ -37,26 +37,13 @@ export type MobileSourceControlStateParams = {
   hostId: string
   worktreeId: string
   name: string
-  origin: string
-  embedded: boolean
-  onRequestClose?: () => void
-  onFileOpenStart?: () => void
-  onOpenedFileDiff?: (relativePath: string) => void
   onOpenHistory?: () => void
+  onCreatePr?: () => void
 }
 
 export function useMobileSourceControlState(params: MobileSourceControlStateParams) {
-  const {
-    hostId,
-    worktreeId,
-    name,
-    origin,
-    embedded,
-    onRequestClose,
-    onFileOpenStart,
-    onOpenedFileDiff,
-    onOpenHistory
-  } = params
+  const t = useMobileTranslation()
+  const { hostId, worktreeId, name, onOpenHistory, onCreatePr } = params
   const insets = useSafeAreaInsets()
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
@@ -80,53 +67,27 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     recordCommitFailure(null)
   }, [recordCommitFailure])
 
-  const { screenState, branchCompareState, mountedRef, setRootRef, loadStatus } =
-    useMobileSourceControlLoaders({
-      client,
-      connState,
-      statusIdentityKey,
-      worktreeId,
-      setActionError,
-      onStatusLoadSuccess: clearCommitFailureRecovery
-    })
-
-  const {
-    router,
-    branchDiffPreview,
-    setBranchDiffPreview,
-    openingPath,
-    openingBranchPath,
-    openFile,
-    openBranchDiff
-  } = useMobileSourceControlOpeners({
+  const loaders = useMobileSourceControlLoaders({
     client,
     connState,
-    hostId,
+    statusIdentityKey,
     worktreeId,
-    name,
-    origin,
-    embedded,
-    onRequestClose,
-    onFileOpenStart,
-    onOpenedFileDiff,
-    branchCompareState,
-    mountedRef,
-    busyActionRef,
-    setActionError
+    setActionError,
+    onStatusLoadSuccess: clearCommitFailureRecovery
   })
+  const { screenState, branchCompareState, mountedRef, setRootRef, loadStatus, settings } = loaders
+
+  const { router, openDiffForFile } = useMobileSourceControlOpeners({ hostId, worktreeId, name })
 
   const status = screenState.kind === 'ready' ? screenState.status : null
   const entries = status?.entries ?? []
   const derivedEntries = useMemo(() => buildMobileGitStatusEntryViews(entries), [entries])
-  const sections = useMemo(() => buildMobileSourceControlSections(derivedEntries), [derivedEntries])
+  const sections = useMobileSourceControlSections(derivedEntries, settings.groupOrder)
   const branchCompareResult = branchCompareState.kind === 'ready' ? branchCompareState.result : null
   const branchCompareSection = useMemo(
     () => buildMobileBranchCompareSection(branchCompareResult?.entries ?? []),
-    [branchCompareResult]
+    [branchCompareResult, t]
   )
-  const branchCompareSummaryText = branchCompareResult
-    ? formatMobileBranchCompareSummary(branchCompareResult.summary)
-    : null
   const branchCompareCanOpen = branchCompareResult
     ? canOpenMobileBranchCompareDiff(branchCompareResult.summary)
     : false
@@ -159,12 +120,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const branchLabel = formatBranchLabel(status?.branch, status?.head)
   const upstream = status?.upstreamStatus
   const upstreamKnown = upstream !== undefined
-  const syncLabel =
-    upstream && upstream.hasUpstream
-      ? `${upstream.ahead} ahead, ${upstream.behind} behind`
-      : upstream && !upstream.hasUpstream
-        ? 'No upstream'
-        : null
 
   const { sendGitRequest, sendCommitRequest, runGitSyncSteps } = useMobileGitRequests({
     client,
@@ -177,7 +132,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     hostId,
     worktreeId,
     status,
-    branchLabel,
     commitMessage,
     stagedEntries: stagedEntriesForRecovery,
     generatingMessage,
@@ -197,48 +151,33 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setShowActionSheet,
     setLocalBranches,
     setShowBranchPicker,
-    setCreatedPrUrl,
-    setCreatedPrWarning,
     recordCommitFailure,
-    onOpenHistory
+    onOpenHistory,
+    onCreatePr
   })
-  const createPrAction = useMobileSourceControlCreatePrAction({
-    client,
-    connState,
-    hostId,
-    worktreeId,
-    status,
-    hasUncommittedChanges: entries.length > 0,
-    busyAction,
-    createPr: runners.createPr
-  })
-  const primaryAction = useMemo(
-    () =>
-      buildMobileSourceControlPrimaryAction({
-        status,
-        hasUnresolvedConflicts,
-        stageablePaths,
-        stagedCount,
-        unstagedCount,
-        commitMessage,
-        busyAction,
-        openingPath,
-        openingBranchPath,
-        branchCompareResult,
-        handlers: {
-          commit: runners.commit,
-          stageAll: runners.stageAll,
-          runActionSheetGitSequence: runners.runActionSheetGitSequence,
-          runActionSheetGitSync: runners.runActionSheetGitSync
-        }
-      }),
+  // The panel adds the branch's review before building the action, so only the inputs live here.
+  const primaryActionArgs = useMemo(
+    (): MobileSourceControlPrimaryActionArgs => ({
+      status,
+      hasUnresolvedConflicts,
+      stageablePaths,
+      stagedCount,
+      unstagedCount,
+      commitMessage,
+      busyAction,
+      branchCompareResult,
+      handlers: {
+        commit: runners.commit,
+        stageAll: runners.stageAll,
+        runActionSheetGitSequence: runners.runActionSheetGitSequence,
+        runActionSheetGitSync: runners.runActionSheetGitSync
+      }
+    }),
     [
       branchCompareResult,
       busyAction,
       commitMessage,
       hasUnresolvedConflicts,
-      openingBranchPath,
-      openingPath,
       runners.commit,
       runners.runActionSheetGitSequence,
       runners.runActionSheetGitSync,
@@ -249,6 +188,14 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       unstagedCount
     ]
   )
+  const createPrAction = useMobileSourceControlCreatePrAction({
+    client,
+    connState,
+    hostId,
+    worktreeId,
+    commitArea: primaryActionArgs,
+    createPr: runners.createPr
+  })
 
   return {
     client,
@@ -260,8 +207,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     worktreeLabel,
     screenState,
     branchCompareState,
-    branchDiffPreview,
-    setBranchDiffPreview,
     busyAction,
     commitMessage,
     setCommitMessage,
@@ -281,12 +226,9 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     commitFailureRecovery,
     commitFailureRecoveryAction,
     keyboardLift,
-    openingPath,
-    openingBranchPath,
     status,
     sections,
     branchCompareResult,
-    branchCompareSummaryText,
     branchEntries,
     shouldShowBranchCompareSection,
     hasVisibleChanges,
@@ -295,14 +237,12 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     stagedCount,
     unstagedCount,
     branchLabel,
-    upstream,
     upstreamKnown,
-    syncLabel,
-    primaryAction,
+    primaryActionArgs,
     createPrAction,
     loadStatus,
-    openFile,
-    openBranchDiff,
+    rebaseBaseRef: loaders.rebaseBaseRef,
+    openDiffForFile,
     ...runners
   }
 }

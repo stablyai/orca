@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  CodexAppServerUnsupportedError,
-  type CodexHookTrustGrantRequest,
-  type CodexHookTrustGrantSessionResult
-} from './codex-app-server-client'
+import { CodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
+import type {
+  CodexHookTrustGrantRequest,
+  CodexHookTrustGrantSessionResult
+} from './app-server/codex-app-server-client'
 import { codexAppServerCapabilityCache } from './app-server/codex-app-server-capability-cache'
 import {
   _internals,

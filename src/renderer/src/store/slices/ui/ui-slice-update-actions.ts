@@ -4,6 +4,7 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../../../shared/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
+import { DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT } from '../../../../../shared/browser-devtools-dock'
 export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     updateStatus: { state: 'idle' },
@@ -129,6 +130,11 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
       const normalized = link ? normalizeKagiSessionLink(link) : null
       void window.api.ui.set({ browserKagiSessionLink: normalized }).catch(console.error)
       set({ browserKagiSessionLink: normalized })
+    },
+    browserDevToolsDock: DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT,
+    setBrowserDevToolsDock: (layout) => {
+      void window.api.ui.set({ browserDevToolsDock: layout }).catch(console.error)
+      set({ browserDevToolsDock: layout })
     }
   }
 }

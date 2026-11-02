@@ -25,6 +25,19 @@ type FleetLivenessSubject = {
   resource: { releaseState?: string | null; hostScope: string | null } | null
 }
 
+/** Durable facts that prove a supervised process ended; the removed-work record reads the same proof. */
+export const DURABLE_EXIT_PROOF = {
+  workerState: 'stopped',
+  workerStage: 'released',
+  resourceReleaseState: 'released',
+  terminationReasons: ['operator_close', 'signaled', 'exited']
+} as const satisfies {
+  workerState: string
+  workerStage: string
+  resourceReleaseState: string
+  terminationReasons: readonly NonNullable<FleetDurableWorker['terminationReason']>[]
+}
+
 /** Worker states that carry an outcome; anything else is still supposed to be running. */
 const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])
 
@@ -33,9 +46,7 @@ function hasCertifiedExit(worker: FleetLivenessSubject): boolean {
   return (
     // unknown means stop without observed exit; null is pre-v29, when the stage alone recorded exit.
     (worker.workerStage === 'process_exited' && worker.terminationReason !== 'unknown') ||
-    worker.terminationReason === 'operator_close' ||
-    worker.terminationReason === 'signaled' ||
-    worker.terminationReason === 'exited'
+    DURABLE_EXIT_PROOF.terminationReasons.some((reason) => reason === worker.terminationReason)
   )
 }
 
@@ -45,13 +56,13 @@ export function projectLiveness(
   now: number
 ): FleetLiveness {
   // Federated release proves terminal exit, independently of the worker outcome.
-  if (worker.workerStage === 'released') {
+  if (worker.workerStage === DURABLE_EXIT_PROOF.workerStage) {
     return { verdict: 'exited', source: 'execution_host' }
   }
-  if (worker.resource?.releaseState === 'released') {
+  if (worker.resource?.releaseState === DURABLE_EXIT_PROOF.resourceReleaseState) {
     return { verdict: 'exited', source: 'resource_release' }
   }
-  if (worker.workerState === 'stopped') {
+  if (worker.workerState === DURABLE_EXIT_PROOF.workerState) {
     return { verdict: 'exited', source: 'worker_stop' }
   }
   // Operator-close settlement also proves exit; it must not fall through to missing_status.
@@ -118,6 +129,9 @@ export function projectFleetNextAction(
   if (worker.workerStage === 'released') {
     return { kind: 'none', argv: [] }
   }
+  if (worker.resource?.autoReleaseAt) {
+    return { kind: 'none', argv: [] }
+  }
   if (worker.terminalState === 'reclaimable') {
     return {
       kind: 'release',
@@ -132,9 +146,11 @@ export function projectFleetNextAction(
   ) {
     return { kind: 'none', argv: [] }
   }
-  // Settled workers still owning terminals need release; worker-show would repeat the settlement.
-  if (SETTLED_WORKER_STATES.has(worker.workerState) && worker.resource) {
-    return worker.resource.ownershipState === 'owned' && worker.resource.releaseState !== 'released'
+  // Settled workers owe only the release of a terminal they still own and nobody kept open; worker-show would repeat the settlement.
+  if (SETTLED_WORKER_STATES.has(worker.workerState)) {
+    return worker.resource?.ownershipState === 'owned' &&
+      worker.resource.releaseState !== 'released' &&
+      worker.resource.releaseState !== 'retained'
       ? {
           kind: 'release',
           argv: ['orchestration', 'worker-release', '--dispatch', worker.dispatchId]
@@ -238,6 +254,7 @@ export function projectOrchestrationFleetWorker(
       lastObservedAt: evidence ? evidence.clock.at : null
     },
     resource: projectResource(worker),
+    ...(worker.resource?.autoReleaseAt ? { autoReleaseAt: worker.resource.autoReleaseAt } : {}),
     nextAction: projectFleetNextAction(worker, liveness),
     attention: projectOrchestrationFleetAttention({
       isRoot: worker.parentTaskId === null,

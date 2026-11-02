@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { strToU8, zipSync } from 'fflate'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as ReleaseModule from './managed-runtime-release'
-import { reclaimRuntimeReleases, RUNTIME_RELEASE_RECEIPT } from './managed-runtime-release'
+import { RUNTIME_RELEASE_RECEIPT } from './managed-runtime-release'
 import { ManagedRuntimeInstallation } from './managed-runtime-installation'
 
 vi.mock('./managed-runtime-release', async (importOriginal) => {
@@ -88,34 +89,6 @@ it('installs only when asked, with progress, cancel, retry, and a status read fr
     })
   )
   expect(await installation.status()).toMatchObject({ installedCurrent: true })
-})
-
-it('publishes an update only once the old releases were reclaimed', async () => {
-  const { root, host, phase } = await rig(['whole'])
-  for (const version of ['0.8', '0.9']) {
-    await mkdir(join(root, version), { recursive: true })
-    await writeFile(join(root, version, 'server'), 'old server', { mode: 0o755 })
-    const members = [{ path: 'server', bytes: 10 }]
-    const receipt = { releaseId: sha256(version), version, members }
-    await writeFile(
-      join(root, version, RUNTIME_RELEASE_RECEIPT),
-      JSON.stringify({ ...receipt, platform: process.platform, arch: process.arch })
-    )
-  }
-  let resume = (): void => {}
-  const reclaim = vi.mocked(reclaimRuntimeReleases)
-  const paused = new Promise<void>((resolve) => (resume = resolve))
-  const { reclaimRuntimeReleases: reclaimNow } = await vi.importActual<typeof ReleaseModule>(
-    './managed-runtime-release'
-  )
-  reclaim.mockImplementationOnce(async (...args) => paused.then(() => reclaimNow(...args)))
-  const installation = host()
-  installation.install()
-  await new Promise((resolve) => setTimeout(resolve, 100))
-  expect((await installation.status()).operation).toMatchObject({ downloadedBytes: 0 })
-  resume()
-  await vi.waitFor(async () => expect(await phase(installation)).toBe('succeeded'))
-  expect((await readdir(root)).sort()).toEqual(['0.9', '1.0'])
 })
 
 it('repairs a damaged copy when Install is clicked again', async () => {

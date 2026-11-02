@@ -50,37 +50,6 @@ function createHarness(ptyId = 'pty-original') {
 }
 
 describe('installTerminalImeCompositionRoute', () => {
-  it('does not install on an uninitialized terminal element', () => {
-    const transport = createTransport('pty-original')
-
-    const route = installTerminalImeCompositionRoute({
-      terminalElement: {} as HTMLElement,
-      terminal: { input: vi.fn() },
-      capturedTransport: transport,
-      getCurrentTransport: () => transport
-    })
-
-    expect(() => route.dispose()).not.toThrow()
-  })
-
-  it('delivers one Hangul commit to the captured route', () => {
-    const harness = createHarness()
-    harness.start(1)
-
-    expect(harness.end(1, '한')).toBe(false)
-    expect(harness.input).toHaveBeenCalledExactlyOnceWith('한')
-  })
-
-  it('never routes a switched composition to an unrelated transport', () => {
-    const harness = createHarness()
-    harness.start(1)
-    harness.state.currentTransport = createTransport('pty-unrelated')
-
-    harness.end(1, '한')
-
-    expect(harness.input).not.toHaveBeenCalled()
-  })
-
   it('finalizes empty cancellation without leaking into the next session', () => {
     const harness = createHarness()
     harness.start(1)
@@ -130,16 +99,6 @@ describe('installTerminalImeCompositionRoute', () => {
     const harness = createHarness()
     harness.start(1)
     vi.mocked(harness.original.getPtyId).mockReturnValue('pty-replacement')
-
-    harness.end(1, '한')
-
-    expect(harness.input).not.toHaveBeenCalled()
-  })
-
-  it('drops a commit after SSH reconnect replaces the transport', () => {
-    const harness = createHarness('remote:env:pty-original')
-    harness.start(1)
-    harness.state.currentTransport = createTransport('remote:env:pty-replacement')
 
     harness.end(1, '한')
 

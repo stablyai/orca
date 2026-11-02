@@ -7,12 +7,14 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
+import os from 'node:os'
 import path from 'node:path'
 
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
@@ -36,7 +38,10 @@ import {
   isDevWebClientFresh,
   recordDevWebClientInputs
 } from './dev-web-client-freshness.mjs'
+import { withRolldownThreadLimit } from './rolldown-thread-limit.mjs'
+import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from './space-sharing-copy.mjs'
+import { buildDevSwiftCliHelpers } from './swift-cli-helper-macos.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -251,7 +256,8 @@ function prepareMacDevElectronApp() {
   )
   const requiredResourcePaths = [
     chromiumResourcePath,
-    path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
+    path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
+    path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint')
   ]
 
   function copiedAppIsUsable() {
@@ -337,22 +343,7 @@ function prepareMacDevElectronApp() {
     )
   }
 
-  try {
-    execFileSync(
-      process.execPath,
-      [
-        path.join(repoRoot, 'config', 'scripts', 'build-keyboard-layout-macos.mjs'),
-        '--single-arch',
-        '--output',
-        path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
-      ],
-      { stdio: 'inherit' }
-    )
-  } catch (error) {
-    console.warn(
-      `[orca-dev] keyboard-layout helper build failed (shifted Option composition stays conservative): ${error?.message ?? error}`
-    )
-  }
+  buildDevSwiftCliHelpers(path.join(appPath, 'Contents', 'MacOS'))
 
   // Re-sign after copy/plist edits or macOS rejects notification registration (UNErrorDomain 1); signing failure stays nonfatal for dev.
   let signed = true
@@ -513,17 +504,53 @@ function prepareDevWebClient() {
     return
   }
   const inputs = captureDevWebClientInputs(repoRoot)
-  console.error('[orca-dev] Building web client for pairing...')
-  execFileSync(
+  console.error('[orca-dev] Building web client for pairing in the background...')
+  // Pairing reads out/web per request, so a stale bundle must not delay Electron startup.
+  // Stage then swap, so an interrupted build never leaves out/web empty.
+  const stagingDir = path.join(repoRoot, 'out', '.web-next')
+  const build = spawn(
     process.execPath,
-    [viteCli, 'build', '--config', path.join(repoRoot, 'vite.web.config.ts')],
-    {
-      cwd: repoRoot,
-      stdio: 'inherit',
-      env: process.env
-    }
+    [
+      viteCli,
+      'build',
+      '--config',
+      path.join(repoRoot, 'vite.web.config.ts'),
+      '--outDir',
+      stagingDir,
+      '--logLevel',
+      'warn'
+    ],
+    { cwd: repoRoot, stdio: 'inherit', env: withRolldownThreadLimit(process.env) }
   )
-  recordDevWebClientInputs(repoRoot, inputs)
+  webClientBuild = build
+  try {
+    os.setPriority(build.pid, os.constants.priority.PRIORITY_BELOW_NORMAL)
+  } catch {
+    // Priority is best effort; the build still runs at normal priority.
+  }
+  build.once('error', (error) => {
+    console.error(`[orca-dev] Web client build failed to start: ${error.message}`)
+  })
+  build.once('exit', (code, signal) => {
+    webClientBuild = null
+    if (code !== 0) {
+      if (!isShuttingDown) {
+        console.error(
+          `[orca-dev] Web client build failed (${signal ?? code}); pairing serves the previous bundle`
+        )
+      }
+      return
+    }
+    try {
+      const outDir = path.dirname(getDevWebClientIndexPath())
+      rmSync(outDir, { recursive: true, force: true })
+      renameSync(stagingDir, outDir)
+      recordDevWebClientInputs(repoRoot, inputs)
+      console.error('[orca-dev] Web client for pairing is ready')
+    } catch (error) {
+      console.error(`[orca-dev] Could not install the web client build: ${error.message}`)
+    }
+  })
 }
 
 if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
@@ -542,22 +569,24 @@ if (!isHelpOrVersion) {
   forwardedExtras = ports.forwardedExtras
   announceDevInstance({ repoRoot, profile: devProfile, ...ports })
 }
-prepareDevWebClient()
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',
-  env: process.env,
+  env: withDevRolldownRuntimeEnv(process.env),
   // Own process group so Ctrl+C terminates electron-vite’s Electron descendants on macOS too.
   detached: process.platform !== 'win32'
 })
+
+let webClientBuild = null
+let isShuttingDown = false
 
 child.once('spawn', () => {
   if (!isHelpOrVersion) {
     startDevStorageReclaim({ repoRoot })
   }
+  prepareDevWebClient()
 })
 
-let isShuttingDown = false
 let forcedKillTimer = null
 
 function signalExitCode(signal) {
@@ -600,6 +629,7 @@ function beginShutdown(signal) {
   }
   isShuttingDown = true
 
+  webClientBuild?.kill()
   terminateChild(signal)
   forcedKillTimer = setTimeout(() => {
     terminateChild('SIGKILL')
@@ -626,6 +656,8 @@ child.on('exit', (code, signal) => {
   if (forcedKillTimer) {
     clearTimeout(forcedKillTimer)
   }
+  // A half-written out/web must not outlive the session that started it.
+  webClientBuild?.kill()
 
   if (isShuttingDown) {
     process.exit(signalExitCode(signal ?? 'SIGINT'))

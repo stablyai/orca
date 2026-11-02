@@ -13,6 +13,43 @@ import type { KeybindingActionId } from './keybindings'
 import { ALL_TUI_AGENTS } from './tui-agent-display-names'
 
 describe('keybindings', () => {
+  it.each([
+    ['darwin', 'Mod+Alt+X'],
+    ['linux', 'Mod+Shift+Y'],
+    ['win32', 'Mod+Shift+Y']
+  ] as const)('uses the Plugins default on %s while preserving overrides', (platform, binding) => {
+    expect(getEffectiveKeybindingsForAction('view.plugins', platform)).toEqual([binding])
+    expect(
+      getEffectiveKeybindingsForAction('view.plugins', platform, {
+        'view.plugins': ['Mod+Shift+X']
+      })
+    ).toEqual(['Mod+Shift+X'])
+    expect(
+      getEffectiveKeybindingsForAction('view.plugins', platform, { 'view.plugins': [] })
+    ).toEqual([])
+  })
+
+  it.each([
+    ['darwin', '≈', 'KeyX'],
+    ['linux', 'Y', 'KeyY'],
+    ['win32', 'Y', 'KeyY']
+  ] as const)('matches the Plugins shortcut input on %s', (platform, key, code) => {
+    expect(
+      keybindingMatchesAction(
+        'view.plugins',
+        {
+          key,
+          code,
+          meta: platform === 'darwin',
+          control: platform !== 'darwin',
+          alt: platform === 'darwin',
+          shift: platform !== 'darwin'
+        },
+        platform
+      )
+    ).toBe(true)
+  })
+
   it('defines a default shortcut for opening markdown notes', () => {
     expect(getEffectiveKeybindingsForAction('tab.openMarkdown', 'darwin')).toEqual(['Mod+Shift+O'])
     expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
@@ -53,7 +90,7 @@ describe('keybindings', () => {
       'Mod+Shift+A'
     ])
     expect(formatKeybindingList(['Mod+Shift+A'], 'darwin')).toBe('⌘⇧A')
-    expect(formatKeybindingList(['Mod+Shift+A'], 'linux')).toBe('Ctrl+Shift+A')
+    expect(formatKeybindingList(['Mod+Shift+A'], 'linux')).toBe('Ctrl+⇧+A')
 
     const macChord = {
       key: 'a',
@@ -193,20 +230,19 @@ describe('keybindings', () => {
     ])
   })
 
-  it('pins the pre-swap chords via LEGACY_TAB_SWITCH_BINDINGS for upgrading installs', () => {
-    // Migration pins learned legacy chords; overriding with those values must reproduce prior bindings.
-    expect(LEGACY_TAB_SWITCH_BINDINGS).toEqual({
-      'tab.nextSameType': ['Mod+Shift+BracketRight'],
-      'tab.previousSameType': ['Mod+Shift+BracketLeft'],
-      'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
-      'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
-    })
-    for (const [actionId, bindings] of Object.entries(LEGACY_TAB_SWITCH_BINDINGS)) {
-      expect(
-        getEffectiveKeybindingsForAction(actionId as KeybindingActionId, 'darwin', {
-          [actionId]: bindings
-        })
-      ).toEqual(bindings)
+  it('matches pre-swap tab chords through migration overrides', () => {
+    const rows = [
+      ['tab.nextSameType', 'BracketRight', false, true],
+      ['tab.previousSameType', 'BracketLeft', false, true],
+      ['tab.nextAllTypes', 'BracketRight', true, false],
+      ['tab.previousAllTypes', 'BracketLeft', true, false]
+    ] as const
+    for (const [actionId, code, alt, shift] of rows) {
+      const input = { key: '', code, meta: true, control: false, alt, shift }
+      expect(keybindingMatchesAction(actionId, input, 'darwin')).toBe(false)
+      expect(keybindingMatchesAction(actionId, input, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)).toBe(
+        true
+      )
     }
   })
 
@@ -309,17 +345,6 @@ describe('keybindings', () => {
       binding: 'Mod+W',
       actionIds: expect.arrayContaining(['tab.close', 'tab.closeAll'])
     })
-  })
-
-  it('defines floating workspace panel action metadata', () => {
-    const actionIds = [
-      'floatingWorkspace.maximize' as KeybindingActionId,
-      'floatingWorkspace.minimize' as KeybindingActionId
-    ] as const
-
-    for (const actionId of actionIds) {
-      expect(getKeybindingDefinition(actionId), actionId).toMatchObject({ id: actionId })
-    }
   })
 
   it('assigns the floating workspace maximize default only on macOS', () => {

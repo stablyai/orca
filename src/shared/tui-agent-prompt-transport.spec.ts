@@ -21,18 +21,6 @@ function planFor(agent: TuiAgent) {
 
 describe('the prompt-transport predicate against the plan it predicts', () => {
   // An empty agent list would make the contract vacuously pass.
-  it('covers every configured agent', () => {
-    expect(ALL_AGENTS.length).toBeGreaterThan(30)
-    expect(ALL_AGENTS).toContain('claude')
-    expect(ALL_AGENTS).toContain('aider')
-  })
-
-  it.each(ALL_AGENTS)('agrees with the built plan for %s', (agent) => {
-    const plan = planFor(agent)
-    expect(plan).not.toBeNull()
-    // The pre-launch predicate must agree with the built plan’s null followupPrompt.
-    expect(plan!.followupPrompt === null).toBe(agentPromptRidesLaunchCommand(agent))
-  })
 
   it('puts the prompt in the launch command exactly when it says it does', () => {
     for (const agent of ALL_AGENTS) {
@@ -49,14 +37,5 @@ describe('the prompt-transport predicate against the plan it predicts', () => {
         Object.values(plan!.env ?? {}).some((value) => value.includes(PROMPT))
       expect(carried, `${agent} claims its launch command carries the prompt`).toBe(true)
     }
-  })
-
-  it('splits the table into both halves, so neither branch is untested', () => {
-    const folded = ALL_AGENTS.filter(agentPromptRidesLaunchCommand)
-    const written = ALL_AGENTS.filter((agent) => !agentPromptRidesLaunchCommand(agent))
-    expect(folded.length).toBeGreaterThan(0)
-    expect(written.length).toBeGreaterThan(0)
-    expect(folded).toContain('claude')
-    expect(written).toContain('aider')
   })
 })

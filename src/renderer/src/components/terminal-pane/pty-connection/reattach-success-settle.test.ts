@@ -4,7 +4,12 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** Success must settle after no-ID/expiry rejection; otherwise healed attempts stay pending for 31s or failed attaches falsely reopen recovery budgets. */
 const mocks = vi.hoisted(() => ({
-  state: { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  state: {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
 }))
 
 vi.mock('@/store', () => ({
@@ -64,7 +69,12 @@ function setPaneTransports(session: ConnectPanePtySession, transports: Map<strin
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.state = { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  mocks.state = {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
 })
 
 describe('handleReattachResult recovery settle', () => {

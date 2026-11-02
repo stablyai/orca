@@ -207,7 +207,7 @@ describe('keybindings', () => {
       includeMainProcessInterception: true
     })
 
-  it('keeps main-process interception out of the loader and write conflict check', () => {
+  it('omits main-process interception unless requested', () => {
     expect(
       findKeybindingConflicts('darwin', { 'terminal.splitRight': ['Mod+Alt+ArrowRight'] })
     ).toEqual([])
@@ -261,7 +261,23 @@ describe('keybindings', () => {
     ).toEqual([])
   })
 
-  it('leaves the dictation chord to other scopes, since main lets it through while voice is off', () => {
+  it("keeps the chat toggle's own default alias inside an override", () => {
+    const toggle = 'terminal.toggleNativeChat'
+    const overrides = { [toggle]: ['Mod+Alt+K', 'Mod+Shift+J'] }
+    for (const find of [findKeybindingConflicts, findInterceptionConflicts]) {
+      expect(
+        find('win32', overrides).filter(({ actionIds }) => actionIds.includes(toggle))
+      ).toEqual([])
+      expect(
+        find('win32', { ...overrides, 'worktree.navigateDown': ['Mod+Shift+J'] })
+      ).toContainEqual({
+        binding: 'Mod+Shift+J',
+        actionIds: expect.arrayContaining([toggle, 'worktree.navigateDown'])
+      })
+    }
+  })
+
+  it('does not classify dictation as a main-process interception conflict', () => {
     expect(findInterceptionConflicts('darwin', { 'terminal.splitRight': ['Mod+E'] })).toEqual([])
   })
 

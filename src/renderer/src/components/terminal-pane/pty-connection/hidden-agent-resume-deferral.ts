@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { takeSleepingAgentWakeRequest } from '@/lib/sleeping-agent-wake-requests'
 import { holdPaneResumeUntilShown, releasePaneResumeHold } from '@/lib/pane-spawn-deferral-registry'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
@@ -32,6 +32,9 @@ export function deferHiddenAgentResume(
     ptyId: session.transport.getPtyId(),
     record: recordEntry.record,
     wake: (): Promise<string | null> => {
+      if (startup?.resumeSource?.cancelled) {
+        return Promise.resolve(null)
+      }
       session.hiddenAgentResumeReleased = true
       return start().then((ptyId) => {
         // Why the transport: a held reattach resolves before it binds, and the hold must cover its fallback.

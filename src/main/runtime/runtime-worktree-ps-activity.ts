@@ -20,7 +20,9 @@ import {
 import { worktreeIdsEqual } from '../../shared/worktree/id'
 import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
 
-export type RuntimeWorkingTerminalEvidence = {
+/** A live terminal whose title reads working or needs-permission, kept per pane so agent rows can suppress it. */
+export type RuntimeTerminalTitleEvidence = {
+  status: 'working' | 'permission'
   paneKey: string | null
   ptyId: string | null
   tabId: string | null
@@ -38,8 +40,8 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
   paneOf: PtyPaneOf
   getTitleDisplayClear: (ptyId: string) => TitleDisplayClear | null
   getSummary: RuntimeWorktreePsSummaryLookup
-}): Map<string, RuntimeWorkingTerminalEvidence[]> {
-  const workingEvidence = new Map<string, RuntimeWorkingTerminalEvidence[]>()
+}): Map<string, RuntimeTerminalTitleEvidence[]> {
+  const titleEvidence = new Map<string, RuntimeTerminalTitleEvidence[]>()
   const savedTabOwnerById = new Map<string, { worktreeId: string; title: string }>()
   for (const [worktreeId, tabs] of Object.entries(args.session?.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
@@ -85,8 +87,9 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
       getLeafDisplayRecord(leaf, args.getTitleDisplayClear(leaf.ptyId)),
       args.tabs.get(leaf.tabId)?.title ?? null
     )
-    if (leafStatus === 'working') {
-      addWorkingTerminalEvidence(workingEvidence, summary.worktreeId, {
+    if (leafStatus === 'working' || leafStatus === 'permission') {
+      addTerminalTitleEvidence(titleEvidence, summary.worktreeId, {
+        status: leafStatus,
         paneKey: args.getPaneKey(leaf),
         ptyId: leaf.ptyId,
         tabId: leaf.tabId
@@ -147,8 +150,9 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     summary.hasHostSidebarActivity = true
     summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, pty.lastOutputAt)
     const ptyStatus = getSavedTabWorktreeStatus(owner.title, true)
-    if (ptyStatus === 'working') {
-      addWorkingTerminalEvidence(workingEvidence, summary.worktreeId, {
+    if (ptyStatus === 'working' || ptyStatus === 'permission') {
+      addTerminalTitleEvidence(titleEvidence, summary.worktreeId, {
+        status: ptyStatus,
         paneKey: recorded.paneKey,
         ptyId: pty.ptyId,
         tabId: recorded.tabId ?? persistedTabId ?? null
@@ -162,13 +166,13 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
       summary.preview = pty.preview
     }
   }
-  return workingEvidence
+  return titleEvidence
 }
 
-function addWorkingTerminalEvidence(
-  evidenceByWorktreeId: Map<string, RuntimeWorkingTerminalEvidence[]>,
+function addTerminalTitleEvidence(
+  evidenceByWorktreeId: Map<string, RuntimeTerminalTitleEvidence[]>,
   worktreeId: string,
-  evidence: RuntimeWorkingTerminalEvidence
+  evidence: RuntimeTerminalTitleEvidence
 ): void {
   const existing = evidenceByWorktreeId.get(worktreeId)
   if (existing) {

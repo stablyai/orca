@@ -38,8 +38,13 @@ import {
 } from './synthetic-title-runtime'
 import { requireMainWindowServices } from './main-window-service-readiness'
 import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
+import { trackBrowserExtensionMainWindow } from '../browser/extensions/browser-extension-window-model'
 
 import { isResourceWindowVisible } from '../window/resource-view-admission'
+import {
+  applyBackgroundActivationPolicy,
+  applyServeDesktopWindowActivationPolicy
+} from '../window/foreground-activation-policy'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
@@ -86,6 +91,9 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     if (probeDispatched) {
       noteWindowsInstallDirAclProbePending()
     }
+  }
+  if (state.isServeMode) {
+    applyServeDesktopWindowActivationPolicy({ warn: console.warn })
   }
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,
@@ -190,6 +198,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
   })
   state.mainWindow = window
+  state.hasOpenedMainWindow = true
   const publishResourceVisibility = (): void => {
     if (!window.isDestroyed()) {
       window.webContents.send('memory:resourceWindowVisibility', isResourceWindowVisible(window))
@@ -199,6 +208,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   window.on('restore', publishResourceVisibility)
   window.on('hide', publishResourceVisibility)
   window.on('minimize', publishResourceVisibility)
+  trackBrowserExtensionMainWindow(window)
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)
@@ -220,6 +230,9 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   window.on('closed', () => {
     if (state.mainWindow === window) {
       state.mainWindow = null
+      if (state.isServeMode) {
+        applyBackgroundActivationPolicy({ serveWithoutDesktopWindow: true, warn: console.warn })
+      }
     }
     clearExpectedRendererReload(rendererWebContentsId)
     state.automations?.setWebContents(null)

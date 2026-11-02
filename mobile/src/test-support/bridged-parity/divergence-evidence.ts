@@ -1,7 +1,6 @@
 import type { BridgeRpcClientDiagnostic } from '../../mobile-web-shell/bridge/bridge-rpc-client'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
-import { firstDifference } from '../rpc-recording/golden-difference'
-import { canonicalJson, OBSERVATION_FIELDS } from '../rpc-recording/golden-value-pool'
+import { checkpointListDifference, recordingDifferences } from '../rpc-recording/golden-difference'
 import type { Observation, Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
 import { captureValue, type RecordedValue } from '../rpc-recording/recording-values'
 import type { ParamsMismatchEvidence } from './divergence-classes'
@@ -31,55 +30,50 @@ export function withReplyMeta(json: string): string {
   })
 }
 
-// Remove added meta before comparing runs; this corpus never otherwise records that key.
-export function withoutRpcMeta(value: RecordedValue): RecordedValue {
+// Remove only counterfactual meta when requested; preserve recorded meta evidence.
+export function withoutRpcMeta(value: RecordedValue, injectedOnly = false): RecordedValue {
   if (Array.isArray(value)) {
-    return value.map(withoutRpcMeta)
+    return value.map((entry) => withoutRpcMeta(entry, injectedOnly))
   }
   if (typeof value !== 'object' || value === null) {
     return value
   }
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => key !== '_meta')
-      .map(([key, entry]) => [key, withoutRpcMeta(entry)])
+      .filter(
+        ([key, entry]) =>
+          key !== '_meta' ||
+          (injectedOnly &&
+            (!isKeyedObject(entry) ||
+              Object.keys(entry).length !== 1 ||
+              entry.runtimeId !== 'counterfactual-runtime'))
+      )
+      .map(([key, entry]) => [key, withoutRpcMeta(entry, injectedOnly)])
   )
 }
 
-export function recordingWithoutRpcMeta(recording: Recording): Recording {
+export function recordingWithoutRpcMeta(recording: Recording, injectedOnly = false): Recording {
   return {
     scenario: recording.scenario,
     checkpoints: recording.checkpoints.map((checkpoint) => ({
       id: checkpoint.id,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `withoutRpcMeta` preserves shape, so an observation maps to an observation.
-      observation: withoutRpcMeta(checkpoint.observation) as Observation
+      observation: withoutRpcMeta(checkpoint.observation, injectedOnly) as Observation
     }))
   }
 }
 
 // Collect every differing field; proving all changes are ordinals requires more than the first difference.
-export function divergingFields(expected: Recording, actual: Recording): string[] {
-  const expectedIds = expected.checkpoints.map((checkpoint) => checkpoint.id)
-  const actualIds = actual.checkpoints.map((checkpoint) => checkpoint.id)
-  if (JSON.stringify(expectedIds) !== JSON.stringify(actualIds)) {
+export function divergingFields(expected: Recording, actual: Recording, complete = true): string[] {
+  const list = checkpointListDifference(expected, actual)
+  if (!complete && (list.missing.length || list.extra.length || list.reordered)) {
     return ['checkpoints']
   }
-  const fields: string[] = []
-  for (const [index, checkpoint] of expected.checkpoints.entries()) {
-    const found = actual.checkpoints[index]
-    if (found === undefined) {
-      return ['checkpoints']
-    }
-    for (const field of OBSERVATION_FIELDS) {
-      const mine = checkpoint.observation[field]
-      const theirs = found.observation[field]
-      if (canonicalJson(mine) === canonicalJson(theirs)) {
-        continue
-      }
-      fields.push(`${field}${firstDifference(mine, theirs).path}`)
-    }
-  }
-  return fields
+  return [
+    ...(expected.scenario === actual.scenario ? [] : ['scenario']),
+    ...(list.missing.length || list.extra.length || list.reordered ? ['checkpoints'] : []),
+    ...recordingDifferences(expected, actual, complete).map(({ field, path }) => `${field}${path}`)
+  ]
 }
 
 export function scriptsAbsentResultReply(scenario: RecordingScenario): boolean {
@@ -101,12 +95,12 @@ export function refusalReleasedStream(diagnostics: readonly BridgeRpcClientDiagn
 
 const REQUEST_PARAMS_MISMATCH = /^Request params mismatch: (?<method>.+)#(?<occurrence>\d+)$/
 
-function isKeyedObject(value: unknown): value is Record<string, unknown> {
+export function isKeyedObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 // Use the transport’s own captureValue comparison so mismatch evidence matches its semantics.
-function sameParams(left: unknown, right: unknown): boolean {
+export function sameParams(left: unknown, right: unknown): boolean {
   return JSON.stringify(captureValue(left)) === JSON.stringify(captureValue(right))
 }
 
@@ -146,11 +140,11 @@ function differingParamPaths(scripted: unknown, arrived: unknown, path = ''): st
   return [path]
 }
 
-function postedRequestParams(
+export function postedRequestParams(
   posted: readonly string[],
   method: string,
   index: number
-): { found: true; params: unknown } | { found: false } {
+): { found: true; params: unknown; id: unknown } | { found: false } {
   const frames = posted
     .map((json): unknown => JSON.parse(json))
     .filter((frame) => isKeyedObject(frame) && frame.type === 'request' && frame.method === method)
@@ -158,7 +152,7 @@ function postedRequestParams(
   if (!isKeyedObject(frame)) {
     return { found: false }
   }
-  return { found: true, params: frame.params }
+  return { found: true, params: frame.params, id: frame.id }
 }
 
 // Unalignable mismatch evidence stays unclassified and loud instead of receiving a silent exclusion.

@@ -1,4 +1,9 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import {
+  applyTerminalLaunchResult,
+  captureTerminalLaunchContext,
+  type TerminalLaunchContext
+} from './terminal-launch-result-policy'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport-types'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
@@ -44,7 +49,9 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'disposed'
     | 'handleReattachResult'
     | 'mountFollowsTerminalPark'
+    | 'noteBoundProcessIncarnation'
     | 'registerEffectiveLaunchConfig'
+    | 'cancelSavedResumeStartup'
     | 'registerPaneSerializerFor'
     | 'registerSideEffectFactConsumerForPty'
     | 'reportPanePtyVisibility'
@@ -69,7 +76,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     result: PtyConnectResult | string | void,
     staleSessionId?: string | null,
     coldRestoreStartup?: ColdRestoreAgentResumeStartup | null,
-    attemptGeneration = session.transportStreamGeneration
+    attemptGeneration = session.transportStreamGeneration,
+    launchContext: TerminalLaunchContext = captureTerminalLaunchContext(
+      sessionBag,
+      coldRestoreStartup ?? sessionBag.paneStartup
+    )
   ): Promise<boolean> => {
     if (session.disposed) {
       return false
@@ -91,16 +102,27 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
     if (connectResult?.incarnationId) {
       session.remotePtyIncarnationId = connectResult.incarnationId
+      session.noteBoundProcessIncarnation(connectResult.incarnationId)
     } else if (connectResult?.isReattach || typeof result === 'string') {
       // Missing legacy incarnation remains client-only unverifiable evidence until a stamped attach.
       session.remotePtyIncarnationId = null
     }
 
+    if (connectResult) {
+      applyTerminalLaunchResult(sessionBag, connectResult, launchContext, 'creator')
+    }
     if (connectResult?.exitedBeforeAttach) {
       // Why: the transport already delivered the dead session's final frame + exit; treat as terminal state, not a failed reattach.
       return true
     }
 
+    // Why: main started a plain shell instead, so nothing of the plan may be registered over it.
+    const startup =
+      connectResult?.agentResumeRefused ||
+      connectResult?.agentResumeUnavailable ||
+      connectResult?.isReattach
+        ? null
+        : coldRestoreStartup
     const ptyId =
       connectResult?.id ?? (typeof result === 'string' ? result : session.transport.getPtyId())
     const hasExplicitPtyId = Boolean(connectResult?.id || typeof result === 'string')
@@ -126,14 +148,6 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       })
       return false
     }
-    session.registerEffectiveLaunchConfig(connectResult?.launchConfig, {
-      ...(coldRestoreStartup ? { launchToken: coldRestoreStartup.launchToken } : {}),
-      ...(connectResult?.launchAgent
-        ? { launchAgent: connectResult.launchAgent }
-        : coldRestoreStartup
-          ? { launchAgent: coldRestoreStartup.agent }
-          : {})
-    })
     if (connectResult?.sessionExpired) {
       if (staleSessionId) {
         session.clearExitedPanePtyLayoutBinding(staleSessionId)
@@ -144,7 +158,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)
       }
       // Why: a host can invalidate the PTY while the tab stays mounted; replace it in place, not with a stale overlay.
-      session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
+      session.startFreshColdRestoreAgentResume(startup, {
         forceBlankRestoredViewport: true
       })
       return false
@@ -172,8 +186,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       !(mainStarts && session.mainStartAttach) &&
       hasEmptyReattachRetireEvidence(
         ptyId,
-        // Main's attach carries no resume; the evidence reads the pane's record all the same.
-        mainStarts ? session.buildColdRestoreAgentResumeStartup() : coldRestoreStartup
+        connectResult.agentResumeRefused
+          ? null
+          : mainStarts
+            ? session.buildColdRestoreAgentResumeStartup()
+            : coldRestoreStartup
       )
     ) {
       session.transport.disconnect()
@@ -279,7 +296,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       prefetchedParkModelSnapshot,
       revealFollowsTerminalPark,
       shouldApplyStructuralPayload,
-      coldRestoreStartup,
+      coldRestoreStartup: startup,
       reattachPayloadApplied: !shouldApplyStructuralPayload,
       skippedAltFrameCaptureCols: null
     }

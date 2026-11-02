@@ -13,6 +13,11 @@ export const SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY =
 export const SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY =
   'session-tabs.create-terminal-shell.v1' as const
 
+// Why: a host with this commits a client's pane-to-new-tab move (session.tabs.movePaneToNewTab).
+// An older host keeps the pane where it was, so a client moves it only in its own window there.
+export const SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY =
+  'session-tabs.move-pane-to-new-tab.v1' as const
+
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
 // Gate force on confirmed pinned closes; old hosts drop it and refuse. Both build variants honor it.
 export const SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY = 'session-tabs.close-force.v1' as const
@@ -30,6 +35,11 @@ export const SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY = 'session-tabs.tab-delta
 export const AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY =
   'agent-status.restored-unconfirmed.v1' as const
 
+// Why: only a WSL host advertises this, with session.readTerminalScrollback; a client asks for a
+// pane's stored scrollback only when it is advertised and otherwise paints from its own store.
+export const SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY =
+  'session.terminal-scrollback-read.v1' as const
+
 export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
@@ -39,5 +49,6 @@ export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY,
   SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY,
-  SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY
+  SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY,
+  SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY
 ] as const

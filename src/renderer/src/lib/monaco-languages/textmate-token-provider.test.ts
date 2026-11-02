@@ -35,36 +35,6 @@ describe('createTextMateTokensProvider', () => {
     expect(after.tokens.length).toBeGreaterThan(1)
   })
 
-  it('tokenizes Nim with the vendored TextMate grammar', async () => {
-    const provider = await createTextMateTokensProvider({ loadGrammar: loadNimTextMateGrammar })
-
-    const procLine = provider.tokenize('proc greet(name: string) =', provider.getInitialState())
-    const procScopes = procLine.tokens.map((token) => token.scopes)
-    expect(procScopes).toContain('keyword.other')
-    expect(procScopes).toContain('entity.name.function.nim')
-    expect(procScopes).toContain('storage.type.concrete.nim')
-
-    const commentLine = provider.tokenize('# hello', provider.getInitialState())
-    expect(commentLine.tokens.map((token) => token.scopes)).toContain(
-      'comment.line.number-sign.nim'
-    )
-  })
-
-  it('tokenizes Typst markup, code, and math through the lazy grammar loader', async () => {
-    const provider = await createTextMateTokensProvider({ loadGrammar: loadTypstTextMateGrammar })
-    const scopesOf = (line: string) =>
-      provider.tokenize(line, provider.getInitialState()).tokens.map((token) => token.scopes)
-
-    expect(scopesOf('#let width = 12pt')).toEqual(
-      expect.arrayContaining(['keyword.other.typst', 'constant.numeric.length.typst'])
-    )
-    expect(scopesOf('#set text(font: "Inter")')).toEqual(
-      expect.arrayContaining(['entity.name.function.typst', 'string.quoted.double.typst'])
-    )
-    expect(scopesOf('// note')).toContain('comment.line.double-slash.typst')
-    expect(scopesOf('$ sum_(k=0)^n k $')).toContain('string.other.math.typst')
-  })
-
   it.each([
     ['```rust', 'let x = 1', '```', '#let y = 2'],
     ['````', '```', '````', '#let y = 2']

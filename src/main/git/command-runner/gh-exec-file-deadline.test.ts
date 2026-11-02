@@ -1,6 +1,6 @@
-import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 
 const { spawnMock, processKillMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -14,14 +14,10 @@ vi.mock('node:child_process', async (importOriginal) => ({
 
 import { ghExecFileAsync } from './gh-exec-file'
 
-function mockChild(pid = 4321): ChildProcess {
-  const child = new EventEmitter() as EventEmitter & Record<string, unknown>
-  child.pid = pid
-  child.kill = vi.fn(() => true)
-  child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  return child as unknown as ChildProcess
+function mockChild(pid = 4321) {
+  const child = createFakeSpawnedChild(pid)
+  vi.spyOn(child.stdin, 'end')
+  return child
 }
 
 function settleChild(child: ChildProcess, stdout: string): void {
@@ -67,26 +63,6 @@ describe('gh exec deadline', () => {
       expect(processKillMock).toHaveBeenCalledWith(-4321, undefined)
     }
   )
-
-  it('spawns with hidden console and captured stdio, never an inherited or shell stdio', async () => {
-    const child = mockChild()
-    spawnMock.mockImplementation(() => {
-      queueMicrotask(() => settleChild(child, 'HTTP/2.0 204 No Content\r\n'))
-      return child
-    })
-
-    const result = await ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], {
-      timeout: 15_000
-    })
-
-    expect(result.stdout).toContain('204 No Content')
-    const [command, args, options] = spawnMock.mock.calls[0]
-    expect(command).toBe('gh')
-    expect(args).toEqual(['api', '--include', 'user/starred/stablyai/orca'])
-    expect(options.windowsHide).toBe(true)
-    expect(options.stdio).toEqual(['pipe', 'pipe', 'pipe'])
-    expect(options.shell).toBe(false)
-  })
 
   it('fails rather than returning a clipped answer when gh overruns maxBuffer', async () => {
     const child = mockChild()

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatSessionSearchResponse,
-  formatSessionSearchStatus,
-  terminalSafe
+  formatSessionSearchStatus
 } from './agent-session-search-format'
 import type {
   AiVaultSearchHit,
@@ -174,11 +173,6 @@ describe('formatSessionSearchResponse: non-result answers', () => {
 })
 
 describe('terminal safety', () => {
-  it('strips escape sequences a transcript could carry into the reader terminal', () => {
-    expect(terminalSafe('before\u001b]52;c;cGF5bG9hZA==\u0007after')).toBe('beforeafter')
-    expect(terminalSafe('red \u001b[31mtext\u001b[0m')).toBe('red text')
-  })
-
   it.each([
     [
       'updatedAt',

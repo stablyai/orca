@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
+import * as ranking from '../../../../../src/shared/quick-open-path-search'
 
 type SearchState = ReturnType<typeof useMobileNativeChatFileSearch>
 
@@ -44,6 +45,7 @@ describe('useMobileNativeChatFileSearch', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
@@ -92,7 +94,7 @@ describe('useMobileNativeChatFileSearch', () => {
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/apple.ts'])
 
-    act(() => state?.loadNativeChatFiles('readme'))
+    act(() => state?.loadNativeChatFiles('drm'))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120)
     })
@@ -144,6 +146,29 @@ describe('useMobileNativeChatFileSearch', () => {
       await betaReply
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+  })
+
+  it('evicts the oldest queries even when the empty query is the oldest entry', async () => {
+    const sendRequest = vi.fn(async (_method: string, params: { query: string }) =>
+      rpcSuccess([`${params.query || 'empty'}.ts`])
+    )
+    await mount(fakeClient({ sendRequest }))
+    async function search(query: string): Promise<void> {
+      act(() => state?.loadNativeChatFiles(query))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120)
+      })
+    }
+
+    for (const query of ['', ...Array.from({ length: 21 }, (_, index) => `file-${index}`)]) {
+      await search(query)
+    }
+    await search('file-0')
+    await search('')
+    const queries = sendRequest.mock.calls.map(([, params]) => params.query)
+    expect(queries.filter((query) => query === 'file-0')).toHaveLength(2)
+    expect(queries.filter((query) => query === '')).toHaveLength(2)
+    expect(state?.nativeChatFilePaths).toEqual(['empty.ts'])
   })
 
   it('reloads the legacy inventory when the logical authority epoch advances', async () => {
@@ -259,16 +284,15 @@ describe('useMobileNativeChatFileSearch', () => {
       }
       return listResponse
     })
+    const rank = vi.spyOn(ranking, 'rankQuickOpenFiles')
     await mount(fakeClient({ sendRequest }))
 
-    act(() => state?.loadNativeChatFiles('apple'))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(120)
-    })
-    act(() => state?.loadNativeChatFiles('readme'))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(120)
-    })
+    for (const query of ['apple', 'app', 'docs', 'readme']) {
+      act(() => state?.loadNativeChatFiles(query))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120)
+      })
+    }
     expect(sendRequest.mock.calls.filter(([method]) => method === 'files.list')).toHaveLength(1)
 
     await act(async () => {
@@ -277,5 +301,6 @@ describe('useMobileNativeChatFileSearch', () => {
       await Promise.resolve()
     })
     expect(state?.nativeChatFilePaths).toEqual(['docs/readme.md'])
+    expect(rank).toHaveBeenCalledTimes(1)
   })
 })

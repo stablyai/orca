@@ -70,6 +70,11 @@ export function isSystemSshFallbackError(err: Error): boolean {
   return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
 }
 
+/** ssh2 supports fewer algorithms than OpenSSH (no host certificates, for one), so no shared algorithm is a client gap. */
+export function isSsh2AlgorithmNegotiationError(err: Error): boolean {
+  return err.message.startsWith('Handshake failed: no matching ')
+}
+
 // ssh2 lacks GSSAPI; use system SSH for config-enabled Kerberos only after auth-shaped failures, preserving network retry semantics.
 export function isGssapiSystemSshFallbackCandidate(
   err: Error,

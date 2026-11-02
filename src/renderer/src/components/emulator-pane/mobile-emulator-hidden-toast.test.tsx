@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 describe('showMobileEmulatorHiddenToast', () => {
-  it('auto-dismisses after 30s while staying dismissible', () => {
+  it('requests a dismissible toast with a 30-second duration', () => {
     showMobileEmulatorHiddenToast({
       openSettingsPage: vi.fn() as unknown as AppState['openSettingsPage'],
       openSettingsTarget: vi.fn() as unknown as AppState['openSettingsTarget']

@@ -84,7 +84,8 @@ export async function bootWindowFromPartitions(
       ...options,
       runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey,
       contestedHostWorkspaceSessions: sessionRead.contestedHostWorkspaceSessions,
-      contestedPrimaryHostBySessionKey: sessionRead.contestedPrimaryHostBySessionKey
+      contestedPrimaryHostBySessionKey: sessionRead.contestedPrimaryHostBySessionKey,
+      hydratedRuntimeSessionHostIds: sessionRead.hydratedRuntimeSessionHostIds
     })
     actions.hydrateTabsSession(sessionRead.session, options)
     actions.hydrateEditorSession(sessionRead.session, options)

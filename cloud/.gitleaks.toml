@@ -18,3 +18,9 @@ regexes = ['''^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/[0-9]+$''']
 description = "RFC 6455 example Sec-WebSocket-Key in upgrade tests"
 regexTarget = "secret"
 regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''']
+
+# The Discord client-secret rule reads a connector env var name in a config error as the secret.
+[[allowlists]]
+description = "Connector Discord env var names"
+regexTarget = "secret"
+regexes = ['''^ORCA_CONNECTOR_DISCORD_[A-Z_]+$''']

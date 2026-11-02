@@ -163,7 +163,12 @@ describe('resetFolderAccessForDaemon runs the remedy', () => {
       cwdClass: 'documents',
       freshDaemonAccess: 'denied'
     }
-    opendirMock.mockReturnValue(new Promise<never>(() => {}))
+    let answer: () => void = () => {}
+    opendirMock.mockReturnValue(
+      new Promise((resolve) => {
+        answer = () => resolve(fakeDir())
+      })
+    )
     getMismatchMock.mockReturnValue(denied)
     vi.useFakeTimers()
     try {
@@ -182,6 +187,8 @@ describe('resetFolderAccessForDaemon runs the remedy', () => {
         cwd_class: 'documents'
       })
     } finally {
+      answer()
+      await vi.advanceTimersByTimeAsync(0)
       vi.useRealTimers()
     }
   })

@@ -60,12 +60,18 @@ const writeTo = (flag: string, content: string): string =>
 function runOnHost(
   bin: string,
   stage: string,
-  options: { mirror?: string; env?: Record<string, string>; timeoutMs?: number } = {}
+  options: {
+    mirror?: string
+    env?: Record<string, string>
+    timeoutMs?: number
+    connectTimeoutSeconds?: number
+  } = {}
 ): string {
   const command = hostDownloadNodeRuntimeCommand(host, {
     stageDir: stage,
     target: TARGET,
-    mirror: options.mirror
+    mirror: options.mirror,
+    connectTimeoutSeconds: options.connectTimeoutSeconds
   })
   const result = runProcessSync({
     program: '/bin/sh',
@@ -100,6 +106,24 @@ describe.skipIf(process.platform === 'win32')('the host-side pinned Node downloa
     expect(read(bin, 'urls')).toEqual([hostNodeRuntimeUrl(TARGET)])
     // Cap endless downloads at 200 MiB, expressed in 512-byte blocks.
     expect(read(bin, 'file-limit')).toEqual(['409600'])
+  })
+
+  it.each([
+    ['SSH hosts keep the default', undefined, '20'],
+    ['a WSL deploy bounds it', 15, '15']
+  ])('gives each source a connect budget: %s', (_name, connectTimeoutSeconds, expected) => {
+    const recordFlag = (flag: string, file: string): string =>
+      `prev=; for a in "$@"; do [ "$prev" = ${flag} ] && echo "$a" >> "\${0%/*}/${file}"; prev=$a; done`
+    const { bin, stage } = fakeHost({
+      curl: `${recordFlag('--connect-timeout', 'connect-timeouts')}\n${writeTo('-o', PAYLOAD)}`
+    })
+    runOnHost(bin, stage, { connectTimeoutSeconds })
+    expect(read(bin, 'connect-timeouts')).toEqual([expected])
+    const wget = fakeHost({
+      wget: `${recordFlag('-T', 'wget-timeouts')}\n${writeTo('-O', PAYLOAD)}`
+    })
+    runOnHost(wget.bin, wget.stage, { connectTimeoutSeconds })
+    expect(read(wget.bin, 'wget-timeouts')).toEqual([expected])
   })
 
   it('uses wget where the host has no curl', () => {

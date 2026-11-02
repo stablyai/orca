@@ -290,6 +290,22 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
     await expect(probeOrcadEndpoint('ws://[::1')).resolves.toBe('unknown')
   })
 
+  it('refuses a lock refreshed three minutes ago, which NFS caching can show for a live clone (#32918)', async () => {
+    const root = makeRoot()
+    const acquiredAt = '2026-01-01T00:00:00.000Z'
+    writeLock(root, holderRecord({ acquiredAt }))
+    const now = () => Date.parse(acquiredAt) + 3 * 60_000
+    const result = await reclaimStaleOrcadInstanceLock(
+      root,
+      { yes: true, hintRuntime: null },
+      rebootedBox({ now, bootStartedAtMs: () => Date.parse(acquiredAt) - 60_000 })
+    )
+    expect(result).toMatchObject({
+      status: 'refused',
+      message: expect.stringContaining('minutes old')
+    })
+  })
+
   it.each([
     ['another host', holderRecord({ host: 'other-box' }), 'not this host'],
     ['the same boot', holderRecord({ bootId: 'boot-2' }), 'judge this lock itself'],

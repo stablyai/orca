@@ -1,6 +1,8 @@
+import { selectVisibleAgentOrchestration } from '@/runtime/visible-agent-orchestration'
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import type { AppState } from '@/store/types'
 import {
@@ -10,7 +12,7 @@ import {
 import { buildActivityEvents, createActivityEventBuildCache } from './activity-event-builder'
 import { projectActivityTabs, type ActivityTabProjection } from './activity-tab-projection'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
-import { collectChildAgentPaneKeys } from './activity-thread-child-agent'
+import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -53,7 +55,7 @@ export type AgentPaneThreadsStoreData = Pick<
   | 'acknowledgeAgents'
   | 'unacknowledgeAgents'
 > & {
-  /** Terminal and agent-session tabs only, identity-stable across focus writes. */
+  /** Current native-chat originals and terminal tabs with semantic identity reuse. */
   activityTabs: ActivityTabProjection
   worktreeMap: ReturnType<typeof getWorktreeMapFromState>
   repoMap: ReturnType<typeof getRepoMapFromState>
@@ -102,7 +104,7 @@ export function useAgentPaneThreads(args: {
         : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     [runtimeEnvironments, runtimeStatusByEnvironmentId]
   )
-  // Project fields the pipeline reads so unrelated tab-focus rewrites preserve tab/list identities.
+  // Keep original native tabs for owner-qualified names; preserve terminal projections across focus writes.
   const tabProjectionRef = useRef<{
     raw: AppState['unifiedTabsByWorktree'] | null
     projected: ActivityTabProjection | null
@@ -110,7 +112,7 @@ export function useAgentPaneThreads(args: {
   const storeData = useAppStore(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
-      runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,
+      runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
       migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
       retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
       tabsByWorktree: s.tabsByWorktree,
@@ -141,6 +143,7 @@ export function useAgentPaneThreads(args: {
   )
   // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const chatNames = useStructuredChatTabNames()
 
   // Per-hook caches preserve unchanged pane/event/thread identities across status writes, including repeated StrictMode/deferred builds.
   const eventBuildCacheRef = useRef<ReturnType<typeof createActivityEventBuildCache>>(undefined!)
@@ -156,6 +159,7 @@ export function useAgentPaneThreads(args: {
     () =>
       buildActivityEvents(
         {
+          chatNames,
           agentStatusByPaneKey: storeData.agentStatusByPaneKey,
           runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
           migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
@@ -174,7 +178,7 @@ export function useAgentPaneThreads(args: {
         eventBuildCacheRef.current
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storeData, agentStatusEpoch]
+    [storeData, agentStatusEpoch, chatNames]
   )
 
   const allThreads = useMemo(
@@ -227,8 +231,8 @@ export function useAgentPaneThreads(args: {
   )
 
   // Classify children over all threads so scoped-out parents do not orphan workers; skip when children are shown.
-  const childAgentPaneKeys = useMemo(
-    () => (showChildAgents ? EMPTY_PANE_KEYS : collectChildAgentPaneKeys(allThreads)),
+  const hiddenChildAgentPaneKeys = useMemo(
+    () => (showChildAgents ? EMPTY_PANE_KEYS : collectHiddenChildAgentPaneKeys(allThreads)),
     [allThreads, showChildAgents]
   )
 
@@ -248,10 +252,10 @@ export function useAgentPaneThreads(args: {
       ) {
         return false
       }
-      // Why: child agents (e.g. dispatched orchestration workers) are hidden by default to keep top-level agent views focused on root tasks.
+      // Why: child agents (e.g. dispatched orchestration workers) are hidden by default to keep top-level agent views focused on root tasks; a live child always keeps its own row.
       if (
         !showChildAgents &&
-        childAgentPaneKeys.has(thread.paneKey) &&
+        hiddenChildAgentPaneKeys.has(thread.paneKey) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false
@@ -268,7 +272,7 @@ export function useAgentPaneThreads(args: {
     deferredQuery,
     effectiveSelectedPaneKey,
     showChildAgents,
-    childAgentPaneKeys
+    hiddenChildAgentPaneKeys
   ])
 
   const markAllReadThreads = useMemo(
@@ -276,10 +280,10 @@ export function useAgentPaneThreads(args: {
       allThreads.filter(
         (thread) =>
           showChildAgents ||
-          !childAgentPaneKeys.has(thread.paneKey) ||
+          !hiddenChildAgentPaneKeys.has(thread.paneKey) ||
           thread.paneKey === effectiveSelectedPaneKey
       ),
-    [allThreads, showChildAgents, childAgentPaneKeys, effectiveSelectedPaneKey]
+    [allThreads, showChildAgents, hiddenChildAgentPaneKeys, effectiveSelectedPaneKey]
   )
 
   const visibleThreadGroups = useMemo(

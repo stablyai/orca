@@ -35,6 +35,12 @@ import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handl
 import type { PluginService } from '../plugins/plugin-service'
 import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
 import { resolveProvisionedRootSource } from '../ephemeral-vm/provisioned-root-source'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
+import {
+  ephemeralVmFailure,
+  pickEphemeralVmFailureCode,
+  type EphemeralVmFailure
+} from '../../shared/ephemeral-vm-failure-copy'
 
 const activeProvisionControllers = new Map<string, AbortController>()
 
@@ -58,12 +64,11 @@ export type EphemeralVmProvisionIpcResult =
       stderr: string
       warnings: EphemeralVmRecipeResultWarning[]
     }
-  | {
+  | ({
       ok: false
-      error: string
       stderr: string
       stdout: string
-    }
+    } & EphemeralVmFailure)
 
 export function registerEphemeralVmHandlers(store: Store, pluginService?: PluginService): void {
   ipcMain.removeHandler('ephemeralVm:listRecipes')
@@ -121,7 +126,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
     ): Promise<EphemeralVmProvisionIpcResult> => {
       const repo = getRecipeRepo(store, args.repoId)
       if (!repo.ok) {
-        return { ok: false, error: repo.message, stdout: '', stderr: '' }
+        return provisionFailure(repo.failure)
       }
       const recipe = resolveRecipeForRepo(
         repo.repo.path,
@@ -129,7 +134,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
         await getApprovedPluginVmRecipes(pluginService)
       )
       if (!recipe) {
-        return { ok: false, error: `Recipe not found: ${args.recipeId}`, stdout: '', stderr: '' }
+        return provisionFailure(ephemeralVmFailure('recipeNotFound', { recipeId: args.recipeId }))
       }
       const controller = args.provisionId ? new AbortController() : null
       if (args.provisionId && controller) {
@@ -158,17 +163,14 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
             controller?.signal
           )
           if (controller?.signal.aborted) {
-            return { ok: false, error: 'Provisioning cancelled.', stdout: '', stderr: '' }
+            return provisionFailure(ephemeralVmFailure('provisionCancelled'))
           }
           if (!source) {
-            return {
-              ok: false,
-              error: args.ref
-                ? `Could not resolve provisioned-root start ref: ${args.ref}`
-                : 'Could not resolve a default provisioned-root start ref.',
-              stdout: '',
-              stderr: ''
-            }
+            return provisionFailure(
+              args.ref
+                ? ephemeralVmFailure('startRefUnresolved', { ref: args.ref })
+                : ephemeralVmFailure('defaultStartRefUnresolved')
+            )
           }
           sourceRef = source.ref
           expectedRefHead = source.head
@@ -195,6 +197,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           return {
             ok: false,
             error: result.start.error,
+            ...pickEphemeralVmFailureCode(result.start),
             stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
             stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
           }
@@ -242,7 +245,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
 
         let environment: ReturnType<typeof addEnvironmentFromPairingCode>
         try {
-          environment = addEnvironmentFromPairingCode(app.getPath('userData'), {
+          environment = addEnvironmentFromPairingCode(getRuntimeEnvironmentRegistryRoot(), {
             name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id),
             pairingCode: connection.pairingCode,
             source: 'ephemeral-vm'
@@ -296,4 +299,8 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
 
 function buildEphemeralEnvironmentName(repoName: string, runtimeId: string): string {
   return `${repoName} VM ${runtimeId.slice(-8)}`
+}
+
+function provisionFailure(failure: EphemeralVmFailure): EphemeralVmProvisionIpcResult {
+  return { ok: false, ...failure, stdout: '', stderr: '' }
 }

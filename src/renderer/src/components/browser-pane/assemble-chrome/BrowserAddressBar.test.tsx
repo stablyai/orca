@@ -272,6 +272,53 @@ describe('BrowserAddressBar autocomplete preview', () => {
     )
   })
 
+  it.each([
+    ['x', 'insertText', 'Enter'],
+    ['x.com', 'insertFromPaste', 'click']
+  ])('offers direct host navigation first when entering %s', async (typed, inputType, action) => {
+    mocks.browserUrlHistory = [
+      historyEntry({
+        url: 'https://x.com/',
+        normalizedUrl: 'https://x.com',
+        title: 'Jinjing Liang on X'
+      }),
+      historyEntry({
+        url: 'https://x.com/home',
+        normalizedUrl: 'https://x.com/home',
+        title: 'Home / X'
+      })
+    ]
+    mocks.openPageUrl = 'https://x.com/home'
+    const onNavigate = vi.fn()
+    const onSubmit = vi.fn()
+    await act(async () => {
+      root.render(<AddressBarHarness initialValue="" onNavigate={onNavigate} onSubmit={onSubmit} />)
+    })
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')!
+    await act(async () => input.focus())
+    await act(async () => typeInto(input, typed, inputType))
+
+    const rows = container.querySelectorAll<HTMLButtonElement>('[data-command-value]')
+    expect(rows[0]?.dataset.commandValue).toBe('https://x.com/')
+    expect(rows[0]?.textContent).toBe('x.com')
+    expect(rows[1]?.textContent).toContain('Home / X')
+    expect(rows[1]?.textContent).toContain('Switch to tab')
+    expect(input.value).toBe('x.com')
+
+    if (action === 'Enter') {
+      await act(async () => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      })
+      expect(onSubmit).toHaveBeenCalledTimes(1)
+      expect(onNavigate).not.toHaveBeenCalled()
+    } else {
+      await act(async () => rows[0]?.click())
+      expect(onNavigate).toHaveBeenCalledWith('https://x.com/')
+      expect(onSubmit).not.toHaveBeenCalled()
+    }
+    expect(mocks.activateBrowserPage).not.toHaveBeenCalled()
+  })
+
   it('shows the completion again, tail selected, when arrowing back to its row', async () => {
     await act(async () => {
       root.render(<AddressBarHarness initialValue="" onNavigate={vi.fn()} onSubmit={vi.fn()} />)
@@ -519,7 +566,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
     expect(mocks.removeBrowserHistoryEntry).not.toHaveBeenCalled()
   })
 
-  it('dismisses suggestions when focus moves into an Electron webview guest', async () => {
+  it('dismisses suggestions on a webview focusin event', async () => {
     const onNavigate = vi.fn()
     const onSubmit = vi.fn()
     const webview = document.createElement('webview')
@@ -556,7 +603,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('lets the second press of a double-click select a word instead of the whole URL', async () => {
+  it('clears the whole-URL selection on the second double-click press', async () => {
     const url = 'https://github.com/stablyai/orca/pull/27021'
     await act(async () => {
       root.render(<AddressBarHarness initialValue={url} onNavigate={vi.fn()} onSubmit={vi.fn()} />)

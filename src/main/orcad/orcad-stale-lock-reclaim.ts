@@ -13,6 +13,7 @@ import {
 } from './orcad-instance-lock'
 import { readBoundedLockFile } from './orcad-instance-lock-reclaim'
 import { orcadLockHolderLocality } from './orcad-lock-holder-locality'
+import { ORCAD_LOCK_FRESH_MS, orcadLockPeer, orcadLockSelf } from './orcad-lock-clone-machine'
 import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
 import { readOrcadProcessIncarnation } from './orcad-process-start-time'
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
@@ -30,8 +31,8 @@ import {
   type OrcadStaleLockReclaimStatus
 } from '../../shared/orcad-stale-lock-reclaim'
 
-// A holder that just took the lock may not be listening yet; its silence would prove nothing.
-export const ORCAD_STALE_LOCK_MIN_AGE_MS = 2 * 60_000
+// A new holder may not listen yet, and NFS attribute caching can age a live heartbeat this much.
+export const ORCAD_STALE_LOCK_MIN_AGE_MS = ORCAD_LOCK_FRESH_MS
 const ENDPOINT_PROBE_TIMEOUT_MS = 1_500
 
 /** Silent requires OS-confirmed absence of a listener; errors leave ownership unknown. */
@@ -41,6 +42,7 @@ export type OrcadStaleLockReclaimHooks = {
   now?: () => number
   hostname?: () => string
   bootId?: () => string | null
+  bootStartedAtMs?: () => number | null
   machineIdentity?: () => string | null
   dataRootIsOnLocalDisk?: (dataRoot: string) => boolean
   probeEndpoint?: (endpoint: string) => Promise<OrcadEndpointProbe>
@@ -139,8 +141,13 @@ async function checkStaleLock(
   hooks: OrcadStaleLockReclaimHooks
 ): Promise<{ refusal: string } | { evidence: OrcadStaleLockEvidence }> {
   const machineIdentity = (hooks.machineIdentity ?? profileStateAccessMachineIdentity)()
-  const self = { ...(machineIdentity ? { machineIdentity } : {}), ...(bootId ? { bootId } : {}) }
-  const locality = orcadLockHolderLocality(holder, self, () =>
+  // Judge as a normal start does, so "a normal start reclaims it" stays true.
+  const self = orcadLockSelf(
+    { ...(machineIdentity ? { machineIdentity } : {}), ...(bootId ? { bootId } : {}) },
+    (hooks.now ?? Date.now)(),
+    hooks.bootStartedAtMs?.()
+  )
+  const locality = orcadLockHolderLocality(orcadLockPeer(holder, lockPath), self, () =>
     (hooks.dataRootIsOnLocalDisk ?? orcadDataRootIsOnLocalDisk)(dataRoot)
   )
   if (locality === 'local') {
@@ -191,7 +198,7 @@ async function checkStaleLock(
       host: holder.host,
       bootId: holder.bootId,
       currentBootId: bootId,
-      ageMinutes: Math.round((now - Date.parse(holder.acquiredAt)) / 60_000),
+      ageMinutes: Math.round((now - writtenMs) / 60_000),
       nonce: holder.nonce
     }
   }

@@ -46,7 +46,8 @@ export function foldersAndAutomationsWslMoverProfile(paths: WslMoverPaths): WslM
     kind: 'workspace-run' as const,
     projectId: 'project-auto',
     hostId: 'local' as const,
-    projectHostSetupId: paths.side === 'source' ? 'setup-local' : 'setup-wsl',
+    // A repo's own setup is keyed by the repo id on both sides (createSetupFromRepo, the export).
+    projectHostSetupId: 'repo-auto',
     repoId: 'repo-auto',
     path: repoAuto.path
   }

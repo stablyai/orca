@@ -90,7 +90,9 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
     summaries,
     pathIndex: { byPath: new Map(), byRealPath: new Map() },
     missingWorktreeIds: new Set(),
+    // Older builds read workingTerminalEvidenceByWorktreeId; newer ones read terminalTitleEvidenceByWorktreeId.
     workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: host.collectRuntimeWorktreeAgentSources({
       hookSnapshots: SNAPSHOTS,
       mirroredWorktreeIdByTabId: new Map(),

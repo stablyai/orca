@@ -36,7 +36,7 @@ export function addManagedOrcadEnvironment(
   if (!offer) {
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'Invalid managed pairing code.')
   }
-  const known = readEnvironmentStore(userDataPath).environments
+  const known = readEnvironmentStore(userDataPath, { recoverBlankStore: true }).environments
   if (known.some((entry) => entry.id === args.id)) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
@@ -66,7 +66,7 @@ export function addManagedOrcadEnvironment(
   }
   const persisted = PersistedRuntimeEnvironmentSchema.parse(environment)
   const environments = [
-    ...readPersistedEnvironmentStore(userDataPath).environments,
+    ...readPersistedEnvironmentStore(userDataPath, { recoverBlankStore: true }).environments,
     persisted
   ].sort((a, b) => a.name.localeCompare(b.name))
   // Sidecar first: a crash between the writes leaves an ownerless entry the next write prunes,

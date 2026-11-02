@@ -39,7 +39,8 @@ describe('ackPaintedColdRestore', () => {
   })
 
   it('never acks a paired server’s terminal, whose host owns its restore', async () => {
-    const { toRemoteRuntimePtyId } = await import('../../../../../shared/remote-runtime-pty-id')
+    const { toRemoteRuntimePtyId } =
+      await import('../../../../../shared/remote-runtime/remote-runtime-pty-id')
     await ackWithSwitch(true, toRemoteRuntimePtyId('handle-1', 'env-1'))
     expect(ackColdRestore).not.toHaveBeenCalled()
   })

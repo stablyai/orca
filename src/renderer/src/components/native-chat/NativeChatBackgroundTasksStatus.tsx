@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Activity, Bot, ChevronDown, CircleHelp, SquareTerminal, Workflow } from 'lucide-react'
-import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type {
   AgentChildRowContext,
   AgentChildRowModel
@@ -169,18 +169,18 @@ export function NativeChatBackgroundTasksStatus(props: {
   return (
     <div
       data-native-chat-background-tasks="true"
-      className="group/tasks shrink-0 bg-chat-canvas px-3 pt-2 sm:px-4"
+      className="group/tasks shrink-0 bg-chat-pane px-3 pt-2 sm:px-4"
     >
       {/* When the goal tab is the next sibling, take its width and share its top edge. */}
-      <div className="mx-auto w-full max-w-(--chat-content-max-width) [[data-native-chat-background-tasks]:has(+[data-native-chat-thread-goal])_&]:px-2">
+      <div className="mx-auto w-full max-w-(--chat-content-max-width) [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:px-2">
         <div
           ref={stripRef}
-          className="overflow-hidden rounded-lg border border-border bg-muted/50 text-xs text-muted-foreground shadow-xs [[data-native-chat-background-tasks]:has(+[data-native-chat-thread-goal])_&]:rounded-b-none [[data-native-chat-background-tasks]:has(+[data-native-chat-thread-goal])_&]:shadow-none"
+          className="overflow-hidden rounded-lg border border-border bg-muted/50 text-xs text-muted-foreground shadow-xs [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:rounded-b-none [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:shadow-none"
         >
           <div className="flex h-8 items-center px-1.5">
             <button
               type="button"
-              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="group/task-header flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
               aria-expanded={expanded}
               aria-controls={taskListId}
               aria-label={headerText}
@@ -194,7 +194,11 @@ export function NativeChatBackgroundTasksStatus(props: {
                   return (
                     <span key={segment.kind ?? 'total'}>
                       {/* Use text color; the border token is too faint for a readable separator. */}
-                      {index > 0 ? <span className="text-muted-foreground"> · </span> : null}
+                      {index > 0 ? (
+                        <span className="text-muted-foreground group-hover/task-header:text-accent-foreground">
+                          {' · '}
+                        </span>
+                      ) : null}
                       {Icon && kind ? (
                         <Icon
                           aria-hidden="true"
@@ -205,7 +209,9 @@ export function NativeChatBackgroundTasksStatus(props: {
                           )}`}
                         />
                       ) : null}
-                      <span className="font-medium text-foreground">{segment.text}</span>
+                      <span className="font-medium text-foreground group-hover/task-header:text-accent-foreground">
+                        {segment.text}
+                      </span>
                     </span>
                   )
                 })}

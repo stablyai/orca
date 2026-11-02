@@ -20,6 +20,7 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import type { MentionOption } from '../page-types'
 import { loadPRFileContents } from '../cache/file-content'
 import { CommentReplyForm } from '../comments/reply-form'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function ConversationCommentCard({
   comment,
@@ -123,7 +124,7 @@ export function ConversationCommentCard({
                   variant="ghost"
                   size="icon-xs"
                   className="size-7"
-                  onClick={() => window.api.shell.openUrl(comment.url)}
+                  onClick={(event) => openAppHttpLink(comment.url, { event })}
                   aria-label={translate(
                     'auto.components.PullRequestPage.0ac19bb52e',
                     'Open comment on GitHub'

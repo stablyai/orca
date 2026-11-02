@@ -1,9 +1,10 @@
 import { createElement } from 'react'
+import { resetMobileNativeChatDraftInputsForTests } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
-import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
+import { resetMobileNativeChatStaleInputForTests } from './native-chat/mobile-native-chat-stale-input'
+import { resetMobileNativeChatTerminalWritesForTests } from './native-chat/mobile-native-chat-terminal-write-lock'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
 
 vi.mock('../platform/media-picker', () => ({
@@ -66,6 +67,7 @@ describe('useMobileSessionImageAttachments', () => {
   }
 
   beforeEach(() => {
+    resetMobileNativeChatDraftInputsForTests()
     vi.useFakeTimers()
     resetMobileNativeChatStaleInputForTests()
     resetMobileNativeChatTerminalWritesForTests()
@@ -85,7 +87,7 @@ describe('useMobileSessionImageAttachments', () => {
       await hook.nativeChatImages.attachImage('library')
     })
     expect(hook.nativeChatImages.attachments).toEqual([
-      { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
+      { id: expect.any(String), path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
     ])
   }
 
@@ -102,13 +104,14 @@ describe('useMobileSessionImageAttachments', () => {
   it('sends structured session images without a terminal input lease', async () => {
     const args = baseArgs({ activeHandle: null, activeHandleRef: { current: null } })
     await renderWithImage(args)
+    const image = hook.nativeChatImages.attachments[0]
 
     expect(await send()).toBe(true)
     expect(args.nativeChatBaseSend).toHaveBeenCalledWith(
       'look',
       ['file:///a.jpg'],
       expect.any(Number),
-      [{ id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }]
+      [image]
     )
     expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'clipboard.startImageUpload',

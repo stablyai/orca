@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, onTestFinished } from 'vitest'
 import { z } from 'zod'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   SESSION
@@ -32,6 +32,14 @@ const ANTIGRAVITY = acpLaunchSpecFor('antigravity')!
 const result = (frame: AcpFixtureFrame | undefined) =>
   z.record(z.string(), z.unknown()).parse(frame?.message.result)
 afterEach(closeProviderTimelineRigs)
+
+it('own settings keep the agent’s reported mode without sending a mode config', async () => {
+  const rig = await openAcpAdapterRig({ spec: ANTIGRAVITY })
+  await rig.acquire({ permissionMode: 'own' })
+  expect(rig.sent('session/set_config_option')).toHaveLength(0)
+  const options = await rig.adapter.readOptions({ sessionId: SESSION, fence: 1 })
+  expect(options.current.reportedPermissionMode).toBe(null)
+})
 
 it('signs a first chat in, asks in default mode, and answers a question with one of its choices', async () => {
   const [initialized, opened, ...turn] = await readAcpFixture('antigravity-v1-question')

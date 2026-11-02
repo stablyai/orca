@@ -18,6 +18,8 @@ import {
 
 export type ChecksListProps = {
   checks: PRCheckDetail[]
+  /** A GitLab parent pipeline: shown as its provider link above the job rows, never as a job. */
+  pipelineCheck?: PRCheckDetail | null
   /** Set when the last read failed; replaces the empty-list copy. */
   checksError?: string | null
   checksLoading: boolean
@@ -81,14 +83,16 @@ export function useChecksListState({
       }
       return next
     })
+    // Close the one-shot latch outside the updater; React may run an updater twice.
+    let autoExpandKey: string | undefined
+    if (autoExpandedContextRef.current !== checkDetailsContextKey) {
+      autoExpandKey = rows.find((row) => isFailedCheck(row.check))?.key
+      autoExpandedContextRef.current = checkDetailsContextKey
+    }
     setExpandedCheckKeys((current) => {
       const next = new Set([...current].filter((key) => validKeys.has(key)))
-      if (autoExpandedContextRef.current !== checkDetailsContextKey) {
-        const firstFailed = rows.find((row) => isFailedCheck(row.check))
-        if (firstFailed) {
-          next.add(firstFailed.key)
-        }
-        autoExpandedContextRef.current = checkDetailsContextKey
+      if (autoExpandKey !== undefined) {
+        next.add(autoExpandKey)
       }
       return next
     })

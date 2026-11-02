@@ -95,6 +95,8 @@ export class SshConnection {
     generation: number
     sources: Promise<HostKeyTrustSources>
   } | null = null
+  /** Generation whose ssh2 attempt found an Orca-stored key for this endpoint. */
+  private orcaStorePinnedGeneration: number | null = null
   private systemSshControlMasterDisabledForSession = false
   private systemSshGssapiOnlyForSession = false
   private systemSshLoopbackRoute: SystemSshLoopbackRoute | null = null
@@ -510,6 +512,7 @@ export class SshConnection {
       connect: (config) => this.doSsh2Connect(config, connectGeneration),
       respawnProxy: (config, proxy) => this.respawnProxy(config, proxy, connectGeneration),
       killProxyIfCurrent: () => this.killProxyIfCurrent(connectGeneration),
+      isPinnedByOrcaHostKeyStore: () => this.orcaStorePinnedGeneration === connectGeneration,
       probeSystemSsh: (resolved, gssapiOnly) =>
         this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, gssapiOnly),
       resetSystemTransportIfCurrent: () => this.resetSystemTransportIfCurrent(connectGeneration),
@@ -742,6 +745,9 @@ export class SshConnection {
         this.hostKeyFingerprint = fingerprint
       }
     })
+    if (verdict.pinnedByOrcaStore && isCurrentAttempt()) {
+      this.orcaStorePinnedGeneration = connectGeneration
+    }
     return runSsh2Handshake(config, {
       label: this.target.label,
       pendingClients: this.pendingSsh2Clients,

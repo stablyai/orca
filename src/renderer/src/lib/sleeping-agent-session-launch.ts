@@ -1,9 +1,12 @@
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import {
+  resolveRuntimeHostReportedPlatform,
+  resolveRuntimeHostTerminalWindowsShell,
   resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget,
   type AgentResumeLaunchTarget
@@ -12,7 +15,7 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveResumeLaunchRecipe } from '../../../shared/tui-agent-launch-defaults'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
@@ -30,17 +33,22 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
   // The resume tab is created without a shell override, so the global Windows shell wins.
   const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
+  // Why: a folder or nested-SSH workspace on a server runs on its SSH target, not the server.
+  const connectionId = repo?.connectionId ?? getConnectionIdFromState(state, worktreeId)
   return resolveAgentResumeLaunchTarget({
     projectRuntime: getLocalProjectExecutionRuntimeContext(state, worktreeId),
-    connectionId: repo?.connectionId,
+    connectionId,
     executionHostId,
     worktreePath: worktree?.path,
     terminalWindowsShell: state.settings?.terminalWindowsShell,
     remotePlatform: resolveSshHostReportedPlatform(
       state,
       executionHostId,
-      runtimeEnvironmentIdUnlessTwin(state, worktreeId)
-    )
+      runtimeEnvironmentIdUnlessTwin(state, worktreeId),
+      connectionId
+    ),
+    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, executionHostId),
+    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(state, executionHostId)
   })
 }
 
@@ -58,6 +66,7 @@ export function launchSleepingAgentSession(
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     ...resolveResumeLaunchRecipe(launchConfig),
     platform: resumeTarget.platform,
+    agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,
     launchCwd: state.getKnownWorktreeById(record.worktreeId)?.path
   })
@@ -78,8 +87,22 @@ export function launchSleepingAgentSession(
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: record.providerSession,
+      resumeOrigin: 'saved',
+      resumeSource: {
+        cancelled: false,
+        record,
+        ...(state.agentStatusByPaneKey[record.paneKey]
+          ? {
+              expectedStatus: {
+                paneKey: record.paneKey,
+                receivedAt: state.agentStatusByPaneKey[record.paneKey].updatedAt,
+                stateStartedAt: state.agentStatusByPaneKey[record.paneKey].stateStartedAt
+              }
+            }
+          : {})
+      },
       launchAgent: record.agent,
-      ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
+      ...(launchConfig ? { agentArgsOverride: startupPlan.launchConfig.agentArgs } : {}),
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),

@@ -245,8 +245,6 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.handleWebSocketBinaryMessage(bytes, socket.ws)
       },
       onReady: (socket) => {
-        // First authenticated direct/relay client starts host-local artifact tracking; remote proxies may omit it because their own server activates buffers.
-        this.runtime.activateRecentPtyPathCandidateTracking?.()
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
         if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
           this.runtime.noteAgentLaunchClientReady?.()
@@ -271,8 +269,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.mobileDesktopRelay?.closePhoneConnection(socket.connectionId)
         // Stream cleanup is socket-scoped; disconnect state spans all transports for that device.
         this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
-        this.runtime.cancelMobileDictationForConnection(socket.connectionId)
+        // Optional: runtime stand-ins without staged saves must still close cleanly.
+        void this.runtime.stagedFileSaves?.abortConnection(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
+        this.declaredDesktopClients.forget(socket.connectionId)
         if (!hasOtherConnections) {
           this.runtime.onClientDisconnected(socket.device.clientId)
         }

@@ -24,6 +24,7 @@ export function optionSession(request: CodexAppServerConnection['request']): Cod
     prompts: new CodexAcquisitionWindow().prompts,
     options: new Map(),
     reportedOptions: { model: 'gpt-live', effort: 'high' },
+    appliedTurnOptions: { model: 'gpt-live', effort: 'high' },
     dispatchEchoes: createCodexDispatchEchoes(),
     turnOpenWaits: createCodexTurnOpenWaits(),
     translator: null

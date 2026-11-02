@@ -22,7 +22,22 @@ const ARCHIVE_PATHS = [
   'mobile/src/worktree/agent-row-display.ts'
 ]
 // Why optional: a release may have either or both, and `git archive` refuses a missing pathspec.
-const OPTIONAL_ARCHIVE_PATHS = ['src/relay', 'src/wsl-guest']
+const OPTIONAL_ARCHIVE_PATHS = [
+  'src/relay',
+  'src/wsl-guest',
+  // Released phone read operations and their runtime decoding dependencies.
+  'mobile/src/agent-history/agent-history-reply-schema.ts',
+  'mobile/src/agent-history/mobile-agent-history-operations.ts',
+  'mobile/src/session/mobile-session-read-operations.ts',
+  'mobile/src/session/session-read-reply-schema.ts',
+  'mobile/src/transport/mobile-runtime-client-capabilities.ts',
+  'mobile/src/transport/request-single-flight.ts',
+  'mobile/src/transport/rpc-acceptance-policies.ts',
+  'mobile/src/transport/rpc-incompatible-reply-error.ts',
+  'mobile/src/transport/rpc-operation-reply.ts',
+  'mobile/src/transport/rpc-operation-result-reader.ts',
+  'mobile/src/transport/rpc-operation.ts'
+]
 
 const WORKSPACE_POLICY = 'pnpm-workspace.yaml'
 

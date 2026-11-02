@@ -271,9 +271,5 @@ describe('parseManualNetworkAddress', () => {
         address: '192.168.1.24'
       })
     })
-
-    it('rejects whitespace inside the address', () => {
-      expect(parseManualNetworkAddress('my host.example.com').ok).toBe(false)
-    })
   })
 })

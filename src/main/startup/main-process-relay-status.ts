@@ -2,17 +2,18 @@ import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import { mainProcessState as state } from './main-process-state'
 
 export function getDesktopRelayStatus(): MobileRelayStatusDetail {
-  return {
-    status: state.desktopRelayStatus,
-    ...(state.desktopRelayCellUrl === undefined ? {} : { cellUrl: state.desktopRelayCellUrl })
-  }
+  return { ...state.desktopRelayStatus }
 }
 
 export function publishDesktopRelayStatus(
   status: MobileRelayStatusDetail['status'],
-  cellUrl?: string
+  cellUrl?: string,
+  clockOffsetMs?: number
 ): void {
-  state.desktopRelayStatus = status
-  state.desktopRelayCellUrl = cellUrl
+  state.desktopRelayStatus = {
+    status,
+    ...(cellUrl === undefined ? {} : { cellUrl }),
+    ...(clockOffsetMs === undefined ? {} : { clockOffsetMs })
+  }
   state.mainWindow?.webContents.send('mobile:relayStatusChanged', getDesktopRelayStatus())
 }

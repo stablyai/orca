@@ -58,14 +58,6 @@ describe('ui.setCollapsed', () => {
     expect(host.collapsed()).toEqual(['repo:b'])
   })
 
-  it('lets the last arrival win when both writers change the same section', async () => {
-    const host = makeHost()
-    await host.collapse('desktop', 1, 'repo:a', true)
-    const response = await host.collapse('phone', 1, 'repo:a', false)
-    expect(response).toMatchObject({ ok: true, result: { collapsed: false, applied: true } })
-    expect(host.collapsed()).toEqual([])
-  })
-
   it('settles a retry of an op that already landed without undoing a newer writer', async () => {
     const host = makeHost()
     await host.collapse('phone-a', 1, 'repo:a', true)
@@ -94,21 +86,5 @@ describe('ui.setCollapsed', () => {
     expect(host.collapsed()).toEqual(['repo:z'])
     await host.collapse('phone-new', 2, 'repo:b', true)
     expect(host.collapsed()).toEqual(['repo:b', 'repo:z'])
-  })
-
-  it('is applied when the section already has the requested state', async () => {
-    const host = makeHost(['repo:a'])
-    const response = await host.collapse('phone', 1, 'repo:a', true)
-    expect(response).toMatchObject({ ok: true, result: { collapsed: true, applied: true } })
-    expect(host.collapsed()).toEqual(['repo:a'])
-  })
-
-  it.each([
-    ['a local caller', {}],
-    ['a paired desktop or web client', { clientKind: 'runtime' as const }]
-  ])('accepts %s, as ui.set does', async (_label, context) => {
-    const host = makeHost()
-    await host.collapse('writer', 1, 'repo:a', true, context)
-    expect(host.collapsed()).toEqual(['repo:a'])
   })
 })

@@ -1,11 +1,13 @@
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalLaunchResult } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
-export type PtySpawnResult = {
+export type PtySpawnResult = TerminalLaunchResult & {
   /** Execution-host probe; absent on older hosts and reattachments. */
   openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
@@ -15,6 +17,8 @@ export type PtySpawnResult = {
   incarnationId?: PtyIncarnationId
   /** The provider observed this exact spawn exit before returning its spawn result. */
   exitedBeforeSpawnReply?: true
+  /** Observed cause for this exact early-dead process. */
+  exitCause?: TerminalExitCause
   /** Host marker proof: false means inspected/unarmed; absent means legacy and retains the client guess. */
   shellReadyArmed?: boolean
   /** OS shell PID for subtree memory collection; null when the host cannot publish one during spawn. */
@@ -65,7 +69,5 @@ export type PtySpawnResult = {
     cols?: number
     rows?: number
     oscLinks?: TerminalOscLinkRange[]
-    /** Last OSC title from the recovered checkpoint (see `lastTitle` above). */
-    lastTitle?: string
   }
 }

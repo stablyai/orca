@@ -1,5 +1,6 @@
 import { CsvByteIndex, CSV_MAX_COLUMNS, CSV_RECORD_BYTES, CSV_PAGE_CELLS } from './csv-byte-index'
 import { parseCsv } from './csv-parse'
+import { CsvPreviewError } from './csv-preview-error'
 import type {
   CsvWorkerRequest,
   CsvWorkerResponse,
@@ -46,7 +47,8 @@ self.onmessage = (event: MessageEvent<CsvWorkerRequest>): void => {
     const response: CsvWorkerResponse = {
       id,
       ok: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      code: error instanceof CsvPreviewError ? error.code : undefined
     }
     self.postMessage(response)
   }

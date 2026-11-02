@@ -1,6 +1,7 @@
 import { hasRemoteRuntimeOwner } from '@/runtime/runtime-file-routing'
 import type { FileLinkTarget } from './terminal-file-link-target'
-import { HostFileRefusal, resolveHostWorkspaceFile } from './terminal-host-workspace-file'
+import { HostFileRefusal } from './host-file-refusal'
+import { resolveHostWorkspaceFile } from './terminal-host-workspace-file'
 import {
   readTerminalPathExistence,
   writeTerminalPathExistence,
@@ -31,8 +32,9 @@ export async function hostFileLinkTargetExists(
   let exists: boolean
   try {
     exists =
-      (await resolveHostWorkspaceFile(target.fileContext, target.absolutePath, terminalHandle)) !==
-      null
+      (await resolveHostWorkspaceFile(target.fileContext, target.absolutePath, {
+        terminalHandle
+      })) !== null
   } catch (error) {
     if (!(error instanceof HostFileRefusal)) {
       throw error

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { rmSync } from 'node:fs'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import {
@@ -8,6 +8,7 @@ import {
   BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES
 } from '../../shared/browser-client-file-channel-protocol'
 import { normalizeBrowserDownloadFilename } from '../../shared/browser-download-filename'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 
 export type BrowserClientStagedUpload = {
   stagingId: string
@@ -34,7 +35,7 @@ type StagingFilesystem = {
   removeDirectorySync(directory: string): void
 }
 
-// Windows file handles held by Chromium or antivirus can transiently block removal; retry.
+// Chromium or antivirus handles can transiently block removal; rmSync's native retries are top-level only.
 const stagingRemovalOptions = {
   recursive: true,
   force: true,
@@ -50,7 +51,7 @@ const nodeStagingFilesystem: StagingFilesystem = {
     await writeFile(filePath, contents, { mode: 0o600 })
   },
   removeDirectory: async (directory) => {
-    await rm(directory, stagingRemovalOptions)
+    await removeTree(directory)
   },
   removeDirectorySync: (directory) => {
     rmSync(directory, stagingRemovalOptions)

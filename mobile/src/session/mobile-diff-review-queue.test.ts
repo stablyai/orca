@@ -4,10 +4,7 @@ import type { MobileGitBranchChangeEntry } from '../source-control/mobile-branch
 import type { MobileGitStatusEntry } from '../source-control/mobile-git-status'
 import {
   buildMobileDiffReviewQueue,
-  createMobileDiffReviewFileKey,
-  filterMobileDiffReviewQueue,
-  summarizeMobileDiffReviewQueue,
-  type MobileDiffReviewQueueItem
+  createMobileDiffReviewFileKey
 } from './mobile-diff-review-queue'
 
 const emptyReviewState: MobileDiffReviewState = { version: 1, files: {} }
@@ -164,102 +161,5 @@ describe('mobile diff review queue', () => {
         staleNoteCount: 1
       }
     ])
-  })
-
-  it('filters unreviewed files and noted files', () => {
-    const reviewState: MobileDiffReviewState = {
-      version: 1,
-      files: {
-        [createMobileDiffReviewFileKey('unstaged', 'unstaged', 'a.ts')]: {
-          key: createMobileDiffReviewFileKey('unstaged', 'unstaged', 'a.ts'),
-          filePath: 'a.ts',
-          scope: 'unstaged',
-          reviewedAt: 11,
-          reviewDiffIdentity: 'wrong'
-        }
-      }
-    }
-    const queue = buildMobileDiffReviewQueue({
-      worktreeId: 'wt-1',
-      statusEntries: [
-        statusEntry({ path: 'a.ts', area: 'unstaged' }),
-        statusEntry({ path: 'b.ts', area: 'unstaged' })
-      ],
-      branchEntries: [],
-      comments: [comment({ id: 'a', filePath: 'b.ts' })],
-      reviewState
-    })
-
-    const reviewedItem: MobileDiffReviewQueueItem = {
-      ...queue[0],
-      key: createMobileDiffReviewFileKey('unstaged', 'unstaged', 'c.ts'),
-      filePath: 'c.ts',
-      isReviewed: true
-    }
-    const filterQueue = [...queue, reviewedItem]
-
-    expect(
-      filterMobileDiffReviewQueue(filterQueue, 'unreviewed').map((item) => item.filePath)
-    ).toEqual(['a.ts', 'b.ts'])
-    expect(filterMobileDiffReviewQueue(filterQueue, 'notes').map((item) => item.filePath)).toEqual([
-      'b.ts'
-    ])
-  })
-
-  it('summarizes review counts in one pass without rereading item fields', () => {
-    const entryCount = 1_000
-    const reads = { isReviewed: 0, scope: 0, canStage: 0 }
-    let expectedReviewedCount = 0
-    let expectedReviewedUnstagedItems = 0
-    let expectedReviewedUnstagedCount = 0
-    const queue = Array.from({ length: entryCount }, (_, index) => {
-      const isReviewed = index % 2 === 0
-      const scope = index % 3 === 0 ? 'unstaged' : 'staged'
-      const canStage = index % 5 === 0
-      if (isReviewed) {
-        expectedReviewedCount += 1
-        if (scope === 'unstaged') {
-          expectedReviewedUnstagedItems += 1
-          if (canStage) {
-            expectedReviewedUnstagedCount += 1
-          }
-        }
-      }
-      const item = {} as MobileDiffReviewQueueItem
-      Object.defineProperties(item, {
-        isReviewed: {
-          enumerable: true,
-          get: () => {
-            reads.isReviewed += 1
-            return isReviewed
-          }
-        },
-        scope: {
-          enumerable: true,
-          get: () => {
-            reads.scope += 1
-            return scope
-          }
-        },
-        canStage: {
-          enumerable: true,
-          get: () => {
-            reads.canStage += 1
-            return canStage
-          }
-        }
-      })
-      return item
-    })
-
-    expect(summarizeMobileDiffReviewQueue(queue)).toEqual({
-      reviewedCount: expectedReviewedCount,
-      reviewedUnstagedCount: expectedReviewedUnstagedCount
-    })
-    expect(reads).toEqual({
-      isReviewed: entryCount,
-      scope: expectedReviewedCount,
-      canStage: expectedReviewedUnstagedItems
-    })
   })
 })

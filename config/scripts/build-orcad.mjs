@@ -6,7 +6,8 @@ import {
   buildOrcadEntry,
   buildOrcadCli,
   buildOrcadLauncher,
-  externalNativeAddons,
+  ORCAD_SERVER_BUILD_TARGET,
+  ORCAD_BUNDLE_PLUGINS,
   ORCAD_EXTERNAL_MODULES,
   ORCAD_CHILD_ENTRY_POINTS,
   ORCAD_COMMONJS_MODULE_OPTIONS,
@@ -117,7 +118,7 @@ async function stageParcelWatcher(target) {
     },
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_SERVER_BUILD_TARGET,
     format: 'cjs',
     outfile: join(OUT_DIR, ORCAD_PARCEL_WATCHER_ENTRY),
     external: ['./watcher.node'],
@@ -222,11 +223,11 @@ function buildForkedChild(entryPoint, outfile) {
     entryPoints: [entryPoint],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_SERVER_BUILD_TARGET,
     format: 'cjs',
     outfile,
     external: ORCAD_EXTERNAL_MODULES,
-    plugins: [externalNativeAddons],
+    plugins: ORCAD_BUNDLE_PLUGINS,
     metafile: true,
     minify: true,
     sourcemap: false,
@@ -286,6 +287,10 @@ const electronImporters = collectImporters(
   (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
 )
 const sqliteImporters = collectImporters(metafiles, (specifier) => specifier === 'node:sqlite')
+// A bundled UMD factory keeps its relative requires, which fail beside the single-file bundle (#33592).
+const umdInputs = metafiles.flatMap((metafile) =>
+  Object.keys(metafile.inputs).filter((file) => /[\\/]lib[\\/]umd[\\/]/.test(file))
+)
 
 const graphErrors = []
 if (electronImporters.size > 0) {
@@ -298,6 +303,13 @@ if (electronImporters.size > 0) {
 if (sqliteImporters.size > 0) {
   graphErrors.push(
     `${sqliteImporters.size} module(s) in the bundle import node:sqlite:\n${[...sqliteImporters]
+      .map((file) => `  - ${file}`)
+      .join('\n')}`
+  )
+}
+if (umdInputs.length > 0) {
+  graphErrors.push(
+    `${umdInputs.length} UMD module(s) in the bundle; resolve their ESM build in ORCAD_BUNDLE_PLUGINS:\n${umdInputs
       .map((file) => `  - ${file}`)
       .join('\n')}`
   )

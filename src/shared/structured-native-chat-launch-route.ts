@@ -1,20 +1,22 @@
 /** Share settings defaults and per-launch feasibility between renderer tab launches and orchestration workers to prevent drift. */
 
-import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from './agent-session/lifecycle/agent-session-provider-handle'
 import { parseExecutionHostId } from './execution-host'
-import type { GlobalSettings } from './global-settings-types'
-import type { NativeChatProviderSettings } from './native-chat/native-chat-providers'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from './protocol-version'
+} from './agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from './agent-session/structured-agent-session-surface-capabilities'
+import type { AgentDefaultSurface } from './native-chat/native-chat-appearance-settings'
 import type { TuiAgent } from './tui-agent'
 import type { WorkspaceLaunchKind } from './workspace-launch-kind'
 
-export type NativeChatDefaultSettings = Pick<GlobalSettings, 'experimentalNativeChat'> &
-  Partial<NativeChatProviderSettings>
+/** Keyed by agent id so host-registered agents outside `TuiAgent` read the same preference. */
+export type NativeChatDefaultSettings = {
+  agentDefaultSurface?: AgentDefaultSurface
+  nativeChatProviders?: Readonly<Partial<Record<string, boolean>>>
+}
 
 /** Why a launch that the user's default asked to be structured cannot be. */
 export type StructuredNativeChatBlocker =
@@ -43,6 +45,7 @@ export type StructuredNativeChatSupportInput = {
   clientCapabilities?: readonly string[]
   /** Host-derived. Absent means the kind was never established, which is not evidence of any kind. */
   workspaceKind?: WorkspaceLaunchKind
+  projectExecutionKind?: 'host' | 'ssh'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   startsOutsideWorkspaceRoot?: boolean
   /** An existing PTY agent keeps its execution transport. */
@@ -51,19 +54,13 @@ export type StructuredNativeChatSupportInput = {
   hostStructuredAgents?: readonly string[]
 }
 
-/** The single Chat UI switch selects structured chat for supported new launches. */
-export function isNativeChatEnabled(
-  settings: Partial<NativeChatDefaultSettings> | null | undefined
+/** An explicit per-agent choice wins over the global default surface. */
+export function nativeChatPreferenceFor(
+  settings: NativeChatDefaultSettings | null | undefined,
+  agent: string
 ): boolean {
-  return settings?.experimentalNativeChat === true
-}
-
-/** Unchosen agents retain the chat default, independently of installation inventory. */
-export function isNativeChatDefaultFor(
-  settings: Partial<NativeChatDefaultSettings> | null | undefined,
-  agent: TuiAgent
-): boolean {
-  return isNativeChatEnabled(settings) && (settings?.nativeChatProviders?.[agent] ?? true)
+  const override = settings?.nativeChatProviders?.[agent]
+  return typeof override === 'boolean' ? override : settings?.agentDefaultSurface === 'chat'
 }
 
 function clientChoosesStructuredLaunches(capabilities: readonly string[] | undefined): boolean {
@@ -78,7 +75,10 @@ export function resolveStructuredNativeChatSupport(
 ): StructuredNativeChatSupport {
   // Paired runtimes execute structured sessions themselves; relay SSH hosts cannot.
   const host = parseExecutionHostId(input.executionHostId)
-  if (host?.kind !== 'local' && host?.kind !== 'runtime') {
+  if (
+    input.projectExecutionKind === 'ssh' ||
+    (host?.kind !== 'local' && host?.kind !== 'runtime')
+  ) {
     return { supported: false, blocker: 'remote-execution-host' }
   }
   if (input.reusesTerminal === true) {

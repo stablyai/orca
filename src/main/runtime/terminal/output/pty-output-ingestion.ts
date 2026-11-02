@@ -30,7 +30,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     ptyId: string,
     data: string
   ): ProcessedAgentStatusChunk
-  protected abstract recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void
+  protected abstract recordRecentPtyOutput(ptyId: string, data: string): void
   protected abstract shouldAnswerQueriesForLiveChunk(ptyId: string): boolean
   abstract maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null
   protected abstract trackHeadlessTerminalData(
@@ -41,7 +41,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
   ): void
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
   protected abstract scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void
-  protected abstract getLeavesForPty(ptyId: string): RuntimeLeafRecord[]
+  protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
   protected abstract recordPtyWorktree(
     ptyId: string,
     worktreeId: string,
@@ -105,7 +105,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
     const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
-    this.recordRecentPtyOutputForPathProvenance(ptyId, data)
+    this.recordRecentPtyOutput(ptyId, data)
     // Use advertised dev-server URLs for workspace ports instead of kernel bind addresses.
     advertisedUrlWatcher.ingest(ptyId, data, at)
     // Capture query ownership in the ingestion/drop tick; queued writes must not reinterpret later subscriber/settings changes.
@@ -130,7 +130,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     let ptyTailAfter: ReturnType<typeof appendNormalizedToTailBuffer> | null = null
     let ptyNormalized: ReturnType<typeof normalizeTerminalChunk> | null = null
     if (pty) {
-      pty.connected = true
+      this.terminalIdentity.setPtyConnected(pty, true)
       pty.disconnectedAt = null
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
@@ -170,7 +170,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         paneKey: this.makeRuntimePaneKey(leaf),
         surfaceRecordedAtGraphSequence: this.graphSequence
       })
-      leaf.connected = true
+      this.terminalIdentity.updateLeafConnected(leaf, true)
       leaf.writable = this.graphStatus === 'ready'
       leaf.lastOutputAt = at
       if (

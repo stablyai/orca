@@ -1,5 +1,5 @@
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat-agent-support'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript,
@@ -82,7 +82,8 @@ export const NATIVE_CHAT_METHODS = [
             params.transcriptPath
           ),
           limit,
-          beforeOffset: params.beforeOffset
+          beforeOffset: params.beforeOffset,
+          sourceOrder: params.capabilities?.transcriptSourceOrder === 1
         },
         signal
       )
@@ -147,6 +148,7 @@ export const NATIVE_CHAT_METHODS = [
           params.transcriptPath
         ),
         initialLimit: limit,
+        sourceOrder: params.capabilities?.transcriptSourceOrder === 1,
         onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {
             return

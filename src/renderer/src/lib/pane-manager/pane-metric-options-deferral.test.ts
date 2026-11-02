@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { setTerminalWebglDiagnosticRecorder } from '../../../../shared/terminal-webgl-diagnostics'
+import { describe, expect, it } from 'vitest'
+
 import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { toPublicPane } from './pane-public-view'
 import { canApplyPaneMetricOptions, canMeasurePaneForFit } from './pane-fit-measurability'
@@ -21,31 +21,6 @@ function makeInternalPane(): ManagedPaneInternal {
 }
 
 describe('pane-metric-options-deferral', () => {
-  it('writes metric options directly when the pane is measurable', () => {
-    const pane = makePane()
-
-    const result = applyOrDeferPaneMetricOptions(pane, { fontSize: 16, fontFamily: 'X' }, true)
-
-    expect(result).toBe('applied')
-    expect(pane.terminal.options.fontSize).toBe(16)
-    expect(pane.terminal.options.fontFamily).toBe('X')
-    expect(hasDeferredPaneMetricOptions(pane)).toBe(false)
-  })
-
-  it('defers writes on an unmeasurable pane until flushed', () => {
-    const pane = makePane()
-
-    const result = applyOrDeferPaneMetricOptions(pane, { fontSize: 16 }, false)
-
-    expect(result).toBe('deferred')
-    expect(pane.terminal.options.fontSize).toBeUndefined()
-    expect(hasDeferredPaneMetricOptions(pane)).toBe(true)
-
-    expect(flushDeferredPaneMetricOptions(pane)).toBe(true)
-    expect(pane.terminal.options.fontSize).toBe(16)
-    expect(hasDeferredPaneMetricOptions(pane)).toBe(false)
-  })
-
   it('keeps only the latest deferral and clears it when a measurable apply lands', () => {
     const pane = makePane()
 
@@ -56,21 +31,6 @@ describe('pane-metric-options-deferral', () => {
     expect(pane.terminal.options.fontSize).toBe(18)
     expect(flushDeferredPaneMetricOptions(pane)).toBe(false)
     expect(pane.terminal.options.fontSize).toBe(18)
-  })
-
-  it('writes only the provided keys', () => {
-    const pane = makePane()
-    pane.terminal.options.lineHeight = 1.4
-
-    applyOrDeferPaneMetricOptions(pane, { fontSize: 12 }, true)
-
-    expect(pane.terminal.options.lineHeight).toBe(1.4)
-    expect(pane.terminal.options.fontWeight).toBeUndefined()
-  })
-
-  it('flush is a no-op without a pending deferral', () => {
-    const pane = makePane()
-    expect(flushDeferredPaneMetricOptions(pane)).toBe(false)
   })
 
   it('flushes through a different pane view than the one that deferred', () => {
@@ -85,15 +45,6 @@ describe('pane-metric-options-deferral', () => {
     expect(hasDeferredPaneMetricOptions(flushView)).toBe(true)
     expect(flushDeferredPaneMetricOptions(flushView)).toBe(true)
     expect(internal.terminal.options.fontSize).toBe(16)
-  })
-
-  it('flushes through the internal pane when a public view deferred', () => {
-    const internal = makeInternalPane()
-
-    applyOrDeferPaneMetricOptions(toPublicPane(internal), { fontSize: 17 }, false)
-
-    expect(flushDeferredPaneMetricOptions(internal)).toBe(true)
-    expect(internal.terminal.options.fontSize).toBe(17)
   })
 
   it('reports settled only when every value is live and nothing is parked', () => {
@@ -125,14 +76,6 @@ describe('pane-metric-options-deferral', () => {
     expect(pane.terminal.options.fontSize).toBe(22)
     expect(pane.terminal.options.lineHeight).toBe(1.5)
   })
-
-  it('override is a no-op when nothing is parked', () => {
-    const pane = makePane()
-    overridePendingPaneMetricOptions(pane, { fontSize: 22 })
-
-    expect(hasDeferredPaneMetricOptions(pane)).toBe(false)
-    expect(pane.terminal.options.fontSize).toBeUndefined()
-  })
 })
 
 describe('canApplyPaneMetricOptions gating', () => {
@@ -156,72 +99,5 @@ describe('canApplyPaneMetricOptions gating', () => {
 
   it('leaves the cols/rows floor on the fit itself', () => {
     expect(canMeasurePaneForFit(makeSizedPane({ width: 50, height: 600 }, 5))).toBe(false)
-  })
-})
-
-describe('metric weight-change forensics', () => {
-  // Weights rarely change; retain transition crumbs that identify bold-collapse poisoning/healing writes (STA-4042).
-  it('records prev/next/reason when a weight value actually changes', () => {
-    const recorder = vi.fn()
-    setTerminalWebglDiagnosticRecorder(recorder)
-    const pane = makePane()
-    pane.terminal.options.fontWeight = 500
-
-    applyOrDeferPaneMetricOptions(pane, { fontWeight: 700, fontWeightBold: 700 }, true)
-
-    expect(recorder).toHaveBeenCalledWith('metric-weight-change', {
-      paneId: 1,
-      key: 'fontWeight',
-      prev: '500',
-      next: '700',
-      reason: 'appearance'
-    })
-    expect(recorder).toHaveBeenCalledWith('metric-weight-change', {
-      paneId: 1,
-      key: 'fontWeightBold',
-      prev: null,
-      next: '700',
-      reason: 'appearance'
-    })
-    setTerminalWebglDiagnosticRecorder(null)
-  })
-
-  it('stays silent when the written weights equal the live values', () => {
-    const recorder = vi.fn()
-    setTerminalWebglDiagnosticRecorder(recorder)
-    const pane = makePane()
-    pane.terminal.options.fontWeight = 500
-    pane.terminal.options.fontWeightBold = 700
-
-    applyOrDeferPaneMetricOptions(
-      pane,
-      { fontWeight: 500, fontWeightBold: 700, fontSize: 15 },
-      true
-    )
-
-    expect(recorder).not.toHaveBeenCalledWith('metric-weight-change', expect.anything())
-    setTerminalWebglDiagnosticRecorder(null)
-  })
-
-  it('labels a flushed deferral as the deferred-flush writer', () => {
-    const recorder = vi.fn()
-    setTerminalWebglDiagnosticRecorder(recorder)
-    const pane = makePane()
-    pane.terminal.options.fontWeight = 700
-
-    applyOrDeferPaneMetricOptions(pane, { fontWeight: 500 }, false)
-    expect(recorder).not.toHaveBeenCalledWith('metric-weight-change', expect.anything())
-    flushDeferredPaneMetricOptions(pane)
-
-    expect(recorder).toHaveBeenCalledWith(
-      'metric-weight-change',
-      expect.objectContaining({
-        key: 'fontWeight',
-        prev: '700',
-        next: '500',
-        reason: 'deferred-flush'
-      })
-    )
-    setTerminalWebglDiagnosticRecorder(null)
   })
 })

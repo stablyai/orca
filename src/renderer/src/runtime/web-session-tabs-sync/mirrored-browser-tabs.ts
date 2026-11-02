@@ -197,6 +197,7 @@ export function buildMirroredBrowserTabs(
       page,
       certificateFailure: tab.certificateFailure ?? null,
       remotePageId: tab.browserPageId,
+      ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),
       ...(tab.placement ? { placement: tab.placement } : {}),
       unifiedTab: buildBrowserUnifiedTab(
         workspace,

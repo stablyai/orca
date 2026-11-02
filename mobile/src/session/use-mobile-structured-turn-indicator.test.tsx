@@ -2,12 +2,13 @@ import { createElement } from 'react'
 import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 function journalItem(
@@ -29,8 +30,9 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
   let listener: ((value: unknown) => void) | null = null
-  type RpcReply = { ok: boolean; result: unknown; _meta: { runtimeId: string } }
+  type RpcReply = RpcResponse
   const sendRequest = vi.fn(async (method: string): Promise<RpcReply> => ({
+    id: 'indicator-rpc',
     ok: true,
     result:
       method === 'agentSession.options'
@@ -42,23 +44,38 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
     _meta: { runtimeId: 'r1' }
   }))
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
-    listener = onData
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+    }
     return vi.fn()
   })
-  const client = { sendRequest, subscribe } as unknown as RpcClient
-  // Keep callbacks stable so rerenders cannot release the session’s hold/subscription.
+  const client: RpcClient = {
+    sendRequest,
+    subscribe,
+    getState: () => 'connected',
+    onStateChange: () => () => {},
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    updateTerminalSubscriptionViewport: () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
+  // Stable across renders: a fresh callback would re-run the hold/subscribe effect
+  // and release the session out from under the test.
   const onSendError = vi.fn()
 
   function Harness(): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,
       connected: true,
+      hostSupport: null,
       agent: 'codex',
       onSendError
-    } as never)
+    })
     return null
   }
 
@@ -163,7 +180,7 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
 
     await act(async () => {
       const cancelled = { ok: true, value: { cancelled: true } }
-      answer({ ok: true, result: cancelled, _meta: { runtimeId: 'r1' } })
+      answer({ id: 'indicator-rpc', ok: true, result: cancelled, _meta: { runtimeId: 'r1' } })
     })
     await vi.waitFor(() => expect(hook?.turnIndicator.stopping).toBe(false))
   })
@@ -231,6 +248,7 @@ describe("useMobileStructuredAgentSession and the host's Stopping", () => {
   function Harness({ statusFeed }: { statusFeed: boolean }): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,

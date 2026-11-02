@@ -15,7 +15,8 @@ export function SshHostAdvancedFields({
   form,
   disabled,
   onFormChange,
-  offerProxyConnectionReuse = false
+  offerProxyConnectionReuse = false,
+  offerReconnectOnLaunch = false
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -24,6 +25,8 @@ export function SshHostAdvancedFields({
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
   /** Only for hosts this Windows desktop dials itself; a paired server runs its own ssh. */
   offerProxyConnectionReuse?: boolean
+  /** Only for hosts this desktop restores at launch; a paired server keeps its own hosts. */
+  offerReconnectOnLaunch?: boolean
 }): React.JSX.Element {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className="col-span-2 sm:col-span-2">
@@ -136,6 +139,35 @@ export function SshHostAdvancedFields({
                 ariaLabel={translate(
                   'auto.components.settings.SshTargetForm.proxyConnectionReuse',
                   'Reuse one proxy connection'
+                )}
+              />
+            </div>
+          ) : null}
+          {offerReconnectOnLaunch ? (
+            <div className="flex items-start justify-between gap-4 py-1 text-xs">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label className="text-xs font-medium">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.reconnectOnLaunch',
+                    'Reconnect on launch'
+                  )}
+                </Label>
+                <p className="text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.reconnectOnLaunchHelp',
+                    'When off, Orca leaves this host, and any Orca server reached through it, disconnected at launch until you connect it.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={form.reconnectOnLaunch}
+                disabled={disabled}
+                onChange={() =>
+                  onFormChange((f) => ({ ...f, reconnectOnLaunch: !f.reconnectOnLaunch }))
+                }
+                ariaLabel={translate(
+                  'auto.components.settings.SshTargetForm.reconnectOnLaunch',
+                  'Reconnect on launch'
                 )}
               />
             </div>

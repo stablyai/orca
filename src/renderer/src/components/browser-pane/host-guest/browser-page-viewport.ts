@@ -2,9 +2,15 @@
 
 const slotViewportRoots = new Map<string, HTMLDivElement>()
 
+/** Lays docked DevTools out below the page when the dock says bottom, beside it otherwise. */
+export const BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME =
+  'flex min-h-0 min-w-0 flex-1 has-[>[data-browser-devtools-dock=bottom]]:flex-col'
+
 type BrowserPageViewport = {
   shell: HTMLDivElement
   chromeInset: HTMLDivElement
+  /** Holds the page container and, while docked, DevTools below or beside it. */
+  devToolsSplit: HTMLDivElement
   container: HTMLDivElement
   scroller: HTMLDivElement
   content: HTMLDivElement
@@ -106,9 +112,12 @@ export function ensureBrowserPageViewport(
     chromeInset.style.height = `${rememberedInsetHeight}px`
   }
 
+  const devToolsSplit = document.createElement('div')
+  devToolsSplit.className = BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME
+
   const container = document.createElement('div')
   container.dataset.browserPageContainer = ''
-  container.className = 'relative flex min-h-0 flex-1 overflow-hidden bg-background'
+  container.className = 'relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background'
 
   const scroller = document.createElement('div')
   scroller.dataset.browserPageScroller = ''
@@ -120,11 +129,12 @@ export function ensureBrowserPageViewport(
 
   scroller.appendChild(content)
   container.appendChild(scroller)
+  devToolsSplit.appendChild(container)
 
-  shell.append(chromeInset, container)
+  shell.append(chromeInset, devToolsSplit)
   root.appendChild(shell)
 
-  const viewport = { shell, chromeInset, container, scroller, content }
+  const viewport = { shell, chromeInset, devToolsSplit, container, scroller, content }
   browserPageViewports.set(browserPageId, viewport)
   applyViewportPresetSizeStyles(viewport, browserPageViewportPresetSizes.get(browserPageId) ?? null)
   return viewport
@@ -278,8 +288,4 @@ export function parkBrowserPageViewport(browserPageId: string): void {
     viewport.shell.style.pointerEvents = 'none'
     viewport.shell.style.opacity = '0'
   }
-}
-
-export function _getRememberedBrowserPageInsetCountForTests(): number {
-  return browserPageChromeInsetHeights.size
 }

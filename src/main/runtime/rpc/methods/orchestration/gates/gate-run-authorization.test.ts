@@ -195,7 +195,7 @@ describe('orchestration gate Run authorization', () => {
       ok: false,
       error: {
         code: 'consumer_fenced',
-        message: `This coordinator terminal is bound to ${runA}, not ${strangerRun.id}.`
+        message: `This caller is bound to Run ${runA}, not Run ${strangerRun.id}. Nothing changed.`
       }
     })
     expect(harness.db.getTask(strangerTask.id)?.status).toBe('ready')

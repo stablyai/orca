@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Measure full-chunk scheme scans against bounded 512-byte carry suffix on each PTY chunk, including early-out without /pull/.
-// Arms mirror production; re-read source constants at startup so changed cap/schemes fail rather than benchmarking stale assumptions.
+// Model full-chunk and bounded carry scans, including an includes() early-out without /pull/.
+// Source constants are checked; the mirrored algorithms still require manual review for drift.
 import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
@@ -61,7 +61,7 @@ function endsWithHttpSchemePrefixFragment(value) {
   return ''
 }
 
-// Pre-fix implementation, kept verbatim for comparison.
+// Full-chunk comparator for the bounded-suffix model.
 function carryBefore(value) {
   const schemeIndex = Math.max(...HTTP_SCHEME_PREFIXES.map((prefix) => value.lastIndexOf(prefix)))
   if (schemeIndex !== -1) {
@@ -181,10 +181,10 @@ for (const bytes of SIZES) {
 }
 
 const pad = (value, width) => String(value).padStart(width)
-console.log('PR-link carry scan, per PTY chunk. Speedup = before / after (>1 is faster).')
+console.log('Modeled PR-link carry scan, per chunk. Ratio = full-chunk / bounded (>1 is faster).')
 console.log(`iterations=${ITERATIONS} warmup=${WARMUP} (median of 5 rounds)`)
 console.log(
-  `${pad('chunk', 9)} ${pad('carry only', 12)} ${pad('detector path', 15)} ${pad('fragment tail', 15)}`
+  `${pad('chunk', 9)} ${pad('carry only', 12)} ${pad('modeled path', 15)} ${pad('fragment tail', 15)}`
 )
 for (const row of rows) {
   console.log(
@@ -193,7 +193,7 @@ for (const row of rows) {
 }
 console.log(
   '\ncarry only    = the scan this change bounds, in isolation.\n' +
-    'detector path = includes() + carry, i.e. what the PTY hot path actually saves.\n' +
-    'fragment tail = chunk ending mid-scheme, where the new code pays an extra\n' +
-    '                bounded probe. ~1x means the fallback costs nothing material.'
+    'modeled path = includes() + carry; excludes normalization, parsing and callbacks.\n' +
+    'fragment tail = chunk ending mid-scheme, including the fallback probe.\n' +
+    'Ratios describe these local models and fixtures; the full detector is not executed.'
 )

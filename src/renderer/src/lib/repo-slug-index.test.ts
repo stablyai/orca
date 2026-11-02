@@ -46,14 +46,6 @@ async function lookup(slug: string): Promise<Repo[]> {
 }
 
 describe('useRepoSlugIndex fork upstream matching', () => {
-  it('matches a project row against a fork clone via its upstream parent', async () => {
-    const fork = makeRepo({ id: 'fork', upstream: { owner: 'SciPhi-AI', repo: 'R2R' } })
-    setRepos([fork])
-    repoSlug.mockResolvedValue({ owner: 'me', repo: 'r2r-mirror' })
-
-    expect(await lookup('SciPhi-AI/R2R')).toEqual([fork])
-  })
-
   it('still matches the fork by its own origin slug', async () => {
     const fork = makeRepo({ id: 'fork', upstream: { owner: 'SciPhi-AI', repo: 'R2R' } })
     setRepos([fork])

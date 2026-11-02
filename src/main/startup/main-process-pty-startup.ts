@@ -34,17 +34,24 @@ import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { mainProcessState as state } from './main-process-state'
+import { shortPluginBranchName } from '../../shared/plugins/events/plugin-events'
+import { notifyWorkspaceCreatedPluginHook } from '../plugins/hooks/workspace-create-plugin-hook'
 
 export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
+  const identity = { workspaceId: event.worktreeId, kind: 'worktree', path: event.path }
+  const folder = parseWorkspaceKey(event.worktreeId)?.type === 'folder'
+  if (event.kind === 'created') {
+    notifyWorkspaceCreatedPluginHook({ ...event, folder })
+  }
   // Public worktree events retain their Git-only scope.
-  if (parseWorkspaceKey(event.worktreeId)?.type === 'folder') {
+  if (folder) {
     return
   }
   state.pluginService?.emitEvent(
-    event.kind === 'created' ? 'worktree.created' : 'worktree.removed',
+    event.kind === 'created' ? 'workspace.created' : 'workspace.removed',
     event.kind === 'created'
-      ? { worktreeId: event.worktreeId, path: event.path, branch: event.branch }
-      : { worktreeId: event.worktreeId, path: event.path }
+      ? { ...identity, branch: shortPluginBranchName(event.branch) }
+      : identity
   )
 }
 

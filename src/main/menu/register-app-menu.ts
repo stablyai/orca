@@ -8,7 +8,8 @@ import {
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-selection-item'
-import { createAppMenuQuitItem } from './app-menu-quit-item'
+import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
+import { createAppMenuReloadAndDevToolsItems } from './app-menu-reload-devtools-items'
 import { createAppWindowMenu } from './app-menu-window'
 
 export type AppearanceMenuState = {
@@ -25,7 +26,7 @@ export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefi
   return !(current !== false)
 }
 
-type RegisterAppMenuOptions = {
+type RegisterAppMenuOptions = AppMenuQuitHandlers & {
   onOpenSettings: () => void
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
@@ -40,9 +41,9 @@ type RegisterAppMenuOptions = {
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined
+  toggleFocusedPageDevTools?: (focused: Electron.WebContents) => boolean
   // app.name stays stable for Keychain; menus use the per-branch development label.
   appMenuLabel?: string
-  onQuit?: () => void
 }
 
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
@@ -72,22 +73,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       getKeybindings?.()
     )
     return formatKeybindingList(bindings, process.platform)
-  }
-
-  const reloadFocusedWindow = (ignoreCache: boolean): void => {
-    const webContents = BrowserWindow.getFocusedWindow()?.webContents
-    if (!webContents) {
-      return
-    }
-
-    onBeforeReload?.({ ignoreCache, webContentsId: webContents.id })
-
-    if (ignoreCache) {
-      webContents.reloadIgnoringCache()
-      return
-    }
-
-    webContents.reload()
   }
 
   // Share modifier-click release-channel routing across platform-specific update menu locations.
@@ -154,13 +139,13 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { role: 'hideOthers' },
       { role: 'unhide' },
       { type: 'separator' },
-      createAppMenuQuitItem(options.onQuit, options.appMenuLabel ?? app.name)
+      ...createAppMenuQuitItems(options, options.appMenuLabel ?? app.name)
     ]
   }
 
   const fileMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.file', 'File'),
-    submenu: [settingsItem, { type: 'separator' }, createAppMenuQuitItem(options.onQuit)]
+    submenu: [settingsItem, { type: 'separator' }, ...createAppMenuQuitItems(options)]
   }
 
   // Keep menu hints while non-macOS Ctrl+Z/Ctrl+Y reach focused terminal or DOM controls.
@@ -259,15 +244,11 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const viewMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.view', 'View'),
     submenu: [
-      {
-        label: translateMain('menu.reload', 'Reload'),
-        click: () => reloadFocusedWindow(false)
-      },
-      {
-        label: `${translateMain('menu.forceReload', 'Force Reload')}\t${shortcutLabel('app.forceReload')}`,
-        click: () => reloadFocusedWindow(true)
-      },
-      { role: 'toggleDevTools' },
+      ...createAppMenuReloadAndDevToolsItems({
+        forceReloadShortcutLabel: shortcutLabel('app.forceReload'),
+        onBeforeReload,
+        toggleFocusedPageDevTools: options.toggleFocusedPageDevTools
+      }),
       { type: 'separator' },
       {
         label: `${translateMain('menu.resetSize', 'Reset Size')}\t${shortcutLabel('zoom.reset')}`,

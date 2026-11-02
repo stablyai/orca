@@ -14,6 +14,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   matchFloatingWorkspacePanelChord,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut,
+  switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
 import {
@@ -687,6 +688,44 @@ describe('switchFloatingWorkspaceTab', () => {
     expect(store.activateTab).toHaveBeenCalledWith('tab-browser-2')
     expect(activateWebRuntimeSessionTabMock).not.toHaveBeenCalled()
     expect(notifyActiveTabChanged).toHaveBeenCalledWith({ browserPageId: 'page-2' })
+  })
+})
+
+describe('switchFloatingWorkspaceRecentTab', () => {
+  it('switches to the previous recent tab in the floating workspace', () => {
+    const activateTab = vi.fn()
+    const setActiveTab = vi.fn()
+    const store: Parameters<typeof switchFloatingWorkspaceRecentTab>[0] = {
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+      activateTab,
+      browserTabsByWorktree: {},
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: 'tab-1',
+            tabOrder: ['tab-1', 'tab-2'],
+            recentTabIds: ['tab-2', 'tab-1']
+          }
+        ]
+      },
+      openFiles: [],
+      setActiveTab,
+      tabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [makeTab('tab-1'), makeTab('tab-2')]
+      },
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeUnifiedTerminalTab('tab-1'),
+          makeUnifiedTerminalTab('tab-2')
+        ]
+      }
+    }
+
+    expect(switchFloatingWorkspaceRecentTab(store)).toBe(true)
+    expect(activateTab).toHaveBeenCalledWith('tab-2')
+    expect(setActiveTab).toHaveBeenCalledWith('tab-2')
   })
 })
 

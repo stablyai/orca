@@ -132,7 +132,6 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
   ]
 }
 
-export const WINDOWS_HOOK_STDIN_DRAIN_LABEL = 'orca_agent_hook_drain_stdin'
 // Windows searches the worktree before PATH; never give hook payloads to a repo-local executable.
 export const WINDOWS_HOOK_STDIN_READER = '"%SystemRoot%\\System32\\more.com"'
 export const WINDOWS_HOOK_STDIN_DRAIN_COMMAND = `${WINDOWS_HOOK_STDIN_READER} >nul 2>nul`
@@ -157,7 +156,3 @@ export const WINDOWS_GIT_BASH_HOOK_ENVIRONMENT_GUARD = `if ${WINDOWS_HOOK_ENVIRO
 export const WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD = `if (${WINDOWS_HOOK_ENVIRONMENT_VARS.map(
   (name) => `-not $env:${name}`
 ).join(' -or ')}) { exit 0 }`
-
-export function buildWindowsHookStdinDrainEpilogue(): string[] {
-  return [`:${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`, WINDOWS_HOOK_STDIN_DRAIN_COMMAND, 'exit /b 0']
-}

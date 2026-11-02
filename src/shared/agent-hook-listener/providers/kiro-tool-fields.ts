@@ -2,13 +2,17 @@ import type { ToolSnapshot } from '../listener-event'
 import { readString } from '../tool-input-preview'
 import { extractClaudeToolFields } from './claude-tool-fields'
 
-/** Kiro's camelCase hook names mapped onto the Claude names its payload fields mirror. */
+/** Kiro V2 camelCase hook names mapped onto Claude's; V3 already sends Claude's names. */
 export const KIRO_CLAUDE_EVENT_NAMES: Readonly<Record<string, string>> = Object.freeze({
   agentSpawn: 'SessionStart',
   userPromptSubmit: 'UserPromptSubmit',
   preToolUse: 'PreToolUse',
   postToolUse: 'PostToolUse',
-  stop: 'Stop'
+  stop: 'Stop',
+  UserPromptSubmit: 'UserPromptSubmit',
+  PreToolUse: 'PreToolUse',
+  PostToolUse: 'PostToolUse',
+  Stop: 'Stop'
 })
 
 /** Kiro keeps Claude tool fields, maps camelCase events and sends final text in assistant_response. */

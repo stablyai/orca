@@ -17,6 +17,8 @@ function makeEngine(mutations: Partial<PrActionMutations>) {
       mergePR: ok,
       setPRAutoMerge: ok,
       updatePRState: ok,
+      markReadyForReview: ok,
+      markDraft: ok,
       requestReviewers: ok,
       removeReviewers: ok,
       rerunChecks: ok,
@@ -68,6 +70,8 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
         mergePR: async () => ({ ok: false, error: 'socket hung up' }),
         setPRAutoMerge: async () => ({ ok: true }),
         updatePRState: async () => ({ ok: true }),
+        markReadyForReview: async () => ({ ok: true }),
+        markDraft: async () => ({ ok: true }),
         requestReviewers: async () => ({ ok: true }),
         removeReviewers: async () => ({ ok: true }),
         rerunChecks: async () => ({ ok: true })
@@ -87,6 +91,8 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
         mergePR: async () => ({ ok: true }),
         setPRAutoMerge: async () => ({ ok: true }),
         updatePRState: async () => ({ ok: true }),
+        markReadyForReview: async () => ({ ok: true }),
+        markDraft: async () => ({ ok: true }),
         requestReviewers: async () => ({ ok: true }),
         removeReviewers: async () => ({ ok: true }),
         rerunChecks: async () => ({ ok: true })
@@ -97,7 +103,7 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
       },
       onChange: () => {}
     })
-    await expect(engine.merge()).resolves.toBeUndefined()
+    await expect(engine.merge()).resolves.toBe(true)
     expect(engine.error).toBe('refresh failed')
     expect(engine.busy).toBeNull()
   })
@@ -109,6 +115,8 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
         mergePR: async () => ({ ok: true }),
         setPRAutoMerge: async () => ({ ok: true }),
         updatePRState: async () => ({ ok: true }),
+        markReadyForReview: async () => ({ ok: true }),
+        markDraft: async () => ({ ok: true }),
         requestReviewers: async () => ({ ok: true }),
         removeReviewers: async () => ({ ok: true }),
         rerunChecks: async () => ({ ok: true })
@@ -132,6 +140,8 @@ describe('PrActionsEngine — PR identity changes', () => {
       mergePR: async () => ({ ok: true }),
       setPRAutoMerge: async () => slow.promise,
       updatePRState: async () => ({ ok: true }),
+      markReadyForReview: async () => ({ ok: true }),
+      markDraft: async () => ({ ok: true }),
       requestReviewers: async () => ({ ok: true }),
       removeReviewers: async () => ({ ok: true }),
       rerunChecks: async () => ({ ok: true })
@@ -168,6 +178,8 @@ describe('PrActionsEngine — PR identity changes', () => {
       mergePR: async () => ({ ok: true }),
       setPRAutoMerge: async () => ({ ok: true }),
       updatePRState: async () => ({ ok: true }),
+      markReadyForReview: async () => ({ ok: true }),
+      markDraft: async () => ({ ok: true }),
       requestReviewers: async () => slow.promise,
       removeReviewers: async () => ({ ok: true }),
       rerunChecks: async () => ({ ok: true })
@@ -203,6 +215,8 @@ describe('PrActionsEngine — PR identity changes', () => {
       mergePR: async () => ({ ok: true }),
       setPRAutoMerge: async () => slow.promise,
       updatePRState: async () => ({ ok: true }),
+      markReadyForReview: async () => ({ ok: true }),
+      markDraft: async () => ({ ok: true }),
       requestReviewers: async () => ({ ok: true }),
       removeReviewers: async () => ({ ok: true }),
       rerunChecks: async () => ({ ok: true })

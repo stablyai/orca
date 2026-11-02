@@ -1,12 +1,13 @@
 import { basename } from '@/lib/path'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiscardAllArea } from './discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import { translate } from '@/i18n/i18n'
 
 export type DiscardConfirmationCopy = {
   title: string
   description: string
   confirmLabel: string
+  deleteAction: boolean
 }
 
 /** Discard deletes untracked files; staged additions retain their index version. */
@@ -30,7 +31,8 @@ export function getDiscardEntryConfirmationCopy(
         'auto.components.right.sidebar.source.control.discard.confirmation.d97bf697c9',
         'This will permanently delete this file. This cannot be undone.'
       ),
-      confirmLabel: 'Delete'
+      deleteAction: true,
+      confirmLabel: translate('sourceControl.discard.delete', 'Delete')
     }
   }
 
@@ -45,7 +47,8 @@ export function getDiscardEntryConfirmationCopy(
         'sourceControl.discard.restoreStagedVersionDescription',
         'This will restore the last staged version and discard the deletion. This cannot be undone.'
       ),
-      confirmLabel: 'Restore'
+      deleteAction: false,
+      confirmLabel: translate('sourceControl.discard.restore', 'Restore')
     }
   }
 
@@ -59,7 +62,8 @@ export function getDiscardEntryConfirmationCopy(
       'sourceControl.discard.unstagedChangesDescription',
       'This will revert the unstaged changes to this file. This cannot be undone.'
     ),
-    confirmLabel: 'Discard'
+    deleteAction: false,
+    confirmLabel: translate('sourceControl.discard.discard', 'Discard')
   }
 }
 
@@ -70,7 +74,11 @@ export function getDiscardAreaConfirmationCopy(
   switch (area) {
     case 'untracked':
       return {
-        title: count === 1 ? 'Delete 1 untracked file?' : `Delete ${count} untracked files?`,
+        title: translate(
+          'sourceControl.discard.deleteUntrackedTitle',
+          'Delete {{count}} untracked files?',
+          { count, defaultValue_one: 'Delete {{count}} untracked file?' }
+        ),
         description:
           count === 1
             ? translate(
@@ -80,9 +88,17 @@ export function getDiscardAreaConfirmationCopy(
             : translate(
                 'sourceControl.discard.deleteUntrackedFilesDescription',
                 'This will permanently delete these {{count}} untracked files. This cannot be undone.',
-                { count }
+                {
+                  count,
+                  defaultValue_one:
+                    'This will permanently delete {{count}} untracked file. This cannot be undone.'
+                }
               ),
-        confirmLabel: count === 1 ? 'Delete' : `Delete ${count}`
+        deleteAction: true,
+        confirmLabel:
+          count === 1
+            ? translate('sourceControl.discard.delete', 'Delete')
+            : translate('sourceControl.discard.deleteCount', 'Delete {{count}}', { count })
       }
     case 'staged':
       return {
@@ -94,7 +110,8 @@ export function getDiscardAreaConfirmationCopy(
           'auto.components.right.sidebar.source.control.discard.confirmation.ddf36f291c',
           'This will unstage and revert all staged changes. Staged new files will be deleted. This cannot be undone.'
         ),
-        confirmLabel: 'Discard all'
+        deleteAction: false,
+        confirmLabel: translate('sourceControl.discard.discardAll', 'Discard all')
       }
     case 'unstaged':
       return {
@@ -111,9 +128,14 @@ export function getDiscardAreaConfirmationCopy(
             : translate(
                 'sourceControl.discard.unstagedFilesIncludingUntrackedDescription',
                 'This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone.',
-                { count }
+                {
+                  count,
+                  defaultValue_one:
+                    'This will revert unstaged changes and permanently delete any untracked files among {{count}} file. This cannot be undone.'
+                }
               ),
-        confirmLabel: 'Discard all'
+        deleteAction: false,
+        confirmLabel: translate('sourceControl.discard.discardAll', 'Discard all')
       }
   }
 }

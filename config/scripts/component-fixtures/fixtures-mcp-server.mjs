@@ -90,7 +90,10 @@ async function screenshotFixtureTool(args) {
       content.push({ type: 'image', data, mimeType: 'image/png' })
     }
   }
-  return { content, isError: payload.results.some((result) => result.error) }
+  return {
+    content,
+    isError: payload.results.some((result) => result.error || result.pageErrors?.length)
+  }
 }
 
 async function handleRequest(message) {

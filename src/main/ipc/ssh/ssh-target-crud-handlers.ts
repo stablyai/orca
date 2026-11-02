@@ -33,11 +33,18 @@ import { requestDesktopBrowserBridgeReconcile } from '../desktop-browser-bridge-
 // Add/import can re-adopt orphaned workspaces; report them so the renderer refreshes repo ownership.
 function takeRepoReadoptions(): SshRepoReadoption[] {
   const store = getSshTargetRegistryStore()
-  if (!store || store.lastRepoReadoptions.length === 0) {
+  if (!store) {
     return []
   }
   const repoReadoptions = store.lastRepoReadoptions
   store.lastRepoReadoptions = []
+  return publishRepoReadoptions(repoReadoptions)
+}
+
+function publishRepoReadoptions(repoReadoptions: SshRepoReadoption[]): SshRepoReadoption[] {
+  if (repoReadoptions.length === 0) {
+    return []
+  }
   for (const targetId of new Set(
     repoReadoptions.flatMap(({ oldTargetId, newTargetId }) => [oldTargetId, newTargetId])
   )) {
@@ -58,6 +65,7 @@ function omitRendererSshTargetGeneration<
     managedServerMoveOffered?: unknown
     managedServerLeaveBehind?: unknown
     managedServerUpdateFailure?: unknown
+    managedServerRemoved?: unknown
     remoteRuntimeResolution?: unknown
   }
 >(
@@ -71,6 +79,7 @@ function omitRendererSshTargetGeneration<
   | 'managedServerMoveOffered'
   | 'managedServerLeaveBehind'
   | 'managedServerUpdateFailure'
+  | 'managedServerRemoved'
   | 'remoteRuntimeResolution'
 > {
   const {
@@ -81,6 +90,7 @@ function omitRendererSshTargetGeneration<
     managedServerMoveOffered: _managedServerMoveOffered,
     managedServerLeaveBehind: _managedServerLeaveBehind,
     managedServerUpdateFailure: _managedServerUpdateFailure,
+    managedServerRemoved: _managedServerRemoved,
     remoteRuntimeResolution: _remoteRuntimeResolution,
     ...rest
   } = value
@@ -167,19 +177,28 @@ export function registerSshTargetCrudHandlers(): void {
 
   ipcMain.handle('ssh:removeTarget', (_event, args: { id: string }) => removeSshTarget(args.id))
 
-  ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
-    const targets = getSshTargetRegistryStore()!.importFromSshConfig(args)
-    const repoReadoptions = takeRepoReadoptions()
-    return { targets, repoReadoptions }
+  ipcMain.handle('ssh:importConfig', async (_event, args?: { reAdopt?: boolean }) => {
+    const { targets, repoReadoptions } =
+      await getSshTargetRegistryStore()!.importFromSshConfig(args)
+    return { targets, repoReadoptions: publishRepoReadoptions(repoReadoptions) }
   })
 
   // Prefill the add-host form without importing targets; bulk sync belongs to Settings.
   ipcMain.handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
+    const store = getSshTargetRegistryStore()!
+    // The import's own decision, read without waiting on ssh -G; until one exists the flags are alias-only.
+    const snapshot = store.currentSshRouteSnapshot()
+    if (args?.refresh === true || !snapshot) {
+      void store.refreshSshRouteSnapshot().catch(() => {})
+    }
     return listUserSshConfigHostSummaries(
-      getSshTargetRegistryStore()!.listTargets(),
+      store.listTargets(),
       args?.query,
-      getSshTargetRegistryStore()!.listSuppressedSshConfigAliases(),
-      { refresh: args?.refresh === true }
+      store.listSuppressedSshConfigAliases(),
+      {
+        refresh: args?.refresh === true,
+        routeDuplicateAliases: new Set(snapshot?.duplicateOf.keys() ?? [])
+      }
     )
   })
 

@@ -1,10 +1,10 @@
 import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
-import { agentPinsAccountHome } from '../../../shared/agent-session-account-home'
+import { agentPinsAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 
 export function adapterSupportsCreate(
   adapter: StructuredAgentSessionAdapter,
@@ -63,12 +63,12 @@ export function hostCanStartRecord(
 /** Include saved chats whose agents are no longer registered when bounding client audiences. */
 export function knownAgentIds(deps: {
   agents: Pick<StructuredAgentRegistry, 'definitions'>
-  store: { listRecords: () => readonly Pick<AgentSessionRecord, 'provider'>[] }
+  store: { listConversations: () => readonly Pick<AgentSessionRecord, 'provider'>[] }
 }): readonly string[] {
   return [
     ...new Set([
       ...deps.agents.definitions().map(({ agent }) => agent),
-      ...deps.store.listRecords().map(({ provider }) => provider)
+      ...deps.store.listConversations().map(({ provider }) => provider)
     ])
   ]
 }

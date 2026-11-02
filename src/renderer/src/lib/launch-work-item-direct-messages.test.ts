@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/new-workspace', () => import('./linked-work-item-provider'))
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
 }))
 

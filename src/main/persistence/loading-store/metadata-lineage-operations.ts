@@ -1,4 +1,5 @@
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
+import type { DiffCommentBaseMutation } from '../../../shared/diff-comment-mutation'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -97,7 +98,7 @@ export class MetadataLineageOperations {
 
   setWorktreeMeta(
     target: HostWorktreeTarget,
-    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
+    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentBaseMutation
   ): WorktreeMeta {
     return setWorktreeMetaForHostOperation(
       this[metadataLineageOperationsContext].runtime,

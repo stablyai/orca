@@ -5,7 +5,11 @@ import { RELAY_INSTALL_LOCK_NAME } from '../../shared/relay-install-lock-name'
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
 import type { RuntimeRpcClientActivity } from '../runtime/runtime-rpc/runtime-rpc-shutdown'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
-import { ORCAD_IDLE_EXIT_TIMEOUT_MS, readOrcadE2EIdleTimeoutMs } from '../../shared/orcad-idle-exit'
+import {
+  ORCAD_IDLE_EXIT_TIMEOUT_MS,
+  readOrcadE2EIdleTimeoutMs,
+  readOrcadIdleTimeoutMs
+} from '../../shared/orcad-idle-exit'
 import {
   OrcadIdleExitMonitor,
   type OrcadIdleExitEvidence,
@@ -24,7 +28,8 @@ export function resolveOrcadManagedIdleExit(
     return null
   }
   return {
-    timeoutMs: readOrcadE2EIdleTimeoutMs(env) ?? ORCAD_IDLE_EXIT_TIMEOUT_MS,
+    timeoutMs:
+      readOrcadE2EIdleTimeoutMs(env) ?? readOrcadIdleTimeoutMs(env) ?? ORCAD_IDLE_EXIT_TIMEOUT_MS,
     activationRoot
   }
 }
@@ -40,6 +45,8 @@ export type OrcadManagedIdleExitPorts = {
   hasStagedMigration: () => boolean
   /** Enabled schedules or unsettled runs would be lost on exit. */
   automationsBusy: () => boolean
+  /** Exit would shut down the emulators Orca started for a workspace. */
+  emulatorsBusy: () => Promise<boolean>
   activationFenceExists: (root: string) => Promise<boolean>
 }
 
@@ -77,6 +84,7 @@ export function createOrcadIdleProbes(
     { name: 'chat-providers', read: () => verdict(ports.hasChatProviders()) },
     { name: 'migration', read: () => verdict(ports.hasStagedMigration()) },
     { name: 'automations', read: () => verdict(ports.automationsBusy()) },
+    { name: 'emulators', read: async () => verdict(await ports.emulatorsBusy()) },
     {
       name: 'activation',
       read: async () => verdict(await ports.activationFenceExists(config.activationRoot))

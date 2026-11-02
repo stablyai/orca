@@ -10,7 +10,7 @@ vi.mock('@/store', async () => {
 })
 
 import { useAppStore } from '@/store'
-import { flushMicrotasks } from '@/store/slices/agent-status-test-harness'
+import { flushMicrotasks } from '@/store/slices/agent-status/agent-status-test-harness'
 import { useActivityUnreadCount } from './useActivityUnreadCount'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'

@@ -14,6 +14,8 @@ export const TYPECHECK_PROJECTS = [
   { config: 'config/tsconfig.node.json', heapGib: 7 },
   { config: 'config/tsconfig.tc.web.json', heapGib: 6 },
   { config: 'config/tsconfig.tc.cli.json', heapGib: 2 },
+  // This typed IPC integration follows both main and renderer imports with their ambient inputs.
+  { config: 'config/tsconfig.test.pane-launch.json', heapGib: 7 },
   // Root projects exclude workspace package tests; each runs with its package's compiler.
   { config: 'src/packages/process-host/tsconfig.test.json', heapGib: 1 }
 ]
@@ -79,6 +81,7 @@ export function parseTypecheckOptions(args) {
     compiler: 'auto',
     bunConcurrency: 2,
     bunThreads: 4,
+    checkers: null,
     projects: TYPECHECK_PROJECTS
   }
   const selected = []
@@ -89,6 +92,8 @@ export function parseTypecheckOptions(args) {
       options.bunConcurrency = Number(argument.slice('--bun-concurrency='.length))
     } else if (argument.startsWith('--bun-threads=')) {
       options.bunThreads = Number(argument.slice('--bun-threads='.length))
+    } else if (argument.startsWith('--checkers=')) {
+      options.checkers = Number(argument.slice('--checkers='.length))
     } else if (argument.startsWith('--project=')) {
       const config = argument.slice('--project='.length)
       const project = [...TYPECHECK_PROJECTS, ...MOBILE_TYPECHECK_PROJECTS].find(
@@ -107,15 +112,45 @@ export function parseTypecheckOptions(args) {
       throw new Error('Bun concurrency and threads must be integers from 1 to 4')
     }
   }
+  if (options.checkers !== null && (!Number.isInteger(options.checkers) || options.checkers < 1)) {
+    throw new Error('Checkers must be a positive integer')
+  }
   if (selected.length > 0) {
     options.projects = selected
   }
   return options
 }
 
+const NATIVE_COMPILER_HINT = 'pass --compiler=native'
+
+const recoveryAdvice = (action, fallbackHint) =>
+  fallbackHint ? `${action}, or ${fallbackHint}.` : `${action}.`
+
+export function resolveTypecheckBunExecutable(root, fallbackHint, execute = runProcessSync) {
+  let timeoutMessage
+  const executable = resolvePinnedBunExecutable(root, (options) => {
+    const result = execute(options)
+    if (result.timedOut) {
+      timeoutMessage = `Bun version probe timed out after ${options.timeoutMs} ms: ${options.program}. ${recoveryAdvice('Retry when the host is less busy', fallbackHint)}`
+    }
+    return result
+  })
+  // Optional Bun callers still fall back; required typechecks must explain a timeout.
+  if (timeoutMessage) {
+    throw new Error(timeoutMessage)
+  }
+  return executable
+}
+
 export function selectTypecheckCompiler(
   compiler,
-  { root, resolveBunExecutable, platform = process.platform, arch = process.arch }
+  {
+    root,
+    resolveBunExecutable,
+    fallbackHint = NATIVE_COMPILER_HINT,
+    platform = process.platform,
+    arch = process.arch
+  }
 ) {
   if (compiler === 'auto') {
     compiler = supportsTsrs(platform, arch) ? 'tsrs' : 'bun'
@@ -126,10 +161,10 @@ export function selectTypecheckCompiler(
   if (compiler === 'native' || compiler === 'tsrs') {
     return { compiler }
   }
-  const bunExecutable = resolveBunExecutable(root)
+  const bunExecutable = resolveBunExecutable(root, fallbackHint)
   if (!bunExecutable) {
     throw new Error(
-      `Bun ${readPinnedBunVersion(root)} from devDependencies is missing; run pnpm install, or pass --compiler=native.`
+      `Bun ${readPinnedBunVersion(root)} from devDependencies is missing; ${recoveryAdvice('run pnpm install', fallbackHint)}`
     )
   }
   return { compiler, bunExecutable }
@@ -152,9 +187,21 @@ export function typecheckBatches(projects, { compiler, bunConcurrency, memoryByt
   )
 }
 
-export function resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }) {
+// Uncapped tsrs runs ~40 threads on 24 cores; 8 checkers matched its wall time with 16% less CPU under load.
+export const TSRS_DEFAULT_CHECKERS = 8
+
+const checkerArgs = (checkers) => (checkers ? ['--checkers', String(checkers)] : [])
+
+export function resolveTypecheckCommand(
+  config,
+  { compiler, bunExecutable, bunThreads, checkers = null, root }
+) {
   if (compiler === 'tsrs') {
-    return resolveTsrsTypecheckCommand(config, root)
+    const command = resolveTsrsTypecheckCommand(config, root)
+    return {
+      ...command,
+      args: [...command.args, ...checkerArgs(checkers ?? TSRS_DEFAULT_CHECKERS)]
+    }
   }
   const installedCompiler = resolveProjectCompilerInfo(config, root)
   if (compiler === 'bun' && installedCompiler.version !== BUN_TYPESCRIPT_VERSION) {
@@ -162,20 +209,27 @@ export function resolveTypecheckCommand(config, { compiler, bunExecutable, bunTh
       `Bun CI compiler targets TypeScript ${BUN_TYPESCRIPT_VERSION}, but ${config} resolves ${installedCompiler.version}`
     )
   }
+  if (compiler === 'bun') {
+    return {
+      program: bunExecutable,
+      args: ['check', '-p', config, '--threads', String(bunThreads), '--no-pretty', '--all'],
+      cwd: root
+    }
+  }
   return {
-    program: compiler === 'bun' ? bunExecutable : process.execPath,
-    args:
-      compiler === 'bun'
-        ? ['check', '-p', config, '--threads', String(bunThreads), '--no-pretty', '--all']
-        : [installedCompiler.program, '--noEmit', '-p', config],
+    program: process.execPath,
+    args: [installedCompiler.program, '--noEmit', '-p', config, ...checkerArgs(checkers)],
     cwd: root
   }
 }
 
-function checkProject(config, { compiler, bunExecutable, bunThreads, root, spawnCompiler }) {
+function checkProject(
+  config,
+  { compiler, bunExecutable, bunThreads, checkers, root, spawnCompiler }
+) {
   return new Promise((resolve, reject) => {
     const child = spawnCompiler({
-      ...resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }),
+      ...resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, checkers, root }),
       stdio: 'inherit'
     })
     child.on('error', reject)
@@ -196,6 +250,7 @@ export async function runTypecheckProjects({
   bunExecutable = 'bun',
   bunConcurrency = 1,
   bunThreads = 4,
+  checkers = null,
   root = repoRoot,
   projects = TYPECHECK_PROJECTS,
   spawnCompiler = spawnProcess,
@@ -217,6 +272,7 @@ export async function runTypecheckProjects({
               compiler,
               bunExecutable,
               bunThreads,
+              checkers,
               root,
               spawnCompiler
             })
@@ -233,7 +289,14 @@ export async function runTypecheckProjects({
   for (const batch of batches) {
     const results = await Promise.allSettled(
       batch.map((project) =>
-        checkProject(project.config, { compiler, bunExecutable, bunThreads, root, spawnCompiler })
+        checkProject(project.config, {
+          compiler,
+          bunExecutable,
+          bunThreads,
+          checkers,
+          root,
+          spawnCompiler
+        })
       )
     )
     for (const result of results) {
@@ -249,7 +312,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const options = parseTypecheckOptions(process.argv.slice(2))
   const selection = selectTypecheckCompiler(options.compiler, {
     root: repoRoot,
-    resolveBunExecutable: (root) => resolvePinnedBunExecutable(root, runProcessSync)
+    resolveBunExecutable: resolveTypecheckBunExecutable
   })
   const failures = await runTypecheckProjects({ ...options, ...selection })
   if (failures.length > 0) {

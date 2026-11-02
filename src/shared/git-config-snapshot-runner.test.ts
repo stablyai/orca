@@ -8,13 +8,13 @@ function listSnapshot(records: string[]): string {
   return `${records.join('\0')}\0`
 }
 
-function getGitArgs(call: unknown[]): string[] {
-  return call[0] as string[]
-}
+type GitCommandRunner = Parameters<typeof createGitConfigSnapshotRunner>[0]
 
-function countCalls(runGit: ReturnType<typeof vi.fn>, expectedArgs: string[]): number {
-  return runGit.mock.calls.filter((call) => {
-    const args = getGitArgs(call)
+function countCalls(
+  runGit: ReturnType<typeof vi.fn<GitCommandRunner>>,
+  expectedArgs: string[]
+): number {
+  return runGit.mock.calls.filter(([args]) => {
     return (
       args.length === expectedArgs.length && args.every((arg, index) => arg === expectedArgs[index])
     )
@@ -31,7 +31,7 @@ function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void
 
 describe('createGitConfigSnapshotRunner', () => {
   it('serves many config --get lookups from one config --list -z call', async () => {
-    const runGit = vi.fn(async () => ({
+    const runGit = vi.fn<GitCommandRunner>(async () => ({
       stdout: listSnapshot([
         'branch.main.remote\norigin',
         'branch.main.merge\nrefs/heads/main',
@@ -40,16 +40,22 @@ describe('createGitConfigSnapshotRunner', () => {
     }))
     const runner = createGitConfigSnapshotRunner(runGit)
 
-    await runner(['config', '--get', 'branch.main.remote'])
-    await runner(['config', '--get', 'branch.main.merge'])
-    await runner(['config', '--get', 'remote.pushDefault'])
+    await expect(runner(['config', '--get', 'branch.main.remote'])).resolves.toEqual({
+      stdout: 'origin'
+    })
+    await expect(runner(['config', '--get', 'branch.main.merge'])).resolves.toEqual({
+      stdout: 'refs/heads/main'
+    })
+    await expect(runner(['config', '--get', 'remote.pushDefault'])).resolves.toEqual({
+      stdout: 'fork'
+    })
 
     expect(countCalls(runGit, ['config', '--list', '-z'])).toBe(1)
-    expect(runGit.mock.calls.filter((call) => getGitArgs(call)[1] === '--get')).toHaveLength(0)
+    expect(runGit.mock.calls.filter(([args]) => args[1] === '--get')).toHaveLength(0)
   })
 
   it('returns branch and remote values from a representative snapshot', async () => {
-    const runGit = vi.fn(async () => ({
+    const runGit = vi.fn<GitCommandRunner>(async () => ({
       stdout: listSnapshot([
         'branch.feature.remote\norigin',
         'branch.feature.merge\nrefs/heads/feature',
@@ -70,7 +76,7 @@ describe('createGitConfigSnapshotRunner', () => {
   })
 
   it('passes remote commands through unchanged', async () => {
-    const runGit = vi.fn(async (args: string[]) => ({ stdout: args.join(' ') }))
+    const runGit = vi.fn<GitCommandRunner>(async (args: string[]) => ({ stdout: args.join(' ') }))
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await expect(runner(['remote'])).resolves.toEqual({ stdout: 'remote' })
@@ -83,18 +89,18 @@ describe('createGitConfigSnapshotRunner', () => {
   })
 
   it('case-folds the requested section and key', async () => {
-    const runGit = vi.fn(async () => ({
+    const runGit = vi.fn<GitCommandRunner>(async () => ({
       stdout: listSnapshot(['remote.pushdefault\nfork'])
     }))
     const runner = createGitConfigSnapshotRunner(runGit)
 
-    await expect(runner(['config', '--get', 'remote.pushDefault'])).resolves.toEqual({
+    await expect(runner(['config', '--get', 'REMOTE.pushDefault'])).resolves.toEqual({
       stdout: 'fork'
     })
   })
 
   it('preserves subsections with dots in lookup keys', async () => {
-    const runGit = vi.fn(async () => ({
+    const runGit = vi.fn<GitCommandRunner>(async () => ({
       stdout: listSnapshot(['branch.feature.x.merge\nrefs/heads/feature.x'])
     }))
     const runner = createGitConfigSnapshotRunner(runGit)
@@ -105,7 +111,7 @@ describe('createGitConfigSnapshotRunner', () => {
   })
 
   it('returns the last multivar value for config --get', async () => {
-    const runGit = vi.fn(async () => ({
+    const runGit = vi.fn<GitCommandRunner>(async () => ({
       stdout: listSnapshot([
         'branch.main.merge\nrefs/heads/old',
         'branch.main.merge\nrefs/heads/new'
@@ -119,7 +125,7 @@ describe('createGitConfigSnapshotRunner', () => {
   })
 
   it('parses valueless boolean keys without corrupting adjacent records', async () => {
-    const runGit = vi.fn(async () => ({
+    const runGit = vi.fn<GitCommandRunner>(async () => ({
       stdout: listSnapshot([
         'remote.origin.mirror',
         'remote.origin.url\ngit@example.com:org/repo.git'
@@ -137,7 +143,7 @@ describe('createGitConfigSnapshotRunner', () => {
 
   it('rejects an absent key from a loaded snapshot instead of returning empty success', async () => {
     // Missing keys must reject like config --get, without respawning the command this snapshot coalesces.
-    const runGit = vi.fn(async () => ({
+    const runGit = vi.fn<GitCommandRunner>(async () => ({
       stdout: listSnapshot(['branch.main.remote\norigin'])
     }))
     const runner = createGitConfigSnapshotRunner(runGit)
@@ -147,8 +153,7 @@ describe('createGitConfigSnapshotRunner', () => {
     )
     expect(countCalls(runGit, ['config', '--list', '-z'])).toBe(1)
     expect(
-      runGit.mock.calls.filter((call) => {
-        const args = getGitArgs(call)
+      runGit.mock.calls.filter(([args]) => {
         return args[0] === 'config' && args[1] === '--get'
       })
     ).toHaveLength(0)
@@ -156,7 +161,7 @@ describe('createGitConfigSnapshotRunner', () => {
 
   it('single-flights concurrent first config --get lookups', async () => {
     const snapshot = createDeferred<{ stdout: string }>()
-    const runGit = vi.fn(async () => await snapshot.promise)
+    const runGit = vi.fn<GitCommandRunner>(async () => await snapshot.promise)
     const runner = createGitConfigSnapshotRunner(runGit)
 
     const lookups = Promise.all([
@@ -184,7 +189,7 @@ describe('createGitConfigSnapshotRunner', () => {
   })
 
   it('falls back to real config --get after snapshot fetch failure', async () => {
-    const runGit = vi.fn(async (args: string[]) => {
+    const runGit = vi.fn<GitCommandRunner>(async (args: string[]) => {
       if (args[0] === 'config' && args[1] === '--list') {
         throw new Error('snapshot failed')
       }
@@ -203,11 +208,11 @@ describe('createGitConfigSnapshotRunner', () => {
     })
 
     expect(countCalls(runGit, ['config', '--list', '-z'])).toBe(1)
-    expect(runGit.mock.calls.filter((call) => getGitArgs(call)[1] === '--get')).toHaveLength(2)
+    expect(runGit.mock.calls.filter(([args]) => args[1] === '--get')).toHaveLength(2)
   })
 
   it('passes non-config commands through', async () => {
-    const runGit = vi.fn(async (args: string[]) => ({ stdout: args.join(' ') }))
+    const runGit = vi.fn<GitCommandRunner>(async (args: string[]) => ({ stdout: args.join(' ') }))
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await expect(runner(['rev-parse', '--abbrev-ref', 'HEAD@{u}'])).resolves.toEqual({

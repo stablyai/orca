@@ -54,9 +54,4 @@ describe('developer permissions LAN search', () => {
     expect(await searchInLocale('ko', 'LAN')).toBe(true)
     expect(await searchInLocale('es', 'LAN')).toBe(true)
   })
-
-  it('indexes both wordings as distinct Chinese keywords', async () => {
-    await i18n.changeLanguage('zh')
-    expect(getLanEntry().keywords).toEqual(expect.arrayContaining(['局域网', '本地网络']))
-  })
 })

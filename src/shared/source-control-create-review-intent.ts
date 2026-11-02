@@ -1,5 +1,4 @@
 import { isBehindOnlyUpstream, shouldForcePushWithLeaseForUpstream } from './git-upstream-status'
-import type { HostedReviewCreationEligibility } from './hosted-review'
 import { supportsHostedReviewCreation } from './hosted-review-creation-providers'
 import type { GitUpstreamStatus } from './git-status-types'
 
@@ -31,7 +30,14 @@ export function resolveCreateReviewIntentEligibility({
   hasMessage: boolean
   hasUnresolvedConflicts: boolean
   upstreamStatus: GitUpstreamStatus | undefined
-  hostedReviewCreation?: HostedReviewCreationEligibility | null
+  // Strings, not the closed unions: mobile round-trips tokens newer hosts add.
+  hostedReviewCreation?: {
+    provider: string
+    canCreate?: boolean
+    blockedReason?: string | null
+    reviewLookupOutcome?: string
+    defaultBaseRef?: string | null
+  } | null
   branchCommitsAhead?: number
   hasCurrentBranch?: boolean
 }): CreateReviewIntentEligibility {
@@ -85,4 +91,47 @@ export function resolveCreateReviewIntentEligibility({
   }
 
   return { eligible: false, kind: null }
+}
+
+export type CreatePrIntentRemoteStep =
+  | 'publish'
+  | 'push'
+  | 'force_push'
+  | 'fast_forward'
+  | 'blocked'
+  | 'none'
+
+export function resolveCreatePrIntentRemoteStep({
+  upstreamStatus,
+  hostedReviewCreation,
+  branchCommitsAhead,
+  hasCurrentBranch
+}: {
+  upstreamStatus: GitUpstreamStatus | undefined
+  // Strings, not the closed union: mobile round-trips reasons newer hosts add.
+  hostedReviewCreation?: { canCreate?: boolean; blockedReason?: string | null } | null
+  branchCommitsAhead?: number
+  hasCurrentBranch: boolean
+}): CreatePrIntentRemoteStep {
+  if (!hasCurrentBranch || !hostedReviewCreation || hostedReviewCreation.canCreate) {
+    return 'none'
+  }
+
+  if (hostedReviewCreation.blockedReason === 'no_upstream') {
+    return branchCommitsAhead && branchCommitsAhead > 0 ? 'publish' : 'blocked'
+  }
+
+  if (hostedReviewCreation.blockedReason === 'needs_push') {
+    return 'push'
+  }
+
+  if (hostedReviewCreation.blockedReason === 'needs_sync') {
+    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
+      return 'force_push'
+    }
+    // Enforce ff-only at execution time to prevent mid-flight divergence or pull.ff=no from silently creating merge commits.
+    return isBehindOnlyUpstream(upstreamStatus) ? 'fast_forward' : 'blocked'
+  }
+
+  return 'none'
 }

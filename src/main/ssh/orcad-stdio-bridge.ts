@@ -5,6 +5,7 @@ import {
 import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import { orcadWindowsHomeOpCommand } from '../managed-server/install/orcad-remote-windows-node'
 import {
+  orcadBashStdioBridgeCommand,
   orcadPosixStdioBridgeCommand,
   type OrcadStdioBridgeMode
 } from '../managed-server/lifecycle/orcad-stdio-bridge-script'
@@ -34,7 +35,7 @@ export async function resolveOrcadStdioBridge(
 ): Promise<OrcadStdioBridge> {
   // WSL deploy already proved a POSIX Linux host; avoid redundant probing.
   if (isWslOrcadHostTarget(conn.getTarget())) {
-    return { command: orcadPosixStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
+    return { command: orcadBashStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
   }
   const host = await detectRemoteHostPlatform(conn)
   if (!host) {

@@ -38,6 +38,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
   const systemSshProxyConnectionReuse = form.systemSshProxyConnectionReuse ? true : undefined
+  const reconnectOnLaunch = form.reconnectOnLaunch ? undefined : false
 
   const target: SshTargetCreateInput = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost),
@@ -51,6 +52,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(jumpHost ? { jumpHost } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
     ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
+    ...(reconnectOnLaunch === false ? { reconnectOnLaunch } : {}),
     // Send explicit true/false because older servers interpret absence as disabled.
     allowRemoteCliControl: form.allowRemoteCliControl
   }
@@ -68,6 +70,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         jumpHost,
         systemSshConnectionReuse,
         systemSshProxyConnectionReuse,
+        reconnectOnLaunch,
         source: 'manual'
       }
     }

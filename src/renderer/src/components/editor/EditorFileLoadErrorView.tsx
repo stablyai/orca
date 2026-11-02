@@ -2,7 +2,10 @@ import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { displayIpcErrorMessage } from '@/lib/ipc-error'
+import { isFileTooLargeCodeMessage } from '../../../../shared/file-write-disk-precondition'
 import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
+import { useStoppedWslHost } from '../wsl-host-stopped/use-stopped-wsl-host'
+import { WslHostStoppedNotice } from '../wsl-host-stopped/WslHostStoppedNotice'
 
 // Localize by machine code; stored English remains readable for logs without coupling upstream state checks to UI language.
 function localizeFileLoadError(message: string, code: string | undefined): string {
@@ -13,19 +16,45 @@ function localizeFileLoadError(message: string, code: string | undefined): strin
     )
   }
   // Keep IPC wrappers in stored errors for classifiers; strip them only for display.
-  return displayIpcErrorMessage(message) ?? message
+  const displayed = displayIpcErrorMessage(message) ?? message
+  if (isFileTooLargeCodeMessage(displayed)) {
+    return translate(
+      'editor.fileLoad.remoteTooLarge',
+      'This file is too large to open from its host.'
+    )
+  }
+  return displayed
 }
 
 // Leave close to the tab strip: this view also serves synthetic conflict rows and cannot enforce pin, shared-reference or unsaved-change rules.
 export function EditorFileLoadErrorView({
   message,
   code,
-  onRetry
+  worktreeId,
+  onRetry,
+  onHostStarted
 }: {
   message: string
   code?: string
+  /** The file's workspace; a stopped WSL host there gets Start instead of this error. */
+  worktreeId?: string
   onRetry: () => void
+  /** Reloads after Start without asking to wake again: the click already booted the host. */
+  onHostStarted?: () => void
 }): React.JSX.Element {
+  const stoppedWslHost = useStoppedWslHost(worktreeId)
+  if (stoppedWslHost) {
+    return (
+      <div className="flex h-full items-center justify-center bg-editor-surface p-6 text-sm">
+        <WslHostStoppedNotice
+          environmentId={stoppedWslHost.environmentId}
+          distro={stoppedWslHost.distro}
+          size="sm"
+          onStarted={onHostStarted}
+        />
+      </div>
+    )
+  }
   return (
     <div className="flex h-full items-center justify-center bg-editor-surface p-6 text-sm text-muted-foreground">
       <div className="flex max-w-xl items-start gap-3 rounded-md border border-border bg-background p-4">

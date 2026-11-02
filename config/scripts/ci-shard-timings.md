@@ -46,7 +46,26 @@ age as specs change. Full CI runs on the existing runner classes are required to
 measure elapsed-time and occupancy improvements, including discovery overhead.
 No retries, assertions, coverage exclusions, runner classes or shard counts changed.
 
-## Current unit refresh: October 14, 2026
+## Current unit refresh: October 25, 2026
+
+The baseline imports all five successful unit shards from
+[run 40276310369, attempt 1](https://github.com/stablyai/orca/actions/runs/40276310369/attempts/1),
+the runner class PR shards use: `blacksmith-8vcpu-ubuntu-2404`, eight workers, Node
+24.22.1, Bun 1.4.4, source `085cfad2cb3b883c975d5630d94fb2900d0bed05`. The previous ARM
+four-worker baseline lacked 1,976 current files and left PR shards 13–44% apart.
+Balancing two later full runs (40276227094, 40275768715) with each baseline, the fresh one
+cut the heaviest shard from 2,129 to 2,008 and from 2,564 to 2,134 worker-seconds, with a
+spread of 3–4% instead of 13–44%.
+
+| Shard | Job ID       | Measured worker-seconds | Job seconds |
+| ----- | ------------ | ----------------------: | ----------: |
+| 1     | 121420433743 |               2,476.887 |         381 |
+| 2     | 121420433755 |               2,069.007 |         329 |
+| 3     | 121420433825 |               2,144.439 |         339 |
+| 4     | 121420433749 |               2,050.086 |         322 |
+| 5     | 121420433831 |               2,151.221 |         338 |
+
+## Historical unit refresh: October 14, 2026
 
 The baseline imports all five successful ARM unit shards from
 [run 38646706136, attempt 1](https://github.com/stablyai/orca/actions/runs/38646706136/attempts/1).

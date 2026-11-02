@@ -8,8 +8,9 @@ import { readTimingBaseline, writeAssignment } from './ci-shard-assignment.mjs'
 
 export function prepareUnitPlan(env = process.env) {
   const requestedCount = env.ORCA_UNIT_FULL_SHARD_COUNT ?? String(FULL_SHARD_COUNT)
-  if (!['5', '10'].includes(requestedCount)) {
-    throw new Error('ORCA_UNIT_FULL_SHARD_COUNT must be 5 or 10')
+  // Every consumer reads the count from the plan; sixteen bounds runner-slot use.
+  if (!/^([2-9]|1[0-6])$/.test(requestedCount)) {
+    throw new Error('ORCA_UNIT_FULL_SHARD_COUNT must be an integer from 2 to 16')
   }
   const fullShardCount = Number(requestedCount)
   const files = discoverUnitFiles()

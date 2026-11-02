@@ -239,6 +239,19 @@ describe('Store', () => {
     })
   })
 
+  it('updateUI survives a throwing UI listener so the shutdown checkpoint is not vetoed', async () => {
+    const store = await createStore()
+    const laterListener = vi.fn()
+    store.onUIChanged(() => {
+      throw new TypeError('Object has been destroyed')
+    })
+    store.onUIChanged(laterListener)
+
+    expect(() => store.updateUI({ sidebarWidth: 321 })).not.toThrow()
+    expect(store.getUI().sidebarWidth).toBe(321)
+    expect(laterListener).toHaveBeenCalledWith(expect.objectContaining({ sidebarWidth: 321 }))
+  })
+
   it('updateUI skips save and notification when normalized UI is unchanged', async () => {
     vi.useFakeTimers()
     try {

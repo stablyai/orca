@@ -3,7 +3,10 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from './execution-host'
-import { parseRemoteRuntimePtyId, isRemoteRuntimePtyId } from './remote-runtime-pty-id'
+import {
+  parseRemoteRuntimePtyId,
+  isRemoteRuntimePtyId
+} from './remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from './ssh-pty-id'
 
 /** 'foreign' = the id proves the PTY runs off this host but cannot name where. */

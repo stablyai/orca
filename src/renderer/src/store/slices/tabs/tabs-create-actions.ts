@@ -1,4 +1,4 @@
-import { structuredLaunchSlotIds } from '@/lib/structured-agent-session-launch-persistence'
+import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
@@ -33,6 +33,7 @@ export function createTabsCreateActions(
       const splitGroupId = init?.split ? createBrowserUuid() : undefined
       let created!: Tab
       set((current) => {
+        init?.validatePlacement?.(current)
         const state =
           init?.split && splitGroupId
             ? {

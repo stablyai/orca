@@ -1,11 +1,11 @@
 // Capture live work immediately before Stop and retain only proven interruptions; persisted running rows prove nothing.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger
-} from '../../../shared/agent-session-resume-marker'
-import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
 
 type WorkingAtStopInput = Parameters<typeof structuredAgentSessionWorkingAtStop>[0]
@@ -21,7 +21,12 @@ export type StructuredAgentSessionRestartWitnesses = {
 
 export function createStructuredAgentSessionRestartWitnesses(deps: {
   sessions: ReadonlyMap<string, NonNullable<WorkingAtStopInput['session']>>
-  getRecord: (sessionId: string) => AgentSessionRecord | null
+  getRecord: (
+    sessionId: string
+  ) => Pick<
+    AgentSessionRecord,
+    'provider' | 'providerHandleChain' | 'providerContextBoundary'
+  > | null
   childWork: WorkingAtStopInput['childWork']
   childWorkOpen: WorkingAtStopInput['childWorkOpen']
   capsule?: Pick<AgentSessionRecoveryCapsule, 'record'>

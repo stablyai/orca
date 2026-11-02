@@ -207,14 +207,26 @@ export function isUnreadableError(error: unknown): boolean {
   )
 }
 
+/** Readers tighten modes opportunistically; a sandbox that denies chmod must not fail the read (#20937). */
 export function hardenExistingSecureFile(targetPath: string): void {
-  const dir = dirname(targetPath)
-  if (existsSync(dir)) {
-    hardenSecurePathOnce(dir, true)
+  try {
+    const dir = dirname(targetPath)
+    if (existsSync(dir)) {
+      hardenSecurePathOnce(dir, true)
+    }
+    if (existsSync(targetPath)) {
+      hardenSecurePathOnce(targetPath, false)
+    }
+  } catch (error) {
+    if (!isPermissionDeniedError(error)) {
+      throw error
+    }
   }
-  if (existsSync(targetPath)) {
-    hardenSecurePathOnce(targetPath, false)
-  }
+}
+
+function isPermissionDeniedError(error: unknown): boolean {
+  const code = error instanceof Error && 'code' in error ? error.code : undefined
+  return code === 'EPERM' || code === 'EACCES' || code === 'EROFS'
 }
 
 /** Caches the current metadata snapshot for a just-hardened path, or clears it if the path is gone. */

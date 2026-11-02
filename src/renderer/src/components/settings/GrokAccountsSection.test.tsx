@@ -59,17 +59,6 @@ describe('GrokAccountsSection', () => {
     vi.clearAllMocks()
   })
 
-  it('explains the host-scoped Grok recovery flow without requiring a chat message', async () => {
-    render(<GrokAccountsSection />)
-
-    expect(
-      await screen.findByText(
-        'Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed.'
-      )
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/grok login/i)).not.toBeInTheDocument()
-  })
-
   // Why: #15740 — an unreported percentage must be stated, never shown as 0%.
   it('shows why usage is unknown instead of hiding the row', async () => {
     mocks.grokUsage.mockReturnValue({

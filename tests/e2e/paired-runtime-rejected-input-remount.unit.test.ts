@@ -80,8 +80,11 @@ function startHost(): {
 } {
   const hostOpcodes: number[] = []
   const sendTerminal = vi.fn().mockResolvedValue({ accepted: false })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
+    getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
+    getTerminalLaunchResult: () => undefined,
     registerRemoteTerminalViewSubscriber: () => () => {},
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
@@ -288,6 +291,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
     mockStoreState = {
       activeWorktreeId: 'wt-1',
       activeWorkspaceExecutionHostId: `runtime:${ENVIRONMENT_ID}`,
+      unifiedTabsByWorktree: {},
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: REMOTE_PTY_ID }] },
       ptyIdsByTabId: { 'tab-1': [REMOTE_PTY_ID] },
       terminalLayoutsByTabId: {

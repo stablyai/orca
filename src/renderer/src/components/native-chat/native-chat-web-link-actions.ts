@@ -16,6 +16,7 @@ import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 
 export type NativeChatWebLinkDeps = {
   worktreeId: string
+  sourceTabId?: string | null
   sourceOwner: HttpLinkSourceOwner
   destinations: HttpLinkActionDestinations
   /** Off: a plain click opens the routed destination outright, as it did before actions existed. */
@@ -37,11 +38,14 @@ type ChatLinkMouseEvent = Pick<
 
 export function openNativeChatWebLink(
   url: string,
-  deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner'>,
-  destination: HttpLinkDestination | undefined
+  deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner' | 'sourceTabId'>,
+  destination: HttpLinkDestination | undefined,
+  openInSourceGroup = false
 ): void {
   openRoutedHttpLink(url, {
     worktreeId: deps.worktreeId,
+    ...(deps.sourceTabId ? { sourceTabId: deps.sourceTabId } : {}),
+    ...(openInSourceGroup ? { openInSourceGroup: true } : {}),
     sourceOwner: deps.sourceOwner,
     modifierHeld: false,
     ...(destination ? { forceDestination: destination } : {})
@@ -82,7 +86,11 @@ export function handleNativeChatWebLink(
     destination: url,
     kind: 'url',
     restoreFocus: deps.restoreFocus,
-    ...buildHttpLinkActions(deps.destinations, open)
+    ...buildHttpLinkActions(deps.destinations, open, {
+      ...deps,
+      url,
+      openInSourceGroup: () => openNativeChatWebLink(url, deps, 'orca', true)
+    })
   })
   return true
 }

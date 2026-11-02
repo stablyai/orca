@@ -345,6 +345,32 @@ describe('relay observability', () => {
     expect(entries[1]).toMatchObject({ instanceZone: 'us-central1-a' })
   })
 
+  it('adds the sandbox TCP counter deltas of each window once a reader is set', () => {
+    const entries: Record<string, unknown>[] = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    const reads = [10, 13, 13, undefined, 20, 2].map((retransSegs) =>
+      retransSegs === undefined
+        ? undefined
+        : { inSegs: retransSegs * 100, outSegs: 0, retransSegs, inErrs: 0, outRsts: 0, estabResets: 0 }
+    )
+    observability.flush(counts)
+    observability.setTcpCounterReader(() => reads.shift())
+    for (let window = 0; window < 5; window++) {
+      observability.flush(counts)
+    }
+
+    expect(entries[0]).not.toHaveProperty('tcpRetransSegsDelta')
+    expect(entries[1]).toMatchObject({ tcpRetransSegsDelta: 3, tcpInSegsDelta: 300 })
+    expect(entries[2]).toMatchObject({ tcpRetransSegsDelta: 0 })
+    // An unreadable window, the window after it, and a counter reset carry no delta.
+    expect(entries[3]).not.toHaveProperty('tcpRetransSegsDelta')
+    expect(entries[4]).not.toHaveProperty('tcpRetransSegsDelta')
+    expect(entries[5]).not.toHaveProperty('tcpRetransSegsDelta')
+  })
+
   it('bounds the per-connection sticky summary', () => {
     const entries: Array<Record<string, unknown>> = []
     const observability = new RelayObservability(

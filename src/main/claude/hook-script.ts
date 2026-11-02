@@ -17,12 +17,17 @@ import {
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
-
-// Daemon workers inherit stale pane keys; exit before draining their potentially abandoned stdin.
-export const WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD = 'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0'
+import {
+  buildPosixClaudeDecisionModeLines,
+  buildPosixClaudeDecisionPreludeLines,
+  wrapPosixClaudeDecisionPost
+} from './claude-hook-decision-script'
+import {
+  WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
+  buildPosixClaudeBackgroundJobGuardLines
+} from '../agent-hooks/claude-background-job-guard'
 
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
@@ -31,6 +36,8 @@ export function getManagedScript(
     skipWhenDevinImportsClaude?: boolean
     skipWhenGrokImportsClaude?: boolean
     skipWhenCursorImportsClaude?: boolean
+    // Only Claude Code itself reads PreToolUse decisions; compatible CLIs keep print-then-post.
+    decidesPreToolUse?: boolean
   } = {}
 ): string {
   const source = options.source ?? 'claude'
@@ -58,18 +65,19 @@ export function getManagedScript(
       // Avoid a PowerShell startup per hook.
       buildWindowsAgentHookCurlPostCommand(source),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
 
+  const decides = options.decidesPreToolUse === true
   return [
     '#!/bin/sh',
     // Permission hooks fail closed on empty stdout, including skip paths.
-    'printf "{}\\n"',
+    ...(decides ? buildPosixClaudeDecisionPreludeLines() : ['printf "{}\\n"']),
     // CLAUDE_CODE_SUBPROCESS_ENV_SCRUB drops ORCA_PANE_KEY; restore it before any guard or spool reads it.
     ...buildPosixScrubSafeEnvRestoreLines(),
     ...buildPosixHookPayloadCapture(),
+    ...(decides ? buildPosixClaudeDecisionModeLines() : []),
     ...(options.skipWhenGrokImportsClaude ? buildPosixGrokReplayGuardLines() : []),
     ...(options.skipWhenCursorImportsClaude ? buildPosixCursorReplayGuardLines() : []),
     ...buildPosixHookSpoolLines(source),
@@ -81,10 +89,7 @@ export function getManagedScript(
           'fi'
         ]
       : []),
-    // Daemon workers inherit pane keys that do not identify their own sessions.
-    'if [ -n "$CLAUDE_JOB_DIR" ]; then',
-    '  exit 0',
-    'fi',
+    ...buildPosixClaudeBackgroundJobGuardLines(),
     ...(source === 'claude' ? buildHookProcessCapture() : []),
     // Surviving PTYs need fresh endpoint coordinates; suppress errors and survive outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
@@ -96,9 +101,13 @@ export function getManagedScript(
     '  exit 0',
     'fi',
     // Keep hook JSON off argv and avoid URL-encoded paths that trigger IDS rules.
-    ...buildPosixAgentHookPostCommand(source).map((line, index, lines) =>
-      index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
-    ),
+    ...(decides
+      ? wrapPosixClaudeDecisionPost(
+          buildPosixAgentHookPostCommand(source, { decisionHeaderVar: 'orca_hook_decides' })
+        )
+      : buildPosixAgentHookPostCommand(source).map((line, index, lines) =>
+          index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
+        )),
     'exit 0',
     ''
   ].join('\n')

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
-import {
-  retitleStructuredConversationTab,
-  titleStructuredConversationTabs
-} from './structured-conversation-tab-title'
+import { retitleStructuredConversationTab } from './structured-conversation-tab-title'
 
 const snapshot: RuntimeMobileSessionTabsSnapshot = {
   worktree: 'workspace-1',
@@ -33,15 +30,6 @@ describe('structured conversation tab title', () => {
     })
     expect(retitleStructuredConversationTab(titled!, 'session-1', 'auth/login')).toBeNull()
     expect(retitleStructuredConversationTab(titled!, 'session-1', null)?.tabs[0]).toMatchObject({
-      title: 'Claude Chat'
-    })
-  })
-
-  it('projects only the title from the record at read time', () => {
-    const projected = titleStructuredConversationTabs(snapshot, () => 'auth/login')
-    expect(projected.tabs[0]).toMatchObject({ title: 'auth/login', sessionId: 'session-1' })
-    expect(projected.snapshotVersion).toBe(snapshot.snapshotVersion)
-    expect(titleStructuredConversationTabs(projected, () => null).tabs[0]).toMatchObject({
       title: 'Claude Chat'
     })
   })

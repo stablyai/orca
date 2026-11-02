@@ -17,6 +17,7 @@ import {
   seedSupervisedAskWorkers
 } from './runtime-rpc-test-harness'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
+import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -505,13 +506,18 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
-    it('releases long-poll slot when client closes mid-wait', async () => {
+    it('releases one same-Run wait slot when its client closes and keeps its sibling live', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
       // A consuming check now requires a live pane; these transport tests only need it to block.
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
+      const run = db.createRun({
+        objective: 'Concurrent Run waits',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey: 'tab_term_coord:leaf'
+      })
       const server = createServer({
         runtime,
         userDataPath,
@@ -523,84 +529,73 @@ describe('OrcaRuntimeRpcServer', () => {
       try {
         const metadata = readRuntimeMetadata(userDataPath)
         const endpoint = metadata!.transports[0]!.endpoint
+        const openRunWait = (id: string) =>
+          openFramedSession(endpoint, {
+            id,
+            authToken: metadata!.authToken,
+            method: 'orchestration.check',
+            params: { terminal: 'term_coord', run: run.id, wait: true, timeoutMs: 10_000 }
+          })
 
-        // Fill admission with two 10s waits, then disconnect one.
-        const a = openFramedSession(endpoint, {
-          id: 'req_a',
-          authToken: metadata!.authToken,
-          method: 'orchestration.check',
-          params: { terminal: 'term_a', wait: true, timeoutMs: 10_000 }
-        })
-        const b = openFramedSession(endpoint, {
-          id: 'req_b',
-          authToken: metadata!.authToken,
-          method: 'orchestration.check',
-          params: { terminal: 'term_b', wait: true, timeoutMs: 10_000 }
-        })
-        await sleep(100)
-        expect(server['activeLongPolls']).toBe(2)
+        // Fill the cap with two waits on the same Run inbox.
+        const a = openRunWait('req_a')
+        const b = openRunWait('req_b')
+        await waitFor(() => server['activeLongPolls'] === 2)
 
         a.socket.destroy()
         await a.done
-        await sleep(50)
-        expect(server['activeLongPolls']).toBe(1)
+        await waitFor(() => server['activeLongPolls'] === 1)
 
-        const c = openFramedSession(endpoint, {
-          id: 'req_c',
-          authToken: metadata!.authToken,
-          method: 'orchestration.check',
-          params: { terminal: 'term_c', wait: true, timeoutMs: 100 }
-        })
-        await c.done
-        const cTerminal = c.frames.find((f) => f.ok !== undefined)
-        expect(cTerminal).toMatchObject({ ok: true, id: 'req_c' })
-
-        b.socket.destroy()
-        await b.done
+        // The freed slot must admit another wait on the same inbox.
+        const c = openRunWait('req_c')
+        await waitFor(() => server['activeLongPolls'] === 2)
+        db.insertMessage({ from: 'term_worker', to: `run:${run.id}`, subject: 'go', runId: run.id })
+        runtime.notifyMessageArrived(`run:${run.id}`)
+        await Promise.all([b.done, c.done])
+        const results = [b, c].map((s) => s.frames.find((f) => f.ok !== undefined)?.result)
+        const batch = { deliveryId: expect.stringMatching(/^delivery_/), count: 1 }
+        expect(results).toMatchObject([batch, batch])
+        expect(db.db.prepare('SELECT COUNT(*) AS n FROM deliveries').get()).toEqual({ n: 1 })
+        await waitFor(() => server['activeLongPolls'] === 0)
       } finally {
         db.close()
         await server.stop()
       }
     })
 
-    it('destroys active Unix socket connections when the runtime stops', async () => {
+    it('destroys active Unix sockets and cancels pending composer readiness when the runtime stops', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-      const runtime = new OrcaRuntimeService()
-      const db = new OrchestrationDb(':memory:')
-      runtime.setOrchestrationDb(db)
-      // A consuming check now requires a live pane; these transport tests only need it to block.
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
-      const server = createServer({
-        runtime,
-        userDataPath,
-        keepaliveIntervalMs: 1000,
-        longPollCap: 1
+      const { runtime, handle } = await createTranscriptPane({
+        paneTitle: 'shell',
+        foregroundProcess: 'bash',
+        data: ''
+      })
+      const server = createServer({ runtime, userDataPath })
+      vi.spyOn(server['dispatcher'], 'dispatch').mockImplementation(async (_request, context) => {
+        await runtime.waitForFreshWorkerComposer(handle, 'claude', 60_000, {
+          signal: context?.signal
+        })
+        throw new Error('unexpected_composer_ready')
       })
       await server.start()
-
       try {
-        const metadata = readRuntimeMetadata(userDataPath)
-        const endpoint = metadata!.transports[0]!.endpoint
-
-        const session = openFramedSession(endpoint, {
+        const metadata = readRuntimeMetadata(userDataPath)!
+        const session = openFramedSession(metadata.transports[0]!.endpoint, {
           id: 'req_stop',
-          authToken: metadata!.authToken,
+          authToken: metadata.authToken,
           method: 'orchestration.check',
           params: { terminal: 'term_stop', wait: true, timeoutMs: 10_000 }
         })
-        await waitFor(() => server['activeLongPolls'] === 1)
-
-        const stopResult = await Promise.race([
-          server.stop().then(() => 'stopped'),
-          sleep(500).then(() => 'timeout')
-        ])
-
-        expect(stopResult).toBe('stopped')
+        await waitFor(() => runtime['terminalWaiters'].forPty(TRANSCRIPT_PANE_PTY_ID).length === 1)
+        await server.stop()
         await session.done
         await waitFor(() => server['activeLongPolls'] === 0)
         expect(session.socket.destroyed).toBe(true)
+        expect(runtime['terminalWaiters'].forPty(TRANSCRIPT_PANE_PTY_ID)).toHaveLength(0)
+        expect(
+          runtime['terminalStreamConsumers']['dataListeners'].get(TRANSCRIPT_PANE_PTY_ID)
+        ).toBeUndefined()
       } finally {
-        db.close()
         await server.stop()
       }
     })

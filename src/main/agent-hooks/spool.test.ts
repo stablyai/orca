@@ -237,7 +237,8 @@ describe('agent hook spool', () => {
         ORCA_AGENT_HOOK_ENDPOINT: endpoint,
         ORCA_PANE_KEY: 'tab-failure:0',
         ORCA_TAB_ID: 'tab-failure',
-        ORCA_AGENT_LAUNCH_TOKEN: 'generation-token'
+        ORCA_AGENT_LAUNCH_TOKEN: 'generation-token',
+        CLAUDE_JOB_DIR: ''
       },
       timeout: 5000
     })

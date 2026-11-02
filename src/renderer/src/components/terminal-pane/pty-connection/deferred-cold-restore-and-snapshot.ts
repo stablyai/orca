@@ -19,6 +19,7 @@ import { bindReplayDataDrain } from './replay-data-drain'
 import { bindStartFreshSpawn } from './fresh-spawn-start'
 
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
+import { bindReplacedProcessInputModes } from './replaced-process-input-modes'
 import { deferHiddenAgentResume } from './hidden-agent-resume-deferral'
 import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
 import { attachToMainResumedSleepPane, mainResumedSleepPane } from './main-resumed-sleep-pane'
@@ -28,16 +29,28 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   session.applyColdRestoreAgentResumeStartup = (
     startup: ColdRestoreAgentResumeStartup | null
   ): boolean => {
-    if (!startup) {
+    if (!startup || startup.resumeSource?.cancelled) {
       return false
     }
     const state = useAppStore.getState()
+    if (!session.pendingStartupCommand && session.shouldDeliverStartupViaTerminalPaste) {
+      session.pendingStartupCommand = {
+        command: startup.command,
+        resumeSource: startup.resumeSource
+      }
+    }
     state.registerAgentLaunchConfig(session.cacheKey, startup.launchConfig, {
       agentType: startup.agent,
       launchToken: startup.launchToken,
       tabId: session.deps.tabId,
       leafId: session.pane.leafId
     })
+    if (startup.resumeSource) {
+      session.savedStartupLaunchRegistration = {
+        source: startup.resumeSource,
+        entry: useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]
+      }
+    }
     return true
   }
   session.clearSleepingRecordAfterColdRestoreSpawn = (
@@ -73,16 +86,15 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   // Why ungated: a reveal, a restart replacement on show, or a phone wake already chose to run now.
   session.spawnColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
-    options: FreshSpawnOptions = {}
+    options: FreshSpawnOptions = {},
+    automatic?: boolean
   ): Promise<string | null> => {
+    if (startup?.resumeSource?.cancelled) {
+      return Promise.resolve(null)
+    }
     const mainPane = mainResumedSleepPane(session, startup)
     if (mainPane && startup?.sleepingRecordEntry) {
-      return attachToMainResumedSleepPane(
-        session,
-        mainPane,
-        startup.sleepingRecordEntry.paneKey,
-        options
-      )
+      return attachToMainResumedSleepPane(session, mainPane, startup, options, automatic)
     }
     return startPaneThroughMainThenAttach(session, () => {
       session.applyColdRestoreAgentResumeStartup(startup)
@@ -107,7 +119,10 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
     session.transport.getPtyId() === ptyId
-  const runTerminalPasteStartupCommand = async (command: string): Promise<boolean> => {
+  const runTerminalPasteStartupCommand = async (
+    command: string,
+    current: () => boolean
+  ): Promise<boolean> => {
     const ptyId = session.transport.getPtyId()
     const result = await executeTerminalStartupCommandPaste({
       command,
@@ -120,43 +135,52 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
         isWindowsConpty: session.isNativeWindowsConpty
       }),
       transport: session.transport,
-      isTargetCurrent: isStartupPasteTargetCurrent
+      isTargetCurrent: (target) => current() && isStartupPasteTargetCurrent(target)
     })
-    if (result.status !== 'pasted' || !isStartupPasteTargetCurrent(ptyId)) {
+    if (result.status !== 'pasted' || !current() || !isStartupPasteTargetCurrent(ptyId)) {
       return false
     }
     return session.transport.sendInput('\r', 'launch')
   }
   session.schedulePendingStartupCommandDelivery = (): void => {
     const startup = session.pendingStartupCommand
-    if (!startup) {
+    if (!startup || startup.resumeSource?.cancelled) {
       return
     }
     if (session.startupInjectTimer !== null) {
       clearTimeout(session.startupInjectTimer)
     }
+    const generation = session.transportStreamGeneration
+    const isCurrent = (): boolean =>
+      !session.disposed &&
+      session.pendingStartupCommand === startup &&
+      !startup.resumeSource?.cancelled &&
+      generation === session.transportStreamGeneration &&
+      (startup.isCurrent?.() ?? true)
     session.startupInjectTimer = setTimeout(() => {
       session.startupInjectTimer = null
       void (async () => {
-        if (session.pendingStartupCommand !== startup || session.disposed) {
+        if (!isCurrent()) {
           return
         }
         if (session.shouldDeliverStartupViaTerminalPaste) {
           await waitForTerminalOutputParsed(session.pane.terminal)
         }
-        if (session.pendingStartupCommand !== startup || session.disposed) {
+        if (!isCurrent()) {
           return
         }
         const command = startup.command
         const submitted = session.shouldDeliverStartupViaTerminalPaste
-          ? await runTerminalPasteStartupCommand(command)
+          ? await runTerminalPasteStartupCommand(command, isCurrent)
           : session.transport.sendInput(`${command}\r`, 'launch')
         if (submitted) {
           session.armStartupDraftReadinessObservation()
         } else {
           session.releaseUnattemptedStartupDraftPasteDelivery()
         }
-        session.pendingStartupCommand = null
+        if (session.pendingStartupCommand === startup) {
+          session.pendingStartupCommand = null
+        }
       })()
     }, 50)
   }
@@ -169,6 +193,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     session.freshSpawnFollowResetDisposables = []
   }
   bindFreshSpawnFollowReset(session)
+  bindReplacedProcessInputModes(session)
   bindStartFreshSpawn(session)
   bindReplayDataDrain(session)
   session.replayDataCallback = (
@@ -190,6 +215,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
           }
         : {}),
       ...(meta.terminalOwner ? { terminalOwner: meta.terminalOwner } : {}),
+      ...(meta.lastTitle !== undefined ? { lastTitle: meta.lastTitle } : {}),
       ...(meta.alternateScreen !== undefined ? { alternateScreen: meta.alternateScreen } : {}),
       ...(meta.snapshotCols !== undefined && meta.snapshotRows !== undefined
         ? { snapshotCols: meta.snapshotCols, snapshotRows: meta.snapshotRows }

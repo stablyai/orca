@@ -12,13 +12,14 @@ import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualifie
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../shared/orca-session-address'
-import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
+import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import type { OrchestrationDb } from './orchestration/db'
 import { structuredSessionMailReach } from './orchestration/structured-session-mail-address'
 import {
   clearedInto,
+  conversationRecordReader,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from './orchestration/structured-session-lineage'
@@ -51,7 +52,7 @@ export function createReferenceAgentIndex(
   runtime: ReferenceAgentSource,
   db: OrchestrationDb | null,
   sessions: AgentSessionRecordReader | null = readAgentSessionRecordStore() ??
-    peekOpenedAgentSessionRecordStore(),
+    coldConversationReader(),
   workspaceKeys?: ReadonlySet<string>,
   connectionHosts?: ReadonlyMap<string, ExecutionHostId | null>
 ): ReferenceAgentIndex {
@@ -64,6 +65,10 @@ export function createReferenceAgentIndex(
     index.set(key, entries)
   }
   const visible = sessions?.getVisibleSessionTabIndex?.()
+  let canonicalRecords: ReturnType<AgentSessionRecordReader['listRecords']> | undefined
+  const canonicalStore = {
+    listRecords: () => (canonicalRecords ??= readAgentSessionRecordStore()?.listRecords() ?? [])
+  }
   for (const record of sessions?.listRecords() ?? []) {
     if (
       clearedInto(record) ||
@@ -84,7 +89,7 @@ export function createReferenceAgentIndex(
     const local = structuredWorkerHostScope(record.location) !== null
     const reachable =
       local && sessions
-        ? structuredSessionMailReach(sessions, record, db).kind === 'reachable'
+        ? structuredSessionMailReach(sessions, record, db, canonicalStore).kind === 'reachable'
         : false
     append(record.location.workspaceId, {
       hostId: record.location.executionHostId,
@@ -180,4 +185,9 @@ export function createReferenceAgentIndex(
     })
   }
   return index
+}
+
+function coldConversationReader(): AgentSessionRecordReader | null {
+  const store = peekOpenedAgentSessionRecordStore()
+  return store ? conversationRecordReader(store) : null
 }

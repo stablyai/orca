@@ -5,7 +5,10 @@ import {
   getRichMarkdownRoundTripOutput
 } from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
-import { canRenderMarkdownAtSize } from './markdown-rich-size-limit'
+import {
+  canRenderMarkdownAtSize,
+  exceedsMarkdownRenderOverrideSizeLimit
+} from './markdown-rich-size-limit'
 import { translate } from '@/i18n/i18n'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
@@ -142,6 +145,10 @@ export function getMarkdownRichModeEligibilityDecision({
   content: string
   sizeOverridden: boolean
 }): MarkdownRichModeEligibilityDecision {
+  // Past the hard cap neither mode renders rich, so the unsupported-syntax scan is moot.
+  if (exceedsMarkdownRenderOverrideSizeLimit(content)) {
+    return { exceedsSizeLimit: true, unsupportedReason: null }
+  }
   return {
     exceedsSizeLimit: !canRenderMarkdownAtSize(content, sizeOverridden),
     unsupportedReason: getMarkdownRichModeUnsupportedReason(content)

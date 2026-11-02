@@ -34,7 +34,7 @@ export function renderGitSettingsSection(context: SettingsRenderContext): React.
           <CommitMessageAiPane
             settings={model.settings}
             updateSettings={model.updateSettings}
-            writeSourceControlAiSettings={interactions.writeSourceControlAiSettings}
+            writeSourceControlAiSettings={interactions.writeSourceControlAiSettingsOrThrow}
             onCustomPromptDirtyChange={model.setHasUnsavedCommitPromptChanges}
             customPromptDiscardSignal={model.sourceControlAiPromptDiscardSignal}
             settingsSearchQuery={model.settingsSearchQuery}

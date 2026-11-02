@@ -1,3 +1,4 @@
+import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
 import { agentHookServer } from '../agent-hooks/server'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../providers/pty-provider-contract'
@@ -27,7 +28,9 @@ export function reserveOpenCodeStartupPrompt(nonce: string, digest: string): boo
   return claims.register(nonce, digest, () => 'pending')
 }
 
-export async function commitPtyWithOpenCodePromptIntent<Result extends PtySpawnResult>(
+export async function commitPtyWithOpenCodePromptIntent<
+  Result extends PtySpawnResult | PtySpawnOutcome
+>(
   context: {
     env?: Record<string, string>
     spawnEnv?: Record<string, string>
@@ -49,7 +52,15 @@ export async function commitPtyWithOpenCodePromptIntent<Result extends PtySpawnR
   facts?.reserveSpawnCommit(options.result)
   try {
     const result = await commit()
-    bindOpenCodeStartupPromptOwner({ ...options, result })
+    const accepted = acceptedPromptSpawnResult(result)
+    if (accepted) {
+      bindOpenCodeStartupPromptOwner({ ...options, result: accepted })
+    } else {
+      const nonce = options.env?.[OPENCODE_STARTUP_PROMPT_NONCE_ENV]
+      if (nonce) {
+        claims.cancel(nonce)
+      }
+    }
     return result
   } catch (error) {
     const nonce = options.env?.[OPENCODE_STARTUP_PROMPT_NONCE_ENV]
@@ -60,6 +71,12 @@ export async function commitPtyWithOpenCodePromptIntent<Result extends PtySpawnR
   } finally {
     facts?.discardSpawnCommit(options.result)
   }
+}
+
+function acceptedPromptSpawnResult(
+  result: PtySpawnResult | PtySpawnOutcome
+): PtySpawnResult | null {
+  return 'kind' in result ? (result.kind === 'registration-exited' ? null : result.result) : result
 }
 
 export function bindOpenCodeStartupPromptOwner(options: {

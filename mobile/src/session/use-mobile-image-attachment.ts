@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useMediaPicker } from '../platform/media-picker'
@@ -75,18 +76,27 @@ export function useMobileImageAttachment({
       } catch (error) {
         onError()
         if (connState !== 'connected') {
-          showToast('Attach failed (disconnected)', 1500)
+          showToast(
+            translate('session.useImageAttachment.disconnected', 'Attach failed (disconnected)'),
+            1500
+          )
           return
         }
         if (error instanceof ImageLibraryPermissionError) {
-          showToast('Photo permission denied', 1500)
+          showToast(
+            translate('session.useImageAttachment.permissionDenied', 'Photo permission denied'),
+            1500
+          )
           return
         }
         if (getErrorMessage(error) === 'Clipboard image is too large') {
-          showToast('Image too large to attach', 1500)
+          showToast(
+            translate('session.useImageAttachment.imageTooLarge', 'Image too large to attach'),
+            1500
+          )
           return
         }
-        showToast('Attach failed', 1500)
+        showToast(translate('session.useImageAttachment.attachFailed', 'Attach failed'), 1500)
       } finally {
         setIsAttaching(false)
       }

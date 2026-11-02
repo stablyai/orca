@@ -174,20 +174,36 @@ describe('removeWorktree state cleanup', () => {
   it('purges the orphaned project that pointed at a destroyed runtime-owned SSH target', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
-    const orphanedSetup = {
+    const orphanedSetup: AppState['projectHostSetups'][number] = {
       id: 'setup-runtime-ssh',
-      hostId: 'ssh:runtime-ssh-orca-1'
-    } as unknown as AppState['projectHostSetups'][number]
-    const userSshSetup = {
+      hostId: 'ssh:runtime-ssh-orca-1',
+      projectId: 'project-runtime-ssh',
+      repoId: 'repo-runtime-ssh',
+      path: '/runtime/repo',
+      displayName: 'Runtime repo',
+      setupState: 'ready',
+      setupMethod: 'legacy-repo',
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const userSshSetup: AppState['projectHostSetups'][number] = {
       id: 'setup-user-ssh',
-      hostId: 'ssh:my-server'
-    } as unknown as AppState['projectHostSetups'][number]
+      hostId: 'ssh:my-server',
+      projectId: 'project-user-ssh',
+      repoId: 'repo-user-ssh',
+      path: '/user/repo',
+      displayName: 'User repo',
+      setupState: 'ready',
+      setupMethod: 'legacy-repo',
+      createdAt: 1,
+      updatedAt: 1
+    }
     const deleteProjectHostSetup = vi.fn().mockResolvedValue(null)
     store.setState({
       worktreesByRepo: { repo1: [wt] },
       projectHostSetups: [orphanedSetup, userSshSetup],
       deleteProjectHostSetup
-    } as unknown as Partial<AppState>)
+    })
     mockApi.ephemeralVm.listRuntimes.mockResolvedValueOnce([
       {
         id: 'runtime-1',

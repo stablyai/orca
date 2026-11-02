@@ -10,7 +10,7 @@ import {
   type FileLinkActions,
   type TerminalFileLinkActionDeps
 } from '@/components/terminal-pane/terminal-file-link-actions'
-import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import { useAppStore } from '../../store'
 import {
   resolveNativeChatFileLink,
@@ -48,6 +48,7 @@ export function nativeChatFileOpenDeps(
     worktreeId: context.worktreeId,
     worktreePath: context.worktreePath,
     runtimeEnvironmentId: context.runtimeEnvironmentId,
+    hostFileOnly: true,
     sourceTabId: context.sourceTabId,
     onOpenFailure: (failure) => showFileLinkOpenFailureToast(target.absolutePath, failure)
   }
@@ -85,12 +86,35 @@ export function nativeChatLinkActions(
   return {
     destination: route.url,
     kind: 'url',
-    ...buildHttpLinkActions(routing.destinations, (destination) =>
-      openNativeChatWebLink(
-        route.url,
-        { worktreeId: context.worktreeId, sourceOwner: routing.sourceOwner },
-        destination
-      )
+    ...buildHttpLinkActions(
+      routing.destinations,
+      (destination) =>
+        openNativeChatWebLink(
+          route.url,
+          {
+            worktreeId: context.worktreeId,
+            sourceTabId: context.sourceTabId,
+            sourceOwner: routing.sourceOwner
+          },
+          destination
+        ),
+      {
+        worktreeId: context.worktreeId,
+        sourceTabId: context.sourceTabId,
+        sourceOwner: routing.sourceOwner,
+        url: route.url,
+        openInSourceGroup: () =>
+          openNativeChatWebLink(
+            route.url,
+            {
+              worktreeId: context.worktreeId,
+              sourceTabId: context.sourceTabId,
+              sourceOwner: routing.sourceOwner
+            },
+            'orca',
+            true
+          )
+      }
     )
   }
 }

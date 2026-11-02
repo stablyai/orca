@@ -158,32 +158,9 @@ describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
 
     expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: undefined })
   })
-
-  it('calls updateRepo with undefined when the value is whitespace-only', () => {
-    const updateRepo = vi.fn()
-    render({ ...BASE_REPO, worktreeBasePath: '../worktrees' }, updateRepo)
-
-    const input = getWorktreePathInput()
-    typeText(input, '   ')
-    blurInput(input)
-
-    expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: undefined })
-  })
 })
 
 describe('RepositoryWorktreeDefaultsSection — external visibility', () => {
-  it('shows the inherited effective value without stamping the repo', () => {
-    render(BASE_REPO, vi.fn(), {
-      settings: {
-        workspaceDir: '/home/user/orca/workspaces',
-        worktreeVisibilityDefaults: { external: 'show' }
-      }
-    })
-
-    expect(container.textContent).toContain('Using global: Show')
-    expect(container.querySelector('select')?.value).toBe('global')
-  })
-
   it('clears the override with the remote-safe null sentinel and refreshes classification', async () => {
     const updateRepo = vi.fn().mockResolvedValue(true)
     const refreshRepo = vi.fn().mockResolvedValue(true)

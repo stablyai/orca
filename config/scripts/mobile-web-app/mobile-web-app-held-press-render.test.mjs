@@ -8,7 +8,7 @@ import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-depende
 import {
   BROWSER_VIEWPORT_ID,
   CHAT_MIC_ID,
-  REPEAT_KEY_LABEL,
+  ARROW_PAD_LABEL,
   TAP_KEY_LABEL,
   TERMINAL_MIC_ID,
   browserPaneProbeRouteSource,
@@ -65,14 +65,16 @@ beforeAll(async () => {
     join(routeDir, 'hold-dictation-probe.tsx'),
     holdDictationProbeRouteSource({
       terminalActionsModule: join(sessionDir, 'MobileTerminalInputActions'),
-      chatComposerModule: join(sessionDir, 'MobileNativeChatComposer')
+      chatComposerModule: join(sessionDir, 'native-chat', 'composer', 'MobileNativeChatComposer')
     })
   )
   await writeFile(
     join(routeDir, 'command-dock-probe.tsx'),
     commandDockProbeRouteSource({
       commandDockModule: join(sessionDir, 'MobileSessionCommandDock'),
-      keyDefinitionsModule: join(terminalDir, 'terminal-key-definitions')
+      keyDefinitionsModule: join(terminalDir, 'terminal-key-definitions'),
+      accessorySelectionModule: join(sessionDir, 'use-mobile-session-accessory-selection'),
+      dockKeysModule: join(sessionDir, 'use-terminal-dock-keys')
     })
   )
   await writeFile(
@@ -136,6 +138,7 @@ async function openProbe(pathname) {
 async function holdLikeAndroidWebView(page, selector, { holdMs, read }) {
   // A handle, not a locator: a label the selector matches can change as soon as the press lands.
   const target = await page.waitForSelector(selector)
+  await target.scrollIntoViewIfNeeded()
   const box = await target.boundingBox()
   const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
   const input = await page.context().newCDPSession(page)
@@ -171,6 +174,40 @@ async function holdLikeAndroidWebView(page, selector, { holdMs, read }) {
   await page.clock.runFor(300)
   return { midHold, afterRelease: await read(target) }
 }
+
+// Lands on the pad's top side, which sends Arrow Up.
+async function beginArrowPadTouch(page) {
+  const pad = await page.waitForSelector(`[aria-label="${ARROW_PAD_LABEL}"]`)
+  await pad.scrollIntoViewIfNeeded()
+  const box = await pad.boundingBox()
+  const point = { x: box.x + box.width / 2, y: box.y + box.height * 0.15 }
+  const input = await page.context().newCDPSession(page)
+  await input.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
+  return { input, point }
+}
+
+async function beginTapKeyTouch(page) {
+  const key = await page.waitForSelector(`[aria-label="${TAP_KEY_LABEL}"]`)
+  await key.scrollIntoViewIfNeeded()
+  const box = await key.boundingBox()
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const input = await page.context().newCDPSession(page)
+  await input.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
+  return { input, key, point }
+}
+
+const keyScrollOffset = (key) =>
+  key.evaluate((node) => {
+    for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+      if (
+        parent.scrollWidth > parent.clientWidth &&
+        getComputedStyle(parent).overflowX !== 'visible'
+      ) {
+        return parent.scrollLeft
+      }
+    }
+    throw new Error('Key bar does not overflow')
+  })
 
 const pressOuts = (page) => page.evaluate(() => globalThis.__orcaHeldPressProbe.pressOuts())
 
@@ -227,27 +264,79 @@ describeRender(
     })
 
     describe('the key bar', () => {
-      it('starts repeat on press and stops it only when the finger lifts', async () => {
+      it('repeats an arrow while a drag holds the pad, without an extra send when the finger lifts', async () => {
         const { errors, page } = await openProbe(ROUTES.keys)
-        const { midHold, afterRelease } = await holdLikeAndroidWebView(
-          page,
-          `[aria-label="${REPEAT_KEY_LABEL}"]`,
-          {
-            holdMs: 1500,
-            read: () =>
-              page.evaluate(() => ({
-                sent: globalThis.__orcaHeldPressProbe.sent(),
-                repeats: globalThis.__orcaHeldPressProbe.repeats()
-              }))
-          }
-        )
-        expect(midHold).toEqual({
-          selectable: false,
-          sent: ['\x1b[A'],
-          repeats: [{ kind: 'start', bytes: '\x1b[A' }]
+        const { input, point } = await beginArrowPadTouch(page)
+        await input.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ ...point, y: point.y - 20 }]
         })
-        expect(afterRelease.sent).toEqual(['\x1b[A'])
-        expect(afterRelease.repeats).toEqual([{ kind: 'start', bytes: '\x1b[A' }, { kind: 'stop' }])
+        await page.clock.runFor(1500)
+        const midHold = await page.evaluate(() => ({
+          repeats: globalThis.__orcaHeldPressProbe.repeats(),
+          sent: globalThis.__orcaHeldPressProbe.sent()
+        }))
+        expect(midHold.repeats).toEqual([{ kind: 'start', bytes: '\x1b[A' }])
+        expect(midHold.sent.length).toBeGreaterThan(1)
+        expect(new Set(midHold.sent)).toEqual(new Set(['\x1b[A']))
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await page.clock.runFor(1000)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual(
+          midHold.sent
+        )
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.repeats())).toEqual([
+          { kind: 'start', bytes: '\x1b[A' },
+          { kind: 'stop' }
+        ])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it('sends a pad tap once on release', async () => {
+        const { errors, page } = await openProbe(ROUTES.keys)
+        const { input } = await beginArrowPadTouch(page)
+        await page.clock.runFor(100)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([])
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await page.clock.runFor(1000)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([
+          '\x1b[A'
+        ])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it('drops a pad tap after switching terminals', async () => {
+        const { errors, page } = await openProbe(ROUTES.keys)
+        const { input } = await beginArrowPadTouch(page)
+        await page.clock.runFor(100)
+        await page.evaluate(() => globalThis.__orcaHeldPressProbe.switchTerminal())
+        await page.waitForFunction(
+          () => globalThis.__orcaHeldPressProbe.activeHandle === 'other-terminal'
+        )
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await page.clock.runFor(1000)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it('scrolls the key row across a tap key without sending it', async () => {
+        const { errors, page } = await openProbe(ROUTES.keys)
+        const { input, key, point } = await beginTapKeyTouch(page)
+        const before = await keyScrollOffset(key)
+        await page.clock.runFor(70)
+        for (let step = 1; step <= 8; step += 1) {
+          await input.send('Input.dispatchTouchEvent', {
+            type: 'touchMove',
+            touchPoints: [{ ...point, x: point.x - step * 20 }]
+          })
+          await page.clock.runFor(20)
+        }
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await page.clock.runFor(1000)
+        expect(await keyScrollOffset(key)).toBeGreaterThan(before)
+        expect(await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).toEqual([])
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)

@@ -83,7 +83,9 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     if (closed || !sendBinary) {
       return
     }
-    sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: frameSeq, payload }))
+    sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: frameSeq, payload }), {
+      compressible: true
+    })
   }
   outputBatcher = createTerminalOutputBatcher((data, meta) => {
     if (meta?.cwd !== undefined) {
@@ -160,7 +162,11 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     outputBatcher?.push(data, meta)
   })
   // Capture live bytes before fit awaits; early presence would suppress main before any view could answer queries.
-  const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
+  const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
+    ptyId,
+    undefined,
+    isMobile ? clientId : undefined
+  )
   unsubscribeData = () => {
     releaseViewSubscriber()
     unsubscribeStreamData()

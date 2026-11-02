@@ -121,6 +121,19 @@ export const UpdatePaneLayout = WorktreeTabSelector.extend({
   renamedLeafIds: z.array(z.string().max(128)).max(64).optional().catch(undefined)
 })
 
+const MovePaneId = z
+  .unknown()
+  .transform((v) => (typeof v === 'string' ? v : ''))
+  .pipe(z.string().min(1).max(512))
+
+export const MovePaneToNewTab = WorktreeTabSelector.extend({
+  sourceTabId: MovePaneId,
+  targetTabId: MovePaneId,
+  leafId: MovePaneId,
+  // Where the client dropped the new tab; without it the host appends the tab.
+  targetGroupId: z.string().min(1).max(512).optional(),
+  index: z.number().int().min(0).optional()
+})
 export const SetTabProps = WorktreeTabSelector.extend({
   tabId: z
     .unknown()

@@ -3,11 +3,15 @@ import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'luci
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../platform/haptics'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { Worktree } from '../worktree/workspace-list-types'
 import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { areStructurallyEqual } from '../worktree/structural-equality'
 import { projectGroupRowIndent } from '../worktree/project-group-indent'
 import { getWorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
@@ -16,13 +20,12 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
+import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
 // Match desktop formatBranchName by hiding refs/heads/ prefix.
 function displayBranch(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
-
-type WorktreeRollupStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
 
 type Props = {
   item: Worktree
@@ -35,7 +38,7 @@ type Props = {
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
-  status: WorktreeRollupStatus
+  status: WorktreeStatus
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean
@@ -59,12 +62,15 @@ function WorktreeListRowComponent({
   onLongPress,
   onToggleLineage
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
-  const folderMeta = item.comment?.trim() || item.path || 'Folder'
+  const folderMeta =
+    item.comment?.trim() || item.path || t('components.worktreeListRow.folder', 'Folder')
   const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
   const lineageDepth = Math.max(0, item.lineageDepth ?? 0)
   const indent = projectGroupRowIndent(item) + lineageDepth * 18
-  const lineageChildCount = item.lineageChildCount ?? 0
+  const count = item.lineageChildCount ?? 0
   const shouldHideRepo = hideRepo && !item.showProjectName
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
@@ -81,7 +87,7 @@ function WorktreeListRowComponent({
         styles.worktreeRow,
         indent > 0 && { paddingLeft: spacing.lg + indent },
         item.isActive && styles.worktreeRowActive,
-        pressed && styles.worktreeRowPressed
+        pressed && (item.isActive ? styles.worktreeRowActivePressed : styles.worktreeRowPressed)
       ]}
       disabled={isReadOnly}
       onPress={() => onPress(item)}
@@ -110,12 +116,21 @@ function WorktreeListRowComponent({
       <View style={styles.worktreeMain}>
         <View style={styles.worktreeNameRow}>
           {showHostGlyph && (
-            <View accessibilityLabel={hostAccessibilityLabel || 'Remote host'}>
+            <View
+              accessibilityLabel={
+                hostAccessibilityLabel || t('components.worktreeListRow.remoteHost', 'Remote host')
+              }
+            >
               <HostKindIcon hostId={hostId} size={11} />
             </View>
           )}
           {showRepoChip && (
-            <View style={styles.repoChip} accessibilityLabel={`Project ${item.repo}`}>
+            <View
+              style={styles.repoChip}
+              accessibilityLabel={t('components.worktreeListRow.project', 'Project {{repo}}', {
+                repo: item.repo
+              })}
+            >
               <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
             </View>
           )}
@@ -139,17 +154,24 @@ function WorktreeListRowComponent({
           )}
           {isFolderWorkspace && (
             <View style={styles.folderBadge}>
-              <Text style={styles.folderBadgeText}>Folder</Text>
+              <Text style={styles.folderBadgeText}>
+                {t('components.worktreeListRow.folder', 'Folder')}
+              </Text>
             </View>
           )}
           <WorktreeMetaGlyphs presence={getWorktreeMetaGlyphPresence(item, cardDetails)} />
+          {item.liveTerminalCount > 0 ? (
+            <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
+          ) : null}
         </View>
         {cardDetails.metaRow && (
           <View style={styles.worktreeMetaRow}>
             {lineageDepth > 0 && (
               <View style={styles.childBadge}>
                 <GitBranch size={10} color={colors.textMuted} />
-                <Text style={styles.childBadgeText}>Child</Text>
+                <Text style={styles.childBadgeText}>
+                  {t('components.worktreeListRow.child', 'Child')}
+                </Text>
               </View>
             )}
             {cardDetails.host && (item.hostContextLabel || item.hostContextHealthLabel) ? (
@@ -199,9 +221,10 @@ function WorktreeListRowComponent({
             fullList={agentActivityDisplayMode === 'full'}
           />
         ) : null}
-        {lineageChildCount > 0 && onToggleLineage ? (
+        {count > 0 && onToggleLineage ? (
           <Pressable
-            style={styles.lineageToggle}
+            style={({ pressed }) => [styles.lineageToggle, pressed && styles.lineageTogglePressed]}
+            hitSlop={LINEAGE_TOGGLE_HIT_SLOP}
             onPress={(event) => {
               event.stopPropagation()
               onToggleLineage(item)
@@ -214,34 +237,39 @@ function WorktreeListRowComponent({
             )}
             <GitBranch size={12} color={colors.textSecondary} />
             <Text style={styles.lineageToggleText}>
-              {lineageChildCount} {lineageChildCount === 1 ? 'child' : 'children'}
+              {count === 1
+                ? t('components.worktreeListRow.children_one', '{{count}} child', { count })
+                : t('components.worktreeListRow.children_other', '{{count}} children', { count })}
             </Text>
           </Pressable>
         ) : null}
       </View>
-
-      {item.liveTerminalCount > 0 && (
-        <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
-      )}
     </Pressable>
   )
 }
 
 export const WorktreeListRow = memo(WorktreeListRowComponent, areStructurallyEqual)
 
-const styles = StyleSheet.create({
+// Grows the 20 pt pill to a 44 pt target without pushing the row apart.
+const LINEAGE_TOGGLE_HIT_SLOP = { top: 12, bottom: 12, left: 8, right: 8 } as const
+
+const styles = themedStyleSheet(() => ({
   worktreeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.md,
     paddingLeft: spacing.lg,
     paddingRight: spacing.lg,
     // Reserve the active accent bar width so active/inactive rows align.
-    borderLeftWidth: 2,
+    borderLeftWidth: WORKTREE_ROW_LAYOUT.accentWidth,
     borderLeftColor: 'transparent'
   },
   worktreeRowPressed: {
     backgroundColor: colors.bgRaised
+  },
+  // The active row already wears bgPanel, so its press needs a wash that reads over it.
+  worktreeRowActivePressed: {
+    backgroundColor: colors.translucentFill
   },
   // Match desktop focused-worktree card with raised fill and left accent.
   worktreeRowActive: {
@@ -250,7 +278,7 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.textSecondary
   },
   indicatorCol: {
-    width: 20,
+    width: WORKTREE_ROW_LAYOUT.indicatorWidth,
     alignItems: 'center',
     paddingTop: 6,
     marginRight: spacing.sm,
@@ -260,8 +288,7 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   worktreeMain: {
-    flex: 1,
-    marginRight: spacing.sm
+    flex: 1
   },
   worktreeNameRow: {
     flexDirection: 'row',
@@ -287,7 +314,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   prNumber: {
     fontSize: 10,
@@ -299,7 +326,7 @@ const styles = StyleSheet.create({
     height: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 4,
+    borderRadius: radii.mark,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
@@ -308,7 +335,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   folderBadgeText: {
     fontSize: 10,
@@ -339,7 +366,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   childBadgeText: {
     fontSize: 10,
@@ -360,12 +387,15 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     marginTop: spacing.xs,
     backgroundColor: colors.bgRaised,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radii.button
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.control
+  },
+  lineageTogglePressed: {
+    opacity: feedback.pressedOpacity
   },
   lineageToggleText: {
     fontSize: 11,
@@ -373,10 +403,8 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   terminalCount: {
+    marginLeft: 'auto',
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    minWidth: 16,
-    textAlign: 'right',
-    paddingTop: 3
+    color: colors.textMuted
   }
-})
+}))

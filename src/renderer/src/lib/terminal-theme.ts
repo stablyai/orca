@@ -1,6 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import { getTheme, getThemeNames } from './terminal-themes-data'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { PluginTerminalThemeRegistration } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import {
   makeCustomTerminalThemeSelection,
   normalizeTerminalCustomThemes,
@@ -11,7 +12,9 @@ import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT,
   lookupTerminalTheme,
-  selectTerminalTheme
+  resolveTerminalPalette,
+  type TerminalPaletteSettings,
+  type TerminalThemeLookupSettings
 } from '../../../shared/terminal-theme-selection'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
@@ -32,7 +35,7 @@ export type EffectiveTerminalAppearance = {
 export type TerminalThemeOption = {
   value: string
   label: string
-  group: 'built-in' | 'imported'
+  group: 'built-in' | 'imported' | 'plugin'
   sourceLabel?: string
   mode?: TerminalCustomTheme['mode']
   previewTheme: ITheme | null
@@ -50,28 +53,15 @@ export function getBuiltinTheme(name: string): ITheme | null {
 }
 
 export function getTerminalTheme(
-  settings: Pick<GlobalSettings, 'terminalCustomThemes'> | undefined,
+  settings: TerminalThemeLookupSettings | undefined,
   selection: string
 ): ITheme | null {
   return lookupTerminalTheme(settings, selection)
 }
 
-function getTerminalThemePreview(
-  name: string,
-  settings?: Pick<GlobalSettings, 'terminalCustomThemes'>,
-  fallbackMode: 'dark' | 'light' = 'dark'
-): ITheme | null {
-  const theme = getTerminalTheme(settings, name)
-  if (theme) {
-    return theme
-  }
-  return getTheme(
-    fallbackMode === 'light' ? DEFAULT_TERMINAL_THEME_LIGHT : DEFAULT_TERMINAL_THEME_DARK
-  )
-}
-
 export function getAvailableTerminalThemeOptions(
-  settings: Pick<GlobalSettings, 'terminalCustomThemes'>
+  settings: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'>,
+  pluginThemes: readonly PluginTerminalThemeRegistration[] = []
 ): TerminalThemeOption[] {
   const builtinOptions = BUILTIN_TERMINAL_THEME_NAMES.map((name) => ({
     value: name,
@@ -90,7 +80,15 @@ export function getAvailableTerminalThemeOptions(
       previewTheme: terminalCustomThemeToXtermTheme(theme)
     })
   )
-  return [...builtinOptions, ...customOptions]
+  const pluginOptions = pluginThemes.map((theme) => ({
+    value: theme.id,
+    label: theme.label,
+    group: 'plugin' as const,
+    sourceLabel: theme.pluginName,
+    mode: theme.mode,
+    previewTheme: theme.terminal
+  }))
+  return [...builtinOptions, ...customOptions, ...pluginOptions]
 }
 
 export function resolveEffectiveTerminalAppearance(
@@ -102,25 +100,26 @@ export function resolveEffectiveTerminalAppearance(
     | 'terminalUseSeparateLightTheme'
     | 'terminalThemeLight'
     | 'terminalCustomThemes'
+    | 'terminalPluginPalettes'
     | 'terminalDividerColorLight'
-  >,
+  > &
+    TerminalPaletteSettings,
   systemPrefersDark = getSystemPrefersDark()
 ): EffectiveTerminalAppearance {
-  const {
-    mode: sourceTheme,
-    useLightVariant,
-    themeName
-  } = selectTerminalTheme(settings, systemPrefersDark)
+  const { mode, useLightVariant, themeName, theme } = resolveTerminalPalette(
+    settings,
+    systemPrefersDark
+  )
   const dividerColor = useLightVariant
     ? normalizeColor(settings.terminalDividerColorLight, DEFAULT_TERMINAL_DIVIDER_LIGHT)
     : normalizeColor(settings.terminalDividerColorDark, DEFAULT_TERMINAL_DIVIDER_DARK)
 
   return {
-    mode: sourceTheme,
+    mode,
     sourceTheme: settings.theme,
     themeName,
     dividerColor,
-    theme: getTerminalThemePreview(themeName, settings, useLightVariant ? 'light' : 'dark'),
+    theme,
     systemPrefersDark
   }
 }
@@ -160,4 +159,4 @@ export function resolvePaneStyleOptions(
 export {
   isTerminalBackgroundLight,
   resolveOpaqueTerminalBackground
-} from './terminal-title-contrast'
+} from '../../../shared/terminal-title-contrast'

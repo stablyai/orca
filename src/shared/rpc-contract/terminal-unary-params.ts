@@ -20,10 +20,36 @@ export const WindowsShellOverrideParam = z
   // Canonicalize host-side to the .exe spellings exact-matched by spawn, even if the client did not.
   .transform((shell) => canonicalizeWindowsShellOverride(shell) ?? shell)
 
+const TerminalSurfaceCloseIdentity = z.object({
+  worktreeId: requiredString('Missing worktree id'),
+  tabId: requiredString('Missing tab id'),
+  leafId: requiredString('Missing leaf id'),
+  createdAt: z.number().finite().nullable(),
+  generation: z.number().int().nonnegative(),
+  hasLeaf: z.boolean(),
+  ptyId: z.string().nullable(),
+  incarnationId: z.string().nullable()
+})
+const TerminalSurfaceCloseCapture = z.object({
+  identity: TerminalSurfaceCloseIdentity,
+  holders: z
+    .array(
+      z.object({
+        hostId: OptionalExecutionHostId.unwrap(),
+        identity: TerminalSurfaceCloseIdentity.nullable()
+      })
+    )
+    .max(64)
+})
+
 export const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle'),
   // Additive fence understood by newer hosts; legacy hosts safely ignore it.
   expectedIncarnationId: requiredString('Missing PTY incarnation').optional()
+})
+
+export const TerminalClose = TerminalHandle.extend({
+  originalPresentation: TerminalSurfaceCloseCapture.optional()
 })
 
 export const TerminalReadKittyFile = TerminalHandle.extend({
@@ -38,6 +64,12 @@ export const TerminalReadKittyFile = TerminalHandle.extend({
 
 export const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
+})
+
+export const TerminalViewClaudeAgent = TerminalHandle.extend({
+  sessionId: z.string().min(1).max(256),
+  agentId: z.string().min(1).max(256).optional(),
+  client: z.object({ id: z.string().min(1).max(256), type: z.literal('desktop') })
 })
 
 /** `terminal.reveal` takes no handle: a pane a paired server owns has none on this host. */
@@ -64,6 +96,8 @@ export const TerminalListParams = z.object({
   requireFreshPtyLiveness: z.boolean().optional(),
   // Only human CLI formatting needs the costly layouts; absent includes them for older clients.
   includeVisualLayouts: z.boolean().optional(),
+  // Readers that never show the output tail drop it; absent includes it, as older hosts always do.
+  includePreview: z.boolean().optional(),
   // Layout-owner hosts show the workspace's unshown live terminals before listing (a window's
   // activation sweep); other hosts drop it, as they did before it existed.
   placeUnshownLiveTerminals: z.boolean().optional()
@@ -180,7 +214,9 @@ const TerminalColorQueryReplyColorsParam = z.object({
 })
 
 export const TerminalSetViewerColors = z.object({
-  colors: TerminalColorQueryReplyColorsParam
+  colors: TerminalColorQueryReplyColorsParam,
+  /** Full appearance for hidden OSC 4/12 and ?996n replies; validated by the host, dropped by older hosts. */
+  attributes: z.unknown().optional()
 })
 
 /** The provider session a terminal's launch resumes. */
@@ -211,10 +247,14 @@ export const TerminalCreateParams = z.object({
     })
     .optional(),
   resumeProviderSession: ResumeProviderSessionParam.optional(),
+  // Older hosts drop it and resume as before.
+  resumeOrigin: z.literal('saved').optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
+  /** The creator's palette and cursor, validated by the host; older hosts drop it. */
+  terminalViewAttributes: z.unknown().optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   // Ignored here; the CLI still sends it for hosts before v1.4.211, which route on it.

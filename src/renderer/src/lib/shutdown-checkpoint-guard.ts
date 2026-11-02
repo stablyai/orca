@@ -53,12 +53,17 @@ export function createShutdownCheckpointGuard(
 }
 
 export function createShutdownCheckpointBeforeUnloadHandler(
-  guard: ShutdownCheckpointGuard
+  guard: ShutdownCheckpointGuard,
+  onNativeUnloadVetoed?: () => void
 ): (event: Event) => void {
   return (event): void => {
     if (!guard.persistOnce()) {
       event.currentTarget?.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT))
       event.preventDefault()
+      // Synthetic close/restart dispatchers report their own veto; browser reloads have no caller to tell the user.
+      if (event.isTrusted) {
+        onNativeUnloadVetoed?.()
+      }
     }
   }
 }

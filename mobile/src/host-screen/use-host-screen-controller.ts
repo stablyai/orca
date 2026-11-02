@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useLocalSearchParams, usePathname } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -22,13 +23,14 @@ import { useHostListSections } from './use-host-list-sections'
 import { useSwitchedHostSidebarFeed } from './use-host-sidebar-feed'
 import { useHostProjectSections } from './use-host-project-sections'
 import { useHostRepoMetadata, type FetchHostRepoMetadata } from './use-host-repo-metadata'
-import { useHostScreenIdentity } from './use-host-screen-identity'
+import { peekStoredHost, useHostScreenIdentity } from './use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostViewSettings } from './use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 import { useHostDisplay } from '../transport/use-host-display'
+import { classifyConnection } from '../transport/connection-health'
 
 export type HostScreenProps = {
   embedded?: boolean
@@ -42,6 +44,7 @@ export function useHostScreenController({
   hostId: hostIdProp,
   onHideSidebar
 }: HostScreenProps = {}) {
+  useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
@@ -60,8 +63,15 @@ export function useHostScreenController({
   const forceReconnectHost = useForceReconnect()
   const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
-  const state = useHostScreenState(hostId)
+  const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
+  const connectionVerdict = classifyConnection({
+    state: connState,
+    reconnectAttempts,
+    lastConnectedAt,
+    hostName: state.hostName,
+    ...relayRecovery
+  })
   const hostDisplay = useHostDisplay(
     hostId && state.hostName
       ? { id: hostId, name: state.hostName, ...state.hostStoredDescriptor }
@@ -151,6 +161,7 @@ export function useHostScreenController({
     feed,
     projectOrderBy,
     client,
+    connectionVerdict,
     connState,
     contentMaxWidth,
     displayWorktrees,

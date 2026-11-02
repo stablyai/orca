@@ -27,6 +27,10 @@ type HostRuntimeEffectsInput = Pick<
 >
 
 import { useEffect, useCallback } from 'react'
+import {
+  readWorkspaceSetupInspection,
+  getComposerSetupInspectionCommit
+} from '@/lib/workspace-setup-preparation'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
@@ -113,17 +117,16 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
 
     let cancelled = false
 
-    void loadHookCheckForRepo(repoId)
-      .then((result) => {
-        if (!cancelled) {
-          commitHookCheckIfCurrent(selectedRepoHookContextKey, result.hooks)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          commitHookCheckIfCurrent(selectedRepoHookContextKey, null)
-        }
-      })
+    // Opening the composer is not a user act on the repo's WSL distro; Create checks again.
+    void readWorkspaceSetupInspection(
+      () => loadHookCheckForRepo(repoId, { background: true }),
+      () => cancelled
+    ).then((outcome) => {
+      const commit = getComposerSetupInspectionCommit(outcome, 'background')
+      if (commit && !cancelled) {
+        commitHookCheckIfCurrent(selectedRepoHookContextKey, commit.hooks)
+      }
+    })
 
     return () => {
       cancelled = true

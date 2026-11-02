@@ -2,19 +2,19 @@
 // Calling the adapter first could lose a turn it accepted.
 
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   refuse,
-  type AgentSessionRefusalReason,
-  type AgentSessionSendResult,
-  type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+  type AgentSessionWireRefusal,
+  isAgentSessionRefusalError
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
@@ -93,6 +93,7 @@ export async function performSend(
     /** Persist only source kind in the submission. */
     source?: AgentSessionMessageSource
     options?: Readonly<Record<string, string>>
+    selection?: Readonly<Record<string, string>>
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
@@ -110,7 +111,7 @@ export async function performSend(
       value: { clientMessageId: input.clientMessageId, submission: { ...existing } }
     }
   }
-  const captured = captureStructuredExecutionOptions(ctx, input.options)
+  const captured = captureStructuredExecutionOptions(ctx, input.options, input.selection)
   if ('refusal' in captured) {
     return { ok: false, refusal: captured.refusal }
   }
@@ -163,4 +164,14 @@ function requireSubmission(
   }
   // Return this step’s answer; later journal settlement must not mutate it.
   return { ...submission }
+}
+
+export type AgentSessionReplayContext = Pick<
+  AgentSessionTurnContext,
+  'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'now'
+> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'cursor' | 'submission' | 'submissions' | 'epoch' | 'threadGoal'
+  > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
 }

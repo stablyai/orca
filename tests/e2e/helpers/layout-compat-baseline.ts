@@ -6,7 +6,7 @@ import { expect } from './orca-app'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
 import { decodePairingOffer } from '../../../src/shared/pairing'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
 import type {
   RuntimeTerminalListResult,

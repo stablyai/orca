@@ -3,14 +3,14 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AppState } from '@/store/types'
+import { TEST_REPO, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 import {
   buildAiVaultHostScopeOptions,
   buildRuntimeAiVaultHostScopeOptions,
   useAiVaultExecutionHostScope
 } from './ai-vault-host-scope'
-import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
 
 type HostScopeResult = ReturnType<typeof useAiVaultExecutionHostScope>
 
@@ -44,14 +44,15 @@ async function renderHook(props: {
 function stateForWorktree(args: {
   worktreeId: string
   repoId: string
-  executionHostId?: string | null
-  hostId?: string | null
+  executionHostId?: ExecutionHostId | null
+  hostId?: ExecutionHostId | null
 }): AiVaultSessionResumeTargetState {
   return {
     folderWorkspaces: [],
     projectGroups: [],
     repos: [
       {
+        ...TEST_REPO,
         id: args.repoId,
         connectionId: null,
         executionHostId: args.executionHostId ?? 'local'
@@ -59,14 +60,14 @@ function stateForWorktree(args: {
     ],
     worktreesByRepo: {
       [args.repoId]: [
-        {
+        makeWorktree({
           id: args.worktreeId,
           repoId: args.repoId,
-          hostId: args.hostId ?? null
-        }
+          hostId: args.hostId ?? undefined
+        })
       ]
     }
-  } as unknown as Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>
+  }
 }
 
 afterEach(() => {
@@ -114,7 +115,7 @@ describe('useAiVaultExecutionHostScope', () => {
         projectGroups: [],
         repos: [],
         worktreesByRepo: {}
-      } as unknown as AiVaultSessionResumeTargetState
+      }
     })
 
     expect(latest?.executionHostScope).not.toBe('local')
@@ -129,7 +130,7 @@ describe('useAiVaultExecutionHostScope', () => {
         projectGroups: [],
         repos: [],
         worktreesByRepo: {}
-      } as unknown as AiVaultSessionResumeTargetState
+      }
     })
 
     expect(latest?.executionHostScope).toBe('local')

@@ -11,27 +11,32 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
-async function replayDialog(name: string, connectionId?: string) {
+async function replayDialog(
+  name: string,
+  connectionId?: string,
+  pane: Partial<Parameters<typeof createTranscriptPane>[0]> = {}
+) {
   const base = join(__dirname, '__fixtures__', name)
   const size: { cols: number; rows: number } = JSON.parse(readFileSync(`${base}.meta.json`, 'utf8'))
   const bytes = readFileSync(`${base}.txt`)
-  const pane = await createTranscriptPane({
+  const transcript = await createTranscriptPane({
     paneTitle: 'Claude Code',
     foregroundProcess: 'claude',
     launchAgent: 'claude',
+    ...pane,
     connectionId,
     size,
     data: ''
   })
   const decoder = new TextDecoder()
   for (let offset = 0; offset < bytes.length; offset += 1024) {
-    pane.runtime.onPtyData(
+    transcript.runtime.onPtyData(
       TRANSCRIPT_PANE_PTY_ID,
       decoder.decode(bytes.subarray(offset, offset + 1024), { stream: true }),
       Date.now()
     )
   }
-  return pane
+  return transcript
 }
 
 describe.each([undefined, 'ssh:build-host'])(
@@ -52,6 +57,66 @@ describe.each([undefined, 'ssh:build-host'])(
     })
   }
 )
+
+describe('hand-typed native Claude, whose process name is its version', () => {
+  afterEach(() => vi.useRealTimers())
+
+  function typedPane(overrides: Partial<Parameters<typeof createTranscriptPane>[0]> = {}) {
+    const counts = { probes: 0, scans: 0 }
+    const pane = replayDialog('claude-dialog-trust-workspace', undefined, {
+      paneTitle: 'bash',
+      launchAgent: undefined,
+      foregroundProcess: '2.1.310',
+      confirmedForegroundProcess: 'claude',
+      onForegroundProbe: () => counts.probes++,
+      onForegroundScan: () => counts.scans++,
+      ...overrides
+    })
+    return pane.then(async (created) => {
+      // The dialog has been painted for a while when someone asks; let the emulator apply it.
+      await created.runtime['readVisibleTerminalState'](TRANSCRIPT_PANE_PTY_ID)
+      return { ...created, counts }
+    })
+  }
+
+  it('reports its trust dialog without storing the scanned identity', async () => {
+    const { runtime, handle, counts } = await typedPane()
+    await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toMatchObject({
+      reason: 'agent-trust-workspace'
+    })
+    const before = runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent
+    await runtime.refreshPtyForegroundAgentFromController(TRANSCRIPT_PANE_PTY_ID)
+    expect(runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent).toBe(before)
+    expect(before).not.toBe('claude')
+    expect(counts.scans).toBe(1)
+  })
+
+  it('never scans for a name that is not a version', async () => {
+    const { runtime, handle, counts } = await typedPane({ foregroundProcess: 'vim' })
+    await runtime.getTerminalInteractiveWait(handle)
+    expect(counts.scans).toBe(0)
+  })
+
+  it('answers unknown when the foreground read never returns', async () => {
+    const { runtime, handle } = await typedPane({ foregroundProbeHangs: true })
+    vi.useFakeTimers()
+    const wait = runtime.getTerminalInteractiveWait(handle)
+    await vi.advanceTimersByTimeAsync(5_000)
+    await expect(wait).resolves.toBeUndefined()
+  })
+
+  it('does not read the foreground of a plain shell', async () => {
+    const counts = { probes: 0 }
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'bash',
+      foregroundProcess: 'bash',
+      onForegroundProbe: () => counts.probes++,
+      data: 'user@host repo $ '
+    })
+    await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
+    expect(counts.probes).toBe(0)
+  })
+})
 
 describe('Claude dialog screen observation fences', () => {
   afterEach(() => vi.useRealTimers())

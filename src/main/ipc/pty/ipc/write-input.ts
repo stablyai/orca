@@ -1,3 +1,4 @@
+import { isTerminalInputPaused } from '../../../runtime/terminal-input-admission'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -68,10 +69,14 @@ export function createPtyWriteInput(deps: {
 
   const writePtyProviderInputWithinLimit = (
     provider: IPtyProvider,
-    id: string,
-    data: string,
+    args: PtyWritePayload,
     verify = false
   ): boolean | Promise<boolean> => {
+    const { id, data } = args
+    if (runtime && isTerminalInputPaused(runtime, id, 'desktop')) {
+      return false
+    }
+    noteRendererPtyInput(args)
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
     if (first.done) {
@@ -121,21 +126,21 @@ export function createPtyWriteInput(deps: {
 
   const writePtyProviderInput = (
     provider: IPtyProvider,
-    id: string,
-    data: string,
+    args: PtyWritePayload,
     verify = false
   ): boolean | Promise<boolean> => {
+    const { id, data } = args
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
       if (typeof tooLarge === 'boolean') {
-        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data, verify)
+        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, args, verify)
       }
       return tooLarge
         .then((result) => {
           if (result) {
             return false
           }
-          return writePtyProviderInputWithinLimit(provider, id, data, verify)
+          return writePtyProviderInputWithinLimit(provider, args, verify)
         })
         .catch((error) => {
           return failedWrite(id, error, verify)
@@ -224,21 +229,16 @@ export function createPtyWriteInput(deps: {
       }
       return accepted
     }
-    const result = writePtyProviderInput(provider, args.id, args.data, verify)
+    const result = writePtyProviderInput(provider, args, verify)
     return typeof result === 'boolean' ? observe(result) : result.then(observe)
   }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
-    // Enforce phone-owned input in main too; renderer presence state lags by one IPC hop (docs/mobile-presence-lock.md).
-    if (runtime?.getDriver(args.id).kind === 'mobile') {
-      return false
-    }
     const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
     if (!provider) {
       return false
     }
     try {
-      noteRendererPtyInput(args)
       return writeAndObserveInput(provider, args)
     } catch {
       return false
@@ -253,14 +253,10 @@ export function createPtyWriteInput(deps: {
     if (!provider?.hasPty?.(args.id)) {
       return false
     }
-    noteRendererPtyInput(args)
     return writeAndObserveInput(provider, args, true)
   }
 
   const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
-    if (runtime?.getDriver(args.id).kind === 'mobile') {
-      return false
-    }
     if (args.requireWriteSettlement === true) {
       return writePtyInputSettled(args)
     }
@@ -273,7 +269,6 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      noteRendererPtyInput(args)
       return writeAndObserveInput(provider, args)
     } catch {
       return false

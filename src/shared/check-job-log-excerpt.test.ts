@@ -17,6 +17,14 @@ describe('bounded owned check log sanitation', () => {
     const raw = '  α\t\x1b[31merror:\x1b[0m\r\n界\r😀\n\x00\x01\x08\x0b\x0c\x1f\x7f\x85\x9c\n'
     expect(sanitizeCheckJobLogExcerpt(raw)).toBe('  α\terror:\n界\n😀\n\n')
   })
+  it('removes a provider log BOM while preserving diagnostics and layout', () => {
+    const raw = '\ufefferror: build failed\r\n  at α.ts:1\t界😀\n'
+    expect(sanitizeCheckJobLogExcerpt(raw)).toBe('error: build failed\n  at α.ts:1\t界😀\n')
+  })
+  it('preserves emoji and word joiners while removing other format controls', () => {
+    const raw = '\ufeff👨\u200d👩\u200d👧\u200d👦 می\u200cروم \u202eerror\u202c\u200b\n'
+    expect(sanitizeCheckJobLogExcerpt(raw)).toBe('👨\u200d👩\u200d👧\u200d👦 می\u200cروم error\n')
+  })
   it.each(['x', 'é', '界', '😀', '\ud800', '\udfff'])('caps UTF-8 %j at byte edges', (unit) => {
     const width = bytes.getUtf8ByteLength(unit)
     for (const delta of [-1, 0, 1]) {

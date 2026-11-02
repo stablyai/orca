@@ -32,7 +32,7 @@ describe('disposeWatcherProcessAndWait', () => {
       settled()
       throw error
     })
-    await Promise.resolve()
+    await new Promise<void>((resolve) => setImmediate(resolve))
     expect(settled).not.toHaveBeenCalled()
     finishPool()
     await expect(disposal).rejects.toMatchObject({ message: 'watcher_process_shutdown_incomplete' })

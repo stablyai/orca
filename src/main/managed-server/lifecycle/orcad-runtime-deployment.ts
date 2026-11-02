@@ -61,7 +61,8 @@ export async function createManagedOrcadEnvironment(
     const { connectionManager, targetStore, claims } = requireManagedOrcadInfrastructure()
     const environmentId =
       getManagedOrcadFenceEnvironmentId(targetStore.getTarget(args.sshTargetId)) ?? randomUUID()
-    const environments = listEnvironments(userDataPath)
+    // Duplicate/name checks before an add: a crash-zeroed list (#18766) must read as empty here.
+    const environments = listEnvironments(userDataPath, { recoverBlankStore: true })
     const registered = environments.find((entry) => entry.id === environmentId)
     if (registered) {
       assertRuntimeEnvironmentNotReconciling(registered)

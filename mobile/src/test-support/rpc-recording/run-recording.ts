@@ -74,8 +74,11 @@ export async function runRecording(
           settlements[step.id] = rejectedSettlement(error, scheduler.elapsed())
         }
       } else if ('complete' in step) {
-        if (!step.optional || transport.outstanding(step.complete)) {
-          transport.complete(step.complete, step.params, step.reply, step.reject)
+        const pending = transport.outstanding(step.complete)
+        if (!step.optional || pending) {
+          const params =
+            step.optional && step.paramsFollowDivergence ? pending?.params : step.params
+          transport.complete(step.complete, params, step.reply, step.reject)
         }
       } else if ('frame' in step) {
         const crash = transport.frame(step.frame, step.params, step.reply)

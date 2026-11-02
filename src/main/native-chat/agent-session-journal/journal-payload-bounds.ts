@@ -1,5 +1,12 @@
 import { createHash } from 'node:crypto'
-import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-journal-types'
+import type { NativeChatBlock } from '../../../shared/native-chat/native-chat-types'
+import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
+import type {
+  AgentJournalBoundedPayload,
+  AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+
+const MAX_LEGACY_IMPORT_SUBAGENTS = 64
 
 export type JournalPayloadLimits = {
   inlineHeadBytes: number
@@ -36,6 +43,18 @@ export function journalPayload(payload: string): AgentJournalBoundedPayload {
 
 export function journalToolPayload(payload: string, running: boolean): AgentJournalBoundedPayload {
   return running ? boundPayload(payload, JOURNAL_RUNNING_PREVIEW_LIMITS) : journalPayload(payload)
+}
+
+/** Growing calls are re-saved on every revision, so the journal keeps whole output only on the closing one. */
+export function boundRunningToolOutput(body: AgentJournalItemBody): AgentJournalItemBody {
+  if (body.kind !== 'tool-call' || body.state !== 'running' || !body.output) {
+    return body
+  }
+  const { output } = body
+  const limit = JOURNAL_RUNNING_PREVIEW_LIMITS.inlineHeadBytes
+  return output.truncated || output.byteLength <= limit
+    ? body
+    : { ...body, output: { ...output, head: utf8Head(output.head, limit), truncated: true } }
 }
 
 /** Digest/byteLength describe the original, even when only its head is retained. */
@@ -104,4 +123,32 @@ function clipUtf8(buffer: Buffer, maxBytes: number): string {
     end -= 1
   }
   return buffer.subarray(0, end).toString('utf8')
+}
+
+/** Bound every bulk-bearing block, including mixed-message tool calls; the transcript retains full content. */
+export function boundLegacyImportBlock(
+  block: NativeChatBlock,
+  limits: JournalPayloadLimits
+): NativeChatBlock {
+  if (block.type === 'text') {
+    return { ...block, text: boundInlineText(block.text, limits).text }
+  }
+  if (block.type === 'tool-result') {
+    return { ...block, output: boundInlineText(block.output, limits).text }
+  }
+  if (block.type === 'tool-call') {
+    return { ...block, input: boundToolInput(block.input, limits) }
+  }
+  if (block.type === 'subagent-group') {
+    return {
+      ...block,
+      agents: block.agents.slice(0, MAX_LEGACY_IMPORT_SUBAGENTS).map((agent) => ({
+        ...agent,
+        // Digest-based roster IDs keep children with shared prefixes distinct.
+        id: boundSubagentEntryId(agent.id),
+        label: boundInlineText(agent.label, limits).text
+      }))
+    }
+  }
+  return block
 }

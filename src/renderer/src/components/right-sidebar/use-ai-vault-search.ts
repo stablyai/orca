@@ -20,6 +20,7 @@ import type { AiVaultSearchScopeIdentity } from '../../../../shared/ai-vault-sea
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
+import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
 
 type SearchIdentity = {
@@ -42,6 +43,7 @@ export function useAiVaultSearch(
   scope: ExecutionHostScope | null,
   policyKey: string
 ) {
+  const associations = useAiVaultAssociationObservation(request ? scope : null)
   const [page, setPage] = useState<SearchPage | null>(null)
   const [revision, setRevision] = useState(0)
   const loadPage = useRef<((cursor: string) => void) | null>(null)
@@ -57,14 +59,19 @@ export function useAiVaultSearch(
     }
     let cancelled = false
     let pending = false
-    async function run(cursor?: string) {
+    let followUp = false
+    let started = false
+    async function run(cursor?: string, revalidate = false) {
       if (pending || cancelled || !request || !scope) {
         return
       }
       pending = true
+      started = true
+      const revision = associations.getSnapshot()
+      const isCurrent = () => !cancelled && revision === associations.getSnapshot()
       setPage((previous) => ({
         identity,
-        hits: cursor && previous?.identity === identity ? previous.hits : [],
+        hits: (cursor || revalidate) && previous?.identity === identity ? previous.hits : [],
         response: null,
         error: false,
         loading: true
@@ -72,14 +79,14 @@ export function useAiVaultSearch(
       try {
         let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
         let append = Boolean(cursor)
-        if (cancelled) {
+        if (!isCurrent()) {
           return
         }
         if (response.kind === 'stale-cursor') {
           append = false
           response = await window.api.aiVault.searchSessions(request, scope)
         }
-        if (cancelled) {
+        if (!isCurrent()) {
           return
         }
         setPage((previous) => ({
@@ -96,21 +103,37 @@ export function useAiVaultSearch(
           loading: false
         }))
       } catch {
-        if (!cancelled) {
+        if (isCurrent()) {
           setPage({ identity, hits: [], response: null, error: true, loading: false })
         }
       } finally {
         pending = false
+        if (followUp && !cancelled) {
+          followUp = false
+          void run(undefined, true)
+        }
       }
     }
     loadPage.current = (cursor) => void run(cursor)
-    const timer = setTimeout(() => void run(), 250)
+    const stop = associations.subscribe(() => {
+      if (!started) {
+        return
+      }
+      if (pending) {
+        followUp = true
+      } else {
+        void run(undefined, true)
+      }
+    })
+    const timer = setTimeout(() => void run(undefined, true), 250)
     return () => {
       cancelled = true
+      followUp = false
+      stop()
       loadPage.current = null
       clearTimeout(timer)
     }
-  }, [identity])
+  }, [identity, associations])
 
   const current = page?.identity === identity ? page : null
   return {

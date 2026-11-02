@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { appendBuildOldSpaceOption } from './node-old-space-limit.mjs'
+import { withRolldownThreadLimit } from './rolldown-thread-limit.mjs'
 import { RENDERER_BUILD_DIR, verifyRendererBootGraph } from './renderer-boot-graph.mjs'
 
 const require = createRequire(import.meta.url)
@@ -15,7 +16,7 @@ const nodeOptions = appendBuildOldSpaceOption(process.env.NODE_OPTIONS)
 const child = spawn(process.execPath, [electronViteCli, 'build', ...process.argv.slice(2)], {
   stdio: 'inherit',
   env: {
-    ...process.env,
+    ...withRolldownThreadLimit(process.env),
     NODE_OPTIONS: nodeOptions
   }
 })

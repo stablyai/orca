@@ -11,10 +11,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call
 }))
 vi.mock('@/runtime/local-structured-chats', () => ({ localStructuredChatsInUse: async () => true }))
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
+  subscribeLocalRuntimeCapabilityObservation: () => () => {},
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => ['agent-session.model-catalog.saved-only.v1'],
   readLocalRuntimeCapabilitiesOrUnknown: () => ['agent-session.model-catalog.saved-only.v1']
@@ -30,13 +32,13 @@ vi.mock('@/runtime/host-structured-agents', () => ({
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
@@ -109,7 +111,7 @@ function renderNewChat(agent: string) {
       turnId: null,
       unloadedTurnRevisions: undefined,
       mutate: vi.fn(),
-      launch: { kind: 'new', heldOptions: {}, worktree: 'id:wt-1' }
+      launch: { kind: 'new', worktree: 'id:wt-1' }
     })
     frames.push(pill(options.optionSnapshot))
     return options

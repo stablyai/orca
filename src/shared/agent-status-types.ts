@@ -1,7 +1,7 @@
 // Normalize explicit hook/OSC status; a guarded interrupt fallback supplies done when the cancellation hook is missing.
 
 import type { ProgramStatusFacet } from './program-status/facet'
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { AgentStateHistoryEntry } from './agent-state-history'
 import { isAgentTurnOutcome } from './agent-turn-outcome'
@@ -41,7 +41,8 @@ export type {
   AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
-  MigrationUnsupportedPtyEntry
+  MigrationUnsupportedPtyEntry,
+  RefusedPaneResume
 } from './agent-status-ipc-payload'
 export { mainAgentStatusEqual, type AgentMainAgentStatus } from './main-agent-status'
 export { AGENT_STATE_HISTORY_MAX, type AgentStateHistoryEntry } from './agent-state-history'
@@ -112,6 +113,8 @@ export type AgentStatusEntry = {
   terminalTitle?: string
   /** Rolling log of previous states, capped at AGENT_STATE_HISTORY_MAX. */
   stateHistory: AgentStateHistoryEntry[]
+  /** Observed session origin for row ordering; recent history can evict its first state. */
+  firstStateStartedAt?: number
   /** Name of the tool the agent is currently using (e.g. "Edit", "Bash"). */
   toolName?: string
   /** Short preview of the tool input (e.g. file path, command). */

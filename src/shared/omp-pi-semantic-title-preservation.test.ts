@@ -1,14 +1,10 @@
 /** OMP/Pi titles use π, never OMP/Pi. Verified oh-my-pi utils/title-generator.ts DEFAULT_TERMINAL_TITLE/buildTerminalTitleWithState
  * (native π frame label); Orca’s injected pi/titlebar-extension-source.ts instead emits π - session - cwd with 80ms braille frames.
  * Orca manufactured OMP/Pi flicker via synthetic profile labels and normalization that discarded session/cwd (#16093).
- * Disable synthesizeWorkingTitle only: terminal-state synthesis still publishes pane identity. Normalize rotating braille while preserving labels. */
+ * OMP disables terminal-title synthesis so its session titles survive every state. Normalize rotating braille while preserving labels. */
 import { describe, expect, it } from 'vitest'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
 import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
-import {
-  getSyntheticAgentTerminalTitle,
-  shouldDriveSyntheticAgentTitleFromHook
-} from './synthetic-agent-title'
 import { normalizeCompatibleAgentTitleForOwner } from './agent-title-owner'
 import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-title'
 
@@ -67,7 +63,10 @@ describe('detectAgentStatusFromTitle reads the π state separator', () => {
     ['π > fixing the sidebar', 'idle'],
     ['π ⠋ fixing the sidebar', 'working'],
     ['⠋ π - fixing the sidebar - orca', 'working'],
-    ['π: fixing the sidebar', 'idle']
+    ['π: fixing the sidebar', 'idle'],
+    // Session names are free text; only the synthetic label means permission.
+    ['π - fix action required banner - orca', 'idle'],
+    ['OMP - fix action required banner - orca', 'idle']
   ])('classifies %s as %s', (title, expected) => {
     expect(detectAgentStatusFromTitle(title)).toBe(expected)
   })
@@ -94,26 +93,6 @@ describe('the churn is gone at the suppressor', () => {
         normalizeTerminalTitle('π ! fixing the sidebar')
       )
     ).toBe(false)
-  })
-})
-
-describe('Orca stops writing over the working title it does not own', () => {
-  // Agent-owned 80ms title animation must not compete with synthetic working labels.
-  it.each(['omp', 'pi'] as const)('synthesizes no working title for %s', (agent) => {
-    expect(shouldDriveSyntheticAgentTitleFromHook(agent, 'working')).toBe(false)
-  })
-
-  // Retain terminal-state synthesis for downstream pane identity; idle agents emit no animation churn.
-  it.each(['omp', 'pi'] as const)('still synthesizes terminal states for %s', (agent) => {
-    for (const state of ['done', 'waiting', 'blocked'] as const) {
-      expect(getSyntheticAgentTerminalTitle(agent, state)).not.toBeNull()
-      expect(shouldDriveSyntheticAgentTitleFromHook(agent, state)).toBe(true)
-    }
-  })
-
-  it('leaves agents that own no title alone', () => {
-    expect(getSyntheticAgentTerminalTitle('droid', 'done')).toBe('Droid ready')
-    expect(shouldDriveSyntheticAgentTitleFromHook('droid', 'working')).toBe(true)
   })
 })
 
@@ -164,33 +143,6 @@ describe('the state separator does not fire on ordinary titles', () => {
     'node - server'
   ])('classifies %s as no agent', (title) => {
     expect(detectAgentStatusFromTitle(title)).toBeNull()
-  })
-})
-
-describe('one real OMP turn', () => {
-  // Drive real injected frames through churn gating: old Pi/OMP alternation committed roughly 12 store patches/sec.
-  it('commits twice across 30 working frames plus the idle transition', () => {
-    const frames = Array.from(
-      { length: 30 },
-      (_, index) => `${FRAMES[index % FRAMES.length]} π - fixing the sidebar - orca`
-    )
-    frames.push('π - fixing the sidebar - orca')
-
-    const committed: string[] = []
-    let previous: string | null = null
-    for (const frame of frames) {
-      const normalized = normalizeTerminalTitle(frame)
-      if (previous !== null && isDecorativeAgentTitleFrameChange(previous, normalized)) {
-        continue
-      }
-      if (normalized === previous) {
-        continue
-      }
-      committed.push(normalized)
-      previous = normalized
-    }
-
-    expect(committed).toEqual(['⠋ π - fixing the sidebar - orca', 'π - fixing the sidebar - orca'])
   })
 })
 

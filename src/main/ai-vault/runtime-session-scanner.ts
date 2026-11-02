@@ -1,3 +1,4 @@
+import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import { AiVaultChatForkSourceSchema } from '../../shared/ai-vault-chat-fork-contract'
 import { z } from 'zod'
 import {
@@ -8,7 +9,7 @@ import {
   type AiVaultSession
 } from '../../shared/ai-vault-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
-import { listEnvironments } from '../../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import type {
   AiVaultPrepareSessionResumeRequest,
@@ -21,6 +22,14 @@ import type {
 import { parseAiVaultListResult } from './session-list-result-validation'
 import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
 import { isGatedOffWslHost } from '../wsl/wsl-host-gate'
+import type {
+  AiVaultDeleteSessionArgs,
+  AiVaultDeleteSessionResult
+} from '../../shared/ai-vault-session-deletion'
+import {
+  readRuntimeAiVaultDeleteSessionResponse,
+  runtimeAiVaultDeleteSessionParams
+} from '../../shared/ai-vault-runtime-session-delete'
 import type { RuntimeAiVaultHostInfo } from '../ipc/ai-vault-runtime-scan'
 
 export type RuntimeAiVaultScanOptions = {
@@ -62,6 +71,8 @@ export async function scanRuntimeAiVaultSessions(
   options: RuntimeAiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
   const executionHostId = toRuntimeExecutionHostId(environmentId)
+  // Captured before the call: a re-pair mid-scan leaves rows fenced to the older pairing, never the newer.
+  const pairingRevision = savedPairingRevision(userDataPath, environmentId)
   const response = await callRuntimeEnvironment(
     userDataPath,
     environmentId,
@@ -87,7 +98,7 @@ export async function scanRuntimeAiVaultSessions(
         }
         return parsed
       }
-      const result = withRuntimeExecutionHost(parsed, executionHostId)
+      const result = withRuntimeExecutionHost(parsed, executionHostId, pairingRevision)
       if (!args.scopePaths || args.scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
         return result
       }
@@ -100,7 +111,9 @@ export async function scanRuntimeAiVaultSessions(
             agent: 'codex',
             kind: 'scope',
             path: environmentId,
-            message: `Only the first ${AI_VAULT_SCOPE_PATHS_MAX_COUNT} project paths were scanned.`
+            ...aiVaultScanIssueText('scopePathsTruncated', {
+              params: { limit: AI_VAULT_SCOPE_PATHS_MAX_COUNT }
+            })
           }
         ]
       }
@@ -172,12 +185,41 @@ export async function prepareRuntimeAiVaultSessionResume(
   return parsed.data
 }
 
+/** The owning host validates and deletes; a host without the RPC asks for an update instead. */
+export async function deleteRuntimeAiVaultSession(
+  userDataPath: string,
+  environmentId: string,
+  args: AiVaultDeleteSessionArgs
+): Promise<AiVaultDeleteSessionResult> {
+  const response = await callRuntimeEnvironment(
+    userDataPath,
+    environmentId,
+    'aiVault.deleteSession',
+    runtimeAiVaultDeleteSessionParams(args),
+    undefined,
+    args.expectedEnvironmentPairingRevision
+  )
+  return readRuntimeAiVaultDeleteSessionResponse(response, args.agent)
+}
+
+function savedPairingRevision(userDataPath: string, environmentId: string): number | undefined {
+  try {
+    const environment = resolveEnvironment(userDataPath, environmentId)
+    return environment.pairingRevision ?? environment.createdAt
+  } catch {
+    return undefined
+  }
+}
+
 function withRuntimeExecutionHost(
   result: AiVaultListResult,
-  executionHostId: `runtime:${string}`
+  executionHostId: `runtime:${string}`,
+  pairingRevision: number | undefined
 ): AiVaultListResult {
   return {
-    sessions: result.sessions.map((session) => retagRuntimeSession(session, executionHostId)),
+    sessions: result.sessions.map((session) =>
+      retagRuntimeSession(session, executionHostId, pairingRevision)
+    ),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
     scannedAt: result.scannedAt,
     ...(result.fingerprint ? { fingerprint: result.fingerprint } : {})
@@ -186,13 +228,16 @@ function withRuntimeExecutionHost(
 
 function retagRuntimeSession(
   session: AiVaultSession,
-  executionHostId: `runtime:${string}`
+  executionHostId: `runtime:${string}`,
+  pairingRevision: number | undefined
 ): AiVaultSession {
-  // The caller selects the scanned host; a transport peer cannot supply trusted execution IDs.
+  // The caller selects the scanned host; a transport peer cannot supply trusted execution IDs or pairings.
+  const { hostPairingRevision: _untrusted, ...rest } = session
   return {
-    ...session,
+    ...rest,
     executionHostId,
-    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
+    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`,
+    ...(pairingRevision !== undefined ? { hostPairingRevision: pairingRevision } : {})
   }
 }
 

@@ -1,11 +1,11 @@
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { RemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
 import type { RuntimeCapability } from '../../protocol-version'
 import type {
   RemoteRuntimeSocketDeathCause,
   RemoteRuntimeSocketLivenessOptions
-} from '../../remote-runtime-socket-liveness'
+} from '../remote-runtime-socket-liveness'
 
 export type SharedControlConnectionState =
   | 'closed'
@@ -114,6 +114,8 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   onDiagnosticsChanged?: (diagnostics: RemoteRuntimeSharedConnectionDiagnostics) => void
   /** Any inbound frame, ping or pong on the current socket. */
   onAnswered?: () => void
+  /** Each socket that becomes ready, including after every reconnect. */
+  onReady?: () => void
   reconnectStableResetMs?: number
   /** Every socket close with its cause, e.g. for the diagnostics trace. */
   onSocketClosed?: (record: SharedControlSocketCloseRecord) => void

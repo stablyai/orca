@@ -2,7 +2,6 @@ import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
 import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
 import {
   isLocalNativeWindowsConpty,
@@ -13,7 +12,6 @@ import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-track
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
 
@@ -127,13 +125,13 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     // WSL/remote panes cannot authorize native ConPTY bytes, so skip Windows scans that cannot affect routing.
     return isLocalNativeWindowsConpty({
       userAgent: navigator.userAgent,
-      connectionId: getConnectionId(session.deps.worktreeId) ?? null,
+      connectionId: session.worktreeConnectionId ?? null,
       cwd: session.deps.cwd,
       shellOverride: resolveWindowsShellOverride(
         tab?.shellOverride,
         state.settings?.terminalWindowsShell
       ),
-      executionHostId: getExecutionHostIdForWorktree(state, session.deps.worktreeId)
+      executionHostId: session.executionHostId
     })
   }
   session.paneForegroundAgentTracker = createPaneForegroundAgentTracker({
@@ -171,6 +169,10 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       session.clearStaleAgentTabTitleOnConfirmedShell()
       // Confirmed hard-kill exit must disarm leftover mouse/focus/Kitty modes; guard reset auto-replies from reaching the shell.
       session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
+      // Agents that leave their OSC title (grok, codex) never trip the title exit; Orca's own hibernation stop keeps its chat.
+      if (!isHibernationWakeRecord) {
+        session.deps.onAgentExitedRef.current(session.pane.leafId)
+      }
       // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
       if (reason === 'process-exit') {
         // Why: reopen the one-shot visible sample so the next agent typed here is identified.

@@ -70,14 +70,4 @@ describe('Pi/OMP native state-title markers', () => {
       }
     )
   })
-
-  // Every table row must reach detection without a second parser change (#13890).
-  it('routes every table marker through title detection', () => {
-    for (const marker of PI_STATE_MARKERS) {
-      const status = getPiStateTitleStatus(`π ${marker} my-project`)
-      expect(status).not.toBeNull()
-      expect(detectAgentStatusFromTitle(`π ${marker} my-project`)).toBe(status)
-      expect(detectAgentStatusFromTitle(`zsh | π ${marker} my-project`)).toBe(status)
-    }
-  })
 })

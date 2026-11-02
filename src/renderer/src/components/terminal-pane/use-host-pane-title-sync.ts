@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'

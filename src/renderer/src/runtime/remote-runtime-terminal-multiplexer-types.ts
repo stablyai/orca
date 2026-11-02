@@ -1,3 +1,4 @@
+import type { TerminalAttachmentLaunchResult } from '../../../shared/terminal-attachment-launch-result'
 import type { TerminalSnapshotUnavailableReason } from '../../../shared/terminal-snapshot-unavailability'
 import type { TerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
 import type { TerminalInputAckKind } from '../../../shared/terminal-stream-protocol'
@@ -12,6 +13,8 @@ export type TerminalMultiplexEvent =
   | { type: 'ready' }
   | {
       type: 'subscribed'
+      terminal?: string
+      launchResult?: unknown
       streamId: number
       streamGeneration?: string
       capabilities?: {
@@ -48,6 +51,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
       kittyKeyboardFlags?: number
       alternateScreen?: boolean
       terminalOwner?: 'shell'
+      /** The host's tracked title when this image was taken; absent from older hosts. */
+      lastTitle?: string
       /** Grid the host serialized this image at. Absent from hosts that omit
        *  it, which must read as unknown so replay keeps the pane's own grid. */
       cols?: number
@@ -58,7 +63,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   ) => void
   onSubscribed?: () => void
   /** The host installed the stream and named its capabilities; its initial snapshot is still on the way. */
-  onSubscribeAcknowledged?: () => void
+  onSubscribeAcknowledged?: (result?: TerminalAttachmentLaunchResult) => void
   onOutputPauseCapability?: () => void
   /** The host discarded output while this stream was paused (negotiated streams only). */
   onPausedOutputDropped?: () => void
@@ -98,6 +103,7 @@ export type RemoteRuntimeSnapshotImage = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
   /** `data` starts on the normal buffer and enters alt itself. */
   carriesNormalBuffer?: boolean
 }
@@ -223,6 +229,7 @@ export type RemoteRuntimeSnapshotInfo = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
   requestId?: number
   truncated?: boolean
   unavailable?: TerminalSnapshotUnavailableReason

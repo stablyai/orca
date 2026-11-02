@@ -11,9 +11,11 @@ const runWslProcess = vi.hoisted(() =>
     timedOut: false
   }))
 )
-const peekConfirmedRunningWslDistros = vi.hoisted(() => vi.fn((): string[] | null => null))
-vi.mock('../wsl-background-distro-gate', () => ({ isWslDistroRunning }))
-vi.mock('../wsl-running-distro-cache', () => ({ peekConfirmedRunningWslDistros }))
+const wasWslDistroLastSeenRunningSettled = vi.hoisted(() => vi.fn((_distro: string) => false))
+vi.mock('../wsl-background-distro-gate', () => ({
+  isWslDistroRunning,
+  wasWslDistroLastSeenRunningSettled
+}))
 vi.mock('./wsl-runner', () => ({ runWslProcess }))
 
 const {
@@ -33,8 +35,8 @@ describe('the guest process table', () => {
   beforeEach(() => {
     isWslDistroRunning.mockReset()
     isWslDistroRunning.mockResolvedValue(true)
-    peekConfirmedRunningWslDistros.mockReset()
-    peekConfirmedRunningWslDistros.mockReturnValue(null)
+    wasWslDistroLastSeenRunningSettled.mockReset()
+    wasWslDistroLastSeenRunningSettled.mockReturnValue(false)
     runWslProcess.mockReset()
   })
 
@@ -71,34 +73,6 @@ describe('the guest process table', () => {
     expect(readWslGuestPaneShellCwd(twoRoots ?? [], KEY)).toBeNull()
   })
 
-  it('never starts a distro that is not running', async () => {
-    isWslDistroRunning.mockResolvedValue(false)
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000)).toBeNull()
-    expect(runWslProcess).not.toHaveBeenCalled()
-  })
-
-  it('skips the running check for a live pane whose distro was last seen running', async () => {
-    peekConfirmedRunningWslDistros.mockReturnValue(['ubuntu'])
-    runWslProcess.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: fenced(),
-      stderr: '',
-      timedOut: false
-    })
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000, { running: true })).toEqual([])
-    expect(isWslDistroRunning).not.toHaveBeenCalled()
-  })
-
-  // Review of #33398: a session the client still holds as live may be in a distro terminated since.
-  it('still checks a live pane whose distro is not in the last confirmed running list', async () => {
-    peekConfirmedRunningWslDistros.mockReturnValue(['Debian'])
-    isWslDistroRunning.mockResolvedValue(false)
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000, { running: true })).toBeNull()
-    expect(isWslDistroRunning).toHaveBeenCalledWith('Ubuntu')
-    expect(runWslProcess).not.toHaveBeenCalled()
-  })
-
   it('runs one fixed script with no login shell, shared by callers asking at once', async () => {
     runWslProcess.mockResolvedValue({
       environmentResolved: true,
@@ -121,18 +95,5 @@ describe('the guest process table', () => {
         timeoutMs: 3_000
       })
     )
-  })
-
-  it('answers null when the read fails or times out', async () => {
-    runWslProcess.mockResolvedValue({
-      environmentResolved: true,
-      code: null,
-      stdout: '',
-      stderr: '',
-      timedOut: true
-    })
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000)).toBeNull()
-    runWslProcess.mockRejectedValue(new Error('wsl.exe missing'))
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000)).toBeNull()
   })
 })

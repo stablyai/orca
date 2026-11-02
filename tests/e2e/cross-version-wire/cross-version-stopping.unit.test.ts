@@ -75,7 +75,9 @@ function publishRow(host: HostRowModules, mainAgent: Record<string, unknown>): R
     summaries,
     pathIndex: { byPath: new Map(), byRealPath: new Map() },
     missingWorktreeIds: new Set(),
+    // Older builds read workingTerminalEvidenceByWorktreeId; newer ones read terminalTitleEvidenceByWorktreeId.
     workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: host.collectRuntimeWorktreeAgentSources({
       hookSnapshots: [snapshot],
       mirroredWorktreeIdByTabId: new Map(),
@@ -100,7 +102,7 @@ function publishRow(host: HostRowModules, mainAgent: Record<string, unknown>): R
 async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [fold, display, sources, rows] = await Promise.all([
-      import('../../../src/shared/structured-agent-session-agent-status'),
+      import('../../../src/shared/agent-session/view/structured-agent-session-agent-status'),
       importWorkingTreeModuleCopy(PHONE_ROW_READER),
       import('../../../src/main/runtime/runtime-worktree-agent-sources'),
       import('../../../src/main/runtime/runtime-worktree-agent-rows')
@@ -180,13 +182,20 @@ describe('cross-version Stopping', () => {
   // The phone's chat reads Stopping from the status stream only on a host that lets phones call it.
   it('an OLD host advertising the status feed refuses it to a NEW phone, which reads that as no feed', async () => {
     const checkout = await materializeReleaseCheckout(PRE_CHANGE_REF)
-    const [oldProtocol, oldAllowlist, newProtocol, newAllowlist] = await Promise.all([
+    const [
+      oldProtocol,
+      oldAllowlist,
+      newProtocol,
+      newAllowlist,
+      { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY }
+    ] = await Promise.all([
       importReleaseCheckoutModule(checkout, PROTOCOL_VERSION),
       importReleaseCheckoutModule(checkout, MOBILE_ALLOWLIST),
       import('../../../src/shared/protocol-version'),
-      import('../../../src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist')
+      import('../../../src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist'),
+      import('../../../src/shared/agent-session/agent-session-attention-capabilities')
     ])
-    const capability = newProtocol.AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY
+    const capability = AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY
     expect(oldProtocol.RUNTIME_CAPABILITIES).toContain(capability)
     // Anti-vacuous oracle: the old Set answers membership for a method it does grant phones.
     expect(oldAllowlist.MOBILE_RPC_METHOD_ALLOWLIST).toContain('agentSession.subscribe')

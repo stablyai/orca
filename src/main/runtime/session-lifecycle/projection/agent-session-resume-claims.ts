@@ -1,7 +1,7 @@
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export type ResumedAgentSession = {
@@ -26,7 +26,7 @@ type Hold = AgentSessionResumeHold & {
 export type AgentSessionResumeClaim = {
   /** The exact PTY this resumer's create produced; the hold ends once every such PTY exits. */
   bind: (ptyId: string) => void
-  /** Releases when nothing was dispatched or the spawn proved its exit; otherwise stays held. */
+  /** Releases on proof this share dispatched no claimed agent, or its spawn exited; otherwise held. */
   settleFailure: (dispatched: boolean, error?: unknown) => void
 }
 

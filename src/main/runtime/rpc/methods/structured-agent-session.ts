@@ -1,3 +1,5 @@
+import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
+import { clientRequestsCommands } from './structured-agent-session-policy'
 import {
   clientReadsCurrentRequests,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
@@ -35,6 +37,7 @@ import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-sessio
 import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from './structured-agent-session-prompt-response'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS } from './structured-agent-session-regenerate-name'
+import { STRUCTURED_AGENT_SESSION_RENAME_METHODS } from './structured-agent-session-rename'
 import { STRUCTURED_AGENT_SESSION_QUEUED_METHODS } from './structured-agent-session-queued-methods'
 import { STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS } from './structured-agent-session-restart-resume'
 import {
@@ -57,7 +60,6 @@ import {
   CreateParams,
   CreateSupportParams,
   HistoryParams,
-  OptionsParams,
   RewindParams,
   SendParams,
   SleepWorkspaceParams,
@@ -66,13 +68,9 @@ import {
 } from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredSessionNeverStarted } from '../../agent-session-record-founding'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import {
-  noteStructuredAgentSessionClose,
-  refusingStructuredAgentSessionCreatesClosedFirst
-} from './structured-agent-session-close-before-create'
+import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
@@ -116,6 +114,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   }),
   defineMethod({
     name: 'agentSession.create',
+    requires: ['accounts'],
     permission: 'workspace',
     params: CreateParams,
     handler: ORCA_LAYOUT_OWNER_IS_MAIN
@@ -141,30 +140,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
   }),
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
-  defineMethod({
-    // Close only provider/in-memory state, preserving record/journal for future attachment.
-    name: 'agentSession.close',
-    permission: 'workspace',
-    params: OptionsParams,
-    handler: async (params, ctx) => {
-      requireStructuredCapability(ctx)
-      // Record close before requiring host so even failed closes fence racing creates.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        noteStructuredAgentSessionClose(
-          params.sessionId,
-          (getStructuredAgentSessionHost()?.deps.store.getRecord(params.sessionId) ?? null) !== null
-        )
-      }
-      const host = requireStructuredCleanupHost(ctx)
-      // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
-      if (typeof host.setSessionTabVisibility === 'function') {
-        await host.setSessionTabVisibility(params.sessionId, false)
-      }
-      // Clients call this only when the user closes this chat's tab or cancels its launch.
-      await host.close(params.sessionId, 'user-close')
-      return { ok: true as const }
-    }
-  }),
+  STRUCTURED_AGENT_SESSION_CLOSE_METHOD,
   defineMethod({
     name: 'agentSession.sleepWorkspace',
     permission: 'workspace',
@@ -195,17 +171,17 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       }
       try {
         const records = store
-          .listRecords()
+          .listConversations()
           .filter(
             (record) =>
               record.location.workspaceId === params.workspaceId &&
               record.location.executionHostId === LOCAL_EXECUTION_HOST_ID
           )
         const stoppedSessionIds = records
-          .filter(structuredSessionNeverStarted)
+          .filter((record) => record.neverStarted)
           .map((record) => record.sessionId)
         const failures = records
-          .filter((record) => !structuredSessionNeverStarted(record))
+          .filter((record) => !record.neverStarted)
           .map((record) => ({ sessionId: record.sessionId, reason: 'stop-unverifiable' as const }))
         return failures.length > 0 ? { stoppedSessionIds, failures } : { stoppedSessionIds }
       } catch (error) {
@@ -253,6 +229,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       }
       // Resolve after opening snapshot/missed batch; a racing close disposes the bound stream.
       dispose = await host.subscribe({
+        commandsOnRequest: clientRequestsCommands(ctx),
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
@@ -295,6 +272,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_HOLD_METHODS,
   ...STRUCTURED_AGENT_SESSION_REVEAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS,
+  ...STRUCTURED_AGENT_SESSION_RENAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
   ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
   ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,

@@ -87,7 +87,6 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
   getResumeExpiresAt = () => Date.now() + 30 * 24 * 3_600_000
   getResumeConfirmation = () => null
   getFailure = () => this.failure
-  readonly probeAfterBackground = vi.fn()
 }
 
 class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
@@ -263,7 +262,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(openRelay).toHaveBeenCalledTimes(2)
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
-      expect.objectContaining({ version: 3 }),
+      expect.objectContaining({ token: 'token-v3'.padEnd(43, 'A'), version: 3 }),
       expect.any(String),
       expect.any(Function)
     )
@@ -351,7 +350,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(deps.openRelay).toHaveBeenCalledOnce()
     expect(deps.openRelay).toHaveBeenLastCalledWith(
       relay,
-      expect.objectContaining({ version: 2 }),
+      expect.objectContaining({ token: 'token-v2'.padEnd(43, 'A'), version: 2 }),
       expect.any(String),
       expect.any(Function)
     )
@@ -380,7 +379,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(openRelay).toHaveBeenCalledTimes(2)
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
-      expect.objectContaining({ version: 1 }),
+      expect.objectContaining({ token: 'token-v1'.padEnd(43, 'A'), version: 1 }),
       expect.any(String),
       expect.any(Function)
     )
@@ -524,6 +523,7 @@ describe('failover with a real direct rpc-client', () => {
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(3_000)
 
+    expect(DeadSocket.constructed).toContain(DIRECT_ENDPOINT)
     expect(deps.openRelay).toHaveBeenCalled()
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
@@ -548,6 +548,7 @@ describe('failover with a real direct rpc-client', () => {
     await started
     await vi.advanceTimersByTimeAsync(3_000)
 
+    expect(DeadSocket.constructed).toContain(DIRECT_ENDPOINT)
     expect(deps.openRelay).toHaveBeenCalled()
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()

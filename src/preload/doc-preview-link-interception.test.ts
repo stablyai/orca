@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DOC_PREVIEW_LINK_CLICK_CHANNEL } from '../shared/doc-preview-scheme'
+import {
+  DOC_PREVIEW_LINK_CLICK_CHANNEL,
+  type DocPreviewLinkModifiers
+} from '../shared/doc-preview-scheme'
 import {
   handleDocPreviewLinkAuxClick,
   handleDocPreviewLinkClick,
@@ -8,9 +11,11 @@ import {
   PRELOAD_DOC_PREVIEW_LINK_CLICK_CHANNEL
 } from './doc-preview-link-interception'
 
+const NO_MODIFIERS = { metaKey: false, ctrlKey: false, shiftKey: false }
+
 const PREVIEW_GRANT_ID = 'a'.repeat(32)
 
-let report: ReturnType<typeof vi.fn<(url: string) => void>>
+let report: ReturnType<typeof vi.fn<(url: string, modifiers: DocPreviewLinkModifiers) => void>>
 
 function documentUrl(): string {
   return window.location.href
@@ -18,7 +23,7 @@ function documentUrl(): string {
 
 function loadPreviewDocument(body: string): void {
   document.body.innerHTML = body
-  report = vi.fn<(url: string) => void>()
+  report = vi.fn<(url: string, modifiers: DocPreviewLinkModifiers) => void>()
 }
 
 // happy-dom does not model SVGAnimatedString hrefs.
@@ -82,7 +87,7 @@ describe('doc preview link interception', () => {
       const click = new MouseEvent('click', { bubbles: true, cancelable: true })
       Object.defineProperty(click, 'isTrusted', { configurable: true, value: true })
       link.dispatchEvent(click)
-      expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs')
+      expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs', NO_MODIFIERS)
       expect(click.defaultPrevented).toBe(true)
 
       const middleClick = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true })
@@ -95,6 +100,17 @@ describe('doc preview link interception', () => {
         document.removeEventListener(type, listener, options)
       }
     }
+  })
+
+  it.each([
+    { metaKey: true, ctrlKey: false, shiftKey: true },
+    { metaKey: false, ctrlKey: true, shiftKey: true }
+  ])('reports the trusted click modifiers %j without choosing a destination', (modifiers) => {
+    loadPreviewDocument('<a id="external" href="https://example.com/docs">go</a>')
+
+    pressTrusted('#external', modifiers)
+
+    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs', modifiers)
   })
 
   it('routes nothing for a click the document dispatched itself', () => {
@@ -116,7 +132,7 @@ describe('doc preview link interception', () => {
 
     const event = pressTrusted('#external')
 
-    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs')
+    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs', NO_MODIFIERS)
     expect(event.defaultPrevented).toBe(true)
   })
 
@@ -125,7 +141,7 @@ describe('doc preview link interception', () => {
 
     pressTrusted('#inner')
 
-    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs')
+    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs', NO_MODIFIERS)
   })
 
   it('reports an SVG anchor by its animated href', () => {
@@ -133,7 +149,7 @@ describe('doc preview link interception', () => {
 
     pressTrusted('#svg-hit')
 
-    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/chart')
+    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/chart', NO_MODIFIERS)
   })
 
   it('leaves a relative SVG link to the guest, the same as the HTML anchor beside it', () => {
@@ -230,7 +246,7 @@ describe('doc preview link interception', () => {
 
     pressTrusted('#other')
 
-    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/page#section')
+    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/page#section', NO_MODIFIERS)
   })
 
   it('opens nothing for a middle click on a link', () => {

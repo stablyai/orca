@@ -17,6 +17,16 @@ import {
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
+import type { WaitForLocalWatcherRetry } from './filesystem-watcher-local-capacity'
+import {
+  noteWslDistroMayHaveStopped,
+  blockedWslDistroForPath
+} from '../../../wsl/wsl-unc-access-gate'
+import { deferUntilWslDistroRunning } from '../../../wsl-background-distro-gate'
+import {
+  clearWslRootStatRetry,
+  nextWslRootStatRetry
+} from './filesystem-watcher-wsl-root-stat-retry'
 
 function isCrashFuseFailure(error: unknown): boolean {
   return (
@@ -30,18 +40,38 @@ export async function installLocalWatcher(
   rootPath: string,
   worktreePath: string,
   cancelToken: LocalWatcherInstallToken,
-  scheduleCapacityRetry: (listeners: Map<number, Electron.WebContents>) => void
+  scheduleRetry: (
+    listeners: Map<number, Electron.WebContents>,
+    waitForRetry?: WaitForLocalWatcherRetry
+  ) => void
 ): Promise<LocalWatcherInstallResult> {
+  const waitForDistro =
+    (distro: string): WaitForLocalWatcherRetry =>
+    (retry) =>
+      deferUntilWslDistroRunning(distro, `fs-watch:${rootKey}`, () => void retry())
   let root: WatchedRoot
   try {
+    // The stat and the watcher spawn would both boot a stopped distro; wait for it to run instead.
+    const blocked = await blockedWslDistroForPath(worktreePath)
+    if (blocked) {
+      scheduleRetry(cancelToken.listeners, waitForDistro(blocked.distro))
+      return 'capacity'
+    }
     try {
       const s = await stat(rootPath)
+      clearWslRootStatRetry(rootKey)
       if (!s.isDirectory()) {
         console.warn(`[filesystem-watcher] not a directory: ${rootKey}`)
         rememberUnwatchableRoot(rootKey)
         return 'unavailable'
       }
     } catch {
+      // A distro just started may not serve its share yet: retry a few times before giving up.
+      const retryWslRoot = isWslPath(worktreePath) ? nextWslRootStatRetry(rootKey) : null
+      if (retryWslRoot) {
+        scheduleRetry(cancelToken.listeners, retryWslRoot)
+        return 'capacity'
+      }
       console.warn(`[filesystem-watcher] cannot stat root: ${rootKey}`)
       rememberUnwatchableRoot(rootKey)
       return 'unavailable'
@@ -56,7 +86,11 @@ export async function installLocalWatcher(
             {
               ignoreDirs: WATCHER_IGNORE_DIRS,
               scheduleBatchFlush: scheduleLocalBatchFlush,
-              watchedRoots: watcherLifecycleState.watchedRoots
+              watchedRoots: watcherLifecycleState.watchedRoots,
+              onUnexpectedStop: (stoppedRoot, distro) => {
+                noteWslDistroMayHaveStopped(distro)
+                scheduleRetry(stoppedRoot.listeners, waitForDistro(distro))
+              }
             },
             cancelToken.abortController.signal
           )
@@ -72,7 +106,7 @@ export async function installLocalWatcher(
       }
       // Capacity failures are retryable when a child exits, not permanently unwatchable roots.
       if (error instanceof WatcherChildCapacityError) {
-        scheduleCapacityRetry(cancelToken.listeners)
+        scheduleRetry(cancelToken.listeners)
         return 'capacity'
       }
       // Crash fuses can half-open after cooldown; do not permanently cache them.

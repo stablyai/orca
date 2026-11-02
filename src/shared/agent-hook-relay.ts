@@ -9,7 +9,7 @@ import type {
   ParsedAgentStatusPayload,
   TurnEndDisposition
 } from './agent-status-types'
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
 
 // The relay must retain the URL-derived source discriminator for CLI attribution.
 const AGENT_HOOK_SOURCES = [
@@ -144,6 +144,17 @@ function subagentRosterDigest(subagents: readonly AgentSubagentSnapshot[]): stri
 /** Carries the dropped roster identity without carrying its full rows. */
 export function createShedSubagentsField(subagents: readonly AgentSubagentSnapshot[]): string {
   return `${AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX}${subagentRosterDigest(subagents)}`
+}
+
+/** Shedding and its marker shipped together, so an unmarked envelope's absent roster is empty. */
+export function hasShedSubagentsField(shedFields: unknown): boolean {
+  return (
+    Array.isArray(shedFields) &&
+    shedFields.some(
+      (field) =>
+        typeof field === 'string' && field.startsWith(AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX)
+    )
+  )
 }
 
 function hasMatchingShedSubagentsField(

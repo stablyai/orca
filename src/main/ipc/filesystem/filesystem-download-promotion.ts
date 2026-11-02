@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { rename, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { isENOENT } from '../filesystem-path-containment'
+import { isENOENT } from './filesystem-path-containment'
 
 export function decodeDownloadedFileContent(content: string, encoding: 'utf8' | 'base64'): Buffer {
   return encoding === 'base64' ? Buffer.from(content, 'base64') : Buffer.from(content, 'utf8')

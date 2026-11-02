@@ -1,12 +1,14 @@
 // Adding a manifest entry exercises both skew directions and requires declaring the older peer’s behavior.
 
-import { attachFingerprintFields } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
-import type { AgentSessionAttachParams } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
-import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
+import {
+  attachFingerprintFields,
+  type AgentSessionAttachParams
+} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
+import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   structuredAgentSessionMessageSendMutation,
   structuredAgentSessionSendBody
-} from '../../../src/shared/structured-agent-session-send-mutation'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 
 import {
   SESSION,
@@ -148,6 +150,10 @@ export function paramsFor(method: string): unknown {
       const fields = { messageId: 'queued-1' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+    case 'agentSession.queuedMessageMove': {
+      const fields = { messageId: 'queued-1', beforeMessageId: null }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.queuedMessagesResume':
       return { envelope: envelope({ method, fields: {}, fence }) }
     case 'agentSession.queuedMessageUpdate': {
@@ -177,6 +183,12 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.continuationContext':
+      return {
+        sessionId: SESSION,
+        workspaceId: WORKSPACE,
+        expectedCursor: { epoch: 'epoch-a', sequence: 0 }
+      }
     case ITEM_DETAIL_METHOD:
       return { sessionId: SESSION, itemId: 'item-1' }
     case 'agentSession.sleepWorkspace':
@@ -189,6 +201,8 @@ export function paramsFor(method: string): unknown {
       return { agent: 'codex', sessionId: SESSION }
     case 'agentSession.readVisual':
       return { sessionId: SESSION, file: 'usage-chart.html' }
+    case 'agentSession.rename':
+      return { sessionId: SESSION, name: 'Release notes' }
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }

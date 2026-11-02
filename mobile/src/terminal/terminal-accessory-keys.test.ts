@@ -88,6 +88,13 @@ describe('TERMINAL_ACCESSORY_KEYS', () => {
     })
   })
 
+  it('builds desktop bytes for Shift+Enter and Ctrl+Backspace', () => {
+    expect(buildTerminalShortcutKey({ key: 'enter', modifiers: ['shift'] })?.bytes).toBe(
+      '\x1b[13;2u'
+    )
+    expect(buildTerminalShortcutKey({ key: 'backspace', modifiers: ['ctrl'] })?.bytes).toBe('\x17')
+  })
+
   it('builds function-key terminal sequences', () => {
     expect(buildTerminalShortcutKey({ key: 'f1', modifiers: [] })).toEqual({
       label: 'F1',

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { realpath } from 'node:fs/promises'
+import * as folderPathStatus from '../../project-groups/folder-workspace-path-status'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   EventEmitter,
@@ -43,6 +44,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(uncStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '//server/share/repo',
+      exists: true
+    })
     const repo = await runtime.addRepo('//server/share/repo', 'folder')
 
     expect(repo).toMatchObject({ id: 'repo-unc', path: '//Server/Share/Repo' })
@@ -97,6 +102,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(colorStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '/tmp/runtime-add-default',
+      exists: true
+    })
     const repo = await runtime.addRepo('/tmp/runtime-add-default', 'folder')
 
     expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
@@ -115,6 +124,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '/tmp/runtime-add-root-prep',
+      exists: true
+    })
     const repo = await runtime.addRepo('/tmp/runtime-add-root-prep', 'folder')
 
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(runtimeStore, repo)
@@ -438,6 +451,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '/tmp/runtime-shared',
+      exists: true
+    })
     const repo = await runtime.addRepo('/tmp/runtime-shared', 'folder')
 
     expect(repo).toMatchObject({
@@ -479,6 +496,10 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
+    vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+      path: '/workspace',
+      exists: true
+    })
     const repo = await runtime.addRepo('/workspace', 'folder', 'runtime:env-1')
 
     expect(repos).toHaveLength(2)
@@ -519,6 +540,10 @@ describe('OrcaRuntimeService', () => {
       }
       const runtime = new OrcaRuntimeService(runtimeStore as never)
 
+      vi.spyOn(folderPathStatus, 'getResolvedFolderWorkspacePathStatus').mockResolvedValueOnce({
+        path: '/workspace',
+        exists: true
+      })
       const repo = await runtime.addRepo('/workspace', 'folder', importHostId)
 
       expect(repos).toHaveLength(1)
@@ -642,9 +667,10 @@ describe('OrcaRuntimeService', () => {
       expect(cloneError).toMatchObject({
         message: expect.stringMatching(/Cloning onto an SSH host is not supported/)
       })
-      // Remote folder registration is supported, so refusal must name the missing connection.
       expect(existingFolderError).toMatchObject({
-        message: expect.stringMatching(/SSH connection "openclaw" not found or not connected/)
+        code: 'ssh_host_not_served',
+        connectionId: 'openclaw',
+        message: expect.stringContaining("This Orca server can't add projects on its SSH hosts.")
       })
     } finally {
       spawnSpy.mockRestore()

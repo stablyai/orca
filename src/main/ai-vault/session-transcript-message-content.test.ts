@@ -1,12 +1,10 @@
 import { expect, it, vi } from 'vitest'
 import {
-  boundedText,
   transcriptMessageFromText,
   transcriptMessagesFromDecodedMessage,
   transcriptMessagesFromContent
 } from './session-transcript-message-content'
 import { decodeSessionMessage } from './session-decoded-message'
-import { asRecord } from './session-scanner-record-value'
 
 const AT = '2026-05-01T10:00:00.000Z'
 const MESSAGE_LIMIT = 256 * 1024
@@ -196,132 +194,50 @@ it('bounds joins for a large multi-block turn and keeps its later tool messages'
   expect(largestJoinedLength).toBeLessThanOrEqual(MESSAGE_LIMIT + 1)
 })
 
-function previousToolResultText(content: unknown): string | null {
-  if (typeof content === 'string') {
-    return boundedText(content)
-  }
-  if (!Array.isArray(content)) {
-    return null
-  }
-  const parts: string[] = []
-  let length = 0
-  for (const item of content) {
-    const text = typeof item === 'string' ? item : asRecord(item)?.text
-    if (typeof text === 'string' && text) {
-      parts.push(text)
-      length += text.length
-      if (length >= MESSAGE_LIMIT) {
-        break
-      }
-    }
-  }
-  return boundedText(parts.join('\n'))
-}
-
-it('matches the previous tool-result collector at newline and surrogate boundaries', () => {
-  const cases: unknown[][] = [
-    ['x'.repeat(MESSAGE_LIMIT - 2), '\ud800'],
-    ['x'.repeat(MESSAGE_LIMIT - 1), '\ud800'],
-    [`${'x'.repeat(MESSAGE_LIMIT - 1)}\ud800`, 'later'],
-    ['x'.repeat(MESSAGE_LIMIT - 2), '\ud800\udc00', 'later'],
-    ['x'.repeat(MESSAGE_LIMIT), '', 'later'],
-    ['', '', '\ud800', '\udfff', '\u0000'],
-    [' '.repeat(MESSAGE_LIMIT), 'visible beyond the cap'],
-    [null, 10, { type: 'image', text: 'still collected' }, { content: 'ignored' }]
+it('bounds joined text at newline and raw surrogate boundaries', () => {
+  const cases = [
+    {
+      parts: ['x'.repeat(MESSAGE_LIMIT - 2), '\ud800'],
+      text: `${'x'.repeat(MESSAGE_LIMIT - 2)}\n\ud800`,
+      truncated: false
+    },
+    {
+      parts: ['x'.repeat(MESSAGE_LIMIT - 1), '\ud800'],
+      text: `${'x'.repeat(MESSAGE_LIMIT - 1)}\n`,
+      truncated: true
+    },
+    {
+      parts: [`${'x'.repeat(MESSAGE_LIMIT - 1)}\ud800`, 'later'],
+      text: 'x'.repeat(MESSAGE_LIMIT - 1),
+      truncated: true
+    },
+    {
+      parts: ['x'.repeat(MESSAGE_LIMIT - 2), '\ud800\udc00', 'later'],
+      text: `${'x'.repeat(MESSAGE_LIMIT - 2)}\n`,
+      truncated: true
+    },
+    {
+      parts: ['x'.repeat(MESSAGE_LIMIT - 3), '\ud800\udc00', 'later'],
+      text: `${'x'.repeat(MESSAGE_LIMIT - 3)}\n\ud800\udc00`,
+      truncated: true
+    },
+    {
+      parts: ['x'.repeat(MESSAGE_LIMIT), '', 'later'],
+      text: 'x'.repeat(MESSAGE_LIMIT),
+      truncated: true
+    },
+    {
+      parts: ['', '', '\ud800', '\udfff', '\u0000'],
+      text: '\n\n\ud800\n\udfff\n\u0000',
+      truncated: false
+    },
+    { parts: [' '.repeat(MESSAGE_LIMIT), 'visible beyond the cap'], text: null, truncated: false }
   ]
-  let seed = 0x6a09e667
-  const random = (): number => {
-    seed ^= seed << 13
-    seed ^= seed >>> 17
-    seed ^= seed << 5
-    return seed >>> 0
-  }
-  const lengths = [0, 1, 12, 4096, MESSAGE_LIMIT - 1, MESSAGE_LIMIT, MESSAGE_LIMIT + 1]
-  const atoms = ['a', ' ', '\n', '\ud800', '\udfff', '\ud83d\ude80', '\u0000', '漢']
-  for (let sample = 0; sample < 120; sample++) {
-    cases.push(
-      Array.from({ length: 1 + (random() % 6) }, (_, index) => {
-        const length = lengths[random() % lengths.length]
-        const atom = atoms[random() % atoms.length]
-        const text = atom.repeat(Math.ceil(length / atom.length)).slice(0, length)
-        return index % 2 === 0 ? text : { type: 'text', text }
-      })
+  for (const { parts, text, truncated } of cases) {
+    expect(transcriptMessagesFromContent('user', parts, AT)).toEqual(
+      text === null
+        ? []
+        : [{ role: 'user', text, timestamp: AT, ...(truncated ? { textTruncated: true } : {}) }]
     )
-  }
-  for (const content of cases) {
-    const text = previousToolResultText(content)
-    expect(
-      transcriptMessagesFromContent(
-        'user',
-        [
-          { type: 'tool_result', content },
-          { type: 'tool_use', name: 'Read', input: { path: 'after' } },
-          { type: 'tool_result', content: 'finished' }
-        ],
-        AT
-      ).map(({ role, text, timestamp }) => ({ role, text, timestamp }))
-    ).toEqual([
-      ...(text ? [{ role: 'tool', text, timestamp: AT }] : []),
-      { role: 'tool', text: 'Read: after', timestamp: AT },
-      { role: 'tool', text: 'finished', timestamp: AT }
-    ])
-  }
-})
-
-it('matches join-then-bound at newline and raw surrogate boundaries', () => {
-  const partsCases = [
-    ['x'.repeat(MESSAGE_LIMIT - 2), '\ud800'],
-    ['x'.repeat(MESSAGE_LIMIT - 1), '\ud800'],
-    [`${'x'.repeat(MESSAGE_LIMIT - 1)}\ud800`, 'later'],
-    ['x'.repeat(MESSAGE_LIMIT - 2), '\ud800\udc00', 'later'],
-    ['x'.repeat(MESSAGE_LIMIT - 3), '\ud800\udc00', 'later'],
-    ['x'.repeat(MESSAGE_LIMIT), '', 'later'],
-    ['', '', '\ud800', '\udfff', '\u0000'],
-    [' '.repeat(MESSAGE_LIMIT), 'visible beyond the cap']
-  ]
-  for (const parts of partsCases) {
-    const text = boundedText(parts.join('\n'))
-    expect(
-      transcriptMessagesFromContent('user', parts, AT).map(({ role, text, timestamp }) => ({
-        role,
-        text,
-        timestamp
-      }))
-    ).toEqual(text ? [{ role: 'user', text, timestamp: AT }] : [])
-  }
-})
-
-it('matches the previous join-then-bound output across generated block mixtures', () => {
-  let seed = 0x6a09e667
-  const random = (): number => {
-    seed ^= seed << 13
-    seed ^= seed >>> 17
-    seed ^= seed << 5
-    return seed >>> 0
-  }
-  const lengths = [0, 1, 12, 4096, MESSAGE_LIMIT - 1, MESSAGE_LIMIT, MESSAGE_LIMIT + 1]
-  const atoms = ['a', ' ', '\n', '\ud800', '\udfff', '\ud83d\ude80', '\u0000', '漢']
-  const roles = ['user', 'assistant', 'tool', 'system', 'unknown'] as const
-  for (let sample = 0; sample < 120; sample++) {
-    const parts = Array.from({ length: 2 + (random() % 7) }, () => {
-      const length = lengths[random() % lengths.length]
-      const atom = atoms[random() % atoms.length]
-      return atom.repeat(Math.ceil(length / atom.length)).slice(0, length)
-    })
-    const role = roles[random() % roles.length]
-    const content = parts.map((text, index) => (index % 2 === 0 ? text : { type: 'Text', text }))
-    const text = boundedText(parts.filter((part, index) => index % 2 === 0 || part).join('\n'))
-    expect(
-      transcriptMessagesFromContent(
-        role,
-        [...content, { type: 'tool_use', name: 'Bash', input: { command: 'pwd' } }],
-        AT
-      ).map(({ role, text, timestamp }) => ({ role, text, timestamp }))
-    ).toEqual([
-      ...(text && (role === 'user' || role === 'assistant' || role === 'tool')
-        ? [{ role, text, timestamp: AT }]
-        : []),
-      { role: 'tool', text: 'Bash: pwd', timestamp: AT }
-    ])
   }
 })

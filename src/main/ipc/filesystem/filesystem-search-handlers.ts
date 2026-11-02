@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { listQuickOpenFiles } from '../filesystem-list-files'
+import { listQuickOpenFiles } from './filesystem-list-files'
 import {
   isFileNameFilterQueryTooLarge,
   pathMatchesFileNameFilterTokens,

@@ -33,7 +33,7 @@ describe('local build compatibility', () => {
     expect(getLocalBuildCompatibilityError(target(), 1, [27, 28])).toBeNull()
   })
 
-  it('parses only bounded Orca compatibility contracts', () => {
+  it('parses valid Orca metadata and rejects foreign apps or empty daemon contracts', () => {
     expect(parseLocalBuildCompatibility(target())).toEqual(target())
     expect(() => parseLocalBuildCompatibility(target({ appId: 'other.app' }))).toThrow(
       'invalid compatibility metadata'

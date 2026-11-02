@@ -4,8 +4,8 @@ import { Input } from '../ui/input'
 import { useAppStore } from '@/store'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import {
-  getRuntimeRepoBaseRefDefault,
-  searchRuntimeRepoBaseRefs
+  searchRuntimeRepoBaseRefs,
+  watchRuntimeRepoBaseRefDefault
 } from '@/runtime/runtime-repo-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
 import { translate } from '@/i18n/i18n'
@@ -61,37 +61,25 @@ export function BaseRefPicker({
   }, [baseRefResults.length])
 
   useEffect(() => {
-    let stale = false
-
-    const loadDefaultBaseRef = async (): Promise<void> => {
-      try {
-        if (!ownerHostId) {
-          return
-        }
-        const result = await getRuntimeRepoBaseRefDefault(ownerHostId, repoId)
-        if (!stale) {
-          setDefaultBaseRef(result.defaultBaseRef)
-          setRemoteCount(result.remoteCount)
-        }
-      } catch (err) {
-        console.error('[BaseRefPicker] getBaseRefDefault failed', err)
-        if (!stale) {
-          setDefaultBaseRef(null)
-          setRemoteCount(0)
-        }
-      }
-    }
-
     setBaseRefQuery('')
     setBaseRefResults([])
     // Drop the previous repo’s default before loading so its Following label cannot describe the new repo.
     setDefaultBaseRef(null)
     setRemoteCount(0)
-    void loadDefaultBaseRef()
-
-    return () => {
-      stale = true
+    if (!ownerHostId) {
+      return
     }
+    return watchRuntimeRepoBaseRefDefault(ownerHostId, repoId, {
+      onResult: (result) => {
+        setDefaultBaseRef(result.defaultBaseRef)
+        setRemoteCount(result.remoteCount)
+      },
+      onError: (err) => {
+        console.error('[BaseRefPicker] getBaseRefDefault failed', err)
+        setDefaultBaseRef(null)
+        setRemoteCount(0)
+      }
+    })
   }, [ownerHostId, repoId])
 
   useEffect(() => {

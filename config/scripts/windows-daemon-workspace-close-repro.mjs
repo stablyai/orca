@@ -280,6 +280,9 @@ async function main() {
     log('SKIP: Windows ConPTY is required')
     return
   }
+  if (!Number.isSafeInteger(iterations) || iterations <= 0) {
+    throw new Error('ORCA_WINDOWS_DAEMON_CLOSE_ITERATIONS must be a positive safe integer')
+  }
   if (!existsSync(entryPath)) {
     throw new Error(`Missing ${entryPath}; run pnpm build:electron-vite first`)
   }

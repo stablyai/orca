@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { SessionRestoredBannerReason } from '../session-restored-banner-pane-state'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
@@ -59,9 +59,10 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
   // Providers own startup delivery across renderer replacement; only explicit terminal paste stays renderer-owned.
   session.pendingStartupCommand = session.shouldDeliverStartupViaTerminalPaste
     ? session.paneStartup?.command
-      ? { command: session.paneStartup.command }
+      ? { command: session.paneStartup.command, resumeSource: session.paneStartup.resumeSource }
       : null
     : null
+  const startupSource = session.paneStartup?.resumeSource
   const startupDraftReadyScanner = session.ownsStartupDraftPaste
     ? createDraftPasteReadyScanner(
         session.startupDraftAgentConfig?.draftPasteReadySignal ??
@@ -89,6 +90,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     const ptyId = session.transport.getPtyId()
     if (
       !ptyId ||
+      startupSource?.cancelled ||
       session.disposed ||
       session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport
     ) {
@@ -115,6 +117,9 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     session.cleanupStartupDraftPasteTimers()
     // Share the transport queue with focus replies so ConPTY cannot race CSI I into the draft as a literal prefix.
     void sendAgentDraftPasteContent(ptyId, session.startupDraftPrompt, 'launch', async (data) => {
+      if (getStartupDraftPtyId() !== ptyId) {
+        return false
+      }
       const accepted = await writeTerminalPastePtyInput(session.transport, data, 'launch')
       if (accepted && !startupDraftInputRecorded) {
         // Transport paste bypasses xterm’s input signal; record it so hibernation cannot discard the composed draft.
@@ -155,6 +160,9 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     }
     startupDraftHardTimer = setTimeout(() => {
       startupDraftHardTimer = null
+      if (!getStartupDraftPtyId()) {
+        return
+      }
       if (session.startupDraftAgent === 'codex') {
         startupDraftPasteSettled = true
         // A timed-out launch stays consumed across pane disposal and remount.

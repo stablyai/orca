@@ -4,7 +4,7 @@ import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'

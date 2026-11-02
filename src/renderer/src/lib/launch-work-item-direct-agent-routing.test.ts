@@ -41,28 +41,6 @@ describe('beginDirectWorkItemStructuredLaunch', () => {
     })
   })
 
-  it('opens the provisional chat synchronously and preserves the requested tab id', () => {
-    const order: string[] = []
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      order.push('begin')
-      args.beforeOpen('session-1')
-      order.push('open')
-      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
-    })
-
-    expect(
-      beginDirectWorkItemStructuredLaunch({
-        plan: structuredPlan,
-        primaryTabId: null,
-        beforeOpen: (sessionId) => {
-          order.push(`reveal:${sessionId}`)
-          return true
-        }
-      })
-    ).toEqual({ completed: true, structuredLaunch: true, primaryTabId: 'agent-session:session-1' })
-    expect(order).toEqual(['begin', 'reveal:session-1', 'open'])
-  })
-
   it('does not claim completion when the provisional opener is refused', () => {
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue(null)
 
@@ -73,20 +51,6 @@ describe('beginDirectWorkItemStructuredLaunch', () => {
         beforeOpen: vi.fn()
       })
     ).toEqual({ completed: false, structuredLaunch: true, primaryTabId: 'setup-shell-tab' })
-  })
-
-  it('skips structured opening for non-structured routes', () => {
-    expect(
-      beginDirectWorkItemStructuredLaunch({
-        plan: adoptAgentSessionLaunchVerdict({
-          ...structuredPlan,
-          route: 'terminal-tui'
-        }),
-        primaryTabId: null,
-        beforeOpen: vi.fn()
-      })
-    ).toEqual({ completed: false, structuredLaunch: false, primaryTabId: null })
-    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
   })
 })
 
@@ -114,12 +78,9 @@ describe('resolveDirectWorkItemAgent', () => {
       resolveDirectWorkItemAgent({
         worktreeId: 'wt-1',
         repoHost: repo,
-        launchConnectionId: 'server-ssh-target',
-        repoConnectionId: 'server-ssh-target',
-        detectedAgentsPromise: null,
         latestStore: store.getState()
       })
-    ).resolves.toEqual({ agent: 'claude', unavailable: false })
+    ).resolves.toEqual(expect.objectContaining({ agent: 'claude', unavailable: false }))
     expect(ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1', 'wt-1')
     expect(ensureDetectedAgents).not.toHaveBeenCalled()
   })

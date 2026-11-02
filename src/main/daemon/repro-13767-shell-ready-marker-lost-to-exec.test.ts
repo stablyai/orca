@@ -179,6 +179,7 @@ async function startFixture(
       rows: 24,
       subprocess,
       shellReadySupported: true,
+      shellReadyTimeoutMs: 2_000,
       ...(onReadinessEvent ? { reportReadinessEvent: onReadinessEvent } : {})
     })
     let output = ''
@@ -190,7 +191,7 @@ async function startFixture(
       },
       onExit: () => {}
     })
-    session.write(fixture.command)
+    session.writeStartupCommand(fixture.command)
     const runningSubprocess = subprocess
     const runningSession = session
     const activeConsoleWarnSpy = consoleWarnSpy
@@ -260,8 +261,12 @@ fi
 `
   )
   try {
+    // ast-grep-ignore: test-no-real-time-wait -- Observe real PTY silence before timeout; fake timers cannot advance the shell.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(running.session.shellState).toBe('pending')
+    expect(running.output()).not.toContain(COMMAND_OUTPUT)
     await waitForOutput(running.subscribe, () => running.output().includes(COMMAND_OUTPUT))
-    expect(running.session.shellState).toBe('ready')
+    expect(running.session.shellState).toBe('timed_out')
     expect(count(running.output(), COMMAND_OUTPUT)).toBe(1)
     expect(running.output()).toContain(fixture.instrumentationOutput)
     expect(running.output()).not.toContain('orca-shell-start')
@@ -306,7 +311,7 @@ describePosix('#13767 shell-ready marker loss across exec', () => {
     const runnable = fixture.shellPath.endsWith('zsh') ? hasZsh : hasBash
     const testCase = runnable ? it : it.skip
     testCase(
-      `releases at the real ${fixture.name} prompt after exec`,
+      `submits once at the timeout after ${fixture.name} exec`,
       () => runExecOracle(fixture),
       10_000
     )
@@ -372,10 +377,15 @@ zle -N zle-line-init
   )
 
   const sqliteTest = hasZsh && existsSync('/usr/bin/sqlite3') ? it : it.skip
+  // sqlite3 3.54+ defaults to a styled, versioned prompt instead of `sqlite> `.
+  const sqlitePinnedPrompt = `-cmd ".prompt 'sqlite> '"`
   sqliteTest(
     'does not treat an exec-replaced readline program as the shell prompt',
     async () => {
-      const running = await startFixture(zshFixture, 'exec /usr/bin/sqlite3\n')
+      const running = await startFixture(
+        zshFixture,
+        `exec /usr/bin/sqlite3 ${sqlitePinnedPrompt}\n`
+      )
       try {
         await waitForOutput(running.subscribe, () => running.output().includes('sqlite> '))
         await new Promise((resolve) => setTimeout(resolve, 300))
@@ -393,7 +403,7 @@ zle -N zle-line-init
     async () => {
       const running = await startFixture(
         zshFixture,
-        'ln -s /usr/bin/sqlite3 "$HOME/zsh" && exec "$HOME/zsh"\n'
+        `ln -s /usr/bin/sqlite3 "$HOME/zsh" && exec "$HOME/zsh" ${sqlitePinnedPrompt}\n`
       )
       try {
         await waitForOutput(running.subscribe, () => running.output().includes('sqlite> '))
@@ -445,7 +455,7 @@ fi
 
   const relayTest = hasScript && hasZsh ? it : it.skip
   relayTest(
-    'releases the queued command behind a pty relay the exec left in front of the shell',
+    'submits at the timeout behind a pty relay the exec left in front of the shell',
     async () => {
       const readinessEvents: string[] = []
       // Drop the wrapper env so the inner shell cannot emit the marker, as with kiro-cli-term.
@@ -471,10 +481,10 @@ fi
       )
       try {
         await waitForOutput(running.subscribe, () => running.output().includes(COMMAND_OUTPUT))
-        expect(running.session.shellState).toBe('ready')
+        expect(running.session.shellState).toBe('timed_out')
         expect(count(running.output(), COMMAND_OUTPUT)).toBe(1)
-        expect(readinessEvents).toContain('shell-ready-wrapper-replaced')
-        expect(readinessEvents).not.toContain('shell-ready-timeout')
+        expect(readinessEvents).toContain('shell-ready-timeout')
+        expect(readinessEvents).not.toContain('shell-ready-wrapper-replaced')
       } finally {
         await running.cleanup()
       }
@@ -483,7 +493,7 @@ fi
   )
 
   alternateBashTest(
-    'releases at the prompt of a second Bash install the pane PATH resolves',
+    'submits at the timeout to a second Bash install',
     async () => {
       const running = await startFixture(
         bashFixture,
@@ -493,7 +503,7 @@ fi
       )
       try {
         await waitForOutput(running.subscribe, () => running.output().includes(COMMAND_OUTPUT))
-        expect(running.session.shellState).toBe('ready')
+        expect(running.session.shellState).toBe('timed_out')
         expect(count(running.output(), COMMAND_OUTPUT)).toBe(1)
         expect(running.output()).not.toContain('orca-shell-start')
       } finally {

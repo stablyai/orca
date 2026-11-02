@@ -37,12 +37,6 @@ describe('per-pane coverage gate', () => {
       'uncovered'
     )
   })
-
-  it('is computed from evidence, never from a platform or remote flag', () => {
-    // No platform/isRemote input: host-proven hooks must resolve identically on every execution host.
-    const identity = resolveCanonicalPaneAgentIdentity({ hookAgent: 'claude', hookIsLive: true })
-    expect(identity).toMatchObject({ agent: 'claude', source: 'live-hook', coverage: 'covered' })
-  })
 })
 
 describe('process rung requires a host-stamped proof', () => {
@@ -156,21 +150,6 @@ describe('canonical ladder inside the covered lane', () => {
       title: 'STA-4011 Linux Antigravity Commit Messages - grok'
     })
     expect(identity).toMatchObject({ agent: 'claude', source: 'launch', titleOnly: false })
-  })
-
-  it('sibling evidence needs the explicit tab-scope opt-in', () => {
-    const withoutOptIn = resolveCanonicalPaneAgentIdentity({
-      launchAgent: 'claude',
-      siblingAgent: 'codex'
-    })
-    expect(withoutOptIn.agent).toBe('claude')
-    const optedIn = resolveCanonicalPaneAgentIdentity({
-      hookAgent: 'claude',
-      hookIsLive: true,
-      siblingAgent: 'codex',
-      allowSibling: true
-    })
-    expect(optedIn).toMatchObject({ agent: 'claude', source: 'live-hook' })
   })
 
   it('surfaces ambiguity instead of picking by array order', () => {

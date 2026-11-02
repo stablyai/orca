@@ -78,10 +78,11 @@ describe('agent CLI install-dir fallback', () => {
       join(home, '.local', 'bin', 'claude'),
       join('/opt/homebrew/bin', 'codex'),
       join('/usr/local/bin', 'cursor-agent'),
+      join('/opt/local/bin', 'gemini'),
       join(home, '.opencode', 'bin', 'opencode')
     )
     expect(
-      resolveAll(['claude', 'codex', 'cursor-agent', 'opencode'], {
+      resolveAll(['claude', 'codex', 'cursor-agent', 'gemini', 'opencode'], {
         platform: 'darwin',
         homePath: home
       })
@@ -89,6 +90,7 @@ describe('agent CLI install-dir fallback', () => {
       claude: join(home, '.local', 'bin', 'claude'),
       codex: join('/opt/homebrew/bin', 'codex'),
       'cursor-agent': join('/usr/local/bin', 'cursor-agent'),
+      gemini: join('/opt/local/bin', 'gemini'),
       opencode: join(home, '.opencode', 'bin', 'opencode')
     })
   })
@@ -134,7 +136,8 @@ describe('agent CLI install-dir fallback', () => {
       '/nix/var/nix/profiles/default/bin',
       join(home, '.nix-profile', 'bin'),
       join(home, '.opencode', 'bin'),
-      join(home, '.vite-plus', 'bin')
+      join(home, '.vite-plus', 'bin'),
+      join(home, '.grok', 'bin')
     ]
     stage(...dirs.map((dir) => join(dir, 'opencode')))
     for (const expected of dirs) {
@@ -188,12 +191,14 @@ describe('agent CLI install-dir fallback', () => {
       for (const directory of [
         '/opt/homebrew/bin',
         '/usr/local/bin',
+        '/opt/local/bin',
         '/snap/bin',
         '/home/linuxbrew/.linuxbrew/bin',
         '/nix/var/nix/profiles/default/bin',
         join(home, '.nix-profile', 'bin'),
         join(home, '.opencode', 'bin'),
-        join(home, '.vite-plus', 'bin')
+        join(home, '.vite-plus', 'bin'),
+        join(home, '.grok', 'bin')
       ]) {
         expect(seeded).not.toContain(directory)
       }
@@ -208,12 +213,14 @@ describe('agent CLI install-dir fallback', () => {
         join('/usr/local/bin', 'codex'),
         join(MOCK_HOME, '.opencode', 'bin', 'opencode'),
         // Pi defaults to ~/.vite-plus/bin and is probed on every runtime (#829).
-        join(MOCK_HOME, '.vite-plus', 'bin', 'pi')
+        join(MOCK_HOME, '.vite-plus', 'bin', 'pi'),
+        // Grok's installer defaults to ~/.grok/bin (#17590).
+        join(MOCK_HOME, '.grok', 'bin', 'grok')
       )
-      // All three come from the fallback: the stubbed PATH holds no system dir.
-      expect(detectCommandsInInstallDirs(['codex', 'opencode', 'pi', 'cursor-agent'])).toEqual(
-        new Set(['codex', 'opencode', 'pi'])
-      )
+      // All come from the fallback: the stubbed PATH holds no system dir.
+      expect(
+        detectCommandsInInstallDirs(['codex', 'opencode', 'pi', 'grok', 'cursor-agent'])
+      ).toEqual(new Set(['codex', 'opencode', 'pi', 'grok']))
     }
   )
 
@@ -239,7 +246,8 @@ describe('agent CLI install-dir fallback', () => {
         login,
         join(home, '.nvm', 'versions', 'node', 'v24.0.0', 'bin'),
         join(home, '.opencode', 'bin'),
-        join(home, '.vite-plus', 'bin')
+        join(home, '.vite-plus', 'bin'),
+        join(home, '.grok', 'bin')
       ]
       const command = 'orca-fallback-fixture'
       try {

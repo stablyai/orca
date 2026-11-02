@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { getOrcadMigrationReceivedBlobPath } from './orcad-migration-blob-staging'
-import { buildWslMoveRestoreHintsBlob } from '../moving-wsl-projects/wsl-move-restore-hints-blob'
 import {
   commitStagedOrcadMigrationCatalogDurably,
   getOrcadMigrationCatalogState
@@ -82,15 +81,20 @@ function encodedHints(): {
   descriptor: OrcadMigrationBlobDescriptor
   bytes: Buffer
 } {
-  const blob = buildWslMoveRestoreHintsBlob([
-    { paneKey: PANE, cwd: '/home/me/src' },
-    { paneKey: OTHER_PANE, cwd: '/srv/app' },
-    { paneKey: ABSENT_PANE, cwd: '/srv/gone' }
-  ])
-  if (!blob) {
-    throw new Error('expected a hints blob')
-  }
-  return blob
+  // What an older desktop sends; this build installs it but no longer sends one.
+  return rawBlob(
+    Buffer.from(
+      JSON.stringify({
+        version: 1,
+        hints: [
+          { paneKey: PANE, cwd: '/home/me/src' },
+          { paneKey: OTHER_PANE, cwd: '/srv/app' },
+          { paneKey: ABSENT_PANE, cwd: '/srv/gone' }
+        ]
+      }),
+      'utf8'
+    )
+  )
 }
 
 function rawBlob(bytes: Buffer): {

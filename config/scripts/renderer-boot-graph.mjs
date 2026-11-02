@@ -84,6 +84,13 @@ export function findForbiddenBootPayloads(rendererDir, payloads) {
   return violations
 }
 
+// V8 keeps a whole script as UTF-16 when any char is above U+00FF, doubling that boot chunk's memory.
+export function findTwoByteBootChunks(rendererDir) {
+  return readRendererBootGraph(rendererDir)
+    .chunks.filter((chunk) => /[\u0100-\uffff]/.test(fs.readFileSync(chunk.file, 'utf8')))
+    .map((chunk) => path.basename(chunk.file))
+}
+
 export function verifyRendererBootGraph(root = process.cwd()) {
   const rendererDir = path.join(root, RENDERER_BUILD_DIR)
   const { chunks, totalBytes } = readRendererBootGraph(rendererDir)
@@ -91,14 +98,23 @@ export function verifyRendererBootGraph(root = process.cwd()) {
   console.log(
     `Renderer boot graph: ${chunks.length} chunks, ${(totalBytes / 1024).toFixed(1)} KB minified.`
   )
-  if (violations.length === 0) {
-    return 0
+  const twoByteChunks = findTwoByteBootChunks(rendererDir)
+  if (twoByteChunks.length > 0) {
+    console.error('Boot chunks contain chars above U+00FF that output.charset cannot escape:')
+    for (const chunk of twoByteChunks) {
+      console.error(`  ${chunk}`)
+    }
+    console.error('Escape them in the source (e.g. \\u2014 inside String.raw regex sources).')
   }
-  console.error('Payloads that must stay off the renderer boot graph are preloaded again:')
-  for (const violation of violations) {
-    console.error(`  ${violation.label} -> ${violation.chunk}`)
+  if (violations.length > 0) {
+    console.error('Payloads that must stay off the renderer boot graph are preloaded again:')
+    for (const violation of violations) {
+      console.error(`  ${violation.label} -> ${violation.chunk}`)
+    }
+    console.error('')
+    console.error(
+      'Load them after first paint (see primeTerminalWebglAddon) or from a route chunk.'
+    )
   }
-  console.error('')
-  console.error('Load them after first paint (see primeTerminalWebglAddon) or from a route chunk.')
-  return 1
+  return twoByteChunks.length > 0 || violations.length > 0 ? 1 : 0
 }
