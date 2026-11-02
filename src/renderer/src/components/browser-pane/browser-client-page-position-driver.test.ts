@@ -6,7 +6,10 @@ import {
   RETAINED_FIXTURE_PAGE,
   type RetainedHostFixture
 } from './browser-client-page-retained-host-fixture'
-import { BROWSER_CLIENT_PAGE_POSITION_SETTLE_FRAMES } from './browser-client-page-position-driver'
+import {
+  BROWSER_CLIENT_PAGE_POSITION_RECHECK_MS,
+  BROWSER_CLIENT_PAGE_POSITION_SETTLE_FRAMES
+} from './browser-client-page-position-driver'
 import type { BrowserClientPageVisibleAttachment } from './browser-client-page-retained-registry'
 
 /** Drives the shared loop by hand so a "frame" is an explicit step, not wall-clock timing. */
@@ -108,6 +111,7 @@ afterEach(() => {
     attachment.detach()
   }
   disposeRetainedHostFixtures()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   Reflect.deleteProperty(document, 'getAnimations')
@@ -173,6 +177,25 @@ describe('client-hosted page position driver', () => {
     await Promise.resolve()
 
     expect(frames.pending()).toBe(0)
+  })
+
+  // Style sheet edits and script-driven animations move panes with no mutation or event.
+  it('repositions a pane moved with no wake on the next recheck, without frames while unchanged', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    const pane = await attachHost('page-one', 10)
+    await settle()
+
+    vi.advanceTimersByTime(BROWSER_CLIENT_PAGE_POSITION_RECHECK_MS * 3)
+    expect(frames.pending()).toBe(0)
+
+    moveContainer(pane.container, 640, 48)
+    vi.advanceTimersByTime(BROWSER_CLIENT_PAGE_POSITION_RECHECK_MS)
+
+    expect(pane.host().style.left).toBe('640px')
+    expect(pane.host().style.top).toBe('48px')
+
+    openAttachments.shift()!.detach()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('keeps syncing past the settle window while a finite animation moves a pane', async () => {

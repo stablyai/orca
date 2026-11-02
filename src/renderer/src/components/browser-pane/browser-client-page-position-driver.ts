@@ -6,6 +6,9 @@ export type BrowserClientPagePositionSync = () => void
 /** Frames synced per wake: wakes follow each DOM change, so a short tail sees settled layout. */
 export const BROWSER_CLIENT_PAGE_POSITION_SETTLE_FRAMES = 2
 
+/** Frameless recheck that bounds staleness when a move has no wake (style sheet edit, script animation). */
+export const BROWSER_CLIENT_PAGE_POSITION_RECHECK_MS = 1_000
+
 // Fixed-size widgets that rewrite their own DOM constantly (terminal output, editor typing) never move panes.
 const SELF_CONTAINED_SELECTOR = '.xterm, .monaco-editor'
 
@@ -55,20 +58,24 @@ function hasFiniteAnimationRunning(): boolean {
     )
 }
 
+function syncAll(): void {
+  // Copied: a host may register or drop out while being synced.
+  for (const sync of Array.from(syncs)) {
+    try {
+      sync()
+    } catch (error) {
+      if (!reportedFailures.has(sync)) {
+        reportedFailures.add(sync)
+        console.warn('[browser-pane] client-hosted page position sync failed:', error)
+      }
+    }
+  }
+}
+
 function runFrame(): void {
   frame = null
   try {
-    // Copied: a host may register or drop out while being synced.
-    for (const sync of Array.from(syncs)) {
-      try {
-        sync()
-      } catch (error) {
-        if (!reportedFailures.has(sync)) {
-          reportedFailures.add(sync)
-          console.warn('[browser-pane] client-hosted page position sync failed:', error)
-        }
-      }
-    }
+    syncAll()
   } finally {
     settleFramesLeft -= 1
     if (settleFramesLeft > 0 || hasFiniteAnimationRunning()) {
@@ -142,7 +149,14 @@ function startWakeSources(): () => void {
     characterData: true
   })
   const stopDevicePixelRatio = watchDevicePixelRatio()
+  // Unchanged rects write nothing, so this requests no frame; a corrected host's style write wakes the burst.
+  const recheck = setInterval(() => {
+    if (frame === null) {
+      syncAll()
+    }
+  }, BROWSER_CLIENT_PAGE_POSITION_RECHECK_MS)
   return () => {
+    clearInterval(recheck)
     for (const type of WINDOW_WAKE_EVENTS) {
       window.removeEventListener(type, wake, options)
     }
