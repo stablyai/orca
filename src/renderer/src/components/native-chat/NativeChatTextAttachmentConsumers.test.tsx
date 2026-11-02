@@ -106,146 +106,247 @@ afterEach(() => {
 })
 
 it('opens draft and sent sources, exports exact bytes and scrolls a giant-line paste to the end', async () => {
-  const text = `\ufeff${'🙂paste\r\n'.repeat(5000)}`
-  mocks.start.mockResolvedValue({ canceled: false, transferId: 'output' })
-  mocks.finish.mockResolvedValue({ canceled: false })
-  mocks.resolved = false
-  const upload = Promise.withResolvers<string>()
-  mocks.save.mockReturnValue(upload.promise)
-  mocks.rpc.mockImplementation(async (_target, method, request) => {
-    if (method === 'status.get') {
-      return { capabilities: ['native-chat.text-attachment-read.v1'] }
-    }
-    const bytes = Buffer.from(text)
-    const chunk = bytes.subarray(request.offset, request.offset + request.length)
-    return {
-      snapshot: 'a'.repeat(64),
-      size: bytes.length,
-      bytesRead: chunk.length,
-      contentBase64: chunk.toString('base64'),
-      eof: request.offset + chunk.length === bytes.length
+  const text = `\ufeff${Array.from({ length: 5000 }, (_, index) => `🙂paste${index}\r\n`).join('')}END35636`
+  const ending = Promise.withResolvers<void>()
+  let heldRange = false
+  let viewportHeight = 600
+  let rowHeight = 20
+  const nativeRect = HTMLElement.prototype.getBoundingClientRect
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return this.classList.contains('invisible')
+      ? new DOMRect(0, 0, 8, rowHeight)
+      : nativeRect.call(this)
+  })
+  const positions = new WeakMap<HTMLElement, number>()
+  const measurements = new Set<() => void>()
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => viewportHeight)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(() => viewportHeight)
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    const track = this.lastElementChild
+    return Math.max(
+      this.clientHeight,
+      track instanceof HTMLElement ? Number.parseFloat(track.style.height) || 0 : 0,
+      ...Array.from(this.querySelectorAll<HTMLElement>('[data-text-segment]')).map(
+        (row) => Number.parseFloat(row.style.top) + Number.parseFloat(row.style.height)
+      )
+    )
+  })
+  vi.spyOn(HTMLElement.prototype, 'scrollTop', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return Math.min(positions.get(this) || 0, this.scrollHeight - this.clientHeight)
+  })
+  vi.spyOn(HTMLElement.prototype, 'scrollTop', 'set').mockImplementation(function (
+    this: HTMLElement,
+    value
+  ) {
+    const top = Math.max(0, Math.min(value, this.scrollHeight - this.clientHeight))
+    if (top !== this.scrollTop) {
+      positions.set(this, top)
+      queueMicrotask(() => this.dispatchEvent(new Event('scroll')))
     }
   })
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      ui: { savePastedTextAsFile: mocks.save, writeClipboardText: mocks.write },
-      fs: {
-        startDownloadedFile: mocks.start,
-        appendDownloadedFileChunk: mocks.append,
-        finishDownloadedFile: mocks.finish,
-        cancelDownloadedFile: mocks.cancel
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      readonly notify: () => void
+      constructor(callback: ResizeObserverCallback) {
+        this.notify = () => callback([], this)
+        measurements.add(this.notify)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {
+        measurements.delete(this.notify)
       }
     }
-  })
-  let view = render(<Composer />)
-  await act(async () => {
-    expect(paste(text)).toBe(true)
-  })
-  expect(screen.getByRole('button', { name: 'Pasted text' })).toBeTruthy()
-  await openSource()
-  fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
-  await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(text))
-  expect(mocks.rpc).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-  mocks.resolved = true
-  await act(async () => upload.resolve(path))
-  view.rerender(<Composer />)
-  expect(nativeChatPastedTextOperations.size).toBe(0)
-  fireEvent.click(screen.getByRole('button', { name: 'Pasted text' }))
-  await waitFor(() =>
-    expect(mocks.rpc).toHaveBeenCalledWith(
-      expect.anything(),
-      'agentSessionAttachment.readTextChunk',
-      expect.objectContaining({ path }),
-      expect.anything()
+  )
+  try {
+    mocks.start.mockResolvedValue({ canceled: false, transferId: 'output' })
+    mocks.finish.mockResolvedValue({ canceled: false })
+    mocks.resolved = false
+    const upload = Promise.withResolvers<string>()
+    mocks.save.mockReturnValue(upload.promise)
+    mocks.rpc.mockImplementation(async (_target, method, request) => {
+      if (method === 'status.get') {
+        return { capabilities: ['native-chat.text-attachment-read.v1'] }
+      }
+      const bytes = Buffer.from(text)
+      if (request.offset > 0) {
+        heldRange = true
+        await ending.promise
+      }
+      const chunk = bytes.subarray(request.offset, request.offset + request.length)
+      return {
+        snapshot: 'a'.repeat(64),
+        size: bytes.length,
+        bytesRead: chunk.length,
+        contentBase64: chunk.toString('base64'),
+        eof: request.offset + chunk.length === bytes.length
+      }
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        ui: { savePastedTextAsFile: mocks.save, writeClipboardText: mocks.write },
+        fs: {
+          startDownloadedFile: mocks.start,
+          appendDownloadedFileChunk: mocks.append,
+          finishDownloadedFile: mocks.finish,
+          cancelDownloadedFile: mocks.cancel
+        }
+      }
+    })
+    let view = render(<Composer />)
+    await act(async () => {
+      expect(paste(text)).toBe(true)
+    })
+    expect(screen.getByRole('button', { name: 'Pasted text' })).toBeTruthy()
+    await openSource()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
+    await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(text))
+    expect(mocks.rpc).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    mocks.resolved = true
+    await act(async () => upload.resolve(path))
+    view.rerender(<Composer />)
+    expect(nativeChatPastedTextOperations.size).toBe(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Pasted text' }))
+    await waitFor(() =>
+      expect(mocks.rpc).toHaveBeenCalledWith(
+        expect.anything(),
+        'agentSessionAttachment.readTextChunk',
+        expect.objectContaining({ path }),
+        expect.anything()
+      )
     )
-  )
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-  const editor = promptEditor(screen.getByRole('textbox'))
-  const token = promptValue(screen.getByRole('textbox')).trim()
-  act(() => {
-    editor.commands.selectAll()
-    editor.commands.deleteSelection()
-  })
-  expect(screen.queryByRole('button', { name: 'Pasted text' })).toBeNull()
-  await act(async () => {
-    editor.commands.undo()
-  })
-  expect(screen.getByRole('button', { name: 'Pasted text' })).toBeTruthy()
-  const saved = structuredClone(readNativeChatComposerDraft(scope))
-  expect(saved.text).toContain(token)
-  const sent = resolveNativeChatPastedText(scope, token)
-  expect(sent).toBe(`@${path}`)
-  view.unmount()
-  clearNativeChatComposerDraftsForTests()
-  updateNativeChatComposerDraft(
-    scope,
-    { text: saved.text, document: saved.document, pastedTextFiles: saved.pastedTextFiles },
-    'immediate'
-  )
-  expect(readNativeChatComposerDraft(scope).text).toBe(saved.text)
-  view = render(
-    <NativeChatTextAttachments
-      content={sent}
-      structured
-      runtimeContext={{ target: { kind: 'local' }, worktreeId: 'w', worktreePath: '/repo' }}
-      renderText={(content) => <span>{content}</span>}
-    />
-  )
-  await openSource()
-  fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
-  await waitFor(() => expect(mocks.write).toHaveBeenCalledTimes(2))
-  expect(mocks.write.mock.calls[1]).toEqual([text])
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Save file' }).hasAttribute('disabled')).toBe(false)
-  )
-  fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
-  await waitFor(() => expect(mocks.finish).toHaveBeenCalledOnce())
-  expect(
-    Buffer.concat(
-      mocks.append.mock.calls.map(([args]) => Buffer.from(args.contentBase64, 'base64'))
-    ).equals(Buffer.from(text))
-  ).toBe(true)
-  view.unmount()
-  const giant = `${'x'.repeat(25 * 1024 * 1024)}TAIL`
-  mocks.resolved = false
-  const heldUpload = Promise.withResolvers<string>()
-  mocks.save.mockReturnValueOnce(heldUpload.promise)
-  const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600)
-  const offsetHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(600)
-  view = render(<Composer />)
-  await act(async () => {
-    expect(paste(giant)).toBe(true)
-  })
-  fireEvent.click(screen.getByRole('button', { name: 'Pasted text' }))
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Copy contents' }).hasAttribute('disabled')).toBe(
-      true
+    const measured = document.querySelector('.scrollbar-editor')
+    if (!(measured instanceof HTMLElement)) {
+      throw new Error('Expected real committed text scroller')
+    }
+    await waitFor(() =>
+      expect(measured.querySelectorAll('[data-text-segment]').length).toBeGreaterThan(0)
     )
-  )
-  const scroller = document.querySelector('.scrollbar-editor')
-  if (!(scroller instanceof HTMLElement)) {
-    throw new Error('Expected real text scroller')
+    fireEvent.keyDown(measured, { key: 'End' })
+    await waitFor(() => expect(heldRange).toBe(true))
+    await act(async () => ending.resolve())
+    await waitFor(() => {
+      expect(measured.textContent).toContain('END35636')
+      expect(measured.scrollTop + measured.clientHeight).toBe(measured.scrollHeight)
+    })
+    fireEvent.keyDown(measured, { key: 'Home' })
+    await waitFor(() => {
+      expect(measured.scrollTop).toBe(0)
+      expect(measured.querySelector('[data-text-segment]')?.textContent).toContain('🙂paste0')
+    })
+    fireEvent.keyDown(measured, { key: 'PageDown' })
+    await waitFor(() => {
+      expect(measured.querySelector('[data-text-segment]')?.textContent).toBeTruthy()
+      expect(measured.querySelector('[data-text-segment]')?.textContent).not.toContain('🙂paste0')
+    })
+    const visible = measured.querySelector('[data-text-segment]')?.textContent
+    viewportHeight = 400
+    rowHeight = 24
+    act(() => measurements.forEach((notify) => notify()))
+    await waitFor(() =>
+      expect(measured.querySelector('[data-text-segment]')?.textContent).toBe(visible)
+    )
+    fireEvent.keyDown(measured, { key: 'Home' })
+    await waitFor(() => expect(measured.scrollTop).toBe(0))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    const editor = promptEditor(screen.getByRole('textbox'))
+    const token = promptValue(screen.getByRole('textbox')).trim()
+    act(() => {
+      editor.commands.selectAll()
+      editor.commands.deleteSelection()
+    })
+    expect(screen.queryByRole('button', { name: 'Pasted text' })).toBeNull()
+    await act(async () => {
+      editor.commands.undo()
+    })
+    expect(screen.getByRole('button', { name: 'Pasted text' })).toBeTruthy()
+    const saved = structuredClone(readNativeChatComposerDraft(scope))
+    expect(saved.text).toContain(token)
+    const sent = resolveNativeChatPastedText(scope, token)
+    expect(sent).toBe(`@${path}`)
+    view.unmount()
+    clearNativeChatComposerDraftsForTests()
+    updateNativeChatComposerDraft(
+      scope,
+      { text: saved.text, document: saved.document, pastedTextFiles: saved.pastedTextFiles },
+      'immediate'
+    )
+    expect(readNativeChatComposerDraft(scope).text).toBe(saved.text)
+    view = render(
+      <NativeChatTextAttachments
+        content={sent}
+        structured
+        runtimeContext={{ target: { kind: 'local' }, worktreeId: 'w', worktreePath: '/repo' }}
+        renderText={(content) => <span>{content}</span>}
+      />
+    )
+    await openSource()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
+    await waitFor(() => expect(mocks.write).toHaveBeenCalledTimes(2))
+    expect(mocks.write.mock.calls[1]).toEqual([text])
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save file' }).hasAttribute('disabled')).toBe(false)
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
+    await waitFor(() => expect(mocks.finish).toHaveBeenCalledOnce())
+    expect(
+      Buffer.concat(
+        mocks.append.mock.calls.map(([args]) => Buffer.from(args.contentBase64, 'base64'))
+      ).equals(Buffer.from(text))
+    ).toBe(true)
+    view.unmount()
+    const giant = `${'x'.repeat(25 * 1024 * 1024)}TAIL`
+    mocks.resolved = false
+    const heldUpload = Promise.withResolvers<string>()
+    mocks.save.mockReturnValueOnce(heldUpload.promise)
+    viewportHeight = 600
+    view = render(<Composer />)
+    await act(async () => {
+      expect(paste(giant)).toBe(true)
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Pasted text' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Copy contents' }).hasAttribute('disabled')).toBe(
+        true
+      )
+    )
+    const scroller = document.querySelector('.scrollbar-editor')
+    if (!(scroller instanceof HTMLElement)) {
+      throw new Error('Expected real text scroller')
+    }
+    await waitFor(() =>
+      expect(scroller.querySelectorAll('[data-text-segment]').length).toBeGreaterThan(0)
+    )
+    const track = scroller.lastElementChild
+    if (!(track instanceof HTMLElement)) {
+      throw new Error('Expected virtual track')
+    }
+    expect(Number.parseFloat(track.style.height)).toBeLessThan(8_000_000)
+    fireEvent.scroll(scroller, {
+      target: { scrollTop: Number.parseFloat(track.style.height) - 600 }
+    })
+    await waitFor(() => expect(scroller.textContent).toContain('TAIL'))
+    expect(scroller.querySelectorAll('[data-text-segment]').length).toBeLessThanOrEqual(256)
+    fireEvent.scroll(scroller, { target: { scrollTop: 0 } })
+    await waitFor(() =>
+      expect(scroller.querySelector('[data-text-segment]')?.textContent).toBe('x'.repeat(256))
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await act(async () => heldUpload.resolve(path))
+    view.unmount()
+  } finally {
+    ending.resolve()
+    cleanup()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   }
-  await waitFor(() =>
-    expect(scroller.querySelectorAll('[data-text-segment]').length).toBeGreaterThan(0)
-  )
-  const track = scroller.lastElementChild
-  if (!(track instanceof HTMLElement)) {
-    throw new Error('Expected virtual track')
-  }
-  expect(Number.parseFloat(track.style.height)).toBeLessThan(8_000_000)
-  fireEvent.scroll(scroller, { target: { scrollTop: Number.parseFloat(track.style.height) - 600 } })
-  await waitFor(() => expect(scroller.textContent).toContain('TAIL'))
-  expect(scroller.querySelectorAll('[data-text-segment]').length).toBeLessThanOrEqual(256)
-  fireEvent.scroll(scroller, { target: { scrollTop: 0 } })
-  await waitFor(() =>
-    expect(scroller.querySelector('[data-text-segment]')?.textContent).toBe('x'.repeat(256))
-  )
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-  await act(async () => heldUpload.resolve(path))
-  view.unmount()
-  height.mockRestore()
-  offsetHeight.mockRestore()
 })

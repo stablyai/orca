@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   AttachmentTextViewport,
   type TextAnchor
@@ -33,12 +32,6 @@ function TextViewport({
     () => new AttachmentTextViewport(source, position.rowHeight, position.height, revision),
     [source, revision, position.rowHeight, position.height]
   )
-  const blocks = useVirtualizer({
-    count: source.blockCount,
-    getScrollElement: () => scroll.current,
-    estimateSize: (index) => layout.heights[index]!,
-    overscan: 0
-  })
   useLayoutEffect(() => {
     const node = scroll.current
     if (!node) {
@@ -59,12 +52,11 @@ function TextViewport({
         (layout.counts[anchor.current.block] ?? 1) / (old.counts[anchor.current.block] ?? 1)
     }
     previousLayout.current = layout
-    blocks.measure()
     node.scrollTop = atEnd.current
       ? Math.max(0, layout.total - node.clientHeight)
       : layout.position(anchor.current)
     setPosition((old) => ({ ...old, top: node.scrollTop }))
-  }, [source, layout, blocks])
+  }, [source, layout])
   useLayoutEffect(() => {
     const node = scroll.current
     if (!node) {
@@ -84,18 +76,16 @@ function TextViewport({
     return () => observer.disconnect()
   }, [])
   const block = layout.anchor(position.top).block
-  // The hook already owns first paint; subsequent ranges follow the actual visible coarse item.
-  const first = blocks.getVirtualItemForOffset(position.top)?.index ?? block
   const needsNext =
-    source.cachedBlock(first) !== undefined &&
-    (source.rowCount(first) - layout.anchor(position.top).row) * position.rowHeight <
+    source.cachedBlock(block) !== undefined &&
+    (source.rowCount(block) - layout.anchor(position.top).row) * position.rowHeight <
       position.height + 4 * position.rowHeight &&
-    first + 1 < source.blockCount
+    block + 1 < source.blockCount
   useEffect(() => {
     if (source.size !== null) {
-      demand(needsNext ? [first, first + 1] : [first])
+      demand(needsNext ? [block, block + 1] : [block])
     }
-  }, [source, first, needsNext, demand])
+  }, [source, block, needsNext, demand])
   const model = useRef({ layout, position })
   useLayoutEffect(() => {
     model.current = { layout, position }
@@ -165,7 +155,7 @@ function TextViewport({
       >
         M
       </div>
-      <div style={{ height: blocks.getTotalSize(), position: 'relative', minWidth: 'max-content' }}>
+      <div style={{ height: layout.total, position: 'relative', minWidth: 'max-content' }}>
         {layout.rows(position.top).map((row) => (
           <div
             key={row.key}

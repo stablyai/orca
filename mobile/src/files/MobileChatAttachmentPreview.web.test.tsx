@@ -108,6 +108,21 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
       }
     })
   }
+  const positions = new WeakMap<HTMLElement, number>()
+  descriptors.set('scrollTop', Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTop'))
+  Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return Math.min(positions.get(this) || 0, Math.max(0, this.scrollHeight - this.clientHeight))
+    },
+    set(this: HTMLElement, value: number) {
+      const top = Math.max(0, Math.min(value, this.scrollHeight - this.clientHeight))
+      if (top !== this.scrollTop) {
+        positions.set(this, top)
+        queueMicrotask(() => this.dispatchEvent(new Event('scroll')))
+      }
+    }
+  })
   const rect = vi
     .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
     .mockImplementation(function (this: HTMLElement) {
@@ -265,6 +280,7 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     await vi.waitFor(async () => {
       await flush()
       expect(container.textContent).toContain('TAIL')
+      expect(scroller.scrollTop + scroller.clientHeight).toBe(scroller.scrollHeight)
     })
     expect(container.querySelectorAll('input')).toHaveLength(0)
     expect(reads.every((request) => request.length <= 16 * 1024)).toBe(true)
