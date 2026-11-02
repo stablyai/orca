@@ -1,4 +1,4 @@
-# Plugin recipes: panels, workers and data
+# Plugin recipes: panels, workers, editors and data
 
 Hand-written companion to the `orca-plugin-authoring` guide.
 
@@ -98,3 +98,43 @@ let the action through, so count blocks after deciding (`void orca.host.call(...
 `(await mountWorker(worker)).hooks.fire('terminal.send', event)`, which returns
 `{ kind: 'continue', event }` or `{ kind: 'deny', reason }`; against the loaded dev plugin,
 `ORCA plugin dev hook . terminal.send --data '<json>'` prints the same decision.
+
+## A rich editor with a library
+
+A `sandboxed-ui` custom editor around a canvas or diagram library; start from
+`ORCA plugin create <dir> --template editor`. Set `"frame": "isolated"` on the editor
+(`engines.orca` `>=1.4.248`) so browser clients open the file in Source instead of a fallback.
+There is no bundler or network: copy the library's ESM build into the plugin and map it,
+`<script type="importmap">{ "imports": { "lib": "./vendor/lib.js" } }</script>` (16 MiB a script,
+1 MiB a `.ts` file; no `eval`). Style from the `--orca-*` variables in `references/host-api.md`
+and redo it on `orca.on('theme', ...)`. Orca keeps no undo for editors: the library's own undo
+gets Cmd/Ctrl+Z.
+
+```ts
+// editor/sync.ts: the only code that talks to Orca; merge by id, never by array position.
+export const start = () =>
+  orca.document.session<Scene>({
+    decode: (content) => (content.kind === 'text' ? JSON.parse(content.text) : { elements: [] }),
+    encode: (scene) => ({ kind: 'text', text: JSON.stringify(scene) }),
+    merge: (base, outside, mine) => mergeById(base, outside, mine)
+  })
+// editor/main.ts: `const doc = await start()`, then library.load(doc.value),
+// library.onChange((scene) => doc.change(scene)), doc.onReplace((scene) => library.load(scene)).
+
+// editor/sync.test.ts, run by `ORCA plugin test`:
+import { assert, mockEditorHost, test } from 'orca/testing'
+test('merges an agent write that lands while an edit waits', async () => {
+  const host = mockEditorHost({ text: '{"elements":[]}' })
+  const doc = await (await import('./sync.ts')).start()
+  doc.change({ elements: [{ id: 'b' }] })
+  host.replace('{"elements":[{"id":"a"}]}') // the agent writes first
+  await host.flush() // as a save: conflict, merge, resend
+  assert.deepEqual(JSON.parse(host.text ?? '').elements, [{ id: 'a' }, { id: 'b' }])
+  doc.dispose()
+  host.dispose()
+})
+```
+
+Without `merge` an outside write wins and the draft is dropped. `ORCA plugin check <dir> --json`
+then reads every file the entry loads without running it, and
+`ORCA plugin open <plugin-key> --editor <file>` shows it on a real file.
