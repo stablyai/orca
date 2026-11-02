@@ -78,8 +78,12 @@ class BlockquoteListTokenizer extends Tokenizer {
   }
 
   url(source: string): Tokens.Link | undefined {
-    const end = findProseUrlEnd(source)
-    return super.url(end === -1 ? source : source.slice(0, end))
+    const token = super.url(source)
+    if (!token) {
+      return undefined
+    }
+    const end = findProseUrlEnd(token.raw)
+    return end === -1 ? token : super.url(token.raw.slice(0, end))
   }
 }
 

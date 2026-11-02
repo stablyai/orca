@@ -3,6 +3,8 @@ import Link from '@tiptap/extension-link'
 import type { EditorState } from '@tiptap/pm/state'
 import { findProseUrlEnd, splitAtProseUrlTerminators } from '../../../../shared/prose-url-boundary'
 
+const MAX_AUTOLINK_PASSES = 8
+
 function isFileUri(href: unknown): href is string {
   return typeof href === 'string' && /^file:/i.test(href.trim())
 }
@@ -144,18 +146,24 @@ export const RichMarkdownLink = Link.extend({
         const rangeBoundaries = new Map<number, number[]>()
         let maxPasses = 1
         for (const { newRange } of getChangedRanges(transform)) {
+          if (!newState.doc.resolve(newRange.from).sameParent(newState.doc.resolve(newRange.to))) {
+            continue
+          }
           const normalizedRange = normalizeTextForLinkify(
             newState.doc.textBetween(newRange.from, newRange.to, ' ', ' ')
           )
           const boundaries: number[] = []
-          for (const match of normalizedRange.matchAll(/\s+/g)) {
-            if (match.index !== undefined) {
+          for (const match of normalizedRange.matchAll(/(\S*)(\s+)/g)) {
+            if (match.index !== undefined && (match.index === 0 || /[.:]/.test(match[1]))) {
               boundaries.push(newRange.from + match.index + match[0].length)
+              if (boundaries.length >= MAX_AUTOLINK_PASSES) {
+                break
+              }
             }
           }
           if (boundaries.length > 0) {
             rangeBoundaries.set(newRange.to, boundaries)
-            maxPasses = Math.max(maxPasses, boundaries.length)
+            maxPasses = Math.min(MAX_AUTOLINK_PASSES, Math.max(maxPasses, boundaries.length))
           }
         }
 
