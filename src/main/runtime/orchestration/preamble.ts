@@ -64,8 +64,9 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 ${dispatchIdentityLines(params)}
 
-The coordinator cannot see this ${surface}. Use the \`${cli} orchestration\` commands below
-only to ask, report a blocker, or finish; it needs no progress updates unless the task asks.
+The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
+below, and message it only to ask, report a blocker, or finish; it needs no progress updates
+unless the task asks.
 Don't post to Slack, GitHub, or other channels during the run.
 Do only this task, yourself: no subagents or helper workers unless the task asks.
 
