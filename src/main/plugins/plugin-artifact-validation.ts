@@ -10,10 +10,11 @@ import { parsePluginVmRecipeArtifact } from '../../shared/plugins/artifacts/plug
 import { PLUGIN_IMAGE_RULES } from '../../shared/plugins/images/plugin-image-fields'
 import { PLUGIN_NEW_FILE_TEMPLATE_MAX_BYTES } from '../../shared/plugins/contributions/plugin-new-file-contribution'
 import { validatePluginImageArtifacts } from './plugin-image-artifact-validation'
+import { PLUGIN_PANEL_ENTRY_MAX_BYTES } from '../../shared/plugins/frames/plugin-frame-entry-limits'
 
 export type PluginArtifactValidationResult = { ok: true } | { ok: false; error: string }
 
-export const PLUGIN_PANEL_ENTRY_MAX_BYTES = 10 * 1024 * 1024
+export { PLUGIN_PANEL_ENTRY_MAX_BYTES }
 export const PLUGIN_WORKER_ENTRY_MAX_BYTES = 50 * 1024 * 1024
 const PLUGIN_ICON_MAX_BYTES = 2 * 1024 * 1024
 export const PLUGIN_LANGUAGE_PACK_MAX_BYTES = 5 * 1024 * 1024
