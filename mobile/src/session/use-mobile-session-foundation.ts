@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
+import { firstParam } from '../navigation/route-param-reader'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { HOST_DOCK_MIN_WIDTH } from '../storage/preferences'
 import { useForceReconnect } from '../transport/host-client-hooks'
@@ -24,13 +25,15 @@ export function useMobileSessionFoundation() {
     worktreeId,
     name: routeWorktreeName,
     created,
-    warning: createdWarning
+    warning: createdWarning,
+    paneKey: routePaneKey
   } = useLocalSearchParams<{
     hostId: string
     worktreeId: string
     name?: string
     created?: string
     warning?: string
+    paneKey?: string | string[]
   }>()
   const isFolderWorkspaceRoute = worktreeId.startsWith('folder:')
   const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(worktreeId)
@@ -95,6 +98,7 @@ export function useMobileSessionFoundation() {
     routeWorktreeName,
     created,
     createdWarning,
+    routePaneKey: firstParam(routePaneKey),
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     router,

@@ -14,7 +14,9 @@ export function useNotificationPaneNavigation({
   connState,
   switchSessionTab,
   worktreeId,
-  openNativeSession
+  openNativeSession,
+  routePaneKey = '',
+  router
 }: {
   sessionTabs: MobileSessionTab[]
   terminalsLoaded: boolean
@@ -22,6 +24,9 @@ export function useNotificationPaneNavigation({
   switchSessionTab: (tab: MobileSessionTab) => void
   worktreeId?: string
   openNativeSession?: (source: StructuredSessionOpenSource) => Promise<void>
+  /** The page router's own paneKey: a host-list tap served inside this page never reaches the shell route. */
+  routePaneKey?: string
+  router?: { setParams: (params: { paneKey: string }) => void }
 }) {
   const client = usePageBridgeClient()
   // The opening tap arrives only in the initial init, before route-update listeners.
@@ -52,6 +57,26 @@ export function useNotificationPaneNavigation({
       setAsked((count) => count + 1)
     })
   }, [client])
+
+  const routeSeen = useRef('')
+
+  useEffect(() => {
+    if (routePaneKey === routeSeen.current) {
+      return
+    }
+    // An erased param permits a later tap for the same pane.
+    routeSeen.current = routePaneKey
+    if (routePaneKey === '') {
+      return
+    }
+    router?.setParams({ paneKey: '' })
+    // A shell-opened page mirrors the shell route into its URL; that tap is already the seed.
+    if (routePaneKey === pending.current) {
+      return
+    }
+    pending.current = routePaneKey
+    setAsked((count) => count + 1)
+  }, [routePaneKey, router])
 
   useEffect(() => {
     const paneKey = pending.current
