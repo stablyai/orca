@@ -281,7 +281,11 @@ describe('rewind behind a clear boundary', () => {
       status: 'idle',
       latestPrompt: 'kept after clear'
     })
-    expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
+    expect(rig.store.getRecord(SESSION)?.lastTurn).toMatchObject({
+      state: 'settled',
+      outcome: 'failure',
+      at: 2
+    })
     const recovered = journal().snapshot()
     const restored = latestNativeChatUsageLimitCut(recovered.items, recovered.submissions)!
     expect(restored.turnItemId).toBe('orca:context-limit-turn')

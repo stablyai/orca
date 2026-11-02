@@ -7,7 +7,7 @@ import {
 } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { replayJournal } from '../agent-session-journal/journal-open'
+import { restoreJournal } from '../agent-session-journal/journal-open'
 import { renderJournalState } from '../agent-session-journal/journal-reducer'
 import type {
   StructuredAgentSessionHostDeps,
@@ -73,7 +73,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       return this.deps.readLoadedCut(id)
     }
     if (!this.coldCuts.has(id) && cold) {
-      const load = replayJournal(this.deps.host.journalDatabase.db, id)
+      const load = restoreJournal(this.deps.host.journalDatabase.db, id)
       const snapshot = load && !load.newer && !load.damage ? renderJournalState(load.state) : null
       this.coldCuts.set(
         id,
@@ -118,7 +118,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       record !== null &&
       record.location.executionHostId === this.deps.host.store.hostId &&
       !this.deps.host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
-      this.deps.host.store.getSessionTabId(id) !== null &&
+      this.deps.host.store.isSessionTabVisible(id) &&
       !(
         record.usageLimitContinueCancel?.turnItemId === cut.turnItemId &&
         record.usageLimitContinueCancel.resetsAt === cut.resetsAt

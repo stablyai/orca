@@ -4,8 +4,6 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
-import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
 import { holdLane } from './structured-agent-session-delivery-hold.test-fixture'
 import {
   hostTestAttachParams,
@@ -211,12 +209,7 @@ it('lets later due chats run while an earlier chat has an edited queued message,
     role: 'user' as const,
     blocks: [{ type: 'text' as const, text: 'backlog' }]
   }
-  const row = await journal.queuedMessages.insert({
-    messageId: hostTestOperationId(),
-    body,
-    fingerprint: agentSessionSendBodyFingerprint(SESSION, body),
-    hostInstance: structuredAgentSessionHostInstance()
-  })
+  const row = await journal.queuedMessages.insert({ messageId: hostTestOperationId(), body })
   journal.queuedMessages.editLeases.acquire(
     { callerKey: REST_TEST_CALLER.callerKey, editId: 'held-edit' },
     { messageId: row.messageId, fingerprint: row.fingerprint }

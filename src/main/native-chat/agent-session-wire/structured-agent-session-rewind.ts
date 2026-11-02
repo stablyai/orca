@@ -201,7 +201,7 @@ export async function rewindStructuredAgentSession(
             value: {
               itemId: params.itemId,
               epoch: journal.cursor().epoch,
-              sequence: journal.cursor().sequence
+              ...(contextFloor ? { sequence: journal.cursor().sequence } : {})
             }
           }
         }
