@@ -115,6 +115,22 @@ describe('Codex quiet ready screen', () => {
       expect(isQuietReadyScreenBody('', 'codex', () => null)).toBe(false)
     })
 
+    it('accepts the 0.162.1 welcome composer (ellipsis + Title Case)', () => {
+      // #35939: Codex 0.162.1 paints the empty composer as
+      // `…Ask Codex to do anything`; the rule only knew the newer
+      // `› ask codex to do anything`, so a quiet welcome screen held until
+      // timeout on any platform (the issue's Windows paste shows the same
+      // UTF-8 rows rendered through a cp936 console).
+      const welcome = [
+        '>_ OpenAI Codex (v0.162.1)',
+        'permissions: YOLO mode',
+        '…Ask Codex to do anything',
+        'GPT-6-Astra high │ <workspace>',
+        '? for shortcuts'
+      ]
+      expect(isCodexComposerReadyScreen(welcome.join('\n'))).toBe(true)
+    })
+
     it('reads the placeholder only as the composer line, not quoted mid-line', () => {
       const quoted = [
         '$ grep placeholder notes.txt',

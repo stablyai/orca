@@ -4,8 +4,10 @@ import { isUnblockedAfter } from './blocked-text-layer'
 const CODEX_HEADER_LOADING_RE = /(?:model|directory):\s+loading|^\s*loading\s*$/m
 // 0.158 has no box boundary before chat.
 const CODEX_HEADER_LINES = 6
-// Whole-line matching excludes placeholders quoted in chat/pagers.
-const CODEX_EMPTY_COMPOSER_RE = /^\u203A ask codex to do anything\s*$/
+// Whole-line matching excludes placeholders quoted in chat/pagers. 0.162 paints
+// the placeholder with a leading ellipsis and Title Case (#35939); newer builds
+// use the lowercase angle form.
+const CODEX_EMPTY_COMPOSER_RE = /^(?:\u203A ask codex to do anything|\u2026Ask Codex to do anything)\s*$/
 // Reasoning summaries replace working; remapped interrupt keys retain this suffix.
 const CODEX_BUSY_STATUS_MARKER = 'to interrupt)'
 // Only the tip separates status from composer in the 120x40 corpus.
