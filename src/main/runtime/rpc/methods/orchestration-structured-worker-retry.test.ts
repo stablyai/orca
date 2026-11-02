@@ -114,7 +114,12 @@ it('starts only for its agent-sourced preamble and observes it after a transient
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
   expect((await rig.host.journalSnapshot(sessionId)).submissions).toEqual([])
   vi.spyOn(rig.host.deps.adapter, 'open').mockRejectedValueOnce(
-    new CodexAppServerRequestError('initialize', -32603, 'temporarily unavailable')
+    new CodexAppServerRequestError(
+      'initialize',
+      -32001,
+      'Server overloaded; retry later.',
+      'Server overloaded; retry later.'
+    )
   )
   const result = await deliverPreamble()
   expect(result.structuredTurnStart).toEqual({ verdict: 'observed' })
@@ -146,7 +151,12 @@ it('reports a preamble as undelivered after startup exhaustion and retires the f
   const sessionId = created.identity.sessionId
   expect(rig.store.listVisibleSessionIds()).toContain(sessionId)
   vi.spyOn(rig.host.deps.adapter, 'open').mockRejectedValue(
-    new CodexAppServerRequestError('initialize', -32603, 'temporarily unavailable')
+    new CodexAppServerRequestError(
+      'initialize',
+      -32001,
+      'Server overloaded; retry later.',
+      'Server overloaded; retry later.'
+    )
   )
   await expect(deliverPreamble()).rejects.toMatchObject({ code: 'dispatch_preamble_undelivered' })
   expect(rig.adapter.acquire).toHaveBeenCalledTimes(5)

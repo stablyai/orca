@@ -4,6 +4,7 @@ import {
   PROVIDER_SESSION_ID,
   fakeClaude
 } from '../../claude/structured/claude-structured-session-test-support'
+import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import { withObservedProviderExit } from './structured-agent-session-failure-text'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
@@ -30,6 +31,7 @@ it('ends a resumed start that exits during transcript catch-up without awaiting 
   const persistHandle = vi.fn(() => persisted.promise)
   let catchingUp = false
   let ended = 0
+  const lifecycleTypes: (string | undefined)[] = []
   const adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
@@ -48,12 +50,19 @@ it('ends a resumed start that exits during transcript catch-up without awaiting 
     onEvent: (event) => {
       if (event.type === 'ended') {
         ended += 1
-        void host.handleAdapterEvent(event)
+        const lifecycle = structuredClaudeLifecycleEvent(event)
+        lifecycleTypes.push(lifecycle?.type)
+        if (lifecycle) {
+          void host.handleAdapterEvent(lifecycle)
+        }
       }
     }
   })
-  await restartWith((input) =>
-    adapter.acquire({
+  await restartWith((input) => {
+    if (!input.events) {
+      throw new Error('expected the host event sink')
+    }
+    return adapter.acquire({
       ...input,
       events: {
         ...input.events,
@@ -63,7 +72,7 @@ it('ends a resumed start that exits during transcript catch-up without awaiting 
         }
       }
     })
-  )
+  })
   providerOpen.mockImplementation(adapter.open)
   closeSession.mockImplementation(adapter.closeSession)
   host.deps.adapter.releaseAcquisition = adapter.releaseAcquisition
@@ -80,6 +89,7 @@ it('ends a resumed start that exits during transcript catch-up without awaiting 
   })
   await vi.advanceTimersByTimeAsync(2_100)
   expect(ended).toBe(1)
+  expect(lifecycleTypes).toEqual(['ended'])
   expect(persistHandle).not.toHaveBeenCalled()
   catchUp.resolve({ ok: true })
   persisted.resolve()

@@ -324,6 +324,9 @@ describe('positive provider startup retry contracts', () => {
       error: { code: -32600, message: 'Server is draining; retry after reconnecting', data }
     })
     const error = await result
+    if (!(error instanceof CodexAppServerRequestError)) {
+      throw new Error('expected a Codex request error')
+    }
     expect(error.data).toBe(data)
     expect(Object.keys(error)).not.toContain('data')
     expectExitEvidenceRequired(error)

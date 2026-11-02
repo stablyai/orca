@@ -12,7 +12,12 @@ it.each(['ServerUnavailable', 'CatalogNotReady'])(
     expect(() =>
       acpReopenTakeover(
         error,
-        { key: 'saved-key', sessionId: 'saved-id', mayBeUnsaved: () => false },
+        {
+          key: 'saved-key',
+          sessionId: 'saved-id',
+          mayBeUnsaved: () => false,
+          unannouncedLosses: () => []
+        },
         { over: false, now: 1, warn }
       )
     ).toThrow(error)
@@ -24,7 +29,14 @@ afterEach(closeProviderTimelineRigs)
 
 it('propagates a temporary load envelope before takeover or a dead-child assertion can replace it', async () => {
   const rig = await openAcpAdapterRig({
-    launch: { resume: { key: 'saved-key', sessionId: 'saved-id', mayBeUnsaved: () => false } },
+    launch: {
+      resume: {
+        key: 'saved-key',
+        sessionId: 'saved-id',
+        mayBeUnsaved: () => false,
+        unannouncedLosses: () => []
+      }
+    },
     script: (agent) =>
       agent.on('session/load', (frame) =>
         agent.fail(frame, -32603, 'server unavailable', { errorName: 'ServerUnavailable' })
