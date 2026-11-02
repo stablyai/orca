@@ -17,7 +17,9 @@
   "common": {
     "retry": "Tentar novamente",
     "cancel": "Cancelar",
-    "delete": "Excluir"
+    "delete": "Excluir",
+    "connect": "Conectar",
+    "disconnect": "Desconectar"
   },
   "quickOpen": {
     "moreMatchesAvailable": "Mais resultados podem estar disponíveis. Refine sua busca para reduzir os resultados.",
@@ -467,7 +469,8 @@
       "cancel": "Manter filtros"
     },
     "startupWorktreeRefresh": {
-      "loading": "Descobrindo espaços de trabalho…"
+      "loading": "Descobrindo espaços de trabalho…",
+      "description": "Mais espaços de trabalho podem aparecer enquanto os projetos locais e remotos são carregados."
     },
     "wslMoved": {
       "movedToHost": "Movido para o host {{distro}}",
@@ -761,6 +764,18 @@
       "terminalSaveFailed": "Não foi possível mudar para o terminal. Desative a interface de chat em Configurações → Interface de chat.",
       "switched": "A interface de chat agora é o padrão para novos agentes. Você pode voltar a qualquer momento em Configurações → Interface de chat.",
       "dismiss": "Descartar"
+    },
+    "nativeChatUpgrade": {
+      "eyebrow": "Novo",
+      "title": "O chat nativo foi aprimorado",
+      "leaveOff": "Manter desativado",
+      "enableNow": "Ativar agora",
+      "enableError": "Não foi possível ativar o modo de chat.",
+      "intro": "Novos chats com agentes compatíveis agora abrem na visualização de chat aprimorada. Para alternar entre chat e CLI, abra {{panel}} na barra lateral direita:",
+      "resumeInNativeChat": "{{action}} abre uma conversa de CLI compatível no chat nativo.",
+      "resumeInCli": "{{action}} copia um chat do Claude ou Codex para uma nova sessão de CLI. O chat original permanece como está.",
+      "gotIt": "Entendi",
+      "manageInSettings": "Gerencie a Interface de Chat em <link>Configurações → Experimental</link>."
     }
   },
   "rendererRecovery": {
@@ -2375,6 +2390,9 @@
               }
             }
           }
+        },
+        "linear": {
+          "37d36984d0": "A conexão com o Linear foi substituída por uma solicitação mais recente."
         }
       },
       "pluginNewFile": {
@@ -2512,7 +2530,9 @@
         "automationsDescription": "Agende o trabalho dos agentes e escolha se Automações aparece na barra lateral.",
         "shareSkillsTitle": "Compartilhar Skills",
         "shareSkillsDescription": "Compartilhe suas skills com um link não listado. Qualquer pessoa que o tiver pode instalá-las.",
-        "floatingWorkspaceWebDescription": "Abas globais de terminal e markdown."
+        "floatingWorkspaceWebDescription": "Abas globais de terminal e markdown.",
+        "planeTitle": "Plane",
+        "planeDescription": "Como o Plane funciona no Orca, checklist de configuração, habilidade de agente e prompts de exemplo."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "A colagem é muito grande."
@@ -2959,7 +2979,8 @@
       },
       "file": {
         "preview": {
-          "webClientUnavailable": "Prévias de documentos não estão disponíveis no cliente web."
+          "webClientUnavailable": "Prévias de documentos não estão disponíveis no cliente web.",
+          "pairedOutsideWorktree": "Arquivos fora do espaço de trabalho ainda não podem ser pré-visualizados em um servidor pareado."
         }
       },
       "clipboardWriteFailure": {
@@ -3096,6 +3117,27 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+clique para abrir no navegador do sistema",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "plane": {
+        "usage": {
+          "examples": {
+            "readTicket": "Ler a tarefa vinculada",
+            "readTicketSummary": "Obtenha o contexto completo da tarefa vinculada do Plane antes de iniciar o trabalho.",
+            "readTicketPrompt": "Use {{value0}} para ler a tarefa vinculada do Plane para este worktree, depois resuma o objetivo e os critérios de aceitação antes de começar.",
+            "postUpdate": "Publicar uma atualização de progresso",
+            "postUpdateSummary": "Comente o progresso ou um resumo de conclusão na tarefa do Plane.",
+            "postUpdatePrompt": "Use {{value0}} para publicar uma atualização de conclusão na tarefa vinculada do Plane com o que mudou e como foi verificado.",
+            "moveState": "Avançar a tarefa",
+            "moveStateSummary": "Avance o estado do fluxo de trabalho do Plane à medida que o trabalho avança.",
+            "moveStatePrompt": "Use {{value0}} para mover a tarefa vinculada do Plane para Em andamento ou Em revisão agora que a alteração está em andamento.",
+            "triagePriority": "Triar e definir prioridade",
+            "triagePrioritySummary": "Atualize a prioridade ou o estado na tarefa do Plane conforme o escopo for esclarecido.",
+            "triagePriorityPrompt": "Use {{value0}} para triar a tarefa vinculada do Plane — atualize sua prioridade para urgente/alta/média/baixa e ajuste o estado.",
+            "createFollowup": "Criar uma tarefa de acompanhamento",
+            "createFollowupSummary": "Crie uma nova tarefa no Plane para trabalhos pendentes ou bugs relacionados encontrados durante o desenvolvimento.",
+            "createFollowupPrompt": "Use {{value0}} para criar uma nova tarefa no Plane para o trabalho de acompanhamento pendente."
+          }
+        }
       }
     },
     "components": {
@@ -3420,7 +3462,8 @@
             "staleCodexSessions_other": "{{count}} sessões do Codex ainda estão na conta antiga.",
             "staleCodexSessions_many": "{{count}} sessões do Codex ainda estão na conta antiga.",
             "signedOutAccounts": "Desconectado",
-            "addAnotherAccount": "Adicionar outra conta…"
+            "addAnotherAccount": "Adicionar outra conta…",
+            "9332ba8684": "Alternar para"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar uma conta",
@@ -4154,7 +4197,9 @@
             "3fdccf0277": "Espaçamento Interno Vertical",
             "651c993c32": "Família de Fonte",
             "64f6b4fdf6": "Foco Segue o Mouse",
-            "18a9f63aff": "Cor do Divisor no Modo Claro"
+            "18a9f63aff": "Cor do Divisor no Modo Claro",
+            "bc2054657a": "Aplica desfoque de fundo à janela do terminal. Requer reinicialização.",
+            "72d0482137": "Desfoque da Janela"
           },
           "windows": {
             "search": {
@@ -4601,7 +4646,9 @@
               "background": "fundo",
               "tint": "tonalidade",
               "tintDescription": "Mantenha a barra lateral esquerda padrão ou aplique uma tonalidade. Para seguir o terminal, escolha Combinar com o Terminal como tema claro ou escuro.",
-              "0a5d3677f0": "Aparência da Barra Lateral Esquerda"
+              "0a5d3677f0": "Aparência da Barra Lateral Esquerda",
+              "description": "Faça a barra lateral esquerda combinar com seu terminal, manter o padrão ou usar uma tonalidade.",
+              "terminal": "terminal"
             },
             "workspaceCardLayout": {
               "description": "Os cartões de espaço de trabalho podem usar layouts compactos ou detalhados.",
@@ -5442,7 +5489,9 @@
           "742ca66ea6": "Privacidade e Telemetria",
           "c2bb9fc528": "Espaço de Trabalho Flutuante",
           "f1fddf7764": "Entrada e Edição",
-          "d60b7f0e58": "Comandos Rápidos"
+          "d60b7f0e58": "Comandos Rápidos",
+          "planeTitle": "Plane",
+          "planeDescription": "Como o Plane funciona no Orca, checklist de configuração, habilidade de agente e prompts de exemplo."
         },
         "experimental": {
           "search": {
@@ -5495,6 +5544,19 @@
               "inWindow": "na própria janela",
               "worktrees": "worktrees",
               "eaf17a7214": "Painel de Agentes"
+            },
+            "nativeChat": {
+              "title": "Interface de Chat",
+              "description": "Abra os novos agentes compatíveis na interface de Chat.",
+              "grok": "grok",
+              "native": "nativo",
+              "chat": "chat",
+              "claude": "claude",
+              "codex": "codex",
+              "openclaude": "openclaude",
+              "omp": "omp",
+              "terminal": "terminal",
+              "agent": "agente"
             }
           }
         },
@@ -5573,7 +5635,11 @@
           "e80b782206": "Opacidade do Fundo",
           "9881daf4f5": "ANSI Brilhante",
           "f5bda64f57": "Preto Brilhante",
-          "2d8a13cabd": "Espaçamento Interno Horizontal"
+          "2d8a13cabd": "Espaçamento Interno Horizontal",
+          "53ce336e15": "Reinicie o Orca para aplicar a alteração de desfoque da janela.",
+          "97950bb087": "Aplica desfoque de fundo à janela do terminal. Requer reinicialização.",
+          "2b82242f43": "Desfoque da Janela",
+          "03c855d15f": "Redefinir todas as substituições de cor"
         },
         "agents": {
           "search": {
@@ -5814,7 +5880,9 @@
             "tintDescription": "Mantenha a barra lateral esquerda padrão ou aplique uma tonalidade. Para seguir o terminal, escolha Combinar com o Terminal como tema claro ou escuro.",
             "fcc653abee": "Aparência da Barra Lateral Esquerda",
             "df205a675e": "Intensidade da Tonalidade",
-            "ba1d9a0607": "Tonalidade da Barra Lateral"
+            "ba1d9a0607": "Tonalidade da Barra Lateral",
+            "rowDescription": "Faça a barra lateral esquerda combinar com seu terminal, manter o padrão ou usar uma tonalidade.",
+            "matchTerminal": "Combinar com o Terminal"
           },
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
@@ -5959,7 +6027,11 @@
             "shellEnvNamesAlwaysPassed": "PATH, locale e SSH_AUTH_SOCK são sempre passados. Aplica-se na próxima vez que uma conversa iniciar ou for retomada.",
             "shellEnvTitle": "Usar o ambiente do seu shell",
             "shellEnvCopy": "As conversas do Codex e Claude iniciam com todas as variáveis exportadas pelo seu shell de login, assim como um terminal. Desative para escolher quais elas recebem.",
-            "shellEnvToggleLabel": "Alternar o uso do ambiente do seu shell"
+            "shellEnvToggleLabel": "Alternar o uso do ambiente do seu shell",
+            "title": "Interface de Chat",
+            "description": "Pré-visualize a interface de chat do desktop para sessões de terminal de agente suportadas.",
+            "copy": "Ativa a Interface de Chat experimental para novas sessões locais suportadas recém-criadas. As sessões de terminal existentes mantêm o caminho de chat do terminal enquanto ajustamos a fidelidade da transcrição, a transmissão e a paridade.",
+            "toggleLabel": "Alternar Interface de Chat"
           },
           "agentDashboard": {
             "title": "Painel de Agentes",
@@ -6386,7 +6458,10 @@
             "86a08aa60c": "Integração com o Gitea",
             "cd74b2f587": "Integração com o GitLab",
             "d905b3ecee": "Integração com o Linear",
-            "b3efe7ab71": "Integração com o Azure DevOps"
+            "b3efe7ab71": "Integração com o Azure DevOps",
+            "plane_title": "Integração com Plane",
+            "plane_description": "Conecte o Plane Cloud ou auto-hospedado para navegar e vincular tarefas.",
+            "plane_keyword": "plane"
           }
         },
         "token": {
@@ -6891,7 +6966,9 @@
           "integrationsLink": "Integrações",
           "skillHint": ". Depois que o Linear estiver conectado, os exemplos de uso permanecem em Configurações → Linear.",
           "incompleteBannerBodyWithLinear": "Oculte provedores que você não usa, ou expanda um cartão e conclua suas etapas. Para o Linear: acesso à API, a skill de agente e Mostrar em Tarefas.",
-          "30255b39dc": "Provedores de Tarefas"
+          "30255b39dc": "Provedores de Tarefas",
+          "plane": "Plane",
+          "planeDescription": "Conecte o Plane Cloud ou Plane auto-hospedado e exiba-o em Tarefas."
         },
         "privacy": {
           "search": {
@@ -6993,7 +7070,9 @@
                 "connectedSiteSingular": "{{count}} site conectado",
                 "connectedSitePlural": "{{count}} sites conectados",
                 "connectedWorkspaceSingular": "{{count}} espaço de trabalho conectado",
-                "connectedWorkspacePlural": "{{count}} espaços de trabalho conectados"
+                "connectedWorkspacePlural": "{{count}} espaços de trabalho conectados",
+                "checkingPlane": "Verificando o acesso ao Plane antes de exibir as ações de configuração.",
+                "addPlaneAccess": "Conecte o Plane Cloud ou uma instância auto-hospedada usando um token de API."
               }
             }
           }
@@ -7549,7 +7628,8 @@
           "resolvedTag": "Instala {{value0}} no commit {{value1}}.",
           "resolvedBranch": "Instala a branch {{value0}} como está agora, no commit {{value1}}.",
           "resolvedCommit": "Instala o commit {{value0}}.",
-          "resolvedDefaultBranch": "Nenhuma tag de versão encontrada, então será instalado o commit mais recente, {{value0}}."
+          "resolvedDefaultBranch": "Nenhuma tag de versão encontrada, então será instalado o commit mais recente, {{value0}}.",
+          "gitRefRequired": "Adicione um #tag ou #commit, como #v0.1.0."
         },
         "PluginMarketplaceBrowser": {
           "loadFailed": "Não foi possível carregar os plugins do catálogo.",
@@ -7864,7 +7944,8 @@
             "apiKey": "chave de api",
             "skill": "skill",
             "connect": "conectar",
-            "12d2fdff3c": "Provedores de Tarefas"
+            "12d2fdff3c": "Provedores de Tarefas",
+            "plane": "plane"
           }
         },
         "MobilePairingConnectionOptions": {
@@ -8064,7 +8145,8 @@
           "1f744a72f4": "Configuração",
           "not_found_choose_file": "Nenhuma configuração do Ghostty encontrada neste computador. Escolha um arquivo de configuração para importar um de outro local.",
           "cleared": "Limpo",
-          "9759d2dfa2": "Aplicar Alterações"
+          "9759d2dfa2": "Aplicar Alterações",
+          "e4bda7ce6f": "Nenhuma configuração do Ghostty encontrada neste sistema."
         },
         "ShortcutsPane": {
           "4b7ae34062": "diretamente.",
@@ -8361,7 +8443,20 @@
           "workerAutoReleaseDescription": "Fecha o terminal ou chat de um worker 2 minutos após a conclusão, a menos que você escolha Manter aberto. Se ele voltar a trabalhar, os 2 minutos recomeçam quando terminar.",
           "workerAutoReleaseKeywordClose": "fechar",
           "workerAutoReleaseKeywordRelease": "liberar",
-          "8a94078d05": "Orquestração de Agentes"
+          "8a94078d05": "Orquestração de Agentes",
+          "chatErrorEscalationTitle": "Avisar o coordenador sobre erros do chat",
+          "chatErrorEscalationDescription": "Quando um agente atribuído encontra um erro que encerra seu turno, envia o erro exato ao coordenador que o atribuiu. A tarefa continua atribuída ao agente. Funciona apenas para agentes executados na interface de chat.",
+          "chatErrorEscalationNeedsChat": "Ative a interface de chat nas configurações experimentais para usar.",
+          "chatErrorEscalationKeywordError": "erro",
+          "chatErrorEscalationKeywordChat": "chat",
+          "heartbeatTitle": "Sinais de vida dos workers",
+          "heartbeatDescription": "Os workers atribuídos dão sinal a cada poucos minutos para que o coordenador distinga um agente trabalhando de um travado. Desativar reduz as mensagens para o coordenador, mas ele perde esse sinal de acompanhamento. Vale para workers atribuídos após a mudança.",
+          "heartbeatKeywordHeartbeat": "sinal de vida",
+          "heartbeatKeywordStalled": "travado",
+          "heartbeatKeywordInterval": "intervalo",
+          "heartbeatIntervalTitle": "Intervalo dos sinais de vida",
+          "heartbeatIntervalDescription": "Intervalos menores dão ao coordenador sinais mais frequentes, mas enviam mais mensagens. Intervalos maiores enviam menos mensagens, mas deixam mais tempo entre os sinais. Vale para workers atribuídos após a mudança.",
+          "heartbeatIntervalSuffix": "minutos"
         },
         "RuntimeAccessGrantList": {
           "6f6d5188ed": "Revogar {{value0}}",
@@ -9809,7 +9904,8 @@
           "installs": "Instalações",
           "hashCopied": "Hash de conteúdo copiado",
           "hashCopyFailed": "Não foi possível copiar o hash.",
-          "readme": "Ler o README no {{value0}}"
+          "readme": "Ler o README no {{value0}}",
+          "homepage": "Site"
         },
         "PluginFilterPopover": {
           "kind": "Categoria",
@@ -10025,6 +10121,72 @@
             "buckets": "grupos de modelos Gemini",
             "optional": "omitido quando um marcador dentro do grupo está vazio"
           }
+        },
+        "PlaneAgentSkillPane": {
+          "title": "Plane",
+          "description": "Como o Plane funciona no Orca: navegue por tarefas, inicie workspaces vinculados e permita que agentes atualizem tickets com /orca-plane.",
+          "skillTitle": "Habilidade do Plane",
+          "howToUse": "Exemplos de prompts",
+          "howToUseDescription": "Clique em um card para copiar o prompt. Use-os em um worktree vinculado ao Plane após a habilidade ser instalada.",
+          "manageConnectionHint": "Revise workspaces do Plane conectados e tokens de API em",
+          "manageConnectionLink": "Integrações"
+        },
+        "PlaneAgentSkillGuide": {
+          "setupConnectTitle": "1. Conectar Plane",
+          "setupConnectBody": "Token de API pessoal para o Orca listar tarefas e abrir workspaces vinculados.",
+          "manageKeys": "Gerenciar acesso",
+          "addAccess": "Adicionar acesso",
+          "setupSkillTitle": "2. Instalar a habilidade do agente",
+          "setupSkillBody": "Permite que agentes de código usem /orca-plane para leitura, atualizações, comentários, prioridades e estados.",
+          "setupVisibleTitle": "3. Exibir o Plane em Tarefas",
+          "setupVisibleBody": "Mantém o Plane no seletor de fontes de Tarefas e nos atalhos da barra lateral.",
+          "openTaskSources": "Fontes de tarefas",
+          "setupTitle": "Checklist de configuração",
+          "setupBody": "Todos os três são necessários para o fluxo completo de Tarefas + agentes. O caminho inicial também fica em Fontes de tarefas.",
+          "setupReady": "Tudo pronto",
+          "setupProgress": "{{done}} de {{total}} prontos",
+          "notesTitle": "Importante saber",
+          "notesIntro": "Lembretes rápidos assim que o Plane estiver conectado e a habilidade instalada.",
+          "noteLinkedTitle": "Comece a partir de uma tarefa do Plane",
+          "noteLinkedBody": "Ações em tarefas funcionam melhor em um worktree criado a partir de Tarefas, para que ela fique vinculada como contexto.",
+          "noteSlashTitle": "Mencione /orca-plane",
+          "noteSlashBody": "No chat, use /orca-plane (ou peça em linguagem natural) para que o agente carregue a habilidade naquele turno.",
+          "noteInstanceTitle": "Cloud e Auto-hospedado",
+          "noteInstanceBody": "Suporta tanto o Plane Cloud (app.plane.so) quanto instâncias auto-hospedadas personalizadas do Plane.",
+          "noteVisibilityTitle": "Ocultar ≠ desconectar",
+          "noteVisibilityBody": "Ocultar o Plane em Fontes de tarefas apenas o remove do seletor. Isso não exclui seu token nem a habilidade.",
+          "setupChecking": "Verificando…"
+        },
+        "TaskSourcePlaneSetup": {
+          "connectTitle": "Conectar Plane",
+          "connectDescription": "Adicione um token de API para o Orca navegar por tarefas e abrir workspaces com o contexto do ticket.",
+          "manageAccess": "Gerenciar acesso",
+          "addAccess": "Adicionar acesso ao Plane",
+          "connectedHint": "Workspaces e tokens são armazenados para o runtime ativo.",
+          "recheck": "Verificar conexão novamente",
+          "skillTitle": "Instalar habilidade do agente Plane",
+          "skillDescription": "Permite que agentes usem /orca-plane para ler tickets, publicar atualizações, mover estados e comentar.",
+          "skillBlocked": "Conecte o Plane primeiro e depois instale a habilidade para os agentes.",
+          "skillPanelTitle": "Habilidade do Plane",
+          "showDescription": "Incluir o Plane no seletor de fontes da página de Tarefas e nos atalhos da barra lateral."
+        },
+        "plane": {
+          "agent": {
+            "skill": {
+              "search": {
+                "title": "Plane",
+                "description": "Status da habilidade do Plane, exemplos de uso e links para a configuração de Fontes de tarefas.",
+                "plane": "plane",
+                "tickets": "tarefas",
+                "issues": "incidências",
+                "skill": "habilidade",
+                "orcaPlane": "orca-plane"
+              }
+            }
+          },
+          "cloud": "Plane Cloud",
+          "connectionFailed": "Falha na conexão",
+          "cardFooter": "Navegue por tarefas e abra worktrees com o contexto do ticket diretamente do Plane Cloud ou de sua instância auto-hospedada."
         }
       },
       "right": {
@@ -11843,7 +12005,13 @@
           "cliCreatedFromShell": "Criado via `orca worktree create`",
           "cliStartupAgent": "Iniciado com {{value0}}",
           "cliCreated": "Criado pela CLI do Orca",
-          "linkedJira": "Jira {{value0}} vinculado"
+          "linkedJira": "Jira {{value0}} vinculado",
+          "e42941631a": "Ver no Linear",
+          "5e982e6128": "Linear {{value0}}",
+          "b22f058067": "Ver no GitHub",
+          "e97d8f2876": "Issue #{{value0}}",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "Ver no Jira"
         },
         "LinearAgentSkillSetupPrompt": {
           "modalTitle": "Ativar acesso a tickets do Linear",
@@ -12019,7 +12187,9 @@
           "pathInvalid": "O caminho não é um caminho local válido.",
           "remoteEditorHint": "Somente VS Code, Cursor e Zed podem abrir pastas em um host SSH.",
           "remoteRuntimeEditorHint": "Os aplicativos deste computador só podem abrir arquivos deste servidor quando o Orca se conecta a ele por SSH.",
-          "wsl": "WSL"
+          "wsl": "WSL",
+          "remoteLaunchFailed": "Não foi possível abrir o caminho no editor.",
+          "remoteLaunchFailedDetail": "Verifique o comando do editor configurado nesta máquina."
         },
         "WorktreeVisibilitySourceList": {
           "claude": "Claude Code",
@@ -12312,7 +12482,8 @@
           "fee535205b": "Tarefas",
           "d599269755": "Ocultar da barra lateral",
           "artifacts": "Artefatos",
-          "skills": "Skills"
+          "skills": "Skills",
+          "openPlaneTasks": "Abrir tarefas do Plane"
         },
         "AddRepoHostSelector": {
           "host": "Host",
@@ -13033,7 +13204,8 @@
           "refresh": "Atualizar",
           "wsl1Reason": "O WSL 1 não pode executar um host do Orca; converta com {{command}}",
           "noWsl2Title": "Nenhuma distribuição WSL 2 encontrada",
-          "noWsl2Install": "Instale uma em um terminal do Windows com {{command}} e depois escolha Atualizar."
+          "noWsl2Install": "Instale uma em um terminal do Windows com {{command}} e depois escolha Atualizar.",
+          "none": "Nenhuma distribuição WSL encontrada. Instale uma com: wsl --install"
         },
         "wslHostRowStatus": {
           "connecting": "Iniciando",
@@ -13656,7 +13828,9 @@
           "d9d2944855": "Falha ao carregar a pré-visualização do arquivo",
           "fitToView": "Ajustar à visualização",
           "actualSize": "Tamanho real",
-          "expand": "Expandir imagem"
+          "expand": "Expandir imagem",
+          "6c89c73d9f": "Redefinir zoom",
+          "77bfc9b35a": "Abrir imagem em popup"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "sem-titulo.md",
@@ -14046,6 +14220,11 @@
         },
         "MarkdownDefaultViewContextMenu": {
           "label": "Visualização Markdown padrão"
+        },
+        "ImageViewerPopup": {
+          "0ef78475e7": "Pressione Esc para fechar",
+          "535f4e2b56": "Fechar",
+          "9e27b2ecaf": "Pré-visualização de imagem em tamanho completo"
         }
       },
       "skills": {
@@ -17071,7 +17250,24 @@
             "d08ee9c466": "Novo espaço de trabalho",
             "aa44b4a6b2": "Explore suas issues e revisões",
             "eda5c8d01b": "Automações",
-            "cd2ad5b641": "Agende o trabalho do agente e visualize execuções"
+            "cd2ad5b641": "Agende o trabalho do agente e visualize execuções",
+            "a7d9e2c44d": "7d",
+            "a3d5476811": "5h",
+            "8a350a4784": "Uso da conta",
+            "e27fdaee51": "Novo Espaço de Trabalho",
+            "4405f3c440": "Parear Desktop",
+            "0b00c98506": "Ações Rápidas",
+            "0bad5b07c8": "GitHub e Linear",
+            "d047197480": "GitHub · Linear",
+            "d33d7a9c29": "orca  ·  feat/mobile-page",
+            "25d6e8a491": "feat/mobile-page",
+            "c791677f2f": "Retomar",
+            "091355da3d": "M1 Mini · casa",
+            "0bc1881bc4": "Conectado · 40 worktrees · 5 ativas",
+            "156db8a68a": "PRs criados",
+            "4a40af029b": "Tempo de agente",
+            "00a6903322": "Agentes iniciados",
+            "c0e2e9dcd9": "Bem-vindo de volta"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "Enviar",
@@ -19309,6 +19505,20 @@
                 }
               }
             }
+          },
+          "plane": {
+            "connectTitle": "Conecte seu workspace do Plane",
+            "connectDescription": "Navegue, acompanhe e inicie trabalhos a partir de tarefas do Plane diretamente em worktrees isolados.",
+            "connectButton": "Conectar Plane",
+            "selectWorkspace": "Selecionar workspace",
+            "allProjects": "Todos os projetos",
+            "refreshIssues": "Atualizar tarefas",
+            "openInPlane": "Abrir no Plane",
+            "noIssuesFound": "Nenhuma tarefa encontrada",
+            "createIssueHint": "Crie uma tarefa no Plane para visualizá-la aqui.",
+            "backlog": "Backlog",
+            "openInWorktree": "Abrir no Worktree",
+            "viewInPlane": "Ver no Plane"
           }
         }
       },
@@ -20460,6 +20670,23 @@
         "setting-global-off": "A confiança de pasta está desativada nas configurações de Agentes, então os agentes sempre perguntam.",
         "keyword-trust": "confiança",
         "keyword-hooks": "hooks"
+      },
+      "plane": {
+        "connect": {
+          "dialog": {
+            "title": "Conectar Plane",
+            "description": "Conecte seu workspace do Plane para navegar por tarefas e abrir worktrees com o contexto do ticket.",
+            "deploymentType": "Tipo de implantação",
+            "planeCloud": "Plane Cloud",
+            "selfHosted": "Auto-hospedado",
+            "instanceUrl": "URL da instância",
+            "instanceUrlPlaceholder": "https://plane.suaempresa.com",
+            "personalApiToken": "Token de API pessoal",
+            "createApiToken": "Criar token de API",
+            "apiTokenPlaceholder": "plane_api_...",
+            "connecting": "Conectando..."
+          }
+        }
       }
     },
     "startup": {
@@ -21318,8 +21545,8 @@
       "resumeInNewChat": {
         "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
         "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder.",
-        "exitUnconfirmed": "O {{agent}} está executando esta conversa em outro terminal. Saia dele lá ou feche esse terminal e tente novamente.",
-        "exitUnconfirmedFromTerminal": "{{agent}} ainda está executando esta conversa neste terminal. Saia do {{agent}} aqui e abra esta conversa no Histórico da Sessão.",
+        "exitUnconfirmed": "{{agent}} está executando esta conversa em outro terminal. Encerre-o lá ou feche esse terminal e tente novamente.",
+        "exitUnconfirmedFromTerminal": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
         "terminalChanged": "O terminal executando {{agent}} mudou antes de ser fechado, então o Orca o deixou aberto. Tente novamente.",
         "terminalExitUnproven": "Orca fechou o terminal de {{agent}}, mas não conseguiu confirmar se ele parou, então o chat não abriu. Verifique a conexão do host e abra a conversa no Histórico da Sessão.",
         "resumeFailed": "{{agent}} não conseguiu continuar no chat. Verifique este terminal e a conexão do host e tente novamente."
@@ -21456,7 +21683,8 @@
         "reorderHint": "Arraste para reordenar ou use as teclas de seta para cima e para baixo.",
         "reorderMessage": "Reordenar mensagem",
         "editReturned": "Sua edição está na caixa de bate-papo.",
-        "commandsUnsupported": "Comandos não podem ser salvos em uma mensagem na fila."
+        "commandsUnsupported": "Comandos não podem ser salvos em uma mensagem na fila.",
+        "turnOffQueueing": "Desativar fila"
       },
       "thought": "Raciocínio",
       "thoughtForDuration": "Pensou por {{duration}}",
@@ -22197,7 +22425,10 @@
         "usageLimitContinueSearchLimit": "limite de uso",
         "usageLimitContinueSearchReset": "reiniciar",
         "usageLimitContinueToggleLabel": "Alternar a continuação dos bate-papos quando um limite de uso for redefinido",
-        "openedPullRequestsSearchPr": "PR"
+        "openedPullRequestsSearchPr": "PR",
+        "queueFollowUpsTitle": "Colocar mensagens de acompanhamento na fila",
+        "queueFollowUpsCopy": "As mensagens enviadas enquanto o agente trabalha aguardam como cartões que você pode usar para orientá-lo, editar ou excluir. Mensagens com imagens são enviadas imediatamente.",
+        "queueFollowUpsToggleLabel": "Ativar ou desativar fila de mensagens de acompanhamento"
       },
       "voice": {
         "dictationLanguage": {
@@ -23510,7 +23741,11 @@
       "selectAll": "Selecionar todos os terminais",
       "selectAllShort": "Selecionar todos",
       "endSelected": "Encerrar selecionados ({{count}})",
-      "selectNamed": "Selecionar {{terminal}}"
+      "selectNamed": "Selecionar {{terminal}}",
+      "cancel": "Cancelar",
+      "endTitle": "Encerrar {{terminal}}?",
+      "endDescription": "Isso encerra o terminal e seus processos filhos. O trabalho não salvo pode ser perdido.",
+      "end": "Encerrar terminal"
     },
     "resources": "Recursos",
     "refresh": "Atualizar",
@@ -23935,7 +24170,12 @@
         "views_one": "Mostrando {{count}} visualização do início da lista. Pesquise ou abra o Linear para ver a lista completa.",
         "views_other": "Mostrando as primeiras {{count}} visualizações. Pesquise ou abra o Linear para ver a lista completa.",
         "views_many": "Mostrando as primeiras {{count}} visualizações. Pesquise ou abra o Linear para ver a lista completa."
-      }
+      },
+      "projectsLoadFailed": "Não foi possível carregar os projetos.",
+      "projectLoadFailed": "Não foi possível carregar o projeto.",
+      "projectIssuesLoadFailed": "Não foi possível carregar as issues do projeto.",
+      "viewsLoadFailed": "Não foi possível carregar as visualizações.",
+      "viewContentsLoadFailed": "Não foi possível carregar o conteúdo da visualização."
     },
     "jira": {
       "connectionFailed": "Falha na conexão",

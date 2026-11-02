@@ -172,7 +172,7 @@ function parseReferenceRoute(
 }
 
 export function getWorkspaceReferenceIdentifier(item: WorkspaceAttachment): string | undefined {
-  return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier
+  return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.planeIdentifier
 }
 
 function externalUrl(item: WorkspaceAttachment): string | undefined {
@@ -199,6 +199,7 @@ function externalUrl(item: WorkspaceAttachment): string | undefined {
         ? `${identity.siteUrl.replace(/\/+$/, '')}/browse/${identifier}`
         : undefined
     case 'linear':
+    case 'plane':
       return undefined
   }
 }
