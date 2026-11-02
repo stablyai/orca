@@ -8,24 +8,6 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import { isClaudePermissionSettledByReplay } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
-function pendingClaudePermission(event: AgentHookEventPayload): boolean {
-  return (
-    event.payload.agentType === 'claude' &&
-    event.payload.state === 'waiting' &&
-    (event.claudePermissionState?.pending !== undefined ||
-      (event.hookEventName === 'PermissionRequest' &&
-        !isAskUserQuestionTool(event.payload.toolName)))
-  )
-}
-
-function permissionIdentity(event: AgentHookEventPayload): {
-  toolUseId?: string
-  toolAgentId?: string
-  toolAgentType?: string
-} {
-  return event.claudePermissionState?.pending ?? event
-}
-
 /** Retain the shell-work fact only with the main-agent observation that established it. */
 export function pairedClaudeNonAgentWork(
   previous: EnrichedAgentHookEventPayload | undefined,
@@ -45,7 +27,7 @@ export function withHeldChildWaitMainAgent(
   next: AgentHookEventPayload
 ): EnrichedAgentHookEventPayload {
   const mainAgent = next.payload.mainAgent
-  if (!permissionIdentity(previous).toolAgentId || !mainAgent) {
+  if (!previous.toolAgentId || !mainAgent) {
     return previous
   }
   const runningNonAgentTask = pairedClaudeNonAgentWork(previous, next)
@@ -72,6 +54,48 @@ export function withHeldChildWaitMainAgent(
   }
 }
 
+type ClaudeSettlementEvidence = Pick<
+  AgentHookEventPayload,
+  'hookEventName' | 'toolUseId' | 'claudeSettledRequests' | 'connectionId' | 'toolAgentId'
+>
+
+/** The bound tool use's own start or end, or a batch listing it, from the same owner. */
+function endsBoundClaudePermission(
+  previous: AgentHookEventPayload,
+  next: ClaudeSettlementEvidence
+): boolean {
+  const toolUseId = previous.toolUseId?.trim()
+  if (
+    !toolUseId ||
+    previous.connectionId !== next.connectionId ||
+    (previous.toolAgentId?.trim() || undefined) !== (next.toolAgentId?.trim() || undefined)
+  ) {
+    return false
+  }
+  return next.hookEventName === 'PostToolBatch'
+    ? next.claudeSettledRequests?.some((request) => request.toolUseId === toolUseId) === true
+    : (next.hookEventName === 'PreToolUse' ||
+        next.hookEventName === 'PostToolUse' ||
+        next.hookEventName === 'PostToolUseFailure') &&
+        next.toolUseId?.trim() === toolUseId
+}
+
+/** A live batch only ever settles a held bound request; anything else is main's no-op and never becomes the row. */
+export function isUnusedClaudeSettlement(
+  previous: AgentHookEventPayload | undefined,
+  next: ClaudeSettlementEvidence & Pick<AgentHookEventPayload, 'isReplay'>
+): boolean {
+  return (
+    next.hookEventName === 'PostToolBatch' &&
+    next.isReplay !== true &&
+    !(
+      previous?.claudePermissionBound &&
+      previous.payload.state === 'waiting' &&
+      endsBoundClaudePermission(previous, next)
+    )
+  )
+}
+
 export function shouldKeepClaudePermissionVisible(
   previous: EnrichedAgentHookEventPayload | undefined,
   next: AgentHookEventPayload
@@ -81,18 +105,14 @@ export function shouldKeepClaudePermissionVisible(
   }
   if (
     previous?.payload.agentType !== 'claude' ||
-    !pendingClaudePermission(previous) ||
-    // Hook rows and host restatements alike carry the host's current table; OSC rows carry none.
-    (next.source === 'claude' && next.claudePermissionState?.knowledge === 'complete') ||
+    previous.payload.state !== 'waiting' ||
+    previous.hookEventName !== 'PermissionRequest' ||
     next.payload.agentType !== 'claude' ||
     next.payload.state !== 'working'
   ) {
     return false
   }
-  if (
-    next.hasExplicitPrompt === true &&
-    permissionIdentity(previous).toolAgentId === next.toolAgentId
-  ) {
+  if (next.hasExplicitPrompt === true) {
     return false
   }
   if (isClaudePermissionOwningChildEnding(previous, next)) {
@@ -100,6 +120,10 @@ export function shouldKeepClaudePermissionVisible(
   }
   if (isClaudePermissionSettledByReplay(previous, next)) {
     return false
+  }
+  if (previous.claudePermissionBound) {
+    // A request naming its tool use waits for that use's own settlement; sibling previews never end it.
+    return !endsBoundClaudePermission(previous, next)
   }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
@@ -115,7 +139,7 @@ function isClaudePermissionOwningChildEnding(
   previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
-  const ownerId = permissionIdentity(previous).toolAgentId?.trim()
+  const ownerId = previous.toolAgentId?.trim()
   if (!ownerId) {
     return false
   }
@@ -133,13 +157,12 @@ function isClaudePermissionResumingApprovedTool(
   previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
-  const request = permissionIdentity(previous)
-  const previousToolUseId = request.toolUseId?.trim() || undefined
+  const previousToolUseId = previous.toolUseId?.trim() || undefined
   const nextToolUseId = next.toolUseId?.trim() || undefined
-  const previousAgentId = request.toolAgentId?.trim() || undefined
+  const previousAgentId = previous.toolAgentId?.trim() || undefined
   const nextAgentId = next.toolAgentId?.trim() || undefined
   const hasAgentId = previousAgentId !== undefined || nextAgentId !== undefined
-  const previousAgentType = request.toolAgentType?.trim() || undefined
+  const previousAgentType = previous.toolAgentType?.trim() || undefined
   const nextAgentType = next.toolAgentType?.trim() || undefined
   const hasMatchingConcreteAgentId =
     previousAgentId !== undefined && previousAgentId === nextAgentId
@@ -165,14 +188,6 @@ function isClaudePermissionResumingApprovedTool(
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
 
-  if (previous.claudePermissionState !== undefined || next.claudePermissionState !== undefined) {
-    return (
-      (next.hookEventName === 'PostToolUse' || next.hookEventName === 'PostToolUseFailure') &&
-      hasMatchingToolUseId &&
-      previousAgentId === nextAgentId
-    )
-  }
-
   // Failure clears tool name/input; require the exact request and owner.
   if (next.hookEventName === 'PostToolUseFailure') {
     return (
@@ -196,7 +211,6 @@ export function shouldInheritClaudeToolUseIdForPermission(
   next: AgentHookEventPayload
 ): boolean {
   if (
-    next.claudePermissionState !== undefined ||
     previous?.restoredUnconfirmed ||
     previous?.payload.agentType !== 'claude' ||
     previous.payload.state !== 'working' ||
@@ -231,6 +245,16 @@ export function attachClaudePermissionToolUseId(
   previous: EnrichedAgentHookEventPayload | undefined,
   next: AgentHookEventPayload
 ): AgentHookEventPayload {
+  if (
+    next.payload.agentType === 'claude' &&
+    next.payload.state === 'waiting' &&
+    next.hookEventName === 'PermissionRequest' &&
+    next.toolUseId?.trim() &&
+    !isAskUserQuestionTool(next.payload.toolName)
+  ) {
+    // The provider omits the id; a producer supplies it only for its single matching in-flight call.
+    return { ...next, claudePermissionBound: true }
+  }
   const inheritedToolUseId = previous?.toolUseId
   if (
     !shouldInheritClaudeToolUseIdForPermission(previous, next) ||

@@ -1,7 +1,7 @@
-import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from './server/program-status/hook-precedence'
-import captures from '../../shared/agent-hook-listener/__fixtures__/declined-permission-hooks.json'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
+import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from './server/program-status/hook-precedence'
+import captures from '../../shared/agent-hook-listener/__fixtures__/declined-permission-hooks.json'
 import { buildBody, postHookEvent, PANE } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -344,7 +344,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('lets Claude permission clear when same explicit agent type finishes the exact approved tool', async () => {
+  it('lets Claude permission clear when same explicit agent type starts the approved tool', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -372,14 +372,6 @@ describe('AgentHookServer listener replay', () => {
         tool_input: { command: 'rm -rf /tmp/orca-subagent-repro' },
         tool_use_id: 'toolu-approved-1'
       })
-      expect(server.getStatusSnapshot()[0].state).toBe('waiting')
-      await postClaudeHook({
-        hook_event_name: 'PostToolUse',
-        agent_type: 'main',
-        tool_name: 'Bash',
-        tool_input: { command: 'rm -rf /tmp/orca-subagent-repro' },
-        tool_use_id: 'toolu-approved-1'
-      })
 
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
@@ -395,7 +387,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('lets Claude subagent permission clear when the same agent finishes the exact approved tool', async () => {
+  it('lets Claude subagent permission clear when the same agent starts the approved tool', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -425,23 +417,14 @@ describe('AgentHookServer listener replay', () => {
         tool_input: { command: 'pnpm test' },
         tool_use_id: 'toolu-approved-subagent'
       })
-      expect(server.getStatusSnapshot()[0].state).toBe('waiting')
-      await postClaudeHook({
-        hook_event_name: 'PostToolUse',
-        agent_id: 'agent-subagent-a',
-        agent_type: 'Review',
-        tool_name: 'Bash',
-        tool_input: { command: 'pnpm test' },
-        tool_use_id: 'toolu-approved-subagent'
-      })
 
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,
           state: 'working',
           agentType: 'claude',
-          toolName: undefined,
-          toolInput: undefined
+          toolName: 'Bash',
+          toolInput: 'pnpm test'
         })
       ])
     } finally {
@@ -449,7 +432,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('lets same Claude subagent settle an unknown approved tool without an input preview', async () => {
+  it('lets same Claude subagent clear an unknown approved tool without an input preview', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -479,22 +462,13 @@ describe('AgentHookServer listener replay', () => {
         tool_input: { request_id: 'pending-1' },
         tool_use_id: 'toolu-custom-approved'
       })
-      expect(server.getStatusSnapshot()[0].state).toBe('waiting')
-      await postClaudeHook({
-        hook_event_name: 'PostToolUse',
-        agent_id: 'agent-custom-tool',
-        agent_type: 'Review',
-        tool_name: 'BespokeTool',
-        tool_input: { request_id: 'pending-1' },
-        tool_use_id: 'toolu-custom-approved'
-      })
 
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,
           state: 'working',
           agentType: 'claude',
-          toolName: undefined,
+          toolName: 'BespokeTool',
           toolInput: undefined
         })
       ])
@@ -618,113 +592,170 @@ describe('AgentHookServer listener replay', () => {
   })
 })
 
-describe('recorded Claude decline and continuation', () => {
-  it.each(['claudeDecline', 'claudeParallel'] as const)(
-    'settles %s through the production HTTP listener before the turn ends',
-    async (capture) => {
-      const server = new AgentHookServer()
-      await server.start({ env: 'production' })
-      try {
-        let waiting = false
-        for (const raw of captures[capture]) {
+async function withClaudePane(
+  run: (
+    post: (raw: Record<string, unknown>) => Promise<string>,
+    server: AgentHookServer
+  ) => Promise<void>
+): Promise<void> {
+  const server = new AgentHookServer()
+  await server.start({ env: 'production' })
+  try {
+    await run(async (raw) => {
+      await postHookEvent(server, buildBody(raw))
+      return server.getStatusSnapshot()[0].state
+    }, server)
+  } finally {
+    vi.useRealTimers()
+    server.stop()
+  }
+}
+
+const [start, submit] = captures.claudeDecline
+const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+const typed = { agent_type: 'reviewer' }
+const child = { agent_id: 'child-a', agent_type: 'general-purpose' }
+const readAt = (offset: number) => ({ tool_name: 'Read', tool_input: { file_path: '/x', offset } })
+const hook = (hook_event_name: string, fields: Record<string, unknown> = {}) => ({
+  ...root,
+  hook_event_name,
+  ...fields
+})
+const pre = (id: string, tool: Record<string, unknown>, owner = {}) =>
+  hook('PreToolUse', { ...tool, tool_use_id: id, ...owner })
+const ask = (tool: Record<string, unknown>, owner = {}) =>
+  hook('PermissionRequest', { ...tool, ...owner })
+const done = (id: string, tool: Record<string, unknown>, owner = {}) =>
+  hook('PostToolUse', { ...tool, tool_use_id: id, tool_response: 'ok', ...owner })
+const batch = (ids: string[], owner = {}) =>
+  hook('PostToolBatch', { tool_calls: ids.map((tool_use_id) => ({ tool_use_id })), ...owner })
+
+describe('Claude requests bound to their single in-flight call', () => {
+  it.each([
+    ['claudeDecline', 5],
+    ['claudeParallel', 10],
+    ['claudeChild', 20]
+  ] as const)(
+    'keeps recorded %s waiting through siblings and child work, and clears at its batch before the turn ends',
+    async (capture, settledAt) => {
+      await withClaudePane(async (post, server) => {
+        const raws = captures[capture]
+        const asked = raws.findIndex((raw) => raw.hook_event_name === 'PermissionRequest')
+        for (const [index, raw] of raws.entries()) {
           if (raw.hook_event_name === 'Stop') {
             break
           }
-          await postHookEvent(server, buildBody(raw))
-          if (raw.hook_event_name === 'PermissionRequest') {
-            waiting = true
-          }
-          if (raw.hook_event_name === 'PostToolBatch') {
-            waiting = false
-          }
-          if (waiting) {
-            expect(server.getStatusSnapshot()[0]).toMatchObject({
-              state: 'waiting',
-              toolName: 'Read'
+          const state = await post(raw)
+          if (index >= asked && index < settledAt) {
+            expect({ index, row: server.getStatusSnapshot()[0] }).toMatchObject({
+              index,
+              row: { state: 'waiting', toolName: 'Read' }
             })
-          }
-          if (raw.hook_event_name === 'PostToolBatch') {
-            expect(server.getStatusSnapshot()[0].state).toBe('working')
+          } else if (index >= settledAt) {
+            expect({ index, state }).toEqual({ index, state: 'working' })
           }
         }
-      } finally {
-        server.stop()
-      }
+      })
     }
   )
-})
 
-it('keeps a second equal-input request waiting when the first invocation ends, until its own invocation resolves', async () => {
-  const server = new AgentHookServer()
-  await server.start({ env: 'production' })
-  try {
-    const [start, prompt, preA, request] = captures.claudeDecline
-    const post = async (raw: Record<string, unknown>): Promise<string> => {
-      await postHookEvent(server, buildBody(raw))
-      return server.getStatusSnapshot()[0].state
-    }
-    const done = (pre: Record<string, unknown>) => ({ ...pre, hook_event_name: 'PostToolUse' })
-    const preB = { ...preA, tool_use_id: 'toolu_second_same_input' }
-    for (const raw of [start, prompt, preA, request]) {
-      await post(raw)
-    }
-    // Constructed reordering: the second invocation's request arrives before its late PreToolUse.
-    expect(await post(request)).toBe('waiting')
-    expect(await post(done(preA))).toBe('waiting')
-    expect(await post(preB)).toBe('waiting')
-    expect(await post(done(preB))).toBe('working')
-
-    // Constructed: requests that name different invocations stay separate obligations.
-    const [preC, preD] = ['toolu_named_c', 'toolu_named_d'].map((id) => ({
-      ...preA,
-      tool_use_id: id
-    }))
-    for (const raw of [preC, preD, { ...request, tool_use_id: preC.tool_use_id }]) {
-      await post(raw)
-    }
-    expect(await post({ ...request, tool_use_id: preD.tool_use_id })).toBe('waiting')
-    expect(await post(done(preC))).toBe('waiting')
-    expect(await post(done(preD))).toBe('working')
-  } finally {
-    server.stop()
-  }
-})
-
-it('holds OSC working behind a projected request and preserves the existing done fallback', async () => {
-  const server = new AgentHookServer()
-  await server.start({ env: 'production' })
-  try {
-    for (const raw of captures.claudeParallel.slice(0, 5)) {
-      await postHookEvent(server, buildBody(raw))
-    }
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(Date.now() + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
-    const terminal = {
-      paneKey: PANE,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      connectionId: null,
-      fromProgramStatus: true,
-      renewsProgramStatusLease: true
-    }
-    server.ingestTerminalStatus({
-      ...terminal,
-      payload: { agentType: 'claude', state: 'working', prompt: '' }
+  it('keeps a child request through its own different-input sibling and clears on its own completion', async () => {
+    await withClaudePane(async (post) => {
+      await post(start)
+      await post(submit)
+      await post(pre('P', { tool_name: 'Agent', tool_input: { prompt: 'look' } }))
+      await post(hook('SubagentStart', child))
+      await post(pre('T', readAt(0), child))
+      await post(pre('V', { tool_name: 'Bash', tool_input: { command: 'ls' } }, child))
+      expect(await post(ask(readAt(0), child))).toBe('waiting')
+      expect(
+        await post(done('V', { tool_name: 'Bash', tool_input: { command: 'ls' } }, child))
+      ).toBe('waiting')
+      expect(await post(done('T', readAt(0), child))).toBe('working')
     })
-    expect(server.getStatusSnapshot()[0].state).toBe('waiting')
-    server.ingestTerminalStatus({
-      ...terminal,
-      payload: { agentType: 'claude', state: 'done', prompt: '' }
+  })
+
+  it('ends only on its own settlement, and a batch that settles something else never becomes the row', async () => {
+    await withClaudePane(async (post, server) => {
+      await post(start)
+      await post(submit)
+      await post(pre('T', readAt(0), typed))
+      await post(pre('U', readAt(100), typed))
+      expect(await post(ask(readAt(0), typed))).toBe('waiting')
+      // Same agent type and preview: main's guess would clear here.
+      expect(await post(done('U', readAt(100), typed))).toBe('waiting')
+      const held = server.getStatusSnapshot()[0]
+      expect(await post(batch(['U'], typed))).toBe('waiting')
+      expect(server.getStatusSnapshot()[0]).toEqual(held)
+      expect(await post(hook('PostToolUseFailure', { tool_use_id: 'T', ...typed }))).toBe('working')
+
+      await post(pre('W', readAt(1)))
+      expect(await post(ask(readAt(1)))).toBe('waiting')
+      expect(await post(batch(['W']))).toBe('working')
     })
-    expect(server.getStatusSnapshot()[0].state).toBe('done')
-    vi.useRealTimers()
-    // A delayed anonymous repeat is indistinguishable from a fresh prompt; it shows until the owner's next end.
-    await postHookEvent(server, buildBody(captures.claudeParallel[3]))
-    expect(server.getStatusSnapshot()[0].state).toBe('waiting')
-    await postHookEvent(server, buildBody(captures.claudeParallel[14]))
-    expect(server.getStatusSnapshot()[0].state).toBe('done')
-  } finally {
-    vi.useRealTimers()
-    server.stop()
-  }
+  })
+
+  it('still ends at a new prompt, the owning child’s end and the turn’s end', async () => {
+    await withClaudePane(async (post) => {
+      await post(start)
+      await post(submit)
+      await post(pre('T', readAt(0)))
+      expect(await post(ask(readAt(0)))).toBe('waiting')
+      expect(await post(hook('UserPromptSubmit', { prompt: 'Do something else' }))).toBe('working')
+      await post(hook('SubagentStart', child))
+      await post(pre('C', readAt(1), child))
+      expect(await post(ask(readAt(1), child))).toBe('waiting')
+      expect(await post(hook('SubagentStop', child))).toBe('working')
+      await post(pre('R', readAt(2)))
+      expect(await post(ask(readAt(2)))).toBe('waiting')
+      expect(await post(hook('Stop'))).toBe('done')
+    })
+  })
+
+  it('holds terminal working behind a bound request and keeps the existing done fallback', async () => {
+    await withClaudePane(async (post, server) => {
+      for (const raw of captures.claudeParallel.slice(0, 5)) {
+        await post(raw)
+      }
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(Date.now() + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+      const terminal = {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: null,
+        fromProgramStatus: true,
+        renewsProgramStatusLease: true
+      }
+      server.ingestTerminalStatus({
+        ...terminal,
+        payload: { agentType: 'claude', state: 'working', prompt: '' }
+      })
+      expect(server.getStatusSnapshot()[0].state).toBe('waiting')
+      server.ingestTerminalStatus({
+        ...terminal,
+        payload: { agentType: 'claude', state: 'done', prompt: '' }
+      })
+      expect(server.getStatusSnapshot()[0].state).toBe('done')
+    })
+  })
+
+  it('accepted limitation (Brennan 2026-11-02): two open prompts for identical input can show working while the second is open', async () => {
+    await withClaudePane(async (post) => {
+      const X = { tool_name: 'Read', tool_input: { file_path: '/tmp/outside.txt' } }
+      await post(start)
+      await post(submit)
+      await post(pre('A', X, typed))
+      await post(ask(X, typed))
+      expect(await post(batch(['A'], typed))).toBe('working')
+      await post(pre('T', readAt(0), typed))
+      expect(await post(ask(readAt(0), typed))).toBe('waiting')
+      await post(pre('U', readAt(0), typed))
+      // Both identical calls are in flight, so U's request cannot be named and takes main's path.
+      expect(await post(ask(readAt(0), typed))).toBe('waiting')
+      // U's prompt is still open here; main shows waiting. Accepted tradeoff, not a guarantee.
+      expect(await post(done('T', readAt(0), typed))).toBe('working')
+      expect(await post(hook('Stop', typed))).toBe('done')
+    })
+  })
 })

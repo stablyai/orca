@@ -184,8 +184,6 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
         {
           ...row,
           providerSession: next,
-          claudePermissionState: undefined,
-          claudeSettledRequests: undefined,
           // Why: only the identity moved; the state is unchanged, so keep its evidence clock.
           isReplay: true,
           hookEventName: undefined,

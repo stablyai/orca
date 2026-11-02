@@ -1,4 +1,3 @@
-import type { ClaudePermissionState } from './claude-permission-projection'
 import type { AgentProcessPresence } from '../agent-process-presence'
 import type { ParsedAgentStatusPayload, TurnEndDisposition } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
@@ -42,10 +41,10 @@ export type AgentHookEventPayload = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool-use identifier when the hook source exposes one. */
   toolUseId?: string
-  /** Requests the execution host saw end; transition/replay proof, never persisted. */
+  /** Requests a batch settled, or a relay saw end beside a replayed row; never stored on a status row. */
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
-  /** Exact execution-host permission projection; never persisted. */
-  claudePermissionState?: ClaudePermissionState
+  /** Receiver-side: the request arrived naming its own tool use, so only that use's settlement ends it. */
+  claudePermissionBound?: true
   /** Claude agent/subagent identifier when the hook source exposes one. */
   toolAgentId?: string
   /** Claude teammate name carried by TeammateIdle. */

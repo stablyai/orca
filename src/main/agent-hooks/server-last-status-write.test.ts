@@ -83,8 +83,6 @@ describe('Last-status persistence', () => {
         })
       })
       expect(file.entries[PANE].launchToken).toBeUndefined()
-      expect(file.entries[PANE].claudePermissionState).toBeUndefined()
-      expect(file.entries[PANE].claudeSettledRequests).toBeUndefined()
       expect(file.entries[PANE].launchTokenHash).toBe(
         createHash('sha256').update('launch-bearer-must-not-persist').digest('hex')
       )
@@ -95,6 +93,26 @@ describe('Last-status persistence', () => {
         stateStartedAt: expect.any(Number)
       })
       expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('launch-bearer-must-not-persist')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('persists a bound permission row without its runtime-only binding', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const tool = { tool_name: 'Read', tool_input: { file_path: '/outside.txt' } }
+      await postHookEvent(server, buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'p' }))
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'PreToolUse', tool_use_id: 'bound-call', ...tool })
+      )
+      await postHookEvent(server, buildBody({ hook_event_name: 'PermissionRequest', ...tool }))
+      server.flushStatusPersistSync()
+      const entry = JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]
+      expect(entry).toMatchObject({ toolUseId: 'bound-call', payload: { state: 'waiting' } })
+      expect(entry).not.toHaveProperty('claudePermissionBound')
     } finally {
       server.stop()
     }

@@ -1,6 +1,5 @@
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import type { HookListenerState } from './agent-hook-listener/listener-state'
-import { restateClaudePermissionRow } from './agent-hook-listener/claude-permission-projection'
 import { mainAgentIdleSince } from './agent-hook-listener/main-agent-turn-state'
 import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { buildClaudeCachedLeadStatusPayload } from './agent-hook-listener/providers/claude-lifecycle-events'
@@ -67,14 +66,12 @@ export class ClaudeOwedNotificationExpiryTimers {
       return
     }
     // Retain stored launch/owner fencing; timer restatement is neither a hook nor a new prompt.
-    publish(
-      restateClaudePermissionRow(this.state, {
-        ...row,
-        hasExplicitPrompt: undefined,
-        hookEventName: undefined,
-        claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(this.state, paneKey),
-        payload
-      })
-    )
+    publish({
+      ...row,
+      hasExplicitPrompt: undefined,
+      hookEventName: undefined,
+      claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(this.state, paneKey),
+      payload
+    })
   }
 }

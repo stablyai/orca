@@ -1,4 +1,3 @@
-import { restateClaudePermissionRow } from '../claude-permission-projection'
 import { dirname, basename, join, posix, win32 } from 'node:path'
 import { AgentTranscriptPollScheduler } from '../../agent-transcript-poll-scheduler'
 import {
@@ -266,16 +265,14 @@ export class ClaudeHelperKillPoller {
     if (!payload) {
       return
     }
-    this.host.publish(
-      restateClaudePermissionRow(this.state, {
-        ...anchor,
-        payload,
-        hasExplicitPrompt: undefined,
-        hookEventName: 'SubagentStop',
-        toolAgentId: waitOwner && ended.includes(waitOwner) ? waitOwner : ended[0],
-        claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(this.state, paneKey)
-      })
-    )
+    this.host.publish({
+      ...anchor,
+      payload,
+      hasExplicitPrompt: undefined,
+      hookEventName: 'SubagentStop',
+      toolAgentId: waitOwner && ended.includes(waitOwner) ? waitOwner : ended[0],
+      claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(this.state, paneKey)
+    })
   }
 }
 

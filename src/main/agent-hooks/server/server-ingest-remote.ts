@@ -1,4 +1,3 @@
-import { updateClaudeRunningNonAgentTask } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { track } from '../../telemetry/client'
@@ -117,25 +116,25 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       worktreeId,
       promptInteractionKey,
       toolUseId,
+      claudeSettledRequests,
       toolAgentId,
       teammateName,
       toolAgentType,
-      providerSession,
-      ...permissionFields
+      providerSession
     } = normalizeRemoteEnvelopeFields(envelope)
+    if (
+      this.dropsClaudeSettlement(paneKey, {
+        hookEventName,
+        claudeSettledRequests,
+        toolAgentId,
+        connectionId: trimmedConnectionId,
+        isReplay: envelope.isReplay
+      })
+    ) {
+      return
+    }
     if (envelope.statusUnavailable === true && envelope.payload === null) {
-      const previous = this.state.lastStatusByPaneKey.get(paneKey)
-      if (
-        (source === 'opencode' || source === 'opencode2') &&
-        previous?.connectionId === trimmedConnectionId &&
-        trimmedConnectionId !== null &&
-        previous.worktreeId === worktreeId &&
-        previous.source === source &&
-        previous.launchToken === envelope.launchToken &&
-        this.getAgentStatusDisposition(paneKey) !== 'suppress'
-      ) {
-        this.clearPaneState(paneKey, { statusUnavailable: true })
-      }
+      this.clearUnavailableRemoteStatus(paneKey, trimmedConnectionId, source, worktreeId, envelope)
       return
     }
     const age = envelope.evidenceAgeMs
@@ -275,7 +274,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       grokPromptBoundary,
       compactTrigger,
       toolUseId,
-      ...permissionFields,
+      ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
       toolAgentId,
       teammateName,
       toolAgentType,
@@ -301,12 +300,13 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     this.applyNormalizedStatus(
       event,
       applyClaudeBackgroundWork
-        ? () =>
-            updateClaudeRunningNonAgentTask(
-              this.state,
-              paneKey,
-              envelope.claudeRunningNonAgentTask === true
-            )
+        ? () => {
+            if (envelope.claudeRunningNonAgentTask) {
+              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+            } else {
+              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+            }
+          }
         : undefined,
       'hook',
       typeof age === 'number' ? Math.max(0, Date.now() - age) : undefined

@@ -1,4 +1,3 @@
-import { markClaudeLeadTurnDone } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
@@ -9,6 +8,7 @@ import {
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
+import { isUnusedClaudeSettlement } from './server-claude-status-rules'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
@@ -30,13 +30,33 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     return applied
   }
 
-  protected recordClaudeTerminalTurnEnd(event: EnrichedAgentHookEventPayload | undefined): void {
+  /** A live batch that settles no held bound request is main's no-op: it must not become the row. */
+  protected dropsClaudeSettlement(
+    paneKey: string,
+    event: Parameters<typeof isUnusedClaudeSettlement>[1]
+  ): boolean {
+    return isUnusedClaudeSettlement(this.state.lastStatusByPaneKey.get(paneKey), event)
+  }
+
+  /** An OpenCode relay that lost status retires only the row its own connection and launch wrote. */
+  protected clearUnavailableRemoteStatus(
+    paneKey: string,
+    connectionId: string | null,
+    source: AgentHookSource | undefined,
+    worktreeId: string | undefined,
+    envelope: { launchToken?: string }
+  ): void {
+    const previous = this.state.lastStatusByPaneKey.get(paneKey)
     if (
-      event?.connectionId === null &&
-      event.payload.agentType === 'claude' &&
-      event.payload.state === 'done'
+      (source === 'opencode' || source === 'opencode2') &&
+      previous?.connectionId === connectionId &&
+      connectionId !== null &&
+      previous.worktreeId === worktreeId &&
+      previous.source === source &&
+      previous.launchToken === envelope.launchToken &&
+      this.getAgentStatusDisposition(paneKey) !== 'suppress'
     ) {
-      markClaudeLeadTurnDone(this.state, event.paneKey)
+      this.clearPaneState(paneKey, { statusUnavailable: true })
     }
   }
 
@@ -93,11 +113,13 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
     if (!paneKey) {
-      return { event: normalizeHookPayload(this.state, source, body, this.env, { isReplay }) }
+      return { event: normalizeHookPayload(this.state, source, body, this.env) }
     }
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    const event = normalizeHookPayload(this.state, source, body, this.env, { isReplay })
+    const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    const event =
+      normalized && this.dropsClaudeSettlement(normalized.paneKey, normalized) ? null : normalized
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).

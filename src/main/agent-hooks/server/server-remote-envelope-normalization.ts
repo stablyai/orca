@@ -1,7 +1,3 @@
-import {
-  readClaudePermissionState,
-  type ClaudePermissionState
-} from '../../../shared/agent-hook-listener/claude-permission-projection'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   normalizeClaudePromptId,
@@ -30,7 +26,6 @@ export type RemoteAgentStatusEnvelope = {
   grokPromptBoundary?: unknown
   compactTrigger?: unknown
   toolUseId?: string
-  claudePermissionState?: unknown
   claudeSettledRequests?: unknown
   toolAgentId?: string
   teammateName?: string
@@ -59,7 +54,6 @@ export type RemoteEnvelopeFields = {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
-  claudePermissionState?: ClaudePermissionState
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
   toolAgentId?: string
   teammateName?: string
@@ -76,7 +70,6 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
-  claudePermissionState?: unknown
   claudeSettledRequests?: unknown
   isReplay?: boolean
   toolAgentId?: string
@@ -85,16 +78,11 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   providerSession?: unknown
 }): RemoteEnvelopeFields {
   const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
-  const permission =
-    source === 'claude' ? readClaudePermissionState(envelope.claudePermissionState) : undefined
-  // Legacy fields name a pending request for older receivers; this receiver reads the row's own hook.
-  const hook = permission?.cause ?? envelope
-  const hookEventName =
-    typeof hook.hookEventName === 'string' && hook.hookEventName.trim().length > 0
-      ? hook.hookEventName.trim()
-      : undefined
   return {
-    hookEventName,
+    hookEventName:
+      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
+        ? envelope.hookEventName.trim()
+        : undefined,
     source,
     providerPromptId:
       source === 'claude'
@@ -119,30 +107,26 @@ export function normalizeRemoteEnvelopeFields(envelope: {
         ? envelope.promptInteractionKey.trim()
         : undefined,
     toolUseId:
-      typeof hook.toolUseId === 'string' && hook.toolUseId.trim().length > 0
-        ? hook.toolUseId.trim()
+      typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
+        ? envelope.toolUseId.trim()
         : undefined,
-    claudePermissionState: permission?.state,
-    // Only settlement hooks or exact cached replays carry resolution proof.
+    // Live tool hooks settle their own requests; a live batch lists its settlements; replays repair gaps.
     claudeSettledRequests:
       source === 'claude' &&
-      (envelope.isReplay === true ||
-        hookEventName === 'PostToolBatch' ||
-        hookEventName === 'PostToolUse' ||
-        hookEventName === 'PostToolUseFailure')
+      (envelope.isReplay === true || envelope.hookEventName?.trim() === 'PostToolBatch')
         ? readClaudeSettledRequests(envelope.claudeSettledRequests)
         : undefined,
     toolAgentId:
-      typeof hook.toolAgentId === 'string' && hook.toolAgentId.trim().length > 0
-        ? hook.toolAgentId.trim()
+      typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
+        ? envelope.toolAgentId.trim()
         : undefined,
     teammateName:
       typeof envelope.teammateName === 'string' && envelope.teammateName.trim().length > 0
         ? envelope.teammateName.trim()
         : undefined,
     toolAgentType:
-      typeof hook.toolAgentType === 'string' && hook.toolAgentType.trim().length > 0
-        ? hook.toolAgentType.trim()
+      typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
+        ? envelope.toolAgentType.trim()
         : undefined,
     providerSession: normalizeAgentProviderSession(envelope.providerSession) ?? undefined
   }

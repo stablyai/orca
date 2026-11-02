@@ -88,8 +88,8 @@ export function retainClaudeSettledRequests(
   }
   const kept = previous && sameClaudeRun(previous, next) ? [...(retained ?? [])] : []
   const own = settledRequestOf(next)
-  const resolutions = next.claudeSettledRequests ?? (own ? [own] : [])
-  for (const settled of resolutions) {
+  // A batch's settlement list rides on the batch row itself; a tool row settles only its own call.
+  for (const settled of next.claudeSettledRequests ?? (own ? [own] : [])) {
     const existing = kept.findIndex((request) => sameRequest(request, settled))
     if (existing !== -1) {
       kept.splice(existing, 1)
@@ -112,13 +112,9 @@ export function isClaudePermissionSettledByReplay(
   waiting: AgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
-  const identity = waiting.claudePermissionState?.pending ?? waiting
-  const toolUseId = readId(identity.toolUseId)
+  const toolUseId = readId(waiting.toolUseId)
   if (
-    (next.isReplay !== true &&
-      next.hookEventName !== 'PostToolBatch' &&
-      next.hookEventName !== 'PostToolUse' &&
-      next.hookEventName !== 'PostToolUseFailure') ||
+    next.isReplay !== true ||
     !toolUseId ||
     !next.claudeSettledRequests ||
     waiting.connectionId !== next.connectionId ||
@@ -128,15 +124,13 @@ export function isClaudePermissionSettledByReplay(
   ) {
     return false
   }
-  const toolAgentId = readId(identity.toolAgentId)
-  const toolAgentType = readId(identity.toolAgentType)
+  const toolAgentId = readId(waiting.toolAgentId)
+  const toolAgentType = readId(waiting.toolAgentType)
   return next.claudeSettledRequests.some((request) =>
-    waiting.claudePermissionState?.pending
-      ? request.toolUseId === toolUseId && request.toolAgentId === toolAgentId
-      : sameRequest(request, {
-          toolUseId,
-          ...(toolAgentId ? { toolAgentId } : {}),
-          ...(toolAgentType ? { toolAgentType } : {})
-        })
+    sameRequest(request, {
+      toolUseId,
+      ...(toolAgentId ? { toolAgentId } : {}),
+      ...(toolAgentType ? { toolAgentType } : {})
+    })
   )
 }

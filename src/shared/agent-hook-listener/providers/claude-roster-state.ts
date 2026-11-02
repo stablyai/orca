@@ -1,4 +1,4 @@
-import { retireClaudePermissions } from '../claude-permission-table'
+import { retireClaudeInFlightCalls } from '../claude-permission-binding'
 import type {
   AgentMainAgentStatus,
   AgentStatusState,
@@ -100,7 +100,7 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
-/** A complete inventory proves child ends as their own end hooks do, so those children's requests end too. */
+/** A complete inventory proves child ends as their own end hooks do, so those children's calls end too. */
 export function foldClaudeBackgroundInventory(
   state: HookListenerState,
   paneKey: string,
@@ -112,7 +112,7 @@ export function foldClaudeBackgroundInventory(
     inventoryComplete: !inventory.truncated
   })
   const ended = new Set(before.filter((id) => !roster.has(id)))
-  retireClaudePermissions(state, paneKey, (owner) => owner !== undefined && ended.has(owner))
+  retireClaudeInFlightCalls(state, paneKey, (owner) => ended.has(owner))
 }
 
 /** Only fresh inventory retires a reported shell; lead verdicts cannot override positive process evidence. */
@@ -179,7 +179,7 @@ export function markClaudeLeadTurnDone(
   mainAgent?: AgentMainAgentStatus
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 } {
-  retireClaudePermissions(state, paneKey, (owner) => owner === undefined)
+  retireClaudeInFlightCalls(state, paneKey, (owner) => owner === '')
   const record = setClaudeMainAgentTurnState(state, paneKey, { state: 'done', outcome })
   const resolved = resolveClaudePaneStatus(state, paneKey, record)
   const mainAgent = claudeMainAgentStatusForPayload(record)
@@ -258,7 +258,7 @@ export function clearClaudePendingWaitForAgent(
   paneKey: string,
   ownsWait: (waitingAgentId: string) => boolean
 ): void {
-  retireClaudePermissions(state, paneKey, (owner) => owner !== undefined && ownsWait(owner))
+  retireClaudeInFlightCalls(state, paneKey, (owner) => owner !== '' && ownsWait(owner))
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
     return

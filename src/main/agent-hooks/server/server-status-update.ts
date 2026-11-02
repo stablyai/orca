@@ -1,4 +1,3 @@
-import { retireClaudePermissions } from '../../../shared/agent-hook-listener/claude-permission-table'
 import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { previewHookPresence } from '../../../shared/agent-hook-presence-transition'
@@ -204,7 +203,6 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         previous.payload.mainAgent?.state === 'done' &&
         this.sameTerminalOwner(previous, attachedPayload)
       ) {
-        retireClaudePermissions(this.state, attachedPayload.paneKey, (owner) => owner === undefined)
         // A refused late hook already mutated the local producer; keep its idle lease clock.
         setClaudeMainAgentTurnState(this.state, attachedPayload.paneKey, previous.payload.mainAgent)
       }
@@ -221,7 +219,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       const held = withHeldChildWaitMainAgent(previous, effectivePayload)
       // Child prompts preserve main-agent progress and its paired shell evidence; the main agent's own waits do not.
-      if (previous.claudePermissionState?.pending?.toolAgentId ?? previous.toolAgentId) {
+      if (previous.toolAgentId) {
         onAccepted?.()
       }
       if (held !== previous) {
