@@ -612,17 +612,13 @@ describe('Claude Agent SDK contract pins', () => {
         { pathToClaudeCodeExecutable: FAKE_CLI },
         permissions.handlers.onStdout
       )
-      try {
-        await drainQuery({
-          pathToClaudeCodeExecutable: FAKE_CLI,
-          cwd: scenario.cwd,
-          env: scenarioEnv(scenario),
-          canUseTool,
-          spawnClaudeCodeProcess: spawner.spawn
-        })
-      } finally {
-        permissions.close()
-      }
+      await drainQuery({
+        pathToClaudeCodeExecutable: FAKE_CLI,
+        cwd: scenario.cwd,
+        env: scenarioEnv(scenario),
+        canUseTool,
+        spawnClaudeCodeProcess: spawner.spawn
+      })
 
       expect(seen).toEqual(expected)
       expect(interaction).toEqual(flags)

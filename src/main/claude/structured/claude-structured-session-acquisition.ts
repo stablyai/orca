@@ -216,8 +216,7 @@ export async function acquireClaudeSession({
           onMessage,
           ...permissions.handlers,
           onFault: childFailed,
-          onExit: (error, exit) => {
-            permissions.close()
+          onExit: permissions.closeThen((error, exit) => {
             if (exit?.expected) {
               naming?.failed()
               callbacks.finishClose(sessionId, attempt)
@@ -226,7 +225,7 @@ export async function acquireClaudeSession({
             // Mark in place because the fault report may retain this error object.
             childFailed(withObservedProviderExit(error))
             callbacks.handleExit(sessionId, attempt, error)
-          }
+          })
         }
       )
     )

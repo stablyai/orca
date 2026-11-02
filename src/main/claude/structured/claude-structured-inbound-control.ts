@@ -100,6 +100,8 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
   return { canUseTool, onUserDialog }
 }
 
+type ClaudeExitHandler = NonNullable<ClaudeStreamJsonConnectionHandlers['onExit']>
+
 /** One process's permission handlers. Only Orca's Full access launch grants auto-allow; Own settings
  *  never does, whatever Claude reports, and no other process's launch or reports carry over. */
 export function claudeLaunchPermissions(
@@ -109,7 +111,8 @@ export function claudeLaunchPermissions(
   handlers: Pick<ClaudeStreamJsonConnectionHandlers, 'canUseTool' | 'onUserDialog' | 'onStdout'>
   /** Claude's mode in wire order; null without Full access, whose launches read no stdout. */
   orderedMode: (() => string | null | undefined) | null
-  close: () => void
+  /** Wraps the connection's exit handler: this process's permission state ends first. */
+  closeThen: (onExit: ClaudeExitHandler) => ClaudeExitHandler
 } {
   const policy = claudeLaunchSkipsPermissions(launch.options)
     ? createClaudeFullAccessPolicy(launch.providerSessionId)
@@ -121,6 +124,9 @@ export function claudeLaunchPermissions(
   return {
     handlers: { ...callbacks, ...(policy ? { onStdout: policy.observe } : {}) },
     orderedMode: policy ? policy.mode : null,
-    close: () => policy?.close()
+    closeThen: (onExit) => (error, exit) => {
+      policy?.close()
+      onExit(error, exit)
+    }
   }
 }
