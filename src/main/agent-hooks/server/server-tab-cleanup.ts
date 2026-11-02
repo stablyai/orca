@@ -4,11 +4,29 @@ import { AgentHookServerCleanup } from './server-cleanup'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { releaseAgentExitKey } from './agent-exit-evidence'
 import type { RefusedPaneResume } from '../../../shared/agent-status-types'
-import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  agentProviderSessionsEqual,
+  type AgentProviderSessionMetadata
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { isLaunchSeedRow } from './server-launch-seed'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
-  /** The host refused `paneKey`'s saved resume because a native chat is its conversation's home:
-   *  forget the pane's claim here, with no resumable remnant, and tell renderers to forget theirs. */
+  /** Whether the pane's row is still its latest launch's seed for this resume; the returned check
+   *  re-reads it, so any write since (a hook, a new seed, an owner change) withdraws the answer. */
+  captureLaunchSeed(
+    paneKey: string,
+    agent: string,
+    providerSession: AgentProviderSessionMetadata
+  ): (() => boolean) | null {
+    const row = this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey))
+    if (!row || !isLaunchSeedRow(row, agent, providerSession)) {
+      return null
+    }
+    return () => this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey)) === row
+  }
+
+  /** The host refused `paneKey`'s saved resume, or started its agent fresh instead: forget the
+   *  pane's claim here, with no resumable remnant, and tell renderers to forget theirs. */
   forgetRefusedPaneResume(paneKey: string, refused: RefusedPaneResume): void {
     // A moved pane's row, and the renderer's state for it, live under its owner's key.
     const ownerKey = this.resolvePaneKeyAlias(paneKey)
