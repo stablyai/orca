@@ -25,6 +25,14 @@ const TURN_EVENTS = new Set(['SessionStart', 'UserPromptSubmit'])
 export type HookRootAcquisition = {
   read: HookRootEvidenceReader
   reconcile?: (completion: HookRootCompletion) => void
+  /** A caller running many attempts in turn, such as a spool drain, owns one answer deadline
+   *  that no attempt's allowance passes. */
+  answerBy?: number
+}
+
+/** One answer allowance from now; a spool drain takes one for all of its records. */
+export function hookRootAnswerDeadline(): number {
+  return monotonicNow() + HOOK_ROOT_ANSWER_MS
 }
 
 export type HookRootCompletion = {
@@ -77,7 +85,7 @@ export function attemptHookRootEvidence(
     if (hook.exit) {
       existing.exit = hook.association
     }
-    return untilAnswerDeadline(existing)
+    return untilAnswerDeadline(existing, acquisition.answerBy)
   }
   // Lineage under another agent outlives every turn; other answers can change.
   if (
@@ -89,7 +97,7 @@ export function attemptHookRootEvidence(
   }
   const attempt: HookRootAttempt = {
     evidence: existing?.evidence,
-    answerBy: existing?.answerBy ?? monotonicNow() + HOOK_ROOT_ANSWER_MS,
+    answerBy: existing?.answerBy ?? hookRootAnswerDeadline(),
     tmux: request.tmux !== undefined,
     association: hook.association,
     ...(hook.exit ? { exit: hook.association } : {})
@@ -126,15 +134,20 @@ export function attemptHookRootEvidence(
       attempts.delete(oldest)
     }
   }
-  return untilAnswerDeadline(attempt)
+  return untilAnswerDeadline(attempt, acquisition.answerBy)
 }
 
 /** Past its deadline an attempt costs a hook nothing; its answer reaches the host instead. The
  *  hand-off records what the hook did, since its timer can fire before the clock says so. */
-function untilAnswerDeadline(attempt: HookRootAttempt): Promise<unknown> | undefined {
+function untilAnswerDeadline(
+  attempt: HookRootAttempt,
+  callerAnswerBy = Infinity
+): Promise<unknown> | undefined {
   if (!attempt.pending) {
     return undefined
   }
+  // A caller's deadline only shortens the allowance, and later hooks inherit what it spent.
+  attempt.answerBy = Math.min(attempt.answerBy, callerAnswerBy)
   if (monotonicNow() >= attempt.answerBy) {
     attempt.unanswered = true
     return undefined

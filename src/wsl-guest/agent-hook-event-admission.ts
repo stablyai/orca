@@ -43,11 +43,13 @@ export type RelayHookAdmissionOptions = {
 export function relayHookRootAcquisition(
   read: HookRootEvidenceReader | undefined,
   state: HookListenerState,
-  apply: (event: AgentHookEventPayload) => unknown
+  apply: (event: AgentHookEventPayload) => unknown,
+  answerBy?: number
 ): HookRootAcquisition | undefined {
   return (
     read && {
       read,
+      answerBy,
       reconcile: (completion) => {
         const event = restateHookRoot(state, completion, 'AgentProcessExit')
         if (event) {

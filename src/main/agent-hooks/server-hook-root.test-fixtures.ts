@@ -96,8 +96,8 @@ export class RootTestServer extends AgentHookServer {
     return super.reconcileEndedProcessForPaneKeys(...args)
   }
 
-  presence() {
-    return this.state.lastStatusByPaneKey.get(PANE)?.agentPresence
+  presence(paneKey = PANE) {
+    return this.state.lastStatusByPaneKey.get(paneKey)?.agentPresence
   }
 
   foldedPrompt() {
@@ -109,9 +109,9 @@ export class RootTestServer extends AgentHookServer {
     return row && 'receivedAt' in row && typeof row.receivedAt === 'number' ? row.receivedAt : 0
   }
 
-  row() {
+  row(paneKey = PANE) {
     return this.getStatusSnapshot().find(
-      (entry) => entry.paneKey === PANE && !entry.providerSessionOnly
+      (entry) => entry.paneKey === paneKey && !entry.providerSessionOnly
     )
   }
 }
@@ -125,18 +125,32 @@ export function capture(pid: number): AgentProcessIdentity {
   return { pid, platform: 'darwin', startTime: startOf(pid) }
 }
 
-export async function createServer(userDataPath?: string): Promise<RootTestServer> {
+/** A server whose startup (spool replay included) the caller drives; `reader: false` installs none. */
+export function launchServer(
+  userDataPath?: string,
+  options: { reader?: boolean; start?: (server: RootTestServer) => Promise<void> } = {}
+): { server: RootTestServer; started: Promise<void> } {
   probe.mockImplementation(async (identity) =>
     identity && live.has(identity.pid) ? 'live' : 'unverifiable'
   )
   const server = new RootTestServer()
   servers.push(server)
-  server.setHookRootEvidenceReader((request) =>
-    readHookRootEvidence(request, io).finally(() => {
-      answered++
-    })
-  )
-  await server.start({ env: 'production', ...(userDataPath ? { userDataPath } : {}) })
+  if (options.reader !== false) {
+    server.setHookRootEvidenceReader((request) =>
+      readHookRootEvidence(request, io).finally(() => {
+        answered++
+      })
+    )
+  }
+  const start =
+    options.start ??
+    ((target) => target.start({ env: 'production', ...(userDataPath ? { userDataPath } : {}) }))
+  return { server, started: start(server) }
+}
+
+export async function createServer(userDataPath?: string): Promise<RootTestServer> {
+  const { server, started } = launchServer(userDataPath)
+  await started
   return server
 }
 
@@ -220,9 +234,9 @@ export function slowRoot(): () => void {
   return release
 }
 
-/** Let a released late answer reach the host. */
-export async function settled(): Promise<void> {
-  await vi.waitFor(() => expect(answered).toBe(1))
+/** Let released late answers reach the host. */
+export async function settled(count = 1): Promise<void> {
+  await vi.waitFor(() => expect(answered).toBe(count))
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 

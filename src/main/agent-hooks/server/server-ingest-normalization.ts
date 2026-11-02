@@ -24,8 +24,13 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
    *  owner's exit neither answers for the pane nor is forgotten. */
   protected readonly undecidedOwnerChallenges = new Map<string, number>()
 
-  /** HTTP and spool hooks share one ownership preflight before provider folds. */
-  protected checkHookOwner(source: AgentHookSource, body: unknown): Promise<unknown> | undefined {
+  /** HTTP and spool hooks share one ownership preflight before provider folds; a drain passes
+   *  the one answer deadline all its records share. */
+  protected checkHookOwner(
+    source: AgentHookSource,
+    body: unknown,
+    answerBy?: number
+  ): Promise<unknown> | undefined {
     const challenges = this.undecidedOwnerChallenges
     let challenged: string | undefined
     const read = this.readHookRootEvidence
@@ -41,6 +46,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       },
       read && {
         read,
+        answerBy,
         // A late answer re-applies the pane's current row with the authority it settles.
         reconcile: (completion) => {
           const event = this.statusHooksEnabled
@@ -160,7 +166,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   }
 
   // Spool records are durable replay evidence, not a live observation.
-  protected ingestSpoolRecord(record: SpoolRecord): Promise<void> | void {
+  protected ingestSpoolRecord(record: SpoolRecord, answerBy?: number): Promise<void> | void {
     if (!isAgentHookSource(record.source)) {
       return
     }
@@ -177,7 +183,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.applySpoolHook(record, body)
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const pending = this.checkHookOwner(record.source, body)
+    const pending = this.checkHookOwner(record.source, body, answerBy)
     return pending ? pending.then(apply) : apply()
   }
 

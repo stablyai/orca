@@ -38,7 +38,7 @@ import {
 } from '../shared/agent-hook-transport-interference'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from '../shared/agent-hook-relay'
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
-import { drainRelayHookSpool, ingestRelayHookSpoolRecord } from './agent-hook-spool-ingest'
+import { drainRelayHookSpool } from './agent-hook-spool-ingest'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import {
   buildCachedPaneReplayEnvelope,
@@ -124,18 +124,16 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.token = this.fixedToken ?? randomUUID()
     this.endpointFileWritten = false
     this.portFallbackApplied = false
-    await drainRelayHookSpool(this.endpointDir, (record) =>
-      ingestRelayHookSpoolRecord(record, this.state, this.env, {
-        providerNormalization: this.providerNormalization,
-        checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
-        readHookRootEvidence: this.readHookRootEvidence,
-        isCurrent,
-        apply: (...args) => this.applyEvent(...args),
-        onAccepted: (row) => this.retryScheduler.observeClaudeHook(row, record.receivedAt),
-        isPaneSurfaceRetired: this.isPaneSurfaceRetired,
-        getAgentLaunchToken: this.getAgentLaunchToken
-      })
-    )
+    await drainRelayHookSpool(this.endpointDir, this.state, this.env, (record) => ({
+      providerNormalization: this.providerNormalization,
+      checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
+      readHookRootEvidence: this.readHookRootEvidence,
+      isCurrent,
+      apply: (...args) => this.applyEvent(...args),
+      onAccepted: (row) => this.retryScheduler.observeClaudeHook(row, record.receivedAt),
+      isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+      getAgentLaunchToken: this.getAgentLaunchToken
+    }))
     if (!isCurrent()) {
       return
     }
