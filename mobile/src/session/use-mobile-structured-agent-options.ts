@@ -1,9 +1,17 @@
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
+import type { MobileStructuredAgentOptionsArgs } from './mobile-structured-agent-session-contract'
+import {
+  mobileStructuredModelDefaultSnapshot,
+  useMobileStructuredModelDefault
+} from './use-mobile-structured-model-default'
+import { structuredOptionPickIsPending } from '../../../src/shared/structured-agent-session-option-pick-book'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import { structuredAgentSessionSeedCatalog } from '../../../src/shared/agent-session/options/structured-agent-session-seed-catalog'
-import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/agent-session-wire'
+
+import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection,
@@ -12,9 +20,6 @@ import {
 } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { agentChatPermissionModes } from '../../../src/shared/agent-chat-permission-mode'
 import { legacyHostPermissionDescriptor } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
-import type { RpcClient } from '../transport/rpc-client'
-import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
-import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
 import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import {
@@ -25,25 +30,7 @@ import { useMobileStructuredOptionSurface } from './use-mobile-structured-option
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
-export function useMobileStructuredAgentOptions(args: {
-  agent: string | null
-  client: RpcClient | null
-  sessionId: string | null
-  enabled: boolean
-  fence: number | null
-  turnId: string | null
-  mutate: StructuredAgentSessionMutate
-  optionStamp?: string
-  hostSupport: Pick<
-    StructuredAgentSessionHostSupport,
-    | 'permissionModes'
-    | 'permissionOwn'
-    | 'coherentModelCatalog'
-    | 'statusFeed'
-    | 'sendSelection'
-    | 'sendOptions'
-  > | null
-}) {
+export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptionsArgs) {
   const { agent, client, enabled, fence, mutate, optionStamp, sessionId, turnId, hostSupport } =
     args
   const optionCatalog = useMemo(
@@ -55,20 +42,7 @@ export function useMobileStructuredAgentOptions(args: {
     [sessionId]
   )
   // An options answer made before the account's listing landed listed none of it.
-  const {
-    projectRuntimeReports,
-    optionState,
-    optionStateRef,
-    activeOptionRecordRef,
-    providerStarting,
-    updateOptionState,
-    conversationSupport,
-    imageSupport,
-    receiveCatalog,
-    isCurrentContext,
-    controller,
-    reread
-  } = useMobileStructuredOptionState({
+  const optionSource = useMobileStructuredOptionState({
     agent,
     enabled,
     statusFeed: hostSupport?.statusFeed === true,
@@ -83,6 +57,23 @@ export function useMobileStructuredAgentOptions(args: {
     worktree: createdHere?.worktree,
     coherentCatalog: hostSupport?.coherentModelCatalog === true
   })
+  const {
+    projectRuntimeReports,
+    optionState,
+    optionStateRef,
+    activeOptionRecordRef,
+    providerStarting,
+    updateOptionState,
+    conversationSupport,
+    imageSupport,
+    awaitingOptions,
+    receiveCatalog,
+    isCurrentContext,
+    controller,
+    optionPicks,
+    writes,
+    reread
+  } = optionSource
   const demandModelCatalog = useMobileHostModelCatalogUpgrade({
     agent,
     client,
@@ -105,6 +96,16 @@ export function useMobileStructuredAgentOptions(args: {
     imageSupport?.sessionId === sessionId &&
     !imageSupport.statesPermissionMode &&
     optionState.permissionMode === null
+  const interactionReadyRef = useRef(!awaitingOptions)
+  const lockSnapshotRef = useRef(
+    (snapshot: ReturnType<typeof structuredAgentSessionShownSnapshot>) => snapshot
+  )
+  const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionShownSnapshot>) =>
+    awaitingOptions ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
+  useLayoutEffect(() => {
+    interactionReadyRef.current = !awaitingOptions
+    lockSnapshotRef.current = lockSnapshot
+  })
   const readOptionState = useCallback(
     () =>
       projectRuntimeReports({
@@ -117,7 +118,14 @@ export function useMobileStructuredAgentOptions(args: {
       }),
     [controller, projectRuntimeReports, hostSupport?.permissionOwn]
   )
-  const shown = structuredAgentSessionShownSnapshot(readOptionState())
+  const shown = lockSnapshot(
+    mobileStructuredModelDefaultSnapshot(
+      structuredAgentSessionShownSnapshot(readOptionState()),
+      readOptionState(),
+      hostSupport?.defaultModel === true,
+      awaitingOptions
+    )
+  )
   const optionSnapshot = legacyHostPermissions
     ? [...shown, legacyHostPermissionDescriptor()]
     : shown
@@ -132,8 +140,13 @@ export function useMobileStructuredAgentOptions(args: {
       controller,
       record: optionStateRef.current.record,
       view,
-      snapshot: structuredAgentSessionShownSnapshot(view),
-      ready: !!client && !!sessionId,
+      snapshot: lockSnapshotRef.current(structuredAgentSessionShownSnapshot(view)),
+      ready:
+        !awaitingOptions &&
+        writes.current.count === 0 &&
+        !!client &&
+        !!sessionId &&
+        interactionReadyRef.current,
       providerStarting,
       isCurrentContext,
       flush: (isCurrent: () => boolean) => {
@@ -183,12 +196,29 @@ export function useMobileStructuredAgentOptions(args: {
         : {}
   }, [controller, hostSupport?.sendSelection, hostSupport?.sendOptions])
 
+  const isModelWritePending = useCallback(
+    () =>
+      structuredOptionPickIsPending(optionPicks.current, 'model') ||
+      (!hostSupport?.sendSelection && controller.isPending('model')),
+    [controller, hostSupport?.sendSelection, optionPicks]
+  )
+  const resetOption = useMobileStructuredModelDefault({
+    agent,
+    client,
+    sessionId,
+    mutate,
+    takesModelDefault: hostSupport?.defaultModel === true,
+    awaitingOptions,
+    lockSnapshotRef,
+    source: optionSource
+  })
   const { optionPickerRequest, invokeStructuredOption, optionSurface } =
     useMobileStructuredOptionSurface({
       optionSnapshot,
       demandModelCatalog,
       setStructuredOption,
-      readOptionState
+      readOptionState,
+      resetOption: hostSupport?.defaultModel === true ? resetOption : undefined
     })
 
   return {
@@ -200,9 +230,12 @@ export function useMobileStructuredAgentOptions(args: {
       (agent !== null && isAgentSessionHandleProvider(agent)),
     optionSnapshot,
     optionSurface,
-    pendingOptionId: writer.pendingOptionId(controller, optionState.record),
+    pendingOptionId: structuredOptionPickIsPending(optionPicks.current, 'model')
+      ? 'model'
+      : writer.pendingOptionId(controller, optionState.record),
     setStructuredOption,
     invokeStructuredOption,
-    sendSelection
+    sendSelection,
+    isModelWritePending
   }
 }

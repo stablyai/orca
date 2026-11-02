@@ -73,8 +73,10 @@ function harness() {
     service,
     resolve,
     run,
-    update: (next: AgentModelCatalogSuccess) => {
-      now += 120001
+    update: (next: AgentModelCatalogSuccess, advanceClock = true) => {
+      if (advanceClock) {
+        now += 120001
+      }
       installed = next
     },
     fail: () => {
@@ -86,6 +88,40 @@ function harness() {
 }
 
 describe('independent installed CLI discovery', () => {
+  it('retains the catalog for display but refuses Default after a partial acquisition', async () => {
+    const h = harness()
+    await h.read('a', { waitForListing: true })
+    h.update({ ...listing('new-list'), complete: false, configured: undefined }, false)
+    expect(
+      await h.read('a', {
+        inSessionWorkspace: true,
+        requireConfiguredDefault: true,
+        verifiedOnly: true
+      })
+    ).toEqual({ origin: 'unknown' })
+    expect(await h.read()).toMatchObject({ models: [{ id: 'old' }] })
+    h.service.stop()
+  })
+
+  it('refreshes the original folder configuration for Default even while its catalog is fresh', async () => {
+    const h = harness()
+    await h.read('a', { waitForListing: true })
+    h.update(listing('listed-recommendation', 'unlisted-project-default'), false)
+    expect(
+      await h.read('a', {
+        inSessionWorkspace: true,
+        requireConfiguredDefault: true,
+        verifiedOnly: true
+      })
+    ).toMatchObject({
+      listingNamesConfiguredModel: true,
+      defaultModelOptions: { model: 'unlisted-project-default', effort: 'high' },
+      models: [{ id: 'listed-recommendation', isDefault: false }]
+    })
+    expect(h.run).toHaveBeenCalledTimes(2)
+    h.service.stop()
+  })
+
   it('refreshes a same-path CLI on picker demand and an old chat cannot put the old list back', async () => {
     const h = harness()
     await h.read('a', { waitForListing: true })

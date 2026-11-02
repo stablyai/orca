@@ -40,6 +40,7 @@ export function createStructuredSessionSelectionController(
   let sequence = 0
   let revision = 0
   let adopted = 0
+  let modelDefault = false
   const inFlight = new Set<Promise<SelectionOutcome>>()
   const operations = new Map<number, SelectionOperation>()
   const latest = new Map<string, number>()
@@ -81,6 +82,9 @@ export function createStructuredSessionSelectionController(
       terminalRevision = revision + 1
     }
     if (outcome.kind === 'accepted') {
+      if (operation.key === 'model') {
+        modelDefault = false
+      }
       const model =
         operation.key === 'model' ? (outcome.options.model ?? operation.model) : operation.model
       const value = decodeStructuredAgentSessionOptionValue(
@@ -95,7 +99,7 @@ export function createStructuredSessionSelectionController(
         (remembered.get(key) ?? 0) < operation.identity
       ) {
         remembered.set(key, operation.identity)
-        const adopt = adopted <= operation.identity
+        const adopt = adopted <= operation.identity && !modelDefault
         adopted = Math.max(adopted, operation.identity)
         try {
           remember([
@@ -135,6 +139,9 @@ export function createStructuredSessionSelectionController(
     return request
   }
   return {
+    setModelDefault: (selected: boolean) => {
+      modelDefault = selected
+    },
     subscribe: (listener: () => void) => {
       listeners.add(listener)
       return () => {

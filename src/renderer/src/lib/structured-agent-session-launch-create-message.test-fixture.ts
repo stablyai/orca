@@ -237,6 +237,9 @@ export function legacyAction(
     }
     if (method === 'agentSession.setOption') {
       const { key, value } = SetOptionParams.parse(params)
+      if (value === null) {
+        throw new Error('This legacy action does not reset models')
+      }
       return write(key, value)
     }
     if (method === 'agentSession.history') {
