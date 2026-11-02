@@ -14,7 +14,7 @@ import {
   journalIdentityFor,
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { markStructuredQueueReopen } from './structured-agent-session-queued-pause'

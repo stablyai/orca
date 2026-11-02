@@ -17,6 +17,7 @@ import {
   projectRemoteAppStatus
 } from './status'
 import { sendRequest } from './transport'
+import { attachMutationRecovery } from './client-error-recovery'
 import {
   RuntimeClientError,
   RuntimeRpcFailureError,
@@ -37,7 +38,10 @@ import {
   ORCHESTRATION_CONTRACT_VERSION
 } from '../../shared/protocol-version'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
-import { createOrchestrationCompatibilityEnvelope } from './orchestration-compatibility-envelope'
+import {
+  createAgentLaunchCallerEvidence,
+  createOrchestrationCompatibilityEnvelope
+} from './orchestration-compatibility-envelope'
 import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -51,6 +55,8 @@ import {
 } from './orchestration-recovery-command'
 
 const LONG_POLL_CLIENT_GRACE_MS = 10_000
+// The host records the launched agent in the caller's chat; older hosts ignore the evidence.
+const AGENT_LAUNCH_METHODS: ReadonlySet<string> = new Set(['agent.launch', 'agent.launchReplay'])
 
 const loadWebSocketTransport = async () => await import('./websocket-transport.js')
 
@@ -65,6 +71,7 @@ export class RuntimeClient {
   private readonly orchestrationCompatibility = createOrchestrationCompatibilityEnvelope(
     process.env
   )
+  private readonly agentLaunchCaller = createAgentLaunchCallerEvidence(process.env)
   private readonly runtimeSourceFence: RuntimeSourceFence
 
   // Browser session cold starts can take 15–30 seconds; allow time for initialization.
@@ -99,9 +106,6 @@ export class RuntimeClient {
     const terminalPromptMutation = isTerminalPromptMutation(method, params)
     const legacyTerminalPrompt = options?.legacyTerminalPrompt === true && terminalPromptMutation
     const durableMutation = !legacyTerminalPrompt && isDurableMutation(method, params)
-    if (orchestrationMutation) {
-      await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
-    }
     const orchestrationRequestId = durableMutation
       ? (options?.orchestrationRequestId ?? randomUUID())
       : undefined
@@ -125,13 +129,25 @@ export class RuntimeClient {
       }
       return attachDurableMutationRecovery(error, orchestrationRequestId, originalCommand, method)
     }
+    if (orchestrationMutation) {
+      try {
+        await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
+      } catch (error) {
+        // A caller-chosen request id is the only rerun handle, so keep it when the probe fails first.
+        throw options?.orchestrationRequestId
+          ? attachMutationRecovery(error, orchestrationRequestId, originalCommand, true)
+          : error
+      }
+    }
     const compatibilityEnvelope = method.startsWith('orchestration.')
       ? {
           ...this.orchestrationCompatibility,
           compatibilityInvocationId:
             orchestrationRequestId ?? this.orchestrationCompatibility.compatibilityInvocationId
         }
-      : {}
+      : AGENT_LAUNCH_METHODS.has(method) && !this.remote && this.agentLaunchCaller
+        ? { orchestrationCompatibilityEvidence: this.agentLaunchCaller }
+        : {}
     const envelope = {
       orchestrationCapability: options?.orchestrationCapability,
       orchestrationContractVersion: method.startsWith('orchestration.')

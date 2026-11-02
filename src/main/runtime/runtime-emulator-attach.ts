@@ -79,7 +79,7 @@ export class RuntimeEmulatorAttach {
         : undefined
       assertCurrent()
       let device = params.device
-      if (params.userInitiated && !device && worktreeId) {
+      if (!device && worktreeId) {
         const active = await bridge.getReusableActiveForWorktree(worktreeId)
         assertCurrent()
         if (active) {
@@ -108,8 +108,10 @@ export class RuntimeEmulatorAttach {
           return { attached: false, selectionRequired: selectedDevice ? 'unavailable' : 'missing' }
         }
       } else {
-        device ??=
-          settings.mobileEmulatorDefaultDeviceUdid ?? (await resolveDefaultAttachDevice(bridge))
+        device ??= await resolveDefaultAttachDevice(bridge, {
+          current: worktreeId ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid : undefined,
+          configured: settings.mobileEmulatorDefaultDeviceUdid ?? undefined
+        })
       }
       if (!device) {
         throw new EmulatorError(

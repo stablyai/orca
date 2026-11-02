@@ -11,6 +11,23 @@ const SEAM_MODULE = 'src/platform/text-input-font-size.ts'
 
 const FLOOR_EXPORT = 'TEXT_INPUT_FONT_SIZE_FLOOR'
 
+// Inputs that forward `style` to their own TextInput: read at every call site, so the forwarded prop is no hole.
+const STYLE_FORWARDING_INPUTS = new Set(['FieldTextInput'])
+
+const isTextInputTag = (element) => {
+  const name = element.tagName.getText()
+  return name === 'TextInput' || STYLE_FORWARDING_INPUTS.has(name)
+}
+
+function insideStyleForwardingInput(node) {
+  for (let current = node.parent; current !== undefined; current = current.parent) {
+    if (ts.isFunctionDeclaration(current) && current.name !== undefined) {
+      return STYLE_FORWARDING_INPUTS.has(current.name.text)
+    }
+  }
+  return false
+}
+
 const parse = (file, source) => ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
 
 const floorByRoot = new Map()
@@ -169,7 +186,7 @@ function textInputStyleRefs(parsed) {
       : ts.isJsxOpeningElement(node)
         ? node
         : null
-    if (element !== null && element.tagName.getText() === 'TextInput') {
+    if (element !== null && isTextInputTag(element)) {
       for (const attribute of element.attributes.properties) {
         if (
           !ts.isJsxAttribute(attribute) ||
@@ -191,6 +208,13 @@ function textInputStyleRefs(parsed) {
           }
           if (ts.isObjectLiteralExpression(expression)) {
             refs.push({ kind: 'inline', node: expression, key: 'inline style', line })
+            continue
+          }
+          if (
+            ts.isIdentifier(expression) &&
+            expression.text === 'style' &&
+            insideStyleForwardingInput(element)
+          ) {
             continue
           }
           refs.push({ kind: 'opaque', key: expression.getText().slice(0, 40), line })

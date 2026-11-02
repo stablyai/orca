@@ -206,6 +206,7 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['dir'],
     notes: [
       'The inner loop: loads the folder like `orca plugin dev load` (refreshing its .orca/types), then prints each log line its panels, editors and worker write, every reload a save causes, and status changes such as errored or invalid with the error.',
+      'A first load that needs approval, run in a terminal without --json, shows the grants and asks `Approve and load? [y/N]`; yes loads it with that fingerprint and keeps watching. Anything else, --json or no terminal (agents, pipes) fails like `orca plugin dev load` (exit 3, with the re-run command).',
       'When an edit asks for new access it prints the `orca plugin dev reload <dir> --approve <fingerprint>` command to run from another shell; this one keeps watching.',
       'Ctrl-C unloads the folder (unless it was loaded before this command) and exits 0; a second Ctrl-C exits at once. If the connection to Orca drops it says so and exits 1.',
       "--check runs `orca plugin check` after the load and after each reload and prints the result inline (one `check` event with --json; it fails while Orca does not run the plugin, such as pending approval, even if the panels render). Like `orca plugin check` it runs the plugin's code on this machine, unsandboxed, so use it on code you trust; it needs a local folder.",

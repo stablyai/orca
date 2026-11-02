@@ -93,4 +93,41 @@ describe('useDiffViewerLargeDiffLifecycle', () => {
       supersededModel.dispose.mock.invocationCallOrder[0]
     )
   })
+
+  it('disposes the pair a remounted view supersedes after content changed while unmounted', async () => {
+    const modelKey = 'file-1::tab-1'
+    const paths = ['v1', 'v2'].map((signature) =>
+      getDiffViewerMonacoModelPaths({
+        modelKey,
+        modelOwnerKey: 'file-1',
+        originalModelKey: `${modelKey}:original:${signature}`,
+        modifiedModelKey: `${modelKey}:modified:${signature}`,
+        generationSuffix: ''
+      })
+    )
+    const staleOriginal = detachedModel()
+    const staleModified = detachedModel()
+    monacoFixture.models.set(paths[0].originalModelPath, staleOriginal)
+    monacoFixture.models.set(paths[0].modifiedModelPath, staleModified)
+    const mount = (signature: string) =>
+      renderHook(() =>
+        useDiffViewerLargeDiffLifecycle({
+          limited: false,
+          modelKey,
+          modelOwnerKey: 'file-1',
+          originalModelKey: `${modelKey}:original:${signature}`,
+          modifiedModelKey: `${modelKey}:modified:${signature}`,
+          diffEditorRef: { current: null },
+          onEnterFallback: vi.fn()
+        })
+      )
+
+    mount('v1').unmount()
+    expect(staleOriginal.dispose).not.toHaveBeenCalled()
+    mount('v2').unmount()
+    await act(() => Promise.resolve())
+
+    expect(staleOriginal.dispose).toHaveBeenCalledOnce()
+    expect(staleModified.dispose).toHaveBeenCalledOnce()
+  })
 })

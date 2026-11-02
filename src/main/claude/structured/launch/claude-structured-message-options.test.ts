@@ -118,6 +118,112 @@ describe('Claude accepted message choices', () => {
     }
   )
 
+  it.each(['free', 'extra_usage_disabled', 'preference', 'future_entitlement_rule'])(
+    'sends a new message with saved Fast on despite initialize reporting %s',
+    async (reason) => {
+      const claude = fakeClaude({ holdInit: true })
+      const adapter = adapterFor({
+        ...claude,
+        openConnection: async (...args) => {
+          const connection = await claude.openConnection(...args)
+          claude.connections[0]!.initialization.resolve({
+            models: MODELS,
+            fast_mode_state: 'off',
+            fast_mode_disabled_reason: reason
+          })
+          return connection
+        }
+      })
+      await adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'new',
+        options: { fastMode: 'true' },
+        events: recordingJournalSink()
+      })
+      const connection = claude.connections[0]!
+      await expect(
+        adapter.dispatch({
+          sessionId: 'session-1',
+          clientMessageId: 'fast',
+          body: USER_MESSAGE,
+          executionOptions: { fastMode: 'true' },
+          fence: 7
+        })
+      ).resolves.toMatchObject({ state: 'admitted' })
+      expect(connection.calls).toContainEqual({
+        subtype: 'apply_flag_settings',
+        params: { settings: { fastMode: true } }
+      })
+      expect(connection.sent).toHaveLength(1)
+      await adapter.closeAll()
+    }
+  )
+
+  it.each([false, true])(
+    'never records earlier Fast on as dispatch execution (resume: %s)',
+    async (resume) => {
+      const claude = fakeClaude({ holdInit: true })
+      const adapter = adapterFor(
+        {
+          ...claude,
+          openConnection: async (...args) => {
+            const connection = await claude.openConnection(...args)
+            claude.connections[0]!.initialization.resolve({ models: MODELS, fast_mode_state: 'on' })
+            return connection
+          }
+        },
+        { resumesTranscript: resume }
+      )
+      await adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'resume',
+        options: {},
+        events: recordingJournalSink()
+      })
+      const connection = claude.connections[0]!
+      if (!resume) {
+        await adapter.dispatch({
+          sessionId: 'session-1',
+          clientMessageId: 'previous',
+          body: USER_MESSAGE,
+          executionOptions: {},
+          fence: 7
+        })
+        claudeFrame(connection, {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          fast_mode_state: 'on'
+        })
+        claudeTurnEnds(connection)
+      }
+      const outcome = await adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'next',
+        body: USER_MESSAGE,
+        executionOptions: {},
+        fence: 7
+      })
+      expect(outcome).toMatchObject({ state: 'admitted', ranOptions: { effort: 'high' } })
+      expect('ranOptions' in outcome ? outcome.ranOptions : undefined).not.toHaveProperty(
+        'fastMode'
+      )
+      expect(
+        (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current.fastModeState
+      ).toBe('on')
+      claudeFrame(connection, {
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        fast_mode_state: 'off',
+        fast_mode_disabled_reason: 'preference'
+      })
+      await adapter.closeAll()
+    }
+  )
+
   it.each([
     ['the effort the CLI applied over the settings level', 'low', { effort: 'low' }],
     ['no effort where the CLI applies none, whatever the settings say', null, {}]

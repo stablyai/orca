@@ -1819,6 +1819,16 @@ html.native-shell .app-layout {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
+/* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
+[data-animation-offscreen],
+[data-animation-offscreen] * {
+  animation-play-state: paused;
+}
+
+.agent-working-spinner[data-animation-offscreen] {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .agent-working-spinner {
     animation: none;
@@ -2671,6 +2681,39 @@ html.native-shell .app-layout {
 .animate-waveform {
   animation: waveform 1.4s ease-in-out infinite;
   transform-origin: center;
+}
+
+.tab-entry-omnibox > input:focus:placeholder-shown:not(:read-only) {
+  caret-color: transparent;
+}
+
+.tab-entry-omnibox:has(> input:focus:placeholder-shown:not(:read-only))::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: calc(var(--spacing) * 3);
+  top: 50%;
+  width: 2px;
+  height: 1em;
+  transform: translateY(-50%);
+  background: color-mix(in srgb, currentColor 85%, transparent);
+  pointer-events: none;
+  animation: tab-entry-caret 850ms step-end infinite;
+}
+
+@keyframes tab-entry-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-entry-omnibox::after {
+    animation: none !important;
+  }
 }
 
 /* CLI feature tip — terminal cursor inside the agent-control command. */

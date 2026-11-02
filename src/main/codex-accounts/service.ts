@@ -10,7 +10,7 @@ import type {
 import type { CodexRateLimitResetResult } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { RateLimitService } from '../rate-limits/service'
 import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from './runtime-selection'

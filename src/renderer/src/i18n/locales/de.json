@@ -844,6 +844,8 @@
       "claudeRemoveFolder": "Orca löscht den Claude-Ordner dieses Kontos und dessen Anmeldung von diesem Computer. Der mit „Systemstandard“ geteilte Chat-Verlauf bleibt erhalten. Falls dieses Konto ausgewählt ist, verwendet der nächste Claude-Start „Systemstandard“."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Git-Vorgang läuft anderswo",
+      "remoteOperationInAnotherWorkspace": "In einem anderen Arbeitsbereich läuft ein Git-Vorgang, etwa Push, Pull oder erzwungener Push. Warte, bis er abgeschlossen ist, bevor du diese Aktion verwendest, damit sich die Vorgänge nicht überschneiden.",
       "actionModel": {
         "on": "Ein",
         "off": "Aus",
@@ -1772,7 +1774,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Dateien außerhalb des Arbeitsbereichs können auf einem gekoppelten Server noch nicht in der Vorschau angezeigt werden.",
           "webClientUnavailable": "Dokumentvorschauen sind im Web-Client nicht verfügbar."
         }
       },
@@ -4545,7 +4546,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Keine weiteren Konten",
-            "9332ba8684": "Wechseln zu",
             "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
@@ -6400,11 +6400,7 @@
           "dbe2d18972": "Weitere Aktionen für {{value0}}",
           "openInOrcaBrowser": "Im Orca-Browser öffnen",
           "2c67730e07": "In Orca öffnen",
-          "e42941631a": "In Linear anzeigen",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Issue bearbeiten",
-          "b22f058067": "Auf GitHub anzeigen",
-          "e97d8f2876": "Issue #{{value0}}",
           "moreIssueActions": "Weitere Issue-Aktionen",
           "copyLink": "Link kopieren",
           "copyLinkSuccess": "{{value0}} kopiert",
@@ -6427,8 +6423,6 @@
           "cliCreatedFromShell": "Über `orca worktree create` erstellt",
           "cliStartupAgent": "Mit {{value0}} gestartet",
           "cliCreated": "Durch Orca CLI erstellt",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "In Jira anzeigen",
           "linkedJira": "Verknüpft mit Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -7333,6 +7327,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Der Speicherort der Konten konnte nicht gespeichert werden. Versuche es erneut.",
           "c2d2751587": "Konto entfernen",
           "dbb9626ed1": "Abbrechen",
           "63843e37e2": "Claude-Konto entfernen?",
@@ -19743,6 +19738,8 @@
         "unnamedSender": "einem Agenten",
         "messageFromCoordinator": "Nachricht vom Koordinator",
         "startedWorker": "Worker gestartet",
+        "handedOffToAgent": "An Agenten übergeben",
+        "startedAgent": "Agent gestartet",
         "taskFromCoordinator": "Aufgabe vom Koordinator",
         "updateFromWorker": "Aktualisierung vom Worker"
       },
@@ -21719,7 +21716,8 @@
       "showLinked_one": "{{count}} verknüpftes Review oder verknüpfte Aufgabe anzeigen",
       "showLinked_other": "{{count}} verknüpfte Reviews und Aufgaben anzeigen",
       "linkedCount_one": "{{count}} verknüpft",
-      "linkedCount_other": "{{count}} verknüpft"
+      "linkedCount_other": "{{count}} verknüpft",
+      "labels": "Labels: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Die entfernte Laufzeitumgebung aktualisieren, um Verknüpfungen des Arbeitsbereichs zu ändern",
@@ -22960,12 +22958,14 @@
       "serveSimUnavailable": "serve-sim ist nicht verfügbar.",
       "serveSimNoEndpoints": "serve-sim hat keine Stream-Endpunkte zurückgegeben.",
       "serveSimEndpointUnreachable": "serve-sim wurde gestartet, aber der Stream-Endpunkt ist nicht erreichbar.",
+      "deviceHubInputBlocked": "Device Hub von Xcode hat die Eingabe für diesen Simulator übernommen, daher kommen Tippen und Texteingabe nicht an. Beende Device Hub und verbinde den Simulator erneut.",
       "androidSdkMissing": "Android SDK nicht gefunden. Android Studio installieren und ANDROID_HOME setzen.",
       "adbUnavailable": "adb ist nicht verfügbar.",
       "noAndroidDevices": "Keine Android-Geräte oder AVDs gefunden. Eines in Android Studio erstellen.",
       "androidDeviceNotRunning": "Android-Gerät „{{device}}“ läuft nicht. Zuerst starten.",
       "unknownDeviceOrAvd": "„{{device}}“ ist weder ein laufendes Gerät noch ein bekanntes AVD.",
       "avdBootTimeout": "AVD „{{avdName}}“ wurde nicht rechtzeitig vollständig gestartet.",
+      "avdExitedBeforeBoot": "AVD „{{avdName}}“ wurde beendet, bevor der Start abgeschlossen war: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy-Server konnte nicht heruntergeladen werden: {{detail}}",
       "scrcpyServerInvalid": "Der heruntergeladene scrcpy-Server war ungültig oder unvollständig."
     },

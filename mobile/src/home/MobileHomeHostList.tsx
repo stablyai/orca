@@ -19,7 +19,7 @@ type MobileHomeHostListProps = {
   contentMaxWidth: number
   /** Sections above Desktops (Jump back in); null when there's nothing to resume. */
   header: ReactElement | null
-  /** Rows after Desktops (the app update notice). */
+  /** Sections after Desktops (Tasks, Automations and the app update notice). */
   footer: ReactElement
   hostAttempts: Record<string, number>
   hostLastConnected: Record<string, number | null>

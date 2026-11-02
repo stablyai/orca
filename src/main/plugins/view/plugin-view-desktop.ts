@@ -1,4 +1,6 @@
 import type { WebContents } from 'electron'
+import type { z } from 'zod'
+import type { PluginShotReplayParams } from '../../../shared/rpc-contract/plugins-params'
 import {
   PLUGIN_VIEW_NO_WORKSPACE_CODE,
   PLUGIN_VIEW_NOT_SHOWN_CODE,
@@ -15,6 +17,7 @@ import {
 } from './plugin-view-capture'
 import { requestPluginViewFromRenderer } from './plugin-view-renderer-relay'
 import { pluginShotActRefusal, pluginShotThemeDecision } from './plugin-shot-policy'
+import { shootPluginReplay, type PluginShotReplayResult } from './plugin-view-replay-shot'
 import type {
   PluginShotAct,
   PluginShotActResult
@@ -46,8 +49,12 @@ export type PluginShotResult = {
   settled: boolean
   /** Errors the panel logged during the capture and the banner it shows, if any. */
   errors: string[]
+  /** Host calls (`plugin.request` included) still unanswered at the capture; components only. */
+  pendingRequests?: number
   /** One result per `acts` entry, when acts were asked for. */
   actions?: PluginShotActResult[]
+  /** With acts: the panel's atoms were put back after the capture (false: its guest reloaded). */
+  restored?: boolean
 }
 
 /** `ifShown` and the panel was not on screen: nothing was opened, switched or captured. */
@@ -72,6 +79,8 @@ export type PluginViewDesktop = {
     ifShown?: boolean
     acts?: PluginShotAct[]
   }): Promise<PluginShotResult | PluginShotNotShown>
+  /** `shot --scenario`: captures a CLI-rendered tree without opening the plugin's panel. */
+  shotReplay(params: z.infer<typeof PluginShotReplayParams>): Promise<PluginShotReplayResult>
 }
 
 export type PluginViewDesktopDeps = {
@@ -95,6 +104,8 @@ const RENDER_TIMEOUT_MS = 15_000
 const REPLY_GRACE_MS = 5_000
 // Why: each act may wait up to 3s for the panel to settle, plus the frames that paint it.
 const ACT_TIMEOUT_MS = 4_000
+// Why: after drawing, a shot waits up to 3s more for the panel's worker to answer.
+const SETTLE_TIMEOUT_MS = 3_500
 const MAX_ERRORS = 20
 
 function failed(reply: PluginViewReply): PluginCliError | null {
@@ -152,6 +163,9 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
       return { pluginKey, kind: 'panel', panelId: panel.panelId, title: panel.title }
     },
 
+    shotReplay: (params) =>
+      shootPluginReplay({ contents: requireContents(), windowShown: deps.windowShown() }, params),
+
     shot: async ({ pluginKey, panelId, colorScheme: requested, width, ifShown, acts }) => {
       const panel = await resolvePluginViewPanel(deps.source, pluginKey, panelId)
       const contents = requireContents()
@@ -166,78 +180,87 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
       const { colorScheme, themeReason } = pluginShotThemeDecision(requested, deps.windowShown())
       const { cursor } = deps.logsSince(pluginKey)
       return withPaintingWhileHidden([contents, ...deps.guestsOf(pluginKey)], async () => {
-        try {
-          const reply = await requestPluginViewFromRenderer(
-            contents,
-            {
-              kind: 'open-panel',
-              pluginKey,
-              panelId: panel.panelId,
-              capture: {
-                guestRevision: panel.guestRevision,
-                ...(width === undefined ? {} : { width }),
-                ...(colorScheme === undefined ? {} : { colorScheme }),
-                ...(ifShown ? { ifShown: true } : {}),
-                ...(acts ? { acts } : {}),
-                timeoutMs: RENDER_TIMEOUT_MS
+        let restored: boolean | undefined
+        const shot = await (async (): Promise<PluginShotResult | PluginShotNotShown> => {
+          try {
+            const reply = await requestPluginViewFromRenderer(
+              contents,
+              {
+                kind: 'open-panel',
+                pluginKey,
+                panelId: panel.panelId,
+                capture: {
+                  guestRevision: panel.guestRevision,
+                  ...(width === undefined ? {} : { width }),
+                  ...(colorScheme === undefined ? {} : { colorScheme }),
+                  ...(ifShown ? { ifShown: true } : {}),
+                  ...(acts ? { acts } : {}),
+                  timeoutMs: RENDER_TIMEOUT_MS
+                }
+              },
+              RENDER_TIMEOUT_MS + SETTLE_TIMEOUT_MS + actsTimeoutMs + REPLY_GRACE_MS
+            )
+            if (ifShown && !reply.ok && reply.code === PLUGIN_VIEW_NOT_SHOWN_CODE) {
+              return {
+                pluginKey,
+                panelId: panel.panelId,
+                title: panel.title,
+                notShown: reply.message
               }
-            },
-            RENDER_TIMEOUT_MS + actsTimeoutMs + REPLY_GRACE_MS
-          )
-          if (ifShown && !reply.ok && reply.code === PLUGIN_VIEW_NOT_SHOWN_CODE) {
+            }
+            const error = failed(reply)
+            if (error) {
+              throw error
+            }
+            const drawn = reply.ok ? reply.panel : undefined
+            if (!drawn) {
+              throw new Error('Orca did not report where the panel is drawn.')
+            }
+            const guest =
+              drawn.ui === 'html'
+                ? deps.guestsOf(pluginKey).find((each) => each.getURL() === drawn.guestUrl)
+                : undefined
+            await settlePluginFrameGuest(guest)
+            const image = await capturePluginPanelPng(
+              contents,
+              drawn.rect,
+              guest && drawn.guestRect
+                ? { contents: guest, rect: drawn.guestRect, fromBitmap: deps.imageFromBitmap }
+                : undefined
+            )
+            const logged = deps
+              .logsSince(pluginKey, cursor)
+              .lines.filter((line) => line.level === 'error')
+              .map((line) => line.line)
             return {
               pluginKey,
               panelId: panel.panelId,
               title: panel.title,
-              notShown: reply.message
+              ui: drawn.ui,
+              png: image.png.toString('base64'),
+              width: image.width,
+              height: image.height,
+              colorScheme: drawn.colorScheme,
+              themeApplied: drawn.themeApplied,
+              ...(themeReason ? { themeReason } : {}),
+              settled: drawn.settled,
+              errors: [...(drawn.issue ? [drawn.issue] : []), ...logged].slice(0, MAX_ERRORS),
+              ...(drawn.pendingRequests === undefined
+                ? {}
+                : { pendingRequests: drawn.pendingRequests }),
+              ...(drawn.actions ? { actions: drawn.actions } : {})
             }
+          } finally {
+            const ended = await requestPluginViewFromRenderer(
+              contents,
+              { kind: 'end-capture' },
+              OPEN_TIMEOUT_MS
+            ).catch(() => null)
+            restored = ended?.ok ? ended.restored : undefined
           }
-          const error = failed(reply)
-          if (error) {
-            throw error
-          }
-          const drawn = reply.ok ? reply.panel : undefined
-          if (!drawn) {
-            throw new Error('Orca did not report where the panel is drawn.')
-          }
-          const guest =
-            drawn.ui === 'html'
-              ? deps.guestsOf(pluginKey).find((each) => each.getURL() === drawn.guestUrl)
-              : undefined
-          await settlePluginFrameGuest(guest)
-          const image = await capturePluginPanelPng(
-            contents,
-            drawn.rect,
-            guest && drawn.guestRect
-              ? { contents: guest, rect: drawn.guestRect, fromBitmap: deps.imageFromBitmap }
-              : undefined
-          )
-          const logged = deps
-            .logsSince(pluginKey, cursor)
-            .lines.filter((line) => line.level === 'error')
-            .map((line) => line.line)
-          return {
-            pluginKey,
-            panelId: panel.panelId,
-            title: panel.title,
-            ui: drawn.ui,
-            png: image.png.toString('base64'),
-            width: image.width,
-            height: image.height,
-            colorScheme: drawn.colorScheme,
-            themeApplied: drawn.themeApplied,
-            ...(themeReason ? { themeReason } : {}),
-            settled: drawn.settled,
-            errors: [...(drawn.issue ? [drawn.issue] : []), ...logged].slice(0, MAX_ERRORS),
-            ...(drawn.actions ? { actions: drawn.actions } : {})
-          }
-        } finally {
-          await requestPluginViewFromRenderer(
-            contents,
-            { kind: 'end-capture' },
-            OPEN_TIMEOUT_MS
-          ).catch(() => undefined)
-        }
+        })()
+        // After --act: whether the panel's atoms were put back once the capture ended.
+        return 'png' in shot && acts ? { ...shot, restored: restored === true } : shot
       })
     }
   }

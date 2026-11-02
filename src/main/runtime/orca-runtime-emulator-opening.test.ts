@@ -65,7 +65,7 @@ describe('user emulator opening', () => {
     expect(acquire).not.toHaveBeenCalled()
     expect(await commands.emulatorAttach({})).toMatchObject({
       attached: true,
-      info: { deviceUdid: 'iphone' }
+      info: { deviceUdid: 'emulator-5558' }
     })
   })
   it('remembers only successful deliberate UI selection and keeps host preferences isolated', async () => {

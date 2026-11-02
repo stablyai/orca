@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
 import { translate } from '@/i18n/i18n'
+import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
 
 type EmulatorPaneToolbarProps = {
   displayName: string
@@ -63,7 +64,7 @@ export function EmulatorPaneToolbar({
         onValueChange={onSelectDevice}
         disabled={loading || devices.length === 0}
       >
-        <SelectTrigger className="h-7 w-[180px] text-xs">
+        <SelectTrigger density="compact" className="h-7 w-[220px]">
           <SelectValue
             placeholder={translate(
               'auto.components.emulator.pane.emulator.pane.toolbar.3d836b879c',
@@ -72,11 +73,20 @@ export function EmulatorPaneToolbar({
           />
         </SelectTrigger>
         <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-          {devices.map((d) => (
-            <SelectItem key={d.udid} value={d.udid} className="text-xs">
-              {d.name}
-            </SelectItem>
-          ))}
+          {devices.map((d) => {
+            const runtime = simulatorRuntimeLabel(d.runtime)
+            return (
+              <SelectItem
+                key={d.udid}
+                value={d.udid}
+                textValue={d.name}
+                disabled={d.isAvailable === false}
+              >
+                <span className="truncate">{d.name}</span>
+                {runtime ? <span className="shrink-0 text-muted-foreground">{runtime}</span> : null}
+              </SelectItem>
+            )
+          })}
         </SelectContent>
       </Select>
       <Tooltip>

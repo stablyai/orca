@@ -95,7 +95,9 @@ it("keeps an existing chat's rows byte for byte, starts its records after one ap
 
   // Catch-up pages the prefix rows, then the record groups, each sequence once.
   const read = (after: number, limit?: number) =>
-    readJournalRowsAfterCursor(database.db, sessionId, epoch, after, limit).map((row) => row.seq)
+    readJournalRowsAfterCursor(database.db, sessionId, epoch, after, limit).rows.map(
+      (row) => row.seq
+    )
   expect(read(0)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
   expect(read(3, 4)).toEqual([4, 5, 6, 7])
   expect(read(5, 2)).toEqual([6, 7])

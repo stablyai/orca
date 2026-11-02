@@ -412,6 +412,8 @@
       "claudeRemoveFolder": "Orca elimina la carpeta de Claude de esta cuenta y su inicio de sesión de este equipo. El historial de chat compartido con Predeterminado del sistema se conserva. Si está seleccionada, el próximo Claude que inicies usará Predeterminado del sistema."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Operación de Git en otro lugar",
+      "remoteOperationInAnotherWorkspace": "Otro espacio de trabajo está ejecutando una operación de Git, como push, pull o force push. Espera a que termine antes de usar esta acción para que las operaciones no se solapen.",
       "actionModel": {
         "on": "Activado",
         "off": "Desactivado",
@@ -1345,7 +1347,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Los archivos fuera del espacio de trabajo aún no se pueden previsualizar en un servidor emparejado.",
           "webClientUnavailable": "Las vistas previas de documentos no están disponibles en el cliente web."
         }
       },
@@ -4097,7 +4098,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Ninguna otra cuenta",
-            "9332ba8684": "Cambiar a",
             "d450654fa2": "Cuenta de Claude",
             "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
@@ -6004,11 +6004,7 @@
           "93cbea12c2": "Notas",
           "dbe2d18972": "Más acciones de {{value0}}",
           "2c67730e07": "Abrir en Orca",
-          "e42941631a": "Ver en Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Editar issue",
-          "b22f058067": "Ver en GitHub",
-          "e97d8f2876": "Issue #{{value0}}",
           "3ea2702e62": "Vinculado {{value0}} #{{value1}}",
           "b105fd3057": "Linear vinculado {{value0}}",
           "3f2649eeb8": "Issue vinculado #{{value0}}",
@@ -6031,8 +6027,6 @@
           "cliCreatedFromShell": "Creado a través de `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "Creado por Orca CLI",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Ver en Jira",
           "linkedJira": "Jira {{value0}} vinculado",
           "openInOrcaBrowser": "Abrir en el navegador Orca"
         },
@@ -6983,6 +6977,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "No se pudo guardar la ubicación de las cuentas. Inténtalo de nuevo.",
           "c2d2751587": "Eliminar cuenta",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "¿Eliminar la cuenta de Claude?",
@@ -19612,6 +19607,8 @@
         "unnamedSender": "un agente",
         "messageFromCoordinator": "Mensaje del coordinador",
         "startedWorker": "Trabajador iniciado",
+        "handedOffToAgent": "Entregado a un agente",
+        "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarea del coordinador",
         "updateFromWorker": "Actualización del trabajador"
       },
@@ -22155,7 +22152,8 @@
       "showLinked_many": "Mostrar {{count}} revisiones y tareas vinculadas",
       "linkedCount_one": "{{count}} vinculado",
       "linkedCount_other": "{{count}} vinculados",
-      "linkedCount_many": "{{count}} vinculados"
+      "linkedCount_many": "{{count}} vinculados",
+      "labels": "Etiquetas: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Actualiza el tiempo de ejecución remoto para cambiar los enlaces del espacio de trabajo",
@@ -23372,12 +23370,14 @@
       "serveSimUnavailable": "serve-sim no está disponible.",
       "serveSimNoEndpoints": "serve-sim no devolvió puntos de conexión de transmisión.",
       "serveSimEndpointUnreachable": "serve-sim se inició, pero no se puede acceder a su punto de conexión de transmisión.",
+      "deviceHubInputBlocked": "Device Hub de Xcode ha tomado el control de la entrada de este simulador, así que los toques y lo que escribas no le llegarán. Cierra Device Hub y vuelve a conectar el simulador.",
       "androidSdkMissing": "No se encontró el SDK de Android. Instala Android Studio y configura ANDROID_HOME.",
       "adbUnavailable": "adb no está disponible.",
       "noAndroidDevices": "No se encontraron dispositivos Android ni AVD. Crea uno en Android Studio.",
       "androidDeviceNotRunning": "El dispositivo Android \"{{device}}\" no está en ejecución. Inícialo primero.",
       "unknownDeviceOrAvd": "\"{{device}}\" no es un dispositivo en ejecución ni un AVD conocido.",
       "avdBootTimeout": "El AVD \"{{avdName}}\" no terminó de iniciarse a tiempo.",
+      "avdExitedBeforeBoot": "El AVD \"{{avdName}}\" se detuvo antes de terminar de iniciarse: {{detail}}",
       "scrcpyDownloadFailed": "No se pudo descargar el servidor de scrcpy: {{detail}}",
       "scrcpyServerInvalid": "El servidor de scrcpy descargado no era válido o estaba incompleto."
     },

@@ -158,3 +158,41 @@ describe('orca/testing with catalog 2', () => {
     expect(panel.errors).toEqual([])
   })
 })
+
+describe('summary and responsive columns', () => {
+  it('summarizes what a person notices first, and which columns fit a width', async () => {
+    panel = await mount(() =>
+      h(
+        'Stack',
+        null,
+        h('Heading', null, 'Review queue'),
+        h('Callout', { tone: 'danger', title: 'Could not load the queue' }, 'offline'),
+        h('Table', {
+          label: 'PRs',
+          columns: [
+            { key: 'title', label: 'Title', minWidth: 'sm' },
+            { key: 'author', label: 'Author', hideBelow: 'sm' },
+            { key: 'checks', label: 'Checks', hideBelow: 'md' }
+          ],
+          rows: [
+            { key: 'a', cells: { title: 'One' } },
+            { key: 'b', cells: { title: 'Two' } }
+          ]
+        }),
+        h('List', { label: 'Later' }, h('ListItem', { title: 'x' })),
+        h('EmptyState', { title: 'All caught up' })
+      )
+    )
+    expect(panel.summary()).toEqual([
+      'Heading "Review queue"',
+      'Callout danger "Could not load the queue"',
+      'Table "PRs": 2 row(s)',
+      'List "Later": 1 item(s)',
+      'EmptyState "All caught up"'
+    ])
+    const table = { type: 'Table' }
+    expect(panel.columnsOf(table)).toEqual(['title', 'author', 'checks'])
+    expect(panel.columnsOf(table, { width: 400 })).toEqual(['title', 'author'])
+    expect(panel.columnsOf(table, { width: 300 })).toEqual(['title'])
+  })
+})

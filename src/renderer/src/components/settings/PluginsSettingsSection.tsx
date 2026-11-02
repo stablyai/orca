@@ -7,7 +7,6 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { PluginDevelopmentDialog } from '../plugins/dialogs/PluginDevelopmentDialog'
 import { PluginInstallDialog } from '../plugins/dialogs/PluginInstallDialog'
-import { PluginInstallTrustDialogHost } from '../plugins/dialogs/PluginInstallTrustDialog'
 import { sourceInstallTrustPrompt } from '../plugins/presentation/plugin-install-trust'
 import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
 import { PluginRemoveDialog } from '../plugins/dialogs/PluginRemoveDialog'
@@ -402,7 +401,6 @@ export function PluginsSettingsSection({
         busy={devPathsBusy}
         onChange={updateDevPaths}
       />
-      <PluginInstallTrustDialogHost />
       <PluginRemoveDialog
         plugin={removePlugin}
         busy={Boolean(removePlugin && busyPluginKeys.has(removePlugin.pluginKey))}

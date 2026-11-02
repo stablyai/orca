@@ -3,6 +3,7 @@ import { getEmulatorOpeningMode } from '../../../../shared/emulator-opening-pref
 import { SettingsRow } from './SettingsFormControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { translate } from '@/i18n/i18n'
+import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
 
 type Device = { name: string; udid: string; runtime?: string; isAvailable?: boolean }
 type Props = {
@@ -14,7 +15,8 @@ type Props = {
 export function EmulatorOpeningSettings({ settings, devices, enabled, updateSettings }: Props) {
   const mode = getEmulatorOpeningMode(settings)
   const fixed = settings.mobileEmulatorDefaultDeviceUdid ?? ''
-  const missing = fixed && !devices.some((device) => device.udid === fixed)
+  const selected = devices.find((device) => device.udid === fixed)
+  const missing = fixed && !selected
   return (
     <>
       <SettingsRow
@@ -69,7 +71,11 @@ export function EmulatorOpeningSettings({ settings, devices, enabled, updateSett
             >
               <SelectTrigger size="sm" className="w-56 max-w-full">
                 <SelectValue placeholder={translate('emulator.opening.choose', 'Choose device')}>
-                  {devices.find((device) => device.udid === fixed)?.name || fixed || undefined}
+                  {selected
+                    ? [selected.name, simulatorRuntimeLabel(selected.runtime)]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : fixed || undefined}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent position="popper" align="end">
@@ -88,9 +94,7 @@ export function EmulatorOpeningSettings({ settings, devices, enabled, updateSett
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate">{device.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {device.runtime
-                          ?.replace('com.apple.CoreSimulator.SimRuntime.', '')
-                          .replaceAll('-', '.')}
+                        {simulatorRuntimeLabel(device.runtime) ?? device.runtime}
                       </span>
                     </span>
                   </SelectItem>

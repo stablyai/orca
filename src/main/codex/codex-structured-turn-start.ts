@@ -18,7 +18,7 @@ import type {
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { codexTurnRequestOptions } from './codex-structured-service-tier'

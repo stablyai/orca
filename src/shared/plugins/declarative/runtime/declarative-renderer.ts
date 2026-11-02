@@ -10,6 +10,7 @@ import type {
 } from './declarative-runtime-types'
 import { evaluateOrcaTree, type OrcaCallback } from './declarative-evaluate'
 import { createMemoryRetention } from './declarative-memory-retention'
+import { actSnapshotSubscriptions } from './declarative-act-snapshot'
 import {
   defaultSchedule,
   errorMessage,
@@ -199,6 +200,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
         bridge.on(PLUGIN_DECLARATIVE_MESSAGES.ack, acknowledge),
         bridge.on(PLUGIN_DECLARATIVE_MESSAGES.hydrate, panel.hydrate),
         bridge.on(PLUGIN_DECLARATIVE_MESSAGES.visibility, panel.setVisibility),
+        ...actSnapshotSubscriptions(bridge.on.bind(bridge), document),
         bridge.on('theme', (payload) => {
           const { colorScheme } = readHostMessage(payload)
           if (

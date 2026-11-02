@@ -4,7 +4,12 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { BottomDrawer } from '../components/BottomDrawer'
+import {
+  BottomDrawer,
+  OptionPager,
+  useOptionPager,
+  type OptionPagerControls
+} from '../components/BottomDrawer'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import {
@@ -26,7 +31,6 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
 import { ListGroup, SectionHeader } from '../components/list/ListGroup'
 import { DrillRow } from './workspace-option-rows'
-import { OptionPager, useOptionPager, type OptionPagerControls } from './workspace-options-pager'
 import {
   WORKSPACE_OPTION_CONTROLS,
   type WorkspaceOptionHost,

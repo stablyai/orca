@@ -1,3 +1,13 @@
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import type { WorkspaceLayoutLoadContext } from '../../../../shared/workspace-layout/workspace-layout-load-types'
+import { isPaneSleepRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  pairedRuntimeHostOfBinding,
+  terminalHoldsPane,
+  type MainTerminalSurfaces,
+  type BoundTerminal
+} from './terminal-surface-index'
 // Read pane copies only in the window-owned branch; main-owned builds use layout alone. Delete these copies with the legacy branch (L80).
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -53,4 +63,94 @@ export function paneOfPty(
     paneKey: pty.paneKey ?? null,
     recordedAtGraphSequence: pty.surfaceRecordedAtGraphSequence ?? 0
   }
+}
+
+export function captureMainTerminalPaneLookup(
+  surfaces: MainTerminalSurfaces,
+  registered: (ptyId: string) => BoundTerminal | null
+): (ptyId: string) => { worktreeId: string; tabId: string; leafId: string } | null {
+  const candidates = new Map<string, typeof surfaces.leaves>()
+  const terminals = new Map<string, BoundTerminal | null>()
+  const facts = new Map([...surfaces.paneFacts].map(([key, value]) => [key, { ...value }]))
+  for (const leaf of surfaces.leaves) {
+    if (!leaf.ptyId) {
+      continue
+    }
+    const bucket = candidates.get(leaf.ptyId) ?? []
+    bucket.push({ ...leaf })
+    candidates.set(leaf.ptyId, bucket)
+    if (!terminals.has(leaf.ptyId)) {
+      const terminal = registered(leaf.ptyId)
+      terminals.set(
+        leaf.ptyId,
+        terminal ? { worktreeId: terminal.worktreeId, incarnationId: terminal.incarnationId } : null
+      )
+    }
+  }
+  return (ptyId) =>
+    findMainTerminalPane(ptyId, candidates.get(ptyId) ?? [], facts, terminals.get(ptyId) ?? null)
+}
+
+export function findMainTerminalPane(
+  ptyId: string,
+  leaves: MainTerminalSurfaces['leaves'],
+  facts: MainTerminalSurfaces['paneFacts'],
+  terminal: BoundTerminal | null
+): { worktreeId: string; tabId: string; leafId: string } | null {
+  const pane = leaves.find(
+    (leaf) =>
+      leaf.ptyId === ptyId &&
+      (pairedRuntimeHostOfBinding(ptyId) !== null ||
+        terminalHoldsPane(terminal, leaf, facts.get(`${leaf.tabId}::${leaf.leafId}`)))
+  )
+  return pane ? { worktreeId: pane.worktreeId, tabId: pane.tabId, leafId: pane.leafId } : null
+}
+
+/** Raw invalidation inputs only; main's loader and pane qualifier still select every binding. */
+export function mainTerminalSourceInputs(
+  session: WorkspaceSessionState | null | undefined,
+  context: WorkspaceLayoutLoadContext
+) {
+  if (!session) {
+    return null
+  }
+  return structuredClone({
+    tabs: Object.entries(session.tabsByWorktree ?? {}).map(([key, rows]) => [
+      key,
+      rows.map((row) => [row.id, row.worktreeId, row.ptyId, row.sortOrder, row.createdAt])
+    ]),
+    tabBar: Object.entries(session.unifiedTabs ?? {}).map(([key, rows]) => [
+      key,
+      rows.map((row) => [
+        row.id,
+        row.contentType,
+        row.entityId,
+        row.groupId,
+        row.sortOrder,
+        row.createdAt
+      ])
+    ]),
+    groups: Object.entries(session.tabGroups ?? {}).map(([key, groups]) => [
+      key,
+      groups.map((group) => [group.id, group.tabOrder])
+    ]),
+    groupLayouts: session.tabGroupLayouts,
+    layouts: Object.entries(session.terminalLayoutsByTabId ?? {}).map(([id, layout]) => [
+      id,
+      collectLayoutLeafIdsInOrder(layout.root),
+      layout.ptyIdsByLeafId,
+      collectLayoutLeafIdsInOrder(layout.root).map((leaf) => [
+        leaf,
+        context.ptyGenerationOf?.(leaf)
+      ])
+    ]),
+    incarnations: session.terminalPtyIncarnationsByPaneKey,
+    sleeping: Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).map(([key, record]) => [
+      key,
+      isPaneSleepRecord(record)
+    ]),
+    retired: session.terminalSurfaceTombstonesByPaneKey,
+    closedTabs: session.closedTerminalTabTombstonesByTabId,
+    closedPanes: session.closedTerminalPanesByPaneKey
+  })
 }

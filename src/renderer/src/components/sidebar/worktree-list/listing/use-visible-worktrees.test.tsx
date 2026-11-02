@@ -5,7 +5,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { useVisibleSidebarWorktrees } from './use-visible-worktrees'
 import type * as visibleWorktreesModule from '../../visible-worktrees'
 

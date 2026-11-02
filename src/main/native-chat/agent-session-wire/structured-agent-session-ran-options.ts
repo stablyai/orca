@@ -8,7 +8,7 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { recordAgentSessionRanOptions } from '../../runtime/agent-session-record-options'
+import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 
 type RanOptionsContext = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'agents' | 'modelCatalog'>

@@ -7,7 +7,6 @@ import {
   type PluginViewReply,
   type PluginViewRequest
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
-import type { PluginShotActResult } from '../../../../../shared/plugins/view/plugin-shot-acts'
 import { detectLanguage } from '@/lib/language-detect'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { useAppStore } from '@/store'
@@ -23,13 +22,12 @@ import {
   measurePluginPanelGuest,
   measurePluginPanelSurface,
   nextPaintedFrames,
-  settlePluginPanelAfterAct,
+  waitForColorScheme,
   waitForPluginPanelDraw
 } from './plugin-view-panel-settle'
-import { runPluginPanelActs } from './plugin-view-acts'
-import { pluginPanelActDriver } from '../../right-sidebar/plugin-panel-act-driver'
-import { pluginDeclarativeActTarget } from '../declarative/plugin-declarative-act-targets'
+import { restoreActedPanel, settleAndActOnPanel } from './plugin-view-capture-acts'
 import { pluginPanelNotShownReason } from './plugin-view-shown'
+import { endPluginShotReplay, replayPluginPanel } from './plugin-view-replay'
 
 type Failure = Extract<PluginViewReply, { ok: false }>
 
@@ -103,18 +101,10 @@ async function capturePanel(
   if (status.value?.failure) {
     return fail(requestId, 'panel_failed', `The plugin panel ${status.value.failure}.`)
   }
-  await nextPaintedFrames()
-  let actions: PluginShotActResult[] | undefined
-  if (capture.acts) {
-    const driver = status.value?.ui === 'components' ? pluginPanelActDriver(tabKey) : null
-    if (!driver) {
-      return fail(requestId, 'act_unsupported', 'Only a drawn components panel takes --act.')
-    }
-    actions = await runPluginPanelActs(capture.acts, {
-      driver,
-      targetOf: pluginDeclarativeActTarget,
-      settle: () => settlePluginPanelAfterAct(driver.onDraw)
-    })
+  await waitForColorScheme(wantDark)
+  const prepared = await settleAndActOnPanel(tabKey, status.value?.ui, capture.acts)
+  if (!prepared.ok) {
+    return fail(requestId, 'act_unsupported', 'Only a drawn components panel takes --act.')
   }
   let rect = measurePluginPanelSurface(tabKey)
   // The panel sits inside the sidebar's border; one correction makes it exactly --width wide.
@@ -122,6 +112,8 @@ async function capturePanel(
     usePluginViewCaptureStore
       .getState()
       .setPanelWidth(capture.width + (capture.width - Math.round(rect.width)))
+    // A resize relayouts the panel; let it paint before main captures.
+    await nextPaintedFrames()
     await nextPaintedFrames()
     rect = measurePluginPanelSurface(tabKey)
   }
@@ -142,7 +134,10 @@ async function capturePanel(
       colorScheme: dark ? 'dark' : 'light',
       themeApplied: wantDark !== null && dark === wantDark,
       settled: status.settled,
-      ...(actions ? { actions } : {})
+      ...(prepared.pendingRequests === undefined
+        ? {}
+        : { pendingRequests: prepared.pendingRequests }),
+      ...(prepared.actions ? { actions: prepared.actions } : {})
     }
   }
 }
@@ -193,9 +188,18 @@ export async function handlePluginViewRequest(
         return await openPanel(request)
       case 'open-editor':
         return await openEditor(request)
-      case 'end-capture':
+      case 'replay-panel':
+        return await replayPluginPanel(request)
+      case 'end-capture': {
+        endPluginShotReplay()
         usePluginViewCaptureStore.getState().end()
-        return { requestId: request.requestId, ok: true }
+        const restored = await restoreActedPanel()
+        return {
+          requestId: request.requestId,
+          ok: true,
+          ...(restored === undefined ? {} : { restored })
+        }
+      }
     }
   } catch (error) {
     return fail(

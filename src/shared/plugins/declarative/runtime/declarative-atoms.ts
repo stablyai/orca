@@ -280,6 +280,22 @@ export function applyStorageValue(key: string, value: unknown): void {
   }
 }
 
+/**
+ * `orca plugin shot --act`: remembers every plugin-written atom's value; the returned function
+ * sets them back as plugin code would, so persisted atoms store their old values again.
+ */
+export function captureAtomValues(): () => void {
+  const values = new Map<AtomState<unknown>, unknown>()
+  for (const inner of writableAtoms) {
+    values.set(inner, inner.value)
+  }
+  return () => {
+    for (const [inner, value] of values) {
+      assign(inner, value, true)
+    }
+  }
+}
+
 /** Applies stored values for a scope (on boot, or the workspace's after a workspace switch). */
 export function hydrateAtoms(
   scope: SnapshotScope,

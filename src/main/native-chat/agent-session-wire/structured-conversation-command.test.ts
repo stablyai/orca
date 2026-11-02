@@ -8,12 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore,
   type PersistedTestAgentSessionStore
-} from '../../runtime/agent-session-record-store-test-harness'
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'

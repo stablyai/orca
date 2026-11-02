@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
-import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
+import { waitForStructuredAgentSessionRecovery } from './agent-session/structured-agent-session-runtime'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
 
 const SESSION = 'claude-failed-start'

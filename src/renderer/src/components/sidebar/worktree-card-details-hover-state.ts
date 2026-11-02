@@ -79,7 +79,6 @@ export function useWorktreeCardDetailsHoverControl() {
 
   return {
     hoverOpen: open || Boolean(openMenu),
-    issueMenuOpen: openMenu === 'issue',
     reviewMenuOpen: openMenu === 'review',
     handleHoverOpenChange,
     handleIssueMenuOpenChange: (next: boolean) => setDetailMenuOpen('issue', next),

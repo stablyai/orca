@@ -32,7 +32,7 @@ vi.mock('pg', () => ({
 }))
 
 const { CELL_INVENTORY_LOCK_TIMEOUT_MS, RelayAssignmentStore } = await import(
-  './assignment-store.js'
+  './assignment/assignment-store.js'
 )
 const { consumeRelayCellInventoryHold, openInMemoryRelayDatabase, openRelayDatabase, POSTGRES_LOCK_TIMEOUT_MS } =
   await import('./database.js')

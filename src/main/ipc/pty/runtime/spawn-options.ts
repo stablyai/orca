@@ -1,5 +1,5 @@
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import {

@@ -445,8 +445,6 @@ it('resuming into the session it was opened from shows the resumed terminal ther
   const onResumedTerminal = vi.fn()
   function SessionBelow() {
     useProvideSessionScreenHandlers('owned-host', 'owned-worktree', {
-      onFileOpenStart: vi.fn(),
-      onOpenedFileDiff: vi.fn(),
       onResumedTerminal
     })
     return null

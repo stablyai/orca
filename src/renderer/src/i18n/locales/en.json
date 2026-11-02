@@ -916,6 +916,8 @@
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
+      "remoteOperationInAnotherWorkspace": "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
       "actionModel": {
         "on": "On",
         "off": "Off",
@@ -1862,7 +1864,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet.",
           "webClientUnavailable": "Document previews aren't available in the web client."
         }
       },
@@ -3786,7 +3787,8 @@
           },
           "PendingNativeChatCreation": {
             "sendBlockedFailed": "Retry creating the worktree to send",
-            "sendBlockedHeld": "Sends when the worktree is ready"
+            "sendBlockedHeld": "Sends when the worktree is ready",
+            "openingChat": "Opening chat…"
           },
           "WorktreeSetupSteps": {
             "prepare": "Prepare workspace",
@@ -4653,7 +4655,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "No other accounts",
-            "9332ba8684": "Switch to",
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
@@ -6529,11 +6530,7 @@
           "dbe2d18972": "More {{value0}} actions",
           "openInOrcaBrowser": "Open in Orca browser",
           "2c67730e07": "Open in Orca",
-          "e42941631a": "View on Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Edit issue",
-          "b22f058067": "View on GitHub",
-          "e97d8f2876": "Issue #{{value0}}",
           "moreIssueActions": "More issue actions",
           "copyLink": "Copy link",
           "copyLinkSuccess": "{{value0}} copied",
@@ -6556,8 +6553,6 @@
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "Created by Orca CLI",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "View on Jira",
           "linkedJira": "Linked Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -7466,6 +7461,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Account location could not be saved. Try again.",
           "c2d2751587": "Remove Account",
           "dbb9626ed1": "Cancel",
           "63843e37e2": "Remove Claude Account?",
@@ -13137,7 +13133,11 @@
         "AppearanceThemeControl": {
           "useTerminalTheme": "Use its terminal colors",
           "matchTerminal": "Match Terminal",
-          "dynamic": "dynamic"
+          "dynamic": "dynamic",
+          "browseThemes": "Browse themes",
+          "moreThemes": "More themes",
+          "moreThemesLoading": "Loading themes…",
+          "installingTheme": "Installing {{value0}}…"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -15487,16 +15487,15 @@
             "dc1f3f5535": "Jump back in",
             "c2a0215163": "Waiting for input",
             "0c14dac908": "2m",
-            "77c0dae863": "Done",
-            "3166f865af": "14m",
             "609517273b": "Working",
             "005afbad3d": "now",
-            "e986b282af": "Last opened",
-            "8a3ebdbdac": "1h",
             "04a94cadee": "40 worktrees · 5 active",
             "b5308d5e2c": "M1 Mini",
             "aefd110ea5": "Pair a desktop",
-            "d08ee9c466": "New workspace"
+            "d08ee9c466": "New workspace",
+            "aa44b4a6b2": "Browse your issues and reviews",
+            "eda5c8d01b": "Automations",
+            "cd2ad5b641": "Schedule agent work and view runs"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "Send",
@@ -19993,6 +19992,8 @@
         "messageFromCoordinator": "Message from coordinator",
         "showMore": "Show more",
         "startedWorker": "Started worker",
+        "handedOffToAgent": "Handed off to agent",
+        "startedAgent": "Started agent",
         "taskFromCoordinator": "Task from coordinator",
         "updateFromWorker": "Update from worker"
       },
@@ -20982,8 +20983,18 @@
       "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
       "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",
       "stayInTerminal": "Stay in terminal",
+      "switchToTerminal": "Switch to terminal",
       "cta": "Use Chat UI",
       "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
+      "terminalSaveFailed": "Could not switch to terminal. Choose Terminal in Settings → Agents.",
+      "dismiss": "Dismiss",
+      "liveSwitching": "Live switching available",
+      "liveSwitchingTitle": "Live switching 101",
+      "liveSwitchingDescription": "Right-click an agent tab to switch between Chat UI and the terminal.",
+      "liveSwitchingGotIt": "Got it",
+      "liveSwitchingTerminalTab": "Claude Code",
+      "liveSwitchingPolishTab": "Polish Bottom…",
+      "liveSwitchingCouncilTab": "Council Review",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
       "demoReply": "Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:",
@@ -21998,7 +22009,8 @@
       "linkedCount_other": "{{count}} linked",
       "addEmoji": "Add emoji",
       "addEmojiTooltip": "Add emoji (or type :)",
-      "noEmojiFound": "No emoji found"
+      "noEmojiFound": "No emoji found",
+      "labels": "Labels: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",
@@ -23303,12 +23315,14 @@
       "serveSimUnavailable": "serve-sim is unavailable.",
       "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
       "serveSimEndpointUnreachable": "serve-sim started but its stream endpoint is not reachable.",
+      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "androidSdkMissing": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
       "adbUnavailable": "adb is unavailable.",
       "noAndroidDevices": "No Android devices or AVDs found. Create one in Android Studio.",
       "androidDeviceNotRunning": "Android device \"{{device}}\" is not running. Boot it first.",
       "unknownDeviceOrAvd": "\"{{device}}\" is not a running device or a known AVD.",
       "avdBootTimeout": "AVD \"{{avdName}}\" did not finish booting in time.",
+      "avdExitedBeforeBoot": "AVD \"{{avdName}}\" stopped before it finished booting: {{detail}}",
       "scrcpyDownloadFailed": "Could not download scrcpy server: {{detail}}",
       "scrcpyServerInvalid": "Downloaded scrcpy server was invalid or truncated."
     },

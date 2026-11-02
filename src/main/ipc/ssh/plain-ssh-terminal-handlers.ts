@@ -10,7 +10,7 @@ import { mayUserSshConfigClaimAlias } from '../../ssh/config/ssh-config-alias-cl
 import { getSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { findSystemSsh } from '../../ssh/system-transport/system-ssh-binary'
-import { ensureNodePtySpawnHelperExecutable } from '../../providers/local-pty-utils'
+import { ensureNodePtySpawnHelperExecutable } from '../../providers/local-pty/local-pty-executable-spawn'
 import {
   ackPlainSshTerminal,
   closePlainSshTerminal,

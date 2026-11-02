@@ -1,5 +1,6 @@
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as LineMutations from '../../../session/github-pr-review-line-mutations'
 
 const WORKTREE = 'repo-9::/w'
 const PR_NUMBER = 12
@@ -65,6 +66,8 @@ export function githubPrMountAdapters(
       const mutations = modules.load<typeof import('../../../session/github-pr-mutations')>(
         'mobile/src/session/github-pr-mutations.ts'
       )
+      const lineMutations = () =>
+        modules.load<typeof LineMutations>('mobile/src/session/github-pr-review-line-mutations.ts')
       const results: Record<string, unknown> = {}
       function send(name: string, args: Record<string, unknown>): Promise<unknown> {
         const prRepo = args.fork === true ? FORK_REPO : null
@@ -127,6 +130,25 @@ export function githubPrMountAdapters(
           return mutations.fetchAddIssueComment(client, WORKTREE, {
             prNumber: PR_NUMBER,
             body: 'recorded comment',
+            prRepo
+          })
+        }
+        if (name === 'line-comment') {
+          return lineMutations().fetchAddPRReviewComment(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            commitId: 'head-sha-1',
+            path: 'src/app.ts',
+            startLine: 3,
+            line: 5,
+            body: 'recorded line comment',
+            prRepo
+          })
+        }
+        if (name === 'file-viewed') {
+          return lineMutations().fetchSetPRFileViewed(client, WORKTREE, {
+            pullRequestId: 'PR_kwDO',
+            path: 'src/app.ts',
+            viewed: true,
             prRepo
           })
         }

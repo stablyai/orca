@@ -1,5 +1,3 @@
-import type { AgentSessionRecordReader } from '../../runtime/orchestration/structured-session-lineage'
-import type { NativeResponseEvidence } from '../../runtime/orchestration/structured-parent-account-work'
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import type {
@@ -29,9 +27,9 @@ import type {
   AgentSessionStatusSummary
 } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { AgentSessionUserNameWrite } from '../../runtime/agent-session-record-conversation-name'
-import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import type { AgentSessionUserNameWrite } from '../../runtime/agent-session/records/agent-session-record-conversation-name'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -206,12 +204,6 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
-  parentAccountWork?: (
-    record: AgentSessionRecord,
-    root: string,
-    response: NativeResponseEvidence,
-    reader: AgentSessionRecordReader
-  ) => boolean
   conversationNaming?: StructuredAgentSessionConversationNaming
   /** Carries the user's chat name into the agent's own conversation; never delays the caller. */
   nameProviderConversation?: (record: AgentSessionRecord) => void

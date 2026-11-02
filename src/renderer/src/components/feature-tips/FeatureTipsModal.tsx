@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -9,14 +8,16 @@ import {
 } from '@/lib/orchestration-setup-state'
 import { useAppStore } from '@/store'
 import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
-import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents-search'
+import {
+  setAgentDefaultSurfaceFromFeatureTip,
+  openChatUiFeatureTipSettings
+} from './chat-ui-here-actions'
 import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 import {
   getOrcaCliFeatureTipTelemetrySource,
-  trackAgentDefaultSurfaceChanged,
   trackChatUiFeatureTipAction,
   trackCmdJPaletteFeatureTipAcknowledged,
   trackOrcaCliFeatureTipSetupClicked,
@@ -36,7 +37,6 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const chatUiLaunchTipVariant = useAppStore((s) => s.chatUiLaunchTipVariant) ?? 'none'
@@ -120,7 +120,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
-  const stayInTerminal = (): void => {
+  const handleTerminalChoice = async (): Promise<void> => {
+    if (chatUiLaunchTipVariant === 'chat-ui-on') {
+      handleSkip()
+      await setAgentDefaultSurfaceFromFeatureTip('terminal')
+      return
+    }
     trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'stay_in_terminal')
     handleSkip()
   }
@@ -129,13 +134,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'open_settings')
     markCurrentTipSeen()
     closeModal()
-    openSettingsTarget({
-      pane: 'agents',
-      repoId: null,
-      hostScope: { kind: 'local' },
-      sectionId: AGENT_DEFAULT_SURFACE_SECTION_ID
-    })
-    openSettingsPage()
+    openChatUiFeatureTipSettings()
   }
 
   const enableOrchestrationSkillSetup = (): void => {
@@ -157,25 +156,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
           trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
           break
         }
-        const fromSurface = normalizeAgentDefaultSurface(settings?.agentDefaultSurface)
-        try {
-          // Only the default moves; an agent the user set for itself keeps its own choice.
-          await updateSettingsOrThrow({ agentDefaultSurface: 'chat' })
-          trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'use_chat_ui')
-          trackAgentDefaultSurfaceChanged({
-            from_mode: fromSurface,
-            to_mode: 'chat',
-            source: 'launch_card',
-            launch_tip_shown: true
-          })
-        } catch {
-          toast.error(
-            translate(
-              'featureTips.chatUiHere.saveFailed',
-              'Could not turn on Chat UI. Choose Chat in Settings → Agents.'
-            )
-          )
-        }
+        await setAgentDefaultSurfaceFromFeatureTip('chat')
         break
       }
       case 'learn-cmd-j-palette': {
@@ -328,9 +309,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
         open={isOpen}
         tip={currentTip}
         variant={chatUiLaunchTipVariant}
+        swapButtons={
+          settings?.telemetry?.chatUiLaunchTipButtonEmphasis === 'swapped' ||
+          settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'
+        }
         onOpenChange={handleOpenChange}
         onPrimaryAction={() => void handlePrimaryAction()}
-        onSkip={stayInTerminal}
+        onSkip={() => void handleTerminalChoice()}
         onSettingsClick={openAgentSettings}
       />
     )

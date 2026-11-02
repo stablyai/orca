@@ -2,7 +2,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/ag
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
-import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session/records/agent-session-record-launch-directory'
 import type { StructuredAgentLaunchSources } from '../runtime/structured-agent-launch-composition'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
 import {

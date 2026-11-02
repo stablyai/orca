@@ -23,7 +23,7 @@ import { shutdownManagedSimulatorIfNoPane } from '@/lib/simulator-pane-shutdown-
 import { buildPrelaunchedEmulatorSessionState } from './emulator-prelaunched-session'
 import { useEmulatorPaneManualLaunchEvents } from './use-emulator-pane-manual-launch-events'
 import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
-import { resolveEmulatorAttachTarget } from './emulator-attach-target'
+import { attachWithAvdFallback } from './emulator-attach-target'
 import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
 import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
 import { emulatorStartErrorText, noEmulatorDevicesError } from './emulator-pane-error-copy'
@@ -133,6 +133,12 @@ export function useEmulatorPaneSession({
     [devices, resetVisualOrientation, selectedUdid, session, setDevices, tabId]
   )
 
+  // Unlike iOS MJPEG, a dead Android stream never reconnects itself; show it disconnected so Connect restarts it.
+  const markStreamLost = useCallback(() => {
+    liveTargetRef.current = null
+    setSession((s) => s && { ...s, attached: false })
+  }, [])
+
   const attach = useCallback(
     async (deviceTarget?: string, automatic = false) => {
       if (loading) {
@@ -156,37 +162,34 @@ export function useEmulatorPaneSession({
           throw deviceRefreshErrorRef.current
         }
         const supportsPreferences = await supportsEmulatorOpeningPreferences()
-        const target =
-          supportsPreferences && automatic
-            ? undefined
-            : resolveEmulatorAttachTarget({
-                configuredDefaultUdid,
-                devices: list,
-                deviceTarget,
-                selectedUdid
-              })
-        if (!target && !supportsPreferences) {
+        if (!supportsPreferences && list.length === 0 && !deviceTarget && !configuredDefaultUdid) {
           throw noEmulatorDevicesError()
         }
+        const target =
+          deviceTarget ||
+          (!automatic ? (selectedUdid ?? configuredDefaultUdid ?? undefined) : undefined)
         requestedTarget = target
-        setSelectedUdid(target ?? null)
+        if (target) {
+          setSelectedUdid(target)
+        }
         if (target !== liveTargetRef.current) {
-          // Clear the old device’s frame so switching shows a connecting state.
           setSession(null)
           setStreamKey(null)
           liveTargetRef.current = null
           resetVisualOrientation()
         }
-        const res = await callRuntimeRpc<{
-          attached?: boolean
-          info?: EmulatorPaneSession['info']
-          selectionRequired?: EmulatorSelectionRequired
-        }>({ kind: 'local' }, 'emulator.attach', {
-          ...(target ? { device: target } : {}),
-          ...(supportsPreferences ? { userInitiated: true } : {}),
-          worktree: worktreeId,
-          focus: false
-        })
+        const res = await attachWithAvdFallback(list, target, setSelectedUdid, (device) =>
+          callRuntimeRpc<{
+            attached?: boolean
+            info?: EmulatorPaneSession['info']
+            selectionRequired?: EmulatorSelectionRequired
+          }>({ kind: 'local' }, 'emulator.attach', {
+            ...(device ? { device } : {}),
+            ...(supportsPreferences ? { userInitiated: true } : {}),
+            worktree: worktreeId,
+            focus: false
+          })
+        )
         if (request !== attachRequestRef.current) {
           return
         }
@@ -292,13 +295,12 @@ export function useEmulatorPaneSession({
     devices,
     selectedUdid,
     setSelectedUdid,
-    session,
     loading,
     error,
     selectionRequired,
     attach,
+    markStreamLost,
     shutdown,
-    refreshDevices,
     sendTap,
     sendButton,
     sendGesture,
@@ -308,7 +310,6 @@ export function useEmulatorPaneSession({
     previewUrl: view.previewUrl,
     wsUrl: view.wsUrl,
     streamKey: streamKey ?? undefined,
-    isLive: view.isLive,
-    selectedDevice: view.selectedDevice
+    isLive: view.isLive
   }
 }

@@ -23,11 +23,11 @@ import type {
   PersistedAgentSessionRecord,
   PersistedAgentSessionRuntimeKind
 } from '../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../../runtime/agent-session-record-store-test-harness'
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'

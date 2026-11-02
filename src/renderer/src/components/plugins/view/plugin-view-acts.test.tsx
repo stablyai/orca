@@ -1,42 +1,17 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { parsePluginDeclarativeTree } from '../../../../../shared/plugins/declarative/plugin-declarative-tree'
-import type { PluginDeclarativeNode } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
 import type { PluginShotAct } from '../../../../../shared/plugins/view/plugin-shot-acts'
-import { PluginDeclarativeView } from '../declarative/PluginDeclarativeView'
-import type { PluginDeclarativeEmit } from '../declarative/PluginDeclarativeControls'
-import { pluginDeclarativeActTarget } from '../declarative/plugin-declarative-act-targets'
-import type { PluginPanelActDriver } from '../../right-sidebar/plugin-panel-act-driver'
-import { runPluginPanelActs } from './plugin-view-acts'
+import { cb, mountActGuest, node } from './plugin-view-act-test-harness'
 
 afterEach(cleanup)
 
-const cb = (id: string) => ({ $callback: id })
-const node = (type: string, props: Record<string, unknown> = {}, children: unknown[] = []) => ({
-  type,
-  props,
-  children
-})
-
-function parse(raw: unknown): PluginDeclarativeNode {
-  const parsed = parsePluginDeclarativeTree(raw)
-  if (!parsed.ok || !parsed.tree) {
-    throw new Error(parsed.ok ? 'empty tree' : parsed.error)
-  }
-  return parsed.tree
-}
-
-/** A tiny todo guest: Orca draws its tree, and its callbacks re-render it, as a real guest's do. */
+/** A tiny todo guest. */
 function mountTodoGuest() {
   const tasks: string[] = []
   const state = { draft: '', edit: 0, tasks, hideDone: false }
-  const sent: { callback: string; args: unknown[]; edit?: number }[] = []
-  const listeners = new Set<() => void>()
-  let tree: PluginDeclarativeNode | null = null
-  const build = () =>
-    parse(
+  const { sent, run } = mountActGuest(
+    () =>
       node('Stack', {}, [
         node('Input', {
           label: 'New task',
@@ -60,51 +35,21 @@ function mountTodoGuest() {
           ]),
           node('Tab', { value: 'done', label: 'Done' }, [node('Text', {}, ['Nothing done yet'])])
         ])
-      ])
-    )
-  const handle = (callback: string, args: unknown[], edit?: number): void => {
-    sent.push({ callback, args, ...(edit === undefined ? {} : { edit }) })
-    if (callback === 'draft' && typeof args[0] === 'string') {
-      state.draft = args[0]
-      state.edit = Math.max(state.edit, edit ?? 0)
-    } else if (callback === 'submit' || callback === 'add') {
-      if (state.draft) {
-        state.tasks.push(state.draft)
+      ]),
+    ({ callback, args, edit }) => {
+      if (callback === 'draft' && typeof args[0] === 'string') {
+        state.draft = args[0]
+        state.edit = Math.max(state.edit, edit ?? 0)
+      } else if (callback === 'submit' || callback === 'add') {
+        if (state.draft) {
+          state.tasks.push(state.draft)
+        }
+        state.draft = ''
+      } else if (callback === 'hide') {
+        state.hideDone = args[0] === true
       }
-      state.draft = ''
-    } else if (callback === 'hide') {
-      state.hideDone = args[0] === true
     }
-    draw()
-  }
-  const onEvent: PluginDeclarativeEmit = (callback, args, options = {}) =>
-    handle(callback, args, options.edit)
-  const view = () => (
-    <TooltipProvider>
-      <PluginDeclarativeView tree={tree} onEvent={onEvent} />
-    </TooltipProvider>
   )
-  const result = render(view())
-  function draw(): void {
-    tree = build()
-    result.rerender(view())
-    listeners.forEach((listener) => listener())
-  }
-  act(() => draw())
-  const driver: PluginPanelActDriver = {
-    tree: () => tree,
-    send: (callback, args) => act(() => handle(callback, args)),
-    onDraw: (listener) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
-    }
-  }
-  const run = (acts: PluginShotAct[]) =>
-    runPluginPanelActs(acts, {
-      driver,
-      targetOf: pluginDeclarativeActTarget,
-      settle: () => act(async () => {})
-    })
   return { state, sent, run }
 }
 

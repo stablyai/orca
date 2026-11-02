@@ -75,6 +75,8 @@ declare module 'orca' {
   /** A fixed-height scroll area, so long content does not push the rest of the panel away. */
   export type MaxHeight = 'sm' | 'md' | 'lg' | 'none'
 
+  /** Unset `align`: fields, tables and cards fill the width, buttons keep their own; `stretch`
+   *  stretches buttons too. */
   export type StackProps = WithChildren & { gap?: Gap; align?: Align }
   export type RowProps = WithChildren & {
     gap?: Gap

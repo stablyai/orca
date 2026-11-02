@@ -21,7 +21,7 @@ import {
 } from '../daemon/daemon-provider-state'
 import { HistoryReader } from '../daemon/history-reader'
 import { orcadMigrationDestinationFor } from '../managed-server/lifecycle/orcad-runtime-conversion-wiring'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { exportWslMoveManifest } from '../persistence/moving-wsl-projects/wsl-move-manifest-export'
 import { ensureWslMoveDestinationBrowserLogins } from '../persistence/moving-wsl-projects/wsl-move-browser-cookie-copy'
 import { activeBrowserRoutePartitionOrcaProfileId } from '../browser/browser-route-partition-binding-runtime'

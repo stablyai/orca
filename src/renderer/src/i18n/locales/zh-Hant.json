@@ -809,6 +809,8 @@
       "claudeRemoveFolder": "Orca 會從這部電腦刪除此帳戶的 Claude 資料夾及其登入資訊。與系統預設共用的聊天記錄會保留。如果已選取此帳戶，您下次啟動的 Claude 將使用系統預設。"
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作",
+      "remoteOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作（例如推送、拉取或強制推送）。請等待其完成後再使用此動作，以免操作重疊。",
       "actionModel": {
         "on": "開啟",
         "off": "關閉",
@@ -1722,7 +1724,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "工作區以外的檔案尚無法在配對伺服器上預覽。",
           "webClientUnavailable": "文件預覽在 Web 用戶端中不可用。"
         }
       },
@@ -4459,7 +4460,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "沒有其他帳戶",
-            "9332ba8684": "切換到",
             "d450654fa2": "Claude 帳戶",
             "11e2354daf": "Claude 用量執行環境",
             "3dd7ddfae1": "開啟 Claude 詳情和帳戶切換器",
@@ -6238,11 +6238,7 @@
           "dbe2d18972": "更多 {{value0}} 操作",
           "openInOrcaBrowser": "在 Orca 瀏覽器中開啟",
           "2c67730e07": "在 Orca 中開啟",
-          "e42941631a": "在 Linear 上檢視",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "編輯議題",
-          "b22f058067": "在 GitHub 上檢視",
-          "e97d8f2876": "議題 #{{value0}}",
           "moreIssueActions": "更多議題操作",
           "copyLink": "複製連結",
           "copyLinkSuccess": "{{value0}} 已複製",
@@ -6265,8 +6261,6 @@
           "cliCreatedFromShell": "透過 `orca worktree create` 建立",
           "cliStartupAgent": "以 {{value0}} 啟動",
           "cliCreated": "由 Orca CLI 建立",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "在 Jira 中檢視",
           "linkedJira": "已關聯 Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -7156,6 +7150,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "無法儲存帳戶位置。請再試一次。",
           "c2d2751587": "移除帳戶",
           "dbb9626ed1": "取消",
           "63843e37e2": "移除 Claude 帳戶？",
@@ -19439,6 +19434,8 @@
         "unnamedSender": "一個代理程式",
         "messageFromCoordinator": "來自協調者的訊息",
         "startedWorker": "已啟動工作代理程式",
+        "handedOffToAgent": "已交接給代理程式",
+        "startedAgent": "已啟動代理程式",
         "taskFromCoordinator": "來自協調者的任務",
         "updateFromWorker": "來自工作代理程式的更新"
       },
@@ -21392,7 +21389,8 @@
       "checksNeutral": "中性",
       "allReviewChecks": "審查：{{count}} · 檢查：{{status}}",
       "showLinked_other": "顯示 {{count}} 個已連結的審查與任務",
-      "linkedCount_other": "已連結 {{count}} 項"
+      "linkedCount_other": "已連結 {{count}} 項",
+      "labels": "標籤：{{labels}}"
     },
     "attachments": {
       "updateRuntime": "更新遠端執行環境以更改工作區連結",
@@ -22628,12 +22626,14 @@
       "serveSimUnavailable": "無法使用 serve-sim。",
       "serveSimNoEndpoints": "serve-sim 未傳回串流端點。",
       "serveSimEndpointUnreachable": "serve-sim 已啟動，但無法連線至其串流端點。",
+      "deviceHubInputBlocked": "Xcode 的 Device Hub 已接管此模擬器的輸入，因此點按和輸入都無法送達。請結束 Device Hub，然後重新連接模擬器。",
       "androidSdkMissing": "找不到 Android SDK。請安裝 Android Studio 並設定 ANDROID_HOME。",
       "adbUnavailable": "無法使用 adb。",
       "noAndroidDevices": "找不到 Android 裝置或 AVD。請在 Android Studio 中建立一個。",
       "androidDeviceNotRunning": "Android 裝置「{{device}}」尚未執行。請先啟動它。",
       "unknownDeviceOrAvd": "「{{device}}」不是正在執行的裝置，也不是已知的 AVD。",
       "avdBootTimeout": "AVD「{{avdName}}」未在時限內完成啟動。",
+      "avdExitedBeforeBoot": "AVD「{{avdName}}」在完成啟動前已停止：{{detail}}",
       "scrcpyDownloadFailed": "無法下載 scrcpy 伺服器：{{detail}}",
       "scrcpyServerInvalid": "下載的 scrcpy 伺服器無效或不完整。"
     },

@@ -34,6 +34,15 @@ import {
 } from './journal-state-layout'
 import { readStoredQueuedMessageRow } from './queued-message-stored-row'
 import { readAgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import { JournalOutcomeCompaction } from './journal-outcome-compaction'
+import { JOURNAL_OUTCOME_FORMAT } from './journal-outcome-format'
+import { parseJournalRow } from './journal-row-schema'
+import {
+  seedOutcomeRows,
+  projectionBase,
+  projectionWriter,
+  expectProjectionMatches
+} from './journal-projection-test-support'
 import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
 
 // Admission keeps the in-memory chat within what this build declares on every path a saved value
@@ -265,6 +274,63 @@ it('folds the checked-in input rows into the same chat, every value of which sto
       entryKey: JSON.parse(value.key),
       kept: JSON.parse(value.json)
     })
+  }
+})
+
+it('compacts past every collection emitted by the current writer, including native whole values', async () => {
+  const database = openTestJournalHostDatabase(root)
+  // Hybrid golden input (authored plus release-emitted rows), restated by today's production writer.
+  const rows = prefix.rows.map((json) => {
+    const parsed = parseJournalRow(json)
+    if (!parsed.ok) {
+      throw new Error('unreadable golden input')
+    }
+    return parsed.row
+  })
+  const rig = projectionWriter(database, seedOutcomeRows(database, rows))
+  try {
+    await rig.writer.enqueue((seq) => ({
+      ...projectionBase(seq),
+      kind: 'submission',
+      clientMessageId: 'native-pending',
+      payloadFingerprint: 'native-pending',
+      handoverRecorded: true,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'pending' }] },
+      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+    }))
+    for (let revision = 1; revision <= 40; revision++) {
+      await rig.writer.enqueue((seq) => ({
+        ...projectionBase(seq),
+        kind: 'item',
+        itemId: 'after-every-field',
+        revision,
+        body: { kind: 'status', text: `revision ${revision}` }
+      }))
+    }
+    const saved = () =>
+      database.db.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
+    const before = saved()
+    const emitted = new Set(before.map((row) => row.field))
+    for (const { path } of journalStateCollections(rig.state())) {
+      expect(emitted.has(path), path).toBe(true)
+    }
+    expect(new Set(before.map((row) => row.format))).toEqual(new Set([JOURNAL_OUTCOME_FORMAT]))
+    const raw = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+    const compaction = new JournalOutcomeCompaction()
+    while (compaction.page(database)) {
+      /* bounded production pages */
+    }
+    expect(
+      saved().filter((row) => row.field === 'items' && row.entry_key === '"after-every-field"')
+    ).toHaveLength(2)
+    for (const row of saved()) {
+      expect(before).toContainEqual(row)
+    }
+    expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(raw)
+    expectProjectionMatches(database, rig.state())
+  } finally {
+    rig.queue.markClosed()
+    await rig.queue.drain()
   }
 })
 

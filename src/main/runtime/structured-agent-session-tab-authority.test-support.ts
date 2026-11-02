@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -21,12 +21,12 @@ import {
   createTestParams,
   CREATE_TEST_CALLER
 } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
-import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
-import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
 
 export const B = 'chat-b-0002',
   C = 'chat-c-0003',

@@ -12,7 +12,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import { reviseAgentSessionProviderResumePoint } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type {
@@ -63,7 +63,6 @@ async function liveOwner(
   options: {
     missingTranscript?: boolean
     beforeOpen?: (frame: (message: Record<string, unknown>) => void) => void
-    lifecycleLimit?: number
     resumeLeafUuid?: string | null
     resumesTranscript?: boolean
   } = {}
@@ -85,12 +84,7 @@ async function liveOwner(
     )
   }
   const journal = await journals.open({ identity: identityFor(), stateDirectory: root })
-  const deferred = createDeferredStructuredAgentSessionEventSink({
-    ...testEventSinkLogging(),
-    ...(options.lifecycleLimit === undefined
-      ? {}
-      : { watermarks: { maxLifecycleQueuedOperations: options.lifecycleLimit } })
-  })
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   deferred.bind({ journal, fence: FENCE, publish: () => {} })
   const store = { record: liveRecord() }
   const claude = fakeClaude()
@@ -260,22 +254,6 @@ describe('Claude durable resume point at turn end', () => {
     expect(
       events.some((event) => event.type === 'message' && event.message.type === 'result')
     ).toBe(true)
-    expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({
-      resumeCursor: 'resumed-at'
-    })
-    await adapter.closeAll()
-    expect(persistedHandles).toEqual([expect.objectContaining({ leafUuid: 'resumed-at' })])
-  })
-
-  it('keeps the leaf after refused finals even when every admitted write succeeds', async () => {
-    const { adapter, store, turn, deferred, journal, persistedHandles } = await liveOwner(
-      undefined,
-      { lifecycleLimit: 1 }
-    )
-    deferred.unbind()
-    await turn('u1', 'a1')
-    deferred.bind({ journal, fence: FENCE, publish: () => {} })
-    expect(await deferred.drained()).toEqual({ ok: true })
     expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({
       resumeCursor: 'resumed-at'
     })

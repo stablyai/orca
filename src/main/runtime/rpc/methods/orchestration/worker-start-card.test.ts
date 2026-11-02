@@ -212,7 +212,7 @@ it.each([
     const warn = vi.spyOn(console, 'warn').mockImplementation((message) => {
       if (
         scenario === 'logging-throws' &&
-        message === '[orchestration] recording a started worker in its caller chat failed'
+        message === '[orchestration] recording a started agent in its caller chat failed'
       ) {
         throw new Error('logger failed')
       }
@@ -326,7 +326,7 @@ it.each([
     ) {
       await eventually(() =>
         expect(warn).toHaveBeenCalledWith(
-          '[orchestration] recording a started worker in its caller chat failed',
+          '[orchestration] recording a started agent in its caller chat failed',
           expect.any(Error)
         )
       )

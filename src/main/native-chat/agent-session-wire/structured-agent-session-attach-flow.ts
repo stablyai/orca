@@ -1,4 +1,3 @@
-import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
@@ -28,7 +27,7 @@ import {
   type AgentSessionAttachParams,
   type AttachedJournal
 } from './structured-agent-session-attach'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   adapterSupportsCreateIfDeclared,
   hostCanStartRecord
@@ -81,7 +80,6 @@ export type AttachFlowInput = {
     attempt: StructuredAgentSessionStartupAttempt
   ) => StructuredAgentSessionStartupProgress
   startupOptions?: Readonly<Record<string, string>>
-  launchAccountRecipe?: (record: AgentSessionRecord) => Promise<ClaudeAccountRecipe | undefined>
   launchPermissionMode?: (
     record: AgentSessionRecord
   ) => Promise<AgentChatPermissionChoice | undefined>
