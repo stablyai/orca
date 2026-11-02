@@ -6,7 +6,6 @@ import {
   CUSTOM_EDITOR_TOO_LARGE,
   isCustomEditorEditAttempt,
   readCustomEditorEdit,
-  readCustomEditorKeyChord,
   type CustomEditorDocument,
   type CustomEditorEdit
 } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
@@ -27,6 +26,7 @@ import {
   structuredCloneMessageBytes
 } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 
+import { handleCustomEditorFrameEvent } from './plugin-custom-editor-frame-events'
 import type {
   CustomEditorBinaryDocument,
   CustomEditorEditRefusal,
@@ -61,6 +61,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   let supersededIds: (number | null)[] = []
   let heldTimer: ReturnType<typeof setTimeout> | null = null
   let lostEdit = false
+  let mergesOutside = false
   // An oversized edit came after the held one, so applying the held one leaves it still lost.
   let lostAfterHeld = false
   let unapplied: CustomEditorUnappliedEdit = null
@@ -246,17 +247,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         pushDocument(true)
       },
       onEvent(event, context) {
-        if (event.event === FRAME_EVENTS.editorSubscribed) {
-          options.onFrameProgress?.('subscribed')
-          return
-        }
-        const chord =
-          event.event === FRAME_EVENTS.editorKeydown
-            ? readCustomEditorKeyChord(event.payload)
-            : null
-        if (chord) {
-          options.onKeyChord?.(chord, context)
-        }
+        mergesOutside ||= handleCustomEditorFrameEvent(event, context, options)
       },
       onResponse(response) {
         pendingFlushes.get(response.id)?.(response.error === undefined)
@@ -265,6 +256,18 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
     },
     syncDocument() {
       pushDocument(false)
+    },
+    mergeOutsideChange(diskText, ancestorText) {
+      if (!ready || !mergesOutside || options.getBinaryDocument) {
+        return false
+      }
+      const { readOnly } = options.getDocument()
+      // The frame now holds the disk text until its merged edit arrives.
+      frameText = diskText
+      version += 1
+      const ancestor = { kind: 'text' as const, text: ancestorText }
+      postDocument({ version, readOnly, content: { kind: 'text', text: diskText }, ancestor })
+      return true
     },
     flush() {
       if (!ready) {
@@ -301,6 +304,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         applyHeldEdit()
       }
       ready = false
+      mergesOutside = false
       frameText = null
       frameReadOnly = null
       frameBinary = null

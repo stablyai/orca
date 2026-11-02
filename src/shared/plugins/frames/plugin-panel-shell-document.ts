@@ -169,6 +169,17 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       var documents = on(E.editorDocument, function (next) {
         if (disposed || next.version === doc.version) return
         doc = next
+        // A disk change under the tab's unsaved edits: merge it with them and send the result.
+        if (next.ancestor && merge) {
+          var mine = value
+          var outside = rebase(next)
+          value = merge(decode(next.ancestor), outside, mine)
+          dirty = true
+          generation += 1
+          emitReplace(value)
+          if (!inFlight) send().catch(function () {})
+          return
+        }
         // Unaccepted work waits for its edit's conflict, where merge runs.
         if (dirty || inFlight) return
         if (sameContent(next.content, baseContent)) { baseVersion = next.version; return }
@@ -179,6 +190,8 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       var flushes = on(C.editor.flush, function () {
         return disposed || doc.readOnly ? undefined : flush()
       })
+      // Orca then hands this session disk changes made under unsaved edits, instead of a banner.
+      if (merge) post({ kind: 'evt', event: E.editorMerges, payload: {} })
       return Object.freeze({
         get value() { return value },
         get readOnly() { return doc.readOnly },

@@ -74,6 +74,17 @@ function harness(
   return { host, posted, send, messages, documents, answers, answerFlushes }
 }
 
+function setupWith(initial: { text: string; onMergesOutside: () => void }) {
+  const doc = { text: initial.text, readOnly: false }
+  const onEdit = vi.fn((text: string) => {
+    doc.text = text
+  })
+  return {
+    ...harness({ getDocument: () => doc, onEdit, onMergesOutside: initial.onMergesOutside }),
+    onEdit
+  }
+}
+
 function setup(initial: {
   text: string
   readOnly?: boolean
@@ -497,5 +508,28 @@ describe('custom editor document channel', () => {
     expect(documents()).toHaveLength(1)
     send(READY)
     expect(documents()).toHaveLength(2)
+  })
+
+  it('sends a disk change with its ancestor only to a frame whose session merges', () => {
+    const onMergesOutside = vi.fn()
+    const { host, send, documents, onEdit } = setupWith({ text: 'a+mine', onMergesOutside })
+    send(READY)
+    expect(host.mergeOutsideChange('a+agent', 'a')).toBe(false)
+    send({ orca: 1, kind: 'evt', event: 'editor.merges', payload: {} })
+    expect(onMergesOutside).toHaveBeenCalledOnce()
+    expect(host.mergeOutsideChange('a+agent', 'a')).toBe(true)
+    expect(documents().at(-1)).toMatchObject({
+      payload: {
+        version: 2,
+        content: { kind: 'text', text: 'a+agent' },
+        ancestor: { kind: 'text', text: 'a' }
+      }
+    })
+    // The session's merged result lands in the buffer like any edit.
+    send(edit('a+agent+mine', 2))
+    expect(onEdit).toHaveBeenLastCalledWith('a+agent+mine')
+    host.reset()
+    send(READY)
+    expect(host.mergeOutsideChange('x', 'a')).toBe(false)
   })
 })

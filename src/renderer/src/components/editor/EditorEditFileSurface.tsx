@@ -18,7 +18,7 @@ import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import type { FileContent } from './editor-panel-content-types'
-import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { CustomEditorExternalChangeBanner } from './CustomEditorExternalChangeBanner'
 import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
@@ -200,7 +200,7 @@ export function EditorEditFileSurface({
   const currentContent = editBuffer ?? fileContent.content
   const externalChangeBanner =
     activeFile.externalMutation === 'changed' ? (
-      <ExternalFileChangeBanner
+      <CustomEditorExternalChangeBanner
         file={activeFile}
         currentContent={currentContent}
         reloadContent={reloadContent}
@@ -296,6 +296,7 @@ export function EditorEditFileSurface({
       onContentChange={handleContentChange}
       onSave={handleSave}
       onDirtyHint={handleDirtyStateHint}
+      diskContent={fileContent.content}
     />
   ) : isMarkdown ? (
     <EditorMarkdownFileSurface

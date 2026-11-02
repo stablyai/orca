@@ -17,6 +17,10 @@ import {
 import { usePluginFrameHost } from '../right-sidebar/use-plugin-frame-host'
 import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
+import {
+  setCustomEditorMerging,
+  useCustomEditorOutsideMerge
+} from './use-custom-editor-outside-merge'
 import { registerEditorFrameFlush } from './editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
@@ -43,6 +47,8 @@ type PluginCustomEditorFrameProps = {
   /** Set for a binary editor: its bytes once loaded (null before). Text props are then unused. */
   binaryDocument?: CustomEditorBinaryDocument | null
   onBytesChange?: (document: CustomEditorBinaryDocument) => void
+  /** The file as last loaded from disk: what unsaved edits started from, for outside merges. */
+  diskContent?: string
 }
 
 function FrameMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -63,7 +69,8 @@ export default function PluginCustomEditorFrame({
   onSave,
   onDirtyHint,
   binaryDocument,
-  onBytesChange
+  onBytesChange,
+  diskContent
 }: PluginCustomEditorFrameProps): React.JSX.Element {
   const [refusal, setRefusal] = useState<CustomEditorEditRefusal | null>(null)
   const [saveBlocked, setSaveBlocked] = useState(false)
@@ -104,6 +111,7 @@ export default function PluginCustomEditorFrame({
     remountGone
   } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
   const progressRef = useRef<(step: 'delivered' | 'subscribed') => void>(() => {})
+  const mergingRef = useRef<(merging: boolean) => void>(() => {})
 
   const host = useMemo(() => {
     const created = createCustomEditorHost({
@@ -130,6 +138,7 @@ export default function PluginCustomEditorFrame({
         }
       },
       onFrameProgress: (step) => progressRef.current(step),
+      onMergesOutside: () => mergingRef.current(true),
       onKeyChord: (chord, context) => {
         const event = new KeyboardEvent('keydown', chord)
         // Why: chords are posted by frame code, so only one riding real user input may save.
@@ -167,7 +176,10 @@ export default function PluginCustomEditorFrame({
   )
   useLayoutEffect(() => {
     progressRef.current = reportProgress
+    mergingRef.current = (merging) =>
+      fileId === undefined || isBinary ? undefined : setCustomEditorMerging(fileId, merging)
   })
+  useCustomEditorOutsideMerge(fileId, host, diskContent)
 
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'editor',
@@ -187,7 +199,10 @@ export default function PluginCustomEditorFrame({
     if (!frameKey) {
       return
     }
-    return () => host.reset()
+    return () => {
+      host.reset()
+      mergingRef.current(false)
+    }
   }, [frameKey, host])
 
   useEffect(() => {

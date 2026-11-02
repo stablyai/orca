@@ -140,7 +140,11 @@ test('merges an agent write that lands while an edit waits', async () => {
 })
 ```
 
-Without `merge` an outside write wins and the draft is dropped. `ORCA plugin check <dir> --json`
+`merge` covers both outside writes: one that lands while an edit waits (base: your last accepted
+value), and one made on disk while the tab has unsaved edits (base: the disk text those edits
+started from; the tab stays unsaved with the result and Orca shows no banner). Without `merge` an
+outside write wins and the draft is dropped, and a disk write under unsaved edits gets Orca's
+Reload/Overwrite banner. `ORCA plugin check <dir> --json`
 then reads every file the entry loads without running it, and
 `ORCA plugin open <plugin-key> --editor <file>` shows it on a real file.
 `ORCA plugin shot <plugin-key> --editor <file> --theme dark` saves a PNG of the editor on that
