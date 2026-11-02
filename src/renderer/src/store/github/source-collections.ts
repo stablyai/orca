@@ -1,5 +1,3 @@
-import type { StoreApi } from 'zustand'
-import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import type { WorkItemsCacheSources } from './cache-model'
@@ -185,7 +183,7 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
       }
       owner.order = Math.max(owner.order, attempt.order)
       if (mappingChanged || effectiveChanged || !valid) {
-        this.retireOwner(owner)
+        this.retireOwners([owner])
       }
       if (!previous || mappingChanged) {
         owner.candidates = { data: null, sources: candidateSources, fetchedAt: Date.now() }
@@ -256,43 +254,37 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
   private boundCounts() {
     this.counts = new Map(Object.entries(evictStaleEntries(Object.fromEntries(this.counts))))
   }
-  protected retireOwner(owner: CollectionOwner) {
+  /** Each owner's lifetime ends on its own; the shared cache is rebuilt and published once per batch. */
+  protected retireOwners(owners: readonly CollectionOwner[]) {
+    const retired = new Set(owners)
     for (const [key, evidence] of Object.entries(this.evidence)) {
-      if (evidence.attempt.owner === owner) {
+      if (evidence.attempt.owner && retired.has(evidence.attempt.owner)) {
         delete this.evidence[key]
       }
     }
     for (const [key, count] of this.counts) {
-      if (count.owners.includes(owner)) {
+      if (count.owners.some((owner) => retired.has(owner))) {
         this.counts.delete(key)
       }
     }
-    taskPageGitHubResumeCache.retireOwner(owner.id)
-    const oldId = owner.id
-    owner.id = nextProviderRequestId()
-    this.store.setState((state) => ({
-      workItemsCache: Object.fromEntries(
-        Object.entries(state.workItemsCache).filter(
-          ([, entry]) => entry.collection?.owner !== oldId
-        )
-      ),
-      workItemsInvalidationNonce: state.workItemsInvalidationNonce + 1
-    }))
+    const oldIds = new Set<number>()
+    for (const owner of owners) {
+      taskPageGitHubResumeCache.retireOwner(owner.id)
+      oldIds.add(owner.id)
+      owner.id = nextProviderRequestId()
+    }
+    this.store.setState((state) => {
+      const kept = Object.entries(state.workItemsCache).filter(
+        ([, entry]) => !entry.collection || !oldIds.has(entry.collection.owner)
+      )
+      return {
+        workItemsCache:
+          kept.length === Object.keys(state.workItemsCache).length
+            ? state.workItemsCache
+            : Object.fromEntries(kept),
+        workItemsInvalidationNonce: state.workItemsInvalidationNonce + 1
+      }
+    })
     this.notify()
   }
-}
-export function createGitHubSourceCollections(store: StoreApi<AppState>) {
-  const cache = new GitHubSourceCollections(store)
-  store.subscribe((state, previous) => {
-    if (
-      state.repos !== previous.repos ||
-      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
-      state.runtimeEnvironments !== previous.runtimeEnvironments ||
-      state.sshConnectionStates !== previous.sshConnectionStates ||
-      state.sshStateByEnvironment !== previous.sshStateByEnvironment
-    ) {
-      cache.sync(state.repos ?? [])
-    }
-  })
-  return cache
 }

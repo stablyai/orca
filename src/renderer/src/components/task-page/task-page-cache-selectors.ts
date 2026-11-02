@@ -24,13 +24,6 @@ export type TaskPageRepoCacheInput = {
   candidateOwner?: string
 }
 
-export type TaskPageDialogWorkItemKey = {
-  id: string
-  repoId: string
-  url: string
-  repoHostId?: GitHubWorkItem['repoHostId']
-} | null
-
 export type TaskPageRepoSourceState = {
   repoId: string
   repoPath: string
@@ -291,31 +284,4 @@ export function reconcileTaskPagePagesAfterLandingRefresh(
     return pages as (GitHubWorkItem[] | null)[]
   }
   return [nextFirstPage, ...pages.slice(1)]
-}
-
-/** Prefers the row's current source binding: a retained older binding can hold an outdated copy of the same row. */
-export function findTaskPageDialogWorkItem(
-  workItemsCache: WorkItemsCache,
-  dialogWorkItemKey: TaskPageDialogWorkItemKey,
-  binding?: string
-): GitHubWorkItem | null {
-  if (!dialogWorkItemKey) {
-    return null
-  }
-  let fallback: GitHubWorkItem | null = null
-  for (const entry of Object.values(workItemsCache)) {
-    const found = entry?.data?.find(
-      (wi) =>
-        wi.id === dialogWorkItemKey.id &&
-        wi.repoId === dialogWorkItemKey.repoId &&
-        wi.url === dialogWorkItemKey.url &&
-        // Why: a twin's other host caches the same PR; its copy routes edits to that host.
-        (!dialogWorkItemKey.repoHostId || wi.repoHostId === dialogWorkItemKey.repoHostId)
-    )
-    if (found && (!binding || entry.sourceBinding === binding)) {
-      return found
-    }
-    fallback ??= found ?? null
-  }
-  return fallback
 }

@@ -9,23 +9,13 @@ import { githubTaskBinding } from '@/lib/github-task-observation'
 import { bindingKey, type TaskBinding } from './task-record-model'
 import { isHostIdentityContinued } from '../host-catalog-fencing'
 import { nextProviderRequestId } from './request-coordination'
+import { createSourceWrite, waitForWriteEnd, type SourceWrite } from './source-write'
 
 const unsafeTarget = () => false
 export const githubCandidateOwner = (repo: Repo) =>
   githubTaskBinding({ ...repo, issueSourcePreference: undefined })
 export const githubCollectionScope = (repo: Repo | undefined, source?: TaskSourceContext | null) =>
   JSON.stringify([repo && githubTaskBinding(repo), source && getTaskSourceCacheScope(source)])
-type SourceWrite = {
-  repo: Repo
-  preference: Repo['issueSourcePreference']
-  acknowledged: Repo['issueSourcePreference']
-  pending: boolean
-  settled: Promise<boolean>
-  finish: (saved: boolean) => void
-  owner: CollectionOwner | undefined
-  /** The owner's readback count when this write failed; the host may still have saved it until a newer row says. */
-  failed?: number
-}
 export type CollectionOwner = {
   repo: Repo
   binding: TaskBinding | undefined
@@ -53,23 +43,25 @@ export abstract class GitHubSourceOwnership {
   protected writes = new Map<string, SourceWrite>()
   protected owners = new Map<string, CollectionOwner>()
   private recoveries = new WeakMap<object, Promise<void>>()
+  /** Shared by every catalog request until a write begins or settles or owners change; never mutated. */
+  private snapshot?: Map<
+    string,
+    { owner: CollectionOwner; write: SourceWrite | undefined; pending: boolean }
+  >
   constructor(protected store: StoreApi<AppState>) {}
   protected abstract reuse(repo: Repo, preference: Repo['issueSourcePreference']): void
-  protected abstract retireOwner(owner: CollectionOwner): void
+  protected abstract retireOwners(owners: readonly CollectionOwner[]): void
   begin(repo: Repo, preference: Repo['issueSourcePreference']) {
     const previous = this.writes.get(bindingKey(repo))
     previous?.finish(false)
-    const deferred = Promise.withResolvers<boolean>()
-    const write: SourceWrite = {
+    const write = createSourceWrite({
       repo,
       owner: this.owners.get(bindingKey(repo)),
       preference,
-      acknowledged: previous ? previous.acknowledged : repo.issueSourcePreference,
-      pending: true,
-      settled: deferred.promise,
-      finish: deferred.resolve
-    }
+      acknowledged: previous ? previous.acknowledged : repo.issueSourcePreference
+    })
     this.writes.set(bindingKey(repo), write)
+    this.snapshot = undefined
     this.reuse(repo, preference)
     return write
   }
@@ -104,12 +96,13 @@ export abstract class GitHubSourceOwnership {
       : repo
   }
   catalogSnapshot() {
-    return new Map(
+    this.snapshot ??= new Map(
       [...this.owners].map(([key, owner]) => {
         const write = this.writes.get(key)
         return [key, { owner, write, pending: write?.pending ?? false }]
       })
     )
+    return this.snapshot
   }
   settle(write: SourceWrite, saved: boolean) {
     const current = this.writes.get(bindingKey(write.repo))
@@ -123,6 +116,7 @@ export abstract class GitHubSourceOwnership {
       current.acknowledged = write.preference
     }
     write.pending = false
+    this.snapshot = undefined
     if (current === write) {
       this.store.setState((s) => {
         const preference = saved ? write.preference : write.acknowledged
@@ -219,30 +213,21 @@ export abstract class GitHubSourceOwnership {
     const pending = () =>
       entry.flatMap(({ repo }) => {
         const write = repo && this.writes.get(bindingKey(repo))
-        return write?.pending ? [write.settled] : []
+        return write?.pending ? [write] : []
       })
-    let release = () => {}
-    const cancelled = new Promise<void>((resolve) => {
-      release = resolve
-      signal?.addEventListener('abort', release)
-    })
-    try {
-      for (let reads = 0; reads < 3 && live(); reads++) {
-        const held = pending().length
-        const value = await read()
-        // Why: replay only after a held save actually settled, never over unchanged obsolete state.
-        if (value !== undefined || held === 0) {
-          return value
-        }
-        // A superseded save resolves false while its successor is pending; following it spends no read.
-        for (let waiting = pending(); waiting.length && live(); waiting = pending()) {
-          await Promise.race([Promise.all(waiting), cancelled])
-        }
+    for (let reads = 0; reads < 3 && live(); reads++) {
+      const held = pending().length
+      const value = await read()
+      // Why: replay only after a held save actually settled, never over unchanged obsolete state.
+      if (value !== undefined || held === 0) {
+        return value
       }
-      return undefined
-    } finally {
-      signal?.removeEventListener('abort', release)
+      // A superseded save ends while its successor is pending; following it spends no read.
+      for (let waiting = pending(); waiting.length && live(); waiting = pending()) {
+        await waitForWriteEnd(waiting, signal)
+      }
     }
+    return undefined
   }
 
   context(repo: Repo) {
@@ -282,6 +267,7 @@ export abstract class GitHubSourceOwnership {
   }
   sync(repos: readonly Repo[]) {
     const live = new Map(repos.map((repo) => [bindingKey(repo), repo]))
+    const retired: CollectionOwner[] = []
     for (const [key, owner] of this.owners) {
       const next = live.get(key),
         write = this.writes.get(key)
@@ -300,8 +286,13 @@ export abstract class GitHubSourceOwnership {
         this.writes.delete(key)
         write?.finish(false)
         this.owners.delete(key)
-        this.retireOwner(owner)
+        retired.push(owner)
       }
+    }
+    // Why one batch: removing many rows at once must not rebuild and publish the shared cache per owner.
+    if (retired.length) {
+      this.snapshot = undefined
+      this.retireOwners(retired)
     }
     for (const repo of repos) {
       const key = bindingKey(repo)
@@ -312,6 +303,7 @@ export abstract class GitHubSourceOwnership {
         previous.binding = binding
       } else {
         this.owners.set(key, { repo, binding, id: nextProviderRequestId(), order: 0, readbacks: 0 })
+        this.snapshot = undefined
       }
     }
   }

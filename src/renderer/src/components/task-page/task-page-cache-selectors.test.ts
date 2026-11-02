@@ -9,7 +9,6 @@ import {
   buildTaskPageRepoSourceState,
   selectTaskPageUnresolvedSourceRepos,
   deriveTaskPageGitHubWorkItemsFetchOptions,
-  findTaskPageDialogWorkItem,
   reconcileTaskPageItemsAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh,
   reconcileTaskPagePagesWithWorkItemsCache,
@@ -17,6 +16,10 @@ import {
   shouldResetTaskPagePaginationAfterLandingRefresh,
   shouldReplaceTaskPageItemsAfterRefresh
 } from './task-page-cache-selectors'
+import {
+  createTaskPageDialogWorkItemReader,
+  findTaskPageDialogWorkItem
+} from './task-page-dialog-work-item'
 import { reconcileTaskPageLinearIssuesAfterLandingRefresh } from './linear/task-page-linear-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {
@@ -280,6 +283,41 @@ describe('task page cache selectors', () => {
     expect(
       findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-2', url: item.url })
     ).toBeNull()
+  })
+
+  it('searches only the current binding once an older copy is found, and nothing on an unchanged cache', () => {
+    let rowVisits = 0
+    const counted = (row: GitHubWorkItem) =>
+      new Proxy(row, {
+        get: (target, key, receiver) => {
+          rowVisits += key === 'id' ? 1 : 0
+          return Reflect.get(target, key, receiver)
+        }
+      })
+    const picked = { ...workItem('issue:12', 'repo-1'), url: 'https://github.com/o/r/issues/12' }
+    const binding = (sourceBinding: string, rows: GitHubWorkItem[]) => ({
+      ...entry(rows.map(counted)),
+      sourceBinding
+    })
+    const current = binding('current', [picked])
+    const cache = {
+      old: binding('old', [{ ...picked, title: 'old' }]),
+      ...Object.fromEntries(
+        Array.from({ length: 40 }, (_, i) => [
+          `other-${i}`,
+          binding('other', [workItem(`issue:${i}`, 'repo-1')])
+        ])
+      ),
+      current
+    }
+    const key = { id: picked.id, repoId: picked.repoId, url: picked.url }
+    expect(findTaskPageDialogWorkItem(cache, key, 'current')).toBe(current.data?.[0])
+    expect(rowVisits).toBe(2)
+    const read = createTaskPageDialogWorkItemReader(key, 'current')
+    read(cache)
+    rowVisits = 0
+    expect(read(cache)).toBe(current.data?.[0])
+    expect(rowVisits).toBe(0)
   })
 
   it('keeps the clicked repository when a source change refreshes the same issue number', () => {

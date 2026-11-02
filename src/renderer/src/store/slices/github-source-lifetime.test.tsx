@@ -6,7 +6,7 @@ import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slic
 import { mergeFetchedRepoCatalog } from '../repos/repo-catalog-merge'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { createRepoUpdateActions } from '../repos/repo-update'
-import { findTaskPageDialogWorkItem } from '@/components/task-page/task-page-cache-selectors'
+import { findTaskPageDialogWorkItem } from '@/components/task-page/task-page-dialog-work-item'
 import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
 import { createCmdJTaskSearchRequests } from '@/components/cmd-j/task-search-requests'
@@ -215,8 +215,10 @@ describe('GitHub source collection lifetime', () => {
     mockApi.repos.update.mockRejectedValueOnce(new Error('request timed out'))
     const recovery = Promise.withResolvers<void>()
     store.setState({ fetchReposForAllHosts: vi.fn().mockReturnValue(recovery.promise) })
-    await store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
     const owner = store.getState().githubSourceCollections
+    // A snapshot from before the failed save must not stand in for the readback's.
+    const snapshots = [owner.catalogSnapshot()]
+    await store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
     const waiting = owner.awaitSave(store.getState().repos[0])
     await flush()
     recovery.reject(new Error('catalog unreachable'))
@@ -224,11 +226,14 @@ describe('GitHub source collection lifetime', () => {
     expect(unverified !== 'save-failed' && unverified()).toBe(false)
     const readBack = vi.fn(async () => {
       const started = owner.catalogSnapshot()
+      // Every host request of one refresh shares one snapshot while ownership is unchanged.
+      snapshots.push(started, owner.catalogSnapshot())
       store.setState((s) => ({ repos: s.repos.map((row) => owner.adopt({ ...row }, started)) }))
     })
     store.setState({ fetchReposForAllHosts: readBack })
     const ready = await owner.awaitSave(store.getState().repos[0])
     expect(readBack).toHaveBeenCalledTimes(1)
+    expect(new Set(snapshots).size).toBe(2)
     expect(ready !== 'save-failed' && ready()).toBe(true)
   })
 
@@ -291,26 +296,81 @@ describe('GitHub source collection lifetime', () => {
       const saving = store
         .getState()
         .setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
-      const controller = new AbortController()
-      const [search] = createCmdJTaskSearchRequests({
-        query: 'fork',
-        repos: store.getState().repos,
-        settings: createGlobalSettingsFixture({ visibleTaskProviders: ['github'] }),
-        accountBackedTaskSourceHostId: 'local',
-        filter: EMPTY_PALETTE_FILTER,
-        hostLabels: new Map(),
-        signal: controller.signal
-      })
-      const results = search.run().catch(() => undefined)
+      // Nothing may keep observing the held save once its searches are cancelled.
+      const [held] = (
+        store.getState().githubSourceCollections as unknown as {
+          writes: Map<string, { settled: Promise<boolean>; waiters?: Set<unknown> }>
+        }
+      ).writes.values()
+      const observe = vi.spyOn(held.settled, 'then')
+      const search = () => {
+        const controller = new AbortController()
+        const [request] = createCmdJTaskSearchRequests({
+          query: 'fork',
+          repos: store.getState().repos,
+          settings: createGlobalSettingsFixture({ visibleTaskProviders: ['github'] }),
+          accountBackedTaskSourceHostId: 'local',
+          filter: EMPTY_PALETTE_FILTER,
+          hostLabels: new Map(),
+          signal: controller.signal
+        })
+        return { controller, results: request.run().catch(() => undefined) }
+      }
+      const { controller, results } = search()
       await flush()
       expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
       if (cancelled) {
         controller.abort()
+        for (let repeat = 0; repeat < 5; repeat++) {
+          const again = search()
+          await flush()
+          again.controller.abort()
+          await again.results
+        }
+        await results
+        expect([observe.mock.calls.length, held.waiters?.size]).toEqual([0, 0])
       }
       save.resolve({ ...repo, issueSourcePreference: 'origin' })
       await saving
       expect((await results)?.length).toBe(cancelled ? undefined : 1)
       expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(cancelled ? 0 : 1)
+    }
+  )
+
+  it.each([3, 30])(
+    'retires %i removed owners with one cache publication and one notification',
+    async (k) => {
+      const store = setup()
+      const gone = Array.from({ length: k }, (_, i) => ({
+        ...repo,
+        id: `gone-${i}`,
+        path: `/g${i}`
+      }))
+      store.setState({ repos: [repo, ...gone] })
+      await store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+      await store.getState().fetchWorkItems(gone[0].id, gone[0].path, 20, '')
+      const owner = store.getState().githubSourceCollections
+      const goneCount = owner.countKey([owner.capture(gone[0]).scope], '', 20)
+      owner.answer(goneCount, [owner.capture(gone[0])], { totalCount: 1, totalPages: 1 }, '', 20)
+      taskPageGitHubResumeCache.write('gone', 1, [row('parent')], undefined, [
+        owner.context(gone[0])
+      ])
+      const counts = { notices: 0, publications: 0 }
+      const stops = [
+        owner.subscribe(() => counts.notices++),
+        store.subscribe(() => counts.publications++)
+      ]
+      const cache = store.getState().workItemsCache
+      store.setState({ repos: [repo, gone[0]] })
+      expect(counts).toEqual({ notices: 1, publications: 2 })
+      expect(store.getState().workItemsCache).toBe(cache)
+      Object.assign(counts, { notices: 0, publications: 0 })
+      store.setState({ repos: [repo] })
+      stops.forEach((stop) => stop())
+      expect(counts).toEqual({ notices: 1, publications: 2 })
+      expect(Object.keys(store.getState().workItemsCache)).toHaveLength(1)
+      expect(owner.count(goneCount)).toBeUndefined()
+      expect(taskPageGitHubResumeCache.read('gone', 1)).toBeNull()
     }
   )
 

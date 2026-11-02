@@ -1,4 +1,4 @@
-import { createGitHubSourceCollections } from '../github/source-collections'
+import { createGitHubSourceCollections } from '../github/source-collections-sync'
 import { createGitHubTaskRecordCache } from '../github/task-record-cache'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
