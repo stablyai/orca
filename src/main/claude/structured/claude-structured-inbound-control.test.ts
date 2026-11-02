@@ -21,13 +21,18 @@ function permissionOptions(
   }
 }
 
-function callbacksFor() {
+function callbacksFor(
+  reported: { reportedPermissionMode?: string | null } = {},
+  launchedMode?: string
+) {
   const prompts = new ClaudePromptRegistry()
   const emit = vi.fn()
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId: 'session-1',
     prompts,
-    emit
+    emit,
+    reported,
+    live: () => (launchedMode ? { launchIntent: { permissionMode: launchedMode } } : null)
   })
   return { prompts, emit, canUseTool, onUserDialog }
 }
@@ -169,5 +174,47 @@ describe('Claude permission callbacks', () => {
     expect(control.emit).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'prompt-cancelled', promptKey: 'perm-4' })
     )
+  })
+
+  it('approves Claude safety-check asks in Full access, re-reading the mode for each request', async () => {
+    // Launched with Full access, before Claude's first mode report.
+    const reported: { reportedPermissionMode?: string | null } = {}
+    const control = callbacksFor(reported, 'bypassPermissions')
+    // Shape of a real Claude Code 2.1.310 ask under --dangerously-skip-permissions.
+    const askOptions = (id: string): CanUseToolOptions =>
+      permissionOptions(id, `tool-${id}`, new AbortController().signal, [], {
+        decisionReason:
+          'Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed'
+      })
+    const input = { command: 'for v in A B; do echo "$v"; done', description: 'List' }
+
+    await expect(control.canUseTool('Bash', input, askOptions('a'))).resolves.toEqual({
+      behavior: 'allow',
+      updatedInput: input,
+      toolUseID: 'tool-a'
+    })
+    expect(control.prompts.find('a')).toBeNull()
+    expect(control.emit).not.toHaveBeenCalled()
+
+    // Claude's own report wins once it arrives, e.g. after an approved plan moved it to default.
+    reported.reportedPermissionMode = 'default'
+    void control.canUseTool('Bash', input, askOptions('b'))
+    expect(control.prompts.find('b')).not.toBeNull()
+  })
+
+  it('still asks the user questions and plan approval in Full access', () => {
+    const control = callbacksFor({ reportedPermissionMode: 'full-access' })
+    void control.canUseTool(
+      'AskUserQuestion',
+      { questions: [{ question: 'Which?', header: 'Pick', options: [], multiSelect: false }] },
+      permissionOptions('q', 'tool-q', new AbortController().signal)
+    )
+    void control.canUseTool(
+      'ExitPlanMode',
+      { plan: '# Plan' },
+      permissionOptions('p', 'tool-p', new AbortController().signal)
+    )
+    expect(control.prompts.find('q')).not.toBeNull()
+    expect(control.prompts.find('p')).not.toBeNull()
   })
 })

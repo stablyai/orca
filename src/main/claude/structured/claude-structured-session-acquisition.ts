@@ -169,7 +169,9 @@ export async function acquireClaudeSession({
   }
   const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
     callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
-  const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({ sessionId, prompts, emit })
+  const live = (): sessionState.ClaudeSession | null => liveSession
+  const permissionDeps = { sessionId, prompts, emit, reported: observedOptions, live }
+  const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks(permissionDeps)
 
   try {
     const launch = await resolveClaudeAcquisitionLaunch({
