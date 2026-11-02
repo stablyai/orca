@@ -75,7 +75,7 @@ async function withClosedHistories(closed: number) {
 }
 
 async function retainedHistoryWork(closed: number) {
-  const { fixture, journal, native, db } = await withClosedHistories(closed)
+  const { fixture, journal, native, db, retained } = await withClosedHistories(closed)
   const facts = instrumentContextTransferFacts(db)
   journal.contextTransfers.reopen()
   const reopen = { ...facts.counts }
@@ -105,30 +105,37 @@ async function retainedHistoryWork(closed: number) {
   const clearWrites = inserts.mock.calls.filter(([sql]) =>
     sql.startsWith('INSERT INTO agent_session_context_transfers')
   ).length
-  return { reopen, sent, marked, clearWrites }
+  expect(facts.unbounded()).toEqual([])
+  return { reopen, sent, marked, clearWrites, retained }
 }
 
 it('keeps reopen, send, marked output and clear independent of retained closed histories', async () => {
   const small = await retainedHistoryWork(20)
   const large = await retainedHistoryWork(200)
-  // Reopen only checks the stored format; nothing decodes until a keyed read needs a row.
-  expect(small.reopen).toMatchObject({ decodes: 0, transferQueries: 1 })
+  // Reopen reads every retained row once; after it nothing else does.
+  expect(small.reopen).toMatchObject({ audits: 1, decodes: 0, transferQueries: 0 })
+  expect(large.reopen.auditedRows - small.reopen.auditedRows).toBe(large.retained - small.retained)
   for (const phase of ['reopen', 'sent', 'marked'] as const) {
     expectSameKeyedWork(small[phase], large[phase])
+  }
+  for (const phase of ['sent', 'marked'] as const) {
+    expect([small[phase].audits, large[phase].audits]).toEqual([0, 0])
   }
   expect({ small: small.clearWrites, large: large.clearWrites }).toEqual({ small: 1, large: 1 })
 })
 
-async function refusedAttemptsWork(refused: number) {
+const refusal = () => ({
+  state: 'rejected' as const,
+  ...agentSessionFailureWords(agentSessionFailureFact('cancelled', { neverReachedAgent: true }), {
+    surface: 'rejection'
+  })
+})
+
+async function retainedAttemptsWork(retained: number) {
   const fixture = await contextTransferFixture()
   fixtures.push(fixture)
   const { journal } = await fixture.recoverSavedChat(async () => ({ kind: 'unsupported' }))
-  fixture.dispatch.mockResolvedValueOnce({
-    state: 'rejected',
-    ...agentSessionFailureWords(agentSessionFailureFact('cancelled', { neverReachedAgent: true }), {
-      surface: 'rejection'
-    })
-  })
+  fixture.dispatch.mockResolvedValueOnce(refusal())
   const first = await fixture.accept('Refused before it reached the agent')
   await eventually(async () =>
     expect((await fixture.submission(first))?.dispatchState).toBe('rejected')
@@ -139,41 +146,47 @@ async function refusedAttemptsWork(refused: number) {
   if (attempt?.kind !== 'delivery') {
     throw new Error('Missing refused attempt')
   }
-  // Each later known refusal retains one more attempt of this shape on the same owed target.
+  const { writeStartedAt: _, ...unstarted } = attempt
+  // Known refusals and attempts whose pending write failed both stay on the same owed target.
   journal.contextTransfers.commit((db) => {
-    for (let i = 1; i < refused; i++) {
+    for (let i = 1; i < retained; i++) {
+      writeContextTransfer(db, { ...attempt, id: `refused-${i}`, carrierInputId: `refused-${i}` })
       writeContextTransfer(db, {
-        ...attempt,
-        id: `refused-${i}`,
-        carrierInputId: `refused-carrier-${i}`
+        ...unstarted,
+        id: `unstarted-${i}`,
+        carrierInputId: `unstarted-${i}`,
+        outcome: null
       })
     }
   })
-  const db = openTestJournalHostDatabase(fixture.root).db
-  const facts = instrumentContextTransferFacts(db)
-  journal.contextTransfers.reopen()
-  const reopen = { ...facts.counts }
-  facts.reset()
-  const retry = await fixture.accept('Retry with the saved number')
-  await eventually(async () =>
-    expect((await fixture.submission(retry))?.dispatchState).toBe('accepted')
-  )
-  const retried = { ...facts.counts }
+  await fixture.restart()
+  const facts = instrumentContextTransferFacts(openTestJournalHostDatabase(fixture.root).db)
+  const send = async (text: string, refused: boolean) => {
+    facts.reset()
+    if (refused) {
+      fixture.dispatch.mockResolvedValueOnce(refusal())
+    }
+    const id = await fixture.accept(text)
+    await eventually(async () =>
+      expect((await fixture.submission(id))?.dispatchState).toBe(refused ? 'rejected' : 'accepted')
+    )
+    return { ...facts.counts }
+  }
+  const opened = await send('First send after the restart', true)
+  const retried = await send('Retry with the saved number', false)
   expect(JSON.stringify(fixture.dispatch.mock.calls.at(-1)![0].body)).toContain('42')
-  expect(
-    deriveContextTransferState(
-      journal.contextTransfers.facts(),
-      fixture.store.requireWritableRecord(SESSION).providerHandleChain
-    ).kind
-  ).toBe('settled')
-  return { reopen, retried }
+  expect(facts.unbounded()).toEqual([])
+  return { opened, retried }
 }
 
-it('reopens and retries an owed target with the same keyed work at 20 or 200 known refusals', async () => {
-  const small = await refusedAttemptsWork(20)
-  const large = await refusedAttemptsWork(200)
-  expect(small.reopen).toMatchObject({ decodes: 0, transferQueries: 1 })
-  expectSameKeyedWork(small.reopen, large.reopen)
+it('audits a chat once when it opens, then sends and retries with keyed work at 20 or 200 retained attempts', async () => {
+  const small = await retainedAttemptsWork(20)
+  const large = await retainedAttemptsWork(200)
+  expect([small.opened.audits, large.opened.audits]).toEqual([1, 1])
+  // Each retained attempt adds one refused and one unstarted row, read once by the audit.
+  expect(large.opened.auditedRows - small.opened.auditedRows).toBe(2 * 180)
+  expect([small.retried.audits, large.retried.audits]).toEqual([0, 0])
+  expectSameKeyedWork(small.opened, large.opened)
   expectSameKeyedWork(small.retried, large.retried)
 })
 
@@ -200,6 +213,7 @@ async function injectedReplayWork(items: number) {
     }))
   })
   expect(JSON.stringify(journal.snapshot())).not.toContain(echo)
+  expect(facts.unbounded()).toEqual([])
   return { ...facts.counts }
 }
 
@@ -343,11 +357,13 @@ async function reattachedRecovery(closed: number) {
 it('publishes a recovery target with keyed reads whatever history is retained', async () => {
   const work = async (closed: number) => {
     const { facts, retained } = await reattachedRecovery(closed)
+    expect(facts.unbounded()).toEqual([])
     return { retained, ...facts.counts }
   }
   const small = await work(20)
   const large = await work(200)
   expect(large.retained).toBe(small.retained + 720)
+  expect([small.audits, large.audits]).toEqual([1, 1])
   expectSameKeyedWork(small, large)
 })
 
@@ -365,6 +381,7 @@ it('carries owed history through occupancy, encoding and selection independent o
     await eventually(async () =>
       expect((await fixture.submission(sent))?.dispatchState).toBe('accepted')
     )
+    expect(facts.unbounded()).toEqual([])
     return { ...facts.counts, encodings: encode.mock.calls.length, usage: usage.mock.calls.length }
   }
   const small = await work(20)
@@ -456,6 +473,7 @@ it('classifies marked Codex history imports without scanning retained history', 
       sessionId: SESSION,
       sink: fixture.acquire.mock.calls.at(-1)![0].events!
     })
+    expect(facts.unbounded()).toEqual([])
     return { ...facts.counts, echoes: echo.mock.calls.length }
   }
   const small = await work(20)
@@ -541,6 +559,7 @@ it('authenticates an export with no retained-history work and source reads linea
     facts.reset()
     const path = await journal.exportRecoveryContext(handoff)
     expect(path).toEqual(expect.any(String))
+    expect(facts.unbounded()).toEqual([])
     return { ...facts.counts, sourceReads: view.reads.count }
   }
   const small = await work(20, 20)

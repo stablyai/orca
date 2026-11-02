@@ -115,6 +115,7 @@ describe('native saved-context recovery delivery', () => {
       ordinal: 0
     }
     const db = openTestJournalHostDatabase(fixture.root).db
+    const saved = journal.contextTransfers.read().length
     const prepare = vi.spyOn(db, 'prepare')
     const decode = vi.spyOn(storedAgentRecord, 'decodePersistedAgentSessionRecord')
     const rows = vi.spyOn(contextTransferRecordSchema, 'safeParse')
@@ -123,7 +124,9 @@ describe('native saved-context recovery delivery', () => {
       prepare.mock.calls.filter(([sql]) => sql.endsWith('WHERE session_id = ? ORDER BY rowid'))
     journal.contextTransfers.reopen()
     expect(wholeChatReads()).toHaveLength(0)
-    expect(rows).not.toHaveBeenCalled()
+    // Reopen reads each saved row once to prove the chat readable.
+    expect(rows).toHaveBeenCalledTimes(saved)
+    rows.mockClear()
     prepare.mockClear()
     await journal.appendLifecycleBatch({
       settlementId: 'late-carrier-batch',
@@ -269,6 +272,59 @@ describe('native saved-context recovery delivery', () => {
       expect(words).toContain('42')
       expect(words).toContain('Continue with the saved number')
       expect(words).not.toContain('Unknown request must not run again')
+    }
+  )
+  it.each([
+    [
+      'a fragment claiming injection',
+      (targetId: string) => JSON.stringify({ targetId, outcome: { kind: 'injected' } })
+    ],
+    ['an empty object', () => '{}']
+  ])(
+    'refuses a reopened chat whose unknown delivery was replaced by %s, sending nothing and keeping its bytes',
+    async (_, replacement) => {
+      const { journal } = await fixture.recoverSavedChat(async () => ({ kind: 'unsupported' }))
+      fixture.dispatch.mockResolvedValueOnce({ state: 'unknown', reason: 'reply lost' })
+      const p = await fixture.accept('P: unknown request')
+      await eventually(async () =>
+        expect((await fixture.submission(p))?.dispatchState).toBe('unknown')
+      )
+      const delivery = journal.contextTransfers
+        .read()
+        .find((row) => row.kind === 'delivery' && row.mode === 'inline')
+      if (delivery?.kind !== 'delivery') {
+        throw new Error('Missing unknown delivery')
+      }
+      const bytes = replacement(delivery.targetId)
+      journal.contextTransfers.commit((db) =>
+        db
+          .prepare('UPDATE agent_session_context_transfers SET record_json = ? WHERE id = ?')
+          .run(bytes, delivery.id)
+      )
+      await fixture.restart()
+      const before = fixture.dispatch.mock.calls.length
+      const body = hostTestMessage('Q: use prior context')
+      expect(
+        await fixture.host.send(CALLER, {
+          envelope: {
+            sessionId: SESSION,
+            clientOperationId: hostTestOperationId(),
+            expectedRuntimeFence: fixture.store.requireWritableRecord(SESSION).lease.runtimeFence,
+            payloadFingerprint: computeAgentSessionPayloadFingerprint({
+              method: 'agentSession.send',
+              sessionId: SESSION,
+              fields: { body }
+            })
+          },
+          body
+        })
+      ).toMatchObject({ ok: false, refusal: { code: 'agent_session_journal_unreadable' } })
+      expect(fixture.dispatch).toHaveBeenCalledTimes(before)
+      expect(
+        openTestJournalHostDatabase(fixture.root)
+          .db.prepare('SELECT record_json FROM agent_session_context_transfers WHERE id = ?')
+          .get(delivery.id)
+      ).toEqual({ record_json: bytes })
     }
   )
   it('words a failed context write as an Orca fault and an unproved history write as undelivered', async () => {

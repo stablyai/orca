@@ -7,7 +7,12 @@ import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycl
 import type Database from '../../sqlite/sync-database'
 import { selectRecoveryDelivery } from '../agent-session-context-transfer-text'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { CONTEXT_TRANSFER_KEYED_SQL, ContextTransferFacts } from './context-transfer-facts'
+import {
+  CONTEXT_TRANSFER_KEYED_SQL,
+  ContextTransferFacts,
+  forgetContextTransferAudit
+} from './context-transfer-facts'
+import { skipsVisitedRows } from './context-transfer-scaling.test-support'
 import type {
   ContextTransferCapture,
   ContextTransferDelivery,
@@ -31,20 +36,20 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-const LOOKUP_INDEXES = [
-  'agent_session_context_transfer_kind',
-  'agent_session_context_transfer_format',
-  'agent_session_context_transfer_delivery_target',
-  'agent_session_context_transfer_delivery_carrier',
-  'agent_session_context_transfer_closure_command'
-]
+const LOOKUP_INDEXES = {
+  kind: 'agent_session_context_transfer_kind',
+  target: 'agent_session_context_transfer_delivery_target',
+  started: 'agent_session_context_transfer_delivery_started',
+  carrier: 'agent_session_context_transfer_inline_carrier',
+  command: 'agent_session_context_transfer_closure_command'
+}
 
 async function database(indexed = true): Promise<Database.Database> {
   const root = await mkdtemp(join(tmpdir(), 'orca-transfer-facts-'))
   roots.push(root)
   const { db } = openTestJournalHostDatabase(root)
   if (!indexed) {
-    for (const index of LOOKUP_INDEXES) {
+    for (const index of Object.values(LOOKUP_INDEXES)) {
       db.exec(`DROP INDEX ${index}`)
     }
   }
@@ -125,12 +130,17 @@ function delivery(
 }
 
 /** One published owed target with `refused` known-before-write attempts retained on it. */
-function seedRefusedAttempts(db: Database.Database, sessionId: string, refused: number) {
+function seedRefusedAttempts(
+  db: Database.Database,
+  sessionId: string,
+  refused: number,
+  prefix = ''
+) {
   seedOwner(db, sessionId)
   const handoff: ContextTransferRecord = {
     kind: 'handoff',
-    id: 'H',
-    handoffId: 'H',
+    id: `${prefix}H`,
+    handoffId: `${prefix}H`,
     sessionId,
     sourceLink: link(0),
     sourceCursor: { epoch: 'e', sequence: 1 },
@@ -143,8 +153,8 @@ function seedRefusedAttempts(db: Database.Database, sessionId: string, refused: 
     writeContextTransfer(db, handoff)
     writeContextTransfer(db, {
       kind: 'target',
-      id: 'T',
-      handoffId: 'H',
+      id: `${prefix}T`,
+      handoffId: `${prefix}H`,
       sessionId,
       preparedAt: 1,
       fence: 1,
@@ -157,7 +167,7 @@ function seedRefusedAttempts(db: Database.Database, sessionId: string, refused: 
     for (let i = 0; i < refused; i++) {
       writeContextTransfer(
         db,
-        delivery(sessionId, `refused-${i}`, 'H', 'T', {
+        delivery(sessionId, `${prefix}refused-${i}`, `${prefix}H`, `${prefix}T`, {
           kind: 'refused-before-write',
           at: 1,
           failureKind: 'carrier-refused'
@@ -169,55 +179,165 @@ function seedRefusedAttempts(db: Database.Database, sessionId: string, refused: 
 
 describe('keyed transfer facts', () => {
   it.each([20, 200])(
-    'plans every keyed read as an index search with %i refused attempts',
+    'seeks every keyed read on its index and visits only the rows it returns, with %i refused attempts',
     async (refused) => {
       const db = await database()
       seedRefusedAttempts(db, 'chat', refused)
-      const params: Record<keyof typeof CONTEXT_TRANSFER_KEYED_SQL, (string | number)[]> = {
-        foreignFormat: ['chat'],
-        any: ['chat'],
-        byId: ['T'],
-        newestTarget: ['chat'],
-        closed: ['chat', 'H'],
-        delivered: ['chat', 'T'],
-        startedWithoutOutcome: ['chat', 'T'],
-        startedUnknown: ['chat', 'T'],
-        carriers: ['chat', 'carrier-refused-0'],
-        closedByCommand: ['chat', 'clear'],
-        newestClosure: ['chat'],
-        handoffsAfter: ['chat', 0]
+      const reads: Record<
+        keyof typeof CONTEXT_TRANSFER_KEYED_SQL,
+        [string, ...(string | number)[]]
+      > = {
+        any: [LOOKUP_INDEXES.kind, 'chat'],
+        byId: ['sqlite_autoindex_agent_session_context_transfers_1', 'T'],
+        newestTarget: [LOOKUP_INDEXES.kind, 'chat'],
+        closed: ['agent_session_context_transfer_owner', 'chat', 'H'],
+        delivered: [LOOKUP_INDEXES.target, 'chat', 'T'],
+        startedWithoutOutcome: [LOOKUP_INDEXES.started, 'chat', 'T'],
+        startedUnknown: [LOOKUP_INDEXES.started, 'chat', 'T'],
+        carriersWithoutOutcome: [LOOKUP_INDEXES.carrier, 'chat', 'carrier-refused-0'],
+        carriersUnknown: [LOOKUP_INDEXES.carrier, 'chat', 'carrier-refused-0'],
+        closedByCommand: [LOOKUP_INDEXES.command, 'chat', 'clear'],
+        newestClosure: [LOOKUP_INDEXES.kind, 'chat'],
+        handoffsAfter: [LOOKUP_INDEXES.kind, 'chat', 0]
       }
-      const args = new Map(Object.entries(params))
+      const expected = new Map(Object.entries(reads))
       for (const [name, sql] of Object.entries(CONTEXT_TRANSFER_KEYED_SQL)) {
+        const [index, ...params] = expected.get(name) ?? ['missing']
         const plan = db
           .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-          .all(...(args.get(name) ?? []))
+          .all(...params)
           .map((row) => String(row.detail))
-        expect(plan.join(' | '), name).toMatch(/SEARCH/)
-        expect(plan.join(' | '), name).not.toMatch(/\bSCAN\b/)
+          .join(' | ')
+        expect(plan, name).toMatch(new RegExp(`^SEARCH \\S+ USING (COVERING )?INDEX ${index} \\(`))
+        expect(skipsVisitedRows(db, sql), name).toBe(false)
       }
     }
   )
 
-  it('refuses a chat holding a row in another format, or bytes that are not its row', async () => {
+  it('sees the residual row filters that a seek alone would hide', async () => {
     const db = await database()
-    seedRefusedAttempts(db, 'foreign', 0)
-    db.prepare(
-      "INSERT INTO agent_session_context_transfers (id,session_id,handoff_id,kind,format,record_json) VALUES ('future','foreign','H','delivery',2,'{}')"
-    ).run()
-    expect(() => new ContextTransferFacts(db, 'foreign').currentTarget()).toThrow(
-      /context transfer cannot be read|newer|read/i
-    )
-    const malformed = await database()
-    seedRefusedAttempts(malformed, 'malformed', 0)
-    malformed
-      .prepare(
-        "UPDATE agent_session_context_transfers SET record_json = '{\"broken' WHERE id = 'H'"
+    db.exec(`DROP INDEX ${LOOKUP_INDEXES.started}`)
+    expect(
+      skipsVisitedRows(
+        db,
+        'SELECT 1 FROM agent_session_context_transfers WHERE session_id = ? AND (format < 1 OR format > 1) LIMIT 1'
       )
-      .run()
-    expect(() => new ContextTransferFacts(malformed, 'malformed').handoff('H')).toThrow(
-      /context transfer cannot be read|newer|read/i
+    ).toBe(true)
+    expect(
+      skipsVisitedRows(
+        db,
+        "SELECT 1 FROM agent_session_context_transfers WHERE session_id = ? AND kind = 'delivery' AND json_extract(record_json, '$.targetId') = ? AND json_extract(record_json, '$.outcome.kind') IS NULL AND json_extract(record_json, '$.writeStartedAt') IS NOT NULL LIMIT 1"
+      )
+    ).toBe(true)
+  })
+
+  const unreadable = /context transfer cannot be read|newer|read/i
+  const insertRaw = (db: Database.Database) =>
+    db.prepare(
+      'INSERT INTO agent_session_context_transfers (id,session_id,handoff_id,kind,format,record_json) VALUES (?,?,?,?,?,?)'
     )
+  const badRows: [string, (db: Database.Database) => void][] = [
+    [
+      'a delivery fragment claiming injection',
+      (db) =>
+        insertRaw(db).run(
+          'D',
+          'chat',
+          'H',
+          'delivery',
+          1,
+          JSON.stringify({ targetId: 'T', outcome: { kind: 'injected' } })
+        )
+    ],
+    ['an empty object', (db) => insertRaw(db).run('D', 'chat', 'H', 'delivery', 1, '{}')],
+    [
+      'malformed JSON in an old closed handoff',
+      (db) => {
+        insertRaw(db).run('old', 'chat', 'old', 'handoff', 1, '{broken')
+        insertRaw(db).run(
+          'old-closure',
+          'chat',
+          'old',
+          'closure',
+          1,
+          JSON.stringify({
+            kind: 'closure',
+            id: 'old-closure',
+            sessionId: 'chat',
+            handoffId: 'old',
+            commandId: 'clear-old',
+            at: 1,
+            cause: 'context-clear'
+          })
+        )
+      }
+    ],
+    ['another format', (db) => insertRaw(db).run('D', 'chat', 'H', 'delivery', 2, '{}')],
+    [
+      'bytes that name another row',
+      (db) =>
+        insertRaw(db).run(
+          'D',
+          'chat',
+          'H',
+          'delivery',
+          1,
+          JSON.stringify(
+            delivery('chat', 'other-D', 'H', 'T', {
+              kind: 'injected',
+              at: 1,
+              requestId: 'r'
+            })
+          )
+        )
+    ]
+  ]
+
+  it.each(badRows)(
+    'refuses every decision of a reopened chat holding %s, keeps its bytes and serves other chats',
+    async (_, write) => {
+      const db = await database()
+      seedRefusedAttempts(db, 'chat', 2)
+      seedRefusedAttempts(db, 'healthy', 0, 'healthy-')
+      expect(new ContextTransferFacts(db, 'chat').currentTarget()?.id).toBe('T')
+      write(db)
+      const saved = db
+        .prepare(
+          'SELECT id, format, record_json FROM agent_session_context_transfers ORDER BY rowid'
+        )
+        .all()
+      forgetContextTransferAudit(db, 'chat')
+      const facts = new ContextTransferFacts(db, 'chat')
+      for (const decide of [
+        () => facts.currentTarget(),
+        () => facts.delivered('T'),
+        () => facts.uncertain('T'),
+        () => facts.any(),
+        () => facts.openHandoffs(),
+        () => facts.closedByCommand('clear-old')
+      ]) {
+        expect(decide).toThrow(unreadable)
+      }
+      expect(
+        db
+          .prepare(
+            'SELECT id, format, record_json FROM agent_session_context_transfers ORDER BY rowid'
+          )
+          .all()
+      ).toEqual(saved)
+      const healthy = new ContextTransferFacts(db, 'healthy')
+      expect(healthy.currentTarget()?.id).toBe('healthy-T')
+      expect(healthy.any()).toBe(true)
+    }
+  )
+
+  it('refuses a forged receipt the moment a decision selects it, before any reopen', async () => {
+    const db = await database()
+    seedRefusedAttempts(db, 'chat', 2)
+    const facts = new ContextTransferFacts(db, 'chat')
+    expect(facts.delivered('T')).toBe(false)
+    badRows[0]![1](db)
+    expect(() => facts.delivered('T')).toThrow(unreadable)
   })
 
   it('maps malformed JSON a lookup reaches without its index to the same refusal', async () => {
@@ -226,14 +346,8 @@ describe('keyed transfer facts', () => {
     db.prepare(
       "INSERT INTO agent_session_context_transfers (id,session_id,handoff_id,kind,format,record_json) VALUES ('bad','chat','H','delivery',1,'{\"broken')"
     ).run()
-    let thrown: unknown
-    try {
-      new ContextTransferFacts(db, 'chat').delivered('T')
-    } catch (error) {
-      thrown = error
-    }
-    expect(thrown).toBeInstanceOf(Error)
-    expect(thrown).not.toMatchObject({ code: 'ERR_SQLITE_ERROR' })
+    forgetContextTransferAudit(db, 'chat')
+    expect(() => new ContextTransferFacts(db, 'chat').delivered('T')).toThrow(unreadable)
   })
 
   it.each([true, false])(

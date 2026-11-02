@@ -11,6 +11,7 @@ import {
   CONTEXT_TRANSFER_INDEX_SQL,
   ContextTransferFacts,
   decodeContextTransferRow,
+  forgetContextTransferAudit,
   forgetContextTransferRow,
   forgetContextTransferRows,
   unreadableContextTransfer
@@ -39,7 +40,6 @@ export function readContextTransfers(
   db: Database.Database,
   sessionId: string
 ): readonly ContextTransferRecord[] {
-  new ContextTransferFacts(db, sessionId).checkFormat()
   return db
     .prepare(
       'SELECT id, session_id, handoff_id, kind, format, record_json FROM agent_session_context_transfers WHERE session_id = ? ORDER BY rowid'
@@ -170,10 +170,11 @@ export class ContextTransferRepository {
     private readonly database: JournalHostDatabase,
     readonly sessionId: string
   ) {}
-  /** Opening refuses a chat holding rows in a format this build doesn't write. */
+  /** Opening reads every saved row of the chat once and refuses it if any cannot be read. */
   reopen(): void {
     forgetContextTransferRows(this.database.db)
-    this.facts().checkFormat()
+    forgetContextTransferAudit(this.database.db, this.sessionId)
+    this.facts().audit()
   }
   facts(): ContextTransferFacts {
     return new ContextTransferFacts(this.database.db, this.sessionId)
