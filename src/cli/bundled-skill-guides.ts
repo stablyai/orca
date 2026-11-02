@@ -3805,8 +3805,6 @@ const ORCHESTRATION_MARKDOWN = [
   "  the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply,",
   "  decision gates), or when the work needs something your own subagents cannot",
   "  give: a different agent (such as Codex from Claude) or its own Orca workspace.",
-  "  \"Have Codex (or Claude) review this and report back\" means an Orca worker of",
-  "  that agent, even when you have your own model subagents.",
   "  Also use when you are a dispatched worker (a prompt with Task and Dispatch",
   "  IDs: ask, worker_done). Otherwise prefer your own subagents,",
   "  including for long or parallel work. Use `orca-cli` to hand work off with",
@@ -4184,7 +4182,7 @@ export const BUNDLED_SKILL_GUIDES = [
   },
   {
     name: "orchestration",
-    description: "Run work in separate Orca worker agents and get their results back. Use when the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply, decision gates), or when the work needs something your own subagents cannot give: a different agent (such as Codex from Claude) or its own Orca workspace. \"Have Codex (or Claude) review this and report back\" means an Orca worker of that agent, even when you have your own model subagents. Also use when you are a dispatched worker (a prompt with Task and Dispatch IDs: ask, worker_done). Otherwise prefer your own subagents, including for long or parallel work. Use `orca-cli` to hand work off with nothing expected back (\"hand off\", \"handover\", \"give this to another agent\", \"another worktree\"), and for terminal control, shell commands, worktree management, and reading or waiting on terminals.",
+    description: "Run work in separate Orca worker agents and get their results back. Use when the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply, decision gates), or when the work needs something your own subagents cannot give: a different agent (such as Codex from Claude) or its own Orca workspace. Also use when you are a dispatched worker (a prompt with Task and Dispatch IDs: ask, worker_done). Otherwise prefer your own subagents, including for long or parallel work. Use `orca-cli` to hand work off with nothing expected back (\"hand off\", \"handover\", \"give this to another agent\", \"another worktree\"), and for terminal control, shell commands, worktree management, and reading or waiting on terminals.",
     markdown: ORCHESTRATION_MARKDOWN,
     aliases: [],
     references: [{ name: "coordinator-loop", markdown: ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN }, { name: "legacy-contract-migration", markdown: ORCHESTRATION_LEGACY_CONTRACT_MIGRATION_REFERENCE_MARKDOWN }, { name: "low-level-topology", markdown: ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN }, { name: "messaging-and-gates", markdown: ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN }, { name: "placement-and-remote", markdown: ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN }, { name: "recovery-and-cleanup", markdown: ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN }]

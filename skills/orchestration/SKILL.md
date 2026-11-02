@@ -5,8 +5,6 @@ description: >-
   the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply,
   decision gates), or when the work needs something your own subagents cannot
   give: a different agent (such as Codex from Claude) or its own Orca workspace.
-  "Have Codex (or Claude) review this and report back" means an Orca worker of
-  that agent, even when you have your own model subagents.
   Also use when you are a dispatched worker (a prompt with Task and Dispatch
   IDs: ask, worker_done). Otherwise prefer your own subagents,
   including for long or parallel work. Use `orca-cli` to hand work off with
@@ -24,9 +22,8 @@ purpose so it can never drift from the binary that will actually run your comman
 Use Orca orchestration to run work in separate Orca worker agents and get their results
 back: when the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply,
 decision gates), or when the work needs something your own subagents cannot give, such as a
-different agent or its own Orca workspace. "Have Codex (or Claude) review this and report
-back" means an Orca worker of that agent, even when you have your own model subagents. Use
-it as well when you are a dispatched worker sending `ask` questions or `worker_done`. Otherwise prefer your own subagents,
+different agent or its own Orca workspace. Use it as well when you are a dispatched worker
+sending `ask` questions or `worker_done`. Otherwise prefer your own subagents,
 including for long or parallel work. Use the orca-cli skill instead to hand work off with
 nothing expected back ("hand off", "handoff", "handover", "give this to another agent",
 "another worktree"), and for ordinary terminal control, shell commands, worktree management,
