@@ -18,7 +18,7 @@ import {
 } from './pty-connection-test-environment'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 
-// STA-4869: unhide can emit after the retiring pane unregisters; keep main’s drop latch until a successor paints and acks. Drive the real renderer channel with a model of main’s gate, pinned by src/main/ipc/pty-hidden-delivery-gate.test.ts.
+// STA-4869: unhide can emit after the retiring pane unregisters; keep main’s drop latch until a successor paints and acks. Drive the real renderer channel with a model of main’s gate, pinned by src/main/ipc/pty/delivery/pty-hidden-delivery-gate.test.ts.
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,

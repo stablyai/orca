@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearNativeChatSessionOptionCacheForTests,
   seedNativeChatAppliedSessionOptions
-} from './native-chat-session-option-cache'
+} from '../../../../shared/native-chat/input/native-chat-session-option-cache'
 import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat/input/native-chat-pty-session-options'
 import {
   resolveNativeChatSessionOptionDefaults,
