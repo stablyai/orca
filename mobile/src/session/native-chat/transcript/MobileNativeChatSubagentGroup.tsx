@@ -1,19 +1,21 @@
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
+import { Pressable, Text, View, type ViewStyle } from 'react-native'
 import { Bot, ChevronRight } from 'lucide-react-native'
 import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader,
-  sayNativeChatSubagentGroupEnglish as say,
   subagentStateLabel
-} from '../../../../../src/shared/native-chat-subagent-group-header'
-import { normalizeSubagentState } from '../../../../../src/shared/native-chat-subagent-summary'
-import { formatNativeChatDuration } from '../../../../../src/shared/native-chat-turn-status'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-group-header'
+import { sayMobileNativeChatSubagentGroup as say } from './native-chat-subagent-group-copy'
+import { normalizeSubagentState } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
+import { formatNativeChatDuration } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import type {
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { useNow } from '../../../hooks/use-now'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 function stateDotStyle(state: NativeChatSubagentState): ViewStyle {
   switch (state) {
@@ -57,6 +59,7 @@ export function MobileNativeChatSubagentGroup({
   open: boolean
   onToggle?: (groupId: string) => void
 }): React.JSX.Element | null {
+  useMobileColorScheme()
   const header = nativeChatSubagentGroupHeader(block.agents, say)
   if (header.total === 0) {
     return null
@@ -133,7 +136,7 @@ export function MobileNativeChatSubagentGroup({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   group: {
     paddingVertical: spacing.xs
   },
@@ -149,7 +152,7 @@ const styles = StyleSheet.create({
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3
+    borderRadius: radii.pill
   },
   headline: {
     flexShrink: 0,
@@ -191,4 +194,4 @@ const styles = StyleSheet.create({
   entryLabelIdle: {
     color: colors.textMuted
   }
-})
+}))

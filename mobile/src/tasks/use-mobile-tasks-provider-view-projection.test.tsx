@@ -18,11 +18,13 @@ const groupingInputSizes: number[] = []
 vi.mock('./mobile-tasks-dependencies', async () => {
   const react = await import('react')
   const { colors } = await import('../theme/mobile-theme')
+  const { useMobileColorScheme } = await import('../theme/use-mobile-color-scheme')
   const { githubProjectIdentityKey } = await import('../../../src/shared/github/project-identity')
   return {
     useCallback: react.useCallback,
     useMemo: react.useMemo,
     colors,
+    useMobileColorScheme,
     githubProjectKey: githubProjectIdentityKey,
     TaskProviderLogo: () => null,
     getLinkedWorkItemSuggestedName: () => ''

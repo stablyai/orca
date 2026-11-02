@@ -3,6 +3,9 @@ import { PhysicalExitTracker } from '../../../../shared/physical-exit-tracker'
 import { watch as watchFs } from 'node:fs'
 import { WatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
+import { WATCHER_IGNORE_DIRS } from '../../../ipc/filesystem/watchers/filesystem-watcher-ignore'
+
+const ignoredWatchDirectories = new Set(WATCHER_IGNORE_DIRS)
 
 // Whole-tree refreshes need a slower pace than precise batches.
 export const WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS = 500
@@ -50,7 +53,18 @@ export function watchWindowsRuntimeFileExplorer(
   }
 
   // Parcel's Watchman probe can crash Windows serve; use conservative overflow refreshes.
-  const watcher = watchFs(rootPath, { recursive: true }, scheduleOverflow)
+  const watcher = watchFs(rootPath, { recursive: true }, (_eventType, filename) => {
+    if (typeof filename === 'string') {
+      const components = filename.split(/[\\/]/)
+      // Keep changes to the directory itself visible, but discard churn within excluded trees.
+      for (let index = 0; index < components.length - 1; index++) {
+        if (ignoredWatchDirectories.has(components[index])) {
+          return
+        }
+      }
+    }
+    scheduleOverflow()
+  })
   const onClose = (): void => {
     watcher.removeListener('error', onError)
     physicalClose.markExited()

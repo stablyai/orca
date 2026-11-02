@@ -1,5 +1,10 @@
 export const COMMIT_MESSAGE_REQUIRED_REASON = 'Enter a commit message to commit' as const
 
+export type CommitDisabledReason =
+  | 'Resolve conflicts before committing'
+  | 'Stage at least one file to commit'
+  | typeof COMMIT_MESSAGE_REQUIRED_REASON
+
 export type CommitEligibilityInputs = {
   stagedCount: number
   hasPartiallyStagedChanges: boolean
@@ -15,7 +20,7 @@ export function resolveCommitDisabledReason(
     CommitEligibilityInputs,
     'stagedCount' | 'hasPartiallyStagedChanges' | 'hasMessage' | 'hasUnresolvedConflicts'
   >
-): string | null {
+): CommitDisabledReason | null {
   if (inputs.hasUnresolvedConflicts) {
     return 'Resolve conflicts before committing'
   }

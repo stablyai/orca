@@ -86,6 +86,35 @@ export async function probeExactRefs(
   }
 }
 
+/** Answer every candidate from one stdin-free child; any failure falls back to per-ref probes. */
+export async function probeExactRefsViaForEachRef(
+  runGit: ExactRefProbeExec,
+  refs: readonly string[],
+  options: ExactRefProbeExecOptions = {}
+): Promise<ExactRefProbeSetResult> {
+  const uniqueRefs = [...new Set(refs)]
+  const safeRefs = uniqueRefs.filter((ref) => isSafeGitRefName(ref))
+  if (safeRefs.length === 0) {
+    return probeExactRefs(runGit, uniqueRefs, options)
+  }
+  let stdout: string
+  try {
+    const argv = ['for-each-ref', '--format=%(refname)', '--', ...safeRefs]
+    const forwardedOptions = commandOptions(options)
+    ;({ stdout } = await (forwardedOptions ? runGit(argv, forwardedOptions) : runGit(argv)))
+  } catch {
+    return probeExactRefs(runGit, uniqueRefs, options)
+  }
+  // Patterns also match descendants (refs/x/main/sub), so only exact lines count.
+  const listed = new Set(stdout.split('\n').map((line) => line.trim()))
+  const safe = new Set(safeRefs)
+  return {
+    presentRefs: safeRefs.filter((ref) => listed.has(ref)),
+    absentRefs: safeRefs.filter((ref) => !listed.has(ref)),
+    unknownRefs: uniqueRefs.filter((ref) => !safe.has(ref))
+  }
+}
+
 /** Stop scheduling exact lookups once any requested ref is present. */
 export async function probeAnyExactRef(
   runGit: ExactRefProbeExec,

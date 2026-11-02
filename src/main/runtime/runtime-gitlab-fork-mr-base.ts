@@ -5,6 +5,7 @@ import {
 } from '../../shared/review-head-tracking-ref'
 import { isTransientReviewHeadFetchError } from '../git/fetch-error-classification'
 import { fetchGitLabMergeRequestHeadRef } from '../gitlab/mr-head-tracking-ref'
+import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'
 type GitExec = (args: string[]) => Promise<{ stdout: string }>
 
 export async function resolveRuntimeGitLabForkMrBase(args: {
@@ -55,7 +56,7 @@ export async function resolveRuntimeGitLabForkMrBase(args: {
     )
     const sha = await resolveDurableHeadSha(localRef)
     if (!sha) {
-      return { error: `Could not resolve fork MR !${args.mrIid} head after fetch.` }
+      return reviewStartPointFailure('gitlab.forkHeadUnresolved', { number: args.mrIid })
     }
     const compareBaseFetched = await args.fetchCompareBaseRef()
     return {
@@ -78,6 +79,6 @@ export async function resolveRuntimeGitLabForkMrBase(args: {
         }
       }
     }
-    return { error: `Failed to fetch ${mrRef}: ${message.split('\n')[0]}` }
+    return reviewStartPointFailure('fetchFailed', { ref: mrRef, detail: message.split('\n')[0] })
   }
 }

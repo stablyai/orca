@@ -29,6 +29,8 @@ export type TerminalFileLinkActionDeps = {
   wslDistro?: string | null
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
   terminalHandle?: string | null
+  /** Chat files belong to their host even when this computer has the same path. */
+  hostFileOnly?: boolean
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
   sourceTabId?: string | null
@@ -59,7 +61,8 @@ export function handleTerminalFileLink(
   const actions = buildFileLinkActions(filePath, line, column, deps, actionContext?.sourceOwner)
   return requestTerminalLinkAction(event, actionContext, {
     ...actions,
-    destination: actionDestination ?? actions.destination
+    destination: actionDestination ?? actions.destination,
+    copyValue: actions.destination
   })
 }
 

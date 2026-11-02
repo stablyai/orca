@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionRestartOfferSession } from './structured-agent-session-restart-offer-withdrawal'
 
 type Phase = NonNullable<AgentSessionStatusSummary['restartResume']>['phase']

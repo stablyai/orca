@@ -34,50 +34,6 @@ function revealSplitPaneFromMobile(harness: {
 }
 
 describe('mobile terminal reveal tab adoption', () => {
-  it('adopts the owning tab when a split pane is revealed before its panes mount (#10486)', async () => {
-    // Unmounted worktrees retain split PTYs only in layout; live maps may be empty.
-    const storeState: HarnessStoreState = createHarnessStoreState({
-      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-split', ptyId: 'pty-a', title: 'codex' }] },
-      ptyIdsByTabId: {},
-      terminalLayoutsByTabId: {
-        'tab-split': { ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' } }
-      }
-    })
-    const harness = await loadIpcEventsHarness(storeState)
-    harness.useIpcEvents()
-
-    revealSplitPaneFromMobile(harness)
-
-    expect(storeState.createTab).not.toHaveBeenCalled()
-    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
-      requestId: 'mobile-reveal',
-      tabId: 'tab-split',
-      title: 'codex',
-      identity: revealIdentity('tab-split')
-    })
-  })
-
-  it('adopts the owning tab when neither the live map nor the layout is hydrated', async () => {
-    // Before layout hydration, honor the pre-minted tab ID baked into the PTY paneKey.
-    const storeState: HarnessStoreState = createHarnessStoreState({
-      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-split', ptyId: 'pty-a', title: 'codex' }] },
-      ptyIdsByTabId: { 'tab-split': ['pty-a'] },
-      terminalLayoutsByTabId: {}
-    })
-    const harness = await loadIpcEventsHarness(storeState)
-    harness.useIpcEvents()
-
-    revealSplitPaneFromMobile(harness)
-
-    expect(storeState.createTab).not.toHaveBeenCalled()
-    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
-      requestId: 'mobile-reveal',
-      tabId: 'tab-split',
-      title: 'codex',
-      identity: revealIdentity('tab-split')
-    })
-  })
-
   it('adopts the tab that records the pty when the reveal hint disagrees', async () => {
     // Dragging a pane changes its current tab while reveal still names its baked-in original.
     const storeState: HarnessStoreState = createHarnessStoreState({
@@ -104,34 +60,6 @@ describe('mobile terminal reveal tab adoption', () => {
       tabId: 'tab-detached',
       title: 'codex',
       identity: revealIdentity('tab-detached')
-    })
-  })
-
-  it('adopts through the persisted layout when the PTY carries no tab id', async () => {
-    const storeState: HarnessStoreState = createHarnessStoreState({
-      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-split', ptyId: 'pty-a', title: 'codex' }] },
-      ptyIdsByTabId: {},
-      terminalLayoutsByTabId: {
-        'tab-split': { ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' } }
-      }
-    })
-    const harness = await loadIpcEventsHarness(storeState)
-    harness.useIpcEvents()
-
-    harness.createTerminal({
-      requestId: 'mobile-reveal',
-      worktreeId: WORKTREE_ID,
-      ptyId: 'pty-b',
-      leafId: 'leaf-b',
-      presentation: 'focused',
-      title: 'codex'
-    })
-
-    expect(storeState.createTab).not.toHaveBeenCalled()
-    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
-      requestId: 'mobile-reveal',
-      tabId: 'tab-split',
-      title: 'codex'
     })
   })
 

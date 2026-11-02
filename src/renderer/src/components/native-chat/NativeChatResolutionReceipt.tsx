@@ -7,7 +7,7 @@ import {
   nativeChatReceiptAnswers,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
-} from '../../../../shared/native-chat-resolution-receipt'
+} from '../../../../shared/native-chat/native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
   body,

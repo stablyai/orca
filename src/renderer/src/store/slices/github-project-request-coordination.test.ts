@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubProjectTable } from '../../../../shared/github/project-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
-import { projectViewCacheKey } from '../github/cache-identity'
-import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
+import { projectViewCacheKey, projectViewSourceScope } from '../github/cache-identity'
+import {
+  createTestStore,
+  mockApi,
+  resetRemoteRuntimeMocks,
+  runtimeEnvironmentCall
+} from './github-slice-test-harness'
+import { projectRelationsTableFixture } from '../../../../shared/github/project-relations.test-fixture'
+import { projectRelationCellText } from '../../components/github-project/ProjectCell.test-fixture'
+import { sortRows, groupRows } from '../../../../shared/github/project-group-sort'
 
 function makeTable(title = 'Roadmap'): GitHubProjectTable {
   return {
@@ -58,6 +66,62 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
     })
     expect(mockApi.gh.getProjectViewTable).not.toHaveBeenCalled()
   })
+
+  it.each([{ kind: 'local' }, { kind: 'environment', environmentId: 'env-board' }] as const)(
+    'preserves populated and legacy cells through the $kind cache',
+    async (target) => {
+      const table = projectRelationsTableFixture()
+      const store = createTestStore()
+      const envelope = { ok: true, data: table }
+      if (target.kind === 'local') {
+        mockApi.gh.getProjectViewTable.mockResolvedValueOnce(envelope)
+      } else {
+        runtimeEnvironmentCall.mockResolvedValueOnce({
+          id: 'rpc-project',
+          ok: true,
+          result: envelope,
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      expect(await store.getState().fetchProjectViewTable(target, request)).toEqual(envelope)
+      const key = projectViewCacheKey(
+        'organization',
+        'acme',
+        1,
+        'view-1',
+        undefined,
+        projectViewSourceScope(target)
+      )
+      const cached = store.getState().projectViewCache[key]?.data
+      if (!cached) {
+        throw new Error('Expected cached table')
+      }
+      expect(cached).toEqual(table)
+      const groups = groupRows(cached, sortRows(cached, cached.rows))
+      expect(groups.map((group) => group.label)).toEqual(['1', '2'])
+      expect(groups.flatMap((group) => group.rows.map(projectRelationCellText))).toEqual([
+        ['', ''],
+        ['#12 +2 more', '1/2 (50%)']
+      ])
+      expect(cached.rows[1].content).not.toHaveProperty('linkedPullRequests')
+      expect(cached.rows[1].content).not.toHaveProperty('subIssuesProgress')
+      expect(await store.getState().fetchProjectViewTable(target, request)).toEqual(envelope)
+      if (target.kind === 'local') {
+        expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(1)
+        expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      } else {
+        expect(mockApi.gh.getProjectViewTable).not.toHaveBeenCalled()
+        expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+        expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+          expect.objectContaining({
+            selector: 'env-board',
+            method: 'github.project.viewTable',
+            params: request
+          })
+        )
+      }
+    }
+  )
 
   it('deduplicates identical non-forced in-flight requests', async () => {
     const store = createTestStore()

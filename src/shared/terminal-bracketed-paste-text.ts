@@ -3,6 +3,8 @@
 const ESCAPE = '\u001b'
 export const BRACKETED_PASTE_START = `${ESCAPE}[200~`
 export const BRACKETED_PASTE_END = `${ESCAPE}[201~`
+// Agents can keep only the last read of unframed input longer than this (#13332).
+export const UNFRAMED_AGENT_INPUT_MAX_BYTES = 1024
 
 // Replace embedded ESC with printable ␛ (U+241B) so pasted framing bytes cannot close the frame and execute its tail.
 export function sanitizeBracketedPasteText(text: string): string {

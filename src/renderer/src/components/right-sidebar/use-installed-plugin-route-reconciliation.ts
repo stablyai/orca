@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
+import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 import type { PluginPanelsFetchStatus } from '@/store/plugin-panels'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 

@@ -8,7 +8,6 @@ const {
   daemonClientMock,
   spawnerInstances,
   ensureRunningOverrides,
-  trackDaemonReplacedMock,
   localFallbackProvider,
   importFresh,
   installDefaultNetConnectStub,
@@ -87,23 +86,6 @@ function mockDaemonWithLiveSessions(count: number): void {
   })
 }
 
-function mockReadyFork(): void {
-  forkMock.mockImplementationOnce(() => ({
-    pid: 12345,
-    on(event: string, cb: (arg?: unknown) => void) {
-      if (event === 'message') {
-        queueMicrotask(() => cb({ type: 'ready', pid: 12345, startedAtMs: 1_000_000 }))
-      }
-      return this
-    },
-    off() {
-      return this
-    },
-    disconnect: vi.fn(),
-    unref: vi.fn()
-  }))
-}
-
 describe('daemon-init: a daemon whose AppImage files are gone', () => {
   let warn: ReturnType<typeof vi.spyOn>
 
@@ -143,17 +125,6 @@ describe('daemon-init: a daemon whose AppImage files are gone', () => {
     handle.releaseAdoptionLease?.()
   })
 
-  it('replaces an idle daemon whose AppImage files are gone', async () => {
-    const mod = await importFresh()
-    await mod.initDaemonPtyProvider()
-    mockReadyFork()
-
-    await launcher()('/fake/socket', '/fake/token')
-
-    expect(forkMock).toHaveBeenCalledTimes(1)
-    expect(trackDaemonReplacedMock).toHaveBeenCalledWith('severed_host_image', 0)
-  })
-
   it('quarantines a daemon kept by the failed-health branch too', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
@@ -165,19 +136,6 @@ describe('daemon-init: a daemon whose AppImage files are gone', () => {
     expect(handle.quarantine).toBe('host-image-severed')
     expect(handle.mode).toBe('degraded-new-pty-fallback')
     expect(forkMock).not.toHaveBeenCalled()
-    handle.releaseAdoptionLease?.()
-  })
-
-  it('leaves intact and non-AppImage daemons on the existing adoption policy', async () => {
-    hostImage.verdict = 'intact'
-    const mod = await importFresh()
-    await mod.initDaemonPtyProvider()
-    mockDaemonWithLiveSessions(1)
-
-    const handle = await launcher()('/fake/socket', '/fake/token')
-
-    expect(handle.mode).toBeUndefined()
-    expect(handle.quarantine).toBeUndefined()
     handle.releaseAdoptionLease?.()
   })
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { normalizeTerminalTitle } from '../../../../shared/agent-title-status'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 
 const panes = [
@@ -7,6 +8,27 @@ const panes = [
 ]
 
 describe('resolveNativeChatLeafTitleAgent', () => {
+  it.each([
+    ['. | Droid', null],
+    ['tmux | Droid', 'droid'],
+    ['⠋ - Codex: fix parser - grok', 'grok'],
+    ['⠋ Codex: fix parser - grok', null],
+    ['tmux | ⠋ fix | a | b | c | d | e | f | g | Codex', null],
+    ['tmux | 🐋 a | b | c | d | e | f | g | h | Codex', 'dsh'],
+    ['✦ session | Thinking - grok', null],
+    ['✦ session | Thinking', 'qoder']
+  ])('preserves raw/stored committed leaf identity for %j', (raw, agent) => {
+    for (const title of [raw, normalizeTerminalTitle(raw)]) {
+      expect(
+        resolveNativeChatLeafTitleAgent({
+          leafId: 'leaf-1',
+          panes: [panes[0]],
+          runtimePaneTitlesByPaneId: { 1: title }
+        })
+      ).toBe(agent)
+    }
+  })
+
   it('does not offer recognition-only DeepSeek Build as a native chat agent', () => {
     expect(
       resolveNativeChatLeafTitleAgent({

@@ -2,6 +2,7 @@ import { TerminalAttachCanceledError } from './types'
 
 export type PendingPtySpawnPreparation = {
   canceled: boolean
+  switchAnchor?: { token: string; invocationId: string; at: number; deadline: number }
   // Unlike the polled canceled flag, the signal interrupts in-flight cwd probes on dead shares.
   readonly controller: AbortController
   cancelTimer?: ReturnType<typeof setTimeout>
@@ -52,6 +53,72 @@ export class DaemonPtySpawnPreparations {
     return preparation
   }
 
+  prepareSwitch(sessionId: string, clientId: string, requestId: string, invocationId: string) {
+    const preparation = this.register(sessionId, clientId, requestId, undefined)
+    preparation.switchAnchor = {
+      token: requestId,
+      invocationId,
+      at: performance.now(),
+      deadline: Infinity
+    }
+    preparation.cancelTimer = setTimeout(() => {
+      this.cancelPreparation(preparation)
+      this.finish(sessionId, preparation)
+    }, 720_000)
+    preparation.cancelTimer.unref?.()
+    return { anchor: requestId }
+  }
+
+  commitSwitch(
+    sessionId: string,
+    clientId: string,
+    requestId: string,
+    execution: { invocationId: string; anchor?: string; remainingMs?: number }
+  ): PendingPtySpawnPreparation {
+    const preparation = [...(this.pending.get(sessionId) ?? [])].find(
+      (entry) =>
+        entry.clientId === clientId &&
+        entry.switchAnchor?.token === execution.anchor &&
+        entry.switchAnchor?.invocationId === execution.invocationId
+    )
+    const anchor = preparation?.switchAnchor
+    if (
+      !preparation ||
+      !anchor ||
+      preparation.canceled ||
+      !Number.isFinite(execution.remainingMs) ||
+      execution.remainingMs! <= 0 ||
+      execution.remainingMs! > 720_000 ||
+      anchor.deadline !== Infinity
+    ) {
+      throw new TerminalAttachCanceledError(sessionId)
+    }
+    anchor.deadline = anchor.at + execution.remainingMs!
+    preparation.requestId = requestId
+    if (performance.now() >= anchor.deadline) {
+      this.cancelPreparation(preparation)
+      this.finish(sessionId, preparation)
+      throw new TerminalAttachCanceledError(sessionId)
+    }
+    if (preparation.cancelTimer) {
+      clearTimeout(preparation.cancelTimer)
+    }
+    preparation.cancelTimer = setTimeout(
+      () => this.cancelPreparation(preparation),
+      anchor.deadline - performance.now()
+    )
+    preparation.cancelTimer.unref?.()
+    return preparation
+  }
+
+  isCanceled(preparation: PendingPtySpawnPreparation): boolean {
+    return (
+      preparation.canceled ||
+      (preparation.switchAnchor !== undefined &&
+        performance.now() >= preparation.switchAnchor.deadline)
+    )
+  }
+
   async prepareUnlessCanceled(
     sessionId: string,
     preparation: PendingPtySpawnPreparation
@@ -62,7 +129,7 @@ export class DaemonPtySpawnPreparations {
       ? Promise.race([this.preparePtySpawn(), cancellation.promise])
       : this.preparePtySpawn()
     await preparationTask
-    if (preparation.canceled) {
+    if (this.isCanceled(preparation)) {
       throw new TerminalAttachCanceledError(sessionId)
     }
   }

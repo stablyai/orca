@@ -38,7 +38,6 @@ beforeEach(() => {
   store = createBrowserLinkTestStore()
   mocks.getState.mockImplementation(() => store.getState())
   store.setState({
-    defaultBrowserSessionProfileIdByHostId: { local: 'default' },
     browserSessionProfilesByHostId: {
       local: [
         {
@@ -126,28 +125,6 @@ describe.each(['repo', 'worktree'] as const)('%s browser profile isolation', (sc
     }
   )
 })
-
-it.each([undefined, null])(
-  'keeps the shared local default independent of the selected remote profile (%s)',
-  async (localDefault) => {
-    store.setState({
-      browserSessionHostIdOverride: 'runtime:remote',
-      defaultBrowserSessionProfileId: 'remote-only',
-      defaultBrowserSessionProfileIdByHostId: { local: localDefault }
-    })
-    const opened = await open('http')
-    if (opened.status !== 'opened') {
-      throw new Error('Expected local browser page')
-    }
-    expect(
-      store
-        .getState()
-        .browserTabsByWorktree[WORKSPACE]?.find(
-          (workspace) => workspace.id === opened.result.browserWorkspaceId
-        )
-    ).toMatchObject({ sessionProfileId: null, sessionPartition: 'persist:shared' })
-  }
-)
 
 it('holds a link in an isolated partition until its workspace profile is minted', async () => {
   let mintProfile: ((profile: BrowserSessionProfile) => void) | undefined

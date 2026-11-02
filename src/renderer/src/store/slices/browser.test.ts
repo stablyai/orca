@@ -79,6 +79,23 @@ describe('createBrowserSlice annotations', () => {
     })
   })
 
+  it('announces a tab that creation activates, but not one opened in the background', async () => {
+    const { store } = await createTestStoreDrawnFromMain()
+    mockApi.browser.notifyActiveTabChanged.mockClear()
+
+    const background = store
+      .getState()
+      .createBrowserTab('wt-1', 'https://background.example.com', { activate: false })
+    const active = store.getState().createBrowserTab('wt-1', 'https://active.example.com')
+
+    expect(mockApi.browser.notifyActiveTabChanged).not.toHaveBeenCalledWith({
+      browserPageId: background.activePageId
+    })
+    expect(mockApi.browser.notifyActiveTabChanged).toHaveBeenLastCalledWith({
+      browserPageId: active.activePageId
+    })
+  })
+
   it('keeps a requested canonical page identity distinct from its workspace', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'about:blank', {
@@ -244,10 +261,12 @@ describe('createBrowserSlice annotations', () => {
   it('uses local browser profile defaults for client-local fallback pages', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     store.setState({
-      settings: settingsWithRuntime('env-1'),
-      defaultBrowserSessionProfileIdByHostId: {
-        local: 'local-profile',
-        'runtime:env-1': 'runtime-profile'
+      settings: {
+        ...settingsWithRuntime('env-1')!,
+        browserDefaultProfileIdByHostId: {
+          local: 'local-profile',
+          'runtime:env-1': 'runtime-profile'
+        }
       }
     })
 
@@ -273,8 +292,11 @@ describe('createBrowserSlice annotations', () => {
     Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
     const { store, main } = await createTestStoreDrawnFromMain({
       repos: [],
-      settings: { ...getDefaultSettings('/tmp'), browserProfileScope: 'repo' },
-      defaultBrowserSessionProfileId: 'user-default'
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        browserProfileScope: 'repo',
+        browserDefaultProfileIdByHostId: { local: 'user-default' }
+      }
     })
 
     const first = store.getState().createBrowserTab('repo-a::/a/one', 'about:blank')
@@ -589,7 +611,7 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().setTabLabel).not.toHaveBeenCalled()
   })
 
-  it('caps stored browser annotations per page', async () => {
+  it('refuses browser annotations past the per-page cap instead of dropping the oldest', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     await main.settle()
@@ -604,7 +626,8 @@ describe('createBrowserSlice annotations', () => {
 
     const annotations = store.getState().browserAnnotationsByPageId[pageId] ?? []
     expect(annotations).toHaveLength(GRAB_BUDGET.annotationsMaxPerPage)
-    expect(annotations[0]?.id).toBe('annotation-3')
+    expect(annotations[0]?.id).toBe('annotation-0')
+    expect(annotations.at(-1)?.id).toBe(`annotation-${GRAB_BUDGET.annotationsMaxPerPage - 1}`)
   })
 
   it('sanitizes persistent annotation payloads at the store boundary', async () => {

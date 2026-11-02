@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen, within, act } from '@testing-library/react'
+import { cleanup, fireEvent, screen, within, act } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -30,19 +31,19 @@ import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 import type {
   NativeChatSubagentState,
   NativeChatMessage
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 import {
   foldStructuredAgentSubagentRoster,
   NO_STRUCTURED_AGENT_SUBAGENT_ROSTER
-} from '../../../../shared/structured-agent-session-subagent-roster'
+} from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 
 import { NativeChatMessageList } from './NativeChatMessageList'
 

@@ -1,4 +1,5 @@
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 
 export function JiraConnectCredentialGuide({
   isServer,
@@ -27,20 +28,26 @@ export function JiraConnectCredentialGuide({
   return (
     <div className="space-y-2 text-xs text-muted-foreground">
       <p>
-        {translate('auto.components.jira.connect.dialog.8090504a3e', 'Create a token in')}{' '}
-        <button
-          type="button"
-          className="text-primary underline-offset-2 hover:underline"
-          onClick={() =>
-            window.api.shell.openUrl('https://id.atlassian.com/manage-profile/security/api-tokens')
-          }
-        >
-          {translate(
-            'auto.components.jira.connect.dialog.fdd26d81cc',
-            'Atlassian account settings'
+        <Trans
+          i18n={i18n}
+          defaults={translate(
+            'auto.components.jira.connect.dialog.createTokenInSettings',
+            'Create a token in <link>Atlassian account settings</link>.'
           )}
-        </button>
-        .
+          components={{
+            link: (
+              <button
+                type="button"
+                className="text-primary underline-offset-2 hover:underline"
+                onClick={() =>
+                  window.api.shell.openUrl(
+                    'https://id.atlassian.com/manage-profile/security/api-tokens'
+                  )
+                }
+              />
+            )
+          }}
+        />
       </p>
       <p>
         {supportsScopedTokens

@@ -38,16 +38,17 @@ function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: strin
   return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
 }
 
-export function listRuntimeFolderWorkspaces(
+function runtimeFolderWorkspaceRows(
   store: Pick<RuntimeStore, 'getAllWorktreeMeta' | 'getRepos' | 'setWorktreeMeta'>,
   repo: Repo,
-  repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+  repoOwnerCount: number,
+  stamp: boolean
 ): Worktree[] {
   const rootId = getRuntimeFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
   const expectedHostId = getRepoExecutionHostId(repo)
   // A project a WSL move is taking still lists, without stamping identities it lacks.
-  const canWrite = !isWslMoveRepoBlocked(repo)
+  const canWrite = stamp && !isWslMoveRepoBlocked(repo)
   const ids = Object.keys(allMeta).filter(
     (worktreeId) =>
       isRuntimeFolderWorkspaceIdForRepo(repo, worktreeId) &&
@@ -73,6 +74,22 @@ export function listRuntimeFolderWorkspaces(
       hostId: repoOwnerCount === 1 ? (meta.hostId ?? expectedHostId) : expectedHostId
     }
   })
+}
+
+export function listRuntimeFolderWorkspaces(
+  store: Pick<RuntimeStore, 'getAllWorktreeMeta' | 'getRepos' | 'setWorktreeMeta'>,
+  repo: Repo,
+  repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+): Worktree[] {
+  return runtimeFolderWorkspaceRows(store, repo, repoOwnerCount, true)
+}
+
+export function projectRuntimeFolderWorkspaces(
+  store: Pick<RuntimeStore, 'getAllWorktreeMeta' | 'getRepos' | 'setWorktreeMeta'>,
+  repo: Repo,
+  repoOwnerCount: number
+): Worktree[] {
+  return runtimeFolderWorkspaceRows(store, repo, repoOwnerCount, false)
 }
 
 export async function runtimePathExists(pathValue: string): Promise<boolean> {

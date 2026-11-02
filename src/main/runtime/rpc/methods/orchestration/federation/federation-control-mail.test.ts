@@ -274,7 +274,7 @@ describe('orchestration federation control mail', () => {
 
   it('uses imported types for waiter eligibility and returns the oldest full batch', async () => {
     vi.useFakeTimers()
-    await dispatchImport(importRequest('import-heartbeat', 1, 'relay-heartbeat', 'heartbeat'))
+    await dispatchImport(importRequest('import-merge-ready', 1, 'relay-merge-ready', 'merge_ready'))
 
     const escalationWaiter = workerDispatcher.dispatch(
       checkRequest('wait-escalation', true, 1_000, 'escalation')
@@ -289,7 +289,7 @@ describe('orchestration federation control mail', () => {
       result: {
         count: 2,
         messages: [
-          { id: 'relay-heartbeat', type: 'heartbeat' },
+          { id: 'relay-merge-ready', type: 'merge_ready' },
           { id: 'relay-escalation', type: 'escalation' }
         ]
       }

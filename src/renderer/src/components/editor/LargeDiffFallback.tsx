@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import type { LargeDiffRenderLimit } from './large-diff-render-limit'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 
 type LargeDiffFallbackProps = {
   filePath: string
@@ -12,10 +13,10 @@ type LargeDiffFallbackProps = {
   }
 }
 
-const numberFormatter = new Intl.NumberFormat()
+const NUMBER_OPTIONS: Intl.NumberFormatOptions = {}
 
 function formatCount(value: number): string {
-  return numberFormatter.format(value)
+  return uiNumberFormat(NUMBER_OPTIONS).format(value)
 }
 
 function formatLineCount(
@@ -76,11 +77,15 @@ export function LargeDiffFallback({
           </div>
         </div>
         <div className="text-[11px]">
-          {translate('auto.components.editor.LargeDiffFallback.5fca073b72', 'Limits')}:{' '}
-          {formatCount(renderLimit.limits.maxLinesPerSide)}{' '}
-          {translate('auto.components.editor.LargeDiffFallback.f1d136a163', 'lines per side')} ·{' '}
-          {formatCount(renderLimit.limits.maxCombinedCharacters)}{' '}
-          {translate('auto.components.editor.LargeDiffFallback.23433fcdea', 'combined characters')}
+          {/* Both limits are large fixed values, so the plural form never varies. */}
+          {translate(
+            'auto.components.editor.LargeDiffFallback.limitsSummary',
+            'Limits: {{lines}} lines per side · {{characters}} combined characters',
+            {
+              lines: formatCount(renderLimit.limits.maxLinesPerSide),
+              characters: formatCount(renderLimit.limits.maxCombinedCharacters)
+            }
+          )}
         </div>
         {action ? (
           <div className="space-y-2">

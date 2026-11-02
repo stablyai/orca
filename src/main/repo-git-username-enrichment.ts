@@ -1,6 +1,8 @@
 import { getRepoExecutionHostId } from '../shared/execution-host'
 import type { Repo } from '../shared/repo-types'
 import { resolveLocalGitUsernameDetailed } from './git/git-username'
+import { blockedWslDistroForPath, wslDistroForPath } from './wsl/wsl-unc-access-gate'
+import { outsideWslUserAct } from './wsl/wsl-user-act-scope'
 
 type RepoUsernameStore = {
   getRepos(): Repo[]
@@ -45,6 +47,10 @@ async function enrichRepoGitUsernamesInBackground(
   )
   let changed = false
   for (const repo of candidates) {
+    // E9: git on a stopped distro's repo boots it; leave it unattempted so a later pass retries.
+    if (wslDistroForPath(repo.path) && (await blockedWslDistroForPath(repo.path))) {
+      continue
+    }
     attemptedLocations.add(getRepoLocationKey(repo))
     const { username, authoritative } = await resolveLocalGitUsernameDetailed(repo.path)
     // Preserve cached usernames on failure; authoritative empty results clear stale accounts.
@@ -70,7 +76,8 @@ export function enrichRepoGitUsernames(
     rerunRequested = true
     return
   }
-  enrichmentInFlight = enrichRepoGitUsernamesInBackground(store, options)
+  // One shared pass for every repo: a request inside a WSL user act must not lend it that act (E9).
+  enrichmentInFlight = outsideWslUserAct(() => enrichRepoGitUsernamesInBackground(store, options))
     .catch((error: unknown) => {
       console.error('[repo-username] Failed to enrich git usernames:', error)
     })

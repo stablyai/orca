@@ -1,3 +1,4 @@
+import { resolveGitHubWorkItemIdentity } from './github-work-item-identity'
 import { getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { getLaunchableWorkItemDraftContent } from '@/lib/linked-work-item-context'
@@ -31,4 +32,12 @@ export function getDirectWorkItemWorkspaceNames(
     linkedPR: itemType === 'pr' ? (itemNumber ?? null) : null
   })
   return { workspaceIntentName, workspaceName }
+}
+
+export function getDirectWorkItemIdentity(item: LaunchableWorkItem) {
+  const identity =
+    item.number !== null && (item.type === 'issue' || item.type === 'pr')
+      ? resolveGitHubWorkItemIdentity({ type: item.type, number: item.number, url: item.url })
+      : null
+  return { itemType: identity?.type ?? item.type, itemNumber: identity?.number ?? item.number }
 }

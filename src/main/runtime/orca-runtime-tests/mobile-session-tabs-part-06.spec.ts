@@ -339,7 +339,11 @@ describe('OrcaRuntimeService', () => {
     })
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: vi.fn(),
+      ownsTab: () => true
+    })
     runtime.setAgentBrowserBridge({
       tabList: vi.fn(() => ({
         tabs: [
@@ -629,6 +633,8 @@ describe('OrcaRuntimeService', () => {
       getWorkspaceSession,
       getWorkspaceSessionHostIds: () => ['local']
     } as never)
+    expect(getWorkspaceSession).toHaveBeenCalledExactlyOnceWith('local')
+    getWorkspaceSession.mockClear()
 
     runtime.syncWindowGraph(1, {
       tabs: [],
@@ -663,6 +669,8 @@ describe('OrcaRuntimeService', () => {
       getWorkspaceSession,
       getWorkspaceSessionHostIds: () => ['local']
     } as never)
+    expect(getWorkspaceSession).toHaveBeenCalledExactlyOnceWith('local')
+    getWorkspaceSession.mockClear()
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 

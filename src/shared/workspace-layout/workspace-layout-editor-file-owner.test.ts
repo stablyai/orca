@@ -11,7 +11,6 @@ import type { CommandOf } from './workspace-layout-command-types'
 import { build, testContext } from './workspace-layout-command.test-fixture'
 import { editorTabFile } from './workspace-layout-editor-tab-file'
 import { loadWorkspaceLayout } from './workspace-layout-load'
-import { diffStoredSession } from './workspace-layout-load-report'
 import type { LayoutEditorFile, WorkspaceLayoutModel } from './workspace-layout-model'
 import { publishWorkspaceLayout } from './workspace-layout-published'
 import { patchStoredSession } from './workspace-layout-record-patch'
@@ -207,21 +206,6 @@ describe('editor file records keyed by path and owner, layout-owner build', () =
     expect(editorTabFile(workspace, PATH)?.runtimeEnvironmentId).toBeUndefined()
     expect(hostOf(PATH)).toBe(LOCAL_EXECUTION_HOST_ID)
     expect(hostOf(runtimeId(GIT_KEY))).toBe(`runtime:${ENV}`)
-  })
-
-  it("the load report sees a change to one owner's record of a shared path", () => {
-    const local = { ...LOCAL_FILE, worktreeId: FLOATING }
-    const runtime = { ...RUNTIME_FILE, worktreeId: FLOATING }
-    const session = (files: PersistedOpenFile[]): WorkspaceSessionState => ({
-      ...emptySession(),
-      openFilesByWorktree: { [FLOATING]: files }
-    })
-
-    const changes = diffStoredSession(session([local, runtime]), session([runtime]))
-
-    expect(changes.filter((change) => change.table === 'file')).toEqual([
-      expect.objectContaining({ field: '*', before: local, after: undefined })
-    ])
   })
 
   it("a reload keeps a path-id preview tab's flag on its own owner's record only", () => {

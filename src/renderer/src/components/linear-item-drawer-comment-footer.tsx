@@ -1,3 +1,4 @@
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle, Send } from 'lucide-react'
@@ -96,7 +97,7 @@ export function LinearIssueCommentFooter({
       if (mountedRef.current) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? taskProviderErrorText(err.message)
             : translate('auto.components.LinearItemDrawer.6ab35eafd5', 'Failed to add comment')
         )
       }

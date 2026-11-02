@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
 import { useMountedRef } from '../../hooks/useMountedRef'
+import { withImportedTerminalColorOverrides } from '../../../../shared/terminal-theme-selection'
+import { getSystemPrefersDark } from '@/lib/terminal-theme'
 
 export type UseGhosttyImportReturn = {
   open: boolean
@@ -49,17 +51,11 @@ export function useGhosttyImport(
     if (applied || !preview?.found || Object.keys(preview.diff).length === 0 || !settings) {
       return
     }
-    const merged = {
-      ...preview.diff,
-      ...(preview.diff.terminalColorOverrides
-        ? {
-            terminalColorOverrides: {
-              ...settings.terminalColorOverrides,
-              ...preview.diff.terminalColorOverrides
-            }
-          }
-        : {})
-    }
+    const merged = withImportedTerminalColorOverrides(
+      settings,
+      preview.diff,
+      getSystemPrefersDark()
+    )
     setApplyError(null)
     try {
       // Await persistence before marking applied so rejected IPC cannot report success.

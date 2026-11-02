@@ -8,8 +8,6 @@ export type ColdRestorePayload = {
   cols: number
   rows: number
   oscLinks?: TerminalOscLinkRange[]
-  /** Last OSC title from the recovered checkpoint; seeds title records only. */
-  lastTitle?: string
 }
 
 export function coldRestorePayloadFromInfo(
@@ -28,8 +26,7 @@ export function coldRestorePayloadFromInfo(
     cwd: restoreInfo.cwd,
     cols: restoreInfo.cols,
     rows: restoreInfo.rows,
-    oscLinks: restoreInfo.oscLinks,
-    ...(restoreInfo.lastTitle ? { lastTitle: restoreInfo.lastTitle } : {})
+    oscLinks: restoreInfo.oscLinks
   }
 }
 
@@ -40,13 +37,7 @@ export function getColdRestorePayloadBytes(payload: ColdRestorePayload): number 
   const oscLinkBytes =
     payload.oscLinks?.reduce((bytes, link) => bytes + link.uri.length * 2 + 24, 0) ?? 0
   // UTF-16 code-unit estimates avoid flattening or rescanning multi-MB string ropes.
-  return (
-    payload.scrollback.length * 2 +
-    payload.cwd.length * 2 +
-    (payload.lastTitle?.length ?? 0) * 2 +
-    oscLinkBytes +
-    16
-  )
+  return payload.scrollback.length * 2 + payload.cwd.length * 2 + oscLinkBytes + 16
 }
 
 export class ColdRestorePayloadCache {

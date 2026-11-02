@@ -334,6 +334,12 @@ module.exports = {
     'out/main/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
+    'out/main/plugins/plugin-authoring-checks.js',
+    // `orca plugin types` copies the author typings from here in Node mode.
+    'resources/plugins/declarative/orca*.d.ts',
+    // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
+    'resources/plugins/declarative/*.mjs',
+    'resources/plugins/types/*.d.ts',
     'out/main/skills/bundled-skill-install/cli-entry.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
@@ -341,6 +347,7 @@ module.exports = {
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/plugin-host-entry.js',
+    'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',

@@ -21,10 +21,10 @@ vi.mock('./runtime-local-worktree-terminal-startup', () => ({
 }))
 
 vi.mock('./runtime-local-worktree-setup', () => ({
-  prepareRuntimeLocalWorktreeSetup: vi.fn(async () => ({
+  prepareRuntimeLocalWorktreeSetup: vi.fn(async (args: { warning?: string }) => ({
     setup: undefined,
     defaultTabs: undefined,
-    warning: undefined,
+    warning: args.warning,
     effectiveDecision: 'skip',
     hookFound: false,
     shouldRunSetup: false,
@@ -98,10 +98,10 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
         metadataResult: { lineage: null, workspaceLineage: null, warnings: [] }
       }
     })
-    startTerminalsMock.mockImplementation(async () => {
+    startTerminalsMock.mockImplementation(async (args: { warning?: string }) => {
       calls.order.push('terminals')
       return {
-        warning: undefined,
+        warning: args.warning,
         returnedSetup: undefined,
         didSpawnSetup: false,
         didSpawnStartup: false,

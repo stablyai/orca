@@ -21,10 +21,7 @@ const linuxFile = '/home/example/.gemini/antigravity-ide/brain/copied-id/transcr
 const debianFile =
   '//wsl.localhost/Debian/home/example/.gemini/antigravity-ide/brain/copied-id/transcript_full.jsonl'
 
-function stateFor(
-  host: ExecutionHostId,
-  distro?: string
-): Extract<State, { endpointProjects: unknown }> {
+function stateFor(host: ExecutionHostId, distro?: string): State {
   const worktree = makeWorktree({
     id: 'repo::workspace',
     repoId: 'repo',
@@ -34,6 +31,10 @@ function stateFor(
   return {
     activeRepoId: 'repo',
     activeWorktreeId: worktree.id,
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     settings: null,
@@ -48,21 +49,7 @@ function stateFor(
         executionHostId: host
       }
     ],
-    endpointProjectHostSetups: [
-      {
-        id: 'repo',
-        projectId: 'repo',
-        repoId: 'repo',
-        hostId: host,
-        path: worktree.path,
-        displayName: 'project',
-        setupMethod: 'legacy-repo',
-        setupState: 'ready',
-        createdAt: 0,
-        updatedAt: 0
-      }
-    ],
-    endpointProjects: [
+    projects: [
       {
         id: 'repo',
         displayName: 'project',
@@ -156,7 +143,7 @@ describe('Antigravity transcript reference ownership', () => {
     const state = stateFor('local')
     state.activeRepoId = null
     state.repos = []
-    state.endpointProjects = []
+    state.projects = []
     state.activeWorktreeId = 'folder:folder-1'
     state.folderWorkspaces = [
       makeFolderWorkspace({ folderPath: '//wsl.localhost/Debian/home/example/project' })
@@ -325,7 +312,7 @@ describe('Antigravity transcript reference ownership', () => {
 
   it('refuses local references while the project runtime requires repair', () => {
     const state = stateFor('local')
-    state.endpointProjects[0].localWindowsRuntimePreference = { kind: 'inherit-global' }
+    state.projects[0].localWindowsRuntimePreference = { kind: 'inherit-global' }
     state.settings = createGlobalSettingsFixture({
       localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
     })

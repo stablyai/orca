@@ -28,6 +28,8 @@ export type SessionSearchFileRow = {
   failedMtimeMs: number | null
 }
 
+export type SessionSearchResumableCursor = { byteOffset: number; prefixHash: string }
+
 export type SessionSearchStateCounts = {
   current: number
   due: number
@@ -141,6 +143,39 @@ export class SessionSearchStore {
     } catch (error) {
       this.onError(error)
       return false
+    }
+  }
+
+  /** A current cursor with bytes past it, and the hash a replacement read must reproduce to append there. */
+  resumableCursor(candidate: SessionFileCandidate): SessionSearchResumableCursor | null {
+    const file = candidate.file
+    if (this.closed || typeof file.sizeBytes !== 'number') {
+      return null
+    }
+    const identity = fileIdentity(file)
+    try {
+      const row = asRecord(
+        this.db
+          .prepare(
+            `SELECT byte_offset AS byteOffset, prefix_hash AS prefixHash FROM files
+             WHERE path = ? AND state = 'current' AND prefix_hash IS NOT NULL
+             AND byte_offset > 0 AND byte_offset < ?
+             AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
+          )
+          .get(
+            file.path,
+            file.sizeBytes,
+            identity?.dev ?? null,
+            identity?.dev ?? null,
+            identity?.ino ?? null
+          )
+      )
+      return typeof row?.byteOffset === 'number' && typeof row.prefixHash === 'string'
+        ? { byteOffset: row.byteOffset, prefixHash: row.prefixHash }
+        : null
+    } catch (error) {
+      this.onError(error)
+      return null
     }
   }
 

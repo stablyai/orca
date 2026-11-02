@@ -5,7 +5,7 @@ import { assertRemoteCliPageAccess, readRemoteCliAdmittedPage } from './remote-c
 /** Draws a hidden guest while a capture or agent input needs its frames; returns its release. */
 export type CapturePaintHold = () => () => void
 
-const SCREENSHOT_TIMEOUT_MS = 8000
+export const SCREENSHOT_TIMEOUT_MS = 8000
 // Probe offsets leave time for the original capture to finish before the deadline.
 const FRAME_PROBE_OFFSETS_MS = [250, 750, 1750, 3750]
 // A cheap 1×1 probe can produce the frame needed by the pending capture.
@@ -119,7 +119,11 @@ function getLayoutClip(
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+export function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string
+): Promise<T> {
   let timer: NodeJS.Timeout | null = null
   return Promise.race([
     promise,

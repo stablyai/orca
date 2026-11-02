@@ -17,6 +17,8 @@ node_modules/
 node_modules
 
 dist/
+# The declarative sample ships its prebuilt bundle so it installs without a build step.
+!examples/plugins/hello-components/dist/
 dist-electron/
 out/
 /build/

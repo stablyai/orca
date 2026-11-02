@@ -150,7 +150,7 @@ describe('agent prompt writer: onPermission wait', () => {
     const sent = runtime.sendTerminalAgentPrompt(handle, 'held prompt', {
       inputKind: 'driving',
       onPermission: 'wait',
-      signal: controller.signal
+      observationSignal: controller.signal
     })
     const rejected = expect(sent).rejects.toThrow('request_aborted')
     await vi.advanceTimersByTimeAsync(0)
@@ -214,5 +214,41 @@ describe('agent prompt writer: expectedBinding', () => {
       })
     ).rejects.toThrow('terminal_handle_stale')
     expect(writes).toEqual([])
+  })
+  it.each(['enrich', 'replace', 'explicit'] as const)('suffix identity %s', async (change) => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createRuntime()
+    const [pane] = (await runtime.listTerminals()).terminals
+    const binding = runtime.getTerminalPromptRequestBinding(handle)
+    const register = (incarnationId: string) =>
+      runtime.registerPty('pty-prompt', pane.worktreeId, null, { ...pane, incarnationId })
+    let checks = 0
+    const sent = runtime.sendTerminalAgentPrompt(handle, 'identity', {
+      inputKind: 'driving',
+      acceptQueued: true,
+      requestId: 'identity',
+      observationTimeoutMs: 0,
+      ...(change === 'explicit' ? { expectedBinding: binding } : {}),
+      beforeWrite: async () => {
+        if (++checks === 1 && change === 'replace') {
+          register('old')
+        }
+        if (checks === 2) {
+          register('learned')
+        }
+      }
+    })
+    void sent.catch(() => undefined)
+    await vi.runAllTimersAsync()
+    expect(writes).toHaveLength(change === 'enrich' ? 2 : 1)
+    if (change !== 'enrich') {
+      await expect(sent).rejects.toThrow()
+      return
+    }
+    const receipt = await sent
+    expect(receipt.prompt?.processIncarnation).toBe('learned')
+    expect(await runtime.observeTerminalAgentPrompt(handle, receipt.prompt!, 0)).not.toMatchObject({
+      observation: 'incarnation_replaced'
+    })
   })
 })

@@ -1,13 +1,7 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import {
-  assertEditorFileOperationCurrent,
-  captureEditorFileOperationProvenance,
-  getEditorFileOperationContext
-} from '@/lib/editor-file-operation-owner'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
+import { createUntitledFileInActiveWorkspace } from './untitled-file-creation'
 import type { OpenFile } from '../types/open-file'
 import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
 import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
@@ -51,49 +45,25 @@ export function createMarkdownPreviewActions(
 > {
   return {
     openNewMarkdownInActiveWorkspace: async (groupId) => {
-      const state = get()
-      const worktreeId = state.activeWorktreeId
-      if (!worktreeId) {
-        return
-      }
-      const worktree = state.getKnownWorktreeById(worktreeId)
-      if (!worktree) {
-        return
-      }
-      try {
-        const operationProvenance = captureEditorFileOperationProvenance(
-          state,
-          worktreeId,
-          undefined,
-          false
-        )
-        const operationContext = getEditorFileOperationContext(
-          state,
-          { worktreeId, operationProvenance },
-          worktree.path
-        )
-        const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
-          worktree.path,
-          worktreeId,
-          operationContext.connectionId,
-          operationContext.target,
-          operationProvenance,
-          operationContext.expectedSshConnectionGeneration,
-          operationContext.expectedSshTargetId,
-          operationContext.expectedExecutionHostId,
-          () => assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
-        )
-        if (!fileInfo) {
-          return
-        }
-        get().openFile(fileInfo, {
-          preview: false,
-          targetGroupId: groupId,
-          focusEditor: true
-        })
+      const created = await createUntitledFileInActiveWorkspace(
+        get,
+        groupId,
+        (context) =>
+          createUntitledMarkdownFileWithTemplateSelection(
+            context.worktreePath,
+            context.worktreeId,
+            context.connectionId,
+            context.target,
+            context.operationProvenance,
+            context.expectedSshConnectionGeneration,
+            context.expectedSshTargetId,
+            context.expectedExecutionHostId,
+            context.assertOperationCurrent
+          ),
+        'Failed to create untitled markdown file.'
+      )
+      if (created) {
         get().recordFeatureInteraction('markdown-file-created')
-      } catch (err) {
-        toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
       }
     },
 
@@ -115,15 +85,22 @@ export function createMarkdownPreviewActions(
           ['edit']
         )
       const id = `markdown-preview::${sourceFileId}`
-      // Why: with the source tab closed, a retarget keeps the authority the preview already reads with.
-      const { externalSshTargetId, terminalArtifactGrantId, readOnly } = inheritFileReadAuthority(
-        file,
-        initialState.openFiles.find((openFile) => openFile.id === sourceFileId) ??
-          initialState.openFiles.find((openFile) => openFile.id === id)
-      )
       const anchor = options?.anchor || undefined
       set((s) => {
         const existing = s.openFiles.find((openFile) => openFile.id === id)
+        // Why: with the source tab closed, a retarget keeps the authority the preview already reads with.
+        const { externalSshTargetId, terminalArtifactGrantId, readOnly } = inheritFileReadAuthority(
+          file,
+          s.openFiles.find((openFile) => openFile.id === sourceFileId) ??
+            s.openFiles.find((openFile) => openFile.id === id)
+        )
+        const source = s.openFiles.find((openFile) => openFile.id === sourceFileId)
+        const operationProvenance =
+          file.externalSshTargetId !== undefined
+            ? (file.operationProvenance ?? source?.operationProvenance)
+            : (existing?.operationProvenance ??
+              file.operationProvenance ??
+              source?.operationProvenance)
         const worktreeId = file.worktreeId
         const runtimeEnvironmentId = resolvedRuntimeEnvironmentId
         const activeResult = buildEditorActiveResult(s, worktreeId, id)
@@ -134,6 +111,7 @@ export function createMarkdownPreviewActions(
             terminalArtifactGrantId !== undefined &&
             existing.terminalArtifactGrantId !== terminalArtifactGrantId
           const needsUpdate =
+            existing.operationProvenance !== operationProvenance ||
             existing.relativePath !== file.relativePath ||
             existing.filePath !== file.filePath ||
             existing.language !== file.language ||
@@ -154,6 +132,7 @@ export function createMarkdownPreviewActions(
                         worktreeId: file.worktreeId,
                         language: file.language,
                         runtimeEnvironmentId,
+                        operationProvenance,
                         externalSshTargetId,
                         terminalArtifactGrantId,
                         readOnly,
@@ -179,6 +158,7 @@ export function createMarkdownPreviewActions(
           language: file.language,
           isDirty: false,
           runtimeEnvironmentId,
+          operationProvenance,
           externalSshTargetId,
           terminalArtifactGrantId,
           readOnly,

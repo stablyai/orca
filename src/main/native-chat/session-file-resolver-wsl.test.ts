@@ -9,6 +9,15 @@ const ROLLOUT_UNC =
   '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\24\\rollout-wsl-sess.jsonl'
 const DEBIAN_ROLLOUT_UNC = ROLLOUT_UNC.replace('Ubuntu', 'Debian')
 
+// These cases cover root and path policy; the E9 gate has its own suite.
+vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
+vi.mock('../wsl/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl')
+  return {
+    wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
+    listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
+  }
+})
 vi.mock('../wsl', () => ({
   listWslDistrosAsync: vi.fn(async () => ['Ubuntu', 'Debian']),
   listRunningWslDistrosAsync: vi.fn(async () => ['Ubuntu', 'Debian']),

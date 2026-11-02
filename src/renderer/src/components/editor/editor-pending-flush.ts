@@ -82,3 +82,78 @@ export function flushClosingEditorBuffers(
     }
   }
 }
+
+/** Resolves false when the view still holds edits it could not hand to the buffer. */
+type FrameFlush = () => Promise<boolean>
+const frameFlushes = new Map<string, Set<FrameFlush>>()
+
+/** For editors whose pending edits live in another frame, so flushing them is a round trip. */
+export function registerEditorFrameFlush(fileId: string, flush: FrameFlush): () => void {
+  const entries = frameFlushes.get(fileId) ?? new Set<FrameFlush>()
+  entries.add(flush)
+  frameFlushes.set(fileId, entries)
+  return () => {
+    entries.delete(flush)
+    if (!entries.size && frameFlushes.get(fileId) === entries) {
+      frameFlushes.delete(fileId)
+    }
+  }
+}
+
+/** Flushes every frame view of `fileId`'s record; false if any kept edits back, so a save must
+ *  not write the buffer as if it were the latest. */
+export async function flushEditorFrames(
+  state: EditorBufferViewIndex,
+  fileId: string
+): Promise<boolean> {
+  const flushes = frameFlushesOf(state, fileId)
+  if (flushes.length === 0) {
+    return true
+  }
+  const results = await Promise.all(flushes.map((flush) => flush().catch(() => false)))
+  return results.every(Boolean)
+}
+
+/** Every view's pending edits, frames first since they land in the buffer as text edits. False
+ *  when a frame kept edits back: a save must then not write the buffer as the latest. */
+export async function flushEditorViewsForSave(
+  getState: () => EditorBufferViewIndex,
+  fileId: string,
+  autosave = false
+): Promise<boolean> {
+  const framesFlushed = await flushEditorFrames(getState(), fileId)
+  flushPendingEditorBuffer(getState(), fileId, autosave)
+  return framesFlushed
+}
+
+function frameFlushesOf(state: EditorBufferViewIndex, fileId: string): FrameFlush[] {
+  return editorBufferSiblingViewIds(state, fileId).flatMap((viewId) => [
+    ...(frameFlushes.get(viewId) ?? [])
+  ])
+}
+
+/** Whether closing `fileId` must first wait on a mounted frame view's flush. */
+export function hasEditorFrameFlush(state: EditorBufferViewIndex, fileId: string): boolean {
+  return frameFlushesOf(state, fileId).length > 0
+}
+
+/** Runs `run` (a close or view switch that unmounts frames) once every frame view of these files
+ *  handed over its pending edits, so a dirty check sees them; synchronous when none is mounted, else
+ *  `deferred` (re-check what is still open). Each flush has its own deadline, bounding the delay. */
+export function runAfterEditorFramesFlush(
+  state: EditorBufferViewIndex,
+  fileIds: Iterable<string>,
+  run: (deferred: boolean) => void
+): void {
+  const flushes = new Set<FrameFlush>()
+  for (const fileId of fileIds) {
+    for (const flush of frameFlushesOf(state, fileId)) {
+      flushes.add(flush)
+    }
+  }
+  if (flushes.size === 0) {
+    run(false)
+    return
+  }
+  void Promise.all([...flushes].map((flush) => flush().catch(() => false))).then(() => run(true))
+}

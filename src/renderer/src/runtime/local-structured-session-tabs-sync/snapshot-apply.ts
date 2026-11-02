@@ -70,18 +70,28 @@ export function applyStructuredSessionTabSnapshots(
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
   const drawnChatLabels: DrawnChatLabel[] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
-    (state) =>
-      applyLocalStructuredSessionTabSnapshots(state, snapshots, owner, undefined, {
-        ...options,
-        onAcceptedAgentSession: (worktreeId, sessionId) => {
-          acceptedAgentSessions.push({ worktreeId, sessionId })
-          options.onAcceptedAgentSession?.(worktreeId, sessionId)
+    (state, changedAgentPaneKeys) =>
+      applyLocalStructuredSessionTabSnapshots(
+        state,
+        snapshots,
+        owner,
+        undefined,
+        {
+          ...options,
+          onAcceptedAgentSession: (worktreeId, sessionId) => {
+            acceptedAgentSessions.push({ worktreeId, sessionId })
+            options.onAcceptedAgentSession?.(worktreeId, sessionId)
+          },
+          // Switch point: main places the listed chats' tabs; its frames draw them.
+          framesDraw: ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(state) : undefined,
+          onDrawnChatLabel: (change) => drawnChatLabels.push(change)
         },
-        // Switch point: main places the listed chats' tabs; its frames draw them.
-        framesDraw: ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(state) : undefined,
-        onDrawnChatLabel: (change) => drawnChatLabels.push(change)
-      }),
-    { frames: [] }
+        changedAgentPaneKeys
+      ),
+    { frames: [] },
+    undefined,
+    false,
+    snapshots.map(({ worktree }) => worktree)
   )
   settleStructuredSessionMirror()
   const { setTabLabel } = useAppStore.getState()
@@ -115,7 +125,8 @@ export function applyLocalStructuredSessionTabSnapshots<
   snapshots: readonly RuntimeMobileSessionTabsResult[],
   owner = LOCAL_STRUCTURED_SESSION_OWNER,
   now = Date.now(),
-  options: StructuredSessionSnapshotApplyOptions = {}
+  options: StructuredSessionSnapshotApplyOptions = {},
+  changedAgentPaneKeys?: Set<string>
 ): State {
   let next = state
   for (const snapshot of snapshots) {
@@ -169,7 +180,8 @@ export function applyLocalStructuredSessionTabSnapshots<
         contentScope: 'agent-session',
         preserveLocalLayout: true,
         terminalPtyMode: 'local'
-      }
+      },
+      changedAgentPaneKeys
     )
     if (options.framesDraw?.(snapshot.worktree)) {
       // Main's frames own this workspace's tabs, so the patch (tab structure only here) is dropped.

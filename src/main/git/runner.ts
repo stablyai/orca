@@ -17,11 +17,8 @@ export {
   promptGuardShellEnv,
   untranslatedGitOutputEnv
 } from './command-runner/git-process-env'
-export {
-  gitExecFileAsync,
-  gitExecFileAsyncBuffer,
-  gitExecFileSync
-} from './command-runner/git-exec-file'
+export { gitExecFileAsync, gitExecFileAsyncBuffer } from './command-runner/git-exec-file'
+export { gitExecFileSync } from './command-runner/git-exec-file-sync'
 export { commandExecFileAsync } from './command-runner/command-exec-file'
 export { gitStreamStdout, type GitStreamResult } from './command-runner/git-stream-stdout'
 export {

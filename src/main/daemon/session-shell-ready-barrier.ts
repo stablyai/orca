@@ -10,17 +10,12 @@ import {
   scanShellStartupOutput,
   type ShellStartupOutputScanState
 } from '../shell-startup-output-scanner'
-import {
-  createShellPromptReadinessProbe,
-  type ShellPromptReadinessProbe
-} from '../shell-prompt-readiness-probe'
 import type { HeadlessEmulator } from './headless-emulator'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { basename } from 'node:path'
 import type { ShellReadyState } from './types'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
-export const CODEX_SHELL_READY_TIMEOUT_MS = 300
 
 export type SessionShellReadyBarrierDeps = {
   sessionId: string
@@ -35,12 +30,10 @@ export type SessionShellReadyBarrierDeps = {
   reportReadinessEvent?(event: string, details: Record<string, unknown>): void
 }
 
-/** Strip startup markers and gate stdin; hold DA1 authority until shell readiness resolves. */
+/** Strip startup markers and hold startup commands until shell readiness resolves. */
 export class SessionShellReadyBarrier {
   private _state: ShellReadyState
   private scanState: ShellStartupOutputScanState | null = null
-  private shellStartupPid: number | null = null
-  private promptReadinessProbe: ShellPromptReadinessProbe | null = null
   private readyTimer: ReturnType<typeof setTimeout> | null = null
   private releaseDeviceAttributesResponder: (() => void) | null = null
   private preReadyStdinQueue: string[] = []
@@ -50,7 +43,7 @@ export class SessionShellReadyBarrier {
     if (deps.shellReadySupported) {
       this._state = 'pending'
       this.scanState = createShellStartupOutputScanState()
-      // Answer DA1 past queued stdin, or a shell waiting for that reply can never emit its ready marker.
+      // Answer startup DA1 locally so shells waiting for it can reach their ready marker.
       this.releaseDeviceAttributesResponder = installDeviceAttributesResponder({
         parser: deps.responderParser,
         response: STARTUP_DA1_RESPONSE,
@@ -74,26 +67,12 @@ export class SessionShellReadyBarrier {
     return this._state
   }
 
-  /** Keep queuing through the post-marker flush window to preserve input order. */
+  /** Keep startup commands queued through the post-marker flush window. */
   get isGatingWrites(): boolean {
     return this._state === 'pending' || this.postReadyFlushGate.isPending
   }
 
-  /** Start after startup ingress exists, because probe callbacks may emit immediately. */
-  startPromptReadinessProbe(): void {
-    if (this._state !== 'pending') {
-      return
-    }
-    this.promptReadinessProbe = createShellPromptReadinessProbe({
-      slavePath: this.deps.subprocess.slavePath,
-      shellPath: this.deps.subprocess.shellPath,
-      shellCwd: this.deps.subprocess.shellCwd,
-      shellPathEnv: this.deps.subprocess.shellPathEnv,
-      getShellPid: () => this.shellStartupPid,
-      onPromptReady: () => this.onShellPromptReady()
-    })
-  }
-
+  /** Queues `data` when the gate is closed; false means the caller must write it through. */
   tryEnqueue(data: string): boolean {
     if (!this.isGatingWrites) {
       return false
@@ -107,9 +86,6 @@ export class SessionShellReadyBarrier {
     if (this._state === 'pending' && this.scanState) {
       const scanned = scanShellStartupOutput(this.scanState, data)
       data = scanned.output
-      if (scanned.shellPid) {
-        this.shellStartupPid = scanned.shellPid
-      }
       if (scanned.ready) {
         this.transitionToReady(scanned.postMarkerBytesObserved)
         releaseStartupDeviceAttributes = true
@@ -119,9 +95,6 @@ export class SessionShellReadyBarrier {
     }
 
     this.deps.acceptStartupIngress(data)
-    if (this._state === 'pending' && data.length > 0) {
-      this.promptReadinessProbe?.notifyOutput(data)
-    }
     if (releaseStartupDeviceAttributes) {
       this.releaseDeviceAttributes()
     }
@@ -145,11 +118,6 @@ export class SessionShellReadyBarrier {
     this.deps.releaseDeviceAttributesFilter()
   }
 
-  disposePromptReadinessProbe(): void {
-    this.promptReadinessProbe?.dispose()
-    this.promptReadinessProbe = null
-  }
-
   clearReadyTimer(): void {
     if (this.readyTimer) {
       clearTimeout(this.readyTimer)
@@ -168,7 +136,6 @@ export class SessionShellReadyBarrier {
 
   dispose(): void {
     this.clearReadyTimer()
-    this.disposePromptReadinessProbe()
     this.scanState = null
     this.clearPendingWrites()
   }
@@ -176,7 +143,6 @@ export class SessionShellReadyBarrier {
   private transitionToReady(postMarkerBytesObserved = false): void {
     this._state = 'ready'
     this.scanState = null
-    this.disposePromptReadinessProbe()
     this.clearReadyTimer()
     if (this.preReadyStdinQueue.length === 0) {
       return
@@ -207,20 +173,9 @@ export class SessionShellReadyBarrier {
       timeoutMs: this.deps.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS
     })
     this._state = 'timed_out'
-    this.disposePromptReadinessProbe()
     this.releaseDeviceAttributes()
     this.releaseHeldBytes()
     this.flushPreReadyQueue()
-  }
-
-  private onShellPromptReady(): void {
-    if (this._state !== 'pending') {
-      return
-    }
-    this.reportReadiness('shell-ready-wrapper-replaced', {})
-    this.releaseHeldBytes()
-    this.transitionToReady(true)
-    this.releaseDeviceAttributes()
   }
 
   private flushPreReadyQueue(): void {

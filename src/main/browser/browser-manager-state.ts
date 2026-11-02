@@ -27,6 +27,16 @@ import type { BrowserGrabCancelReason } from '../../shared/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './browser-manager-viewport-scroll-state'
 import { BrowserGuestDevToolsDock } from './browser-guest-devtools-dock'
 
+/** A link a headless serve page asked to open as an Orca tab beside it. */
+export type OffscreenBrowserTabOpenRequest = {
+  worktreeId: string
+  profileId: string | null
+  url: string
+  activate: boolean
+  /** The paired client whose click or key press opened it, if one did. */
+  pairedDeviceId: string | null
+}
+
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
   protected abstract attachGuestPolicies(
     guest: Electron.WebContents,
@@ -113,6 +123,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     error: string | null
   ): void
   protected abstract getDownloadReceivedBytes(item: Electron.DownloadItem): number
+  protected abstract isAwaitingDownloadFrom(
+    guestWebContentsId: number,
+    rootGuestWebContentsId: number
+  ): boolean
   protected abstract openLinkInOrcaTab(
     browserTabId: string,
     rawUrl: string,
@@ -157,6 +171,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   // Restore the optimistically hidden error if navigation aborts.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
+  protected offscreenTabOpener: ((request: OffscreenBrowserTabOpenRequest) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null
   protected siteDisplayController: BrowserSiteDisplayController | null = null
   protected shouldForwardDictationShortcut: (() => boolean) | null = null
@@ -178,6 +193,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     this.browserGuestStateChangedListener = listener
   }
 
+  setOffscreenTabOpener(opener: ((request: OffscreenBrowserTabOpenRequest) => void) | null): void {
+    this.offscreenTabOpener = opener
+  }
+
   setCertificateTrustController(controller: BrowserCertificateTrustController): void {
     this.certificateTrustController = controller
   }
@@ -192,6 +211,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   removeCertificateRequestGuard(session: Electron.Session): void {
     this.certificateTrustController?.removeSessionRequestGuard(session)
+  }
+
+  /** Orca's shortcut overrides; extension commands yield to every Orca shortcut. */
+  getKeybindingOverrides(): KeybindingOverrides | undefined {
+    return this.settingsResolver?.().keybindings
   }
 
   setSettingsResolver(

@@ -35,7 +35,7 @@ export const WorktreeCreate = z
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
-    branchIntent: z.literal('open-existing').optional(),
+    branchIntent: z.enum(['open-existing', 'open-existing-v2', 'create-new']).optional(),
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
     linkedLinearIssue: z.string().optional(),
@@ -90,6 +90,8 @@ export const WorktreeCreate = z
     envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
     cwdParentWorktree: OptionalString,
+    // Absent on older clients: retain the existing cwd parent.
+    cwdParentAmbiguous: z.literal(true).optional(),
     noParent: OptionalBoolean,
     callerTerminalHandle: OptionalString,
     orchestrationContext: z
@@ -129,6 +131,8 @@ export const WorktreeCreate = z
     /** The requesting window's pending creation, so the host's in-progress entry shares its id. */
     creationId: z.string().min(1).max(128).optional(),
     automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional(),
+    // Why unknown: the label is cosmetic, so the host drops a malformed one instead of failing the create.
+    clientAutomationProvenance: z.unknown().optional(),
     cliProvenanceRequest: CliWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {

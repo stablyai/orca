@@ -62,13 +62,19 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
           path: |
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-win-
 
@@ -484,7 +490,7 @@ jobs:
             # Only elevate.exe is advisory: NSIS pack recopies pristine cache bytes over signed win-unpacked output.
             # With no certificate, CopyElevateHelper.signIf signs nothing; this predates the uninstaller relay.
             # release-cut pre-seeds only Valid, SignPath-signed cache bytes; test certificates deliberately fail that guard.
-            # DO NOT relax it: rehearsal shares electron-builder-win-<lockfile hash> with real releases and would poison
+            # DO NOT relax it: rehearsal shares electron-builder-win-<Electron+builder versions> with real releases and would poison
             # their cache with “Test certificate for Orca agent ide [OSS]”. Fix the UAC helper separately with proper scrutiny.
             if ($relative -eq 'resources\elevate.exe') {
               Test-Signature "installed: $relative" $path -Advisory

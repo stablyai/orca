@@ -97,10 +97,19 @@ export function createTerminalPathExistenceBatch(): (
         const values = window.api.shell.pathsExist
           ? await window.api.shell.pathsExist(paths)
           : await Promise.all(paths.map((path) => window.api.shell.pathExists(path)))
-        if (values.length !== paths.length || values.some((value) => typeof value !== 'boolean')) {
+        if (values.length !== paths.length) {
           throw new Error('Invalid local path existence response')
         }
-        results = values.map((exists) => ({ exists }))
+        results = values.map((value): PathExistenceResult => {
+          if (typeof value === 'boolean') {
+            return { exists: value }
+          }
+          // A refused path (e.g. in a stopped WSL distro) is unverifiable, never missing.
+          if (value && typeof value === 'object' && typeof value.error === 'string') {
+            return { error: value.error }
+          }
+          throw new Error('Invalid local path existence response')
+        })
       }
       results.forEach((result, index) => {
         if ('exists' in result) {

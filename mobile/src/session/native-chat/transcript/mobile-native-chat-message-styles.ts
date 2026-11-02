@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
 
 export const TEXT_SIZE = 17
 export const CHAT_PROSE_SCALE = 1.25
@@ -10,7 +11,7 @@ export function scaledType(size: number, fontScale: number, leading = 6) {
 }
 export const MONO_SIZE = 12
 
-export const styles = StyleSheet.create({
+export const styles = themedStyleSheet(() => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm
@@ -24,8 +25,10 @@ export const styles = StyleSheet.create({
   },
   userBubble: {
     maxWidth: '88%',
-    backgroundColor: colors.textPrimary,
-    borderRadius: radii.card,
+    backgroundColor: colors.chatUserSurface,
+    borderWidth: 1,
+    borderColor: colors.chatUserBorder,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
@@ -67,10 +70,15 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize
   },
+  // Same gap as the tool rows' icon and sentence, so the time starts on their text.
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs
+    gap: 6
+  },
+  // The copy button's 24 pt box centres a 14 pt glyph; pulling the 5 pt back lines the glyph up with the tool icons.
+  metaCopy: {
+    marginHorizontal: -5
   },
   unsentNotice: {
     maxWidth: '88%',
@@ -94,9 +102,9 @@ export const styles = StyleSheet.create({
   imageThumb: {
     width: 200,
     height: 150,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   }
-})
+}))

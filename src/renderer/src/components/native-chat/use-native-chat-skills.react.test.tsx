@@ -3,7 +3,7 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatSkillDiscovery } from './use-native-chat-skills'
-import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isSkillPickerTriggered } from '../../../../shared/native-chat-composer-autocomplete'
 
@@ -35,8 +35,7 @@ function stateForHost(hostId: string) {
     activeWorktreeId: 'worktree-1',
     folderWorkspaces: [],
     projectGroups: [],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
+    projects: [],
     repos: [
       {
         id: 'repo-1',

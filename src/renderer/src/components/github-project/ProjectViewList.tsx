@@ -210,6 +210,7 @@ export default function ProjectViewList({
             {table.selectedView.groupByFields[0] ? (
               <ProjectGroupHeader
                 group={g}
+                groupFieldName={table.selectedView.groupByFields[0].name}
                 expanded={expanded}
                 onToggle={() => {
                   setCollapsed((prev) => {

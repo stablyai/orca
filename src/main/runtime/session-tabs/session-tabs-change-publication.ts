@@ -168,7 +168,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   ): Promise<string> {
     const worktreeId =
       this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
-      (await this.resolveWorktreeSelector(worktreeSelector)).id
+      (await this.resolveWorkspaceSelector(worktreeSelector)).id
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const tab = snapshot?.tabs.find(
       (candidate): candidate is RuntimeMobileSessionMarkdownTab =>

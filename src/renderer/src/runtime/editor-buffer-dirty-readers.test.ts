@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
 import { buildEditorSessionData } from '../lib/workspace-session'
-import { sameOpenFiles } from './web-session-tabs-sync/state-equality-files'
 import { buildRuntimeMobileOpenFilesProjection } from './sync-runtime-graph/sync-projections'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from './sync-runtime-graph-test-harness'
@@ -54,12 +53,6 @@ describe('a dirty change on the buffer record reaches every openFiles reader', (
   beforeEach(() => {
     resetEditorState()
     openMarkdownFile()
-  })
-
-  it('web session tab sync sees the open files change', () => {
-    const { before, after } = dirtyThroughRecord()
-
-    expect(sameOpenFiles(before.openFiles, after.openFiles)).toBe(false)
   })
 
   it('session save persists the draft of the now-dirty tab', () => {

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -39,6 +40,7 @@ import {
 import { getWslAccountTarget } from './account-wsl-location'
 import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
 import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
+import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
@@ -71,6 +73,12 @@ async function runAgentLoginInTerminal(
   json: boolean,
   session: InteractiveLoginSession
 ): Promise<void> {
+  if (command === 'opencode') {
+    command = await resolveOpenCodeLoginCommand(
+      addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv }),
+      session
+    )
+  }
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const resolvedCommand = resolveCliCommand(command)
     let spawnCmd: string
@@ -95,6 +103,12 @@ async function runAgentLoginInTerminal(
       resolvedCommand,
       addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
     )
+    try {
+      assertWslDistroAllowed(spawnCmd, spawnArgs)
+    } catch (error) {
+      rejectPromise(error)
+      return
+    }
     const consoleStdio = stdioForWindowsInteractiveChild(json)
     let child: ReturnType<typeof spawn>
     try {

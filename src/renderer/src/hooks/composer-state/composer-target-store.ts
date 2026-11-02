@@ -1,7 +1,3 @@
-import {
-  selectCanonicalProjects,
-  selectCanonicalProjectHostSetups
-} from '@/store/project-host-setup-selector'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -98,11 +94,11 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const repos = useAppStore((s) => s.repos)
 
-  const projects = useAppStore((s) => selectCanonicalProjects(s))
+  const projects = useAppStore((s) => s.projects)
 
   const projectGroups = useAppStore((s) => s.projectGroups)
 
-  const projectHostSetups = useAppStore((s) => selectCanonicalProjectHostSetups(s))
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
 
   const activeRepoId = useAppStore((s) => s.activeRepoId)
 

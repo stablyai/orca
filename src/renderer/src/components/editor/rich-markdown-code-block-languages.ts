@@ -1,4 +1,5 @@
-import { i18n, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export type CodeBlockLanguage = { value: string; label: string }
 
@@ -33,23 +34,13 @@ const LANGUAGE_ENTRIES: readonly LanguageEntry[] = [
   ['yaml', 'auto.components.editor.RichMarkdownCodeBlock.74eab1d9b2', 'YAML']
 ]
 
-let cachedLocale: string | null = null
-let cachedResourceBundle: unknown = null
-let cachedLanguages: CodeBlockLanguage[] = []
-
 /** Cache translated labels to avoid thousands of lookups per code-heavy render. */
-export function getCodeBlockLanguages(): CodeBlockLanguage[] {
-  const resourceBundle = i18n.getResourceBundle(i18n.language, 'translation')
-  if (cachedLocale !== i18n.language || cachedResourceBundle !== resourceBundle) {
-    cachedLocale = i18n.language
-    cachedResourceBundle = resourceBundle
-    cachedLanguages = LANGUAGE_ENTRIES.map(([value, key, label]) => ({
-      value,
-      label: key === null ? label : translate(key, label)
-    }))
-  }
-  return cachedLanguages
-}
+export const getCodeBlockLanguages = createLocalizedCatalog<CodeBlockLanguage[]>(() =>
+  LANGUAGE_ENTRIES.map(([value, key, label]) => ({
+    value,
+    label: key === null ? label : translate(key, label)
+  }))
+)
 
 export function getCodeBlockLanguageLabel(value: string): string {
   return getCodeBlockLanguages().find((language) => language.value === value)?.label ?? value

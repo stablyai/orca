@@ -1,6 +1,6 @@
 // Share pure slash-command data across desktop/mobile without DOM/RN dependencies or mirrored catalogs.
 
-import type { AgentSessionSlashCommand } from '../../agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../agent-session/agent-session-wire'
 import type { AgentType } from '../../agent-status-types'
 
 /** Terminal replies: composer answers locally without sending; transcript surfaces an agent-written row; absent means terminal/effect-only feedback. */
@@ -14,6 +14,7 @@ export type SlashCommandSuggestion = {
   /** Provider-authored argument sketch, e.g. `<objective>`. */
   argumentHint?: string
   kindUnspecified?: true
+  builtin?: true
   /** Declared only on curated rows; a surface that cannot show the reply drops the row. */
   reply?: NativeChatCommandReply
   /** The desktop chat runs it itself: it hides an agent command of the same name, never a skill. */
@@ -141,25 +142,34 @@ export function sessionSlashCommandSuggestions(
     getAgentSlashCommands(agent).map((command) => [command.name, command.description])
   )
   return reported
-    .filter((entry) => entry.kind === 'command')
+    .filter((entry) => !isSessionSkill(entry, agent))
     .map((entry) => {
       const description = entry.description ?? described.get(entry.name)
       return {
         name: entry.name,
         ...(description ? { description } : {}),
         ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {}),
-        ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {})
+        ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {}),
+        ...(entry.builtin ? { builtin: true as const } : {})
       }
     })
 }
 
 export type NativeChatSessionSkill = Pick<AgentSessionSlashCommand, 'name' | 'description' | 'path'>
 
+function isSessionSkill(entry: AgentSessionSlashCommand, agent?: AgentType): boolean {
+  return (
+    entry.kind === 'skill' ||
+    (agent === 'omp' && entry.name.startsWith('skill:') && entry.name.length > 'skill:'.length)
+  )
+}
+
 export function sessionReportedSkills(
-  reported: readonly AgentSessionSlashCommand[]
+  reported: readonly AgentSessionSlashCommand[],
+  agent?: AgentType
 ): readonly NativeChatSessionSkill[] {
   return reported.flatMap((entry) =>
-    entry.kind === 'skill'
+    isSessionSkill(entry, agent)
       ? [
           {
             name: entry.name,

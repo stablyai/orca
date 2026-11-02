@@ -1,11 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { MessageSquareMore } from 'lucide-react-native'
-import {
-  NATIVE_CHAT_ASK_ROW_COPY,
-  type NativeChatAskRowSubject
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
+import type { NativeChatAskRowSubject } from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
+import { nativeChatAskRowCopy } from './native-chat-ask-row-copy'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
 
 const ICON_SIZE = 15
@@ -22,20 +23,15 @@ export function MobileNativeChatAwaitingInputRow({
   // Suppress duplicate question lists when the grouped prompt already renders them.
   listsQuestions?: boolean
 }): React.JSX.Element {
-  const label = !pending
-    ? NATIVE_CHAT_ASK_ROW_COPY.asked
-    : subject === null
-      ? NATIVE_CHAT_ASK_ROW_COPY.awaitingUnnamed
-      : NATIVE_CHAT_ASK_ROW_COPY.awaiting
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const copy = nativeChatAskRowCopy(
+    t,
+    subject?.kind === 'questions' ? subject.questions.length : undefined
+  )
+  const label = !pending ? copy.asked : subject === null ? copy.awaitingUnnamed : copy.awaiting
   const text =
-    subject === null
-      ? null
-      : subject.kind === 'question'
-        ? subject.text
-        : NATIVE_CHAT_ASK_ROW_COPY.questionCount.replace(
-            '{{value0}}',
-            String(subject.questions.length)
-          )
+    subject === null ? null : subject.kind === 'question' ? subject.text : copy.questionCount
   const type = scaledType(typography.bodySize, fontScale)
   const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
   return (
@@ -67,7 +63,7 @@ export function MobileNativeChatAwaitingInputRow({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -81,4 +77,4 @@ const styles = StyleSheet.create({
   question: {
     color: colors.textPrimary
   }
-})
+}))

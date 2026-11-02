@@ -681,6 +681,48 @@ describe('resolveDropdownItems', () => {
       await i18n.changeLanguage('en')
     }
   })
+
+  it('routes every row label and tooltip through the active locale', async () => {
+    await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
+    try {
+      const idle = resolveDropdownItems(
+        inputs({
+          conflictOperation: 'merge',
+          upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0, upstreamName: 'origin/main' },
+          hostedReviewCreation: {
+            provider: 'github',
+            review: null,
+            canCreate: true,
+            blockedReason: null,
+            nextAction: null,
+            reviewLookupOutcome: 'not_found'
+          }
+        })
+      )
+      for (const entry of idle) {
+        if (entry.kind !== 'separator') {
+          expect(entry.label).toMatch(/^\[/)
+          expect(entry.title).toMatch(/^\[/)
+        }
+      }
+      const idleByKind = Object.fromEntries(
+        idle.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      expect(idleByKind.commit.title).toBe('[Stage at least one file to commit]')
+      expect(idleByKind.push.title).toBe('[Nothing to push to origin/main]')
+      expect(idleByKind.abort_merge.title).toBe('[Abort the merge in progress]')
+
+      const loading = resolveDropdownItems(inputs())
+      const loadingByKind = Object.fromEntries(
+        loading.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      for (const kind of ['commit_push', 'pull', 'fast_forward', 'sync', 'publish']) {
+        expect(loadingByKind[kind].title).toBe('[Checking branch status…]')
+      }
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
 })
 
 // Exercise the real push-target resolution chain used by the component (#8196).

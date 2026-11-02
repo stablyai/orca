@@ -51,7 +51,8 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
     void refreshPreflightStatus()
     const handleWindowActive = (): void => {
       if (document.visibilityState === 'visible') {
-        void refreshPreflightStatus({ force: true })
+        // Focus is a user act on the focused workspace, the only one preflight checks.
+        void refreshPreflightStatus({ force: true, wakeWslDistro: true })
       }
     }
     document.addEventListener('visibilitychange', handleWindowActive)

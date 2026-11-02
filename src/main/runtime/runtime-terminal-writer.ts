@@ -1,6 +1,7 @@
 import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
+import type { TerminalInputSource } from './terminal-input-admission'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import {
   WRITE_ACCEPTED,
@@ -10,6 +11,7 @@ import {
 } from '../../shared/pty-write-settlement'
 
 export type RuntimeTerminalWriteOptions = {
+  inputSource?: TerminalInputSource
   inputKind: TerminalInputKind
   signal?: AbortSignal
   beforeWrite?: (ptyId: string) => void | Promise<void>
@@ -17,6 +19,8 @@ export type RuntimeTerminalWriteOptions = {
   afterWrite?: (ptyId: string) => void | Promise<void>
   suffixFailureError?: string
   requireWriteSettlement?: true
+  /** Hold an Enter until a fresh launch's composer is up, refusing the send if it never comes (#34580). */
+  waitForLaunchComposer?: true
 }
 
 export class RuntimeTerminalWriter {
@@ -29,7 +33,8 @@ export class RuntimeTerminalWriter {
       ptyId: string,
       data: string,
       inputKind: TerminalInputKind
-    ) => WriteSettlement | Promise<WriteSettlement>
+    ) => WriteSettlement | Promise<WriteSettlement>,
+    private readonly claimIdleShellPrompt: (ptyId: string) => Promise<boolean> = async () => false
   ) {}
 
   async writeAction(
@@ -78,16 +83,23 @@ export class RuntimeTerminalWriter {
     }
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
-      if (text) {
+      const claimStartedAt = performance.now()
+      // A shell at its prompt reads one line as typed; agent TUIs need the paste to settle.
+      if (text && !(isSingleLine(text) && (await this.claimIdleShellPrompt(ptyId)))) {
+        const delayMs = resolveAgentPromptSubmitDelayForAgent(
+          this.getWriteHostPlatform(ptyId),
+          text,
+          this.getAgent(ptyId)
+        )
         // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
+        // A failed idle proof already spent part of that wait, so a send is never slower than before.
         await waitForTerminalWriteDelay(
-          resolveAgentPromptSubmitDelayForAgent(
-            this.getWriteHostPlatform(ptyId),
-            text,
-            this.getAgent(ptyId)
-          ),
+          Math.max(0, delayMs - (performance.now() - claimStartedAt)),
           options.signal
         )
+      } else if (options.signal?.aborted) {
+        // Match the settle path: a send cancelled during the idle proof must not submit.
+        throw new Error('request_aborted')
       }
       try {
         await options.beforeWrite?.(ptyId)
@@ -161,6 +173,10 @@ export class RuntimeTerminalWriter {
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
+}
+
+function isSingleLine(text: string): boolean {
+  return !text.includes('\n') && !text.includes('\r')
 }
 
 function yieldBetweenTerminalInputChunks(): Promise<void> {

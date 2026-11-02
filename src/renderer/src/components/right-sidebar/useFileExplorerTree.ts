@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
-import { splitPathSegments } from './path-tree'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {
   getFileExplorerOperationOwner,
@@ -9,11 +8,13 @@ import {
   getFileExplorerOperationRoute
 } from './file-explorer-operation-owner'
 import {
-  fileExplorerEntriesToTreeNodes,
   keepOpenedDirectoryLinks,
   clearFailedOpenedDirectoryLink,
+  canFollowFolderLink,
   readFileExplorerDirectory
 } from './file-explorer-directory-listing'
+import { fileExplorerDirDepth, fileExplorerListingToDirCache } from './file-explorer-dir-pages'
+import { useFileExplorerLoadMoreDir } from './use-file-explorer-load-more'
 import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
 import { collectStaleDirCachePaths } from './file-explorer-stale-dir-cache'
 import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
@@ -45,12 +46,16 @@ type UseFileExplorerTreeResult = {
   refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
   /** `wakeWslDistro` only for a user act: it may start a stopped WSL distro. */
   refreshDir: (dirPath: string, options?: { wakeWslDistro?: boolean }) => Promise<void>
+  /** Reads the next page of a folder a remote server listed only in part. */
+  loadMoreDir: (dirPath: string) => Promise<void>
   /** True while a dir's cached listing predates the last full refresh that skipped it. */
   isDirStale: (dirPath: string) => boolean
   resetAndLoad: (options?: { wakeWslDistro?: boolean }) => void
 }
 
 /** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
+const FOLLOW_LINK = { followProjectFolderLink: true } as const
+
 export function useFileExplorerTree(
   worktreePath: string | null,
   expanded: Set<string>,
@@ -109,6 +114,8 @@ export function useFileExplorerTree(
         return true
       }
       const loadToken = dirLoadTrackerRef.current.begin(dirPath)
+      const minEntries = cache[dirPath]?.children.length
+      const paged = cache[dirPath]?.paged
       // Reads started after stale marking can verify that listing.
       staleDirsRef.current.delete(dirPath)
       // Retain cached children while loading so projection shrinkage cannot jump the virtualizer.
@@ -116,7 +123,10 @@ export function useFileExplorerTree(
       updateLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, [dirPath]))
       try {
         const listing = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
-          wakeWslDistro: options?.wakeWslDistro
+          wakeWslDistro: options?.wakeWslDistro,
+          paged,
+          minEntries,
+          ...(canFollowFolderLink(cache, dirPath, options?.wakeWslDistro) ? FOLLOW_LINK : {})
         })
         // Only the current read may clear loading; superseded reads must preserve their replacement’s spinner.
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
@@ -126,18 +136,12 @@ export function useFileExplorerTree(
           setRootError(null)
           setSourceWorkspaceId(activeWorktreeId?.trim() || null)
         }
-        const children = fileExplorerEntriesToTreeNodes(
-          listing.entries,
-          dirPath,
-          depth,
-          worktreePath,
-          listing.operationOwner
-        )
+        const listed = fileExplorerListingToDirCache(listing, dirPath, depth, worktreePath)
         setDirCache((prev) => ({
           ...prev,
           [dirPath]: {
-            children: keepOpenedDirectoryLinks(prev[dirPath]?.children, children, prev),
-            operationOwner: listing.operationOwner
+            ...listed,
+            children: keepOpenedDirectoryLinks(prev[dirPath]?.children, listed.children, prev)
           }
         }))
         updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
@@ -243,10 +247,7 @@ export function useFileExplorerTree(
     // Exclude the root already force-loaded above to avoid reading it twice.
     const expandedDirs = Array.from(expanded)
       .filter((dirPath) => dirPath !== worktreePath)
-      .map((dirPath) => ({
-        dirPath,
-        depth: splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-      }))
+      .map((dirPath) => ({ dirPath, depth: fileExplorerDirDepth(worktreePath, dirPath) }))
     const allDirsCommitted = await refreshFileExplorerExpandedDirs({
       dirs: expandedDirs,
       worktreePath,
@@ -254,7 +255,11 @@ export function useFileExplorerTree(
       setDirCache,
       updateLoadingDirPaths,
       readDirectory: (dirPath) =>
-        readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath),
+        readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
+          paged: dirCacheRef.current[dirPath]?.paged,
+          minEntries: dirCacheRef.current[dirPath]?.children.length,
+          ...(canFollowFolderLink(dirCacheRef.current, dirPath, false) ? FOLLOW_LINK : {})
+        }),
       maxConcurrentReads: fileExplorerRefreshConcurrency(
         getFileExplorerOperationOwner(activeWorktreeId)
       ),
@@ -273,14 +278,23 @@ export function useFileExplorerTree(
       if (!worktreePath) {
         return
       }
-      const depth =
-        dirPath === worktreePath
-          ? -1
-          : splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-      await loadDir(dirPath, depth, { force: true, wakeWslDistro: options?.wakeWslDistro })
+      await loadDir(dirPath, fileExplorerDirDepth(worktreePath, dirPath), {
+        force: true,
+        wakeWslDistro: options?.wakeWslDistro
+      })
     },
     [worktreePath, loadDir]
   )
+
+  const loadMoreDir = useFileExplorerLoadMoreDir({
+    activeWorktreeId,
+    worktreePath,
+    dirCacheRef,
+    loadingDirPathsRef,
+    dirLoadTrackerRef,
+    setDirCache,
+    updateLoadingDirPaths
+  })
 
   const isDirStale = useCallback((dirPath: string) => staleDirsRef.current.has(dirPath), [])
 
@@ -315,6 +329,7 @@ export function useFileExplorerTree(
     markPathAsDirectory,
     refreshTree,
     refreshDir,
+    loadMoreDir,
     isDirStale,
     resetAndLoad
   }

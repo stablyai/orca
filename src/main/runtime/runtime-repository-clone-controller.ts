@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 import { mkdir } from 'node:fs/promises'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
@@ -49,6 +50,7 @@ export class RuntimeRepositoryCloneController {
       throw new Error('Clone destination is required')
     }
     const clonePath = deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
+    await refuseWslHostWindowsDrivePath(trimmedDestination)
     const clonePathKey = getClonePathComparisonKey(clonePath)
     const previous = this.inFlightByPath.get(clonePathKey) ?? Promise.resolve()
     let release!: () => void
@@ -111,6 +113,8 @@ export class RuntimeRepositoryCloneController {
         ['clone', '--progress', '--', trimmedUrl, clonePath],
         {
           cwd: trimmedDestination,
+          // Host Git on purpose: the clone makes a new repo no project owns, even inside one.
+          hostGit: true,
           admissionTier: 'interactive',
           env: promptGuardGitEnv(),
           stdio: ['ignore', 'ignore', 'pipe']

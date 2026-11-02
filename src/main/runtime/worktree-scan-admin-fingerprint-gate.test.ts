@@ -605,9 +605,7 @@ describe('scoped explicit worktree-id resolution', () => {
   it('scans only the owning repo for an id: selector on a cold cache', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
     const resolve = (selector: string): Promise<{ id: string }> =>
-      (
-        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<{ id: string }> }
-      ).resolveWorktreeSelector(selector)
+      runtime['resolveGitWorktreeSelector'](selector)
 
     const resolved = await resolve(`id:${MAIN_WORKTREE_ID}`)
 
@@ -617,9 +615,7 @@ describe('scoped explicit worktree-id resolution', () => {
   it('resolves an exact canonical identity without relying on the mutable locator', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
     const resolve = (selector: string): Promise<{ id: string }> =>
-      (
-        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<{ id: string }> }
-      ).resolveWorktreeSelector(selector)
+      runtime['resolveGitWorktreeSelector'](selector)
     const identityKey = canonicalWorktreeIdentity({
       worktreeId: MAIN_WORKTREE_ID,
       executionHostId: 'local',
@@ -634,9 +630,7 @@ describe('scoped explicit worktree-id resolution', () => {
   it('still finds worktrees in other repos through the fleet path', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
     const resolve = (selector: string): Promise<{ id: string }> =>
-      (
-        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<{ id: string }> }
-      ).resolveWorktreeSelector(selector)
+      runtime['resolveGitWorktreeSelector'](selector)
 
     const otherId = `${REPO_ID}-3::${REPO_PATH}-3`
     const resolved = await resolve(`id:${otherId}`)
@@ -648,9 +642,7 @@ describe('scoped explicit worktree-id resolution', () => {
   it('keeps cross-repo selectors on the fleet path so ambiguity still throws', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
     const resolve = (selector: string): Promise<unknown> =>
-      (
-        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> }
-      ).resolveWorktreeSelector(selector)
+      runtime['resolveGitWorktreeSelector'](selector)
 
     await expect(resolve('branch:main')).rejects.toThrow('selector_ambiguous')
     expect(new Set(scannedRepoPaths()).size).toBe(10)
@@ -659,9 +651,7 @@ describe('scoped explicit worktree-id resolution', () => {
   it('falls back to the fleet path when the id names no registered repo', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
     const resolve = (selector: string): Promise<unknown> =>
-      (
-        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> }
-      ).resolveWorktreeSelector(selector)
+      runtime['resolveGitWorktreeSelector'](selector)
 
     await expect(resolve('id:missing-repo::/nowhere')).rejects.toThrow('selector_not_found')
     expect(new Set(scannedRepoPaths()).size).toBe(10)

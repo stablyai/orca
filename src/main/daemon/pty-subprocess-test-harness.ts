@@ -47,22 +47,64 @@ export type MockPtyProcess = {
   _simulateExit: (code: number) => void
 }
 
+export function createPtyProcessEventEmitter(): Pick<
+  MockPtyProcess,
+  'onData' | 'onExit' | '_simulateData' | '_simulateExit'
+> {
+  const dataListeners = new Set<(data: string) => void>()
+  const exitListeners = new Set<(event: { exitCode: number }) => void>()
+  return {
+    onData: vi.fn((callback: (data: string) => void) => {
+      dataListeners.add(callback)
+      return {
+        dispose: vi.fn(() => {
+          dataListeners.delete(callback)
+        })
+      }
+    }),
+    onExit: vi.fn((callback: (event: { exitCode: number }) => void) => {
+      exitListeners.add(callback)
+      return {
+        dispose: vi.fn(() => {
+          exitListeners.delete(callback)
+        })
+      }
+    }),
+    _simulateData: (data: string) => {
+      const listeners = [...dataListeners]
+      for (const listener of listeners) {
+        listener(data)
+      }
+    },
+    _simulateExit: (exitCode: number) => {
+      const listeners = [...exitListeners]
+      for (const listener of listeners) {
+        listener({ exitCode })
+      }
+    }
+  }
+}
+
 const CONPTY_MOCK_PRELUDE = '\x1b[c'
 
 /** Windows spawns wait for the DA1 query bundled ConPTY writes once it reads input. */
 export function createConptyPreludeSender(): (cb: (data: string) => void) => void {
   let sent = false
+  const listeners = new Set<(data: string) => void>()
   return (cb) => {
     if (process.platform === 'win32' && !sent) {
-      sent = true
-      queueMicrotask(() => cb(CONPTY_MOCK_PRELUDE))
+      listeners.add(cb)
+      if (listeners.size === 1) {
+        queueMicrotask(() => {
+          sent = true
+          for (const listener of listeners) {
+            listener(CONPTY_MOCK_PRELUDE)
+          }
+          listeners.clear()
+        })
+      }
     }
   }
-}
-
-/** What a mocked pane printed before the test's own output; the replayed prelude on Windows. */
-export function mockConptyStartupOutput(): string[] {
-  return process.platform === 'win32' ? [CONPTY_MOCK_PRELUDE] : []
 }
 
 export function mockPtyProcess(pid = 12345): MockPtyProcess {

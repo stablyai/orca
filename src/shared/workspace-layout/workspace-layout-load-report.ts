@@ -137,7 +137,7 @@ export function stableJson(value: unknown): string {
   return JSON.stringify(value, (_key, inner: unknown) =>
     inner && typeof inner === 'object' && !Array.isArray(inner)
       ? Object.fromEntries(
-          Object.entries(inner).sort(([left], [right]) => left.localeCompare(right))
+          Object.entries(inner).sort(([left], [right]) => left.localeCompare(right, 'en'))
         )
       : inner
   )

@@ -2,7 +2,8 @@ import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { OrcaRuntimeService } from '../../orca-runtime'
+import type { ListMergeRequestsResult, MRComment } from '../../../../shared/gitlab-types'
 import { GITLAB_METHODS } from './gitlab'
 import { WorkItemDetails } from '../../../../shared/rpc-contract/gitlab-params'
 
@@ -32,30 +33,79 @@ describe('gitlab RPC methods', () => {
   })
 
   it('routes GitLab task queries and mutations to the runtime server', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      diagnoseGitLabAuth: vi.fn().mockResolvedValue({ glabAvailable: true }),
-      getGitLabRateLimit: vi.fn().mockResolvedValue({ ok: true }),
-      listGitLabRepoMRs: vi.fn().mockResolvedValue({ items: [] }),
-      listGitLabRepoWorkItems: vi.fn().mockResolvedValue({ items: [] }),
-      listGitLabRepoIssues: vi.fn().mockResolvedValue({ items: [] }),
-      listGitLabRepoTodos: vi.fn().mockResolvedValue([{ id: 1 }]),
-      listGitLabRepoLabels: vi.fn().mockResolvedValue(['bug']),
-      createGitLabRepoIssue: vi.fn().mockResolvedValue({ ok: true, number: 7 }),
-      updateGitLabRepoIssue: vi.fn().mockResolvedValue({ ok: true }),
-      addGitLabRepoIssueComment: vi.fn().mockResolvedValue({ ok: true }),
-      addGitLabRepoMRComment: vi.fn().mockResolvedValue({ ok: true }),
-      addGitLabRepoMRInlineComment: vi.fn().mockResolvedValue({ ok: true }),
-      resolveGitLabRepoMRDiscussion: vi.fn().mockResolvedValue({ ok: true }),
-      getGitLabRepoJobTrace: vi.fn().mockResolvedValue({ ok: true, trace: 'log' }),
-      retryGitLabRepoJob: vi.fn().mockResolvedValue({ ok: true }),
-      mergeGitLabRepoMR: vi.fn().mockResolvedValue({ ok: true }),
-      updateGitLabRepoMRState: vi.fn().mockResolvedValue({ ok: true }),
-      updateGitLabRepoMR: vi.fn().mockResolvedValue({ ok: true }),
-      updateGitLabRepoMRReviewers: vi.fn().mockResolvedValue({ ok: true, reviewers: [] }),
-      getGitLabRepoWorkItemDetails: vi.fn().mockResolvedValue({ body: 'Details' }),
-      getGitLabRepoWorkItemByPath: vi.fn().mockResolvedValue({ id: 'gitlab-issue-7' })
-    } as unknown as OrcaRuntimeService
+    const pagedResult: ListMergeRequestsResult = {
+      items: [
+        {
+          id: 'mr-7',
+          type: 'mr',
+          number: 7,
+          title: 'Fix bug',
+          state: 'opened',
+          url: 'https://gitlab.example.com/group/project/-/merge_requests/7',
+          labels: [],
+          updatedAt: '2026-10-26T00:00:00Z',
+          author: 'ana',
+          repoId: 'repo-1'
+        }
+      ],
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
+    }
+    const comment: MRComment = {
+      id: 1,
+      author: 'ana',
+      authorAvatarUrl: '',
+      body: 'looks good',
+      createdAt: '2026-10-26T00:00:00Z',
+      url: 'https://gitlab.example.com/comment/1'
+    }
+    const runtime = new OrcaRuntimeService()
+    vi.spyOn(runtime, 'getRuntimeId').mockReturnValue('test-runtime')
+    vi.spyOn(runtime, 'diagnoseGitLabAuth').mockResolvedValue({
+      glabAvailable: true,
+      authenticated: true,
+      hosts: ['gitlab.example.com'],
+      activeHost: 'gitlab.example.com',
+      envTokenInProcess: null,
+      error: null
+    })
+    vi.spyOn(runtime, 'getGitLabRateLimit').mockResolvedValue({
+      ok: true,
+      snapshot: { rest: null, host: 'gitlab.example.com', fetchedAt: 0 }
+    })
+    vi.spyOn(runtime, 'listGitLabRepoMRs').mockResolvedValue(pagedResult)
+    vi.spyOn(runtime, 'listGitLabRepoWorkItems').mockResolvedValue(pagedResult)
+    vi.spyOn(runtime, 'listGitLabRepoIssues').mockResolvedValue({ items: [], totalPages: 1 })
+    vi.spyOn(runtime, 'listGitLabRepoTodos').mockResolvedValue([])
+    vi.spyOn(runtime, 'listGitLabRepoLabels').mockResolvedValue(['bug'])
+    vi.spyOn(runtime, 'createGitLabRepoIssue').mockResolvedValue({
+      ok: true,
+      number: 7,
+      url: pagedResult.items[0].url
+    })
+    vi.spyOn(runtime, 'updateGitLabRepoIssue').mockResolvedValue({ ok: true })
+    vi.spyOn(runtime, 'addGitLabRepoIssueComment').mockResolvedValue({ ok: true, comment })
+    vi.spyOn(runtime, 'addGitLabRepoMRComment').mockResolvedValue({ ok: true, comment })
+    vi.spyOn(runtime, 'addGitLabRepoMRInlineComment').mockResolvedValue({ ok: true, comment })
+    vi.spyOn(runtime, 'resolveGitLabRepoMRDiscussion').mockResolvedValue({ ok: true })
+    vi.spyOn(runtime, 'getGitLabRepoJobTrace').mockResolvedValue({ ok: true, trace: 'log' })
+    vi.spyOn(runtime, 'retryGitLabRepoJob').mockResolvedValue({ ok: true })
+    vi.spyOn(runtime, 'mergeGitLabRepoMR').mockResolvedValue({ ok: true })
+    vi.spyOn(runtime, 'updateGitLabRepoMRState').mockResolvedValue({ ok: true })
+    vi.spyOn(runtime, 'updateGitLabRepoMR').mockResolvedValue({ ok: true })
+    vi.spyOn(runtime, 'updateGitLabRepoMRReviewers').mockResolvedValue({ ok: true, reviewers: [] })
+    vi.spyOn(runtime, 'getGitLabRepoWorkItemDetails').mockResolvedValue({
+      item: pagedResult.items[0],
+      body: 'Details',
+      comments: []
+    })
+    vi.spyOn(runtime, 'getGitLabRepoWorkItemByPath').mockResolvedValue({
+      ...pagedResult.items[0],
+      id: 'gitlab-issue-7',
+      type: 'issue'
+    })
     const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
     const projectRef = { host: 'gitlab.example.com', path: 'group/project' }
 
@@ -63,21 +113,21 @@ describe('gitlab RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('gitlab.rateLimit', { force: true, host: 'gitlab.example.com' })
     )
-    await dispatcher.dispatch(
+    const mergeRequests = await dispatcher.dispatch(
       makeRequest('gitlab.listMRs', {
         repo: 'id:repo-1',
         state: 'opened',
-        page: 1,
-        perPage: 25,
+        page: 3,
+        perPage: 1,
         query: 'bug'
       })
     )
-    await dispatcher.dispatch(
+    const workItems = await dispatcher.dispatch(
       makeRequest('gitlab.listWorkItems', {
         repo: 'id:repo-1',
         state: 'opened',
-        page: 1,
-        perPage: 25,
+        page: 3,
+        perPage: 1,
         query: 'bug'
       })
     )
@@ -217,14 +267,10 @@ describe('gitlab RPC methods', () => {
       force: true,
       host: 'gitlab.example.com'
     })
-    expect(runtime.listGitLabRepoMRs).toHaveBeenCalledWith('id:repo-1', 'opened', 1, 25, 'bug')
-    expect(runtime.listGitLabRepoWorkItems).toHaveBeenCalledWith(
-      'id:repo-1',
-      'opened',
-      1,
-      25,
-      'bug'
-    )
+    expect(mergeRequests).toMatchObject({ ok: true, result: pagedResult })
+    expect(workItems).toMatchObject({ ok: true, result: pagedResult })
+    expect(runtime.listGitLabRepoMRs).toHaveBeenCalledWith('id:repo-1', 'opened', 3, 1, 'bug')
+    expect(runtime.listGitLabRepoWorkItems).toHaveBeenCalledWith('id:repo-1', 'opened', 3, 1, 'bug')
     expect(runtime.listGitLabRepoIssues).toHaveBeenCalledWith('id:repo-1', 'opened', '@me', 50, 2)
     expect(runtime.createGitLabRepoIssue).toHaveBeenCalledWith('id:repo-1', 'Fix bug', 'Details')
     expect(runtime.listGitLabRepoTodos).toHaveBeenCalledWith('id:repo-1')

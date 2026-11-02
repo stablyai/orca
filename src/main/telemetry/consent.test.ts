@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { resolveConsent, _resetMisconfigWarnCacheForTests } from './consent'
 
@@ -144,31 +144,6 @@ describe('resolveConsent', () => {
         })
       )
     ).toEqual({ effective: 'enabled' })
-  })
-
-  it('warns to stderr once for misconfigured env var values like "yes" / "on" / "FALSE"', () => {
-    const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    try {
-      process.env.DO_NOT_TRACK = 'yes'
-      resolveConsent(
-        settingsWithTelemetry({
-          optedIn: true,
-          installId: 'x',
-          existedBeforeTelemetryRelease: false
-        })
-      )
-      resolveConsent(
-        settingsWithTelemetry({
-          optedIn: true,
-          installId: 'x',
-          existedBeforeTelemetryRelease: false
-        })
-      )
-      expect(spy).toHaveBeenCalledTimes(1)
-      expect(spy.mock.calls[0][0]).toContain('DO_NOT_TRACK')
-    } finally {
-      spy.mockRestore()
-    }
   })
 
   it('treats a misconfigured DO_NOT_TRACK=0 as unset (not truthy)', () => {

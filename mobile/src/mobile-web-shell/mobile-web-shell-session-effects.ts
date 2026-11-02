@@ -1,5 +1,5 @@
-import { fetchMobileWebBundle } from '../transport/mobile-web-bundle-fetch'
-import { mobileWebBundleManifestRead } from '../transport/mobile-web-bundle-operations'
+import { fetchMobileWebBundle } from '../transport/web-bundle/mobile-web-bundle-fetch'
+import { mobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-operations'
 import { runRpcOperation } from '../transport/rpc-operation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GenerationStore } from './generation-store'
@@ -114,7 +114,7 @@ export async function download(args: {
     }
     fetchedWhole = true
     send({ type: 'download-staged', flow })
-    const staged = await store.stageGeneration(hostKey, fetched)
+    const staged = await store.stageGeneration(hostKey, fetched, controller.signal)
     // Recheck after staging: abort may remove tmp, but cannot undo a commit’s activation/index changes.
     if (controller.signal.aborted) {
       await store.abortStagedGeneration(staged).catch(() => undefined)

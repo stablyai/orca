@@ -4,6 +4,7 @@ import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
 import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
 import {
   agentDisplayLabel,
+  agentStateLabel,
   agentDotState,
   agentRowTimeAt,
   formatTimeAgo
@@ -51,6 +52,15 @@ describe('agentDotState', () => {
     expect(agentDisplayLabel(row({ state: 'done', ...mainAgentDone('unconfirmed') }), 0)).toBe(
       'Couldn’t confirm'
     )
+    for (const [outcome, label] of [
+      ['cancellation', 'Interrupted'],
+      ['interruption', 'Failed'],
+      ['failure', 'Failed']
+    ] as const) {
+      expect(
+        agentStateLabel(agentDotState(row({ state: 'done', ...mainAgentDone(outcome) }), 0))
+      ).toBe(label)
+    }
   })
 
   it('decays a stale active state to idle, matching desktop', () => {
@@ -127,6 +137,17 @@ describe('agentDisplayLabel', () => {
     })
     expect(agentDisplayLabel(stopping, 0)).toBe('Stopping…')
     expect(agentDotState(stopping, 0)).toBe('working')
+    expect(agentDisplayLabel({ ...stopping, conversationName: 'Orca PR rebase' }, 0)).toBe(
+      'Stopping… · Orca PR rebase'
+    )
+  })
+
+  it('leads with the host-sent conversation name, like the desktop row', () => {
+    const named = row({ state: 'done', conversationName: 'Orca PR rebase', prompt: 'rebase it' })
+    expect(agentDisplayLabel(named, 0)).toBe('Orca PR rebase')
+    expect(agentDisplayLabel({ ...named, lastAssistantMessage: 'PR is closed' }, 0)).toBe(
+      'Orca PR rebase · PR is closed'
+    )
   })
 
   it('falls back to the decayed state label when stale', () => {

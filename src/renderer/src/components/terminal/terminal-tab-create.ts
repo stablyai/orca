@@ -38,7 +38,7 @@ export function createNewTerminalTab(
         ...(options?.command ? { command: options.command } : {}),
         activate: true
       },
-      ...(onSettled ? [{ notifyFailure: false }] : [])
+      { userAct: true, ...(onSettled ? { notifyFailure: false } : {}) }
     )
     if (onSettled) {
       void launch.then(

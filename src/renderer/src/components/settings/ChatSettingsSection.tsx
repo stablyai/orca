@@ -3,7 +3,6 @@ import { AppearanceChatSection } from './AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
-import { NativeChatProvidersSetting } from './NativeChatProvidersSetting'
 import { SettingsSection } from './SettingsSection'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -39,11 +38,8 @@ export function ChatSettingsSection({
   searchEntries: SettingsSearchEntry[]
   showDesktopOnlySettings: boolean
   isMounted: boolean
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const query = useAppStore((state) => state.settingsSearchQuery)
-  if (settings.experimentalNativeChat !== true) {
-    return null
-  }
   const title = translate('settings.appearance.chat.title', 'Chat')
   const appearanceTitle = translate('auto.components.settings.Settings.2b4474780a', 'Appearance')
   const showAllBehavior = matchesSettingsSearch(query, [
@@ -79,13 +75,6 @@ export function ChatSettingsSection({
                 </CardContent>
               </Card>
             </section>
-          ) : null}
-          {showDesktopOnlySettings ? (
-            <NativeChatProvidersSetting
-              settings={settings}
-              updateSettings={updateSettings}
-              forceVisible={matchesSettingsSearch(query, [{ title }])}
-            />
           ) : null}
           {showDesktopOnlySettings ? (
             <NativeChatInlineVisualsSetting

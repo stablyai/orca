@@ -63,7 +63,7 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft != true)
-    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 5
     outputs:
       should_run: ${{ steps.scope.outputs.should_run || steps.graph.outputs.should_run }}
@@ -153,10 +153,10 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-15","macos-15-intel","windows-2022","windows-11-arm"]') }}
-    # Keep platform keys stable for slot names and Windows cross-compilation. Hosted Windows x64 is free and
-    # still finishes before the windows-11-arm and macos-15-intel lanes that set wall time.
+    # Keep platform keys stable for slot names and Windows cross-compilation. PR and scheduled runs use the
+    # free hosted label; only explicit fast_runners callers rent Blacksmith where it has the platform.
     runs-on: >-
-      ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15","macos-15-intel":"macos-15-intel","windows-2022":"windows-2022","windows-11-arm":"windows-11-arm"}')[matrix.os] || matrix.os }}
+      ${{ inputs.fast_runners && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -187,6 +187,7 @@ jobs:
         if: runner.os == 'Linux'
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
       - name: Build the last Bun orcad for the cross-runtime tests
         id: bun-orcad
         background: true
@@ -337,7 +338,7 @@ jobs:
       ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
       needs.changes.outputs.qualification != 'false' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
-    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -380,7 +381,7 @@ jobs:
             image: quay.io/pypa/manylinux_2_28_x86_64@sha256:407f771c51a2c3e83ebe5a7970b4289ead3a6db21d9b9c089168775cad11d328
           - os: ubuntu-24.04-arm
             image: quay.io/pypa/manylinux_2_28_aarch64@sha256:c22ffd129ac99a8a42d1f2c2f4e88a9089288dd9ee987a7092da1c7dc48f27a9
-    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
+    runs-on: ${{ inputs.fast_runners && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
     container: ${{ matrix.image }}
     timeout-minutes: 25
     env:
@@ -408,7 +409,10 @@ jobs:
           persist-credentials: false
       - name: Trust the checked-out workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # A direct install (6-9s) beats restoring the 417 MB store plus a linking install.
       - uses: ./.github/actions/install-node-dependencies
+        with:
+          cache-pnpm-store: 'false'
       - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
         run: |
           pnpm build:orcad-prebuilds
@@ -442,7 +446,7 @@ jobs:
       (github.event_name != 'pull_request' || github.event.pull_request.draft != true) &&
       (github.event_name != 'pull_request' || inputs.build_template || inputs.ref != '' ||
       needs.changes.outputs.native_compatibility != 'false') }}
-    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'blacksmith-8vcpu-ubuntu-2204' || 'ubuntu-22.04' }}
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2204' || 'ubuntu-22.04' }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -504,7 +508,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04-arm]
-    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
+    runs-on: ${{ inputs.fast_runners && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -570,7 +574,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6

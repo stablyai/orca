@@ -1,3 +1,4 @@
+import type { PersistedState } from '../../shared/persisted-state-types'
 import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 // Moving a definition must publish both hosts or source subscribers retain a stale row.
 
@@ -14,7 +15,8 @@ import type { AutomationsChangedPayload } from '../../shared/runtime-client-even
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../shared/automation-owner-conflict'
 import type { AutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
 import { AutomationService } from '../automations/service'
-import { Store, initDataPath } from '../persistence'
+import { Store } from '../persistence/loading-store/store'
+import { initDataPath } from '../persistence/loading-store/user-data-path'
 import { OrcaRuntimeService } from './orca-runtime'
 import * as worktreeChangeInvalidators from '../ipc/worktree-change-invalidators'
 import { _resetTerminalModelQueryAuthorityForTest } from './terminal-model-query-authority'
@@ -94,7 +96,7 @@ const AUTOMATIONS = [
   })
 ]
 
-async function makeRuntime() {
+async function makeRuntime(overrides: Partial<PersistedState> = {}) {
   mkdirSync(testState.dir, { recursive: true })
   writeFileSync(
     join(testState.dir, 'orca-data.json'),
@@ -103,7 +105,8 @@ async function makeRuntime() {
       repos: REPOS,
       sshTargets: TARGETS,
       sshTargetGenerationCounter: 7,
-      automations: AUTOMATIONS
+      automations: AUTOMATIONS,
+      ...overrides
     }),
     'utf-8'
   )
@@ -263,6 +266,65 @@ describe('scoped automationsChanged publication', () => {
 })
 
 describe('manual run refused before dispatch', () => {
+  it('records a truthful reselection refusal for a bare legacy run without execution, and fences stale callers first', async () => {
+    const record = automation({
+      id: 'repair',
+      projectId: 'repo-ssh',
+      precheck: { command: 'must not run', timeoutSeconds: 30 },
+      runContext: {
+        kind: 'workspace-run',
+        repoId: 'repo-ssh',
+        projectId: 'logical-project',
+        projectHostSetupId: 'saved-setup',
+        hostId: 'ssh:ssh-1',
+        path: '/remote'
+      }
+    })
+    const { store, runtime } = await makeRuntime({
+      repos: [{ ...REPOS[1], connectionId: undefined, executionHostId: 'ssh:ssh-1' }],
+      automations: [record],
+      projectHostSetups: [
+        {
+          id: 'saved-setup',
+          projectId: 'logical-project',
+          repoId: 'repo-ssh',
+          hostId: 'ssh:ssh-1',
+          path: '/remote',
+          displayName: 'App',
+          setupState: 'ready',
+          setupMethod: 'legacy-repo',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+    const dispatch = vi.fn(async () => {
+      throw new Error('Unexpected execution')
+    })
+    const service = new AutomationService(store, { headlessDispatcher: dispatch })
+    const execute = vi.spyOn(service, 'runNow')
+    const precheck = vi.spyOn(service, 'runPrecheck')
+    runtime.setAutomationService(service)
+    await expect(runNow(runtime, record.id, { selector: { kind: 'self' } })).rejects.toMatchObject({
+      code: AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged
+    })
+    expect(store.listAutomationRuns(record.id)).toEqual([])
+    await expect(runNow(runtime, record.id)).rejects.toThrow(
+      'Edit the automation and reselect its host before running it.: automation_target_removed'
+    )
+    expect(store.listAutomationRuns(record.id)).toMatchObject([
+      {
+        status: 'skipped_unavailable',
+        trigger: 'manual',
+        error: 'Edit the automation and reselect its host before running it.'
+      }
+    ])
+    expect(store.listAutomationRuns(record.id)).toHaveLength(1)
+    expect(execute).not.toHaveBeenCalled()
+    expect(precheck).not.toHaveBeenCalled()
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
   it('answers the caller with the conflict and still leaves the user a run record', async () => {
     const { store, runtime } = await makeManualRunRuntime()
 

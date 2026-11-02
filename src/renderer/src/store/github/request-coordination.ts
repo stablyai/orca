@@ -3,6 +3,7 @@ import type { PRComment } from '../../../../shared/github/comment-types'
 import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
+import type { LinkedReviewClearScope } from './linked-review-clear'
 import type { AppState } from '../types'
 import { matchesRepoCacheEviction, type RepoCacheEviction } from './cache-identity'
 
@@ -14,9 +15,19 @@ export type InflightPR = {
 }
 export type InflightChecks = {
   promise: Promise<PRCheckDetail[]>
+  /** The provider reply alone, so a failed successor can land it without waiting on this request. */
+  reply?: Promise<PRCheckDetail[]>
   requestId: number
   force: boolean
   noCache: boolean
+  /** A user act's request may start a stopped WSL distro; a poll's would be refused. */
+  wakeWslDistro?: boolean
+}
+export type InflightComments = {
+  promise: Promise<PRComment[]>
+  reply?: Promise<PRComment[]>
+  requestId: number
+  postedComments: PRComment[]
 }
 export type InflightWorkItems = {
   promise: Promise<readonly GitHubWorkItem[]>
@@ -24,6 +35,7 @@ export type InflightWorkItems = {
   force: boolean
   noCache: boolean
   requireComplete: boolean
+  wakeWslDistro?: boolean
 }
 export type InflightProjectView = {
   promise: Promise<GetProjectViewTableResult>
@@ -34,13 +46,17 @@ export type InflightProjectView = {
 export const inflightPRRequests = new Map<string, InflightPR>()
 export const inflightIssueRequests = new Map<string, Promise<IssueInfo | null>>()
 export const inflightChecksRequests = new Map<string, InflightChecks>()
-export const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
+export const inflightCommentsRequests = new Map<string, InflightComments>()
 export const inflightWorkItemsRequests = new Map<string, InflightWorkItems>()
 export const inflightProjectViewRequests = new Map<string, InflightProjectView>()
 export const prRequestGenerations = new Map<string, number>()
 export const prRefreshStartedHostedReviewEntries = new Map<
   string,
-  AppState['hostedReviewCache'][string] | undefined
+  AppState['hostedReviewCache'][string]
+>()
+export const prRefreshStartedLinkedReviewScopes = new Map<
+  string,
+  { sequence: number; scope: LinkedReviewClearScope; expiresAt: number }
 >()
 
 let providerRequestSequence = 0
@@ -70,6 +86,7 @@ export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
 
 export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
   prRefreshStartedHostedReviewEntries.clear()
+  prRefreshStartedLinkedReviewScopes.clear()
 }
 
 const PROVIDER_REQUEST_CONCURRENCY = 8

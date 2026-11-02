@@ -19,10 +19,24 @@ vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
 }))
 vi.mock('./claude-oauth-usage-request', () => ({ fetchClaudeOAuthUsage: calls.usage }))
 const runningDistros = vi.hoisted(() => ({
-  filter: vi.fn(async (paths: readonly string[]) => [...paths])
+  filter: vi.fn(async (paths: readonly string[], _options?: { requireConfirmed?: boolean }) => [
+    ...paths
+  ])
 }))
-vi.mock('../wsl-running-path-filter', () => ({
-  filterPathsToRunningWslDistrosAsync: runningDistros.filter
+// The settled gate asks the running list for the path's distro; `filter` stands in for it.
+const settledGate = vi.hoisted(() => ({
+  override: vi.fn((): { distro: string; state: 'stopped' } | undefined => undefined)
+}))
+vi.mock('../wsl/wsl-unc-access-gate', () => ({
+  blockedWslDistroForPath: async (path: string) => {
+    const override = settledGate.override()
+    if (override !== undefined) {
+      return override
+    }
+    return (await runningDistros.filter([path], { requireConfirmed: true })).length > 0
+      ? null
+      : { distro: 'Ubuntu', state: 'stopped' }
+  }
 }))
 vi.mock('@orca/process-host', () => ({
   spawnProcess: () => {
@@ -282,6 +296,19 @@ it('reads an inactive WSL account where the WSL router says its launches would r
     wslLinuxAuthPath: '/home/u/.local/share/orca/claude-accounts/acct/auth'
   })
   expect(wslRouter.accountUsagePreparation).toHaveBeenCalledWith('Ubuntu', 'acct')
+})
+it('does not read an inactive WSL account a running list still names while it stops (E9)', async () => {
+  const { fetchInactiveClaudeAccountUsage } = await import('./claude-managed-account-usage')
+  settledGate.override.mockReturnValueOnce({ distro: 'Ubuntu', state: 'stopped' })
+  wslRouter.accountUsagePreparation.mockClear()
+  const result = await fetchInactiveClaudeAccountUsage({
+    id: 'acct',
+    managedAuthRuntime: 'wsl',
+    wslDistro: 'Ubuntu',
+    wslLinuxAuthPath: '/home/u/.local/share/orca/claude-profiles/acct/home'
+  })
+  expect(result).toMatchObject({ usageMetadata: { failureKind: 'usage-unavailable' } })
+  expect(wslRouter.accountUsagePreparation).not.toHaveBeenCalled()
 })
 it('does not read an inactive WSL account through a stopped distro', async () => {
   const { fetchInactiveClaudeAccountUsage } = await import('./claude-managed-account-usage')

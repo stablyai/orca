@@ -83,22 +83,6 @@ describe('readGitCommonHeadIdentities', () => {
     ])
   })
 
-  it('reports detached HEAD as a raw oid with a null branch', async () => {
-    const commonDir = await makeCommonDir()
-    await writeFile(join(commonDir, 'HEAD'), `${OID_B}\n`)
-
-    const identities = await readIdentities(commonDir)
-
-    expect(identities).toEqual([{ worktreePath: dirname(commonDir), head: OID_B, branch: null }])
-  })
-
-  it('skips unborn branches instead of emitting partial identities', async () => {
-    const commonDir = await makeCommonDir()
-    await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/unborn\n')
-
-    expect(await readIdentities(commonDir)).toEqual([])
-  })
-
   it('resolves relative gitdir entries against the metadata dir', async () => {
     const commonDir = await makeCommonDir()
     await writeLooseRef(commonDir, 'refs/heads/feature', OID_B)

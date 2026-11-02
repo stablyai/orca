@@ -66,9 +66,6 @@ function runtimeScanArgs(
   listArgs: AiVaultListArgs | undefined
 ): AiVaultListArgs {
   const scanArgs: AiVaultListArgs = { executionHostScope: hostInfo.executionHostId }
-  if (listArgs?.historyOwnership !== undefined) {
-    scanArgs.historyOwnership = listArgs.historyOwnership
-  }
   if (listArgs?.afterFingerprint !== undefined) {
     scanArgs.afterFingerprint = listArgs.afterFingerprint
   }

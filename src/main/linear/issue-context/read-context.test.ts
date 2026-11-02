@@ -102,6 +102,63 @@ describe('Linear issue context', () => {
         }
       }
     })
-    expect(getClients).toHaveBeenCalledWith('workspace-stably')
+    expect(getClients).toHaveBeenCalledWith('workspace-stably', undefined)
+  })
+
+  it('returns partial context and attachment metadata when the optional comment read fails', async () => {
+    const selected = workspace('workspace-proof', 'proof')
+    const rawRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { issue: rawIssue('ENG-1') } })
+      .mockRejectedValueOnce(
+        new TypeError('fetch failed', {
+          cause: Object.assign(new Error('socket closed'), { code: 'ECONNRESET' })
+        })
+      )
+      .mockResolvedValueOnce({
+        data: {
+          issue: {
+            attachments: {
+              nodes: [{ id: 'attachment-1', title: 'Plan', url: 'https://example.invalid/plan' }],
+              pageInfo: { hasNextPage: false }
+            }
+          }
+        }
+      })
+    getClients.mockReturnValue([makeEntry({ workspace: selected, rawRequest })])
+    const { readLinearIssueContext } = await import('./read-context')
+
+    const output = await readLinearIssueContext(
+      {
+        input: 'ENG-1',
+        workspaceId: selected.id,
+        include: {
+          comments: true,
+          children: false,
+          attachments: true,
+          relations: false,
+          activity: false
+        },
+        depth: 0
+      },
+      async () => {
+        throw new Error('Unexpected current issue lookup')
+      }
+    )
+
+    expect(output).toMatchObject({
+      issue: { identifier: 'ENG-1' },
+      attachments: [{ id: 'attachment-1', title: 'Plan', metadataOnly: true }],
+      meta: {
+        partial: true,
+        includeErrors: [
+          { include: 'comments', code: 'linear_network_error', message: 'fetch failed' }
+        ],
+        sections: { attachments: { returned: 1, hasMore: false } }
+      }
+    })
+    expect(output.comments).toBeUndefined()
+    expect(rawRequest).toHaveBeenCalledTimes(3)
+    expect(rawRequest.mock.calls[2]?.[1]).toEqual({ id: 'ENG-1-id', first: 50 })
   })
 })

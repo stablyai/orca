@@ -1,11 +1,11 @@
 // Keep estimates arithmetic over cached metrics; per-measurement block scans would traverse the whole transcript.
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import {
   NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
   nativeChatUserMessageFolds
-} from '../../../../shared/native-chat-user-message-fold'
+} from '../../../../shared/native-chat/transcript/native-chat-user-message-fold'
 
 export type NativeChatRowContentMetrics = {
   role: NativeChatMessage['role']

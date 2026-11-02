@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
+import type { Tab } from '../../../../shared/tab-types'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { WORKTREE_REFRESH_CONCURRENCY } from './worktrees'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -114,6 +115,56 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     }
   )
 
+  // D1b-7a: hydration keeps only a moved project's chats, which stay on this computer.
+  it("keeps a moved project's chats through the purge, and still purges a stale worktree", async () => {
+    const store = createTestStore()
+    const live = makeWorktree({ id: 'repoA::/a/live', repoId: 'repoA', path: '/a/live' })
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
+      qualifyDetectedResult(args, makeDetectedResult(repoA.id, [live]))
+    )
+    store.setState({ repos: [repoA], hydrationSucceeded: false, workspaceSessionReady: false })
+    const results = await store.getState().fetchAllWorktrees({
+      visibilityOwnerHostId: 'local',
+      hydrationPurge: 'defer'
+    })
+    const moved = 'moved-repo::\\\\wsl.localhost\\Ubuntu\\home\\dev\\app'
+    const chat: Tab = {
+      id: 'chat',
+      entityId: 'agent-session-1',
+      groupId: 'group-1',
+      worktreeId: moved,
+      contentType: 'agent-session',
+      label: 'Claude',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    store.setState({
+      hydrationSucceeded: true,
+      workspaceSessionReady: true,
+      wslMovedProjects: [
+        {
+          kind: 'repo',
+          id: 'moved-repo',
+          displayName: 'app',
+          path: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\app',
+          distro: 'Ubuntu'
+        }
+      ],
+      tabsByWorktree: {
+        'repoA::/a/stale': [makeTab({ id: 'saved', worktreeId: 'repoA::/a/stale' })],
+        [moved]: []
+      },
+      unifiedTabsByWorktree: { [moved]: [chat] }
+    })
+    purgeHydratedWorktrees(store.setState, store.getState, results)
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+    expect(store.getState().tabsByWorktree['repoA::/a/stale']).toBeUndefined()
+    expect(store.getState().tabsByWorktree[moved]).toEqual([])
+    expect(store.getState().unifiedTabsByWorktree[moved]).toEqual([chat])
+  })
+
   it.each([false, true])(
     'hydrates connecting SSH worktrees with hydration purge completed=%s',
     async (hasHydratedWorktreePurge) => {
@@ -161,12 +212,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       await store.getState().fetchAllWorktrees()
 
       expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
-        {
-          ...queued,
-          hostId: 'ssh:ssh-1',
-          projectId: 'repo:repo-ssh',
-          projectHostSetupId: 'repo-ssh'
-        }
+        { ...queued, hostId: 'ssh:ssh-1' }
       ])
       expect(listKnownForExecutionHostMock).toHaveBeenCalledWith({
         repoId: sshRepo.id,
@@ -539,11 +585,9 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(refreshed).toHaveLength(2)
     expect(refreshed).toEqual(
       expect.arrayContaining([
-        { ...localWorktree, projectId: 'repo:same-repo', projectHostSetupId: 'same-repo' },
+        localWorktree,
         {
           ...refreshedRemoteWorktree,
-          projectId: 'repo:same-repo',
-          projectHostSetupId: 'same-repo',
           hostId: 'runtime:env-1',
           runtimeOwnerEnvironmentId: 'env-1'
         }

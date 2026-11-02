@@ -21,11 +21,11 @@ import {
 } from '../../shared/agent-status-child-work-display'
 import { projectAgentChildWorkViews } from '../../shared/agent-status-child-work-view'
 import { createAgentStatusStore } from '../../shared/agent-status-store'
-import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
+import { agentJournalLinkageFields } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'

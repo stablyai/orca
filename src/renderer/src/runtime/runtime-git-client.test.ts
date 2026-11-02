@@ -148,6 +148,8 @@ describe('runtime git client', () => {
       worktreePath: `/home/user::workspace:${workspaceId}`
     }
 
+    gitGenerateCommitMessage.mockResolvedValue({ success: true, message: 'feat: x' })
+    gitGeneratePullRequestFields.mockResolvedValue({ success: false, error: 'No changes' })
     await generateRuntimeCommitMessage(context)
     await generateRuntimePullRequestFields(context, {
       base: 'main',

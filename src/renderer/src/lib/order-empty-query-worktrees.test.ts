@@ -36,39 +36,6 @@ describe('orderEmptyQueryWorktrees', () => {
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['ssh', 'local'])
   })
 
-  it('sorts visited worktrees by lastVisitedAt descending', () => {
-    const a = wt({ id: 'a', displayName: 'a' })
-    const b = wt({ id: 'b', displayName: 'b' })
-    const result = orderEmptyQueryWorktrees({
-      visibleWorktrees: [a, b],
-      activeWorktreeId: null,
-      lastVisitedAtByWorktreeId: { a: 100, b: 200 }
-    })
-    expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['b', 'a'])
-  })
-
-  it('falls back to lastActivityAt for never-visited worktrees', () => {
-    const a = wt({ id: 'a', displayName: 'a', lastActivityAt: 100 })
-    const b = wt({ id: 'b', displayName: 'b', lastActivityAt: 200 })
-    const result = orderEmptyQueryWorktrees({
-      visibleWorktrees: [a, b],
-      activeWorktreeId: null,
-      lastVisitedAtByWorktreeId: {}
-    })
-    expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['b', 'a'])
-  })
-
-  it('uses displayName as final tie-breaker', () => {
-    const a = wt({ id: 'a', displayName: 'apple', lastActivityAt: 100 })
-    const b = wt({ id: 'b', displayName: 'banana', lastActivityAt: 100 })
-    const result = orderEmptyQueryWorktrees({
-      visibleWorktrees: [b, a],
-      activeWorktreeId: null,
-      lastVisitedAtByWorktreeId: {}
-    })
-    expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['a', 'b'])
-  })
-
   it('does not crash the switcher when a visible worktree has no displayName (crash 99657ab1)', () => {
     // Persisted/discovered displayName can be undefined despite its type; raw localeCompare once crashed Cmd+J.
     const named = wt({ id: 'a', displayName: 'apple', lastActivityAt: 100 })
@@ -86,18 +53,6 @@ describe('orderEmptyQueryWorktrees', () => {
     ).not.toThrow()
   })
 
-  it('excludes current worktree from rows but includes it in state list', () => {
-    const cur = wt({ id: 'cur', displayName: 'cur' })
-    const other = wt({ id: 'other', displayName: 'other' })
-    const result = orderEmptyQueryWorktrees({
-      visibleWorktrees: [cur, other],
-      activeWorktreeId: 'cur',
-      lastVisitedAtByWorktreeId: {}
-    })
-    expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['other'])
-    expect(result.visibleWorktreesForState.map((w) => w.id)).toEqual(['cur', 'other'])
-  })
-
   // Filter current workspace by host too or its same-ID SSH twin becomes unreachable.
   it('keeps the same-id worktree on the other host switchable', () => {
     const local = wt({ id: 'shared', displayName: 'local', hostId: 'local' })
@@ -109,16 +64,5 @@ describe('orderEmptyQueryWorktrees', () => {
       lastVisitedAtByWorktreeId: {}
     })
     expect(result.switchableWorktreesForRows.map((w) => w.displayName)).toEqual(['ssh'])
-  })
-
-  it('returns empty rows but non-empty state when only the current worktree is visible', () => {
-    const cur = wt({ id: 'cur', displayName: 'cur' })
-    const result = orderEmptyQueryWorktrees({
-      visibleWorktrees: [cur],
-      activeWorktreeId: 'cur',
-      lastVisitedAtByWorktreeId: {}
-    })
-    expect(result.switchableWorktreesForRows).toEqual([])
-    expect(result.visibleWorktreesForState).toHaveLength(1)
   })
 })

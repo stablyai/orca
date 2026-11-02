@@ -21,7 +21,7 @@ import {
 } from './runtime-environment-host-service-ops'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
@@ -50,6 +50,10 @@ import {
   wslOrcadHostSupports
 } from '../../wsl/wsl-orcad-host-environments'
 import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/wsl-host-gate'
+import {
+  isHostSpawnFencedForWslMoveUndo,
+  wslMoveUndoSpawnFencedResponse
+} from '../../persistence/moving-wsl-projects/wsl-move-undo-spawn-fence'
 
 export { isRuntimeEnvironmentManuallyDisconnected }
 
@@ -228,6 +232,9 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
+      }
+      if (isHostSpawnFencedForWslMoveUndo(environment.id, args.method)) {
+        return wslMoveUndoSpawnFencedResponse(environment, args.method)
       }
       void desktopChatCreationHistory(getUserDataPath()).recordCreate(
         environment.id,

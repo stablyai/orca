@@ -13,7 +13,13 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  wslHostWindowsDriveRefusalForLinuxPath,
+  type WslHostWindowsDriveRefusal
+} from '../../../../shared/wsl-host-windows-drive-refusal'
+import { getWindowsPathAccess } from '@/lib/windows-path-access'
+import type { AddRepoPathOptions } from '@/store/repos/repo-state'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
 
 type ShowNestedRepoReview = (args: {
@@ -38,12 +44,13 @@ export function useAddRepoServerPathFlow({
   setNestedScanInProgress,
   showNestedRepoReview,
   onGitRepoReady,
-  setAddProjectBusyLabel
+  setAddProjectBusyLabel,
+  onWindowsDriveRefusal
 }: {
   addRepoPath: (
     path: string,
     kind?: 'git' | 'folder',
-    options?: { runtimeEnvironmentId?: string | null }
+    options?: AddRepoPathOptions
   ) => Promise<Repo | null>
   activeRuntimeEnvironmentId: string | null
   closeModal: () => void
@@ -67,6 +74,8 @@ export function useAddRepoServerPathFlow({
     executionHostId?: ExecutionHostId
   ) => Promise<void>
   setAddProjectBusyLabel: (label: string | null) => void
+  /** Shown inline by the dialog, whether this client or the host refused. */
+  onWindowsDriveRefusal: (refusal: WslHostWindowsDriveRefusal) => void
 }): {
   serverPath: string
   isAddingServerPath: boolean
@@ -88,6 +97,16 @@ export function useAddRepoServerPathFlow({
     async (kind: 'git' | 'folder'): Promise<void> => {
       const path = serverPath.trim()
       if (!path) {
+        return
+      }
+      // A WSL host refuses /mnt/<drive> up front, before a slow drvfs scan; the host re-checks by mount.
+      const driveRefusal =
+        activeRuntimeEnvironmentId &&
+        getWindowsPathAccess(toRuntimeExecutionHostId(activeRuntimeEnvironmentId))
+          ? wslHostWindowsDriveRefusalForLinuxPath(path)
+          : null
+      if (driveRefusal) {
+        onWindowsDriveRefusal(driveRefusal)
         return
       }
       const gen = ++serverAddGenRef.current
@@ -166,7 +185,8 @@ export function useAddRepoServerPathFlow({
           kind === 'git' ? addRepoBusyLabels.openingProject() : addRepoBusyLabels.openingFolder()
         )
         const repo = await addRepoPath(path, kind, {
-          runtimeEnvironmentId: activeRuntimeEnvironmentId
+          runtimeEnvironmentId: activeRuntimeEnvironmentId,
+          onWindowsDriveRefusal
         })
         if (gen !== serverAddGenRef.current) {
           return
@@ -200,6 +220,7 @@ export function useAddRepoServerPathFlow({
       fetchWorktrees,
       getNestedRepoRuntimeKind,
       onGitRepoReady,
+      onWindowsDriveRefusal,
       scanNestedRepos,
       serverPath,
       setActiveNestedScanId,

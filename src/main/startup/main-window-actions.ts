@@ -24,6 +24,7 @@ import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-servic
 import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
 import { mainProcessState as state } from './main-process-state'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
+import { getWorkspaceSpaceWindow } from '../window/workspace-space-window'
 import { markUserQuitWindowClose } from '../window/user-quit-window-close'
 import { loadMainWindow } from '../window/createMainWindow'
 import {
@@ -265,10 +266,22 @@ export function createSystemTrayDeferred(
 }
 
 function resolveMenuTargetRenderer(targetWindow?: BrowserWindow | null): WebContents | undefined {
-  // Native browser popups host web pages rather than Orca renderer actions.
-  return targetWindow && !targetWindow.isDestroyed() && !isNativeBrowserPopupWindow(targetWindow)
-    ? targetWindow.webContents
-    : state.mainWindow?.webContents
+  const invokingWindow = targetWindow && !targetWindow.isDestroyed() ? targetWindow : undefined
+  const isCompanion =
+    invokingWindow &&
+    (invokingWindow === getDashboardPopoutWindow() || invokingWindow === getWorkspaceSpaceWindow())
+  if (invokingWindow && !isCompanion && !isNativeBrowserPopupWindow(invokingWindow)) {
+    return invokingWindow.webContents
+  }
+  const mainWindow = state.mainWindow
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return undefined
+  }
+  // Companion renderers do not mount the Help dialogs.
+  if (isCompanion) {
+    safelyRevealWindow(mainWindow)
+  }
+  return mainWindow.webContents
 }
 
 export function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
