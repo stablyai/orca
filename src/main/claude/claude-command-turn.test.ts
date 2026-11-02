@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
@@ -22,7 +22,8 @@ const COMMAND_IDENTITY: AgentJournalItemIdentity = {
   clientMessageId: 'command-turn:cmd-1'
 }
 const COMMAND_KEY = agentJournalItemKey(COMMAND_IDENTITY)
-const QUOTA_RESET_S = Math.floor(Date.now() / 1000) + 3600
+const NOW = 1_800_000_000_000
+const QUOTA_RESET_S = NOW / 1000 + 3600
 const CREDITS = 'This model requires usage credits'
 const IN_COMMAND: AgentJournalTurnScope = { kind: 'turn', turnItemId: COMMAND_KEY }
 const TERMINAL_FAILURE_KEY = agentJournalItemKey({
@@ -37,6 +38,15 @@ const RUNNING = {
   requestedAt: 900,
   startedAt: 1_000
 }
+
+// Usage limits expire by the system clock; pin it so the quota reset stays an hour ahead.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(NOW)
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 type Row = { key: string; body: AgentJournalItemBody; turnScope?: AgentJournalTurnScope }
 

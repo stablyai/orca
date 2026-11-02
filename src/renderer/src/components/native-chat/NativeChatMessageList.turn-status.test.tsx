@@ -470,7 +470,7 @@ const commandView = {
         ...agentSessionFailureWords(
           {
             kind: 'usageLimitReached',
-            usageLimit: { window: 'session', resetsAt: Date.now() - 60_000 },
+            usageLimit: { window: 'session', resetsAt: 1_700_000_000_000 },
             detail: { text: "You've hit your limit", audience: 'person' }
           },
           { surface: 'row', agentName: 'Claude' }
