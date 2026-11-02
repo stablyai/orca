@@ -3,8 +3,8 @@ import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-row-builders'
@@ -146,13 +146,9 @@ export type DeferredStructuredAgentSessionEventSink = {
 
 export type StructuredAgentSessionSinkWatermarks = {
   pauseQueuedBytes: number
-  maxQueuedBytes: number
   lowQueuedBytes: number
   pauseQueuedOperations: number
-  maxQueuedOperations: number
   lowQueuedOperations: number
-  maxLifecycleQueuedBytes: number
-  maxLifecycleQueuedOperations: number
 }
 
 export type StructuredAgentSessionReadingControl = {

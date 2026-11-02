@@ -3,7 +3,10 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { getWorkspaceCleanupHostIdentity as identity } from '../../../../shared/workspace-cleanup-host-identity'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { makeTab, makeLayout } from './store-test-helpers'
-import { makeAgentEntry, makeUnifiedTab } from '@/components/worktree-jump-palette-test-fixtures'
+import {
+  makeAgentEntry,
+  makeUnifiedTab
+} from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { enrichWorkspaceCleanupCandidates } from './workspace-cleanup-candidate-enrichment'
 import { getWorkspaceCleanupAgentEvidence } from './workspace-cleanup-agent-evidence'
 import { WORKTREE_ID, makeCandidate, makeState } from './workspace-cleanup-slice-test-harness'

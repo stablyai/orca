@@ -2,7 +2,7 @@ import { normalizeConstruction } from './structured-agent-session-construction'
 import { structuredAgentSessionAdapterCapabilities } from './structured-agent-session-adapter-capabilities'
 
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'

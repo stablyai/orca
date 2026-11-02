@@ -1,5 +1,4 @@
 import type { RecoveryConstructionPermit } from './structured-agent-session-construction'
-import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
@@ -82,7 +81,6 @@ export type AttachFlowInput = {
     attempt: StructuredAgentSessionStartupAttempt
   ) => StructuredAgentSessionStartupProgress
   startupOptions?: Readonly<Record<string, string>>
-  launchAccountRecipe?: (record: AgentSessionRecord) => Promise<ClaudeAccountRecipe | undefined>
   launchPermissionMode?: (
     record: AgentSessionRecord
   ) => Promise<AgentChatPermissionChoice | undefined>

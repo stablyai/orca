@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { boundJournalKeyComponent } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { readAgentSessionHistory } from './agent-session-history-page'

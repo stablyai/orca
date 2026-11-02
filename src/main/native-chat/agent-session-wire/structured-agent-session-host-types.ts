@@ -1,6 +1,4 @@
 import type { RecoveryConstructionPermit } from './structured-agent-session-construction'
-import type { AgentSessionRecordReader } from '../../runtime/orchestration/structured-session-lineage'
-import type { NativeResponseEvidence } from '../../runtime/orchestration/structured-parent-account-work'
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import type {
@@ -22,7 +20,7 @@ import type {
 import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
@@ -52,7 +50,7 @@ import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionSwitchResult } from '../../../shared/agent-session-switch-execution'
+import type { AgentSessionSwitchResult } from '../../../shared/agent-session/requests/agent-session-switch-execution'
 
 export type StructuredAgentSessionCaller = {
   callerKey: string
@@ -210,12 +208,6 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
-  parentAccountWork?: (
-    record: AgentSessionRecord,
-    root: string,
-    response: NativeResponseEvidence,
-    reader: AgentSessionRecordReader
-  ) => boolean
   conversationNaming?: StructuredAgentSessionConversationNaming
   /** Carries the user's chat name into the agent's own conversation; never delays the caller. */
   nameProviderConversation?: (record: AgentSessionRecord) => void

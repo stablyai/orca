@@ -3,7 +3,7 @@ import type {
   ConstructionStep,
   RecoveryConstructionIntent
 } from './structured-agent-session-construction'
-import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
@@ -22,7 +22,7 @@ import type {
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {

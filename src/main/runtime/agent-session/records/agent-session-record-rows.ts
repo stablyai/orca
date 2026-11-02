@@ -1,5 +1,5 @@
 import { invalidateContextTransferOwner } from '../../../native-chat/agent-session-journal/journal-context-transfer'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Load session/ledger rows once and persist only changed rows inside the journal transaction.
 // Unreadable records remain present and immutable; every mutation of their ids is refused.
 

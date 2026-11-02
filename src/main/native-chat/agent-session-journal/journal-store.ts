@@ -17,7 +17,7 @@ import type {
   AgentJournalCursor,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 import { journalWroteBeforeOpen, readJournalSince } from './journal-cursor'

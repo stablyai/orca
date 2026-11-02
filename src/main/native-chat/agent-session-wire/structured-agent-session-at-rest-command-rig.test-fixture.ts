@@ -2,7 +2,7 @@ import { readyConstruction } from './structured-agent-session-construction'
 // @vitest-environment happy-dom
 import { cleanup } from '@testing-library/react'
 
-import type { CommandMenuRendererFixtureModule } from '../../../shared/agent-session-command-menu.test-fixture-contract'
+import type { CommandMenuRendererFixtureModule } from '../../../shared/agent-session/agent-session-command-menu.test-fixture-contract'
 
 import { OMP } from '../../acp/acp-command-discovery.test-fixture'
 import { acpStructuredAgentDefinition } from '../../acp/acp-structured-agent-definitions'

@@ -10,7 +10,10 @@ import {
   withProviderDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
-import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import {
+  isCodexAppServerRequestError,
+  type CodexAppServerRequestError
+} from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { CodexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { readCodexThreadId } from './codex-structured-thread-facts'
@@ -34,7 +37,10 @@ function nonEmptyString(value: unknown): string | null {
 }
 
 /** Only this thread-specific resume error proves no rollout; archived resumes report "is archived". */
-function isCodexNoRolloutError(error: unknown, threadId: string): boolean {
+function isCodexNoRolloutError(
+  error: unknown,
+  threadId: string
+): error is CodexAppServerRequestError {
   return (
     isCodexAppServerRequestError(error) &&
     error.method === 'thread/resume' &&
@@ -157,8 +163,17 @@ export async function openCodexThread(
           providerDiagnostic(finalError.providerDiagnostic?.text ?? finalError.message, 'log')
         )
       }
-      if (!isCodexNoRolloutError(finalError, resumeThreadId) || !launch.sourceLink) {
+      if (!isCodexNoRolloutError(finalError, resumeThreadId)) {
         throw finalError
+      }
+      if (!launch.sourceLink) {
+        throw withProviderDiagnostic(
+          Object.assign(
+            new AgentSessionAcquisitionRefusal(finalError.message, 'savedConversationMissing'),
+            { cause: finalError }
+          ),
+          providerDiagnostic(finalError.providerDiagnostic?.text ?? finalError.message, 'log')
+        )
       }
       const sourceLink = launch.sourceLink
       return {

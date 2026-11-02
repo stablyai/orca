@@ -6,7 +6,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalItemRowBuilder, journalDispatchRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalAppendResult, JournalItemAppendOptions } from './journal-store-contracts'

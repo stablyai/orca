@@ -5,7 +5,7 @@ import { afterEach, beforeEach } from 'vitest'
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   type AgentJournalItemBody,
   AGENT_JOURNAL_THREAD_SCOPE,

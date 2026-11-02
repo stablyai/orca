@@ -7,7 +7,7 @@ import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/l
 import { sealStructuredSessionChild } from '../runtime/structured-session-child-env'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

@@ -6,7 +6,7 @@ import {
   withStoppedHistory
 } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
 import {

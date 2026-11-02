@@ -196,6 +196,7 @@ async function mountPhone(): Promise<Phone> {
   function Harness(): ReturnType<typeof createElement> {
     const session = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: STOP_JOURNAL_SESSION,
       sourceIdentity: 'host\0workspace',
       enabled: true,

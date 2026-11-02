@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { RuntimeClientError, type RuntimeClient } from '../../runtime-client'
 import { readRetryRequestFlag } from '../../retry-request-flag'
 import { orchestrationMutationRecoveryError } from '../../orchestration-mutation-recovery'
+import { isRequestUnsent } from '../../runtime/client-error-recovery'
 
 const MAX_UNAVAILABLE_RETRY_DELAY_MS = 15_000
 
@@ -14,8 +15,8 @@ export async function callOrchestrationMutation<TResult>(
   unavailableRetryMs = 0
 ) {
   // Reuse one request id so retries replay the mutation instead of applying it twice.
-  const requestId =
-    readRetryRequestFlag(flags) ?? (unavailableRetryMs > 0 ? randomUUID() : undefined)
+  const retryRequest = readRetryRequestFlag(flags)
+  const requestId = retryRequest ?? (unavailableRetryMs > 0 ? randomUUID() : undefined)
   const deadline = Date.now() + unavailableRetryMs
   let sentError: RuntimeClientError | undefined
   for (let delayMs = 1_000; ; delayMs = Math.min(delayMs * 2, MAX_UNAVAILABLE_RETRY_DELAY_MS)) {
@@ -31,14 +32,16 @@ export async function callOrchestrationMutation<TResult>(
     } catch (error) {
       const unavailable =
         error instanceof RuntimeClientError && error.code === 'runtime_unavailable'
-      if (carriesRequestId(error)) {
+      const sent = carriesRequestId(error) && !isRequestUnsent(error)
+      if (sent) {
         sentError = error
       }
       if (!unavailable || Date.now() + delayMs > deadline) {
         // A later failure may lack the request id even though an earlier attempt landed.
-        throw orchestrationMutationRecoveryError(
-          carriesRequestId(error) ? error : (sentError ?? error)
-        )
+        throw orchestrationMutationRecoveryError(sent ? error : (sentError ?? error), {
+          // Only a fresh id that never got past the contract check is known not to have run.
+          unsent: !retryRequest && !sentError && isRequestUnsent(error)
+        })
       }
       await new Promise((resolve) => setTimeout(resolve, delayMs))
     }

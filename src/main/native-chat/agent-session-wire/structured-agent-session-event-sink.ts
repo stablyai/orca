@@ -2,7 +2,6 @@ export type * from './structured-agent-session-event-sink-types'
 import type {
   StructuredAgentSessionSinkAdmission,
   StructuredAgentSessionSinkState,
-  StructuredAgentSessionAppendOptions,
   StructuredAgentSessionPublishOptions,
   StructuredAgentSessionEventSink,
   DeferredStructuredAgentSessionEventSink,
@@ -11,6 +10,7 @@ import type {
 } from './structured-agent-session-event-sink-types'
 
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 
 import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
@@ -31,13 +31,9 @@ import { StructuredAgentSessionExitObservation } from './structured-agent-sessio
 
 const DEFAULT_WATERMARKS: StructuredAgentSessionSinkWatermarks = {
   pauseQueuedBytes: 16 * 1024 * 1024,
-  maxQueuedBytes: 32 * 1024 * 1024,
   lowQueuedBytes: 8 * 1024 * 1024,
   pauseQueuedOperations: 512,
-  maxQueuedOperations: 1_024,
-  lowQueuedOperations: 256,
-  maxLifecycleQueuedBytes: 16 * 1024 * 1024,
-  maxLifecycleQueuedOperations: 1_024
+  lowQueuedOperations: 256
 }
 
 export function createDeferredStructuredAgentSessionEventSink(deps: {
@@ -69,55 +65,53 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
 
   const appendLifecycleBatch = (
     settlementId: string,
-    mutations: readonly JournalLifecycleIdentityMutationInput[],
-    options: StructuredAgentSessionAppendOptions = {}
+    mutations: readonly JournalLifecycleIdentityMutationInput[]
   ): StructuredAgentSessionSinkAdmission =>
-    queue.submit(
-      {
-        bytes: Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
-        run: (bound) =>
-          bound.journal.appendLifecycleBatch({
-            settlementId,
-            mutations,
-            // Preserve per-mutation linkage instead of stamping the whole row.
-            fence: bound.fence,
-            // Provider observations use the bound child’s execution fence.
-            ownerFence: bound.fence
-          })
-      },
-      { ...options, lifecycle: true }
-    )
+    queue.submit({
+      bytes: Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
+      run: (bound) =>
+        bound.journal.appendLifecycleBatch({
+          settlementId,
+          mutations,
+          // Preserve per-mutation linkage instead of stamping the whole row.
+          fence: bound.fence,
+          // Provider observations use the bound child’s execution fence.
+          ownerFence: bound.fence
+        })
+    })
 
   const publish = (
     options: StructuredAgentSessionPublishOptions = {}
   ): StructuredAgentSessionSinkAdmission =>
-    queue.submit(
-      {
-        bytes: 1,
-        publicationKey: options.coalescingKey ?? 'publish',
-        run: (bound) => bound.publish()
-      },
-      options
-    )
+    queue.submit({
+      bytes: 1,
+      publicationKey: options.coalescingKey ?? 'publish',
+      run: (bound) => bound.publish()
+    })
 
   const appendItem: NonNullable<StructuredAgentSessionEventSink['tryAppendItem']> = (
     identity,
     body,
     options
   ) =>
-    queue.submit(
-      {
-        bytes: estimateStructuredAgentSessionItemBytes(identity, body),
-        run: async (bound) => {
-          await bound.journal.appendItem(
-            identity,
-            body,
-            structuredAgentSessionJournalAppendOptions(bound.fence, options)
-          )
-        }
-      },
-      options
-    )
+    queue.submit({
+      bytes: estimateStructuredAgentSessionItemBytes(identity, body),
+      run: async (bound) => {
+        await bound.journal.appendItem(
+          identity,
+          body,
+          structuredAgentSessionJournalAppendOptions(bound.fence, options)
+        )
+      }
+    })
+
+  const appendTombstone = (
+    identity: AgentJournalItemIdentity
+  ): StructuredAgentSessionSinkAdmission =>
+    queue.submit({
+      bytes: Buffer.byteLength(agentJournalItemKey(identity), 'utf8') + 256,
+      run: (bound) => bound.journal.appendTombstone(identity, { fence: bound.fence })
+    })
 
   return {
     exitObservation: () => exit,
@@ -131,8 +125,8 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       journalLinkage: queue.journalLinkage,
       journalHistory: queue.journalHistory,
       journalStopDecidesTurn: queue.journalStopDecidesTurn,
-      appendLifecycleBatch: (settlementId, mutations, options = {}) => {
-        const admission = appendLifecycleBatch(settlementId, mutations, options)
+      appendLifecycleBatch: (settlementId, mutations) => {
+        const admission = appendLifecycleBatch(settlementId, mutations)
         if (!admission.accepted) {
           failed(
             new Error(
@@ -144,23 +138,8 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       },
       tryAppendLifecycleBatch: appendLifecycleBatch,
       bindReadingControl: (control) => queue.bindReadingControl(control),
-      appendTombstone: (identity, options = {}) => {
-        queue.submit(
-          {
-            bytes: Buffer.byteLength(agentJournalItemKey(identity), 'utf8') + 256,
-            run: (bound) => bound.journal.appendTombstone(identity, { fence: bound.fence })
-          },
-          options
-        )
-      },
-      tryAppendTombstone: (identity, options = {}) =>
-        queue.submit(
-          {
-            bytes: Buffer.byteLength(agentJournalItemKey(identity), 'utf8') + 256,
-            run: (bound) => bound.journal.appendTombstone(identity, { fence: bound.fence })
-          },
-          options
-        ),
+      appendTombstone: (identity) => void appendTombstone(identity),
+      tryAppendTombstone: appendTombstone,
       publish: (options = {}) => void publish(options),
       written: queue.written,
       setActivity: (activity) => {

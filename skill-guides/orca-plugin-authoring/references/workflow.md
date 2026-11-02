@@ -17,7 +17,8 @@ loads the folder (refreshing `.orca/types`) and prints one JSON object per line:
 - `reloaded` (before that reload's logs) and `status` (`errored`/`invalid` with the error).
 - `approval`: an edit asked for new access; it carries the `dev reload … --approve` command to
   show the user. The watch keeps running and never approves.
-- `check` (with `--check`): `orca plugin check` after the load and each reload. `ok` is false
+- `check` (with `--check`): `orca plugin check` after the load and each reload, with `panels`
+  and `editors` (each custom editor checked without running it). `ok` is false
   unless Orca also runs the plugin; `checkOk` is the check alone, `pluginStatus`/`pluginError`
   what Orca reports.
 - `shot` (with `--shot`): `{ path, width, height, settled, errors }` for the panel opened once at
@@ -69,9 +70,38 @@ re-checks changed commands and shortcuts), `ORCA plugin dev unload <dir>`.
   placeholder, no `--act`, local only (no `--environment`), and Orca's window must be hidden
   or minimized. Default file `.orca/shots/<plugin-key>-<panel>.<scenario>.png`.
 - `ORCA plugin open <plugin-key> [--panel <id> | --editor <file>]` shows the panel in the right
-  sidebar, or a file in the plugin's custom editor. Neither raises the window.
-- Both need the desktop app with a workspace showing. A shot never changes the view: it fails with
+  sidebar, or a file in the plugin's custom editor. Neither raises the window. `--editor` opens the
+  file in the workspace that holds it (its real path counts: `/tmp` is `/private/tmp`), or else
+  opens the file's folder as a folder workspace first.
+
+## Seeing and driving a custom editor
+
+The editor loop: edit the editor's code (a `dev watch` reloads it), then
+`ORCA plugin shot <dir> --editor <file> [--theme light|dark] [--width <px>] [--height <px>]
+[--act '<json>'] --json`, then read the PNG. It opens the file like `plugin open --editor`, loads
+the editor afresh, waits for it to get its document and ask for it (`orca.document.get` or
+`onDidChange`) and paint, then captures exactly the editor with the window hidden. `--act` is real
+input in the editor's own CSS pixels: `[{"click":[200,150]},{"drag":[[200,150],[400,300]]},
+{"key":"r"}]` (`key` takes a name such as `Enter` and optional `"modifiers":["meta"]`), each
+painted before the next; it needs the window hidden or minimized. A shot never changes your file:
+`--act` runs on a copy in a temporary folder workspace that is removed afterwards (`--in-place`
+acts on the file itself and keeps its tab open), and a shot without acts closes the tab it
+opened. Edits only mark the tab dirty, as typing does: to write them to disk, end an `--in-place`
+`--act` with `{"key":"s","modifiers":["meta"]}` (`"control"` on Linux and Windows). Before each `key` Orca focuses the editor's guest, so a canvas keeps getting keys. It exits 1 and lists `errors` when the editor threw, was blocked by its
+content policy, or never asked for its document within 5s; the PNG is written anyway. The theme
+and size are put back. Default file `.orca/shots/<plugin-key>-<editor>.png`.
+
+`ORCA plugin shot <dir> --status-bar [--theme light|dark]` captures Orca's status bar, where your
+status bar items draw, and `--window` the whole window, both from the hidden window. Default files
+`.orca/shots/<plugin-key>-status-bar.png` and `-window.png`.
+
+- Both need the desktop app with a workspace. With none showing, a shot selects one of this
+  machine's workspaces in the hidden window. A shot never changes the view: it fails with
   `no_workspace` while Orca shows Settings or another full page. Without them, use `plugin check`.
+- From an Orca source checkout, `ORCA` is `node config/scripts/orca-dev.mjs` after
+  `pnpm run build:cli` and `pnpm run build:electron-vite`; `ORCA open` starts that checkout's dev
+  app (`ORCA_BACKGROUND_LAUNCH=1` keeps its window hidden). The CLI has no quit command: stop a
+  hidden dev app by ending the Electron process whose arguments name the checkout.
 
 ## Events
 

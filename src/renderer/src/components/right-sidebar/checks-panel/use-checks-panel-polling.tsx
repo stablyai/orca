@@ -5,7 +5,10 @@ import {
   nextChecksPollBackoffMs
 } from '../../../../../shared/github/checks-detail-polling-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { gitLabPipelineJobsToPRChecks } from '../../../../../shared/gitlab-pipeline-checks'
+import {
+  gitLabPipelineJobsToPRChecks,
+  gitLabPipelineToPRCheck
+} from '../../../../../shared/gitlab-pipeline-checks'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey
@@ -17,6 +20,7 @@ import { fetchGitLabMRDetailsForChecks, gitLabMRCommentsToPRComments } from './g
 import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import { translate } from '@/i18n/i18n'
 
 export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
@@ -229,10 +233,16 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           throw new Error('GitLab MR details are unavailable')
         }
         gitLabProjectRefRef.current = details.item.projectRef ?? null
-        const result = gitLabPipelineJobsToPRChecks(details?.pipelineJobs ?? [])
-        setChecks(result)
+        const result = gitLabPipelineJobsToPRChecks(details.pipelineJobs ?? [])
+        const pipelineCheck = details.pipeline
+          ? gitLabPipelineToPRCheck(
+              details.pipeline,
+              translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
+            )
+          : null
+        setChecks(result, pipelineCheck)
         setComments(gitLabMRCommentsToPRComments(details?.comments))
-        const signature = policyRef.current.accept(result)
+        const signature = policyRef.current.accept(result, pipelineCheck)
         pollIntervalRef.current = nextChecksPollBackoffMs(
           pollIntervalRef.current,
           signature === prevChecksRef.current ? 'unchanged' : 'changed'

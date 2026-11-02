@@ -6,7 +6,6 @@ import type {
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import { retireOutgrownStructuredAgentSessionChild } from './structured-agent-session-outgrown-child'
-import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
 import {
   structuredAgentSessionInputCompilerPermission,
   structuredAgentSessionLaunchPermission
@@ -173,10 +172,7 @@ export async function retireDeliveryChild(
     },
     launchAccountHome: async () => {
       const record = deps.store.getRecord(sessionId)
-      return record
-        ? (await structuredAgentSessionReceivingAccount(deps, record, session, next, 'identity'))
-            .home
-        : null
+      return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
     },
     logger: deps.logger
   })
