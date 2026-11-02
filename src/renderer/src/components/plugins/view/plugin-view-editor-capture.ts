@@ -68,6 +68,14 @@ function editorGuestContentsId(fileId: string): number | undefined {
   }
 }
 
+// Main relays these to the CLI, so they stay English like every other plugin CLI error.
+const refuse = (requestId: string, code: string, message: string): PluginViewReply => ({
+  requestId,
+  ok: false,
+  code,
+  message
+})
+
 const loaded = (status: PluginEditorCaptureStatus): boolean =>
   status.frame === 'ready' && status.delivered
 
@@ -79,13 +87,11 @@ export async function captureOpenEditor(
 ): Promise<PluginViewReply> {
   // The capture reloads an open editor's frame, so edits still in its debounce window go first.
   if (!(await flushEditorFrames(useAppStore.getState(), fileId))) {
-    return {
+    return refuse(
       requestId,
-      ok: false,
-      code: 'editor_flush_failed',
-      message:
-        'The open editor did not hand over its latest edits, so Orca did not reload it for the shot. Save or wait, then shoot again.'
-    }
+      'editor_flush_failed',
+      'The open editor did not hand over its latest edits, so Orca did not reload it for the shot. Save or wait, then shoot again.'
+    )
   }
   const wantDark = capture.colorScheme === undefined ? null : capture.colorScheme === 'dark'
   const size =
@@ -135,7 +141,7 @@ export async function captureOpenEditor(
   await nextPaintedFrames()
   const rect = measureEditorFrame(fileId)
   if (!rect) {
-    return { requestId, ok: false, code: 'editor_hidden', message: 'The editor is not on screen.' }
+    return refuse(requestId, 'editor_hidden', 'The editor is not on screen.')
   }
   const dark = document.documentElement.classList.contains('dark')
   const guestUrl = load.status?.guestUrl ?? null
