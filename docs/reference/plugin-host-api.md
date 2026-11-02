@@ -194,7 +194,7 @@ Hooks run in the workers of the Orca that handles the request, before it acts: f
 
 | Hook | Event | Stop result | `next` may change | Summary |
 | --- | --- | --- | --- | --- |
-| `terminal.send` | `{ terminalId: string; text: string; enter: boolean; inputKind: "driving" \| "orchestration" \| "launch" }` | `{ deny: string }` | `text`, `enter` | Text Orca, a client or a plugin is about to type into a terminal (not keys a person presses in it). Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send. |
+| `terminal.send` | `{ terminalId: string; text: string; enter: boolean; inputKind: "driving" \| "orchestration" \| "launch" }` | `{ deny: string }` | `text`, `enter` | Text Orca, the CLI or a plugin is about to send to a terminal. A person typing (on the desktop, a phone or a paired client) is never hooked, and prompts Orca submits to an agent are not included (a separate agent prompt hook covers them). Writes to one terminal stay in order while a hook decides. Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send. |
 | `workspace.create.before` | `{ kind: "worktree" \| "folder"; projectId: string; name: string; branch?: string; base?: string }` | `{ deny: string }` | `name`, `branch`, `base` | A worktree or folder workspace is about to be created. Change `name`, `branch` or `base` with `next`, or return `{ deny }` to refuse it. |
 | `workspace.create.after` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string; branch: string }` | none | nothing | A worktree or folder workspace was created. Observe only: Orca does not wait for it, and results are ignored. |
 

@@ -128,26 +128,16 @@ describe('hook plugin warming', () => {
     await manager.disposeAll()
   })
 
-  it('makes hook workers past their soft cap wait, and says so once', async () => {
+  it('starts hook workers past their soft cap instead of waiting, and says so once', async () => {
     const slots = new PluginWorkerSlots(5, 1)
     const log = vi.fn()
     const signal = new AbortController().signal
-    const first = await slots.for({ keepWarm: true }, log).acquire(signal)
-    let secondStarted = false
-    const second = slots
-      .for({ keepWarm: true }, log)
-      .acquire(signal)
-      .then((lease) => ((secondStarted = true), lease))
-    void slots
-      .for({ keepWarm: true }, log)
-      .acquire(signal)
-      .catch(() => undefined)
-    await Promise.resolve()
-    expect(secondStarted).toBe(false)
+    // Why no release: a waiting admission would hang refresh, disable and uninstall forever.
+    await slots.for({ keepWarm: true }, log).acquire(signal)
+    await slots.for({ keepWarm: true }, log).acquire(signal)
+    await slots.for({ keepWarm: true }, log).acquire(signal)
     expect(log).toHaveBeenCalledOnce()
-    first.release()
-    await second
-    expect(secondStarted).toBe(true)
+    expect(log.mock.calls[0]?.[1]).toMatch(/more than 1 plugins with hooks/)
     slots.dispose()
   })
 

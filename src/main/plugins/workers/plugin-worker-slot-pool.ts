@@ -27,9 +27,8 @@ export class PluginWorkerSlotPool {
     }
   }
 
-  /** Whether an acquire now would wait. */
-  get full(): boolean {
-    return this.leased >= this.capacity || this.waiters.length > 0
+  get leasedCount(): number {
+    return this.leased
   }
 
   acquire(signal: AbortSignal): Promise<PluginWorkerSlotLease> {
@@ -108,24 +107,31 @@ export class PluginWorkerSlotPool {
 }
 
 /** The active-worker cap, plus a separate soft cap for hook workers, which never idle out and
- *  so would otherwise starve every other plugin of the shared one. */
+ *  so would otherwise starve every other plugin of the shared one. Past the soft cap a hook worker
+ *  still starts (logged once), so admission never waits on a worker that never stops. */
 export class PluginWorkerSlots {
   private readonly active: PluginWorkerSlotPool
-  private readonly keepWarm: PluginWorkerSlotPool
+  // Why unbounded: waiting here would hang refresh, disable and uninstall behind hook workers.
+  private readonly keepWarm = new PluginWorkerSlotPool(Number.MAX_SAFE_INTEGER)
   private keepWarmCapLogged = false
 
-  constructor(maxActive: number, maxKeepWarm = PLUGIN_WORKER_MAX_KEEP_WARM_DEFAULT) {
+  constructor(
+    maxActive: number,
+    private readonly maxKeepWarm = PLUGIN_WORKER_MAX_KEEP_WARM_DEFAULT
+  ) {
     this.active = new PluginWorkerSlotPool(maxActive)
-    this.keepWarm = new PluginWorkerSlotPool(maxKeepWarm)
   }
 
   for(spec: { keepWarm?: true }, log: (level: 'warn', line: string) => void): PluginWorkerSlotPool {
     if (!spec.keepWarm) {
       return this.active
     }
-    if (this.keepWarm.full && !this.keepWarmCapLogged) {
+    if (this.keepWarm.leasedCount >= this.maxKeepWarm && !this.keepWarmCapLogged) {
       this.keepWarmCapLogged = true
-      log('warn', 'too many plugins with hooks are running; this one waits until another stops')
+      log(
+        'warn',
+        `more than ${this.maxKeepWarm} plugins with hooks are running; each extra one adds a process`
+      )
     }
     return this.keepWarm
   }

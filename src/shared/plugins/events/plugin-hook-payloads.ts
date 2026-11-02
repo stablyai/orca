@@ -27,7 +27,7 @@ export const terminalSendHookPayloadSchema = z.object({
   text: z.string().max(TERMINAL_INPUT_MAX_BYTES),
   /** Whether Enter follows the text. */
   enter: z.boolean(),
-  /** `driving`: a client, CLI or plugin typing on someone's behalf; `orchestration`: Orca's own
+  /** `driving`: the CLI or a plugin sending on someone's behalf; `orchestration`: Orca's own
    *  dispatches and relayed messages; `launch`: startup commands and drafts. */
   inputKind: z.enum(['driving', 'orchestration', 'launch'])
 })
@@ -61,7 +61,7 @@ export const PLUGIN_HOOK_SPECS = {
     mutable: ['text', 'enter'],
     deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
     summary:
-      'Text Orca, a client or a plugin is about to type into a terminal (not keys a person presses in it). Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send.'
+      'Text Orca, the CLI or a plugin is about to send to a terminal. A person typing (on the desktop, a phone or a paired client) is never hooked, and prompts Orca submits to an agent are not included (a separate agent prompt hook covers them). Writes to one terminal stay in order while a hook decides. Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send.'
   },
   'workspace.create.before': {
     payload: workspaceCreateBeforeHookPayloadSchema,

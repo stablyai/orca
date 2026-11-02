@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHookName } from '../../../shared/plugins/contributions/plugin-hook-contribution'
 import type { PluginHookChainOutcome } from '../../../shared/plugins/workers/plugin-hook-chain'
-import { terminalSendPluginHook } from '../../runtime/terminal/input/terminal-send-plugin-hook'
-import { PluginHookDeniedError, setPluginHookRunner } from './plugin-hook-dispatch'
+import { setPluginHookRunner } from './plugin-hook-dispatch'
 import {
   applyWorkspaceCreatePluginHook,
+  createFolderWorkspaceWithPluginHooks,
   notifyWorkspaceCreatedPluginHook
 } from './workspace-create-plugin-hook'
 
@@ -25,40 +25,6 @@ const rewrite =
 
 afterEach(() => {
   setPluginHookRunner(null)
-})
-
-describe('terminal.send hook site', () => {
-  it('adds nothing when no plugin lists the hook, or for query replies and bare keys', () => {
-    const run = installRunner(rewrite({}), [])
-    expect(terminalSendPluginHook('t', { text: 'ls' }, 'driving')).toBeNull()
-    installRunner(rewrite({}), ['terminal.send'])
-    expect(terminalSendPluginHook('t', { text: '\x1b[0n' }, 'query-reply')).toBeNull()
-    expect(terminalSendPluginHook('t', { enter: true }, 'driving')).toBeNull()
-    expect(run).not.toHaveBeenCalled()
-  })
-
-  it('sends what the chain decided and keeps an interrupt', async () => {
-    const run = installRunner(rewrite({ text: 'ls -la', enter: false }), ['terminal.send'])
-    await expect(
-      terminalSendPluginHook('term_1', { text: 'ls', enter: true, interrupt: true }, 'launch')
-    ).resolves.toEqual({ text: 'ls -la', enter: false, interrupt: true })
-    expect(run).toHaveBeenCalledWith('terminal.send', {
-      terminalId: 'term_1',
-      text: 'ls',
-      enter: true,
-      inputKind: 'launch'
-    })
-  })
-
-  it('refuses the send when a plugin denies it', async () => {
-    installRunner(
-      () => ({ kind: 'deny', pluginKey: 'acme.guard', reason: 'no rm' }),
-      ['terminal.send']
-    )
-    const sent = terminalSendPluginHook('t', { text: 'rm -rf /' }, 'orchestration')
-    await expect(sent).rejects.toBeInstanceOf(PluginHookDeniedError)
-    await expect(sent).rejects.toThrow('terminal.send denied by plugin acme.guard: no rm')
-  })
 })
 
 describe('workspace.create hook sites', () => {
@@ -135,5 +101,49 @@ describe('workspace.create hook sites', () => {
         { workspaceId: 'folder:f', kind: 'folder', path: '/f', branch: '' }
       ]
     ])
+  })
+})
+
+describe('project-group folder workspace creates', () => {
+  it('run the before hook on the name, create once, then tell observers', async () => {
+    const run = installRunner(rewrite({ name: 'Notes (team)' }), [
+      'workspace.create.before',
+      'workspace.create.after'
+    ])
+    const create = vi.fn((input: { projectGroupId: string; name?: string }) => ({
+      id: 'fw-1',
+      folderPath: '/notes',
+      name: input.name
+    }))
+    await expect(
+      createFolderWorkspaceWithPluginHooks({ projectGroupId: 'g1', name: 'Notes' }, create)
+    ).resolves.toMatchObject({ name: 'Notes (team)' })
+    expect(create).toHaveBeenCalledOnce()
+    expect(run.mock.calls).toEqual([
+      ['workspace.create.before', { kind: 'folder', projectId: 'g1', name: 'Notes' }],
+      [
+        'workspace.create.after',
+        { workspaceId: 'folder:fw-1', kind: 'folder', path: '/notes', branch: '' }
+      ]
+    ])
+  })
+
+  it('keep Orca’s default name when unnamed and unchanged, and create nothing on a deny', async () => {
+    installRunner(rewrite({}), ['workspace.create.before'])
+    const create = vi.fn((input: { projectGroupId: string; name?: string }) => ({
+      id: 'fw-2',
+      folderPath: '/x',
+      name: input.name
+    }))
+    await createFolderWorkspaceWithPluginHooks({ projectGroupId: 'g1' }, create)
+    expect(create).toHaveBeenCalledWith({ projectGroupId: 'g1' })
+    installRunner(
+      () => ({ kind: 'deny', pluginKey: 'acme.n', reason: 'no' }),
+      ['workspace.create.before']
+    )
+    await expect(
+      createFolderWorkspaceWithPluginHooks({ projectGroupId: 'g1' }, create)
+    ).rejects.toThrow('denied by plugin acme.n')
+    expect(create).toHaveBeenCalledOnce()
   })
 })
