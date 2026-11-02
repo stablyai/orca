@@ -122,4 +122,51 @@ describe('AI Vault service entry cache invalidation', () => {
       clock.mockRestore()
     }
   })
+
+  it('evicts a previously cached title when a later scan resolves to the generated fallback', async () => {
+    const sessionId = 'sess-12345678'
+    scanAiVaultSessions.mockResolvedValueOnce({
+      sessions: [{ agent: 'claude', sessionId, title: 'Prior real prompt' }],
+      issues: [],
+      scannedAt: '2026-08-10'
+    })
+    await runScan(30)
+
+    emit({
+      type: 'request',
+      id: 31,
+      operation: 'titles',
+      requests: [{ agent: 'claude', sessionId }]
+    })
+    await vi.waitFor(() =>
+      expect(sent).toContainEqual({
+        type: 'result',
+        id: 31,
+        operation: 'titles',
+        value: { titles: [{ agent: 'claude', sessionId, title: 'Prior real prompt' }] }
+      })
+    )
+
+    scanAiVaultSessions.mockResolvedValueOnce({
+      sessions: [{ agent: 'claude', sessionId, title: 'Claude sess-123' }],
+      issues: [],
+      scannedAt: '2026-08-10'
+    })
+    await runScan(32)
+
+    emit({
+      type: 'request',
+      id: 33,
+      operation: 'titles',
+      requests: [{ agent: 'claude', sessionId }]
+    })
+    await vi.waitFor(() =>
+      expect(sent).toContainEqual({
+        type: 'result',
+        id: 33,
+        operation: 'titles',
+        value: { titles: [] }
+      })
+    )
+  })
 })

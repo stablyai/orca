@@ -55,6 +55,64 @@ describe('scanAiVaultSessions harness-injected title seeding', () => {
     expect(result.sessions[0]?.title).toBe('Fix the sidebar label bug')
   })
 
+  it('does not fall back to <local-command-caveat> or /clear harness turns when no real prompt has been sent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-claude-clear-caveat-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const sessionId = '9176163a-2f89-431f-b202-32f04d61f124'
+    await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })
+
+    await writeFile(
+      join(roots.claudeProjectsDir, 'project', `${sessionId}.jsonl`),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId,
+          timestamp: '2026-06-11T10:00:00.000Z',
+          cwd: '/repo/app',
+          isMeta: true,
+          message: {
+            role: 'user',
+            content:
+              '<local-command-caveat>The command below was run directly in Claude Code. Do not respond unless asked.</local-command-caveat>'
+          }
+        },
+        {
+          type: 'user',
+          sessionId,
+          timestamp: '2026-06-11T10:00:01.000Z',
+          cwd: '/repo/app',
+          isMeta: true,
+          message: {
+            role: 'user',
+            content:
+              '<command-name>/clear</command-name>\n            <command-message>clear</command-message>\n            <command-args></command-args>'
+          }
+        },
+        {
+          type: 'user',
+          sessionId,
+          timestamp: '2026-06-11T10:00:02.000Z',
+          cwd: '/repo/app',
+          isMeta: true,
+          message: {
+            role: 'user',
+            content: '<local-command-stdout></local-command-stdout>'
+          }
+        }
+      ])
+    )
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      platform: 'darwin'
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]?.title).toBe('Claude 9176163a')
+  })
+
   it('titles a session from a real first turn that pastes a custom element', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-claude-custom-element-title-'))
     tempRoots.push(root)

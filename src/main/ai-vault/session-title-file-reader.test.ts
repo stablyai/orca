@@ -80,6 +80,24 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     ).resolves.toEqual({ titles: [] })
   })
 
+  it('ignores synthetic fallback titles when a session has no real title yet', async () => {
+    const path = await transcriptPath()
+    const sessionId = '9176163a-2f89-431f-b202-32f04d61f124'
+    const cache = { get: vi.fn(() => null), set: vi.fn() }
+    parseAgentSessionFileCached.mockResolvedValue({
+      agent: 'claude',
+      sessionId,
+      title: 'Claude 9176163a'
+    })
+
+    await expect(
+      readAiVaultSessionTitlesFromFiles([{ agent: 'claude', sessionId, transcriptPath: path }], {
+        cache
+      })
+    ).resolves.toEqual({ titles: [] })
+    expect(cache.set).not.toHaveBeenCalled()
+  })
+
   it('uses the bounded worker index when no transcript path is available', async () => {
     const cached = { agent: 'claude' as const, sessionId: 'session-1', title: 'Cached title' }
     const cache = { get: vi.fn(() => cached), set: vi.fn() }

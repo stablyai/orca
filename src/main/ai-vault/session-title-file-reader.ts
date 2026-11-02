@@ -5,6 +5,7 @@ import {
   type AiVaultSessionTitleRequest,
   type AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
+import { generatedSessionTitle } from './session-scanner-accumulator'
 import { parseAgentSessionFileCached } from './session-scanner-parse-cache'
 
 const TITLE_PARSE_CONCURRENCY = 4
@@ -45,18 +46,20 @@ async function readOneTitle(
       },
       process.platform
     )
+    const trimmedTitle = session?.title.trim() ?? ''
     if (
       signal?.aborted ||
       session?.agent !== request.agent ||
       session.sessionId !== request.sessionId ||
-      !session.title.trim()
+      !trimmedTitle ||
+      trimmedTitle === generatedSessionTitle(session.agent, session.sessionId)
     ) {
       return null
     }
     const title = {
       agent: request.agent,
       sessionId: request.sessionId,
-      title: session.title.trim()
+      title: trimmedTitle
     }
     cache?.set(title)
     return title
