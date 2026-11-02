@@ -115,8 +115,8 @@ HTML panels and custom editors get these CSS variables from Orca's active theme,
   `(params: { workspaceId: string; title?: string; command?: string }) => { terminalId: string }`
 - `terminal.read` (capability `terminal:read`; worker; since 1.3): Reads a terminal's newest output as plain text, at most 2000 lines.
   `(params: { terminalId: string; maxLines?: number }) => { lines: string[]; truncated: boolean }`
-- `agent.launch` (capability `agent:launch`; worker; since 1.3): Starts an agent in a workspace, optionally with a first prompt, in the background.
-  `(params: { workspaceId: string; agent: string; prompt?: string }) => { terminalId: string; surface: "chat" | "terminal" }`
+- `agent.launch` (capability `agent:launch`; worker; since 1.3): Starts an agent's CLI in a new terminal of a workspace, in the background, and returns as soon as it starts; a `prompt` is sent once the agent is ready.
+  `(params: { workspaceId: string; agent: string; prompt?: string }) => { terminalId: string }`
 
 ## Hooks
 

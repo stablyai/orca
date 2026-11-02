@@ -25,6 +25,7 @@ import {
 } from './plugin-worker-requests'
 import { buildPluginWorkerEnv } from './plugin-worker-env'
 import { pipePluginWorkerOutput } from './plugin-worker-output-buffer'
+import { PluginWorkerHostCalls } from './plugin-worker-host-calls'
 
 const PLUGIN_WORKER_SHUTDOWN_GRACE_MS = 2_000
 const PLUGIN_WORKER_EVENT_TIMEOUT_MS = 5 * 60_000
@@ -139,15 +140,8 @@ export async function startPluginWorker(
       rejectAllPending(failure.message)
     })
     child.on('exit', (code) => fail(new Error(`${tag} worker exited before ready (code ${code})`)))
-    // A host call the worker cancels leaves this map, so its late answer is dropped and its
-    // effect, if it has not started, never starts.
-    const inFlightHostCalls = new Map<number, AbortController>()
-    child.once('exit', () => {
-      for (const cancel of inFlightHostCalls.values()) {
-        cancel.abort()
-      }
-      inFlightHostCalls.clear()
-    })
+    const inFlightHostCalls = new PluginWorkerHostCalls()
+    child.once('exit', () => inFlightHostCalls.cancelAll())
     child.on('message', (raw) => {
       const message = readPluginEnvelope(raw)
       if (!message) {
@@ -175,21 +169,17 @@ export async function startPluginWorker(
         case 'req': {
           lastActivityAt = Date.now()
           const { id } = message
-          const cancel = new AbortController()
-          inFlightHostCalls.set(id, cancel)
-          void options
-            .executeHostCall(message.method, message.params, cancel.signal)
-            .then((outcome) => {
-              lastActivityAt = Date.now()
-              if (inFlightHostCalls.delete(id)) {
-                sendToChild(pluginOutcomeResponse(id, outcome))
-              }
-            })
+          const signal = inFlightHostCalls.start(id)
+          void options.executeHostCall(message.method, message.params, signal).then((outcome) => {
+            lastActivityAt = Date.now()
+            if (inFlightHostCalls.finish(id)) {
+              sendToChild(pluginOutcomeResponse(id, outcome))
+            }
+          })
           return
         }
         case 'cancel':
-          inFlightHostCalls.get(message.id)?.abort()
-          inFlightHostCalls.delete(message.id)
+          inFlightHostCalls.cancel(message.id)
           return
         case 'evt':
           break
