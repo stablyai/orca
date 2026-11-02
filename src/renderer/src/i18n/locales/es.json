@@ -171,7 +171,7 @@
         "inheritFont": "Misma fuente que el IDE",
         "fontPreviewLabel": "Vista previa de la fuente del chat",
         "fontPreview": "El veloz zorro marrón salta sobre el perro perezoso.",
-        "title": "Chat",
+        "title": "Interfaz de chat",
         "textSize": "Tamaño del texto",
         "textSizeDescription": "Mensajes, actividad de herramientas y cuadro de mensaje. {{increase}} / {{decrease}} en un chat también cambian este valor.",
         "codeTextSize": "Tamaño del texto del código",
@@ -7729,7 +7729,6 @@
           "9d3e56ca36": "Aplicar cambios",
           "f96688b6bc": "Cancelar",
           "b7ddae600c": "Hecho",
-          "e4bda7ce6f": "No se encontró ninguna configuración de Ghostty en este sistema.",
           "b58d4c9051": "Claves no compatibles",
           "674b5ccd6b": "No hay nuevos ajustes que importar; tus ajustes actuales ya coinciden.",
           "a4c5dec640": "Ajustes por actualizar",
@@ -21297,7 +21296,10 @@
       "title": "Ejecutar {{distro}} como host (recomendado)",
       "why": "Git, los archivos y las terminales se ejecutan de forma nativa en Linux en lugar de a través del recurso compartido de Windows.",
       "accept": "Ejecutar como host",
-      "projectNotFound": "No se encontró el proyecto añadido para moverlo. Usa «Mover al host {{distro}}…» en el proyecto de la barra lateral."
+      "projectNotFound": "No se encontró el proyecto añadido para moverlo. Usa «Mover al host {{distro}}…» en el proyecto de la barra lateral.",
+      "existingTitle": "Añadir en el host {{distro}} (recomendado)",
+      "existingWhy": "{{distro}} ya se ejecuta como host, así que Git, los archivos y las terminales se ejecutan de forma nativa en Linux en lugar de a través del recurso compartido de Windows.",
+      "existingAccept": "Añadir en el host"
     }
   },
   "rendererRecovery": {
@@ -23021,7 +23023,8 @@
       "changed": "Se movió antes y luego una versión anterior de Orca lo cambió aquí. No se vuelve a mover.",
       "chatsStay": "Los chats existentes se quedan en este equipo. Los chats nuevos de este proyecto se inician en el host WSL.",
       "browserLoginsConflict": "Las sesiones iniciadas en el navegador no se trasladarán, porque el perfil del navegador del host ya está en uso. Vuelve a iniciar sesión en las pestañas del navegador del host después del traslado.",
-      "browserLoginsNotCarried": "Las sesiones iniciadas en el navegador no se trasladarán a este host. Vuelve a iniciar sesión en sus pestañas del navegador después del traslado."
+      "browserLoginsNotCarried": "Las sesiones iniciadas en el navegador no se trasladarán a este host. Vuelve a iniciar sesión en sus pestañas del navegador después del traslado.",
+      "why": "El trabajo se ejecuta entonces dentro de Linux, junto a tus archivos, así que las terminales, Git y los cambios de archivos son más rápidos y fiables. Tus proyectos no cambian, y puedes devolver cualquier proyecto con «Usar de nuevo en este equipo»."
     },
     "cancel": "Cancelar",
     "progress": {
