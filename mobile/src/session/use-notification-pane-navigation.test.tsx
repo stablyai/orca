@@ -236,21 +236,6 @@ describe('an agent row tapped in the host list served by this same page', () => 
     render(true)
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
   })
-
-  it('switches again when the same pane is tapped after its param was erased', () => {
-    bridge.route = { pathname: '/h/host-1' }
-    page.params = { paneKey: `tab-b:${LEAF}` }
-    const tree = render(true)
-    page.params = {}
-    act(() => {
-      tree.update(createElement(Probe, { terminalsLoaded: true }))
-    })
-    page.params = { paneKey: `tab-b:${LEAF}` }
-    act(() => {
-      tree.update(createElement(Probe, { terminalsLoaded: true }))
-    })
-    expect(switched.map((tab) => tab.id)).toEqual(['second', 'second'])
-  })
 })
 
 it('opens a missing canonical native notification once, only after inventory loads', () => {

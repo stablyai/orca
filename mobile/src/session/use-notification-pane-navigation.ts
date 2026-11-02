@@ -5,7 +5,7 @@ import { usePageBridgeClient } from '../transport/client-context.web'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { notificationPaneTab } from './notification-pane-tab'
 
-// The document at / receives pane requests through shell init; router params belong to the native shell.
+// Pane requests arrive through shell init/route updates, or the page URL when this document serves the session itself.
 // Erase every arrival to repair lost clears, but switch once per value so replay cannot undo a later tab pick.
 // Keep pending requests in a ref until terminal inventory arrives, avoiding a stale selection render.
 export function useNotificationPaneNavigation({
