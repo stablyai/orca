@@ -4,13 +4,8 @@ import type { AgentProcessVerdict } from '../../shared/agent-process-presence'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../shared/structured-agent-cli-conversation-adoption'
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { assertCliConversationWritersExited } from './structured-agent-cli-writers'
-import {
-  TerminalIdentityReadContext,
-  ptyRecordForPaneKey
-} from './terminal/query/terminal-identity-read-context'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import { identityFixture } from './terminal/query/terminal-identity.test-fixture'
 import type { CliWriterObservation } from '../agent-hooks/server/cli-writer-observation'
+import { identityFixture } from './terminal/query/terminal-identity.test-fixture'
 
 const row: AgentStatusIpcPayload = {
   paneKey: 'source',
@@ -217,74 +212,43 @@ describe('canonical status store conversation admission', () => {
 
   // Every create, resume and acquire runs this check: resolving panes for nothing to leave out, or
   // scanning every terminal for each row, would grow with rows times terminals.
-  it('resolves panes only to leave some out, reading the terminals once', async () => {
-    const { owner } = identityFixture()
-    const run = async (count: number, closingPaneKeys: string[]) => {
-      const visits = { count: 0 }
-      // Counts every terminal record a lookup reads: a scan of all terminals per row reads each one.
-      class CountedMap<V> extends Map<string, V> {
-        override get(key: string): V | undefined {
-          visits.count += 1
-          return super.get(key)
-        }
-      }
-      const leafId = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
-      const indices = Array.from({ length: count }, (_, i) => i)
-      // No leaf is bound: every row and closing pane resolves through the terminals' recorded panes.
-      const leaves = new CountedMap<RuntimeLeafRecord>()
-      const ptys = new CountedMap<RuntimePtyWorktreeRecord>(
-        indices.map((i) => [
-          `pty-${i}`,
-          owner.recordPtyWorktree(`pty-${i}`, 'workspace', { connected: true })
-        ])
-      )
-      const capturePaneOf = () => (record: { ptyId: string }) => {
-        const i = Number(record.ptyId.slice(4))
-        return { tabId: `tab-${i}`, paneKey: `tab-${i}:${leafId(i)}`, recordedAtGraphSequence: 0 }
-      }
-      const source = {
-        leaves,
-        ptys,
-        leafKey: (tab: string, id: string) => `${tab}::${id}`,
-        capturePaneOf
-      }
-      let lookups = 0
-      // The runtime's resolver: one identity read context for the whole check.
-      const ptyResolver = () => {
-        const context = new TerminalIdentityReadContext({
-          ...source,
-          handles: new Map(),
-          reverse: new Map(),
-          sshTerminals: new Map()
-        })
-        return (paneKey: string) => {
-          lookups += 1
-          return ptyRecordForPaneKey(paneKey, source, context)?.ptyId ?? null
-        }
-      }
-      // Rows under keys no terminal is bound to now, which only a scan of the terminals resolves.
-      const rows = indices.map((i) => ({ ...row, paneKey: `legacy-${i}` }))
-      await assertCliConversationWritersExited(
-        {
-          rows: () => rows,
-          observation: () => ({
-            current: () => true,
-            presence: async () => 'exited',
-            topology: 'pane-owned'
-          }),
-          ptyResolver
-        },
-        'claude',
-        'conversation',
-        closingPaneKeys
-      )
-      return { lookups, visits: visits.count }
-    }
+  it('resolves panes only to leave some out, through one look at the terminals', async () => {
+    const leafId = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
     for (const count of [20, 200]) {
-      expect(await run(count, [])).toEqual({ lookups: 0, visits: 0 })
-      const closing = await run(count, [`tab-0:${'00000000-0000-4000-8000-000000000000'}`])
-      expect(closing.lookups).toBe(count + 1)
-      expect(closing.visits).toBeLessThanOrEqual(4 * count)
+      const { runtime, owner } = identityFixture({
+        readHookCliWriterObservation: () => ({
+          current: () => true,
+          topology: 'pane-owned',
+          presence: async () => 'exited'
+        })
+      })
+      for (let i = 0; i < count; i += 1) {
+        owner.recordPtyWorktree(`pty-${i}`, 'workspace', {
+          paneKey: `tab-${i}:${leafId(i)}`,
+          connected: true
+        })
+      }
+      // Rows under keys no terminal is bound to now, which only a look at the terminals resolves.
+      vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue(
+        Array.from({ length: count }, (_, i) => ({ ...row, paneKey: `legacy-${i}` }))
+      )
+      const contexts = vi.spyOn(runtime, 'createTerminalIdentityReadContext')
+      // A lookup with no shared look walks every terminal and leaf by key, per pane.
+      const scans = [vi.spyOn(owner.ptysById, 'keys'), vi.spyOn(owner.leaves, 'keys')]
+      const scanned = () => scans.reduce((sum, scan) => sum + scan.mock.calls.length, 0)
+
+      await runtime.assertStructuredAdoptionTerminalWritersExited('claude', 'conversation')
+      expect({ contexts: contexts.mock.calls.length, scans: scanned() }).toEqual({
+        contexts: 0,
+        scans: 0
+      })
+      await runtime.assertStructuredAdoptionTerminalWritersExited('claude', 'conversation', [
+        `tab-0:${leafId(0)}`
+      ])
+      expect({ contexts: contexts.mock.calls.length, scans: scanned() }).toEqual({
+        contexts: 1,
+        scans: 0
+      })
     }
   })
 })
