@@ -1,9 +1,13 @@
 import { z } from 'zod'
-import {
-  type AgentSessionLease,
-  type AgentSessionRecord,
-  agentSessionScopeKey
+import type {
+  AgentSessionLease,
+  AgentSessionRecord
 } from './agent-session/lifecycle/agent-session-record'
+import { agentSessionScopeKey } from './agent-session/lifecycle/agent-session-record'
+import {
+  isLegacyAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from './agent-session/lifecycle/agent-session-account-home'
 
 const path = z
   .string()
@@ -25,6 +29,7 @@ export const claudeAccountRecipeSchema = z.discriminatedUnion('route', [
   z.object({ route: z.literal('system'), home: path, configDir: path.nullable() }).strict()
 ])
 export type ClaudeAccountRecipe = z.infer<typeof claudeAccountRecipeSchema>
+const codexAccountRecipeSchema = z.object({ route: z.literal('codex'), home: path }).strict()
 const acquiredAccountSchema = z
   .object({
     version: z.literal(1),
@@ -36,21 +41,39 @@ const acquiredAccountSchema = z
     observedThroughFence: z.number().int().positive(),
     generation: z.string().min(1).max(512),
     spawnToken: z.string().min(1).max(512),
-    recipe: claudeAccountRecipeSchema
+    recipe: z.union([claudeAccountRecipeSchema, codexAccountRecipeSchema])
   })
   .strict()
-export type AgentSessionAcquiredAccount = z.infer<typeof acquiredAccountSchema>
+type AcquiredAccount = z.infer<typeof acquiredAccountSchema>
+export type AgentSessionAcquiredAccount = Omit<AcquiredAccount, 'recipe'> & {
+  recipe: ClaudeAccountRecipe
+}
 
 /** This optional host observation never changes founding identity or saved choices. */
 export function acquiredAgentSessionAccount(
   record: AgentSessionRecord,
   hostId?: string
 ): AgentSessionAcquiredAccount | null {
+  const receipt = readAcquiredAccount(record, hostId)
+  return receipt && receipt.recipe.route !== 'codex' ? { ...receipt, recipe: receipt.recipe } : null
+}
+
+export function acquiredCodexSessionAccount(
+  record: AgentSessionRecord
+): (Omit<AcquiredAccount, 'recipe'> & { recipe: z.infer<typeof codexAccountRecipeSchema> }) | null {
+  const receipt = readAcquiredAccount(record)
+  return receipt?.recipe.route === 'codex' ? { ...receipt, recipe: receipt.recipe } : null
+}
+
+function readAcquiredAccount(record: AgentSessionRecord, hostId?: string): AcquiredAccount | null {
   const parsed = acquiredAccountSchema.safeParse(record.acquiredAccount)
-  if (!parsed.success || record.provider !== 'claude') {
+  if (!parsed.success || (record.provider !== 'claude' && record.provider !== 'codex')) {
     return null
   }
   const receipt = parsed.data
+  if ((record.provider === 'codex') !== (receipt.recipe.route === 'codex')) {
+    return null
+  }
   const lease = record.lease
   if (
     (hostId !== undefined && receipt.hostId !== hostId) ||
@@ -70,11 +93,22 @@ export function acquiredAgentSessionAccount(
 /** Co-written with successful owner proof; a non-reporting older producer invalidates its predecessor. */
 export function withAcquiredAgentSessionAccount(
   record: AgentSessionRecord,
-  acquisition: { generation: string; recipe: ClaudeAccountRecipe } | undefined
+  acquisition:
+    | { generation: string; recipe?: ClaudeAccountRecipe; home?: AgentSessionAccountHome }
+    | undefined
 ): AgentSessionRecord {
   const { acquiredAccount: _previous, ...without } = record
   const process = record.lease.ownerProcess
-  if (!acquisition || !process || record.provider !== 'claude') {
+  const recipe =
+    record.provider === 'claude'
+      ? acquisition?.recipe
+      : record.provider === 'codex' &&
+          acquisition?.home &&
+          isLegacyAgentSessionAccountHome(acquisition.home) &&
+          acquisition.home.variable === 'CODEX_HOME'
+        ? { route: 'codex', home: acquisition.home.path }
+        : null
+  if (!acquisition || !process || !recipe) {
     return without
   }
   const acquiredAccount = acquiredAccountSchema.safeParse({
@@ -87,7 +121,7 @@ export function withAcquiredAgentSessionAccount(
     observedThroughFence: record.lease.runtimeFence,
     generation: acquisition.generation,
     spawnToken: process.spawnToken,
-    recipe: acquisition.recipe
+    recipe
   })
   return acquiredAccount.success ? { ...without, acquiredAccount: acquiredAccount.data } : without
 }
@@ -97,6 +131,6 @@ export function acquiredAccountAcrossLease(
   record: AgentSessionRecord,
   lease: AgentSessionLease
 ): unknown {
-  const receipt = acquiredAgentSessionAccount(record)
+  const receipt = readAcquiredAccount(record)
   return receipt ? { ...receipt, observedThroughFence: lease.runtimeFence } : record.acquiredAccount
 }

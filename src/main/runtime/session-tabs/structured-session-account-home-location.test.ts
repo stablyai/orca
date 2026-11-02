@@ -1,3 +1,5 @@
+import { applyStructuredCodexWorkspaceTrust } from '../../agent-workspace-trust-spawn'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,6 +16,9 @@ import { agentDrivesSession } from '../../native-chat/agent-session-wire/structu
 import { claudeAndCodexAgents } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { AgentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 
+vi.mock('../../agent-workspace-trust-spawn', () => ({
+  applyStructuredCodexWorkspaceTrust: vi.fn(async () => {})
+}))
 vi.mock('./structured-session-cli-writer-host', () => ({
   OrcaRuntimeWithStructuredSessionCliWriterHost: class {}
 }))
@@ -26,6 +31,66 @@ afterEach(() => {
   installClaudeProfileRouter(undefined)
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
 })
+
+it.each([
+  { kind: 'git-worktree', id: 'worktree-1', directory: '/current-workspace' },
+  { kind: 'folder', id: 'folder-1', directory: '/current-workspace' },
+  { kind: 'folder', id: FLOATING_TERMINAL_WORKTREE_ID, directory: '/initial-workspace' }
+] as const)(
+  'resolves a selected Codex account and trust for $kind/$id without read side effects',
+  async ({ kind, id, directory }) => {
+    let selected = '/accounts/a/home'
+    const readHome = vi.fn(async () => selected)
+    const prepareHome = vi.fn(async () => selected)
+    const prepareAccount = vi.fn(async () => {})
+    const resolveWorkspace = vi.fn(async () => ({ worktree: { path: '/current-workspace' } }))
+    vi.mocked(applyStructuredCodexWorkspaceTrust).mockClear()
+    const runtime: OrcaRuntimeWithStructuredSessionAccountHome = Object.assign(
+      Object.create(OrcaRuntimeWithStructuredSessionAccountHome.prototype),
+      {
+        accounts: { getClaudeConfigDirectory: () => null, prepareHostAgentLaunch: prepareAccount },
+        requireStore: () => ({ getSettings: () => ({ agentWorkspaceTrustEnabled: false }) }),
+        structuredAgentLaunchEnv: () => ({}),
+        resolveCodexStructuredLaunchHomeFn: readHome,
+        prepareCodexStructuredLaunchFn: prepareHome,
+        resolveRuntimeFileTarget: resolveWorkspace
+      }
+    )
+    const record = {
+      ...agentSessionRecordFixture(),
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: selected },
+      launchDirectory: '/initial-workspace',
+      location: { ...agentSessionRecordFixture().location, workspaceId: id, workspaceKind: kind }
+    }
+    expect(await runtime.resolveStructuredAgentLaunchAccountHome(record, 'identity')).toEqual(
+      record.accountHome
+    )
+    selected = '/accounts/b/home'
+    expect(await runtime.resolveStructuredAgentLaunchAccountHome(record, 'identity')).toEqual({
+      variable: 'CODEX_HOME',
+      path: selected
+    })
+    expect(prepareHome).not.toHaveBeenCalled()
+    expect(prepareAccount).not.toHaveBeenCalled()
+    expect(resolveWorkspace).not.toHaveBeenCalled()
+    expect(applyStructuredCodexWorkspaceTrust).not.toHaveBeenCalled()
+    expect(await runtime.resolveStructuredAgentLaunchAccountHome(record, 'launch')).toEqual({
+      variable: 'CODEX_HOME',
+      path: selected
+    })
+    expect(prepareAccount).toHaveBeenCalledWith('codex')
+    expect(prepareHome).toHaveBeenCalledOnce()
+    expect(applyStructuredCodexWorkspaceTrust).toHaveBeenCalledWith(
+      expect.objectContaining({ workspacePath: directory, codexHome: selected })
+    )
+    if (id === FLOATING_TERMINAL_WORKTREE_ID) {
+      expect(resolveWorkspace).not.toHaveBeenCalled()
+    } else {
+      expect(resolveWorkspace).toHaveBeenCalledWith(`id:${id}`)
+    }
+  }
+)
 
 it('with a router names the selected account before its folder exists, through the real runtime resolver', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-account-identity-'))
