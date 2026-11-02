@@ -32,7 +32,8 @@ vi.mock('@/store', () => ({
 
 vi.mock('./agent-draft-readiness', () => ({
   waitForAgentDraftInputReady: testState.waitForReady,
-  agentInputIsAdmitted: async () => true
+  agentInputIsAdmitted: async () => true,
+  forgetLegacyTail: () => {}
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
@@ -87,7 +88,10 @@ describe('pty-bound agent draft readiness budget', () => {
       'pty-1',
       60_000,
       'codex-composer-prompt',
-      'codex'
+      'codex',
+      undefined,
+      '',
+      'startup'
     )
     expect(testState.sendInput).toHaveBeenCalledExactlyOnceWith(
       'pty-1',
@@ -113,7 +117,10 @@ describe('pty-bound agent draft readiness budget', () => {
       'pty-1',
       60_000,
       'render-cursor-after-bracketed-paste',
-      'opencode'
+      'opencode',
+      undefined,
+      '',
+      'startup'
     )
     expect(testState.sendInput).toHaveBeenCalledTimes(1)
     expect(onUnconfirmedDelivery).not.toHaveBeenCalled()
@@ -137,7 +144,10 @@ describe('pty-bound agent draft readiness budget', () => {
         'pty-1',
         60_000,
         'opencode-agent-row',
-        agent
+        agent,
+        undefined,
+        '',
+        'startup'
       )
     }
   )
@@ -159,7 +169,15 @@ describe('pty-bound agent draft readiness budget', () => {
     await vi.advanceTimersByTimeAsync(12_000)
 
     await expect(promise).resolves.toBe(true)
-    expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 60_000, signal, agent)
+    expect(testState.waitForReady).toHaveBeenCalledWith(
+      'pty-1',
+      60_000,
+      signal,
+      agent,
+      undefined,
+      '',
+      'startup'
+    )
   })
 
   it('does not fall through to paste after a refused readiness wait', async () => {
@@ -234,7 +252,10 @@ describe('pty-bound agent draft readiness budget', () => {
       'pty-1',
       8000,
       'render-quiet-after-bracketed-paste',
-      'gemini'
+      'gemini',
+      undefined,
+      '',
+      'startup'
     )
     expect(onTimeout).toHaveBeenCalledTimes(1)
     expect(testState.sendInput).not.toHaveBeenCalled()

@@ -116,6 +116,11 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
       const hosted = ptyConnectionTestMocks.sendGeneratedTerminalInput
       capturedDataCallback.current?.('\x1b[?2004hWaiting for Codex...')
       await vi.advanceTimersByTimeAsync(waitMs)
+      // The spawned pane's tab now names its PTY, as the store records after spawn.
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-codex' }] }
+      }
       refused.resolve('not-sent')
       await flushAsyncTicks()
 

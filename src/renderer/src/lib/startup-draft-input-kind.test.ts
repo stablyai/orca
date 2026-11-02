@@ -32,7 +32,8 @@ vi.mock('@/store', () => ({
 
 vi.mock('./agent-draft-readiness', () => ({
   waitForAgentDraftInputReady: async () => readiness.ready,
-  agentInputIsAdmitted: async () => true
+  agentInputIsAdmitted: async () => true,
+  forgetLegacyTail: () => {}
 }))
 
 const DRAFT = 'plan the migration'

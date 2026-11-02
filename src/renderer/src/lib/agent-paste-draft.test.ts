@@ -587,17 +587,16 @@ describe('pasteDraftWhenAgentReady', () => {
     )
   })
 
-  it('submits to an already running agent after a live compatibility quiet window', async () => {
+  // A running agent takes the paste at once, as before; only blocking evidence on screen refuses.
+  it('submits to an already running agent without waiting for readiness signals', async () => {
     const promise = sendBracketedPasteToRunningAgent({
       ptyId: 'pty-1',
       content: ISSUE_URL
     })
 
     await flushMicrotasks()
-    expect(testState.subscribeToPtyData).toHaveBeenCalledOnce()
+    expect(testState.subscribeToPtyData).not.toHaveBeenCalled()
     expect(testState.subscribeToRuntimeTerminalData).not.toHaveBeenCalled()
-    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1500)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
 
@@ -620,7 +619,6 @@ describe('pasteDraftWhenAgentReady', () => {
     )
 
     const submit = sendBracketedPasteToRunningAgent({ ptyId: 'pty-1', content: ISSUE_URL })
-    await vi.advanceTimersByTimeAsync(1500)
     await flushMicrotasks()
     // Competing chunked paste on the same PTY: it must not open a frame the Enter can land in.
     const competing = sendAgentDraftPasteContent(
@@ -678,7 +676,8 @@ describe('pasteDraftWhenAgentReady', () => {
       content
     })
 
-    await vi.advanceTimersByTimeAsync(1500)
+    // Chunk preflight yields to timers between writes; Enter is still 50 ms away.
+    await vi.advanceTimersByTimeAsync(0)
     await flushMicrotasks(30)
 
     const calls = testState.sendRuntimePtyInputVerified.mock.calls
@@ -706,7 +705,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: 'line one\r\nline two\nline three'
     })
 
-    await vi.advanceTimersByTimeAsync(1500)
+    await flushMicrotasks()
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
       'pty-1',
       '\x1b[200~line one\rline two\rline three\x1b[201~'
@@ -725,7 +724,7 @@ describe('pasteDraftWhenAgentReady', () => {
     )
 
     const result = sendBracketedPasteToRunningAgent({ ptyId: 'pty-1', content })
-    await vi.advanceTimersByTimeAsync(1500)
+    await flushMicrotasks()
     await expect(result).resolves.toBe(false)
 
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(3)

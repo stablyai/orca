@@ -37,12 +37,15 @@ export async function deliverGeneratedTerminalInput(
   const expired = new Promise<GeneratedInputOutcome>((resolve) => {
     const settleIfUnwritten = (): void => {
       // Once text is written the real outcome decides; it is bounded by the same deadline.
-      if (!progress.pasted) {
+      if (!progress.pasted && !progress.submitted) {
         resolve('not-sent')
       }
     }
     timer = setTimeout(settleIfUnwritten, Math.max(0, deadline - Date.now()))
-    delivery.signal?.addEventListener('abort', settleIfUnwritten, { once: true })
+    // An abort raised inside the write itself is read after the writer records that write.
+    delivery.signal?.addEventListener('abort', () => queueMicrotask(settleIfUnwritten), {
+      once: true
+    })
   })
   try {
     return await Promise.race([deliver(runtime, handle, delivery, deadline, progress), expired])

@@ -15,6 +15,7 @@ import {
 const testState = vi.hoisted(() => ({
   appState: null as unknown as NoteSendAppState,
   callRuntimeRpc: vi.fn(),
+  sendGenerated: vi.fn(),
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
     readonly code: string
     readonly response: unknown
@@ -38,6 +39,11 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: testState.callRuntimeRpc }))
+// These cases drive the guarded paste and Enter an older host gets; a capable host's own
+// transaction is covered where its outcome is mapped.
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInputToHandle: testState.sendGenerated
+}))
 vi.mock('@/runtime/runtime-rpc-result', () => ({
   RuntimeRpcCallError: testState.RuntimeRpcCallError
 }))
@@ -46,6 +52,8 @@ describe('active agent note send', () => {
   beforeEach(() => {
     testState.appState = createNoteSendAppState()
     testState.callRuntimeRpc.mockReset()
+    testState.sendGenerated.mockReset()
+    testState.sendGenerated.mockResolvedValue(null)
   })
 
   it('sends notes immediately to an explicit note target using bracketed paste and Enter', async () => {
