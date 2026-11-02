@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
+import { cn } from '@/lib/utils'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { monacoTypographyOptions } from '@/lib/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
@@ -30,6 +31,7 @@ import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchange
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
+import { isWholeFileAddition, WHOLE_FILE_ADDITION_DIFF_CLASS } from './diff-whole-file-addition'
 import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
@@ -371,7 +373,11 @@ export default function DiffViewer({
           <DiffEditor
             height="100%"
             // Why: the overview ruler column is unpainted; it shows this surface, not the app's.
-            className="code-editor-backdrop"
+            className={cn(
+              'code-editor-backdrop',
+              isWholeFileAddition(originalContent, modifiedContent) &&
+                WHOLE_FILE_ADDITION_DIFF_CLASS
+            )}
             language={language}
             original={originalContent}
             modified={modifiedContent}

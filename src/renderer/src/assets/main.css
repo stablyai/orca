@@ -2545,6 +2545,16 @@ html.native-shell .app-layout {
   background-color: transparent;
 }
 
+/* Why: Monaco defines its colours on each .monaco-editor, so only a scoped rule can clear the tint on wholly new files (the removed tint marks only the empty original line). */
+.orca-diff-whole-file-addition :is(.monaco-editor, .monaco-diff-editor) {
+  --vscode-diffEditor-insertedLineBackground: transparent;
+  --vscode-diffEditor-insertedTextBackground: transparent;
+  --vscode-diffEditorGutter-insertedLineBackground: transparent;
+  --vscode-diffEditor-removedLineBackground: transparent;
+  --vscode-diffEditor-removedTextBackground: transparent;
+  --vscode-diffEditorGutter-removedLineBackground: transparent;
+}
+
 /* Why: bracket-pair colouring is a global Monaco model option; notebook cells neutralise it locally to match their preview. */
 .ipynb-code-surface .monaco-editor [class*='bracket-highlighting-'] {
   color: inherit;
