@@ -309,10 +309,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
           agentSelection.agentOverridden
             ? agentSelection.selectedAgent.label
             : !projectDefault
-              ? 'Resolving default agent…'
+              ? t('components.newWorktreeModal.resolvingDefaultAgent', 'Resolving default agent…')
               : projectDefault.error
-                ? 'Default agent unavailable'
-                : `${agentSelection.selectedAgent.label} · ${projectDefault.source === 'project' ? 'Project default' : projectDefault.source === 'global' ? 'Global default' : 'Automatic'}`
+                ? t(
+                    'components.newWorktreeModal.defaultAgentUnavailable',
+                    'Default agent unavailable'
+                  )
+                : `${agentSelection.selectedAgent.label} · ${projectDefault.source === 'project' ? t('components.newWorktreeModal.projectDefaultSource', 'Project default') : projectDefault.source === 'global' ? t('components.newWorktreeModal.globalDefaultSource', 'Global default') : t('components.newWorktreeModal.automaticDefaultSource', 'Automatic')}`
         }
         agentError={agentSelection.agentOverridden ? null : (projectDefault?.error ?? null)}
         showAdvanced={showOptions}
