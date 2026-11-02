@@ -87,7 +87,8 @@ export function createClaudeTurnOpener(deps: {
     deps.open(
       {
         sessionId: source.sessionId,
-        turnId: owed?.sentUuid ?? source.uuid,
+        // The frame's own id: the owed input's later echo can then never collide with this row.
+        turnId: source.uuid,
         startedAt: observedAt,
         ...(owed?.requestedAt === undefined ? {} : { requestedAt: owed.requestedAt }),
         userItemId: owed

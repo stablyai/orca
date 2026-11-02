@@ -11,18 +11,23 @@ export type ClaudeOfferedInput = {
   requestedAt?: number
 }
 
-type ClaudeRunInput = ClaudeOfferedInput & {
-  /** Its own receipt, echo, result correlation, or the run's first execution proved Claude ran it here. */
-  participated: boolean
+type ClaudeRunInput = {
+  readonly offered: ClaudeOfferedInput
   receipt?: 'queued' | 'started' | 'ended'
   /** The uuid Claude gave its echo; results may name the input by it. */
   echoUuid?: string
 }
 
-/** Orca inputs behind the open run, and those a finished run never consumed, owed to a later cycle. */
+/** Orca inputs behind the open run, and those a finished run never consumed, owed to a later cycle.
+ * Each input is reachable by every identity Claude names it with, so attribution never scans the run. */
 export class ClaudeInputRuns {
-  private members: ClaudeRunInput[] = []
-  private successors: ClaudeRunInput[] = []
+  private readonly byUuid = new Map<string, ClaudeRunInput>()
+  private readonly bySubmission = new Map<string, ClaudeRunInput>()
+  private members = new Set<ClaudeRunInput>()
+  private owed = new Set<ClaudeRunInput>()
+  /** Members not yet proven to have run here (by their own receipt, echo, named result, or the run's
+   * first execution); only these move at a cycle boundary or run end. */
+  private readonly provisional = new Set<ClaudeRunInput>()
   private joinable = false
   /** A provider cycle began and has not reached its result or idle. */
   private cycleOpen = false
@@ -34,38 +39,45 @@ export class ClaudeInputRuns {
   private worked = false
 
   get tracked(): boolean {
-    return this.members.length > 0
+    return this.members.size > 0
   }
 
   get anchor(): ClaudeOfferedInput | null {
-    return this.members[0] ?? null
+    return first(this.members)?.offered ?? null
   }
 
   /** Root work outside a run belongs to an owed input Claude has not reported as merely queued. */
   get successor(): ClaudeOfferedInput | null {
-    return (
-      this.successors.find((input) => input.receipt === 'started') ??
-      this.successors.find((input) => input.receipt !== 'queued') ??
-      null
-    )
+    let unreported: ClaudeRunInput | undefined
+    for (const input of this.owed) {
+      if (input.receipt === 'started') {
+        return input.offered
+      }
+      unreported ??= input.receipt === 'queued' ? undefined : input
+    }
+    return unreported?.offered ?? null
   }
 
   /** Claude runs owed inputs in order, so the oldest anchors the next run. */
   get oldestOwed(): ClaudeOfferedInput | null {
-    return this.successors[0] ?? null
+    return first(this.owed)?.offered ?? null
   }
 
   owns(clientMessageId: string): boolean {
-    return this.members.some((input) => input.clientMessageId === clientMessageId)
+    const input = this.bySubmission.get(clientMessageId)
+    return input !== undefined && this.members.has(input)
   }
 
   /** True when the offer needs a new run; a live run gains it as a provisional member, a command owes it. */
-  offer(input: ClaudeOfferedInput, runOpen: boolean): boolean {
-    const offered = { ...input, participated: false }
+  offer(offered: ClaudeOfferedInput, runOpen: boolean): boolean {
+    const input: ClaudeRunInput = { offered }
+    this.byUuid.set(offered.sentUuid, input)
+    this.bySubmission.set(offered.clientMessageId, input)
     if (runOpen && this.joinable) {
-      this.members.push(offered)
+      this.members.add(input)
+      this.provisional.add(input)
     } else {
-      this.successors.push(offered)
+      this.owed.add(input)
     }
     return !runOpen
   }
@@ -77,25 +89,31 @@ export class ClaudeInputRuns {
     this.awaiting = offered
     this.predecessorOpen = offered && this.cycleOpen
     if (!joinable) {
-      this.members = []
       return
     }
-    const anchor = this.successors.find((input) => input.clientMessageId === anchorClientMessageId)
-    this.members = anchor
-      ? [anchor, ...this.successors.filter((i) => i !== anchor)]
-      : this.successors
-    this.successors = []
+    const owedAnchor = anchorClientMessageId && this.bySubmission.get(anchorClientMessageId)
+    const anchor = owedAnchor && this.owed.has(owedAnchor) ? owedAnchor : undefined
+    this.members = new Set(anchor ? [anchor, ...this.owed] : this.owed)
+    this.owed = new Set()
+    for (const input of this.members) {
+      this.provisional.add(input)
+    }
     if (anchor && (!offered || anchor.receipt === 'started')) {
       this.participate(anchor)
     }
   }
 
-  /** Inputs the ended run never ran stay owed; delivery waiters keep their own recovery. */
+  /** Inputs the ended run consumed or Claude ended leave for good; only unconsumed offers stay owed. */
   end(): void {
-    this.successors.push(
-      ...this.members.filter((input) => !input.participated && input.receipt !== 'ended')
-    )
-    this.members = []
+    for (const input of this.members) {
+      if (this.provisional.has(input) && input.receipt !== 'ended') {
+        this.owed.add(input)
+      } else {
+        this.retire(input)
+      }
+    }
+    this.members.clear()
+    this.provisional.clear()
     this.joinable = false
     this.awaiting = false
     this.predecessorOpen = false
@@ -104,23 +122,27 @@ export class ClaudeInputRuns {
   /** The child is gone and can run nothing it was given. */
   reset(): void {
     this.end()
-    this.successors = []
+    this.owed.clear()
+    this.byUuid.clear()
+    this.bySubmission.clear()
     this.cycleOpen = false
   }
 
   /** Removes only the input Claude proved it never ran. */
   withdraw(clientMessageId: string): 'kept' | 'reanchor' | 'retract' {
-    const matches = (input: ClaudeRunInput) => input.clientMessageId === clientMessageId
-    this.successors = this.successors.filter((input) => !matches(input))
-    const index = this.members.findIndex(matches)
-    if (index === -1) {
+    const input = this.bySubmission.get(clientMessageId)
+    if (!input || !this.members.has(input)) {
+      if (input) {
+        this.retire(input)
+      }
       return 'kept'
     }
-    this.members.splice(index, 1)
-    if (this.members.length === 0) {
+    const anchored = first(this.members) === input
+    this.retire(input)
+    if (this.members.size === 0) {
       return this.worked ? 'kept' : 'retract'
     }
-    return index === 0 ? 'reanchor' : 'kept'
+    return anchored ? 'reanchor' : 'kept'
   }
 
   /** Attribute a root frame to this run's inputs and cycle before any of its effects apply. */
@@ -135,8 +157,11 @@ export class ClaudeInputRuns {
     } else if (type === 'system' && message.subtype === 'init') {
       // A new cycle after this run already answered is the missing-result boundary.
       if (responded) {
-        this.successors.push(...this.members.filter((input) => !input.participated))
-        this.members = this.members.filter((input) => input.participated)
+        for (const input of this.provisional) {
+          this.members.delete(input)
+          this.owed.add(input)
+        }
+        this.provisional.clear()
       }
       this.predecessorOpen = false
       this.startCycle()
@@ -145,16 +170,15 @@ export class ClaudeInputRuns {
         this.startCycle()
       }
     } else if (type === 'user') {
-      const input = this.members.find(
-        (member) =>
-          member.clientMessageId === clientMessageId ||
-          member.sentUuid === claudeText(message.uuid) ||
-          member.sentUuid === claudeText(message.user_message_uuid)
-      )
-      if (input) {
-        const echo = claudeText(message.uuid)
+      const input =
+        (clientMessageId === undefined ? undefined : this.bySubmission.get(clientMessageId)) ??
+        this.named(message.uuid) ??
+        this.named(message.user_message_uuid)
+      const echo = claudeText(message.uuid)
+      if (input && this.members.has(input)) {
         if (echo) {
           input.echoUuid = echo
+          this.byUuid.set(echo, input)
         }
         this.participate(input)
       }
@@ -168,18 +192,25 @@ export class ClaudeInputRuns {
     }
   }
 
-  /** Correlated results end the run they name; an unnamed one only an executing run. */
+  /** A named result is each named input's own endpoint wherever it is; it ends this run only if it names a member.
+   * An unnamed result ends only an executing run. */
   resultEndsRun(message: Record<string, unknown>): boolean {
-    const names = new Set(claudeResultUserMessageUuids(message))
-    const named = claudeText(message.user_message_uuid)
-    if (named) {
-      names.add(named)
+    const names = claudeResultUserMessageUuids(message)
+    const singular = claudeText(message.user_message_uuid)
+    if (singular) {
+      names.push(singular)
     }
-    const hits = this.members.filter(
-      (input) => names.has(input.sentUuid) || (input.echoUuid && names.has(input.echoUuid))
-    )
-    hits.forEach((input) => this.participate(input))
-    const ends = !this.tracked || (names.size > 0 ? hits.length > 0 : !this.awaiting)
+    let namesMember = false
+    for (const name of names) {
+      const input = this.byUuid.get(name)
+      if (input && this.members.has(input)) {
+        namesMember = true
+        this.participate(input)
+      } else if (input) {
+        this.retire(input)
+      }
+    }
+    const ends = !this.tracked || (names.length > 0 ? namesMember : !this.awaiting)
     this.cycleOpen = false
     this.predecessorOpen = false
     return ends
@@ -193,8 +224,13 @@ export class ClaudeInputRuns {
     return ends
   }
 
+  private named(uuid: unknown): ClaudeRunInput | undefined {
+    const name = claudeText(uuid)
+    return name === null ? undefined : this.byUuid.get(name)
+  }
+
   private observeReceipt(commandUuid: string | null, state: string | null): void {
-    const input = [...this.members, ...this.successors].find((i) => i.sentUuid === commandUuid)
+    const input = commandUuid === null ? undefined : this.byUuid.get(commandUuid)
     if (!input) {
       return
     }
@@ -202,19 +238,33 @@ export class ClaudeInputRuns {
       input.receipt = 'started'
       // Claude runs one command at a time, so its start also ends any earlier cycle.
       this.predecessorOpen = false
-      if (this.members.includes(input)) {
+      if (this.members.has(input)) {
         this.participate(input)
       }
     } else if (state === 'queued') {
       input.receipt = input.receipt === 'started' ? 'started' : 'queued'
     } else if (state !== null) {
       input.receipt = 'ended'
-      this.successors = this.successors.filter((owed) => owed !== input)
+      if (!this.members.has(input)) {
+        this.retire(input)
+      }
     }
   }
 
+  /** The one way an input stops being owed: every identity and collection drops it together. */
+  private retire(input: ClaudeRunInput): void {
+    this.byUuid.delete(input.offered.sentUuid)
+    if (input.echoUuid) {
+      this.byUuid.delete(input.echoUuid)
+    }
+    this.bySubmission.delete(input.offered.clientMessageId)
+    this.members.delete(input)
+    this.owed.delete(input)
+    this.provisional.delete(input)
+  }
+
   private participate(input: ClaudeRunInput): void {
-    input.participated = true
+    this.provisional.delete(input)
     this.awaiting = false
     this.predecessorOpen = false
     this.cycleOpen = true
@@ -225,10 +275,14 @@ export class ClaudeInputRuns {
     this.cycleOpen = true
     if (this.awaiting && !this.predecessorOpen) {
       this.awaiting = false
-      const anchor = this.members[0]
+      const anchor = first(this.members)
       if (anchor) {
-        anchor.participated = true
+        this.provisional.delete(anchor)
       }
     }
   }
+}
+
+function first<T>(items: ReadonlySet<T>): T | undefined {
+  return items.values().next().value
 }

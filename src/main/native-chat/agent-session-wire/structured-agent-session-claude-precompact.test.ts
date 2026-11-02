@@ -323,3 +323,43 @@ it.each([
     expect(completions[1]).not.toBe(prior)
   }
 )
+
+it.each([
+  ['plural', (uuid: unknown) => ({ user_message_uuids: [uuid] })],
+  ['singular', (uuid: unknown) => ({ user_message_uuid: uuid })]
+])(
+  'retires a follow-up its own %s result names, so it cannot anchor the next send',
+  async (_label, names) => {
+    const connection = fixture.claude.connections[0]!
+    await openTurn(connection, 'Say the word A.')
+    const uuidA = connection.sent.at(-1)!.uuid
+    const followUp = await sendUnechoed(connection)
+    const uuidB = connection.sent.at(-1)!.uuid
+    frame(connection, {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      uuid: 'result-a',
+      user_message_uuids: [uuidA]
+    })
+    // B's own result arrives with no echo, init or output of B.
+    frame(connection, {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      uuid: 'result-b',
+      ...names(uuidB)
+    })
+    expect(await dispatch(followUp)).toMatchObject({ state: 'accepted' })
+
+    const next = await send('Say the word C.')
+    await eventually(() => expect(connection.sent).toHaveLength(3))
+    const written = connection.sent.at(-1)!
+    frame(connection, { ...written, parent_tool_use_id: null })
+    const running = (await turns()).filter((turn) => turn.state === 'running')
+    expect(running).toEqual([
+      expect.objectContaining({ turnId: written.uuid, userItemId: agentJournalSubmissionKey(next) })
+    ])
+    expect(connection.sent).toHaveLength(3)
+  }
+)

@@ -15,11 +15,14 @@ import {
 } from './claude-turn-lifecycle-item'
 import { writeAgentJournalTurnRow } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { ClaudeCommandTurn } from './claude-command-turn'
-import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
+import {
+  createClaudeTurnOpener,
+  isRootClaudeFrame,
+  type ClaudeTurnSource
+} from './claude-turn-opening'
 import { refineClaudeQuotaTurnEnd } from './claude-terminal-failure'
 import type { ClaudeUsageLimitEvidence } from './claude-usage-limits'
 import { ClaudeInputRuns, type ClaudeOfferedInput } from './claude-input-runs'
-import { isRootClaudeFrame } from './claude-turn-opening'
 
 export type ClaudeOpenTurnDeps = {
   sink: StructuredAgentSessionEventSink
@@ -130,6 +133,10 @@ export class ClaudeOpenTurn {
 
   /** Orca's handoff owns the run it starts; a live run gains the input as a member. */
   offerInput(input: ClaudeOfferedInput, observedAt: number): void {
+    // A host command's own input belongs to its command row.
+    if (this.current?.command?.sentUuid === input.sentUuid) {
+      return
+    }
     if (!this.runs.offer(input, this.current !== null)) {
       return
     }
