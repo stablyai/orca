@@ -1,11 +1,10 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import type { AddressInfo } from 'node:net'
-import { setTimeout as delay } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
 
@@ -13,6 +12,8 @@ const executablePath = process.env.ORCA_BROWSER_EXECUTABLE
 
 // Allow slow first-run macOS binary verification beyond the default test timeout.
 const COLD_BROWSER_START_TIMEOUT_MS = 120_000
+
+const EvalReply = z.object({ result: z.unknown() })
 
 const CHAT_FIXTURE = `<!doctype html><title>Chat</title><textarea id="box"></textarea>
 <button id="send" onclick="sent.push([location.pathname, box.value])">Send</button>
@@ -38,10 +39,14 @@ async function expectUrlGuardsTheChatFixture(
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   try {
-    const { port } = server.address() as AddressInfo
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Fixture server has no port')
+    }
+    const { port } = address
     const url = (path: string): string => `http://127.0.0.1:${port}${path}`
     const inPage = async (expression: string): Promise<unknown> =>
-      ((await commands.browserEval({ page, expression })) as { result: unknown }).result
+      EvalReply.parse(await commands.browserEval({ page, expression })).result
     const mismatch = (expectedPath: string, actualPath: string, mayHaveStarted = false) => ({
       code: 'browser_expected_url_mismatch',
       data: {
@@ -95,13 +100,16 @@ async function expectUrlGuardsTheChatFixture(
     await commands.browserWait({ page, load: 'load' })
     // Delayed past this eval's own reply, which an open dialog would block.
     await inPage(`setTimeout(() => { window.answer = confirm('Send?') }, 300); 1`)
-    await delay(600)
     await expect(
       commands.browserDialogAccept({ page, expectUrl: url('/chat/a') })
     ).rejects.toMatchObject(mismatch('/chat/a', '/slow/x'))
-    await expect(
-      commands.browserDialogAccept({ page, expectUrl: url('/slow/x') })
-    ).resolves.toMatchObject({ browserPageId: page, checkedUrl: url('/slow/x') })
+    await vi.waitFor(
+      () =>
+        expect(
+          commands.browserDialogAccept({ page, expectUrl: url('/slow/x') })
+        ).resolves.toMatchObject({ browserPageId: page, checkedUrl: url('/slow/x') }),
+      { timeout: 5_000 }
+    )
     await expect(inPage('window.answer')).resolves.toBe(true)
   } finally {
     server.close()

@@ -7,12 +7,12 @@ import { RuntimeEdgeCommandController } from './runtime-edge-command-controller'
 afterEach(() => setRuntimeBrowserCommandsFactory(null))
 
 it('lets a browser command read the URL its RPC params expect, for that call only', async () => {
-  // SAFETY: the test calls one method, and the proxy answers every name the controller binds.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test calls one method, and the proxy answers every name the controller binds.
   const commands = new Proxy({} as RuntimeBrowserCommands, {
     get: () => async () => getRequestedPageUrl()
   })
   setRuntimeBrowserCommandsFactory(() => commands)
-  // SAFETY: these hosts are only used by commands the test never calls.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these hosts are only used by commands the test never calls.
   const hosts = {
     browserHost: {},
     jiraHost: {},

@@ -37,6 +37,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
 })
 vi.mock('../cdp-ws-proxy', () => ({ CdpWsProxy: CdpWsProxyMock }))
 
+import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { runWithRequestedPageUrl } from '../browser-expected-page-url'
 import { AgentBrowserBridge } from './agent-browser-bridge'
@@ -56,6 +57,8 @@ overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdM
 const A = 'https://chat.example/chat/a'
 const B = 'https://chat.example/chat/b'
 const PAGE = 'tab-1'
+
+const keyOf = (params: unknown): unknown => (isRecord(params) ? params.key : undefined)
 
 const expecting = <T>(url: string, run: () => T): T =>
   runWithRequestedPageUrl({ expectUrl: url }, run)
@@ -252,7 +255,7 @@ describe('commands that expect a page URL', () => {
 
   it('rechecks between typed runs, so keys after a navigating Enter never land', async () => {
     guest.debugger.sendCommand.mockImplementation(async (method, params) => {
-      if (method === 'Input.dispatchKeyEvent' && (params as { key?: string }).key === 'Enter') {
+      if (method === 'Input.dispatchKeyEvent' && keyOf(params) === 'Enter') {
         url = B
       }
       return {}
@@ -264,7 +267,7 @@ describe('commands that expect a page URL', () => {
 
     const keys = guest.debugger.sendCommand.mock.calls
       .filter(([method]) => method === 'Input.dispatchKeyEvent')
-      .map(([, params]) => (params as { key?: string }).key)
+      .map(([, params]) => keyOf(params))
     expect(keys).toContain('Enter')
     expect(keys).not.toContain('t')
   })
@@ -307,11 +310,11 @@ describe('commands that expect a page URL', () => {
     bridge = makeBridge({
       beginAgentCommand: () => ({
         agent: true,
-        run: (execute: () => Promise<unknown>) => execute(),
+        run: <T>(execute: () => Promise<T>) => execute(),
         end: () => {}
       }),
       observePageEvents: () => () => {}
-    } as unknown as Partial<BrowserManager>)
+    })
     answer = (command, cb) => {
       if (command[0] === 'click') {
         url = B
@@ -322,7 +325,7 @@ describe('commands that expect a page URL', () => {
     const result = await expecting(A, () => bridge.click('@e3'))
 
     expect(result).toMatchObject({ browserPageId: PAGE, checkedUrl: A, effects: { url: B } })
-  }, 15_000)
+  })
 
   it('does not tell an SSH host the URL of a page that moved somewhere it may not drive', async () => {
     const SECRET = 'file:///Users/me/secret.pdf'
@@ -342,7 +345,7 @@ describe('commands that expect a page URL', () => {
 
     expect(failure).toMatchObject({ code: 'desktop_browser_bridge_unrouted' })
     expect(JSON.stringify(failure)).not.toContain('secret')
-    expect((failure as Error).message).not.toContain('secret')
+    expect(String(failure)).not.toContain('secret')
   })
 
   it('checks a dialog answer before it reaches the page', async () => {

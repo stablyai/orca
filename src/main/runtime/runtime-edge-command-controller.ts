@@ -133,8 +133,10 @@ function bindBrowserMethods<T extends object>(
   instance: T,
   names: readonly (keyof T)[]
 ): Partial<PublicMethods<T>> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fromEntries loses the key type of the names it was built from.
   return Object.fromEntries(
     names.map((name) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every name in BROWSER_COMMAND_NAMES is checked against RuntimeBrowserCommands, whose members are all methods.
       const method = (instance[name] as (...args: unknown[]) => unknown).bind(instance)
       return [name, (...args: unknown[]) => runWithRequestedPageUrl(args[0], () => method(...args))]
     })
@@ -162,6 +164,7 @@ export class RuntimeEdgeCommandController {
       getCommands: () => args.getBrowserCommands?.() ?? this.browser
     })
     this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bound name lists are checked against the classes above; spreading loses their key types.
     this.surface = {
       ...bindPrefixedMethods(this.jira, 'jira'),
       ...bindBrowserMethods(this.browser, BROWSER_COMMAND_NAMES),

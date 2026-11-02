@@ -117,7 +117,7 @@ describe('--expect-url', () => {
 
       const call = callMock.mock.calls.find(([called]) => called === method)
       expect(call?.[1]).toMatchObject({ page: 'page-1', expectUrl: EXPECT_URL })
-      expect(RPC_PARAMS_BY_METHOD[method].parse(call?.[1])).toMatchObject({
+      expect(RPC_PARAMS_BY_METHOD[method]?.parse(call?.[1])).toMatchObject({
         expectUrl: EXPECT_URL
       })
     }
