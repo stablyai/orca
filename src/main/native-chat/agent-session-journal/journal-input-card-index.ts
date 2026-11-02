@@ -81,6 +81,10 @@ export class JournalInputCardIndex {
   hasOverlay(id: string): boolean {
     return this.overlays.has(id)
   }
+  /** Whether a failed turn holds waiting input, as of the last ensure. */
+  failureHolds(): boolean {
+    return this.failed
+  }
   command(): QueuedMessageRow | undefined {
     return this.failed ? undefined : this.currentCoordinates?.allPlaces().command
   }

@@ -10,7 +10,13 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION as SESSION,
+  hostTestMessage,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data'
+import { sendAgentTurn } from '../../runtime/orchestration/send-agent-turn'
+import { structuredSessionPointerCallerKey } from '../../runtime/orchestration/structured-mailbox-pointer-host'
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 let rig: QueuedMessageTestRig
@@ -27,6 +33,25 @@ async function queue(text: string): Promise<string> {
     throw new Error('expected a queued message')
   }
   return result.value.queued.messageId
+}
+
+/** An orchestration message, sent the way the mailbox host sends one. */
+function mail(text: string) {
+  const id = hostTestOperationId()
+  const outcome = sendAgentTurn({
+    kind: 'structured-session',
+    host: rig.host,
+    sessionId: SESSION,
+    callerKey: structuredSessionPointerCallerKey(SESSION),
+    turn: {
+      body: { ...hostTestMessage(text), from: { kind: 'agent', senders: [], orchestration: null } },
+      delivery: 'queue',
+      operationId: id,
+      expectedRuntimeFence: 1,
+      beforeRun: () => {}
+    }
+  })
+  return { id, outcome }
 }
 
 async function start(): Promise<string> {
@@ -266,5 +291,51 @@ describe('queued follow-ups after an accepted turn fails', () => {
     expect(failed()).toBe(false)
     await openRigTurnFor(rig, handoff, 'completed', 'success')
     await dispatched(second)
+  })
+
+  it('holds orchestration mail that arrives during the hold until Resume', async () => {
+    const working = await start()
+    const first = await queue('first')
+    await openRigTurnFor(rig, working, 'completed', 'failure')
+    await held(first)
+    const message = mail('worker finished')
+    expect(await message.outcome).toMatchObject({ kind: 'queued' })
+    await held(first, message.id)
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    const handoff = await dispatched(first)
+    expect(await rig.handoff(message.id)).toBeUndefined()
+    await openRigTurnFor(rig, handoff)
+    await rig.settleAccepted(handoff, 'first')
+    await openRigTurnFor(rig, handoff, 'completed', 'success')
+    await dispatched(message.id)
+  })
+
+  it("lets held mail's Send deliver it, and a person's fresh send still recovers", async () => {
+    const working = await start()
+    await openRigTurnFor(rig, working, 'completed', 'failure')
+    const message = mail('worker finished')
+    expect(await message.outcome).toMatchObject({ kind: 'queued' })
+    await held(message.id)
+    expect(await rig.sendNow(message.id)).toMatchObject({ ok: true })
+    const handoff = await dispatched(message.id)
+    await openRigTurnFor(rig, handoff)
+    await rig.settleAccepted(handoff, 'mail')
+    await openRigTurnFor(rig, handoff, 'completed', 'failure')
+    const later = mail('another worker finished')
+    expect(await later.outcome).toMatchObject({ kind: 'queued' })
+    await held(later.id)
+
+    const retrySend = rig.send('retry', 'queue-if-active')
+    expect(await retrySend.result).toMatchObject({
+      ok: true,
+      value: { submission: expect.anything() }
+    })
+    await eventually(async () =>
+      expect((await rig.submission(retrySend.id))?.handedOverAt).toBeDefined()
+    )
+    await openRigTurnFor(rig, retrySend.id)
+    await rig.settleAccepted(retrySend.id, 'retry')
+    await openRigTurnFor(rig, retrySend.id, 'completed', 'success')
+    await dispatched(later.id)
   })
 })

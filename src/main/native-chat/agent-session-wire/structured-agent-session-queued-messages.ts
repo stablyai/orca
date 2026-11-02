@@ -92,7 +92,7 @@ export function nextStructuredQueuedMessage(
 
 /** Queue behind work/actionable backlog; held or returned cards cannot trap a fresh send that lifts their pause. */
 export function shouldQueueStructuredAgentSessionSend(
-  input: StructuredQueueGateInput & { journal: AgentSessionJournal }
+  input: StructuredQueueGateInput & { journal: AgentSessionJournal; fromAgent?: boolean }
 ): boolean {
   const hold = structuredQueueHold(input)
   if (hold === 'blocked') {
@@ -101,6 +101,15 @@ export function shouldQueueStructuredAgentSessionSend(
   }
   if (hold !== null) {
     return true
+  }
+  if (input.fromAgent) {
+    // Only the person's own send recovers a failed turn; another agent's message waits held with the rest.
+    const state = input.journal.queuedMessages.inputState()
+    const cards = journalInputOrder(state).cards
+    cards.ensure(state)
+    if (cards.failureHolds()) {
+      return true
+    }
   }
   return oldestActionableQueuedMessage(input.journal, false) !== null
 }
@@ -157,7 +166,8 @@ export async function maybeQueueStructuredAgentSessionSend(
     !shouldQueueStructuredAgentSessionSend({
       journal: ctx.journal,
       record: context.deps.store.getRecord(ctx.sessionId),
-      work: contextStructuredAgentSessionCurrentWork(ctx)
+      work: contextStructuredAgentSessionCurrentWork(ctx),
+      fromAgent: !params.userSend && !params.personsMessage && params.body.from !== undefined
     })
   ) {
     return null
