@@ -1,8 +1,11 @@
-import { readAgentMenuLaunchFacts, readAgentMenuTerminalPending } from './agent-menu-launch-facts'
+import {
+  createAgentMenuTerminalPendingSelector,
+  readAgentMenuLaunchFacts
+} from './agent-menu-launch-facts'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
-import { useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
@@ -90,7 +93,16 @@ export function useAgentMenuObservation(
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
       : (target?.workspace ?? { kind: 'floating' as const })
   const facts = useAppStore(useShallow((state) => readAgentMenuLaunchFacts(state, workspace)))
-  const terminalPending = useAppStore((state) => readAgentMenuTerminalPending(state, workspace))
+  const prospective = typeof target === 'string' ? undefined : target?.workspace
+  const repoId = prospective?.repoId
+  const repoHostId = prospective?.executionHostId
+  // Kept per target, so unrelated store writes never re-resolve which host it launches on.
+  const terminalPendingSelector = useMemo(
+    () =>
+      createAgentMenuTerminalPendingSelector({ worktreeId, repoId, executionHostId: repoHostId }),
+    [worktreeId, repoId, repoHostId]
+  )
+  const terminalPending = useAppStore(terminalPendingSelector)
   const state = useAppStore.getState()
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(

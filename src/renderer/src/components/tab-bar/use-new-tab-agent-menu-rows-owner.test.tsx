@@ -6,6 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
@@ -15,8 +16,12 @@ import {
 } from '@/store/slices/worktrees-slice-test-fixtures'
 import { makeProjectGroup } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
+import type { Project } from '../../../../shared/project-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '@/store/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { SshConnectionState } from '../../../../shared/ssh-types'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
@@ -28,6 +33,7 @@ afterEach(() => {
   cleanup()
   useAppStore.setState(initial, true)
   setLocalRuntimeCapabilitiesForTests(null)
+  resetRendererAppPlatformCacheForTests()
 })
 it('settles ownerless continuation and plus inventory without borrowing agents, then recovers on hydration', async () => {
   const group = makeProjectGroup()
@@ -133,7 +139,7 @@ const sshState = {
   error: null,
   reconnectAttempt: 0
 }
-const repo = { ...TEST_REPO, id: 'r1', connectionId: 'box', executionHostId: 'ssh:box' }
+const repo: Repo = { ...TEST_REPO, id: 'r1', connectionId: 'box', executionHostId: 'ssh:box' }
 
 /** An SSH workspace whose host has not reported its OS, with Codex's CLI already detected. */
 function seedSshWorkspace(): void {
@@ -148,7 +154,7 @@ function seedSshWorkspace(): void {
     },
     remoteDetectedAgentIds: { box: ['codex'] },
     sshConnectionStates: new Map([['box', sshState]]),
-    ensureRemoteDetectedAgents: vi.fn(async () => ['codex'])
+    ensureRemoteDetectedAgents: vi.fn<AppState['ensureRemoteDetectedAgents']>(async () => ['codex'])
   })
 }
 
@@ -272,5 +278,237 @@ it.each([1, 10])(
     for (const hook of hooks) {
       hook.unmount()
     }
+  }
+)
+
+/** Copies whose `id` reads are counted: every index build and owner scan reads it. */
+function countIdReads<T extends { id: string }>(rows: T[], onRead: () => void): T[] {
+  return rows.map((row) => {
+    const { id } = row
+    return Object.defineProperty({ ...row }, 'id', {
+      enumerable: true,
+      get: () => {
+        onRead()
+        return id
+      }
+    })
+  })
+}
+
+/** Closed pickers, each counting its own renders once mount effects settle. */
+async function mountPickers(targets: { worktreeId: string; detection: AgentDetectionTarget }[]) {
+  const renders = targets.map(() => 0)
+  const hooks = targets.map(({ worktreeId: id, detection }, index) =>
+    renderHook(() => {
+      renders[index] += 1
+      return useAgentMenuObservation(id, false, detection)
+    })
+  )
+  await act(async () => {})
+  return {
+    renders,
+    pending: () =>
+      hooks.map(({ result: { current } }) =>
+        current.model.state === 'settled' ? current.model.terminalPending : 'loading'
+      ),
+    unmount: () => hooks.forEach((hook) => hook.unmount())
+  }
+}
+
+const connecting = (targetId: string) => ({ ...sshState, targetId })
+const linux = (targetId: string) => ({
+  ...connecting(targetId),
+  status: 'connected' as const,
+  remotePlatform: 'linux' as const
+})
+const direct = (box: SshConnectionState, other: SshConnectionState) =>
+  new Map([
+    ['box', box],
+    ['other', other]
+  ])
+// A paired server's own connection to `box`, as it publishes it.
+const viaServer = (box: SshConnectionState) =>
+  new Map([
+    [
+      'srv',
+      {
+        connectionStates: new Map([['box', box]]),
+        targetLabels: new Map(),
+        targetGenerations: new Map(),
+        removedTargetLabels: new Map(),
+        targetsHydrated: true
+      }
+    ]
+  ])
+
+it.each([1, 10])(
+  "isolates each SSH host's pickers, direct and nested, and indexes a republication once (x%i)",
+  async (scale) => {
+    setLocalRuntimeCapabilitiesForTests([])
+    let visits = 0
+    const countVisit = () => {
+      visits += 1
+    }
+    const groups = [
+      { repoId: 'rb', hostId: 'ssh:box', detection: { kind: 'ssh', connectionId: 'box' } },
+      { repoId: 'ro', hostId: 'ssh:other', detection: { kind: 'ssh', connectionId: 'other' } },
+      { repoId: 'rn', hostId: 'ssh:box', detection: { kind: 'runtime', environmentId: 'srv' } }
+    ] satisfies { repoId: string; hostId: `ssh:${string}`; detection: AgentDetectionTarget }[]
+    const filler: Repo = { ...TEST_REPO, connectionId: 'third', executionHostId: 'ssh:third' }
+    const repos = countIdReads(
+      [
+        ...groups.map(({ repoId, hostId }) => ({
+          ...TEST_REPO,
+          id: repoId,
+          executionHostId: hostId,
+          connectionId: hostId.slice('ssh:'.length)
+        })),
+        ...Array.from({ length: 20 * scale }, (_, index) => ({ ...filler, id: `f${index}` }))
+      ],
+      countVisit
+    )
+    const ids = groups.map(({ repoId }) =>
+      Array.from({ length: scale }, (_, index) => `${repoId}::/${repoId}/${index}`)
+    )
+    useAppStore.setState({
+      ...initial,
+      settings: { ...getDefaultSettings('/home/me'), agentDefaultSurface: 'terminal' },
+      repos,
+      worktreesByRepo: Object.fromEntries(
+        groups.map(({ repoId, hostId }, group) => [
+          repoId,
+          ids[group].map((id) =>
+            makeWorktree({
+              id,
+              repoId,
+              hostId,
+              ...(repoId === 'rn' ? { runtimeOwnerEnvironmentId: 'srv' } : {})
+            })
+          )
+        ])
+      ),
+      remoteDetectedAgentIds: { box: ['codex'], other: ['codex'] },
+      runtimeDetectedAgentIds: { srv: ['codex'] },
+      sshConnectionStates: direct(connecting('box'), connecting('other')),
+      sshStateByEnvironment: viaServer(connecting('box'))
+    })
+    const visitsFor = async (update: () => void) => {
+      visits = 0
+      await act(async () => update())
+      return visits
+    }
+    const republish = (id: string) => () =>
+      useAppStore.setState((state) => ({
+        repos: [...state.repos, ...countIdReads([{ ...filler, id }], countVisit)]
+      }))
+    // Store subscribers outside the picker read repos on these writes; measure them unmounted.
+    const storeOnly = {
+      republish: await visitsFor(republish('late0')),
+      connection: await visitsFor(() =>
+        useAppStore.setState({
+          sshConnectionStates: direct(connecting('box'), connecting('other'))
+        })
+      )
+    }
+    const pickers = await mountPickers(
+      groups.flatMap(({ detection }, group) =>
+        ids[group].map((id) => ({ worktreeId: id, detection }))
+      )
+    )
+    const perGroup = <T,>(values: T[]) =>
+      groups.map((_, group) => [...new Set(values.slice(group * scale, (group + 1) * scale))])
+    expect(perGroup(pickers.pending())).toEqual([[true], [true], [true]])
+    const transitions: [() => void, number, boolean[]][] = [
+      [() => useAppStore.setState({ rightSidebarWidth: 412 }), 0, [true, true, true]],
+      [
+        () =>
+          useAppStore.setState({ sshConnectionStates: direct(linux('box'), connecting('other')) }),
+        storeOnly.connection,
+        [false, true, true]
+      ],
+      [
+        () => useAppStore.setState({ sshConnectionStates: direct(linux('box'), linux('other')) }),
+        storeOnly.connection,
+        [false, false, true]
+      ],
+      [
+        () => useAppStore.setState({ sshStateByEnvironment: viaServer(linux('box')) }),
+        storeOnly.connection,
+        [false, false, false]
+      ]
+    ]
+    let seen = [...pickers.renders]
+    let previous = [true, true, true]
+    for (const [update, storeVisits, pending] of transitions) {
+      // Connection facts are read live: no picker re-resolves an owner for them.
+      expect(await visitsFor(update)).toBe(storeVisits)
+      expect(perGroup(pickers.pending())).toEqual(pending.map((value) => [value]))
+      // Only the pickers whose host changed render.
+      expect(perGroup(pickers.renders.map((count, index) => count > seen[index]))).toEqual(
+        pending.map((value, group) => [value !== previous[group]])
+      )
+      seen = [...pickers.renders]
+      previous = pending
+    }
+    // Another host's project arriving builds the shared id index once, not once per picker.
+    const pickerVisits = (await visitsFor(republish('late1'))) - storeOnly.republish
+    // Each shared index is built once per published array (about four today), whatever the picker count.
+    expect(pickerVisits).toBeLessThanOrEqual(5 * repos.length)
+    expect(pickers.renders).toEqual(seen)
+    pickers.unmount()
+  }
+)
+
+it.each([1, 10])(
+  'Windows local pickers read no projects on unrelated writes (x%i)',
+  async (scale) => {
+    Object.assign(window, { api: { platform: { get: () => ({ platform: 'win32' }) } } })
+    resetRendererAppPlatformCacheForTests()
+    setLocalRuntimeCapabilitiesForTests([])
+    let visits = 0
+    const repoIds = Array.from({ length: 2 * scale }, (_, index) => `l${index}`)
+    const projects: Project[] = countIdReads(
+      Array.from({ length: 20 * scale }, (_, index) => ({
+        id: `p${index}`,
+        displayName: '',
+        badgeColor: '',
+        sourceRepoIds: [],
+        createdAt: 0,
+        updatedAt: 0
+      })),
+      () => {
+        visits += 1
+      }
+    )
+    useAppStore.setState({
+      ...initial,
+      settings: { ...getDefaultSettings('C:\\Users\\me'), agentDefaultSurface: 'terminal' },
+      repos: repoIds.map((id) => ({ ...TEST_REPO, id, path: `C:\\${id}` })),
+      worktreesByRepo: Object.fromEntries(
+        repoIds.map((id) => [
+          id,
+          [makeWorktree({ id: `${id}::C:\\${id}`, repoId: id, hostId: 'local', path: `C:\\${id}` })]
+        ])
+      ),
+      projects,
+      detectedAgentIds: ['codex']
+    })
+    const pickers = await mountPickers(
+      repoIds.map((id) => ({ worktreeId: `${id}::C:\\${id}`, detection: { kind: 'local' } }))
+    )
+    // Rendering resolves each workspace's Windows runtime from its project.
+    expect(visits).toBeGreaterThan(0)
+    const settled = [...pickers.renders]
+    visits = 0
+    for (const update of [
+      () => useAppStore.setState({ rightSidebarWidth: 412 }),
+      () => useAppStore.setState({ sshConnectionStates: new Map([['box', sshState]]) })
+    ]) {
+      await act(async () => update())
+    }
+    expect(visits).toBe(0)
+    expect(pickers.renders).toEqual(settled)
+    expect(pickers.pending()).toEqual(repoIds.map(() => false))
+    pickers.unmount()
   }
 )

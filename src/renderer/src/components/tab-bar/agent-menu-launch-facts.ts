@@ -1,12 +1,15 @@
 import type { AppState } from '@/store/types'
 import type { AgentSessionLaunchRequest } from '@/lib/agent-session-launch-plan'
-import { buildAgentLaunchRouteInput } from '@/lib/agent-launch-route-input'
+import { resolveAgentLaunchHost } from '@/lib/agent-launch-route-input'
 import {
-  resolveRepoExecutionHostPlatform,
-  resolveWorktreeExecutionHostPlatform
+  executionHostTerminalPending,
+  resolveRepoExecutionHostTarget,
+  resolveWorktreeExecutionHostTarget,
+  type ExecutionHostTarget
 } from '@/lib/execution-host-facts'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
-import type { Repo } from '../../../../shared/repo-types'
+import { getIndexedReposById } from '@/store/worktree-repo-index'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -20,7 +23,8 @@ export function readAgentMenuLaunchFacts(
   state: AppState,
   workspace: AgentSessionLaunchRequest['workspace']
 ) {
-  const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
+  // Only the host and its capabilities are read, so skip building the full route input.
+  const input = resolveAgentLaunchHost(state, workspace)
   const host = parseExecutionHostId(input.executionHostId)
   const status =
     host?.kind === 'runtime'
@@ -40,24 +44,27 @@ export function readAgentMenuLaunchFacts(
   }
 }
 
-// Why: this selector reruns on every store write, so a target's repo resolves once per repos list.
-const prospectiveRepoCache = new WeakMap<AppState['repos'], Map<string, Repo | null>>()
+type TerminalTargetWorkspace = Pick<
+  AgentSessionLaunchRequest['workspace'],
+  'worktreeId' | 'repoId' | 'executionHostId'
+>
 
-function prospectiveRepo(
-  repos: AppState['repos'],
-  repoId: string,
-  hostId: string | undefined
-): Repo | null {
-  let byTarget = prospectiveRepoCache.get(repos)
-  if (!byTarget) {
-    byTarget = new Map()
-    prospectiveRepoCache.set(repos, byTarget)
+/** The terminal host a menu's launch would use, from ownership slices alone; null when none owns it. */
+function resolveAgentMenuTerminalTarget(
+  state: AppState,
+  { worktreeId, repoId, executionHostId }: TerminalTargetWorkspace
+): ExecutionHostTarget | null {
+  if (worktreeId) {
+    return resolveWorktreeExecutionHostTarget(state, worktreeId)
   }
-  const key = JSON.stringify([repoId, hostId])
-  if (!byTarget.has(key)) {
-    byTarget.set(key, findRepoForHost(repos, repoId, { hostId }))
-  }
-  return byTarget.get(key) ?? null
+  // A workspace not created yet launches on its repo's host. Its id's indexed rows keep the
+  // host, twin and ambiguity rules a whole-catalog search applies.
+  const repo = repoId
+    ? findRepoForHost(getIndexedReposById(state.repos, repoId), repoId, {
+        hostId: executionHostId
+      })
+    : null
+  return repo ? resolveRepoExecutionHostTarget(repo) : null
 }
 
 /**
@@ -66,17 +73,45 @@ function prospectiveRepo(
  */
 export function readAgentMenuTerminalPending(
   state: AppState,
-  workspace: AgentSessionLaunchRequest['workspace']
+  workspace: TerminalTargetWorkspace
 ): boolean {
-  const { worktreeId, repoId } = workspace
-  // A workspace not created yet launches on its repo's host, so read that host's facts.
-  const repo =
-    !worktreeId && repoId ? prospectiveRepo(state.repos, repoId, workspace.executionHostId) : null
-  // The workspace path only refines a known OS (WSL), so readiness does not need it.
-  const platform = worktreeId
-    ? resolveWorktreeExecutionHostPlatform(state, worktreeId, undefined)
-    : repo
-      ? resolveRepoExecutionHostPlatform(state, repo, () => undefined)
-      : undefined
-  return platform?.kind === 'withheld' && platform.pending === true
+  const target = resolveAgentMenuTerminalTarget(state, workspace)
+  return target ? executionHostTerminalPending(state, target) : false
+}
+
+// Every input the owner resolvers read; the build fails if WorktreeRuntimeOwnerState gains one
+// this does not compare. Connection and contact facts are not here: they are read live.
+const OWNERSHIP_INPUTS = Object.values({
+  repos: (state) => state.repos,
+  worktreesByRepo: (state) => state.worktreesByRepo,
+  detectedWorktreesByRepo: (state) => state.detectedWorktreesByRepo,
+  folderWorkspaces: (state) => state.folderWorkspaces,
+  projectGroups: (state) => state.projectGroups,
+  restoredRuntimeHostIdByWorkspaceSessionKey: (state) =>
+    state.restoredRuntimeHostIdByWorkspaceSessionKey,
+  activeWorktreeId: (state) => state.activeWorktreeId,
+  activeWorkspaceExecutionHostId: (state) => state.activeWorkspaceExecutionHostId,
+  runtimeEnvironments: (state) => state.runtimeEnvironments,
+  runtimeEnvironmentCatalogHydrated: (state) => state.runtimeEnvironmentCatalogHydrated,
+  removedRuntimeEnvironmentIds: (state) => state.removedRuntimeEnvironmentIds,
+  settings: (state) => state.settings?.activeRuntimeEnvironmentId
+} satisfies Record<keyof WorktreeRuntimeOwnerState, (state: AppState) => unknown>)
+
+/**
+ * One mounted menu's readiness. The target host is resolved again only when an ownership slice
+ * changes; every other store write reads just that host's connection and contact facts.
+ */
+export function createAgentMenuTerminalPendingSelector(
+  workspace: TerminalTargetWorkspace
+): (state: AppState) => boolean {
+  let inputs: readonly unknown[] | null = null
+  let target: ExecutionHostTarget | null = null
+  return (state) => {
+    const next = OWNERSHIP_INPUTS.map((read) => read(state))
+    if (!inputs || next.some((value, i) => value !== inputs?.[i])) {
+      inputs = next
+      target = resolveAgentMenuTerminalTarget(state, workspace)
+    }
+    return target ? executionHostTerminalPending(state, target) : false
+  }
 }
