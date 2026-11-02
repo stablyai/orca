@@ -197,7 +197,8 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     })
     await act(async () => button('Back').click())
     expect(mocks.back).toHaveBeenCalledOnce()
-    content = Buffer.from('\ufeffcomplete\r\n🙂')
+    const literal = '    indented\tfield    value'
+    content = Buffer.from(`\ufeffcomplete\r\n${literal}\n🙂`)
     await act(async () =>
       root.render(
         createElement(MobileChatAttachmentPreview, { key: 'small', params: route.params })
@@ -206,6 +207,13 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     await vi.waitFor(async () => {
       await flush()
       expect(button('Copy').getAttribute('aria-disabled')).not.toBe('true')
+      const row = Array.from(
+        container.querySelectorAll('[data-testid="attachment-text-segment"]')
+      ).find((node) => node.textContent === literal)
+      if (!(row instanceof HTMLElement)) {
+        throw new Error('Missing literal indented text row')
+      }
+      expect(getComputedStyle(row).whiteSpace).toBe('pre')
     })
     await act(async () => button('Copy').click())
     expect(mocks.write).toHaveBeenCalledWith(content.toString('utf8'))

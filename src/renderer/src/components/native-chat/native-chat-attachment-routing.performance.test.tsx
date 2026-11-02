@@ -115,11 +115,8 @@ it('bounds routing work at 100 mounted scopes with quiet updates and exact incom
   )
   await act(async () => {})
   const bound = () => {
-    // STA-12852 repo and STA-13152 nested-filter work remain separate, external main bugs.
-    expect(reads.rawOperations).toBe(
-      reads.operations + reads.repoFilterExcluded + reads.nestedFilterExcluded
-    )
-    expect(reads.repoFilterExcluded).toBe(incomingFilterWork.repoVisits)
+    // STA-13152 nested work is excluded here; separate STA-12852 repo work is not measured.
+    expect(reads.rawOperations).toBe(reads.operations + reads.nestedFilterExcluded)
     expect(reads.nestedFilterExcluded).toBe(incomingFilterWork.nestedVisits)
     expect(reads.operations).toBeLessThanOrEqual(20 * n)
     return reads.snapshot()

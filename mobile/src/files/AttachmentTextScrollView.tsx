@@ -176,6 +176,7 @@ export function AttachmentTextScrollView({
                 style={[
                   styles.textPreview,
                   {
+                    ...(Platform.OS === 'web' ? { whiteSpace: 'pre' as const } : {}),
                     position: 'absolute',
                     top: row.top,
                     height: position.rowHeight,

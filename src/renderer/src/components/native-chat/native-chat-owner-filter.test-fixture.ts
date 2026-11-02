@@ -1,77 +1,14 @@
 import { expect, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import { worktreeFixture, detectedListingFixture } from './native-chat-workspace-test-fixtures'
-import * as appStore from '@/store'
-import * as githubRepoHooks from './native-chat-github-repo'
 import * as owners from '@/lib/resolve-owner'
 import * as ownerIndex from '@/lib/worktree-runtime-owner-index'
 import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-export const incomingFilterWork = { repoVisits: 0, nestedVisits: 0, nestedFilters: 0 }
-export const isIncomingRepoFilterRead = () => incomingSelectorDepth > 0 && repoFilterDepth > 0
+export { useAppStore } from '@/store'
 
-// STA-12852/STA-13152 own only incoming filter callbacks; preceding owner/directory/index work counts.
-let incomingHookDepth = 0,
-  incomingSelectorDepth = 0,
-  repoFilterDepth = 0
-const realGithubRepoHook = githubRepoHooks.useNativeChatGitHubRepo
-vi.spyOn(githubRepoHooks, 'useNativeChatGitHubRepo').mockImplementation((...args) => {
-  incomingHookDepth++
-  try {
-    return realGithubRepoHook(...args)
-  } finally {
-    incomingHookDepth--
-  }
-})
-const realStore = appStore.useAppStore
-const storeSpy = vi.spyOn(appStore, 'useAppStore').mockImplementation((selector) => {
-  if (!incomingHookDepth || !selector) {
-    return selector ? realStore(selector) : realStore()
-  }
-  return realStore((state) => {
-    incomingSelectorDepth++
-    try {
-      return selector(state)
-    } finally {
-      incomingSelectorDepth--
-    }
-  })
-})
-Object.assign(storeSpy, realStore)
-export const useAppStore = appStore.useAppStore
-
+export const incomingFilterWork = { nestedVisits: 0, nestedFilters: 0 }
 const filterDescriptors = new Map<object, PropertyDescriptor | undefined>()
-export function instrumentRepoFilter<T extends object>(rows: readonly T[]): readonly T[] {
-  if (filterDescriptors.has(rows)) {
-    return rows
-  }
-  filterDescriptors.set(rows, Object.getOwnPropertyDescriptor(rows, 'filter'))
-  Object.defineProperty(rows, 'filter', {
-    configurable: true,
-    value(
-      this: readonly T[],
-      predicate: (row: T, index: number, array: T[]) => unknown,
-      thisArg?: unknown
-    ) {
-      return Array.prototype.filter.call(
-        this,
-        function (this: unknown, row: T, index: number, array: T[]) {
-          if (incomingSelectorDepth > 0 && Object.getOwnPropertyDescriptor(row, 'id')?.get) {
-            incomingFilterWork.repoVisits++
-          }
-          repoFilterDepth++
-          try {
-            return predicate.call(this, row, index, array)
-          } finally {
-            repoFilterDepth--
-          }
-        },
-        thisArg
-      )
-    }
-  })
-  return rows
-}
 
 type OwnerFrame = {
   state: Parameters<typeof owners.resolveOwner>[0]
@@ -166,10 +103,9 @@ export function restoreIncomingFilterArrays() {
 export class IncomingOwnerReadMeter {
   operations = 0
   rawOperations = 0
-  repoFilterExcluded = 0
   nestedFilterExcluded = 0
 
-  row<T extends object, K extends keyof T>(row: T, key: K, category?: 'repo' | 'nested'): T {
+  row<T extends object, K extends keyof T>(row: T, key: K, category?: 'nested'): T {
     const value = row[key]
     if (category === 'nested' && key === 'runtimeOwnerEnvironmentId') {
       meteredDetectedRows.add(row)
@@ -178,9 +114,7 @@ export class IncomingOwnerReadMeter {
       enumerable: true,
       get: () => {
         this.rawOperations++
-        if (category === 'repo' && key === 'id' && isIncomingRepoFilterRead()) {
-          this.repoFilterExcluded++
-        } else if (
+        if (
           category === 'nested' &&
           key === 'runtimeOwnerEnvironmentId' &&
           nestedCandidate === row
@@ -196,21 +130,16 @@ export class IncomingOwnerReadMeter {
   }
 
   reset() {
-    this.operations = this.rawOperations = this.repoFilterExcluded = this.nestedFilterExcluded = 0
-    incomingFilterWork.repoVisits =
-      incomingFilterWork.nestedVisits =
-      incomingFilterWork.nestedFilters =
-        0
+    this.operations = this.rawOperations = this.nestedFilterExcluded = 0
+    incomingFilterWork.nestedVisits = incomingFilterWork.nestedFilters = 0
   }
 
   snapshot() {
     return {
       operations: this.operations,
       rawOperations: this.rawOperations,
-      excludedOperations: this.repoFilterExcluded + this.nestedFilterExcluded,
-      repoFilterExcluded: this.repoFilterExcluded,
+      excludedOperations: this.nestedFilterExcluded,
       nestedFilterExcluded: this.nestedFilterExcluded,
-      incomingRepoFilterVisits: incomingFilterWork.repoVisits,
       incomingNestedFilterVisits: incomingFilterWork.nestedVisits,
       incomingNestedFilters: incomingFilterWork.nestedFilters
     }
@@ -286,7 +215,6 @@ export function assertIncomingOwnerFilterBoundaries(
   expect(reads.rawOperations).toBe(2)
   expect(reads.operations).toBe(2)
   expect(reads.nestedFilterExcluded).toBe(0)
-  expect(reads.repoFilterExcluded).toBe(0)
   expect(incomingFilterWork.nestedVisits).toBe(0)
   boundaries.outsideCallback = reads.snapshot()
   restoreIncomingFilterArrays()
