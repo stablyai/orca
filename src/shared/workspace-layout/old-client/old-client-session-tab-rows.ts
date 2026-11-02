@@ -2,11 +2,7 @@
 
 import type { LayoutTab, WorkspaceLayout } from '../workspace-layout-model'
 import { layoutContainsLeafId } from '../terminal-pane-tree'
-import {
-  AGENT_SESSION_ROW_PREFIX,
-  publishedTabOrderId,
-  TERMINAL_ROW_SEPARATOR
-} from './old-client-session-row-ids'
+import { publishedTabOrderId, TERMINAL_ROW_SEPARATOR } from './old-client-session-row-ids'
 
 export { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
 export { projectSessionTabs } from './old-client-session-tabs-projection'
@@ -15,8 +11,10 @@ export type SessionTabRowTarget = { tab: LayoutTab; leafId?: string }
 
 /** A row id names the tab whose current content publishes it (`publishedTabOrderId`): terminal::pane
  *  a pane, a bare terminal id its tab, a chat row its chat, any other row its tab. A tab id is
- *  never a match key by itself, so a terminal id a switch left behind names nothing. Chats also
- *  answer to their session's row, and a browser to its workspace. */
+ *  never a match key by itself, so a terminal id a switch left behind names nothing, and a chat's
+ *  retired row (its session's row once it reopened under its own) names nothing either. Session
+ *  History's session-addressed activation is its own typed step (`resolveChatTabActivation`). A
+ *  browser also answers to its workspace. */
 export function resolveSessionTabRow(
   workspace: WorkspaceLayout,
   rowId: string
@@ -32,14 +30,9 @@ export function resolveSessionTabRow(
       ? { tab, leafId }
       : null
   }
-  const sessionId = rowId.startsWith(AGENT_SESSION_ROW_PREFIX)
-    ? rowId.slice(AGENT_SESSION_ROW_PREFIX.length)
-    : null
-  const tab = workspace.tabs.find((entry) =>
-    sessionId !== null
-      ? entry.kind === 'agent-session' && entry.entityId === sessionId
-      : publishedTabOrderId(entry) === rowId ||
-        (entry.kind === 'browser' && entry.entityId === rowId)
+  const tab = workspace.tabs.find(
+    (entry) =>
+      publishedTabOrderId(entry) === rowId || (entry.kind === 'browser' && entry.entityId === rowId)
   )
   return tab ? { tab } : null
 }

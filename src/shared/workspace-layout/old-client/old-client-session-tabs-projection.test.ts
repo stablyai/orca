@@ -360,7 +360,7 @@ describe('projectSessionTabs', () => {
     expect(resolveSessionTabRow(ws, `${api!.tabId!}::not-a-pane`)).toBeNull()
   })
 
-  it('publishes a reopened chat under its own tab id and finds it by that id or its session', () => {
+  it('publishes a reopened chat under its own tab id, which alone finds it', () => {
     const { model } = workspace()
     const reopened = build(
       testContext(),
@@ -379,8 +379,10 @@ describe('projectSessionTabs', () => {
       (tab) => tab.type === 'agent-session' && tab.sessionId === 'session-2'
     )
     expect(row?.id).toBe('agent-chat-tab-v1-r')
-    for (const rowId of ['agent-chat-tab-v1-r', 'agent-session:session-2']) {
-      expect(resolveSessionTabRow(reopened, rowId)?.tab.id, rowId).toBe('agent-chat-tab-v1-r')
-    }
+    expect(resolveSessionTabRow(reopened, 'agent-chat-tab-v1-r')?.tab.id).toBe(
+      'agent-chat-tab-v1-r'
+    )
+    // The session's row is the retired lifetime's; a delayed command naming it changes nothing.
+    expect(resolveSessionTabRow(reopened, 'agent-session:session-2')).toBeNull()
   })
 })

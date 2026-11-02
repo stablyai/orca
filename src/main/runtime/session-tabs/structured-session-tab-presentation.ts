@@ -11,7 +11,7 @@ import {
 } from '../agent-session/structured-agent-session-close'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentSessionTabCloseCause } from '../agent-session/structured-agent-session-tab-close-cause'
-import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { publishesSameChatRow } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { savedSessionId } from '../saved-structured-agent-session-restoration'
 import type { QueuedChatTabChange } from '../agent-session-tab-layout-queue'
@@ -79,15 +79,16 @@ export function windowlessStructuredSessionTabSaveEligible(
   session: WorkspaceSessionState | null,
   worktreeId: string
 ): boolean {
+  // A save belongs to the chat's lifetime its record names, else to the one it was saved in.
   const current = getStructuredAgentSessionHost()?.getSessionTabId(sessionId)
-  if (isReopenedChatTabId(tabId)) {
-    return current === tabId
-  }
   if (current) {
-    return !isReopenedChatTabId(current)
+    return publishesSameChatRow(sessionId, current, tabId)
   }
   const saved = session?.unifiedTabs?.[worktreeId]?.find((tab) => savedSessionId(tab) === sessionId)
-  return !saved || !isReopenedChatTabId(saved.id)
+  return (
+    publishesSameChatRow(sessionId, null, tabId) &&
+    publishesSameChatRow(sessionId, saved?.id, tabId)
+  )
 }
 
 /** Renderer acceptance retires only the admitted raw identity; unknown journal state proves no durable hide. */

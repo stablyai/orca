@@ -12,7 +12,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { randomUUID } from 'node:crypto'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { publishesSameChatRow } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 /** Placement in the creating client's host-owned group/tab ids. */
 export type ChatTabPlacement = { groupId?: string; afterTabId?: string; index?: number }
@@ -64,8 +64,8 @@ export function chatTabLayoutCommand(
       : null
   }
   if (tabId) {
-    return (isReopenedChatTabId(change.open.tabId) || isReopenedChatTabId(tabId)) &&
-      tabId !== change.open.tabId
+    // A different lifetime's open supersedes the tab; the same lifetime keeps its tab.
+    return !publishesSameChatRow(sessionId, change.open.tabId, tabId)
       ? { type: 'closeTabs', workspace: worktreeId, tabIds: [tabId], force: true }
       : null
   }

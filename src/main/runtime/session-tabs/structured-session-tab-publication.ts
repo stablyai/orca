@@ -10,7 +10,10 @@ import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/
 import { chatTabId } from '../agent-session/agent-session-tab-layout'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { mobileChatTabId, newReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
-import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import {
+  isReopenedChatTabId,
+  publishesSameChatRow
+} from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import {
   insertTabIdIntoOrder,
   partitionPinnedTabOrder
@@ -109,7 +112,8 @@ export async function admitStructuredSessionTabPublication(
         }))
   }
   const current = host?.getSessionTabId(input.sessionId)
-  if (isReopenedChatTabId(tabId) ? current !== tabId : current && isReopenedChatTabId(current)) {
+  // Another lifetime recorded since (or this lifetime never recorded) supersedes the publication.
+  if (!publishesSameChatRow(input.sessionId, current, tabId)) {
     throw new Error('Chat tab publication was superseded')
   }
   const authority = host
@@ -121,11 +125,10 @@ export async function admitStructuredSessionTabPublication(
       return false
     }
     const winner = authority?.getSessionTabId(input.sessionId)
-    return committed
-      ? winner === tabId
-      : isReopenedChatTabId(tabId)
-        ? winner === tabId
-        : !winner || winner === tabId
+    return (
+      winner === tabId ||
+      (!committed && !winner && publishesSameChatRow(input.sessionId, null, tabId))
+    )
   }
   return { tabId, current: current ?? null, eligible }
 }

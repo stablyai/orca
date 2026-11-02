@@ -473,6 +473,46 @@ describe('a switched tab answers to its current content only', () => {
     ])
   })
 
+  it("moves nothing by a chat's session row once the chat reopened under its own row", () => {
+    const { ctx, model } = setup()
+    const reopened = 'agent-chat-tab-v1-reopened'
+    const opened = build(
+      ctx,
+      [
+        {
+          type: 'openAgentSessionTab',
+          workspace: WS,
+          tabId: reopened,
+          sessionId: 'session-2',
+          agent: 'codex'
+        }
+      ],
+      model
+    ).model.workspaces[WS]!
+    const shown = projectSessionTabs(WS, opened, NO_VIEW, NO_FACTS, false)
+    const move = (tabId: string) =>
+      translateSessionTabMove(
+        WS,
+        opened,
+        shown,
+        MoveTab.parse({
+          worktree: WS,
+          tabId,
+          targetGroupId: opened.groups[0]!.id,
+          kind: 'split',
+          splitDirection: 'right'
+        })
+      )
+    expect(move('agent-session:session-2')).toEqual({ ok: false, code: 'tab_not_found' })
+    expect(translateSessionTabClose(WS, opened, { tabId: 'agent-session:session-2' })).toEqual({
+      ok: true,
+      commands: []
+    })
+    expect(commandsOf(move(reopened))).toEqual([
+      expect.objectContaining({ type: 'splitGroup', tabId: reopened })
+    ])
+  })
+
   it('refuses a new terminal under the id of a tab that now holds a chat', () => {
     const { model, tabA } = switchedToChat()
     expect(

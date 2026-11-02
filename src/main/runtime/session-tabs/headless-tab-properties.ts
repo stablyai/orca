@@ -36,13 +36,13 @@ function paneLayoutEditIsNoOp(
 
 /** Whether a saved window tab's current content publishes this row id (as the window's rows do):
  *  a terminal its terminal id, a chat its chat row, anything else its tab id. A tab a switch left
- *  holding a chat no longer answers to its old terminal's id. */
+ *  holding a chat no longer answers to its old terminal's id, nor a reopened chat to its
+ *  session's retired row. */
 function savedTabPublishes(tab: Tab, rowId: string): boolean {
   return tab.contentType === 'terminal'
     ? tab.entityId === rowId
     : tab.contentType === 'agent-session'
-      ? agentSessionRowId(tab.entityId) === rowId ||
-        agentSessionRowId(tab.entityId, tab.id) === rowId
+      ? agentSessionRowId(tab.entityId, tab.id) === rowId
       : tab.id === rowId || (tab.contentType === 'browser' && tab.entityId === rowId)
 }
 
