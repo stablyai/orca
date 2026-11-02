@@ -34,12 +34,11 @@ vi.mock('../transport/use-workspace-client', () => ({
 
 it('opens the phone attachment card, scrolls the actual RN-web list to its tail and copies eligible complete text', async () => {
   await activateMobileUiLocale('en')
-  const viewportHeight = 600
+  let viewportHeight = 600
+  const children = (node: HTMLElement) =>
+    Array.from(node.children).filter((child): child is HTMLElement => child instanceof HTMLElement)
   const flowChildren = (node: HTMLElement) =>
-    Array.from(node.children).filter(
-      (child): child is HTMLElement =>
-        child instanceof HTMLElement && getComputedStyle(child).position !== 'absolute'
-    )
+    children(node).filter((child) => getComputedStyle(child).position !== 'absolute')
   const height = (node: HTMLElement): number => {
     const style = getComputedStyle(node)
     if (node.style.height.endsWith('px')) {
@@ -78,12 +77,27 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
       : available
   }
   const descriptors = new Map<string, PropertyDescriptor | undefined>()
+  const descendantBottom = (node: HTMLElement): number => {
+    const style = getComputedStyle(node)
+    return [style.overflow, style.overflowY].some((value) =>
+      ['hidden', 'clip', 'auto', 'scroll'].includes(value)
+    )
+      ? height(node)
+      : Math.max(
+          height(node),
+          ...children(node).map((child) => child.offsetTop + descendantBottom(child))
+        )
+  }
   const metrics = {
     offsetHeight: height,
     clientHeight: height,
     offsetWidth: width,
     clientWidth: width,
-    scrollHeight: (node: HTMLElement) => Math.max(height(node), ...flowChildren(node).map(height)),
+    scrollHeight: (node: HTMLElement) =>
+      Math.max(
+        height(node),
+        ...children(node).map((child) => child.offsetTop + descendantBottom(child))
+      ),
     scrollWidth: (node: HTMLElement) =>
       Math.max(width(node), ...flowChildren(node).map((child) => child.scrollWidth)),
     offsetParent: (node: HTMLElement) => node.parentElement,
@@ -113,6 +127,7 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     })
   }
   const positions = new WeakMap<HTMLElement, number>()
+  const nativePositions = new WeakMap<HTMLElement, number>()
   const horizontal = new WeakMap<HTMLElement, number>()
   let deliverScroll = true
   descriptors.set(
@@ -137,9 +152,13 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
   Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
     configurable: true,
     get(this: HTMLElement) {
-      return Math.min(positions.get(this) || 0, Math.max(0, this.scrollHeight - this.clientHeight))
+      return (
+        nativePositions.get(this) ??
+        Math.min(positions.get(this) || 0, Math.max(0, this.scrollHeight - this.clientHeight))
+      )
     },
     set(this: HTMLElement, value: number) {
+      nativePositions.delete(this)
       const top = Math.max(0, Math.min(value, this.scrollHeight - this.clientHeight))
       if (top !== this.scrollTop) {
         positions.set(this, top)
@@ -323,6 +342,39 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     expect(
       container.querySelectorAll('[data-testid="attachment-text-segment"]').length
     ).toBeLessThanOrEqual(Math.ceil(viewportHeight / 19) + 4)
+    // Discover enough real ranges through scrolling to exercise a compressed physical track.
+    for (let block = 1; block < 32; block++) {
+      const current = new AttachmentTextViewport(source, 19, scroller.clientHeight)
+      if (current.scale < 1) {
+        break
+      }
+      await act(async () => {
+        scroller.scrollTop = current.position({ block, row: 1 })
+        scroller.dispatchEvent(new Event('scroll'))
+      })
+      await vi.waitFor(async () => {
+        await flush()
+        expect(source.rowKnown(block)).toBe(true)
+      })
+    }
+    const compressed = new AttachmentTextViewport(source, 19, scroller.clientHeight)
+    expect(compressed.scale).toBeLessThan(1)
+    await act(async () => {
+      scroller.scrollTop = compressed.total - compressed.height - 1
+      scroller.dispatchEvent(new Event('scroll'))
+    })
+    await vi.waitFor(async () => {
+      await flush()
+      const rows = Array.from(
+        container.querySelectorAll<HTMLElement>('[data-testid="attachment-text-segment"]')
+      )
+      const declared = Number.parseFloat(rows[0]!.parentElement!.style.height)
+      expect(container.textContent).toContain('TAIL')
+      expect(Math.max(...rows.map((row) => row.offsetTop + row.offsetHeight))).toBeGreaterThan(
+        declared
+      )
+      expect(scroller.scrollHeight).toBe(Math.max(scroller.clientHeight, declared))
+    })
     await act(async () => {
       scroller.scrollTop = 0
       scroller.dispatchEvent(new Event('scroll'))
@@ -396,6 +448,76 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
       deliverScroll = true
       hostScroll.mockRestore()
     }
+    viewportHeight = 645
+    const line = 'Original pasted contents 35636; exact Copy and Save.\n'
+    const header = `COPY35636-START\n    indented\tfield    value; whitespace35636\n        ${line}`
+    const tail = '\nCOPY35636-END\n'
+    content = Buffer.from((header + line.repeat(2000)).slice(0, 98304 - tail.length) + tail)
+    await act(async () =>
+      root.render(
+        createElement(MobileChatAttachmentPreview, { key: 'elastic', params: route.params })
+      )
+    )
+    await vi.waitFor(async () => {
+      await flush()
+      expect(container.textContent).toContain('COPY35636-START')
+    })
+    const elasticSource = sourceBlocks.mock.contexts.at(-1)
+    const elastic = Array.from(container.querySelectorAll('div')).find((node) =>
+      ['auto', 'scroll'].includes(getComputedStyle(node).overflowY)
+    )
+    if (!(elasticSource instanceof AttachmentTextSource) || !(elastic instanceof HTMLElement)) {
+      throw new Error('Missing actual literal source/host')
+    }
+    await vi.waitFor(async () => {
+      await flush()
+      expect(elastic.clientHeight).toBe(645)
+    })
+    for (let block = 1; block < elasticSource.blockCount; block++) {
+      const current = new AttachmentTextViewport(elasticSource, 19, elastic.clientHeight)
+      await act(async () => {
+        elastic.scrollTop = current.position({ block, row: 1 })
+        elastic.dispatchEvent(new Event('scroll'))
+      })
+      await vi.waitFor(async () => {
+        await flush()
+        expect(elasticSource.rowKnown(block)).toBe(true)
+      })
+    }
+    const elasticTrack = new AttachmentTextViewport(elasticSource, 19, elastic.clientHeight)
+    expect(elasticTrack.total).toBe(35283)
+    const nativeScroll = async (top: number) =>
+      act(async () => {
+        nativePositions.set(elastic, top)
+        elastic.dispatchEvent(new Event('scroll'))
+      })
+    const elasticWrites = vi.spyOn(elastic, 'scrollTo')
+    try {
+      const writes = elasticWrites.mock.calls.length
+      for (const top of [35545, 34931]) {
+        await nativeScroll(top)
+        await vi.waitFor(async () => {
+          await flush()
+          const rows = Array.from(
+            container.querySelectorAll<HTMLElement>('[data-testid="attachment-text-segment"]')
+          )
+          expect(rows[0]?.offsetTop).toBe(34637)
+          expect(rows.at(-1)!.offsetTop + rows.at(-1)!.offsetHeight).toBe(35283)
+          expect(elastic.scrollHeight).toBe(35283)
+        })
+      }
+      await nativeScroll(34638 - 645)
+      await vi.waitFor(async () => {
+        await flush()
+        expect(
+          container.querySelector<HTMLElement>('[data-testid="attachment-text-segment"]')!.offsetTop
+        ).toBeLessThan(34637)
+      })
+      expect(elasticWrites.mock.calls.length).toBe(writes)
+    } finally {
+      elasticWrites.mockRestore()
+    }
+    viewportHeight = 600
     content = Buffer.from('🙂'.repeat((25 * 1024 * 1024) / 4))
     await act(async () =>
       root.render(

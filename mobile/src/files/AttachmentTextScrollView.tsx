@@ -117,7 +117,7 @@ export function AttachmentTextScrollView({
           setProjection((old) => ({ ...old, top }))
         }}
       >
-        <View style={{ height: layout.total, position: 'relative' }}>
+        <View style={{ height: layout.total, position: 'relative', overflow: 'hidden' }}>
           <Text
             accessible={false}
             style={[

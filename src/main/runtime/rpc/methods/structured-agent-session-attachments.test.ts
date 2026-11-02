@@ -253,6 +253,10 @@ it('reads a committed text attachment through the registered mobile RPC and vali
         .toBeCloseTo(grown.position(previous.anchor(back)), 6)
       expect(grown.position(previous.anchor(back))).toBeCloseTo(7_998_151.9358067745, 6)
       expect(grown.restore(previous, oldEnd)).toBe(grown.total - grown.height)
+      const overscan = previous.rows(oldEnd - 1)
+      expect(overscan.length).toBeGreaterThan(0)
+      expect(overscan.length).toBeLessThanOrEqual(previous.rowBudget)
+      expect(overscan.at(-1)!.top + 20).toBeGreaterThan(previous.total)
     } finally {
       source.dispose()
     }
@@ -317,6 +321,22 @@ it('reads a committed text attachment through the registered mobile RPC and vali
       for (let index = source.blockCount - 1; index >= 0; index--) {
         expect.soft(await source.block(index)).toEqual(blocks[index])
       }
+      await source.block(source.blockCount - 1)
+      const elastic = new AttachmentTextViewport(source, 19, 645)
+      const end = elastic.total - elastic.height
+      const ending = elastic.rows(end)
+      expect(elastic.counts).toEqual([291, 290, 289, 290, 289, 290, 118])
+      expect(end).toBe(34638)
+      expect(ending[0]?.top).toBe(34637)
+      expect(ending.at(-1)!.top + 19).toBe(elastic.total)
+      expect.soft(elastic.rows(35545)).toEqual(ending)
+      expect.soft(elastic.rows(34931)).toEqual(ending)
+      expect(elastic.rows(end - 645)[0]?.key).not.toBe(ending[0]?.key)
+      await source.block(0)
+      expect.soft(elastic.rows(-40)).toEqual(elastic.rows(0))
+      const fitting = new AttachmentTextViewport(source, 19, 40000)
+      expect.soft(fitting.rows(80)).toEqual(fitting.rows(0))
+      expect.soft(fitting.window(80)).toEqual(fitting.window(0))
       expect(requests.every((request) => request.length <= 16 * 1024)).toBe(true)
       expect(await source.copyText()).toBe(text)
       const output: Uint8Array[] = []

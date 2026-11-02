@@ -52,11 +52,11 @@ export class AttachmentTextViewport {
     }
     return this.position(anchor)
   }
+  private clampTop(top: number): number {
+    return Math.max(0, Math.min(top, this.total - this.height))
+  }
   anchor(top: number): TextAnchor {
-    const row = Math.max(
-      0,
-      Math.min(top, Math.max(0, this.total - this.height)) / this.scale / this.rowHeight
-    )
+    const row = this.clampTop(top) / this.scale / this.rowHeight
     let low = 0,
       high = this.counts.length - 1
     while (low < high) {
@@ -72,18 +72,16 @@ export class AttachmentTextViewport {
   position(anchor: TextAnchor): number {
     const block = Math.min(anchor.block, this.counts.length - 1)
     const logical = (this.prefixes[block]! + Math.max(0, anchor.row)) * this.rowHeight
-    return Math.max(0, Math.min(this.total - this.height, logical * this.scale))
+    return this.clampTop(logical * this.scale)
   }
   move(anchor: TextAnchor, pixels: number): number {
-    return Math.max(
-      0,
-      Math.min(this.total - this.height, this.position(anchor) + pixels * this.scale)
-    )
+    return this.clampTop(this.position(anchor) + pixels * this.scale)
   }
   get rowBudget(): number {
     return Math.ceil(this.height / this.rowHeight) + 4
   }
   window(top: number): AttachmentTextWindow {
+    top = this.clampTop(top)
     const anchor = this.anchor(top)
     return {
       ...anchor,
@@ -95,6 +93,7 @@ export class AttachmentTextViewport {
     }
   }
   rows(top: number): { key: string; text: string; top: number }[] {
+    top = this.clampTop(top)
     const anchor = this.anchor(top)
     const rows: { key: string; text: string; top: number }[] = []
     let y = top - (anchor.row % 1) * this.rowHeight
