@@ -19,7 +19,7 @@ import { readAgentSessionRecordStore } from '../../../orchestration/structured-s
 import type { z } from 'zod'
 import type { OrchestrationDb } from '../../../orchestration/db'
 import { defineMethod, type RpcContext } from '../../core'
-import { openClosedWorkerChat } from './worker/closed-worker-chat'
+import { openClosedWorkerTerminal } from './worker/closed-worker-terminal'
 import { ensureStructuredHostInstalled } from '../structured-agent-session-gate'
 
 async function locateParty(
@@ -103,13 +103,13 @@ export const ORCHESTRATION_CALLER_METHODS = [
     name: 'orchestration.partyOpen',
     permission: 'workspace',
     params: PartyLocationParams,
-    // The lookup, except that a terminal worker Orca closed opens as a chat of its conversation.
+    // The lookup, except that a terminal worker Orca closed resumes its conversation in a new terminal.
     handler: async (params, ctx): Promise<OrchestrationPartyLocationResult> => {
       const located = await locateParty(params, ctx)
       const db = ctx.runtime.getOrchestrationDb()
       const handle = db && closedWorkerHandle(params.address, located, db)
-      const chat = handle ? await openClosedWorkerChat(ctx, db, handle) : null
-      return chat ? { location: chat } : located
+      const reopened = handle ? await openClosedWorkerTerminal(ctx.runtime, db, handle) : null
+      return reopened ? { location: reopened } : located
     }
   })
 ]

@@ -9,9 +9,7 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import {
   adoptsCliConversations,
-  CLI_CONVERSATION_ADOPTING_AGENTS,
-  cliConversationCwdMatchesWorkspace,
-  cliConversationNeedsRecordingCwd
+  CLI_CONVERSATION_ADOPTING_AGENTS
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
@@ -20,6 +18,8 @@ import {
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
 import {
   resolveAiVaultSessionResumeInChatEligibility,
+  aiVaultSessionResumeInChatWorkspaceMatters,
+  aiVaultSessionCwdMatchesWorkspace,
   type AiVaultResumeInChatEligibility
 } from './ai-vault-session-resume-in-chat'
 import {
@@ -48,8 +48,8 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
     : null
   const aliasDependent =
     args.session.agent !== 'pi' &&
-    cliConversationNeedsRecordingCwd(args.session.agent) &&
-    !cliConversationCwdMatchesWorkspace(args.session.cwd, targetWorkspacePath)
+    aiVaultSessionResumeInChatWorkspaceMatters(args.session.agent) &&
+    !aiVaultSessionCwdMatchesWorkspace(args.session.cwd, targetWorkspacePath)
   const capabilities = targetOwner ? resolveHostCapabilities(state, targetOwner) : null
   return resolveAiVaultSessionResumeInChatEligibility({
     session: args.session,

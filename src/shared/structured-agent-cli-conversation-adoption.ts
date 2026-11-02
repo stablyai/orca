@@ -1,5 +1,3 @@
-import { normalizeRuntimePathForComparison } from './cross-platform-path'
-
 /** Adoption order by Session History row agent; registration tests require a transcript importer for every target.
  * Conversations stay on their recording host, which validates importer availability before adoption. */
 export const CLI_CONVERSATION_ADOPTING_AGENTS = {
@@ -53,32 +51,5 @@ export function namesCliConversation(
     CLI_CONVERSATION_ADOPTING_AGENTS[row.agentType].some((chat) =>
       chatAgentsShareConversations(chat, agent)
     )
-  )
-}
-
-/** Codex can resume anywhere; other providers require the original cwd or silently miss/refuse/fork the conversation. */
-export function cliConversationNeedsRecordingCwd(agent: string): boolean {
-  return (
-    agent === 'claude' ||
-    agent === 'grok' ||
-    agent === 'omp' ||
-    agent === 'opencode' ||
-    agent === 'opencode2' ||
-    agent === 'pi'
-  )
-}
-
-/** Compare with shared runtime rules; POSIX case folding would conflate distinct directories. */
-export function cliConversationCwdMatchesWorkspace(
-  cwd: string | null | undefined,
-  workspacePath: string | null | undefined,
-  cwdAliases: readonly string[] = []
-): boolean {
-  if (!cwd || !workspacePath) {
-    return false
-  }
-  const workspace = normalizeRuntimePathForComparison(workspacePath.trim())
-  return [cwd, ...cwdAliases].some(
-    (path) => normalizeRuntimePathForComparison(path.trim()) === workspace
   )
 }

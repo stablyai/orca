@@ -18,14 +18,8 @@ export type StructuredAgentCliSourceLocator =
   | { kind: 'matched'; transcriptPath?: string }
   | { kind: 'absent' }
 
-/** The pane identity and conversation a source is matched by; no agent state is read. */
-export type StructuredAgentCliSourceRow = Pick<
-  AgentStatusIpcPayload,
-  'paneKey' | 'worktreeId' | 'connectionId' | 'structuredHost' | 'agentType' | 'providerSession'
->
-
 export type StructuredAgentCliSourceEvidence = (
-  | { readonly rows: readonly Readonly<StructuredAgentCliSourceRow>[] }
+  | { readonly rows: readonly Readonly<AgentStatusIpcPayload>[] }
   | { readonly error: unknown }
 ) & {
   readonly sourceRoute?: Readonly<CliSource & { route: StructuredAgentCliSourceRoute }>
@@ -88,7 +82,7 @@ export function structuredAgentCliSourcePath(input: {
   agent: StructuredAgentId
   resumeFrom: StructuredAgentSessionResumeSource
   workspaceId: string
-  rows: readonly StructuredAgentCliSourceRow[]
+  rows: readonly AgentStatusIpcPayload[]
 }): string | undefined {
   const source = resolveSource(input)
   return source.kind === 'matched' ? source.transcriptPath : undefined
@@ -98,7 +92,7 @@ function resolveSource(input: {
   agent: StructuredAgentId
   resumeFrom: StructuredAgentSessionResumeSource
   workspaceId: string
-  rows: readonly StructuredAgentCliSourceRow[]
+  rows: readonly AgentStatusIpcPayload[]
   evidence?: StructuredAgentCliSourceEvidence
 }): StructuredAgentCliSourceLocator {
   const source = input.resumeFrom.cliSource

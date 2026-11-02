@@ -283,8 +283,6 @@ export async function createStructuredAgentSessionForWorktree(args: {
   worktree: string
   agent: StructuredAgentId
   activate: boolean
-  resumeFrom?: StructuredAgentSessionResumeSource
-  structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   tabId?: string
