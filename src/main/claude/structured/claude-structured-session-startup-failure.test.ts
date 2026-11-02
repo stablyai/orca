@@ -265,3 +265,45 @@ it('parses only a failed root result at startup and bounds what it retains', asy
   expect(observation.failure()).toMatchObject({ errorClass: 'error_result' })
   expect(child.stdout.listenerCount('data')).toBe(0)
 })
+
+it('takes no startup answer from a line over the budget', async () => {
+  const child = createFakePipedChild()
+  const observation = claudeStartupAnswerObservation()
+  observation.attach(child)
+  const flush = () => new Promise((resolve) => setImmediate(resolve))
+  const large = 'x'.repeat(NDJSON_MAX_LINE_BYTES + 1)
+  // Tool input is arbitrary JSON; a result-shaped object inside it is not the provider's answer.
+  const assistant = `${JSON.stringify({
+    type: 'assistant',
+    parent_tool_use_id: null,
+    message: {
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          id: 'tool-1',
+          name: 'Write',
+          input: { type: 'result', is_error: true, content: large }
+        }
+      ]
+    }
+  })}\n`
+  child.stdout.write(assistant.slice(0, NDJSON_MAX_LINE_BYTES))
+  child.stdout.write(assistant.slice(NDJSON_MAX_LINE_BYTES))
+  await flush()
+  expect(observation.failure()).toBeUndefined()
+  // The parent that marks a subagent result can sit past the retained prefix.
+  child.stdout.write(
+    `${JSON.stringify({ type: 'result', is_error: true, errors: [large], parent_tool_use_id: 'task-1' })}\n`
+  )
+  // Intended limit: an oversized failed root result is left to the SDK answer or the unanswered exit.
+  child.stdout.write(`${JSON.stringify({ type: 'result', is_error: true, errors: [large] })}\n`)
+  await flush()
+  expect(observation.failure()).toBeUndefined()
+  child.stdout.write(
+    `${JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true })}\n`
+  )
+  await flush()
+  expect(observation.failure()).toMatchObject({ errorClass: 'error_result' })
+  expect(child.stdout.listenerCount('data')).toBe(0)
+})

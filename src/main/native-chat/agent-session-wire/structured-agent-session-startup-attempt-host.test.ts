@@ -20,6 +20,10 @@ import {
 } from './structured-agent-session-host-test-data'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
 import {
+  providerStartupFailureFact,
+  withObservedProviderExit
+} from './structured-agent-session-failure-text'
+import {
   CALLER,
   accept,
   acquisition,
@@ -353,9 +357,16 @@ describe('one logical start across physical attempts', () => {
     }
   )
 
-  it.each(['fullAccessAsRoot', 'historyTooLarge'] as const)(
-    'keeps the typed %s exit-only refusal final even when raw open never settles',
-    async (kind) => {
+  it.each([
+    agentSessionFailureFact('fullAccessAsRoot'),
+    agentSessionFailureFact('historyTooLarge'),
+    // A refusal whose reason has no failure kind of its own keeps only its refusal marker.
+    providerStartupFailureFact(
+      withObservedProviderExit(new AgentSessionAcquisitionRefusal('typed startup refusal'))
+    )
+  ])(
+    'keeps the typed $kind exit-only refusal final even when raw open never settles',
+    async (failure) => {
       await restartWith(publishFirst)
       let signal: AbortSignal | undefined
       providerOpen.mockImplementationOnce((input) => {
@@ -371,11 +382,11 @@ describe('one logical start across physical attempts', () => {
         acquisitionGeneration: child.generation!,
         reason: 'root refusal',
         cause: 'unexpected-exit',
-        failure: agentSessionFailureFact(kind)
+        failure
       })
       await vi.advanceTimersByTimeAsync(2_100)
       await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
-      expect((await submission(id))?.rejection).toMatchObject({ kind })
+      expect((await submission(id))?.rejection).toMatchObject({ kind: failure.kind })
       expect(acquire).toHaveBeenCalledTimes(1)
       expect(dispatch).not.toHaveBeenCalled()
       expect(signal?.aborted).toBe(true)

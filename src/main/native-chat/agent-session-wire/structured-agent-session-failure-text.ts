@@ -150,6 +150,10 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   }
   const exited = providerExitObserved(cause)
   return agentSessionFailureFact(exited ? 'providerStartFailed' : 'startFailed', {
+    // A typed refusal of any reason stays final when only its exit fact reaches the start.
+    ...(cause instanceof AgentSessionAcquisitionRefusal
+      ? { refusal: { code: cause.code, details: { reason: cause.reason } } }
+      : {}),
     detail: providerDiagnosticOf(cause),
     argumentProblem: argumentProblemOf(cause),
     ...(exited ? {} : { requestTimeout: providerRequestTimeoutOf(cause) })

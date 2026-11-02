@@ -233,6 +233,8 @@ export type ClaudeSession = {
     cwd: string
     history: { leafUuid: string | null; covered: boolean; contextActivity: number }
     onLateRefusal: (error: Error) => void
+    /** Set only when the host-awaited open returns; each new session starts unopened. */
+    opened?: true
   }
 }
 

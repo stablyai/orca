@@ -13,12 +13,6 @@ function mayBeFailedResult(text: string): boolean {
 export function claudeStartupAnswerObservation() {
   let failure: Error | undefined
   let detach = (): void => {}
-  const capture = (): void => {
-    failure ??= Object.assign(new Error('claude reported a failed result during startup'), {
-      errorClass: 'error_result'
-    })
-    detach()
-  }
   const observe = (record: unknown): void => {
     if (
       typeof record === 'object' &&
@@ -29,7 +23,10 @@ export function claudeStartupAnswerObservation() {
       record.is_error === true &&
       !('parent_tool_use_id' in record && record.parent_tool_use_id)
     ) {
-      capture()
+      failure ??= Object.assign(new Error('claude reported a failed result during startup'), {
+        errorClass: 'error_result'
+      })
+      detach()
     }
   }
   return {
@@ -37,16 +34,10 @@ export function claudeStartupAnswerObservation() {
     finish: () => detach(),
     attach: (child: PipedChildProcess): void => {
       const decoder = new StringDecoder('utf8')
-      // The shared line budget bounds retention; an oversized failed result still answers from its prefix.
-      const framer = createIncrementalNdjsonFramer(
-        observe,
-        (rejected) => {
-          if (rejected.kind === 'line-too-long' && mayBeFailedResult(rejected.prefix)) {
-            capture()
-          }
-        },
-        { acceptLine: mayBeFailedResult }
-      )
+      // The shared line budget bounds retention; a rejected prefix cannot prove a root record.
+      const framer = createIncrementalNdjsonFramer(observe, () => {}, {
+        acceptLine: mayBeFailedResult
+      })
       const onData = (chunk: Buffer | string): void =>
         framer.feed(typeof chunk === 'string' ? chunk : decoder.write(chunk))
       detach = () => {
