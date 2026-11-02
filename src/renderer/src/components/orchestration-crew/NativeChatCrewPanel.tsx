@@ -42,3 +42,29 @@ export function NativeChatCrewPanel({
     />
   )
 }
+
+/** The chat transcript: the crew panel overlays it, never the header's buttons or the composer below it. */
+export function NativeChatCrewFrame({
+  pane,
+  composerRef,
+  canMention,
+  children
+}: {
+  pane: { target: RuntimeClientTarget; sessionId: string; isVisible: boolean }
+  composerRef: RefObject<NativeChatComposerHandle | null>
+  canMention: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <NativeChatCrewPanel
+        target={pane.target}
+        sessionId={pane.sessionId}
+        isVisible={pane.isVisible}
+        composerRef={composerRef}
+        canMention={canMention}
+      />
+      {children}
+    </div>
+  )
+}

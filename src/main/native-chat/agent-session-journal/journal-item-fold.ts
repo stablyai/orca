@@ -1,15 +1,15 @@
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+  AgentJournalRenderItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentJournalLinkageFields,
   isRootAgentJournalItem,
   namesAgentJournalProducer
-} from '../../../shared/agent-session-journal-producer'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 
 export function statedOrDerivedTurnScope(

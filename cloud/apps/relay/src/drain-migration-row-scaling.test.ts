@@ -1,6 +1,6 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { afterEach, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openInMemoryRelayDatabase, type RelayDatabase, type SqlRow } from './database.js'
 
 let database: RelayDatabase | undefined

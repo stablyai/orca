@@ -62,10 +62,16 @@ function utf8Bytes(value: string, stopAfter: number): number {
 }
 
 /** Bound cloneable-message size by UTF-8 strings/backing bytes, handling cycles and stopping once the cap is exceeded. */
+/** Caps on the size walk itself; a lane whose payloads are legitimately deep or wide raises them. */
+export type StructuredCloneWalkLimits = { maxObjects?: number; maxDepth?: number }
+
 export function structuredCloneMessageBytes(
   data: unknown,
-  stopAfter = PANEL_MESSAGE_MAX_BYTES
+  stopAfter = PANEL_MESSAGE_MAX_BYTES,
+  walk: StructuredCloneWalkLimits = {}
 ): number {
+  const maxObjects = walk.maxObjects ?? 10_000
+  const maxDepth = walk.maxDepth ?? 100
   const seen = new WeakSet<object>()
   let total = 0
   let visitedNodes = 0
@@ -110,7 +116,7 @@ export function structuredCloneMessageBytes(
     }
     seen.add(object)
     visitedNodes += 1
-    if (visitedNodes > 10_000 || depth > 100) {
+    if (visitedNodes > maxObjects || depth > maxDepth) {
       total = stopAfter + 1
       return
     }

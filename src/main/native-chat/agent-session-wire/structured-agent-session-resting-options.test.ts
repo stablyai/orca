@@ -8,8 +8,8 @@ import {
   applyStructuredAgentSessionOptions,
   commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
-import { structuredAgentSessionSendSelection } from '../../../shared/structured-agent-session-option-view'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionSendSelection } from '../../../shared/agent-session/options/structured-agent-session-option-view'
 
 import { describe, expect, it, vi } from 'vitest'
 import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
@@ -23,10 +23,10 @@ import { AcpStructuredOptions } from '../../acp/acp-structured-options'
 import { GROK_CONFIG_OPTIONS } from '../../acp/acp-structured-adapter.test-support'
 import { SessionConfigOptionSchema } from '../../acp/generated/acp-protocol.generated'
 import { withLiveCatalogListing } from '../agent-model-catalog/agent-model-catalog-entry'
-import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
-import { agentSessionRecordFixture as durableAgentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
-import { seedTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { agentSessionRecordFixture as durableAgentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { seedTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const SESSION = 'session-1'

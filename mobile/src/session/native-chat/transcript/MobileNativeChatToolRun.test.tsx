@@ -1,14 +1,14 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalToolCallItem } from '../../../../../src/shared/agent-session-journal-types'
+import type { AgentJournalToolCallItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { MAX_TOOL_DETAIL_LENGTH } from '../../../../../src/shared/native-chat/tools/native-chat-tool-summary'
-import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { colors } from '../../../theme/mobile-theme'
 
 const scrolls = vi.hoisted(() => ({ toEnd: vi.fn(), to: vi.fn() }))

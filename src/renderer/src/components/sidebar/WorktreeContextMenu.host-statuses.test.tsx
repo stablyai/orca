@@ -64,6 +64,7 @@ vi.mock('@/i18n/i18n', () => ({
 
 vi.mock('./ProjectGroupNameDialog', () => ({ ProjectGroupNameDialog: () => null }))
 vi.mock('./WorktreeParentPickerPopover', () => ({ WorktreeParentPickerPopover: () => null }))
+vi.mock('./WorktreeWslHostStartMenuItem', () => ({ WorktreeWslHostStartMenuItem: () => null }))
 
 type StatusMenuCapture = {
   contextWorkspaceStatus: string

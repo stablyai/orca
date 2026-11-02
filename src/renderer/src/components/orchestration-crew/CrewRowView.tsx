@@ -47,7 +47,7 @@ export const CrewRowView = memo(function CrewRowView({
   canMention: boolean
   mention: (rows: OrchestrationCrewRow[]) => void
 }) {
-  // memo blocks the parent re-render a language switch relies on.
+  // memo() skips the parent re-render a language switch relies on.
   useUiLanguageRevision()
   // A pending question already shows on the row's second line, so rows start collapsed.
   const [expanded, setExpanded] = useState(false)

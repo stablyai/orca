@@ -281,14 +281,14 @@
   },
   {
     "filePath": "mobile/src/settings/about-screen.tsx",
-    "kind": "jsx-text",
+    "kind": "jsx-attribute:title",
     "text": "@orca_build",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "mobile/src/settings/about-screen.tsx",
-    "kind": "jsx-text",
+    "kind": "jsx-attribute:title",
     "text": "onOrca.dev",
     "dynamic": false,
     "count": 1
@@ -302,16 +302,9 @@
   },
   {
     "filePath": "mobile/src/settings/about-screen.tsx",
-    "kind": "jsx-text",
+    "kind": "jsx-attribute:title",
     "text": "stablyai/orca",
     "dynamic": false,
-    "count": 1
-  },
-  {
-    "filePath": "mobile/src/source-control/MobileBranchDiffPreviewDrawer.tsx",
-    "kind": "jsx-expression",
-    "text": "..HEAD",
-    "dynamic": true,
     "count": 1
   },
   {
@@ -581,14 +574,14 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-web-bundle-reply-schemas.ts",
+    "filePath": "mobile/src/transport/web-bundle/mobile-web-bundle-reply-schemas.ts",
     "kind": "object-property:message",
     "text": "assets sum to more than the contract total",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-web-bundle-reply-schemas.ts",
+    "filePath": "mobile/src/transport/web-bundle/mobile-web-bundle-reply-schemas.ts",
     "kind": "object-property:message",
     "text": "buildId must be the content hash of the asset list",
     "dynamic": false,

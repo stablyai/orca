@@ -2,9 +2,9 @@ import { hostTestState } from '../native-chat/agent-session-wire/structured-agen
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
-import type { AgentSessionLease } from '../../shared/agent-session-record'
+import type { AgentSessionLease } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PtyProcessInfo } from '../providers/pty-process-info'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'

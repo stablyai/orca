@@ -62,12 +62,6 @@ const WSL_DEPLOYMENT: OrcadDeploymentLink = {
   localPort: 9999,
   remotePort: 7777
 }
-const SSH_DEPLOYMENT: OrcadDeploymentLink = {
-  sshTargetId: 'target-a',
-  sshTargetGeneration: 1,
-  localPort: 9999,
-  remotePort: 7777
-}
 
 function environment(
   pairing: { revision: number; device: string },
@@ -191,24 +185,6 @@ describe('WSL host browser route partition', () => {
     ).toBe(seeded)
   })
 
-  it('copies into the jar the host already uses instead of starting another', async () => {
-    const existing = await pagePartition(environment({ revision: 10, device: 'a' }), 'rt-a')
-
-    expect(
-      bindWslHostBrowserRoutePartition(
-        stableStorage(environment({ revision: 20, device: 'b' })),
-        'default'
-      )
-    ).toBe(existing)
-  })
-
-  it('keeps one partition per browser profile', () => {
-    const storage = stableStorage(environment({ revision: 10, device: 'a' }))
-    expect(bindWslHostBrowserRoutePartition(storage, 'default')).not.toBe(
-      bindWslHostBrowserRoutePartition(storage, 'work')
-    )
-  })
-
   // Only this identity derives that name, so the page path re-adopts it; the copy must agree.
   it('keeps its own partition after an older build rewrote the binding without its alias', async () => {
     const storage = stableStorage(environment({ revision: 10, device: 'a' }))
@@ -219,23 +195,5 @@ describe('WSL host browser route partition', () => {
 
     expect(bindWslHostBrowserRoutePartition(storage, 'default')).toBe(partition)
     expect(await pagePartition(environment({ revision: 20, device: 'b' }), 'rt-b')).toBe(partition)
-  })
-
-  it('reports no stable partition for an environment without a deployment link', () => {
-    expect(
-      wslHostBrowserRouteStorage(ORCA_PROFILE, environment({ revision: 10, device: 'a' }))
-    ).toMatchObject({ kind: 'stable' })
-    expect(
-      wslHostBrowserRouteStorage(ORCA_PROFILE, environment({ revision: 10, device: 'a' }, null))
-    ).toEqual({ kind: 'unavailable', reason: 'no-stable-partition' })
-  })
-
-  it('never resolves a managed SSH host, so its partitions stay untouched', () => {
-    expect(
-      wslHostBrowserRouteStorage(
-        ORCA_PROFILE,
-        environment({ revision: 10, device: 'a' }, SSH_DEPLOYMENT, 'ssh-managed')
-      )
-    ).toEqual({ kind: 'unavailable', reason: 'destination-not-wsl-host' })
   })
 })

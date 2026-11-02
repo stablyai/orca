@@ -19,7 +19,7 @@ import * as sessionTime from '@/components/right-sidebar/ai-vault-session-time'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { emptyCrew } from '../../../../shared/orchestration-crew'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
@@ -216,7 +216,7 @@ it.each([10, 100])(
     })
     const normalize = vi.spyOn(presentation, 'resolveRowProgramStatus')
     const labels = vi.spyOn(worktreeStatus, 'getWorktreeStatusLabel')
-    const listeners = readStoreListenerCount()
+    const listeners = readStoreListenerCount() ?? 0
     const mounted = render(panel(Array.from({ length: n }, (_, i) => row(i))))
     await act(async () => {})
     expect(readStoreListenerCount()).toBe((listeners ?? 0) + 1)

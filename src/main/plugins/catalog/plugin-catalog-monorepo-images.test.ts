@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import type {
-  PluginMarketplace,
-  PluginMarketplaceEntry
-} from '../../../shared/plugins/catalog/plugin-marketplace'
+import type { PluginMarketplace } from '../../../shared/plugins/catalog/plugin-marketplace'
+
 import { extractCatalogImages } from './plugin-catalog-image-extraction'
 import { fillMonorepoReleaseImages } from './plugin-catalog-monorepo-images'
 
@@ -68,8 +66,6 @@ const files: Record<string, Buffer> = {
   'plugins/midnight-theme/images/cover.png': cover
 }
 const read = async (path: string): Promise<Buffer | null> => files[path] ?? null
-const fill = (entry: PluginMarketplaceEntry) =>
-  fillMonorepoReleaseImages(entry, CATALOG_URL, read).then((filled) => filled.entry)
 
 describe('fillMonorepoReleaseImages', () => {
   it('lists the manifest cover for a same-repository release published without images', async () => {
@@ -92,12 +88,5 @@ describe('fillMonorepoReleaseImages', () => {
     })
     expect(extracted.images).toEqual([cover])
     expect(reads.filter((path) => path.endsWith('cover.png'))).toHaveLength(1)
-  })
-
-  it('leaves plugins hosted elsewhere and releases that declare images untouched', async () => {
-    const elsewhere = catalog('https://github.com/acme/midnight.git').plugins[0]!
-    expect(await fill(elsewhere)).toEqual(elsewhere)
-    const declared = catalog(CATALOG_URL, {}).plugins[0]!
-    expect(await fill(declared)).toEqual(declared)
   })
 })

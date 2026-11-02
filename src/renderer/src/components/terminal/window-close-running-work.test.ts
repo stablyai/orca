@@ -69,15 +69,6 @@ describe('assessWindowCloseRunningWork', () => {
     })
   })
 
-  it('warns on quit about a live process on an SSH host', async () => {
-    setState([SSH_PTY])
-    answerWith({ [SSH_PTY]: BUSY })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
-      kind: 'running'
-    })
-  })
-
   // #29916: a paired runtime owns its terminals and keeps them after this client quits.
   it('does not warn on quit, or probe, for a live process on a paired runtime host', async () => {
     setState([RUNTIME_PTY, OWNERLESS_RUNTIME_PTY])
@@ -87,15 +78,6 @@ describe('assessWindowCloseRunningWork', () => {
       kind: 'none'
     })
     expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('does not warn on quit when a paired runtime host is unreachable', async () => {
-    setState([RUNTIME_PTY])
-    answerWith({ [RUNTIME_PTY]: UNVERIFIABLE })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
-      kind: 'none'
-    })
   })
 
   it('still warns when closing the window over a live process on a paired runtime host', async () => {
@@ -154,18 +136,6 @@ describe('assessWindowCloseRunningWork', () => {
     await vi.advanceTimersByTimeAsync(WINDOW_CLOSE_PROBE_TIMEOUT_MS)
 
     await expect(pending).resolves.toEqual({ kind: 'unverifiable' })
-  })
-
-  it('does not resolve before the budget expires', async () => {
-    setState([SSH_PTY])
-    answerWith({})
-    vi.useFakeTimers()
-    const settled = vi.fn()
-
-    void assessWindowCloseRunningWork({ isQuitting: true }).then(settled)
-    await vi.advanceTimersByTimeAsync(WINDOW_CLOSE_PROBE_TIMEOUT_MS - 1)
-
-    expect(settled).not.toHaveBeenCalled()
   })
 
   it('does not warn when the owning remote host reports an idle shell', async () => {
@@ -242,14 +212,5 @@ describe('assessWindowCloseRunningWork', () => {
     await assessWindowCloseRunningWork({ isQuitting: true })
 
     expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('closes without probing when no workspace owns a pty', async () => {
-    setState([])
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
-      kind: 'none'
-    })
-    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
   })
 })

@@ -76,7 +76,7 @@ export function editor(input: PluginTemplateInput): PluginTemplate {
 `,
       'README.md': readme(
         input,
-        `A custom editor for \`${extension}\` files. It runs in a sandboxed frame and talks to Orca only through \`window.orca\`. Loading it needs approval: \`orca plugin dev load\` prints the exact access and the \`--approve\` fingerprint.`
+        `A custom editor for \`${extension}\` files. It runs in a sandboxed frame and talks to Orca only through \`window.orca\`. Loading it needs approval: \`orca plugin dev watch .\` prints the exact access and the \`--approve\` fingerprint.`
       ),
       ...COMMON_FILES
     }
@@ -127,7 +127,7 @@ export function panel(input: PluginTemplateInput): PluginTemplate {
 `,
       'README.md': readme(
         input,
-        'A right-sidebar panel. It runs in a sandboxed frame and calls host methods its `capabilities` allow through `window.orca`. Loading it needs approval: `orca plugin dev load` prints the exact access and the `--approve` fingerprint.'
+        'A right-sidebar panel. It runs in a sandboxed frame and calls host methods its `capabilities` allow through `window.orca`. Loading it needs approval: `orca plugin dev watch .` prints the exact access and the `--approve` fingerprint.'
       ),
       ...COMMON_FILES
     }

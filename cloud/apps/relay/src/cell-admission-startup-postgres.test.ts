@@ -1,6 +1,6 @@
 import pg from 'pg'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { reconcileCellAdmissionAtStartup } from './cell-admission-startup.js'
 import type { RelayCellConfig } from './config.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'

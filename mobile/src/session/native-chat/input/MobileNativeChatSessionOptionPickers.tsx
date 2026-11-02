@@ -10,8 +10,7 @@ import {
   type LucideIcon
 } from 'lucide-react-native'
 import { BottomDrawer } from '../../../components/BottomDrawer'
-import { ListGroup, LIST_LEADING_INSET } from '../../../components/list/ListGroup'
-import { SectionHeader } from '../../../components/list/SectionHeader'
+import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../components/list/ListGroup'
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import { colors } from '../../../theme/mobile-theme'

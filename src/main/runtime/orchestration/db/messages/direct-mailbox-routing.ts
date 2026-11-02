@@ -43,7 +43,9 @@ export function routeDirectMessagePage(
   runId: string,
   directHandle: string,
   throughSequence?: number,
-  preserveActiveDispatchOwnership = false
+  preserveActiveDispatchOwnership = false,
+  /** Mail new to its new owner, so that owner is woken for it; an in-flight pointer keeps its stamps to settle. */
+  freshDelivery = false
 ): MailboxRoutingPage {
   this.db.exec('BEGIN IMMEDIATE')
   try {
@@ -77,6 +79,15 @@ export function routeDirectMessagePage(
            AND delivery_contract = 'current_delivery' AND id IN (${placeholders})`
       )
       .run(mailboxHandle, runId, directHandle, ...page.map((row) => row.id))
+    if (freshDelivery) {
+      this.db
+        .prepare(
+          `UPDATE messages INDEXED BY idx_messages_id
+              SET delivered_at = NULL, pointer_pty_id = NULL, pointer_process_incarnation = NULL
+            WHERE id IN (${placeholders}) AND pointer_enter_pending = 0`
+        )
+        .run(...page.map((row) => row.id))
+    }
     this.db.exec('COMMIT')
     return {
       routedCount: Number(result.changes),
@@ -103,9 +114,17 @@ export function routeUnreadDirectMessagesToDispatchMailbox(
   dispatchId: string,
   runId: string,
   directHandle: string,
-  throughSequence?: number
+  throughSequence?: number,
+  freshDelivery = false
 ): MailboxRoutingPage {
-  return this.routeDirectMessagePage(`dispatch:${dispatchId}`, runId, directHandle, throughSequence)
+  return this.routeDirectMessagePage(
+    `dispatch:${dispatchId}`,
+    runId,
+    directHandle,
+    throughSequence,
+    false,
+    freshDelivery
+  )
 }
 
 export function routeUnreadDispatchMailboxToRunMailbox(

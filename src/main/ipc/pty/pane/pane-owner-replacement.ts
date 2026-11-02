@@ -1,6 +1,6 @@
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/pty-binding-persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'

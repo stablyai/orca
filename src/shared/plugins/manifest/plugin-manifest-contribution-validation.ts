@@ -25,6 +25,7 @@ type ContributionValidationManifest = {
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
     customEditors: (IdentifiedContribution & PluginFileMatch)[]
     newFiles: IdentifiedContribution[]
+    settings: { key: string }[]
   }
   capabilities: { kind: string }[]
 }
@@ -109,6 +110,23 @@ export function validatePluginManifestContributions(
     'language pack locale',
     ctx
   )
+  rejectDuplicateValues(
+    manifest.contributes.settings.map((setting) => setting.key),
+    String,
+    'settings',
+    'setting key',
+    ctx
+  )
+  if (
+    manifest.contributes.settings.length > 0 &&
+    !manifest.capabilities.some((capability) => capability.kind === 'settings:own')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contributes', 'settings'],
+      message: 'needs the "settings:own" capability, which is how the plugin reads them'
+    })
+  }
   rejectDuplicateValues(
     manifest.contributes.vmRecipes,
     (entry) => (entry as PathContribution).path,

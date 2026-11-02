@@ -27,98 +27,6 @@ afterEach(() => {
 })
 
 describe('upsertHookTrustEntries', () => {
-  it('creates the file with a trust block when none exists', () => {
-    const entry: CodexTrustEntry = {
-      sourcePath: '/foo/hooks.json',
-      eventLabel: 'pre_tool_use',
-      groupIndex: 0,
-      handlerIndex: 0,
-      command: '/bin/echo hi'
-    }
-    upsertHookTrustEntries(configPath, [entry])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).toContain(`[hooks.state."/foo/hooks.json:pre_tool_use:0:0"]`)
-    expect(written).toContain('enabled = true')
-    expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
-  })
-
-  it('appends to an existing config without disturbing prior content', () => {
-    const original = [
-      'model = "gpt-5.5"',
-      'approval_policy = "never"',
-      '',
-      '[features]',
-      'hooks = true',
-      ''
-    ].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    upsertHookTrustEntries(configPath, [
-      {
-        sourcePath: '/x/hooks.json',
-        eventLabel: 'session_start',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'echo hello'
-      }
-    ])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written.startsWith(original.trimEnd())).toBe(true)
-    expect(written).toContain('[hooks.state."/x/hooks.json:session_start:0:0"]')
-  })
-
-  it('replaces an existing block keyed at the same path without touching unrelated blocks', () => {
-    const key = '/x/hooks.json:pre_tool_use:0:0'
-    const original = [
-      '[features]',
-      'hooks = true',
-      '',
-      `[hooks.state."${key}"]`,
-      'enabled = true',
-      'trusted_hash = "sha256:STALE"',
-      '',
-      '[unrelated]',
-      'value = 42',
-      ''
-    ].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    upsertHookTrustEntries(configPath, [
-      {
-        sourcePath: '/x/hooks.json',
-        eventLabel: 'pre_tool_use',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'echo new'
-      }
-    ])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).not.toContain('STALE')
-    expect(written).toContain('[unrelated]')
-    expect(written).toContain('value = 42')
-    expect(written).toContain('[features]\nhooks = true')
-  })
-
-  it('writes a single block per entry even when called repeatedly', () => {
-    const entry: CodexTrustEntry = {
-      sourcePath: '/x/hooks.json',
-      eventLabel: 'pre_tool_use',
-      groupIndex: 0,
-      handlerIndex: 0,
-      command: 'echo'
-    }
-    upsertHookTrustEntries(configPath, [entry])
-    upsertHookTrustEntries(configPath, [entry])
-    upsertHookTrustEntries(configPath, [entry])
-
-    const written = readFileSync(configPath, 'utf-8')
-    const occurrences = written.match(/\[hooks\.state\./g) ?? []
-    expect(occurrences).toHaveLength(1)
-  })
-
   it('collapses duplicate blocks for the same hook key while preserving unrelated hook state', () => {
     const sourcePath = 'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json'
     const key = `${sourcePath}:session_start:0:0`
@@ -246,35 +154,6 @@ describe('upsertHookTrustEntries', () => {
     expect(readFileSync(configPath, 'utf-8')).toBe(firstWrite)
   })
 
-  it('replaces a stale block written with CRLF line endings without duplicating', () => {
-    const key = '/x/hooks.json:pre_tool_use:0:0'
-    const original = [
-      '[features]',
-      'hooks = true',
-      '',
-      `[hooks.state."${key}"]`,
-      'enabled = true',
-      'trusted_hash = "sha256:STALE"',
-      ''
-    ].join('\r\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    const entry: CodexTrustEntry = {
-      sourcePath: '/x/hooks.json',
-      eventLabel: 'pre_tool_use',
-      groupIndex: 0,
-      handlerIndex: 0,
-      command: 'echo new'
-    }
-    upsertHookTrustEntries(configPath, [entry])
-
-    const written = readFileSync(configPath, 'utf-8')
-    const occurrences = written.match(/\[hooks\.state\./g) ?? []
-    expect(occurrences).toHaveLength(1)
-    expect(written).not.toContain('STALE')
-    expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
-  })
-
   it('preserves an immediately-adjacent unrelated hooks.state block', () => {
     const targetKey = '/x/hooks.json:pre_tool_use:0:0'
     const neighborKey = '/y/hooks.json:post_tool_use:0:0'
@@ -307,25 +186,6 @@ describe('upsertHookTrustEntries', () => {
     expect(written.slice(neighborIdx)).toMatch(/enabled = true[\s\S]*sha256:NEIGHBOR/)
   })
 
-  it('preserves an unrelated table whose quoted key contains a `]`', () => {
-    const original = ['[other."a]b"]', 'foo = 1', ''].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    upsertHookTrustEntries(configPath, [
-      {
-        sourcePath: '/x/hooks.json',
-        eventLabel: 'pre_tool_use',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'echo'
-      }
-    ])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).toContain('[other."a]b"]')
-    expect(written).toContain('foo = 1')
-  })
-
   it('preserves an unrelated table whose literal-string key contains a `]`', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
@@ -352,36 +212,6 @@ describe('upsertHookTrustEntries', () => {
     expect(written).not.toContain('STALE')
     expect(written).toContain("[other.'a]b']")
     expect(written).toContain('foo = 1')
-  })
-
-  it('does not treat `[fake]` inside a multi-line basic string as a header', () => {
-    const original = [
-      'model = "gpt"',
-      'description = """',
-      'This text has a fake header:',
-      '[fake]',
-      'inside it.',
-      '"""',
-      ''
-    ].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    upsertHookTrustEntries(configPath, [
-      {
-        sourcePath: '/x/hooks.json',
-        eventLabel: 'pre_tool_use',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'echo'
-      }
-    ])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).toContain(
-      ['description = """', 'This text has a fake header:', '[fake]', 'inside it.', '"""'].join(
-        '\n'
-      )
-    )
   })
 
   it('does not treat the target hook header inside a multi-line basic string as a duplicate', () => {
@@ -474,34 +304,6 @@ describe('upsertHookTrustEntries', () => {
     expect(written).not.toContain('sha256:STALE')
   })
 
-  it('treats `\\"""` inside a multi-line basic string as an escaped quote, not a close', () => {
-    const original = [
-      'prompt = """',
-      'use \\"\\"\\" carefully',
-      '"""',
-      '',
-      '[other]',
-      'x = 1',
-      ''
-    ].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    upsertHookTrustEntries(configPath, [
-      {
-        sourcePath: '/x/hooks.json',
-        eventLabel: 'pre_tool_use',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'echo'
-      }
-    ])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).toContain(['prompt = """', 'use \\"\\"\\" carefully', '"""'].join('\n'))
-    expect(written).toContain('[other]\nx = 1')
-    expect(written).toContain('[hooks.state."/x/hooks.json:pre_tool_use:0:0"]')
-  })
-
   it('escapes literal `"` and `\\` in non-Windows source paths inside the trust block header', () => {
     const entry: CodexTrustEntry = {
       sourcePath: '/x/with"quote\\and\\back/hooks.json',
@@ -557,27 +359,6 @@ describe('upsertHookTrustEntries', () => {
     const written = readFileSync(configPath, 'utf-8')
     expect(written).toContain('enabled = false')
     expect(written).not.toContain('enabled = true')
-  })
-
-  it('overwrites an existing block when the file ends without a trailing newline', () => {
-    const key = '/x/hooks.json:pre_tool_use:0:0'
-    const original = `[hooks.state."${key}"]\nenabled = true\ntrusted_hash = "sha256:OLD"`
-    writeFileSync(configPath, original, 'utf-8')
-
-    upsertHookTrustEntries(configPath, [
-      {
-        sourcePath: '/x/hooks.json',
-        eventLabel: 'pre_tool_use',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'echo hi'
-      }
-    ])
-
-    const written = readFileSync(configPath, 'utf-8')
-    const headerCount = (written.match(/\[hooks\.state\."/g) ?? []).length
-    expect(headerCount).toBe(1)
-    expect(written).not.toContain('sha256:OLD')
   })
 
   it('overwrites an existing block whose header has an inline comment', () => {

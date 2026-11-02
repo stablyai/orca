@@ -1,7 +1,7 @@
-import { agentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import { CLAUDE_STRUCTURED_AGENT } from '../claude-structured-agent-definition'
+import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 import { randomUUID } from 'node:crypto'
-import { refreshClaudeStructuredSessionOptions } from '../claude-structured-session-options'
+import { refreshClaudeStructuredSessionOptions } from './launch/claude-structured-session-options'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput
@@ -19,8 +19,8 @@ import type {
 import { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
-import type { ClaudeStructuredLaunch } from '../claude-structured-launch-resolution'
-import type { ClaudeAcquisitionLaunch } from '../claude-structured-acquisition-launch'
+import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
+import type { ClaudeAcquisitionLaunch } from './launch/claude-structured-acquisition-launch'
 import type { ClaudeNamingGeneration } from '../claude-naming-generation'
 import { readClaudeStartupFacts } from './claude-structured-session-startup'
 

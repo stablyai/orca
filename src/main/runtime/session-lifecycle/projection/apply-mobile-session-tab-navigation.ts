@@ -30,7 +30,9 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     snapshot: RuntimeMobileSessionTabsResult,
     activeTabId: string,
     navigation: RuntimeNavigationTarget,
-    clientNavigationId?: string
+    clientNavigationId?: string,
+    /** The caller asked for nothing itself (a host action on its behalf), so it must be told to follow. */
+    callerFollows = false
   ): RuntimeMobileSessionTabsResult {
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
     if (navigationTargetsClients(navigation)) {
@@ -61,7 +63,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
         clientNavigationId,
         activeTabId
       )
-      this.emitMobileSessionTabsSnapshotToClient(callerSnapshot, clientNavigationId)
+      this.emitMobileSessionTabsSnapshotToClient(callerSnapshot, clientNavigationId, callerFollows)
     }
     if (clientNavigationId) {
       return callerSnapshot ?? this.projectMobileSessionTabsForClient(snapshot, clientNavigationId)
@@ -95,6 +97,30 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       return false
     }
     this.applyMobileSessionTabNavigation(snapshot, tab.id, 'caller', clientNavigationId)
+    return true
+  }
+
+  reopenMobileSessionTabForClient(
+    worktreeId: string,
+    sessionId: string,
+    clientNavigationId: string
+  ): boolean {
+    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId)
+    const tab = snapshot.tabs.find(
+      (candidate) => candidate.type === 'agent-session' && candidate.sessionId === sessionId
+    )
+    if (!tab) {
+      return false
+    }
+    const projected = this.clientSessionTabSelections.reopen(
+      this.withSessionTabsHolds(snapshot, clientNavigationId),
+      clientNavigationId,
+      tab.id
+    )
+    if (!projected.tabs.some((candidate) => candidate.id === tab.id)) {
+      return false
+    }
+    this.emitMobileSessionTabsSnapshotToClient(projected, clientNavigationId)
     return true
   }
 

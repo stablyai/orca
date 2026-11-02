@@ -1,9 +1,9 @@
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit } from '../../../../shared/queued-message-edit'
 import { promptTextContent } from './native-chat-prompt-document-text'
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
 import {
   nativeChatPastedTextOperations,

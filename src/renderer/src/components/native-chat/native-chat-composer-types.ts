@@ -3,13 +3,13 @@ import type { CaptureStructuredAgentSessionPresentation } from './use-structured
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
-import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
-import type { AgentSessionSlashCommand } from '../../../../shared/agent-session-wire'
+import type { StructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
+import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type {
   StructuredAgentSessionCommandOutcome,
   StructuredAgentSessionCommandRefusalCause
-} from '../../../../shared/structured-agent-session-composer'
+} from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface

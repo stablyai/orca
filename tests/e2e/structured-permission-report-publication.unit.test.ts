@@ -24,7 +24,7 @@ import {
   claudeFrame,
   USER_MESSAGE,
   PROVIDER_SESSION_ID
-} from '../../src/main/claude/claude-structured-session-test-support'
+} from '../../src/main/claude/structured/claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/structured/claude-structured-session-state'
 import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/structured-claude-runtime-adapter'
 import {
@@ -38,7 +38,7 @@ import {
   HOST_TEST_SESSION as sessionId
 } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../src/shared/agent-session-permission-modes-capability'
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-permission-modes-capability'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 import { acpLaunchSpecFor } from '../../src/main/acp/acp-launch-specs'
@@ -47,7 +47,7 @@ import { GROK_CONFIG_OPTIONS } from '../../src/main/acp/acp-structured-adapter.t
 import { closeProviderTimelineRigs } from '../../src/main/native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 
-import { agentSessionRefusalFailure } from '../../src/shared/agent-session-write-failure'
+import { agentSessionRefusalFailure } from '../../src/shared/agent-session/failures/agent-session-write-failure'
 import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 
 beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW))

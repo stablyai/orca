@@ -21,7 +21,8 @@ import type {
   WorkspaceLayoutLoadResult
 } from './workspace-layout-load-types'
 import { saveWorkspaceLayout } from './workspace-layout-save'
-import { createRecordedLeafReader, loadWorkspace } from './workspace-layout-load-workspace'
+import { loadWorkspace } from './workspace-layout-load-workspace'
+import { createRecordedLeafReader } from './workspace-layout-recorded-key-order'
 import type {
   LegacyLayoutPersistence,
   WorkspaceLayout,

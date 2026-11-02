@@ -10,8 +10,8 @@ import type {
   AgentLaunchPrompt,
   AgentLaunchMode
 } from '../../shared/agent-launch-intent'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
-import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../shared/agent-launch-preferences'

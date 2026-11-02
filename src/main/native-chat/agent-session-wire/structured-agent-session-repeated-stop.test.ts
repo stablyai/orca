@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, type Mock } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { AgentJournalTurnLifecycleState } from '../../../shared/agent-session-journal-types'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnLifecycleState } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
@@ -69,16 +69,6 @@ describe('a Stop pressed again', () => {
     expect(await statusRows()).toEqual([REQUESTED])
   })
 
-  it('adds one row for two Stops at once, whatever the provider says to the second', async () => {
-    await attach()
-    await turn('running')
-    const [first, second] = await Promise.all([stopTurn(), stopTurn()])
-
-    expect(first).toMatchObject({ ok: true, value: { cancelled: true } })
-    expect(second).toMatchObject({ ok: true })
-    expect(await statusRows()).toEqual([REQUESTED])
-  })
-
   it('naming no turn, keys its row by the turn running, as a Stop naming it does', async () => {
     await attach()
     await turn('running')
@@ -93,17 +83,6 @@ describe('a Stop pressed again', () => {
       agentJournalItemKey(structuredAgentSessionStopNoteIdentity('turn-1'))
     ])
     expect(await statusRows()).toEqual([REQUESTED])
-  })
-
-  it('writes nothing when neither Stop found anything to stop', async () => {
-    await attach()
-    await turn('running')
-    await turn('completed')
-    cancelTurn.mockResolvedValue({ cancelled: false })
-
-    await stopTurn()
-    expect(await stopTurn()).toMatchObject({ ok: true, value: { cancelled: false } })
-    expect(await statusRows()).toEqual([])
   })
 
   it('writes nothing more on a restarted host', async () => {

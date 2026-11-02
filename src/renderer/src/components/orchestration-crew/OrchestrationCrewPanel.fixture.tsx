@@ -243,9 +243,41 @@ function pane(value: OrchestrationCrewSnapshot) {
   })
 }
 
-function expanded(value: OrchestrationCrewSnapshot) {
+// A wide native chat: the panel overlays the transcript and ends above the composer.
+function nativeChat(value: OrchestrationCrewSnapshot) {
+  return defineFixture({
+    width: 1100,
+    render: () => (
+      <div className="flex h-130 flex-col overflow-hidden rounded-md border border-border bg-background">
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <CrewPanelContent
+            target={{ kind: 'local' }}
+            party="term_self"
+            snapshot={value}
+            canMention
+            mention={() => {}}
+          />
+          <div className="mx-auto grid w-full max-w-3xl gap-3 px-4 pt-10">
+            {Array.from({ length: 12 }, (_, index) => (
+              <div
+                key={index}
+                className="h-2 rounded bg-muted"
+                style={{ width: `${96 - index * 3}%` }}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="mx-auto mb-3 flex h-20 w-full max-w-3xl items-end justify-end rounded-lg border border-border p-2">
+          <span data-testid="composer-send" className="size-7 rounded-full bg-foreground" />
+        </div>
+      </div>
+    )
+  })
+}
+
+function expanded(value: OrchestrationCrewSnapshot, host = pane) {
   return {
-    ...pane(value),
+    ...host(value),
     interact: (frame: HTMLElement) =>
       frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
   }
@@ -273,3 +305,5 @@ export const managedByOnlyExpanded = expanded(managedByOnly)
 export const peerOnlyCollapsed = pane(peerOnly)
 export const peerOnlyExpanded = expanded(peerOnly)
 export const allFinishedExpanded = expanded(allFinished)
+export const nativeChatCollapsed = nativeChat(fiveWorkers)
+export const nativeChatExpanded = expanded(fiveWorkers, nativeChat)

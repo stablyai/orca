@@ -17,7 +17,7 @@ import {
   isBareStructuredAgentSessionGoalCommand,
   isStructuredAgentSessionHostCommand,
   structuredAgentSessionGoalObjective
-} from '../../../../shared/structured-agent-session-composer'
+} from '../../../../shared/agent-session/view/structured-agent-session-composer'
 
 import {
   admitNativeChatPastedText,

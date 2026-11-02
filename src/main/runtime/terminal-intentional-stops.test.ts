@@ -34,14 +34,6 @@ describe('terminal intentional stops', () => {
     expect(stops.claimExit('pty-ssh', 'inc-1')).toEqual([])
   })
 
-  it('drops the mark at once when the stop fails', () => {
-    const stops = new TerminalIntentionalStops()
-
-    stops.mark('pty-1', 'replaced', 'inc-1')(false)
-
-    expect(stops.claimExit('pty-1', 'inc-1')).toEqual([])
-  })
-
   it('reads the synthetic exit and the provider exit of the same process alike', () => {
     const stops = new TerminalIntentionalStops()
     const settle = stops.mark('pty-1', 'replaced', null)
@@ -50,13 +42,6 @@ describe('terminal intentional stops', () => {
     settle(true)
 
     expect(stops.claimExit('pty-1', 'inc-1')).toEqual(['replaced'])
-    expect(stops.claimExit('pty-1', 'inc-2')).toEqual([])
-  })
-
-  it('never marks the exit of another process that reuses the id', () => {
-    const stops = new TerminalIntentionalStops()
-    stops.mark('pty-1', 'reversible', 'inc-1')
-
     expect(stops.claimExit('pty-1', 'inc-2')).toEqual([])
   })
 

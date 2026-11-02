@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // @vitest-environment happy-dom
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
@@ -11,7 +11,7 @@ import {
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'

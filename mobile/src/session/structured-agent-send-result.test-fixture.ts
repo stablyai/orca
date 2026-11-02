@@ -1,7 +1,7 @@
 // Include the durable submission and dispatchState: ok alone proves no message delivery.
 
-import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
+import type { AgentJournalDispatchState } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
 
 export function structuredSendResultFixture(
   dispatchState: AgentJournalDispatchState,

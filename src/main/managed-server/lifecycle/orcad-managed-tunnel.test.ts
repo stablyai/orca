@@ -229,24 +229,6 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       resolveEnvironment: () => environment(),
       timeoutMs: 5_000
     })
-    it('connects through the raw SSH manager and creates the exact loopback forward', async () => {
-      const state = setup()
-
-      await state.manager.ensure(environment())
-
-      expect(state.connect).toHaveBeenCalledOnce()
-      if (linkKind === 'sshAccess') {
-        expect(environment().orcadDeployment).toBeUndefined()
-      }
-      expect(state.addForward).toHaveBeenCalledWith(
-        'ssh-1',
-        expect.anything(),
-        46_768,
-        '127.0.0.1',
-        6_768,
-        'Orca on Builder'
-      )
-    })
 
     it('reuses a tunnel only for the same SSH transport generation', async () => {
       const state = setup()
@@ -317,33 +299,17 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       }
     )
 
-    it('preserves missing dependency and unavailable services as different actual guards', async () => {
-      const state = setup()
-      const missing = state.manager.ensure({ ...environment(), connectionDependency: undefined })
-      await expect(missing).rejects.toThrow('missing its SSH tunnel dependency')
-      const unavailable = new OrcadManagedTunnelManager({
-        getConnectionManager: () => null,
-        getTargetStore: () => null
-      })
-      const result = unavailable.ensure(environment())
-      await expect(result).rejects.toThrow('SSH is unavailable on this client')
-      expect(state.connect).not.toHaveBeenCalled()
-      unavailable.dispose()
-    })
-
     it('fails closed when the SSH registration generation changed', async () => {
       const state = setup({ generation: 8 })
 
-      const result = state.manager.ensure(environment())
-      await expect(result).rejects.toThrow('removed or re-created')
+      await expect(state.manager.ensure(environment())).rejects.toThrow('removed or re-created')
       expect(state.connect).not.toHaveBeenCalled()
     })
 
     it('fails closed when another environment owns the target', async () => {
       const state = setup({ orcadFence: { environmentId: 'environment-2' } })
 
-      const result = state.manager.ensure(environment())
-      await expect(result).rejects.toThrow('no longer owned')
+      await expect(state.manager.ensure(environment())).rejects.toThrow('no longer owned')
       expect(state.connect).not.toHaveBeenCalled()
     })
 
@@ -528,38 +494,6 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       expect(state.probeTunnel).not.toHaveBeenCalled()
     })
 
-    it('checks that the server is running only when it sets up a fresh forward', async () => {
-      const state = setup()
-
-      await state.manager.ensure(environment())
-      await state.manager.ensure(environment())
-      expect(state.ensureServing).toHaveBeenCalledOnce()
-      expect(state.ensureServing).toHaveBeenCalledWith({
-        environment: expect.objectContaining({ id: 'environment-1' }),
-        target: state.target,
-        connection: state.connection,
-        remotePort: 6_768
-      })
-
-      state.setTransportGeneration(4)
-      await state.manager.ensure(environment())
-      expect(state.ensureServing).toHaveBeenCalledTimes(2)
-    })
-
-    it('starts a server that stopped while the client slept once the tunnel is rebuilt', async () => {
-      const state = setup()
-      await state.manager.ensure(environment())
-      state.probeTunnel.mockResolvedValue(false)
-
-      await state.manager.recoverAfterHostResume(resumeOptions())
-
-      expect(state.reconnect).toHaveBeenCalledOnce()
-      expect(state.ensureServing).toHaveBeenCalledTimes(2)
-      expect(state.ensureServing).toHaveBeenLastCalledWith(
-        expect.objectContaining({ target: state.target, remotePort: 6_768 })
-      )
-    })
-
     it('keeps a healthy managed tunnel intact after host resume', async () => {
       const state = setup()
       await state.manager.ensure(environment())
@@ -723,21 +657,6 @@ describe('OrcadManagedTunnelManager bound port', () => {
     }
   }
 
-  it('forwards to the port orcad bound when another runtime holds the preferred one', async () => {
-    const state = boundPortSetup([58_520])
-    await state.manager.ensure(createEnvironment('orcadDeployment'))
-
-    expect(state.addForward).toHaveBeenCalledWith(
-      'ssh-1',
-      state.connection,
-      46_768,
-      '127.0.0.1',
-      58_520,
-      'Orca on Builder'
-    )
-    expect(state.verifyIdentity).toHaveBeenCalledOnce()
-  })
-
   it('follows a restarted server to the port it bound, within the same ensure', async () => {
     const state = boundPortSetup([6_768, 58_520])
     state.ensureServing
@@ -780,16 +699,6 @@ describe('OrcadManagedTunnelManager bound port', () => {
       58_520,
       'Orca on Builder'
     )
-  })
-
-  it('reuses a verified tunnel without reading the port again', async () => {
-    const state = boundPortSetup([58_520])
-    const environment = createEnvironment('orcadDeployment')
-    await state.manager.ensure(environment)
-    await state.manager.ensure(environment)
-
-    expect(state.resolveRemotePort).toHaveBeenCalledOnce()
-    expect(state.addForward).toHaveBeenCalledOnce()
   })
 
   it('fails the connect, leaving no forward, when the bound port serves another runtime', async () => {

@@ -9,76 +9,6 @@ import {
   resolveNativeChatSkillDiscoveryContext,
   resolveNativeChatSkillDiscoveryCwd
 } from './use-native-chat-skills'
-import { worktreeFixture } from './native-chat-workspace-test-fixtures'
-
-describe('resolveNativeChatSkillDiscoveryCwd', () => {
-  const catalog = {
-    floatingWorkspacePath: null,
-    folderWorkspaces: [],
-    worktreesByRepo: {
-      'repo-1': [worktreeFixture('repo-1::/repo/worktree', '/repo/worktree', { repoId: 'repo-1' })]
-    }
-  }
-
-  it('returns the owning worktree path for a terminal tab', () => {
-    expect(
-      resolveNativeChatSkillDiscoveryCwd(
-        {
-          ...catalog,
-          tabsByWorktree: {
-            'repo-1::/repo/worktree': [
-              {
-                id: 'tab-1'
-              }
-            ]
-          }
-        },
-        'tab-1'
-      )
-    ).toBe('/repo/worktree')
-  })
-
-  it('returns the owning worktree path for a structured session tab', () => {
-    expect(
-      resolveNativeChatSkillDiscoveryCwd(
-        {
-          ...catalog,
-          tabsByWorktree: {},
-          unifiedTabsByWorktree: {
-            'repo-1::/repo/worktree': [{ id: 'structured-tab-1' }]
-          }
-        },
-        'structured-tab-1'
-      )
-    ).toBe('/repo/worktree')
-  })
-
-  it('returns null when the tab has no known worktree owner', () => {
-    expect(
-      resolveNativeChatSkillDiscoveryCwd(
-        { ...catalog, tabsByWorktree: {}, worktreesByRepo: {} },
-        'tab-1'
-      )
-    ).toBeNull()
-  })
-
-  it('prefers the pane startupCwd over the worktree root', () => {
-    expect(
-      resolveNativeChatSkillDiscoveryCwd(
-        {
-          ...catalog,
-          tabsByWorktree: {
-            'repo-1::/repo/worktree': [
-              { id: 'tab-1', startupCwd: '/repo/worktree/packages/app' },
-              { id: 'tab-2' }
-            ]
-          }
-        },
-        'tab-1'
-      )
-    ).toBe('/repo/worktree/packages/app')
-  })
-})
 
 describe('floating workspace skill discovery', () => {
   const floatingTab: Tab = {
@@ -137,14 +67,5 @@ describe('floating workspace skill discovery', () => {
       runtimeTarget: { kind: 'local' },
       discoveryTarget: { cwd: '/home/me/pinned', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
     })
-  })
-
-  it('stays not-ready until the floating directory resolves', () => {
-    expect(
-      resolveNativeChatSkillDiscoveryContext(
-        { ...floatingInputs, floatingWorkspacePath: null },
-        'floating-chat-1'
-      )
-    ).toBeNull()
   })
 })

@@ -8,18 +8,20 @@ import {
 import type { AgentType } from '../../shared/agent-status-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { structuredAgentSessionIdFromTabId } from '../../shared/structured-agent-session-tab-id'
-import type { Tab } from '../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './orchestration/db'
 import {
+  observeOrchestrationSender,
+  orchestrationSenderAgent,
   orchestrationSenderName,
   structuredChatNaming,
+  captureMirroredTabs,
   type MirroredTabs,
   type SenderHookRow,
   type SenderNamingSources,
   type TerminalSenderNaming
 } from './orchestration/orchestration-sender-name'
-import { agentMessageSender } from './orchestration/agent-message-sender'
+import { agentMessageSender, type SenderSnapshot } from './orchestration/agent-message-sender'
 import {
   type AgentSessionRecordReader,
   readAgentSessionRecordStore
@@ -67,7 +69,7 @@ export class RuntimeOrchestrationSenderNames {
     return agentMessageSender(
       address,
       this.deps.getDb(),
-      (party, reported) => this.nameOf(party, reported),
+      (party, reported) => this.snapshotOf(party, reported),
       reportedDispatchId
     )
   }
@@ -80,15 +82,38 @@ export class RuntimeOrchestrationSenderNames {
   ): string | null {
     return orchestrationSenderName(
       party,
-      {
-        db: this.deps.getDb(),
-        ...this.chatSources(undefined, records),
-        terminal: (handle) => this.terminalNaming(handle),
-        generatedTitlesEnabled: this.deps.getGeneratedTitlesEnabled()
-      },
+      this.namingSources(records),
       reportedDispatchId,
+      undefined,
       taskName
     )
+  }
+
+  /** Name and agent share one current chat or terminal observation. */
+  snapshotOf(party: AgentMessageSender['party'], reportedDispatchId?: string): SenderSnapshot {
+    const sources = this.namingSources()
+    const observation = observeOrchestrationSender(party, sources, reportedDispatchId)
+    return {
+      name: orchestrationSenderName(party, sources, reportedDispatchId, observation),
+      agent: orchestrationSenderAgent(sources, observation)
+    }
+  }
+
+  private namingSources(
+    records: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+  ): SenderNamingSources {
+    const terminals = new Map<string, TerminalSenderNaming | null>()
+    return {
+      ...this.chatSources(undefined, records),
+      db: this.deps.getDb(),
+      terminal: (handle) => {
+        if (!terminals.has(handle)) {
+          terminals.set(handle, this.terminalNaming(handle))
+        }
+        return terminals.get(handle) ?? null
+      },
+      generatedTitlesEnabled: this.deps.getGeneratedTitlesEnabled()
+    }
   }
 
   /** Names one worktree.ps pass's rows as desktop's compact row does; null keeps the phone's message fallback. */
@@ -131,45 +156,7 @@ export class RuntimeOrchestrationSenderNames {
   captureCrewInputs() {
     const generatedTitlesEnabled = this.deps.getGeneratedTitlesEnabled()
     const db = this.deps.getDb()
-    const snapshots = new WeakMap<MirroredTabs, MirroredTabs>()
-    const workspaces = new Map<string, MirroredTabs | null>()
-    const terminalTabs = new Map<
-      string,
-      Map<string, Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>>
-    >()
-    const chatTabs = new Map<
-      string,
-      Map<string, Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>>
-    >()
-    const session = (id: string) => {
-      if (!workspaces.has(id)) {
-        const live = this.deps.getWorkspaceSession(id)
-        let captured = live ? snapshots.get(live) : null
-        if (live && !captured) {
-          captured = structuredClone(live)
-          snapshots.set(live, captured)
-        }
-        workspaces.set(id, captured ?? null)
-        const terminals = new Map<string, Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>>()
-        for (const tab of captured?.tabsByWorktree?.[id] ?? []) {
-          if (!terminals.has(tab.id)) {
-            terminals.set(tab.id, tab)
-          }
-        }
-        terminalTabs.set(id, terminals)
-        const chats = new Map<
-          string,
-          Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>
-        >()
-        for (const tab of captured?.unifiedTabs?.[id] ?? []) {
-          if (tab.contentType === 'agent-session' && !chats.has(tab.entityId)) {
-            chats.set(tab.entityId, tab)
-          }
-        }
-        chatTabs.set(id, chats)
-      }
-      return workspaces.get(id)
-    }
+    const tabs = captureMirroredTabs((id) => this.deps.getWorkspaceSession(id))
     const statuses = new Map<string, SenderHookRow[]>()
     const allStatuses = this.deps.getAgentStatusSnapshot?.()
     for (const row of allStatuses ?? []) {
@@ -190,16 +177,13 @@ export class RuntimeOrchestrationSenderNames {
           db,
           records,
           generatedTitlesEnabled,
-          chatTab: (worktreeId, sessionId) => {
-            session(worktreeId)
-            return chatTabs.get(worktreeId)?.get(sessionId) ?? null
-          },
+          chatTab: tabs.chatTab,
           terminal: (handle) => {
             if (!terminals.has(handle)) {
               const naming = this.terminalNaming(
                 handle,
-                session,
-                (worktreeId, tabId) => terminalTabs.get(worktreeId)?.get(tabId),
+                tabs.session,
+                tabs.terminalTab,
                 allStatuses ? (pane) => statuses.get(pane) ?? [] : this.statusRowsForPane,
                 readPane
               )
@@ -208,6 +192,7 @@ export class RuntimeOrchestrationSenderNames {
             return terminals.get(handle) ?? null
           }
         },
+        undefined,
         undefined,
         taskName
       )

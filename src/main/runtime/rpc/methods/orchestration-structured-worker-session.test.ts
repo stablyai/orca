@@ -1,15 +1,15 @@
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { getAppEnvironment } from '../../../../shared/app-environment'
-import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end-settlement'
 
 type WorkerHost = Pick<
@@ -22,6 +22,7 @@ type WorkerHost = Pick<
   | 'observeJournalPublications'
 > & {
   deps: {
+    logger: Pick<StructuredAgentSessionHost['deps']['logger'], 'warn'>
     store: Pick<
       StructuredAgentSessionHost['deps']['store'],
       'requireWritableRecord' | 'getConversation' | 'getSessionTabId' | 'isSessionTabRetired'
@@ -71,6 +72,7 @@ function installHost(
     },
     close: async () => {},
     deps: {
+      logger: { warn: vi.fn() },
       store: {
         requireWritableRecord: record,
         getConversation: (id: string) => agentSessionConversationView(record(id)),

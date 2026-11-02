@@ -14,7 +14,7 @@ import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
-import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/structured-agent-session-live-turn'
+import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { NativeChatNewRowsMarker } from './NativeChatNewRowsMarker'
 import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
 

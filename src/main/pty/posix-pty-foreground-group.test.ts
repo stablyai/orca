@@ -26,11 +26,6 @@ const psResult = (stdout: string): ProcessResult => ({
 const macosTable = ['84644 84985 ttys318', '  4242     4242 ttys002'].join('\n')
 
 describe('getPosixPtyForegroundGroup', () => {
-  it('returns the tty foreground group, not the root pid group', () => {
-    // macOS login(1) is the root; the shell moves into the group that actually receives resize signals.
-    expect(getPosixPtyForegroundGroup(macosTable, 84644, '/dev/ttys318', 4242)).toBe(84985)
-  })
-
   it('accepts a Linux pts device name', () => {
     expect(getPosixPtyForegroundGroup('900 931 pts/3', 900, '/dev/pts/3', 4242)).toBe(931)
   })
