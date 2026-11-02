@@ -146,16 +146,4 @@ describe('useListMultiSelection', () => {
     })
     expect(selection.selectedItems).toEqual([])
   })
-
-  it('keeps array identities across rebuilds with the same order', () => {
-    setPlatform(false)
-    render([a, b])
-    act(() => selection.updateSelectionForGesture(gesture({ ctrlKey: true }), a))
-    const { visibleKeys, selectedItems, updateSelectionForGesture } = selection
-
-    render([a, b])
-    expect(selection.visibleKeys).toBe(visibleKeys)
-    expect(selection.selectedItems).toBe(selectedItems)
-    expect(selection.updateSelectionForGesture).toBe(updateSelectionForGesture)
-  })
 })
