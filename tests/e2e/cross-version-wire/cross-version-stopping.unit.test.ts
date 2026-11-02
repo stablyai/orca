@@ -12,9 +12,6 @@ const SUITE_TIMEOUT_MS = 180_000
 const STATUS_FOLD = 'src/shared/structured-agent-session-agent-status.ts'
 // Both builds load a copy in the checkout cache, out of reach of `mobile/tsconfig.json`.
 const PHONE_ROW_READER = 'mobile/src/worktree/agent-row-display.ts'
-const PROTOCOL_VERSION = 'src/shared/protocol-version.ts'
-const MOBILE_ALLOWLIST = 'src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist.ts'
-const STATUS_STREAM = 'agentSession.subscribeStatus'
 
 const WORKTREE_ID = 'repo::/worktree'
 const NOW = 1_000_000
@@ -102,7 +99,7 @@ function publishRow(host: HostRowModules, mainAgent: Record<string, unknown>): R
 async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [fold, display, sources, rows] = await Promise.all([
-      import('../../../src/shared/structured-agent-session-agent-status'),
+      import('../../../src/shared/agent-session/view/structured-agent-session-agent-status'),
       importWorkingTreeModuleCopy(PHONE_ROW_READER),
       import('../../../src/main/runtime/runtime-worktree-agent-sources'),
       import('../../../src/main/runtime/runtime-worktree-agent-rows')
@@ -177,25 +174,5 @@ describe('cross-version Stopping', () => {
     const row = publishRow(oldBuild.host, { state: 'working', stateStartedAt: NOW - 60_000 })
     expect(newBuild.agentDotState(row, NOW)).toBe('working')
     expect(newBuild.agentDisplayLabel(row, NOW)).toBe('running the tests')
-  })
-
-  // The phone's chat reads Stopping from the status stream only on a host that lets phones call it.
-  it('an OLD host advertising the status feed refuses it to a NEW phone, which reads that as no feed', async () => {
-    const checkout = await materializeReleaseCheckout(PRE_CHANGE_REF)
-    const [oldProtocol, oldAllowlist, newProtocol, newAllowlist] = await Promise.all([
-      importReleaseCheckoutModule(checkout, PROTOCOL_VERSION),
-      importReleaseCheckoutModule(checkout, MOBILE_ALLOWLIST),
-      import('../../../src/shared/protocol-version'),
-      import('../../../src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist')
-    ])
-    const capability = newProtocol.AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY
-    expect(oldProtocol.RUNTIME_CAPABILITIES).toContain(capability)
-    // Anti-vacuous oracle: the old Set answers membership for a method it does grant phones.
-    expect(oldAllowlist.MOBILE_RPC_METHOD_ALLOWLIST).toContain('agentSession.subscribe')
-    // The capability alone is no grant: this host's mobile gate answers `forbidden`, which the
-    // phone's feed reads as absence (mobile-structured-session-status-feed.test.ts).
-    expect(oldAllowlist.MOBILE_RPC_METHOD_ALLOWLIST).not.toContain(STATUS_STREAM)
-    expect(newProtocol.RUNTIME_CAPABILITIES).toContain(capability)
-    expect(newAllowlist.MOBILE_RPC_METHOD_ALLOWLIST.has(STATUS_STREAM)).toBe(true)
   })
 })

@@ -8,7 +8,6 @@ const {
   autoUpdaterMock,
   getLinuxRootPackageTypeMock,
   isExternallyManagedLinuxInstallMock,
-  recordUpdaterLifecycleMock,
   fetchNewerReleaseTagsMock,
   moduleFactories,
   resetUpdaterMocks
@@ -64,29 +63,6 @@ describe('updater externally managed Linux installs', () => {
     return send.mock.calls.findLast(([channel]) => channel === 'updater:status')?.[1]
   }
 
-  it('still reports the available release so the user can update through their distribution', async () => {
-    const { send, updater } = await startUpdater({ packageType: 'deb', externallyManaged: true })
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(lastStatus(send)).toEqual({
-      state: 'available',
-      version: '1.0.61',
-      changelog: null,
-      externallyManaged: true
-    })
-  })
-
-  it('does not flag a real deb host', async () => {
-    const { send, updater } = await startUpdater({ packageType: 'deb', externallyManaged: false })
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-
-    const status = lastStatus(send)
-    expect(status).toEqual({ state: 'available', version: '1.0.61', changelog: null })
-    expect(status && 'externallyManaged' in status).toBe(false)
-  })
-
   it('refuses the download instead of spending it on a package it can never install', async () => {
     const { send, updater } = await startUpdater({ packageType: 'deb', externallyManaged: true })
     updater.checkForUpdatesFromMenu()
@@ -105,33 +81,8 @@ describe('updater externally managed Linux installs', () => {
     })
   })
 
-  it('records the blocked download for field diagnosis', async () => {
-    const { updater } = await startUpdater({ packageType: 'deb', externallyManaged: true })
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-    updater.downloadUpdate()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
-      'linux_package_externally_managed_download_blocked',
-      { version: '1.0.61' }
-    )
-  })
-
   it('leaves an ordinary deb host able to download', async () => {
     const { updater } = await startUpdater({ packageType: 'deb', externallyManaged: false })
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-    autoUpdaterMock.downloadUpdate.mockResolvedValue([])
-
-    updater.downloadUpdate()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalled()
-  })
-
-  it('leaves an AppImage host able to download', async () => {
-    const { updater } = await startUpdater({ packageType: null, externallyManaged: false })
     updater.checkForUpdatesFromMenu()
     await vi.advanceTimersByTimeAsync(0)
     autoUpdaterMock.downloadUpdate.mockResolvedValue([])

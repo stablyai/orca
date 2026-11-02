@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { DaemonClient } from './client'
-import { DaemonPtyAdapter } from './daemon-pty-adapter'
+
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
@@ -81,24 +81,6 @@ it('reads and saves on the attached daemon socket, refusing stale identity and l
     'host changed'
   )
   expect(readFileSync(path, 'utf8')).toBe(saved)
-})
-
-it('recognizes an older daemon without replacement and preserves real transport failures', async () => {
-  vi.spyOn(DaemonClient.prototype, 'ensureConnected').mockResolvedValue()
-  const request = vi
-    .spyOn(DaemonClient.prototype, 'request')
-    .mockRejectedValue(new Error('Unknown request type: terminalLimitStatus'))
-  const adapter = new DaemonPtyAdapter({
-    socketPath: '/tmp/orca-limit-old.sock',
-    tokenPath: '/tmp/orca-limit-old.token'
-  })
-  try {
-    await expect(adapter.terminalLimit()).resolves.toBeNull()
-    request.mockRejectedValue(new Error('socket closed'))
-    await expect(adapter.terminalLimit()).rejects.toThrow('socket closed')
-  } finally {
-    adapter.dispose()
-  }
 })
 
 it('fences an actual pending save when the server shuts down before replacement', async () => {

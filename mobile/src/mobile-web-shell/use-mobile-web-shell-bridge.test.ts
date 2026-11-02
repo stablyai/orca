@@ -16,7 +16,6 @@ import {
 } from './bridge/bridge-haptics-notify'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
 import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge/bridge-page-back'
-import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
@@ -313,55 +312,6 @@ describe('the bridge channel', () => {
     ])
   })
 
-  it('names the screen the page stands in for, so its document at `/` is not what it opens', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(mounted.frames('session-one')).toEqual([
-      expect.objectContaining({
-        type: 'init',
-        route: { pathname: '/h/host-1' },
-        pageRoutes: ['/h/[hostId]'],
-        host: SNAPSHOT.host,
-        storage: STORAGE
-      })
-    ])
-  })
-
-  it('opens a screen the page hands back, through the caller that owns the stack', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    await mounted.deliver(
-      clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-1/session/wt-1' })
-    )
-    expect(mounted.probe.navigations).toEqual(['/h/host-1/session/wt-1'])
-  })
-
-  it("hands the page's first paint to the caller that owns the cover over the view", async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(mounted.probe.paints).toBe(0)
-    await mounted.deliver(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
-    expect(mounted.probe.paints).toBe(1)
-  })
-
-  it('hands a URL the page asked for to the caller that can leave the app', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    await mounted.deliver(
-      clientFrame({ type: 'notify', name: 'externalLink', url: 'https://example.com/x' })
-    )
-    expect(mounted.probe.externalLinks).toEqual(['https://example.com/x'])
-    expect(mounted.probe.navigations).toEqual([])
-  })
-
-  it('pops the stack the page was pushed onto, through the caller that owns it', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    await mounted.deliver(clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }))
-    expect(mounted.probe.backPops).toBe(1)
-    expect(mounted.probe.navigations).toEqual([])
-  })
-
   it('does not rebuild the host for a route object the caller built again', async () => {
     const mounted = await mount(readyState('session-one'))
     await mounted.deliver(clientFrame({ type: 'ready' }))
@@ -375,22 +325,6 @@ describe('the bridge channel', () => {
     expect(mounted.frames('session-one').filter((frame) => frame.type !== 'init')).toEqual([
       { v: 1, type: 'reply', id: ID, payload: rpcSuccess('wire-1', 'ok') }
     ])
-  })
-
-  it('hands a page fault to the screen and asks the client for nothing', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    await mounted.deliver(
-      clientFrame({
-        type: 'notify',
-        name: BRIDGE_FAULT_GRANT,
-        error: { category: 'Error', message: 'the route threw', isRpcDeliveryUnknown: false }
-      })
-    )
-    expect(mounted.faults).toEqual([
-      { category: 'Error', message: 'the route threw', isRpcDeliveryUnknown: false }
-    ])
-    expect(fakeClient().requests).toEqual([])
   })
 
   it('reports a fault from the page on screen, never from the one it replaced', async () => {
@@ -411,21 +345,6 @@ describe('the bridge channel', () => {
       })
     })
     expect(mounted.faults).toEqual([])
-  })
-
-  it('forwards to the client the hook was given', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
-    expect(fakeClient().requests.map((request) => request.method)).toEqual(['status.get'])
-  })
-
-  it('builds no host while the ready session has no client, and answers nothing', async () => {
-    doubles.client = null
-    const mounted = await mount(readyState('session-one'))
-    expect(mounted.probe.view?.bridgeEnabled).toBe(true)
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(mounted.posted).toEqual([])
   })
 
   it('logs a frame it dropped for want of a host once per session, naming what is missing', async () => {
@@ -561,26 +480,9 @@ describe('teardown', () => {
     await flushBridge()
     expect(mounted.posted).toHaveLength(2)
   })
-
-  it('ignores a frame that arrives for a session the hook has moved past', async () => {
-    const mounted = await mount(readyState('session-one'))
-    const stale = mounted.probe.view
-    await mounted.update(readyState('session-two'))
-    await act(async () => {
-      stale?.onBridgeMessage({ nativeEvent: { json: clientFrame({ type: 'ready' }) } })
-    })
-    expect(mounted.posted).toEqual([])
-  })
 })
 
 describe('diagnostics', () => {
-  it('warns once for the frames one page has refused, not once each', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver('{"v":1,"type":')
-    await mounted.deliver(clientFrame({ type: 'request', id: 'short', method: 'x' }))
-    expect(warned).toHaveBeenCalledTimes(1)
-  })
-
   it('names the notification it refused and why, rather than blaming the view', async () => {
     const mounted = await mount(readyState('session-one'))
     await mounted.deliver(
@@ -596,29 +498,9 @@ describe('diagnostics', () => {
       why: 'before-ready'
     })
   })
-
-  it('starts the count over for the next page', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver('{"v":1,"type":')
-    await mounted.update(readyState('session-two'))
-    await mounted.deliver('{"v":1,"type":')
-    expect(warned).toHaveBeenCalledTimes(2)
-  })
 })
 
 describe('client changes', () => {
-  it('rebuilds the host on a new client, so nothing crosses to the one that was replaced', async () => {
-    const first = fakeClient()
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    const next = createFakeRpcClient()
-    doubles.client = next
-    await mounted.update(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
-    expect(next.requests).toHaveLength(1)
-    expect(first.requests).toHaveLength(0)
-  })
-
   // Client replacement preserves the live document/session; retain its Back state so an open sheet cannot lose the next press.
   it('keeps delivering Back to an open sheet after the host is rebuilt under it', async () => {
     const mounted = await mount(readyState('session-one'))

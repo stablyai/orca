@@ -5,8 +5,18 @@ import { PendingPtyGroupSweep } from '../../pty/pending-pty-group-sweep'
 import { killConptyNow, terminatePtyJob } from '../../windows/windows-pty-job'
 import { SessionTerminationController } from '../session-termination-controller'
 import { shutdownOwnedTerminalProcess } from '../terminal-host-session-shutdown'
-export function createDaemonPtyPhysicalOwner(proc: pty.IPty) {
+import { createGitBashConsoleCapacityDetector } from '../../../shared/git-bash-console-capacity'
+import { resolvePtyOwnerBackend } from '../../../shared/pty-owner-backend'
+import { resolveProcessExitCause } from '../../../shared/terminal-exit-cause'
+import { withInitialOutputDiagnostic } from '../../../shared/terminal-start-failure'
+
+export function createDaemonPtyPhysicalOwner(proc: pty.IPty, shellPath: string) {
   const nativeProc: DisposableNativePty = proc
+  const initialOutput =
+    resolvePtyOwnerBackend({ platform: process.platform, shellPath }) === 'windows-conpty'
+      ? createGitBashConsoleCapacityDetector(4096)
+      : null
+  let nativeDataSubscription: pty.IDisposable | undefined
   let exit: { exitCode: number; signal?: number } | null = null
   const exitListeners = new Set<Parameters<pty.IPty['onExit']>[0]>()
   let disposed = false
@@ -66,6 +76,8 @@ export function createDaemonPtyPhysicalOwner(proc: pty.IPty) {
       return
     }
     disposed = true
+    nativeDataSubscription?.dispose()
+    nativeDataSubscription = undefined
     const destroy = (): void => {
       try {
         nativeProc.destroy?.()
@@ -98,6 +110,10 @@ export function createDaemonPtyPhysicalOwner(proc: pty.IPty) {
     if (exit || nativeExitSubscription) {
       return
     }
+    // Observe the original prefix before ConPTY rewrites or pre-listener eviction.
+    if (initialOutput && !nativeDataSubscription) {
+      nativeDataSubscription = proc.onData(initialOutput.observe)
+    }
     nativeExitSubscription = proc.onExit((event) => {
       if (exit) {
         return
@@ -108,6 +124,12 @@ export function createDaemonPtyPhysicalOwner(proc: pty.IPty) {
       }
       termination.markPhysicalExit()
       const errors: unknown[] = []
+      try {
+        nativeDataSubscription?.dispose()
+        nativeDataSubscription = undefined
+      } catch (error) {
+        errors.push(error)
+      }
       try {
         retireNativeExitSubscription()
       } catch (error) {
@@ -137,6 +159,11 @@ export function createDaemonPtyPhysicalOwner(proc: pty.IPty) {
   }
   return {
     observeExit,
+    resolveExitCause: (observation: Parameters<typeof resolveProcessExitCause>[0]) =>
+      withInitialOutputDiagnostic(
+        resolveProcessExitCause(observation),
+        initialOutput?.detected() === true
+      ),
     completion: termination.physicalCompletion,
     exitCode: () => exit?.exitCode ?? null,
     onExit: (listener: Parameters<pty.IPty['onExit']>[0]): pty.IDisposable => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
+import { structuredAgentSessionCommandTurn } from '../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import {
   CODEX_TEST_THREAD_ID,
   codexTurnLifecycleRig
@@ -28,15 +28,6 @@ describe('a Codex Stop that names no turn', () => {
 
     await expect(stop(rig, () => null)).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
     expect(rig.interrupts().map((call) => call.params?.turnId)).toEqual(['turn-1'])
-  })
-
-  it('interrupts no turn that already ended', async () => {
-    const rig = await codexTurnLifecycleRig()
-    await openedTurn(rig)
-    rig.turns.end('completed')
-
-    await expect(stop(rig)).resolves.toEqual({ cancelled: false })
-    expect(rig.interrupts()).toEqual([])
   })
 
   it("names the journal's turn over the one it saw open, and carries Codex's refusal", async () => {

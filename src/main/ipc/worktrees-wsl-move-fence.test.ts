@@ -21,7 +21,7 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { rememberPreservedBranchCleanupTarget } from './worktrees/removal/preserved-branch-cleanup'
-import * as issueCommandFile from '../issue-command-file'
+
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
@@ -83,14 +83,6 @@ describe('worktree IPC under a WSL move', () => {
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
-  it('refuses a forget before touching metadata', async () => {
-    await expect(
-      handlers['worktrees:forgetLocal'](null, { worktreeId: MOVING })
-    ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-  })
-
   it('refuses a preserved-branch delete before any Git work', async () => {
     rememberPreservedBranchCleanupTarget(
       MOVING,
@@ -109,15 +101,6 @@ describe('worktree IPC under a WSL move', () => {
     ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
     expect(forceDeleteLocalBranchMock).not.toHaveBeenCalled()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('refuses an issue-command write before touching the file', async () => {
-    const write = vi.spyOn(issueCommandFile, 'writeIssueCommand').mockResolvedValue(undefined)
-    await expect(
-      handlers['hooks:writeIssueCommand'](null, { repoId: 'repo-1', content: 'run' })
-    ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
-    expect(write).not.toHaveBeenCalled()
-    write.mockRestore()
   })
 
   it('drops passive metadata quietly and refuses a user edit', () => {

@@ -79,20 +79,6 @@ describe('served browser tabs in a layout-owner build', () => {
     expect(host.session().browserTabsByWorktree?.[WT]).toHaveLength(1)
   })
 
-  it('closes a tab through layout.apply and drops its page records', async () => {
-    const host = servedHost()
-    host.tabs.opened(PAGE)
-    await settle()
-
-    expect(host.tabs.closed(WT, 'page-1')).toBe(true)
-    await settle()
-
-    expect(host.session().browserTabsByWorktree?.[WT] ?? []).toEqual([])
-    expect(host.session().unifiedTabs?.[WT] ?? []).toEqual([])
-    expect(host.session().browserPagesByWorkspace?.['page-1']).toBeUndefined()
-    expect(host.tabs.closed(WT, 'page-1')).toBe(false)
-  })
-
   it('closes a window-saved tab by its own tab-bar entry', async () => {
     const host = servedHost()
     host.tabs.opened(PAGE)

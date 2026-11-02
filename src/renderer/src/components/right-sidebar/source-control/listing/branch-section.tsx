@@ -6,7 +6,7 @@ import type {
   GitBranchCompareSummary
 } from '../../../../../../shared/git-diff-compare-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { SourceControlTreeNode } from '../../source-control-tree'
+import type { SourceControlTreeNode } from '../../../../../../shared/source-control-tree'
 import type { SourceControlRowOpenEvent } from './split-open'
 import { BranchEntryRow } from './branch-entry-row'
 import { SectionHeader } from './section-header'
@@ -15,6 +15,7 @@ import { SourceControlBranchTreeDirectoryRow } from './tree-directory-rows'
 import { VirtualizedList } from '../../../virtualized-list'
 
 export function SourceControlBranchSection({
+  activeOpenRowKeys,
   branchSummary,
   filteredBranchEntries,
   totalBranchEntryCount,
@@ -33,6 +34,7 @@ export function SourceControlBranchSection({
   openBranchAllDiffs,
   diffCommentCountByPath
 }: {
+  activeOpenRowKeys: ReadonlySet<string>
   branchSummary: GitBranchCompareSummary
   filteredBranchEntries: GitBranchChangeEntry[]
   totalBranchEntryCount: number
@@ -123,6 +125,7 @@ export function SourceControlBranchSection({
                   currentWorktreeId={currentWorktreeId}
                   worktreePath={worktreePath}
                   depth={node.depth}
+                  isOpenFile={activeOpenRowKeys.has(node.key)}
                   onRevealInExplorer={revealInExplorer}
                   connectionId={activeConnectionId}
                   onOpen={(event) => openCommittedDiff(node.entry, event)}
@@ -136,10 +139,11 @@ export function SourceControlBranchSection({
           <VirtualizedList
             rows={filteredBranchEntries}
             scrollElement={fileListScrollElement}
-            getRowKey={(entry) => `branch:${entry.path}`}
+            getRowKey={(entry) => `branch::${entry.path}`}
             renderRow={(entry) => (
               <BranchEntryRow
-                key={`branch:${entry.path}`}
+                key={`branch::${entry.path}`}
+                isOpenFile={activeOpenRowKeys.has(`branch::${entry.path}`)}
                 entry={entry}
                 currentWorktreeId={currentWorktreeId}
                 worktreePath={worktreePath}

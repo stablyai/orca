@@ -3,7 +3,9 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
+import { useAppStore } from '@/store'
+import { publicRuntimeEnvironment } from '@/runtime/paired-runtime-environment-test-fixture'
+import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
 
 beforeAll(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
@@ -54,6 +56,60 @@ async function renderHeader(delayDuration = 0) {
   })
   return container
 }
+
+describe('project header WSL host mark', () => {
+  it('shows a penguin instead of the host name, and the header tooltip says where it runs', async () => {
+    useAppStore.setState({
+      runtimeEnvironments: [
+        publicRuntimeEnvironment({
+          id: 'env-wsl',
+          name: 'orca-demo (WSL)',
+          orcadDeployment: {
+            kind: 'wsl',
+            distro: 'orca-demo',
+            localPort: 42000,
+            remotePort: 6768
+          }
+        })
+      ]
+    })
+    cleanup.push(() => useAppStore.setState({ runtimeEnvironments: [] }))
+    const context = {
+      hostId: 'runtime:env-wsl',
+      label: 'orca-demo (WSL)',
+      detail: 'Ready'
+    } as const
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    cleanup.push(() => {
+      act(() => root.unmount())
+      container.remove()
+    })
+    await act(async () => {
+      root.render(
+        <TooltipProvider delayDuration={0}>
+          <ProjectHeaderHostTooltip label="app" context={context}>
+            <div role="button" tabIndex={0}>
+              <span>app</span>
+              <ProjectHeaderHostLabel context={context} />
+            </div>
+          </ProjectHeaderHostTooltip>
+        </TooltipProvider>
+      )
+    })
+    expect(container.textContent).not.toContain('orca-demo (WSL)')
+    expect(container.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(
+      'Runs on WSL: orca-demo (Linux)'
+    )
+    act(() => container.querySelector<HTMLElement>('[role="button"]')?.focus())
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+        'app — Runs on WSL: orca-demo (Linux)'
+      )
+    )
+  })
+})
 
 describe('project header host tooltip focus', () => {
   it('opens the full identity tooltip when the header itself receives keyboard focus', async () => {

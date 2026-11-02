@@ -1,21 +1,18 @@
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import {
-  projectStructuredQuestionMessages,
-  structuredQuestionTranscript
-} from '../../../src/shared/structured-agent-question-projection'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import { createStructuredQuestionProjection } from '../../../src/shared/structured-agent-question-projection'
+import { projectStructuredAgentStartItem } from '../../../src/shared/structured-agent-start-projection'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
-import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
+import { agentSessionTranscriptRows } from '../../../src/shared/agent-session/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
-import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
+import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   runningStructuredAgentSessionTurnId,
-  structuredAgentSessionHostSaysWorking,
   structuredAgentSessionQueueSendsNext
-} from '../../../src/shared/structured-agent-session-live-turn'
+} from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
@@ -45,9 +42,13 @@ import { useMobileStructuredSendWithOutcome } from './use-mobile-structured-send
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import { useMobileStructuredSends } from './use-mobile-structured-sends'
-import { useMobileNativeChatQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
+import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
 import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
+
+const mobileStructuredTranscript = createStructuredQuestionProjection(
+  projectStructuredAgentStartItem
+)
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
@@ -55,6 +56,7 @@ export function useMobileStructuredAgentSession(
   const {
     agent,
     client,
+    pairedHostClient: paired,
     connected,
     sessionId,
     sourceIdentity = '',
@@ -67,7 +69,7 @@ export function useMobileStructuredAgentSession(
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
-  const queueFollowUps = useMobileNativeChatQueueFollowUps(client, connected && enabled, sessionId)
+  const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
   const promptCancelSupported = hostSupport?.promptCancel ?? null
   const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const hostStopsConversation = hostSupport?.conversationStop ?? null
@@ -144,7 +146,7 @@ export function useMobileStructuredAgentSession(
         transcriptItems,
         sends.optimistic,
         state.submissions,
-        projectStructuredQuestionMessages
+        mobileStructuredTranscript.messages
       ),
     [transcriptItems, sends.optimistic, state.submissions]
   )
@@ -152,9 +154,7 @@ export function useMobileStructuredAgentSession(
     { ...state, items: transcriptItems },
     turnId
   )
-  const isWorking = structuredAgentSessionHostSaysWorking(state.working, () =>
-    isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence)
-  )
+  const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
   const backgroundTasks = useMobileStructuredBackgroundTasks({
     sessionKey,
@@ -183,7 +183,8 @@ export function useMobileStructuredAgentSession(
     hostStopping,
     stopPressed: stopPress.pressed,
     queueCapable,
-    queueFollowUps
+    queueFollowUps,
+    queueSendsNext
   })
   const { stopping } = turnIndicator
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
@@ -289,6 +290,7 @@ export function useMobileStructuredAgentSession(
     },
     isWorking: isWorking || queueSendsNext,
     canStop,
+    sendFollowUp: turnIndicator.sendFollowUp ?? null,
     turnId,
     turnIndicator,
     ...turnTiming,
@@ -296,7 +298,7 @@ export function useMobileStructuredAgentSession(
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
-    receipts: structuredQuestionTranscript(transcriptItems).receipts,
+    receipts: mobileStructuredTranscript.transcript(transcriptItems).receipts,
     actionablePromptIds: state.actionablePromptIds,
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt),

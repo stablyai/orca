@@ -1,3 +1,4 @@
+import { currentDraftScope } from './native-chat-launch-draft-source'
 import { insertNativeChatComposerDraftText } from './native-chat-composer-draft-insertion'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { captureNativeChatEditDraftDestination } from './native-chat-composer-draft-store'
@@ -17,7 +18,7 @@ function captureNativeChatPasteDestination(
       return
     }
     if (
-      (!destination || destination.scopeKey === scope) &&
+      (!destination || destination.scopeKey === currentDraftScope(scope ?? '')) &&
       lifetime.active &&
       insertTypedText(text)
     ) {

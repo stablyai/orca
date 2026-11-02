@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './register-handlers'
-import { LocalPtyProvider } from '../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
 import type * as WindowsShellExecutable from '../../providers/windows-powershell-executable'
 import {
   getAntigravityAccountVaultPath,

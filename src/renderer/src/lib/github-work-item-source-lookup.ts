@@ -1,7 +1,11 @@
+import { getWorkItemRepo } from './work-item-repo-row'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../shared/task-source-runtime-capabilities'
+import { parseGitHubIssueOrPRLink } from '../../../shared/github/links'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
@@ -23,6 +27,8 @@ type GitHubWorkItemByOwnerRepoLookupArgs = GitHubWorkItemLookupArgs & {
   type: 'issue' | 'pr'
   /** One light call for hover cards; older hosts ignore it. */
   preview?: boolean
+  accepts?: () => boolean
+  rpcOptions?: Parameters<typeof callRuntimeRpc>[3]
 }
 
 type GitHubWorkItemDetailsLookupArgs = {
@@ -32,15 +38,34 @@ type GitHubWorkItemDetailsLookupArgs = {
   number: number
   type: 'issue' | 'pr'
   ownerRepo?: GitHubOwnerRepo | null
+  canonical?: boolean
+  accepts?: () => boolean
+  rpcOptions?: Parameters<typeof callRuntimeRpc>[3]
 }
 
 function runtimeRepoId(args: Pick<GitHubWorkItemLookupArgs, 'repoId' | 'sourceContext'>): string {
   return getGitHubRuntimeRepoId(args.sourceContext, args.repoId)
 }
 
+/** Issue readings feed the shared task records; pull requests never have one, so their lookups skip it. */
+async function captureTaskRecords(args: GitHubWorkItemLookupArgs) {
+  if (args.type === 'pr') {
+    return undefined
+  }
+  const { useAppStore } = await import('@/store')
+  const state = useAppStore.getState()
+  const cache = state.githubTaskCache
+  const repo = getWorkItemRepo(state.repos ?? [], {
+    repoId: args.repoId,
+    repoHostId: args.sourceContext?.hostId
+  })
+  return cache && { cache, binding: cache.capture(repo, args.sourceContext) }
+}
+
 export async function lookupGitHubWorkItemForSource(
   args: GitHubWorkItemLookupArgs
 ): Promise<GitHubWorkItem | null> {
+  const records = await captureTaskRecords(args)
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
   const item =
     target.kind === 'environment'
@@ -60,12 +85,17 @@ export async function lookupGitHubWorkItemForSource(
           number: args.number,
           type: args.type
         })
-  return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  const row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  return row && records ? records.cache.acceptSearch([row], records.binding)[0] : row
 }
 
 export async function lookupGitHubWorkItemByOwnerRepoForSource(
   args: GitHubWorkItemByOwnerRepoLookupArgs
 ): Promise<GitHubWorkItem | null> {
+  if (args.accepts?.() === false) {
+    return null
+  }
+  const records = await captureTaskRecords(args)
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
   const item =
     target.kind === 'environment'
@@ -81,7 +111,15 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
             type: args.type,
             ...(args.preview ? { preview: true } : {})
           },
-          { timeoutMs: 30_000 }
+          {
+            timeoutMs: 30_000,
+            ...args.rpcOptions,
+            beforeSend: () => {
+              if (args.accepts?.() === false) {
+                throw new Error('Task source changed.')
+              }
+            }
+          }
         )
       : await window.api.gh.workItemByOwnerRepo({
           repoPath: args.repoPath,
@@ -94,32 +132,90 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           type: args.type,
           ...(args.preview ? { preview: true } : {})
         })
-  return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  if (args.accepts?.() === false) {
+    return null
+  }
+  const row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  // A canonical verification read publishes through its record, not as a search reading.
+  return row && records && !args.accepts
+    ? records.cache.acceptSearch([row], records.binding)[0]
+    : row
 }
 
-export function lookupGitHubWorkItemDetailsForSource(
+export async function lookupGitHubWorkItemDetailsForSource(
   args: GitHubWorkItemDetailsLookupArgs
 ): Promise<GitHubWorkItemDetails | null> {
+  if (args.accepts?.() === false) {
+    return null
+  }
   const sourceContext = args.sourceContext
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
-  if (runtimeHost) {
-    return callRuntimeRpc<GitHubWorkItemDetails | null>(
-      { kind: 'environment', environmentId: runtimeHost.environmentId },
-      'github.workItemDetails',
-      {
-        repo: getGitHubRuntimeRepoId(sourceContext, args.repoId),
-        number: args.number,
-        type: args.type
-      },
-      { timeoutMs: 30_000 }
-    )
+  if (
+    args.canonical &&
+    runtimeHost &&
+    !(await runtimeEnvironmentSupportsCapability(
+      runtimeHost.environmentId,
+      GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY
+    ))
+  ) {
+    // A canonical read an old server can't serve is unavailable, never an ordinary cached read.
+    return null
   }
-  return window.api.gh.workItemDetails({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    sourceContext,
-    number: args.number,
-    type: args.type,
-    ...(args.ownerRepo ? { ownerRepo: args.ownerRepo } : {})
-  })
+  if (args.accepts?.() === false) {
+    return null
+  }
+  const result = await (runtimeHost
+    ? callRuntimeRpc<GitHubWorkItemDetails | null>(
+        { kind: 'environment', environmentId: runtimeHost.environmentId },
+        'github.workItemDetails',
+        {
+          repo: getGitHubRuntimeRepoId(sourceContext, args.repoId),
+          number: args.number,
+          type: args.type,
+          ...(args.canonical && args.ownerRepo ? { ownerRepo: args.ownerRepo } : {})
+        },
+        {
+          timeoutMs: 30_000,
+          ...args.rpcOptions,
+          ...(args.accepts
+            ? {
+                beforeSend: () => {
+                  if (!args.accepts?.()) {
+                    throw new Error('Task context changed.')
+                  }
+                }
+              }
+            : {})
+        }
+      )
+    : window.api.gh.workItemDetails({
+        repoPath: args.repoPath,
+        repoId: args.repoId,
+        sourceContext,
+        number: args.number,
+        type: args.type,
+        ...(args.ownerRepo ? { ownerRepo: args.ownerRepo } : {}),
+        ...(args.canonical ? { canonical: true } : {})
+      }))
+  if (args.accepts?.() === false) {
+    return null
+  }
+  if (args.canonical && result) {
+    const returned = parseGitHubIssueOrPRLink(result.item.url)
+    if (
+      !returned ||
+      !args.ownerRepo ||
+      result.item.type !== args.type ||
+      result.item.number !== args.number ||
+      returned.type !== args.type ||
+      returned.number !== args.number ||
+      githubRepoIdentityKey(returned.slug) !== githubRepoIdentityKey(args.ownerRepo)
+    ) {
+      return null
+    }
+    return result.item.assignees === undefined
+      ? result
+      : { ...result, assignees: result.item.assignees.map((user) => user.login) }
+  }
+  return result
 }

@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
@@ -145,7 +145,11 @@ export function TerminalPaneView({
           }
           accessibilityState={{ selected: active }}
           onPress={() => onTerminalTap(handle)}
-          style={[styles.paneHeading, active && styles.paneHeadingActive]}
+          style={({ pressed }) => [
+            styles.paneHeading,
+            active && styles.paneHeadingActive,
+            pressed && pressedStyle
+          ]}
           onLayout={(event) => setHeadingHeight(event.nativeEvent.layout.height)}
         >
           <Text numberOfLines={1} style={styles.paneTitle}>

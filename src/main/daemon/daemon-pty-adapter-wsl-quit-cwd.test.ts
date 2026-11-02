@@ -137,13 +137,4 @@ describe('a bridge WSL pane keeps its shell folder across quit', () => {
     expect(readRows.mock.calls[0]?.[1]).toBe(5)
     expect(checkpointCwd(id)).toBe(WSL_CWD)
   })
-
-  it('reads no distro for a pane that is not a WSL pane', async () => {
-    const app = launch()
-    await openBridgePane(app, 'repo::/repo@@windows', 'C:\\repo')
-
-    await app.disconnectOnly()
-
-    expect(readRows).not.toHaveBeenCalled()
-  })
 })

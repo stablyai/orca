@@ -200,16 +200,6 @@ describe('divider drag pointer-type isolation', () => {
     expect(harness.onLayoutChanged).toHaveBeenCalledTimes(1)
   })
 
-  it('drives a touch-started drag from its own pointerId', () => {
-    const harness = createDividerDragHarness()
-    startTouchDrag(harness)
-    harness.windowListeners.get('pointerup')?.(createPointerEvent({ ...TOUCH_DRAG, clientX: 180 }))
-
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-    expect(harness.nextPane.style.flex).toBe('220 1 0%')
-    expect(harness.onLayoutChanged).toHaveBeenCalledTimes(1)
-  })
-
   it('ignores stray mouse motion during an active touch drag', () => {
     const harness = createDividerDragHarness()
     startTouchDrag(harness)

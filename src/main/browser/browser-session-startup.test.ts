@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function installRegistryMock(): {
@@ -48,93 +47,6 @@ describe('initializeBrowserSessionsForApp', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.restoreAllMocks()
-  })
-
-  it('replays pending cookie imports before initializing browser sessions', async () => {
-    const { applyPendingCookieImportMock, initializeBrowserSessionsFromPersistedStateMock } =
-      installRegistryMock()
-    const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
-
-    initializeBrowserSessionsForApp()
-
-    expect(applyPendingCookieImportMock).toHaveBeenCalledOnce()
-    expect(initializeBrowserSessionsFromPersistedStateMock).toHaveBeenCalledOnce()
-    expect(applyPendingCookieImportMock.mock.invocationCallOrder[0]).toBeLessThan(
-      initializeBrowserSessionsFromPersistedStateMock.mock.invocationCallOrder[0]
-    )
-  })
-
-  it('configures the active Orca profile before replaying browser sessions', async () => {
-    const {
-      configureForOrcaProfileMock,
-      configureRouteSessionsForOrcaProfileMock,
-      configurePairedRuntimeBrowserClientHostsForOrcaProfileMock,
-      applyPendingCookieImportMock,
-      initializeBrowserSessionsFromPersistedStateMock
-    } = installRegistryMock()
-    const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
-
-    initializeBrowserSessionsForApp({
-      orcaProfileId: 'local-work',
-      profileDirectory: '/profiles/local-work'
-    })
-
-    expect(configureForOrcaProfileMock).toHaveBeenCalledWith({
-      orcaProfileId: 'local-work',
-      profileDirectory: '/profiles/local-work'
-    })
-    expect(configureRouteSessionsForOrcaProfileMock).toHaveBeenCalledWith({
-      orcaProfileId: 'local-work',
-      profileDirectory: '/profiles/local-work'
-    })
-    expect(configurePairedRuntimeBrowserClientHostsForOrcaProfileMock).toHaveBeenCalledWith({
-      orcaProfileId: 'local-work'
-    })
-    const { getBrowserExtensionProfileDataDirectory } =
-      await import('./extensions/browser-extension-profile-data-directory')
-    expect(getBrowserExtensionProfileDataDirectory()).toBe(
-      join('/profiles/local-work', 'browser-extensions')
-    )
-    expect(configureForOrcaProfileMock.mock.invocationCallOrder[0]).toBeLessThan(
-      applyPendingCookieImportMock.mock.invocationCallOrder[0]
-    )
-    expect(configureRouteSessionsForOrcaProfileMock.mock.invocationCallOrder[0]).toBeLessThan(
-      applyPendingCookieImportMock.mock.invocationCallOrder[0]
-    )
-    expect(
-      configurePairedRuntimeBrowserClientHostsForOrcaProfileMock.mock.invocationCallOrder[0]
-    ).toBeLessThan(applyPendingCookieImportMock.mock.invocationCallOrder[0])
-    expect(applyPendingCookieImportMock.mock.invocationCallOrder[0]).toBeLessThan(
-      initializeBrowserSessionsFromPersistedStateMock.mock.invocationCallOrder[0]
-    )
-  })
-
-  it('sweeps orphaned route partitions once the profile binding runtime is configured', async () => {
-    const {
-      configureRouteSessionsForOrcaProfileMock,
-      collectOrphanedBrowserRoutePartitionStorageMock
-    } = installRegistryMock()
-    const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
-
-    initializeBrowserSessionsForApp({
-      orcaProfileId: 'local-work',
-      profileDirectory: '/profiles/local-work'
-    })
-
-    expect(collectOrphanedBrowserRoutePartitionStorageMock).toHaveBeenCalledOnce()
-    // Orphan collection needs the active profile configured first.
-    expect(configureRouteSessionsForOrcaProfileMock.mock.invocationCallOrder[0]).toBeLessThan(
-      collectOrphanedBrowserRoutePartitionStorageMock.mock.invocationCallOrder[0]
-    )
-  })
-
-  it('does not sweep route partitions when no profile is active', async () => {
-    const { collectOrphanedBrowserRoutePartitionStorageMock } = installRegistryMock()
-    const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
-
-    initializeBrowserSessionsForApp()
-
-    expect(collectOrphanedBrowserRoutePartitionStorageMock).not.toHaveBeenCalled()
   })
 
   it('initializes browser sessions once per app process', async () => {

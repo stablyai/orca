@@ -106,9 +106,7 @@ export async function flushEditorFrames(
   state: EditorBufferViewIndex,
   fileId: string
 ): Promise<boolean> {
-  const flushes = editorBufferSiblingViewIds(state, fileId).flatMap((viewId) => [
-    ...(frameFlushes.get(viewId) ?? [])
-  ])
+  const flushes = frameFlushesOf(state, fileId)
   if (flushes.length === 0) {
     return true
   }
@@ -126,4 +124,36 @@ export async function flushEditorViewsForSave(
   const framesFlushed = await flushEditorFrames(getState(), fileId)
   flushPendingEditorBuffer(getState(), fileId, autosave)
   return framesFlushed
+}
+
+function frameFlushesOf(state: EditorBufferViewIndex, fileId: string): FrameFlush[] {
+  return editorBufferSiblingViewIds(state, fileId).flatMap((viewId) => [
+    ...(frameFlushes.get(viewId) ?? [])
+  ])
+}
+
+/** Whether closing `fileId` must first wait on a mounted frame view's flush. */
+export function hasEditorFrameFlush(state: EditorBufferViewIndex, fileId: string): boolean {
+  return frameFlushesOf(state, fileId).length > 0
+}
+
+/** Runs `run` (a close or view switch that unmounts frames) once every frame view of these files
+ *  handed over its pending edits, so a dirty check sees them; synchronous when none is mounted, else
+ *  `deferred` (re-check what is still open). Each flush has its own deadline, bounding the delay. */
+export function runAfterEditorFramesFlush(
+  state: EditorBufferViewIndex,
+  fileIds: Iterable<string>,
+  run: (deferred: boolean) => void
+): void {
+  const flushes = new Set<FrameFlush>()
+  for (const fileId of fileIds) {
+    for (const flush of frameFlushesOf(state, fileId)) {
+      flushes.add(flush)
+    }
+  }
+  if (flushes.size === 0) {
+    run(false)
+    return
+  }
+  void Promise.all([...flushes].map((flush) => flush().catch(() => false))).then(() => run(true))
 }

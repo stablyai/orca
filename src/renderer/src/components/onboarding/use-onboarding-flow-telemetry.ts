@@ -14,7 +14,7 @@ import type { StepNumber, STEPS } from './use-onboarding-flow-types'
 type OnboardingTelemetryArgs = {
   remappedLastCompletedStep: number
   currentStep: (typeof STEPS)[number]
-  persistedThemeRef: { current: GlobalSettings['theme'] }
+  paintedThemeRef: { current: GlobalSettings['theme'] }
   preflightStatus: AppState['preflightStatus']
   preflightStatusLoading: boolean
   linearStatus: AppState['linearStatus']
@@ -24,7 +24,7 @@ type OnboardingTelemetryArgs = {
 export function useOnboardingFlowTelemetry({
   remappedLastCompletedStep,
   currentStep,
-  persistedThemeRef,
+  paintedThemeRef,
   preflightStatus,
   preflightStatusLoading,
   linearStatus,
@@ -62,10 +62,10 @@ export function useOnboardingFlowTelemetry({
   const setLifecycleRootRef = useCallback(
     (node: HTMLElement | null): void => {
       if (node === null) {
-        applyDocumentTheme(persistedThemeRef.current)
+        applyDocumentTheme(paintedThemeRef.current)
       }
     },
-    [persistedThemeRef]
+    [paintedThemeRef]
   )
 
   const trackTaskSourcesSnapshot = useCallback(

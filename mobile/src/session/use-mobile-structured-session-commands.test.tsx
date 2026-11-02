@@ -1,5 +1,5 @@
 import type { MobileCommandMenuHostFixtureModule } from '../../../src/shared/mobile-queued-edit-host.test-fixture-contract'
-import type { AgentSessionCommandsResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionCommandsResult } from '../../../src/shared/agent-session/agent-session-wire'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import {
   mobileComposerCatalog,

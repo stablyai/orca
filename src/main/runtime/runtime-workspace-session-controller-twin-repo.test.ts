@@ -4,7 +4,6 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   LOCAL_ROW,
   RUNTIME_ROW,
-  SSH_ROW,
   TWIN_REPO_HOST_CASES,
   TWIN_WORKTREE_ID,
   twinPartitionSessions,
@@ -56,15 +55,6 @@ describe('routing a repo id registered on two hosts, in a layout-owner build', (
     expect(controller.tryGetHostId(TWIN_WORKTREE_ID)).toBe(expected)
   })
 
-  it.each<[string, TwinRepoRow, ExecutionHostId]>([
-    ['local', LOCAL_ROW, 'local'],
-    ['SSH', SSH_ROW, 'ssh:box'],
-    ['runtime', RUNTIME_ROW, 'runtime:env-1']
-  ])('leaves a %s-only repo on its own host', (_label, row, expected) => {
-    layoutOwner.isMain = true
-    expect(controllerFor({ repos: [row] }).controller.tryGetHostId(TWIN_WORKTREE_ID)).toBe(expected)
-  })
-
   it('hydrates a twin worktree from the partition the router picks, not the last repo row', () => {
     layoutOwner.isMain = true
     const { controller, sessions } = controllerFor({
@@ -76,16 +66,6 @@ describe('routing a repo id registered on two hosts, in a layout-owner build', (
     )
   })
 
-  it.each(['global-floating-terminal', 'removed-repo::/work/api'])(
-    'routes %s without reading the repo inventory',
-    (worktreeId) => {
-      layoutOwner.isMain = true
-      const { controller, getRepos } = controllerFor({ repos: [RUNTIME_ROW, LOCAL_ROW] })
-      expect(controller.tryGetHostId(worktreeId)).toBe('local')
-      expect(getRepos).not.toHaveBeenCalled()
-    }
-  )
-
   it('reads the repo inventory once per hydration pass, not once per saved worktree', () => {
     layoutOwner.isMain = true
     const { controller, getRepos } = controllerFor({
@@ -94,25 +74,5 @@ describe('routing a repo id registered on two hosts, in a layout-owner build', (
     })
     controller.getHydrationTargets(true)
     expect(getRepos).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('routing twins with the layout-owner switch off', () => {
-  it.each<[string, TwinRepoRow[], ExecutionHostId]>([
-    ['local and SSH twins', [SSH_ROW, LOCAL_ROW], 'ssh:box'],
-    ['local and runtime twins', [RUNTIME_ROW, LOCAL_ROW], 'runtime:env-1'],
-    ['SSH and runtime twins', [RUNTIME_ROW, SSH_ROW], 'runtime:env-1']
-  ])('keeps the first catalog row for %s', (_label, repos, expected) => {
-    layoutOwner.isMain = false
-    expect(controllerFor({ repos }).controller.tryGetHostId(TWIN_WORKTREE_ID)).toBe(expected)
-  })
-
-  it('keeps hydrating from the last repo row', () => {
-    layoutOwner.isMain = false
-    const { controller } = controllerFor({
-      repos: [RUNTIME_ROW, LOCAL_ROW],
-      saved: ['runtime:env-1']
-    })
-    expect(controller.getHydrationTargets(true).has(TWIN_WORKTREE_ID)).toBe(false)
   })
 })

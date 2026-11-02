@@ -1,4 +1,4 @@
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   StructuredAgentSessionInputNotAdmitted,

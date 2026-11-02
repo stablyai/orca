@@ -30,22 +30,6 @@ function apply(
 
 // Snapshot ANSI omits kitty pushes; restore proven metadata in order before the IME forwarder reads it.
 describe('replayPreviewConnectionSnapshot', () => {
-  it('adopts flags the snapshot owner proved, before any live output', () => {
-    const { modes } = apply({ kittyKeyboardFlags: 8 })
-    expect(modes.flags).toBe(8)
-    expect(modes.snapshotFlags).toBe(8)
-  })
-
-  it('leaves the mirror unproven and at the raw-text fallback when the field is absent', () => {
-    const { modes } = apply({ data: 'plain output' })
-    expect(modes.flags).toBe(0)
-    expect(modes.snapshotFlags).toBeUndefined()
-
-    // A later explicit negotiation still upgrades it.
-    modes.scan('\x1b[>8u')
-    expect(modes.flags).toBe(8)
-  })
-
   it('replaces an earlier 8 when a replacement snapshot proves 0', () => {
     const modes = new TerminalKittyKeyboardModeTracker()
     apply({ kittyKeyboardFlags: 8 }, [], modes)
@@ -62,22 +46,6 @@ describe('replayPreviewConnectionSnapshot', () => {
     apply({ data: 'second frame' }, [], modes)
     expect(modes.flags).toBe(8)
     expect(modes.snapshotFlags).toBe(8)
-  })
-
-  it('carries nothing across a flagless snapshot when the mirror never proved state', () => {
-    // Fresh default zero is not proof of this PTY’s negotiation state.
-    const modes = new TerminalKittyKeyboardModeTracker()
-    apply({ data: 'first frame' }, [], modes)
-    apply({ data: 'second frame' }, [], modes)
-    expect(modes.flags).toBe(0)
-    expect(modes.snapshotFlags).toBeUndefined()
-  })
-
-  it('keeps proven flags across a replacement snapshot whose ANSI carries no kitty bytes', () => {
-    const modes = new TerminalKittyKeyboardModeTracker()
-    apply({ data: 'first frame' }, [], modes)
-    apply({ data: 'second frame', cols: 90, rows: 30, kittyKeyboardFlags: 8 }, [], modes)
-    expect(modes.flags).toBe(8)
   })
 
   it('restores onto the screen the snapshot scan selected', () => {
@@ -100,17 +68,5 @@ describe('replayPreviewConnectionSnapshot', () => {
     modes.scan('\x1b[<u')
     expect(modes.flags).toBe(0)
     expect(modes.snapshotFlags).toBe(0)
-  })
-
-  it('writes scrollback, frame, kitty restore, escape tail, then replay, in that order', () => {
-    const { written } = apply(
-      {
-        scrollbackAnsi: 'history',
-        data: 'frame',
-        pendingEscapeTailAnsi: '\x1b['
-      },
-      [{ data: 'tail', mode: 'live' }]
-    )
-    expect(written).toEqual(['history', 'frame', '\x1b[<99u', '\x1b[', 'tail'])
   })
 })

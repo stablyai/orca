@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import * as sessionOrigin from '../../../shared/agent-session-start-time'
+import * as sessionOrigin from '../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { buildMirroredAgentStatusPatch } from './web-session-tabs-sync/agent-status-patch'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'

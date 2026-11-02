@@ -13,6 +13,7 @@ import {
 } from './wsl-cli-registration-registry'
 import { WslCliInstaller } from './wsl-cli-installer'
 import { runSerializedWslCliRegistrationOperation } from './wsl-cli-registration-operation'
+import { readWslHostDeployments } from '../../shared/wsl-host-deployment-store'
 
 // Why: each repair spawns a guest shell; a small cap bounds the startup fan-out.
 const MAX_CONCURRENT_DISTRO_REPAIRS = 2
@@ -29,6 +30,7 @@ type ManagedWslCliInstaller = {
 type WslCliRegistrationCandidateContext = {
   currentTarget?: string | null
   appVersion?: string | null
+  inspectableDistros?: readonly string[]
 }
 
 type WslCliRegistrationRegistry = {
@@ -48,6 +50,8 @@ type WslCliRegistrationReconciliationOptions = {
   createInstaller?: (distro: string) => ManagedWslCliInstaller
   getHostLauncherTarget?: () => Promise<string | null>
   registry?: WslCliRegistrationRegistry
+  /** Distros Orca deployed a WSL host into; only those may be inspected for an unrecorded registration. */
+  listOrcaHostDistros?: () => string[]
   listRunningDistros?: () => Promise<string[]>
   /** Settled read taken right before each repair spawns. */
   isDistroRunning?: (distro: string) => Promise<boolean>
@@ -112,7 +116,14 @@ export async function reconcileManagedWslCliRegistrations(
     ? await getHostLauncherTarget().catch(() => null)
     : null
   const appVersion = options.appVersion ?? ''
-  const candidates = await registry.getCandidates(availableDistros, { currentTarget, appVersion })
+  const inspectableDistros = (
+    options.listOrcaHostDistros ?? (() => orcaHostDistros(options.userDataPath))
+  )()
+  const candidates = await registry.getCandidates(availableDistros, {
+    currentTarget,
+    appVersion,
+    inspectableDistros
+  })
   if (candidates.length === 0) {
     return []
   }
@@ -204,6 +215,15 @@ export async function reconcileManagedWslCliRegistrations(
     })
   )
   return [...results, ...deferred]
+}
+
+function orcaHostDistros(userDataPath: string): string[] {
+  try {
+    return readWslHostDeployments(userDataPath).deployments.map((record) => record.distro)
+  } catch {
+    // An unreadable store names no host; registered distros are still reconciled.
+    return []
+  }
 }
 
 export function logWslCliReconciliationResults(

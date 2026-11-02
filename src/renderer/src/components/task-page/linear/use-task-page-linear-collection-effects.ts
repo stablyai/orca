@@ -1,3 +1,5 @@
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import { linearIssueReadError } from '@/lib/linear-read-error'
 import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { translate } from '@/i18n/i18n'
 import type { TaskPageLinearInOrcaEffectsModel } from './use-task-page-linear-in-orca-effects'
@@ -34,6 +36,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     setLinearProjectDetailError,
     linearProjectTab,
     setLinearProjectIssuesResult,
+    linearProjectIssueResult: { read: consumeLinearRead, setLoading: finishLinearLoading },
     linearProjectIssueLimit,
     setLinearProjectIssuesLoading,
     setLinearProjectIssuesError,
@@ -74,11 +77,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
       })
       .catch((error) => {
         if (!cancelled) {
-          setLinearProjectsError(
-            error instanceof Error
-              ? taskProviderErrorText(error.message)
-              : translate('taskProviders.linear.projectsLoadFailed', 'Failed to load projects.')
-          )
+          setLinearProjectsError(taskProviderErrorText(linearIssueReadError(error)))
           setLinearProjectsLoading(false)
         }
       })
@@ -132,11 +131,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
       })
       .catch((error) => {
         if (!cancelled) {
-          setLinearProjectDetailError(
-            error instanceof Error
-              ? taskProviderErrorText(error.message)
-              : translate('taskProviders.linear.projectLoadFailed', 'Failed to load project.')
-          )
+          setLinearProjectDetailError(taskProviderErrorText(linearIssueReadError(error)))
           setLinearProjectDetailLoading(false)
         }
       })
@@ -164,7 +159,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     setLinearProjectIssuesLoading(true)
     setLinearProjectIssuesError(null)
     const effectiveLimit = clampLinearIssueListLimit(linearProjectIssueLimit)
-    void listLinearProjectIssues(
+    const request = listLinearProjectIssues(
       selectedLinearProject.id,
       selectedLinearProject.workspaceId,
       effectiveLimit,
@@ -173,29 +168,35 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
         sourceContext: linearTaskSourceContext
       }
     )
-      .then((result) => {
-        if (!cancelled) {
-          setLinearProjectIssuesResult(result)
-          setLinearProjectIssuesLoading(false)
+    const release = observeLinearIssueRead(
+      request,
+      () => !cancelled,
+      (lease, view) => {
+        if (view.kind === 'abandoned') {
+          if (!cancelled) {
+            finishLinearLoading(false)
+          }
+          return
         }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setLinearProjectIssuesError(
-            error instanceof Error
-              ? taskProviderErrorText(error.message)
-              : translate(
-                  'taskProviders.linear.projectIssuesLoadFailed',
-                  'Failed to load project issues.'
-                )
-          )
-          setLinearProjectIssuesLoading(false)
-        }
-      })
+        consumeLinearRead(lease, view, {
+          ...(view.data ? { data: view.data } : {}),
+          error:
+            view.kind === 'error'
+              ? taskProviderErrorText(linearIssueReadError(view.error))
+              : view.data?.errors?.length
+                ? taskProviderErrorText(linearIssueReadError(view.data.errors[0].message))
+                : null,
+          loading: view.kind === 'loading'
+        })
+      }
+    )
     return () => {
       cancelled = true
+      release()
     }
   }, [
+    consumeLinearRead,
+    finishLinearLoading,
     linearProjectIssueLimit,
     linearProjectTab,
     linearRefreshNonce,

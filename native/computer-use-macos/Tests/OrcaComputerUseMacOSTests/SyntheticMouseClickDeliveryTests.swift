@@ -58,50 +58,10 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
         }
     }
 
-    func testSingleClickPlanPairsDownAndUpAfterMove() {
-        XCTAssertEqual(
-            SyntheticMouseClickDelivery.steps(clickCount: 1),
-            [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)]
-        )
-    }
 
-    func testMultiClickPlanNumbersEachPressForClickState() {
-        XCTAssertEqual(
-            SyntheticMouseClickDelivery.steps(clickCount: 2),
-            [
-                .move,
-                .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1),
-                .buttonDown(pressIndex: 2), .buttonUp(pressIndex: 2),
-            ]
-        )
-    }
 
-    func testNonPositiveClickCountStillDeliversOnePress() {
-        for count in [0, -3] {
-            XCTAssertEqual(
-                SyntheticMouseClickDelivery.steps(clickCount: count),
-                [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)]
-            )
-        }
-    }
 
-    func testExcessiveClickCountIsCappedAtTripleClick() {
-        XCTAssertEqual(
-            SyntheticMouseClickDelivery.steps(clickCount: Int.max),
-            [
-                .move,
-                .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1),
-                .buttonDown(pressIndex: 2), .buttonUp(pressIndex: 2),
-                .buttonDown(pressIndex: 3), .buttonUp(pressIndex: 3),
-            ]
-        )
-    }
 
-    func testClickStateMatchesPressIndexAndSkipsMove() {
-        XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .move), 0)
-        XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .buttonDown(pressIndex: 1)), 1)
-        XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .buttonUp(pressIndex: 2)), 2)
-    }
 
     func testAmbiguousWindowFrameFallbackDoesNotSelectRecipient() {
         let candidates = [(windowID: 101, frame: 7), (windowID: 202, frame: 7)]

@@ -115,6 +115,9 @@ export function buildManagedWorktreeCreateArgs(
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
       ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
+      ...(params.cwdParentAmbiguous === true
+        ? { cwdParentAmbiguous: params.cwdParentAmbiguous }
+        : {}),
       noParent: params.noParent === true,
       callerTerminalHandle: params.callerTerminalHandle,
       orchestrationContext: params.orchestrationContext

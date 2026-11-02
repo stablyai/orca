@@ -40,7 +40,7 @@ beforeAll(async () => {
     join(root, 'preload.ts'),
     `
 import { contextBridge, ipcRenderer } from 'electron'
-import { browserPageInteractionAndSessionsApi } from ${JSON.stringify(join(process.cwd(), 'src/preload/api/browser-bridge-page-interaction-and-sessions.ts'))}
+import { browserPageInteractionAndSessionsApi } from ${JSON.stringify(join(process.cwd(), 'src/preload/api/browser/browser-bridge-page-interaction-and-sessions.ts'))}
 let heldOpen = null
 contextBridge.exposeInMainWorld('probeApi', {
   browser: { ...browserPageInteractionAndSessionsApi, onOpenLinkInOrcaTab: (callback) => browserPageInteractionAndSessionsApi.onOpenLinkInOrcaTab((event) => { heldOpen = () => callback(event) }), registerGuest: (args) => ipcRenderer.invoke('link-probe:register', args) },

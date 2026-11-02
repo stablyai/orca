@@ -1,4 +1,4 @@
-import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function structuredSessionOperationId(): string {

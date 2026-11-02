@@ -4,12 +4,12 @@ import {
   type AgentStatusExecutionScope,
   type AgentStatusStructuredSessionSubject
 } from '../../shared/agent-status-subject'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer } from './server'
 import { GOOD_PANE, PANE } from './server.test-fixtures'
 

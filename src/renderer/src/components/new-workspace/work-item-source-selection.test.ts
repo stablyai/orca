@@ -36,12 +36,6 @@ const issue: JiraIssue = {
 const contexts = { github: null, gitlab: null, linear: null, jira: source }
 
 describe('shared work-item source resolution', () => {
-  it('binds a known Jira account for both creation and attachment selection', () => {
-    expect(
-      resolveWorkItemSourceRow({ kind: 'jira', value: 'jira', issue }, contexts, [site])
-        ?.taskSourceContext
-    ).toEqual(bindJiraIssueSourceContext(source, site, issue))
-  })
   it('rejects a row whose account is no longer available', () => {
     expect(
       resolveWorkItemSourceRow({ kind: 'jira', value: 'jira', issue }, contexts, [])

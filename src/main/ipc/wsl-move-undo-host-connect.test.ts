@@ -7,6 +7,7 @@ import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 const host = vi.hoisted(() => ({
   pendingStop: false,
   connect: vi.fn(async () => {}),
+  ensureForRuntimeCall: vi.fn(async () => {}),
   call: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({
     ok: true,
     result: { terminals: [], truncated: false }
@@ -27,7 +28,7 @@ vi.mock('../wsl/wsl-host-service-instance', () => ({
     recordForEnvironment: () => ({ environmentId: 'wsl:ubuntu', distro: 'Ubuntu' }),
     getStatuses: () => [],
     connect: host.connect,
-    ensureForRuntimeCall: vi.fn()
+    ensureForRuntimeCall: host.ensureForRuntimeCall
   })
 }))
 
@@ -56,5 +57,60 @@ describe("undo's stop of the host's terminals: connecting the host", () => {
     expect(host.connect).not.toHaveBeenCalled()
     // It got past the removed-host check, so the skip is the pending Remove's.
     expect(host.call).toHaveBeenCalled()
+  })
+
+  // A bring-back is not the user's act: it may reach a running distro, never start a stopped one.
+  describe('as an automatic bring-back', () => {
+    it('connects only through the no-boot path, and offers a preflight', async () => {
+      host.pendingStop = false
+      host.connect.mockClear()
+      host.ensureForRuntimeCall.mockClear()
+      const ports = createWslMoveUndoPorts(store, '/user-data', 'automatic')
+      expect(await ports.preflightHostCopies?.(move)).toBe('stopped')
+      host.call.mockClear()
+      expect(await ports.stopHostCopies(move)).toBe('stopped')
+      expect(host.ensureForRuntimeCall).toHaveBeenCalled()
+      expect(host.connect).not.toHaveBeenCalled()
+      expect(host.call).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        'worktree.sleep',
+        expect.anything(),
+        expect.anything()
+      )
+    })
+
+    it('reads a stopped distro as unreachable, asking the host nothing', async () => {
+      host.pendingStop = false
+      host.connect.mockClear()
+      host.call.mockClear()
+      host.ensureForRuntimeCall.mockRejectedValueOnce(new Error('Ubuntu is stopped'))
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const ports = createWslMoveUndoPorts(store, '/user-data', 'automatic')
+      expect(await ports.preflightHostCopies?.(move)).toBe('unreachable')
+      expect(host.connect).not.toHaveBeenCalled()
+      expect(host.call).not.toHaveBeenCalled()
+    })
+
+    it('refuses a live host terminal instead of sleeping it', async () => {
+      host.pendingStop = false
+      host.call.mockImplementation(async (..._args: unknown[]) => ({
+        ok: true,
+        result: { terminals: [{ connected: true, worktreeId: 'repo-a::/home/me/a' }] }
+      }))
+      const ports = createWslMoveUndoPorts(store, '/user-data', 'automatic')
+      expect(await ports.stopHostCopies(move)).toBe('still-running')
+      expect(host.call).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        'worktree.sleep',
+        expect.anything(),
+        expect.anything()
+      )
+    })
+
+    it('offers no preflight to the user undo', () => {
+      expect(createWslMoveUndoPorts(store, '/user-data').preflightHostCopies).toBeUndefined()
+    })
   })
 })

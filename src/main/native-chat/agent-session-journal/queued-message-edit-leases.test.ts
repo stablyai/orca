@@ -61,6 +61,17 @@ describe('queued edit leases', () => {
     expect(leases.heldIds().size).toBe(0)
   })
 
+  it('reuses an edit key only after its previous target becomes invalid', () => {
+    rows.push(card('second'))
+    expect(leases.acquire(desktop, base)).toMatchObject({ status: 'held' })
+    expect(leases.acquire(desktop, { ...base, messageId: 'second' })).toEqual({ status: 'changed' })
+    rows[0]!.fingerprint = 'newer'
+    expect(leases.acquire(desktop, { ...base, messageId: 'second' })).toMatchObject({
+      status: 'held'
+    })
+    expect([...leases.heldIds()]).toEqual(['second'])
+  })
+
   it('expires on its own and wakes the queue with no other activity', () => {
     leases.acquire(desktop, base)
     advance(QUEUED_MESSAGE_EDIT_LEASE_MS - 1)
