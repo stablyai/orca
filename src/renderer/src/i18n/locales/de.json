@@ -23087,7 +23087,7 @@
     "launchTerminal": "Terminal starten"
   },
   "quickChat": {
-    "newChat": "Neuer Chat",
+    "saveFailed": "Die Chat-Einstellungen konnten nicht gespeichert werden. Versuche es erneut.",
     "startChatting": "Chat starten",
     "projectName": "Chats",
     "failed": "Der Chat konnte nicht gestartet werden. Prüfe den Ordner „Chats“ und versuche es erneut."

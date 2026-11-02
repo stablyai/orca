@@ -23468,7 +23468,7 @@
     "terminalUnverifiable": "O Orca não conseguiu verificar se a distribuição WSL {{distro}} está em execução, então não iniciou este terminal. Inicie a distribuição e tente novamente."
   },
   "quickChat": {
-    "newChat": "Novo chat",
+    "saveFailed": "Não foi possível salvar as configurações do chat. Tente novamente.",
     "startChatting": "Começar a conversar",
     "projectName": "Conversas",
     "failed": "Não foi possível iniciar um chat. Verifique a pasta Conversas e tente novamente."

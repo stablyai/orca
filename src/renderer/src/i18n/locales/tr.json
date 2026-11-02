@@ -23070,7 +23070,7 @@
     "launchTerminal": "Terminal başlat"
   },
   "quickChat": {
-    "newChat": "Yeni sohbet",
+    "saveFailed": "Sohbet ayarları kaydedilemedi. Tekrar deneyin.",
     "startChatting": "Sohbete başla",
     "projectName": "Sohbetler",
     "failed": "Sohbet başlatılamadı. Sohbetler klasörünü kontrol edip tekrar deneyin."
