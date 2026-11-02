@@ -23008,7 +23008,8 @@
       "changed": "Foi movido antes e depois alterado aqui por uma versão anterior do Orca. Não será movido novamente.",
       "chatsStay": "Os chats existentes ficam neste computador. Novos chats neste projeto começam no host WSL.",
       "browserLoginsConflict": "Os logins do navegador não serão levados, porque o perfil do navegador do host já está em uso. Entre novamente nas abas do navegador do host após a movimentação.",
-      "browserLoginsNotCarried": "Os logins do navegador não serão levados para este host. Entre novamente nas abas do navegador dele após a movimentação."
+      "browserLoginsNotCarried": "Os logins do navegador não serão levados para este host. Entre novamente nas abas do navegador dele após a movimentação.",
+      "why": "O trabalho passa a rodar dentro do Linux, junto aos seus arquivos, então terminais, Git e alterações de arquivos ficam mais rápidos e confiáveis. Seus projetos não mudam, e você pode trazer qualquer projeto de volta com “Usar novamente neste computador”."
     },
     "cancel": "Cancelar",
     "progress": {

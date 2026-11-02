@@ -23023,7 +23023,8 @@
       "changed": "Déplacé auparavant, puis modifié ici par une version plus ancienne d'Orca. Il n'est pas déplacé à nouveau.",
       "chatsStay": "Les chats existants restent sur cet ordinateur. Les nouveaux chats de ce projet démarrent sur l'hôte WSL.",
       "browserLoginsConflict": "Les connexions du navigateur ne seront pas transférées, car le profil de navigateur de l'hôte est déjà utilisé. Reconnectez-vous dans les onglets de navigateur de l'hôte après le déplacement.",
-      "browserLoginsNotCarried": "Les connexions du navigateur ne seront pas transférées vers cet hôte. Reconnectez-vous dans ses onglets de navigateur après le déplacement."
+      "browserLoginsNotCarried": "Les connexions du navigateur ne seront pas transférées vers cet hôte. Reconnectez-vous dans ses onglets de navigateur après le déplacement.",
+      "why": "Le travail s’exécute alors dans Linux, à côté de vos fichiers : les terminaux, Git et les modifications de fichiers sont plus rapides et plus fiables. Vos projets ne changent pas, et vous pouvez ramener n’importe quel projet avec « Utiliser à nouveau sur cet ordinateur »."
     },
     "cancel": "Annuler",
     "progress": {

@@ -22042,7 +22042,8 @@
       "changed": "Zuvor verschoben, dann hier durch eine ältere Version von Orca geändert. Es wird nicht erneut verschoben.",
       "chatsStay": "Bestehende Chats bleiben auf diesem Computer. Neue Chats in diesem Projekt starten auf dem WSL-Host.",
       "browserLoginsConflict": "Browser-Anmeldungen werden nicht übernommen, da das Browser-Profil des Hosts bereits verwendet wird. Nach dem Verschieben in den Browser-Tabs des Hosts erneut anmelden.",
-      "browserLoginsNotCarried": "Browser-Anmeldungen werden nicht auf diesen Host übernommen. Nach dem Verschieben in den Browser-Tabs des Hosts erneut anmelden."
+      "browserLoginsNotCarried": "Browser-Anmeldungen werden nicht auf diesen Host übernommen. Nach dem Verschieben in den Browser-Tabs des Hosts erneut anmelden.",
+      "why": "Die Arbeit läuft dann in Linux, direkt bei den Dateien, sodass Terminals, Git und Dateiänderungen schneller und zuverlässiger sind. Die Projekte ändern sich nicht, und jedes Projekt lässt sich mit „Wieder auf diesem Computer verwenden“ zurückholen."
     },
     "cancel": "Abbrechen",
     "progress": {
