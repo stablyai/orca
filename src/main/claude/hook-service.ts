@@ -100,7 +100,8 @@ export class ClaudeHookService {
       source: this.options.source,
       skipWhenDevinImportsClaude: this.options.agent === 'claude',
       skipWhenGrokImportsClaude: this.options.agent === 'claude',
-      skipWhenCursorImportsClaude: this.options.agent === 'claude'
+      skipWhenCursorImportsClaude: this.options.agent === 'claude',
+      decidesPreToolUse: this.options.agent === 'claude'
     })
   }
 

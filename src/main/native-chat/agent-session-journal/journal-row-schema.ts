@@ -14,8 +14,8 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
-import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   readAgentJournalItemBody,
   readAgentJournalMessageBody,

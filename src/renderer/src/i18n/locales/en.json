@@ -12029,7 +12029,10 @@
             "secrets": "Store its own encrypted secrets",
             "settingsOwn": "Read and change its own settings",
             "agentsRead": "Get notified when agent status changes",
-            "terminalRun": "Run commands in your terminals, including SSH"
+            "terminalRun": "Run commands in your terminals, including SSH",
+            "terminalRead": "Read the output of your terminals, including SSH",
+            "workspaceWrite": "Open your workspaces and files, and run built-in commands",
+            "agentLaunch": "Start agents in your workspaces, including SSH"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
           "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network and run other programs.",
@@ -13333,7 +13336,8 @@
           "languageCoverage": "Interface language · {{value0}}% translated",
           "newFileMenu": "Adds to the + menu",
           "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
-          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer"
+          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer",
+          "statusBar": "Status bar"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -14186,6 +14190,7 @@
                 "baseCommitLabel": "base commit:",
                 "failingChecks_one": "{{count}} failing check",
                 "failingChecks_other": "{{count}} failing checks",
+                "pipelineFailed": "{{name}} failed",
                 "pendingChecks_one": "{{count}} check pending",
                 "pendingChecks_other": "{{count}} checks pending",
                 "unresolvedChecks_one": "{{count}} check unresolved",
@@ -17048,6 +17053,12 @@
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "Couldn't save a pasted image beside the document. It may not load after Orca restarts."
+        },
+        "PluginEditorNeedsDesktopNotice": {
+          "browser": "{{value0}} runs only in an isolated frame, which browser clients cannot give it.",
+          "isolationOff": "{{value0}} runs only in an isolated frame, and isolated plugin frames are turned off.",
+          "heading": "This editor needs the Orca desktop app",
+          "openSource": "Open Source"
         }
       },
       "diff": {
@@ -20715,7 +20726,24 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [Optional]",
-      "createDescription": "Choose the project and workspace name. Select an agent if you want to start one."
+      "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
+      "setupCheckFailed": "Could not check setup configuration. Try again.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Choose whether to run setup before creating this workspace.",
+        "cancel": "Cancel",
+        "retry": "Retry",
+        "setupScript": "Setup script",
+        "askRunSetup": "Run setup now?",
+        "defaultTabCommands": "Default tab commands",
+        "askRunDefaultTabs": "Run default tab commands now?",
+        "setupAndDefaultTabs": "Setup and default tab commands",
+        "askRunSetupAndDefaultTabs": "Run setup and default tab commands now?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "local settings"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
