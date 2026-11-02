@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-identity'
+} from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { currentAgentSessionThreadGoal } from '../../shared/agent-session/agent-session-thread-goal'
 import type { AgentSessionHistoryPage } from '../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
