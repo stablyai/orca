@@ -113,10 +113,6 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
             throw new StructuredWorkspaceUnavailable('obsolete')
           }
         }
-        if (original && original.location.workspaceId !== revealed.workspaceId) {
-          await ctx.runtime.retireMovedStructuredSessionPlacement(revealed.sessionId)
-          check()
-        }
         await ctx.runtime.publishStructuredAgentSessionTab({
           workspaceAuthority: {
             check,

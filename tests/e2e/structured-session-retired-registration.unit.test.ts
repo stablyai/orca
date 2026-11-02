@@ -17,6 +17,7 @@ import { openAgentSessionJournal } from '../../src/main/native-chat/agent-sessio
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import { withChatTabChanges } from '../../src/main/runtime/agent-session/agent-session-tab-layout'
 import { getRepoMainWorktreeId } from '../../src/shared/worktree/id'
+import { withPlacedSavedChatTabs } from '../../src/main/runtime/session-tabs/saved-chat-tab-placement'
 import { hostTestMessage } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { agentSessionMessagePayload } from '../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -143,10 +144,13 @@ it.each([false, true])(
       providerHandleChain: rig.record.providerHandleChain,
       accountHome: rig.record.accountHome
     })
-    expect(
-      rig.profile.getWorkspaceSession('local')?.unifiedTabs?.[rig.old] ?? []
-    ).not.toContainEqual(expect.objectContaining({ entityId: B }))
-    expect(rig.profile.getWorkspaceSession('local')?.unifiedTabs?.[destination]).toContainEqual(
+    // The old saved tab is a hint now: every read filters it by the record, and the next
+    // startup's restore closes it.
+    const saved = rig.profile.getWorkspaceSession('local')!
+    expect(withPlacedSavedChatTabs(saved, 'local').unifiedTabs?.[rig.old] ?? []).not.toContainEqual(
+      expect.objectContaining({ entityId: B })
+    )
+    expect(saved.unifiedTabs?.[destination]).toContainEqual(
       expect.objectContaining({ entityId: B })
     )
     const snapshot = await rig.host.journalSnapshot(B)
@@ -180,6 +184,10 @@ it.each([false, true])(
     expect(rig.host.listSessionTabs().find((tab) => tab.sessionId === B)).toMatchObject({
       workspaceId: destination
     })
+    const fresh = await physicalReload(rig)
+    expect(
+      fresh.profile.getWorkspaceSession('local')?.unifiedTabs?.[rig.old] ?? []
+    ).not.toContainEqual(expect.objectContaining({ entityId: B }))
   }
 )
 

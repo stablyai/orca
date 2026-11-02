@@ -300,7 +300,7 @@ describe('host editor file ownership', () => {
       'editor',
       'agent-session'
     ])
-    // The host's correction is its whole frame again, without the chat.
+    // The host's next ordinary frame filters the moved chat out by its record.
     const after = {
       ...before,
       ...applyWebSessionTabsSnapshot(

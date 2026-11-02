@@ -10,17 +10,3 @@ export function stampMobileSnapshotVersion(
     : snapshot.snapshotVersion
   return snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
 }
-
-/** The stored frame is built on the window publication last accepted for it (merged host rows
- *  included), so it holds that window's complete content for the workspace. */
-export function storedFrameFollowsRendererPublication(
-  existing: RuntimeMobileSessionTabsSnapshot | undefined,
-  accepted: { publicationEpoch: string } | undefined
-): boolean {
-  return (
-    !!existing &&
-    !!accepted &&
-    (existing.publicationEpoch === accepted.publicationEpoch ||
-      existing.publicationEpoch.startsWith(`${accepted.publicationEpoch}:headless-merge:`))
-  )
-}

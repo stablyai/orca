@@ -67,7 +67,6 @@ export function runtimeStub(overrides: Record<string, unknown> = {}) {
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     ensureStructuredAgentSessionHost: async () => undefined,
     prepareStructuredAgentSessionRevealWorkspace: vi.fn(availableRevealWorkspace),
-    retireMovedStructuredSessionPlacement: vi.fn(async () => undefined),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     structuredAgentSessionLaunchSeedOptions: () => undefined,
     resolveStructuredAgentSessionCreateIntent: async () => {

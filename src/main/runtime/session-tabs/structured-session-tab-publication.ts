@@ -158,83 +158,58 @@ export function projectStructuredSessionTab(
     }
     return
   }
-  const snapshot = withStructuredSessionChatTabs(existing, input.workspaceId, [
+  const tab: RuntimeMobileSessionAgentTab = {
+    type: 'agent-session',
+    id,
+    title: defaultAgentChatLabel(input.agent),
+    sessionId: input.sessionId,
+    agent: input.agent,
+    isActive: input.activate
+  }
+  const tabs = [...(existing?.tabs ?? [])].map((candidate) => ({
+    ...candidate,
+    isActive: input.activate ? false : candidate.isActive
+  }))
+  tabs.push(tab)
+  const priorGroups = existing?.tabGroups ?? [
     {
-      type: 'agent-session',
-      id,
-      title: defaultAgentChatLabel(input.agent),
-      sessionId: input.sessionId,
-      agent: input.agent,
-      isActive: input.activate
+      id: getHeadlessMobileSessionGroupId(input.workspaceId),
+      activeTabId: existing?.activeTabId ?? null,
+      tabOrder: []
     }
-  ])
+  ]
+  // Why: the window can list the chat before main restores its row; keep the place it gave it.
+  const listingGroupId = priorGroups.find((group) => group.tabOrder.includes(id))?.id
+  const groupId =
+    listingGroupId ??
+    (priorGroups.some((group) => group.id === existing?.activeGroupId)
+      ? existing!.activeGroupId!
+      : priorGroups[0]!.id)
+  const tabGroups = priorGroups.map((group) =>
+    group.id === groupId
+      ? {
+          ...group,
+          activeTabId: input.activate ? id : group.activeTabId,
+          tabOrder: listingGroupId ? group.tabOrder : [...group.tabOrder, id]
+        }
+      : group
+  )
+  const snapshot: RuntimeMobileSessionTabsSnapshot = {
+    worktree: input.workspaceId,
+    publicationEpoch: existing?.publicationEpoch ?? `structured:${Date.now().toString(36)}`,
+    snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
+    activeGroupId: input.activate ? groupId : (existing?.activeGroupId ?? groupId),
+    activeTabId: input.activate ? id : (existing?.activeTabId ?? null),
+    activeTabType: input.activate ? 'agent-session' : (existing?.activeTabType ?? null),
+    tabGroups,
+    ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
+    tabs
+  }
   if (input.eligible?.() === false) {
     throw new Error('Chat tab publication was superseded')
   }
   const stored = runtime.storeMobileSessionSnapshot(input.workspaceId, snapshot)
   if (input.notify !== false) {
     emit(stored)
-  }
-}
-
-/** `existing` with chat tabs added in one copy. A tab a group already lists keeps that place; the
- *  rest join the active (else first) group, or the default group when the frame lists none. An
- *  added tab marked active becomes the frame's active tab. */
-export function withStructuredSessionChatTabs(
-  existing: RuntimeMobileSessionTabsSnapshot | undefined,
-  workspaceId: string,
-  added: readonly RuntimeMobileSessionAgentTab[]
-): RuntimeMobileSessionTabsSnapshot {
-  const activated = added.find((tab) => tab.isActive)?.id ?? null
-  const tabs = [
-    ...(existing?.tabs ?? []).map((candidate) =>
-      activated ? { ...candidate, isActive: false } : candidate
-    ),
-    ...added
-  ]
-  // A frame can list no groups (a window's empty workspace); the chats then start the default one.
-  const priorGroups = existing?.tabGroups?.length
-    ? existing.tabGroups
-    : [
-        {
-          id: getHeadlessMobileSessionGroupId(workspaceId),
-          activeTabId: existing?.activeTabId ?? null,
-          tabOrder: []
-        }
-      ]
-  // Why: the window can list a chat before main restores its row; keep the place it gave it.
-  const addedIds = new Set(added.map((tab) => tab.id))
-  const listingGroupIds = new Map<string, string>()
-  for (const group of priorGroups) {
-    for (const tabId of group.tabOrder) {
-      if (addedIds.has(tabId) && !listingGroupIds.has(tabId)) {
-        listingGroupIds.set(tabId, group.id)
-      }
-    }
-  }
-  const targetGroupId = priorGroups.some((group) => group.id === existing?.activeGroupId)
-    ? existing!.activeGroupId!
-    : priorGroups[0]!.id
-  const appended = added.filter((tab) => !listingGroupIds.has(tab.id)).map((tab) => tab.id)
-  const groupId = (added[0] && listingGroupIds.get(activated ?? added[0].id)) ?? targetGroupId
-  const tabGroups = priorGroups.map((group) =>
-    (group.id === targetGroupId && appended.length) || (activated && group.id === groupId)
-      ? {
-          ...group,
-          activeTabId: activated && group.id === groupId ? activated : group.activeTabId,
-          tabOrder: group.id === targetGroupId ? [...group.tabOrder, ...appended] : group.tabOrder
-        }
-      : group
-  )
-  return {
-    worktree: workspaceId,
-    publicationEpoch: existing?.publicationEpoch ?? `structured:${Date.now().toString(36)}`,
-    snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-    activeGroupId: activated ? groupId : (existing?.activeGroupId ?? groupId),
-    activeTabId: activated ?? existing?.activeTabId ?? null,
-    activeTabType: activated ? 'agent-session' : (existing?.activeTabType ?? null),
-    tabGroups,
-    ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
-    tabs
   }
 }

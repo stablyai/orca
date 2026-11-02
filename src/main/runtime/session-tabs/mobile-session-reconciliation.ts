@@ -4,13 +4,6 @@ import { OrcaRuntimeWithWriteOrchestrationPointerPty } from '../orchestration/te
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
-import { storedFrameFollowsRendererPublication } from '../mobile-session-snapshot-version'
-import {
-  completeStructuredWorkspaceProjection,
-  structuredChatTabIdsListedBy,
-  type StructuredWorkspaceChatContext
-} from './structured-session-workspace-projection'
-import { structuredSessionPlacementAllowed } from './structured-session-placement'
 
 export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOrchestrationPointerPty {
   protected abstract buildPreservedHeadlessMobileSessionSnapshot(
@@ -136,7 +129,8 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       if (
         existing &&
         accepted &&
-        storedFrameFollowsRendererPublication(existing, accepted) &&
+        (existing.publicationEpoch === accepted.publicationEpoch ||
+          existing.publicationEpoch.startsWith(`${accepted.publicationEpoch}:headless-merge:`)) &&
         existing.tabs.length >= accepted.rendererTabCount &&
         (existing.tabs.length === accepted.rendererTabCount ||
           !this.storedMobileSnapshotHasStalePreservedTab(
@@ -152,7 +146,6 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       // Clear accepted pairs before republish or the still-retained accept gate rejects its frame.
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
     }
-    let context: StructuredWorkspaceChatContext | undefined
     for (const snapshot of acceptedSnapshots) {
       nextWorktrees.add(snapshot.worktree)
       const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
@@ -175,19 +168,7 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       const launchDraftFencedSnapshot = this.nativeChatDraftResolutions.applyFence(snapshot)
       const fencedSnapshot = this.applyMobileSessionRetirementFences(launchDraftFencedSnapshot)
       this.releaseRuntimeSessionOwnershipForRendererRetiredTabs(fencedSnapshot, existing)
-      const merged = this.mergePreservedHeadlessMobileSessionTabs(fencedSnapshot, existing)
-      // A window still listing a chat whose record moved elsewhere gets its whole frame back
-      // through the projection a move uses, so the chats it lists beside it keep their rows.
-      const listed = structuredChatTabIdsListedBy(fencedSnapshot)
-      context ??= this.structuredWorkspaceChatContext()
-      const moved = listed.some((tabId) => {
-        const sessionId = context!.sessionOfTab(tabId)
-        return !!sessionId && !structuredSessionPlacementAllowed(snapshot.worktree, sessionId)
-      })
-      const projection = moved
-        ? completeStructuredWorkspaceProjection(merged, listed, context)
-        : null
-      const nextSnapshot = projection?.kind === 'complete' ? projection.snapshot : merged
+      const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(fencedSnapshot, existing)
       // Keep stored versions strictly increasing past main-local bumps or clients discard accepted renderer content as stale.
       const storedVersion = existing
         ? Math.max(nextSnapshot.snapshotVersion, existing.snapshotVersion + 1)
