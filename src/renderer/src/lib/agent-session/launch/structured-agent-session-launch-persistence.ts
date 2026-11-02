@@ -20,6 +20,11 @@ const tombstones = new Map<string, ExecutionHostId>()
 const remoteTombstoneCancelledAt = new Map<string, number>()
 const REMOTE_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 let loaded = false
+// Writes inside a batch update the records at once and save them once, at the batch's end.
+let batchDepth = 0
+let batchDirty = false
+// Slot ids read inside a batch until a record changes: a batch drawing many tabs scans once each.
+const batchSlotIds = new Map<string, ReadonlySet<string>>()
 
 function load(): void {
   if (loaded) {
@@ -107,6 +112,11 @@ function serializeTombstone(sessionId: string, executionHostId: ExecutionHostId)
 }
 
 function writeRecords(): void {
+  batchSlotIds.clear()
+  if (batchDepth > 0) {
+    batchDirty = true
+    return
+  }
   if (typeof localStorage === 'undefined') {
     return
   }
@@ -145,13 +155,36 @@ function writeTombstones(): void {
   }
 }
 
+/** Runs `update` with its record writes saved once, when it ends; a write outside any batch is
+ *  saved before it returns, as a launch's row must be before its host is asked. */
+export function batchStructuredAgentLaunchRecordWrites(update: () => void): void {
+  batchDepth += 1
+  try {
+    update()
+  } finally {
+    batchDepth -= 1
+    if (batchDepth === 0) {
+      batchSlotIds.clear()
+      if (batchDirty) {
+        batchDirty = false
+        writeRecords()
+      }
+    }
+  }
+}
+
 export function readStructuredAgentLaunchRecords(): readonly StructuredAgentLaunchPersistedRecord[] {
   load()
   return [...records.values()]
 }
 
-export function structuredLaunchSlotIds(worktreeId: string, groupId?: string): Set<string> {
-  return new Set(
+export function structuredLaunchSlotIds(worktreeId: string, groupId?: string): ReadonlySet<string> {
+  const key = `${worktreeId}\0${groupId ?? ''}`
+  const kept = batchSlotIds.get(key)
+  if (kept) {
+    return kept
+  }
+  const ids = new Set(
     readStructuredAgentLaunchRecords().flatMap((record) =>
       record.executionHostId === 'local' &&
       record.lifecycle !== 'failed' &&
@@ -161,6 +194,10 @@ export function structuredLaunchSlotIds(worktreeId: string, groupId?: string): S
         : []
     )
   )
+  if (batchDepth > 0) {
+    batchSlotIds.set(key, ids)
+  }
+  return ids
 }
 
 export function readStructuredAgentLaunchRecord(
@@ -250,6 +287,7 @@ export function retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted
 
 export function resetStructuredAgentLaunchPersistenceForTests(): void {
   records.clear()
+  batchSlotIds.clear()
   tombstones.clear()
   remoteTombstoneCancelledAt.clear()
   loaded = false

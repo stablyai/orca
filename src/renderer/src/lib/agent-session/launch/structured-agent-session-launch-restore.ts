@@ -23,6 +23,7 @@ import {
   getStructuredLaunchStateBySessionId
 } from './structured-agent-session-launch-registry'
 import {
+  batchStructuredLaunchSurfaces,
   materializeStructuredLaunchSurface,
   openStructuredAgentSessionProvisionalTab,
   reserveStructuredLaunchSlot
@@ -47,6 +48,10 @@ export function restoreStructuredLaunchSurfacesListedBy(hostId: ExecutionHostId)
 }
 
 function restoreLaunchSurfaces(records: readonly StructuredAgentLaunchPersistedRecord[]): void {
+  batchStructuredLaunchSurfaces(() => drawLaunchSurfaces(records))
+}
+
+function drawLaunchSurfaces(records: readonly StructuredAgentLaunchPersistedRecord[]): void {
   const state = useAppStore.getState()
   const catalog = {
     workspaces: [

@@ -7,6 +7,7 @@ import { useAppStore } from '@/store/index'
 import { resolveUnifiedTabCreatePlacement } from '@/store/slices/tabs/tabs-create-placement'
 import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
 import {
+  batchStructuredAgentLaunchRecordWrites,
   readStructuredAgentLaunchRecord,
   readStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
@@ -77,18 +78,33 @@ export function captureStructuredLaunchSurfaceAddress(
 }
 
 let stopTrackingSlots: (() => void) | undefined
+// While a batch draws launch surfaces, their slot bookkeeping waits to be reconciled once, at its end.
+let slotReconcileDeferred = false
 
 export function stopStructuredLaunchSlotTracking(): void {
   stopTrackingSlots?.()
   stopTrackingSlots = undefined
 }
 
-function trackSlotAddresses(): void {
-  stopTrackingSlots ??= useAppStore.subscribe((state, previous) => {
-    if (state.groupsByWorktree === previous.groupsByWorktree) {
-      return
-    }
-    let hasHiddenSlot = false
+function sameSurfaceAddress(
+  saved: StructuredLaunchSurfaceAddress | undefined,
+  next: StructuredLaunchSurfaceAddress
+): boolean {
+  return (
+    saved?.worktreeId === next.worktreeId &&
+    saved.targetGroupId === next.targetGroupId &&
+    saved.precedingTabIds.length === next.precedingTabIds.length &&
+    saved.precedingTabIds.every((id, index) => id === next.precedingTabIds[index])
+  )
+}
+
+/** Saves where each hidden local slot now sits, in one write; false once no slot is hidden. */
+function reconcileSlotAddresses(
+  state: ReturnType<typeof useAppStore.getState>,
+  previousGroups: ReturnType<typeof useAppStore.getState>['groupsByWorktree']
+): boolean {
+  let hasHiddenSlot = false
+  batchStructuredAgentLaunchRecordWrites(() => {
     for (const record of readStructuredAgentLaunchRecords()) {
       const address = record.surfaceAddress
       if (!address || record.executionHostId !== 'local') {
@@ -99,9 +115,7 @@ function trackSlotAddresses(): void {
         continue
       }
       hasHiddenSlot = true
-      if (
-        state.groupsByWorktree[address.worktreeId] === previous.groupsByWorktree[address.worktreeId]
-      ) {
+      if (state.groupsByWorktree[address.worktreeId] === previousGroups[address.worktreeId]) {
         continue
       }
       const group = state.groupsByWorktree[address.worktreeId]?.find((entry) =>
@@ -112,14 +126,47 @@ function trackSlotAddresses(): void {
         targetGroupId: group?.id,
         precedingTabIds: group ? group.tabOrder.slice(0, group.tabOrder.indexOf(tabId)) : []
       }
+      if (sameSurfaceAddress(address, surfaceAddress)) {
+        continue
+      }
       const launch = getStructuredLaunchStateBySessionId(record.sessionId)
       if (launch) {
         launch.intent.surfaceAddress = surfaceAddress
       }
       writeStructuredAgentLaunchRecord({ ...record, surfaceAddress })
     }
-    if (!hasHiddenSlot) {
+  })
+  return hasHiddenSlot
+}
+
+function trackSlotAddresses(): void {
+  stopTrackingSlots ??= useAppStore.subscribe((state, previous) => {
+    if (slotReconcileDeferred || state.groupsByWorktree === previous.groupsByWorktree) {
+      return
+    }
+    if (!reconcileSlotAddresses(state, previous.groupsByWorktree)) {
       stopStructuredLaunchSlotTracking()
+    }
+  })
+}
+
+/** Draws many launch surfaces at once: their slots are reconciled and their rows saved once, after
+ *  every draw, rather than on each tab each draw adds. */
+export function batchStructuredLaunchSurfaces(draw: () => void): void {
+  if (slotReconcileDeferred) {
+    draw()
+    return
+  }
+  const previousGroups = useAppStore.getState().groupsByWorktree
+  slotReconcileDeferred = true
+  batchStructuredAgentLaunchRecordWrites(() => {
+    try {
+      draw()
+    } finally {
+      slotReconcileDeferred = false
+      if (stopTrackingSlots && !reconcileSlotAddresses(useAppStore.getState(), previousGroups)) {
+        stopStructuredLaunchSlotTracking()
+      }
     }
   })
 }

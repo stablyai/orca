@@ -16,7 +16,10 @@ import {
   getStructuredAgentSessionLaunchLifecycle,
   resetStructuredAgentLaunchRegistryForTests
 } from './agent-session/launch/structured-agent-session-launch-registry'
-import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+import {
+  readStructuredAgentLaunchRecords,
+  resetStructuredAgentLaunchPersistenceForTests
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 import { retryStructuredAgentSessionLaunch } from './agent-session/launch/structured-agent-session-launch'
 import { restoreStructuredLaunchSurfaces } from './agent-session/launch/structured-agent-session-launch-restore'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
@@ -110,23 +113,20 @@ function hostReplies(status: () => Promise<unknown>): void {
   )
 }
 
-describe('restoring held host launches at startup', () => {
-  const row = (
-    sessionId: string,
-    executionHostId: string,
-    extra: Record<string, unknown> = {}
-  ) => ({
-    sessionId,
-    executionHostId,
-    agent: 'codex',
-    lifecycle: 'failed',
-    clientOperationId: `op-${sessionId}`,
-    payloadFingerprint: 'fingerprint',
-    expectedRuntimeFence: null,
-    surfaceAddress: { worktreeId: worktree.id, precedingTabIds: [] },
-    ...extra
-  })
+/** A saved launch row as this window writes it. */
+const row = (sessionId: string, executionHostId: string, extra: Record<string, unknown> = {}) => ({
+  sessionId,
+  executionHostId,
+  agent: 'codex',
+  lifecycle: 'failed',
+  clientOperationId: `op-${sessionId}`,
+  payloadFingerprint: 'fingerprint',
+  expectedRuntimeFence: null,
+  surfaceAddress: { worktreeId: worktree.id, precedingTabIds: [] },
+  ...extra
+})
 
+describe('restoring held host launches at startup', () => {
   it('draws a paired launch only on the host it ran on, and no ordinary failed launch', async () => {
     // The workspace is the paired server's, as its catalog says.
     useAppStore.setState({
@@ -443,5 +443,71 @@ describe('restoring held host launches at startup', () => {
     useAppStore.getState().purgeStaleRuntimeHostState(['env-1'])
     expect(savedLaunch('codex-removed')).toBeUndefined()
     expect(savedLaunch('codex-other')).toBeDefined()
+  })
+})
+
+describe('restoring many held launches at once', () => {
+  type Cost = { flushes: number; serializedRows: number; addressReads: number }
+
+  /** Restores `count` held launches through settled layout, counting full journal writes, rows
+   *  they serialize, and every read of a row's address (the scans that place slots). */
+  async function restoreCost(count: number): Promise<Cost> {
+    resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentLaunchPersistenceForTests()
+    const prefix = `codex-batch-${count}`
+    const rows = Array.from({ length: count }, (_, index) =>
+      row(`${prefix}-${index}`, 'local', { hostLaunchOperationId: `host-op-${prefix}-${index}` })
+    )
+    localStorage.setItem(LAUNCHES, JSON.stringify(rows))
+    let addressReads = 0
+    for (const record of readStructuredAgentLaunchRecords()) {
+      const address = record.surfaceAddress
+      Object.defineProperty(record, 'surfaceAddress', {
+        enumerable: true,
+        get: () => (addressReads++, address)
+      })
+    }
+    const writes = vi.spyOn(localStorage, 'setItem')
+    restoreStructuredLaunchSurfaces()
+    await main.settle()
+    const flushed = writes.mock.calls.filter(([key]) => key === LAUNCHES)
+    writes.mockRestore()
+    expect(
+      (useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).filter((tab) =>
+        tab.entityId.startsWith(prefix)
+      )
+    ).toHaveLength(count)
+    return {
+      flushes: flushed.length,
+      serializedRows: flushed.reduce((sum, [, value]) => sum + JSON.parse(value).length, 0),
+      addressReads
+    }
+  }
+
+  it('writes the journal a constant number of times and reads each row a bounded number of times', async () => {
+    const small = await restoreCost(3)
+    useAppStore.setState({ unifiedTabsByWorktree: {}, groupsByWorktree: {}, tabsByWorktree: {} })
+    const large = await restoreCost(30)
+
+    // One batch, one write at most: a main-drawn chat's slot moves into its group once.
+    expect(large.flushes).toBe(small.flushes)
+    expect(large.flushes).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 1 : 0)
+    expect(large.serializedRows).toBe(large.flushes * 30)
+    // Linear in the rows: ten times the rows costs at most ten times the reads.
+    expect(large.addressReads).toBeLessThanOrEqual(10 * small.addressReads)
+
+    // Restoring again changes no address, so nothing is written.
+    const writes = vi.spyOn(localStorage, 'setItem')
+    restoreStructuredLaunchSurfaces()
+    await main.settle()
+    expect(writes.mock.calls.filter(([key]) => key === LAUNCHES)).toEqual([])
+    writes.mockRestore()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // The one write is a real move: each row now names the group its chat was drawn in.
+      const chat = chatTabs('codex-batch-30-29')[0]!
+      expect(savedLaunch('codex-batch-30-29')).toMatchObject({
+        surfaceAddress: { targetGroupId: chat.groupId }
+      })
+    }
   })
 })
