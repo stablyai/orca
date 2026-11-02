@@ -30,22 +30,41 @@ import { TaskPageGitHubFilters } from './github/Filters'
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 
 vi.mock('@/components/github/PRFilterDropdowns', () => ({ default: () => null }))
-// Count the source reader's own cache reads; writers keep the uninstrumented cache.
-const readerWork = vi.hoisted(() => ({ invocations: 0, gets: 0, enumerations: 0 }))
+// Count the source reader's own work at its boundary; writers keep the uninstrumented cache.
+const readerWork = vi.hoisted(() => ({
+  invocations: 0,
+  gets: 0,
+  maxGetsPerInvocation: 0,
+  enumerations: 0,
+  keyCompositions: 0,
+  rowVisits: 0
+}))
 vi.mock('./task-page-cache-selectors', async (importOriginal) => {
   const actual = await importOriginal<typeof CacheSelectors>()
   return {
     ...actual,
+    // Rows hold the composed cache keys; the selector and the after-commit pointer upkeep both walk them.
+    getTaskPageRepoCacheRows: (...args: Parameters<typeof actual.getTaskPageRepoCacheRows>) => {
+      readerWork.keyCompositions += 1
+      return new Proxy(actual.getTaskPageRepoCacheRows(...args), {
+        get: (target, key, receiver) => {
+          if (typeof key === 'string' && /^\d+$/.test(key)) {
+            readerWork.rowVisits += 1
+          }
+          return Reflect.get(target, key, receiver)
+        }
+      })
+    },
     createTaskPageWorkItemsCacheSelector: (
       ...args: Parameters<typeof actual.createTaskPageWorkItemsCacheSelector>
     ) => {
       const select = actual.createTaskPageWorkItemsCacheSelector(...args)
       return (cache: Parameters<typeof select>[0]) => {
-        readerWork.invocations += 1
-        return select(
+        let gets = 0
+        const selection = select(
           new Proxy(cache, {
             get: (target, key, receiver) => {
-              readerWork.gets += 1
+              gets += 1
               return Reflect.get(target, key, receiver)
             },
             ownKeys: (target) => {
@@ -54,6 +73,10 @@ vi.mock('./task-page-cache-selectors', async (importOriginal) => {
             }
           })
         )
+        readerWork.invocations += 1
+        readerWork.gets += gets
+        readerWork.maxGetsPerInvocation = Math.max(readerWork.maxGetsPerInvocation, gets)
+        return selection
       }
     }
   }
@@ -351,6 +374,22 @@ describe('Tasks source display', () => {
 })
 
 describe('Tasks source display scaling', () => {
+  type Work = typeof readerWork
+  // One settled act turn per actual update, measured on its own.
+  async function measureUpdate(update: () => unknown): Promise<Work> {
+    Object.assign(readerWork, {
+      invocations: 0,
+      gets: 0,
+      maxGetsPerInvocation: 0,
+      enumerations: 0,
+      keyCompositions: 0,
+      rowVisits: 0
+    })
+    await act(async () => {
+      await update()
+    })
+    return { ...readerWork }
+  }
   // C cache entries in total: one carried Q1 entry per selected row, the rest another host's rows.
   async function measure(selectedCount: number, cacheSize: number) {
     const rows = Array.from({ length: selectedCount }, (_, index) => ({
@@ -365,6 +404,10 @@ describe('Tasks source display scaling', () => {
       path: '/other',
       upstream: { owner: 'o', repo: 'other' }
     }
+    window.api.repos.update = vi.fn(async ({ repoId, updates }) => ({
+      ...rows.find((row) => row.id === repoId)!,
+      ...updates
+    }))
     mount(rows)
     for (const row of rows) {
       await fetchList(row, Q1, sources(fork))
@@ -394,35 +437,89 @@ describe('Tasks source display scaling', () => {
     expect(view.githubSourceDisplayState.every((state) => state.sources?.issues === fork)).toBe(
       true
     )
-    readerWork.invocations = 0
-    readerWork.gets = 0
-    readerWork.enumerations = 0
-    // Real cache writes: another host's patch, then a current-query and a sibling fetch.
-    act(() =>
+    const outputs = () => [
+      view.githubSourceDisplayState,
+      view.selectedWorkItemsCacheEntries,
+      view.sourceDisplayWorkItemsCacheEntries
+    ]
+    const expectOutputsReused = (before: unknown[]) =>
+      outputs().forEach((output, index) => expect(output).toBe(before[index]))
+
+    let before = outputs()
+    const otherHostPatch = await measureUpdate(() =>
       useAppStore
         .getState()
         .patchWorkItem('issue-1', { title: 'y' }, 'other', { sourceContext: otherContext })
     )
-    await fetchList(rows[0], Q2, sources(fork))
-    await fetchList(rows[0], 'is:issue is:closed', sources(upstream))
-    const work = { ...readerWork }
+    expectOutputsReused(before)
+    before = outputs()
+    const nonCacheWrite = await measureUpdate(() =>
+      useAppStore.getState().setRightSidebarWidth(321)
+    )
+    expectOutputsReused(before)
+    listAnswers.set(`${rows[0].path}\0${Q2}`, sources(fork))
+    const currentFetch = await measureUpdate(() =>
+      useAppStore
+        .getState()
+        .fetchWorkItems(rows[0].id, rows[0].path, view.githubPerRepoPageLimit, Q2, {
+          force: true,
+          sourceContext: getTaskPageRepoSourceContext(rows[0], 'github')
+        })
+    )
+    listAnswers.set(`${rows[0].path}\0is:issue is:closed`, sources(upstream))
+    const siblingFetch = await measureUpdate(() => {
+      return useAppStore
+        .getState()
+        .fetchWorkItems(
+          rows[0].id,
+          rows[0].path,
+          view.githubPerRepoPageLimit,
+          'is:issue is:closed',
+          {
+            force: true,
+            sourceContext: getTaskPageRepoSourceContext(rows[0], 'github')
+          }
+        )
+    })
+    const preferenceEviction = await measureUpdate(() =>
+      useAppStore.getState().setIssueSourcePreference(rows[0].id, rows[0].path, 'origin', 'local')
+    )
     cleanup()
     useAppStore.setState({ workItemsCache: {} })
-    return work
+    return { otherHostPatch, nonCacheWrite, currentFetch, siblingFetch, preferenceEviction }
   }
 
-  it('reads at most two cache entries per selected row per selection, never scanning the cache', async () => {
-    const small = await measure(10, 500)
-    const large = await measure(100, 500)
-    const smallCache = await measure(10, 50)
-    for (const work of [small, large, smallCache]) {
-      expect(work.enumerations).toBe(0)
-      expect(work.invocations).toBeGreaterThan(0)
+  // Selector calls per update (a literal, not measured): each store write notifies the subscription and the
+  // renders it causes read the snapshot again. The busiest update, preference eviction, makes three writes
+  // (optimistic repo patch, saved repo row, cache eviction) and measures 15.
+  const MAX_SELECTIONS_PER_UPDATE = 16
+  // A selector call visits each row at most twice (current key, then source key for a missing row); the
+  // after-commit pointer upkeep walks rows once per commit. Its prune loop is bounded by the previous N.
+  const MAX_ROW_VISITS_PER_ROW = 3 * MAX_SELECTIONS_PER_UPDATE
+  it('bounds each update by selected rows, never by the cache, and never scans or rebuilds keys', async () => {
+    const sizes = [
+      { rows: 10, work: await measure(10, 500) },
+      { rows: 100, work: await measure(100, 500) },
+      { rows: 10, work: await measure(10, 50) }
+    ]
+    for (const { rows, work } of sizes) {
+      for (const [update, counts] of Object.entries(work)) {
+        expect({ update, enumerations: counts.enumerations }).toEqual({ update, enumerations: 0 })
+        expect(counts.invocations).toBeGreaterThan(0)
+        expect(counts.invocations).toBeLessThanOrEqual(MAX_SELECTIONS_PER_UPDATE)
+        expect(counts.maxGetsPerInvocation).toBeLessThanOrEqual(2 * rows)
+        expect(counts.gets).toBeLessThanOrEqual(MAX_SELECTIONS_PER_UPDATE * 2 * rows)
+        expect(counts.rowVisits).toBeLessThanOrEqual(MAX_ROW_VISITS_PER_ROW * rows)
+        // Keys are never rebuilt on a cache write; the preference action replaces the repos array twice.
+        expect(counts.keyCompositions).toBeLessThanOrEqual(update === 'preferenceEviction' ? 2 : 0)
+      }
     }
-    const perSelection = (work: typeof small) => work.gets / work.invocations
-    expect(perSelection(small)).toBeLessThanOrEqual(2 * 10)
-    expect(perSelection(large)).toBeLessThanOrEqual(2 * 100)
-    // Work follows selected rows, not cache size.
-    expect(perSelection(smallCache)).toBe(perSelection(small))
+    const [small, large, smallCache] = sizes.map(({ work }) => work)
+    for (const update of Object.keys(small) as (keyof typeof small)[]) {
+      // Selector calls grow with neither rows nor cache size.
+      expect(large[update].invocations).toBe(small[update].invocations)
+      // Same rows, a tenth of the cache: identical work.
+      expect(smallCache[update]).toEqual(small[update])
+    }
   })
 })
