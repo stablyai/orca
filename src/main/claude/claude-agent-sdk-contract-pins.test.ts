@@ -507,6 +507,7 @@ describe('Claude Agent SDK contract pins', () => {
         ...extra
       }
     })
+    const isAsk = (frame: object): frame is ReturnType<typeof ask> => 'request' in frame
     const cancel = (id: string) => ({ type: 'control_cancel_request', request_id: id })
     const many = (prefix: string) =>
       Array.from({ length: 300 }, (_, index) => ask(`${prefix}${index}`))
@@ -565,9 +566,7 @@ describe('Claude Agent SDK contract pins', () => {
       }
     ])('$label', async ({ frames, seen: expected, interaction: flags, pending }) => {
       const requestIds = [
-        ...new Set(
-          [...pending, ...frames].flatMap((frame) => ('request' in frame ? [frame.request_id] : []))
-        )
+        ...new Set([...pending, ...frames].filter(isAsk).map((frame) => frame.request_id))
       ]
       const scenario = scriptScenario(
         [
